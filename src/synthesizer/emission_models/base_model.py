@@ -2223,6 +2223,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         emissions,
         particle_emissions,
         emission_type="spectra",
+        models=None,
     ):
         """Unpack any existing emissions from the emitters.
 
@@ -2243,6 +2244,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 The dictionary of particle emissions to populate.
             emission_type (str):
                 The type of emission to get. Either "spectra" or "lines".
+            models (iterable):
+                Optional iterable of models to inspect. If omitted, all models
+                discovered on the emission tree are considered.
 
         Returns:
             dict, dict
@@ -2255,7 +2259,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 "'spectra' or 'lines'."
             )
 
-        for this_model in self._models.values():
+        # Restrict reuse checks to the supplied models when the caller has
+        # already pruned the execution graph down to its active subset.
+        if models is None:
+            models = self._models.values()
+
+        for this_model in models:
             # Skip extractions, these can't reuse existing lines by their
             # nature
             if this_model._is_extracting:
@@ -2515,13 +2524,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # only their reference)
         emission_model = copy.copy(self)
 
-        # Before we do anything, check that we have the emitters we need
-        for model in emission_model._models.values():
-            if emitters.get(model.emitter, None) is None:
-                raise exceptions.InconsistentArguments(
-                    f"Missing {model.emitter} in emitters."
-                )
-
         # Apply any overrides we have
         tic("Applying model overrides")
         self._apply_overrides(
@@ -2535,6 +2537,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         )
         toc("Applying model overrides")
 
+        # Work with the overridden root instance stored in the model tree so
+        # root-level overrides are reflected in any queue and reuse logic.
+        root_model = emission_model._models[self.label]
+
         # Make a spectra dictionary if we haven't got one yet
         if spectra is None:
             spectra = {}
@@ -2543,27 +2549,38 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # We need to make sure the root is being saved, otherwise this is a bit
         # nonsensical.
-        if not self.save:
+        if not root_model.save:
             raise exceptions.InconsistentArguments(
-                f"{self.label} is not being saved. There's no point in "
+                f"{root_model.label} is not being saved. There's no point in "
                 "generating at the root if they are not saved. Maybe you "
                 "want to use a child model you are saving instead?"
             )
 
+        # Build the execution queue for the active model tree before doing any
+        # existing-emission reuse checks so inactive branches are skipped.
+        tic("Building model queue")
+        queue = ModelQueue(root_model)
+        toc("Building model queue")
+
+        # Before we do anything else, check that we have the emitters needed by
+        # the active models in the queued execution graph.
+        for model in queue.models.values():
+            if emitters.get(model.emitter, None) is None:
+                raise exceptions.InconsistentArguments(
+                    f"Missing emitter '{model.emitter}' required by active "
+                    f"EmissionModel '{model.label}'."
+                )
+
         # Get any existing spectra we are reusing
         tic("Getting existing emissions")
-        spectra, particle_spectra = self._get_existing_emissions(
+        spectra, particle_spectra = root_model._get_existing_emissions(
             emitters,
             spectra,
             particle_spectra,
             emission_type="spectra",
+            models=queue.models.values(),
         )
         toc("Getting existing emissions")
-
-        # Build the execution queue for this model tree.
-        tic("Building model queue")
-        queue = ModelQueue(emission_model)
-        toc("Building model queue")
 
         # Execute the full model closure by processing each ready model once.
         while len(queue) > 0:
@@ -2576,11 +2593,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 queue.done(this_model, spectra, particle_spectra)
                 continue
 
-            # Skip models for emitters that are not being generated here while
-            # still keeping the dependency queue consistent.
+            # Active queued models must always have a matching emitter.
             if this_model.emitter not in emitters:
-                queue.done(this_model, spectra, particle_spectra)
-                continue
+                raise exceptions.InconsistentArguments(
+                    f"Active EmissionModel '{this_model.label}' requires "
+                    f"missing emitter '{this_model.emitter}'."
+                )
 
             # Get the emitter for this model now that it is ready to execute.
             emitter = emitters[this_model.emitter]
@@ -2863,6 +2881,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             vel_shift=None,
         )
 
+        # Work with the overridden root instance stored in the model tree so
+        # root-level overrides are reflected in any queue and reuse logic.
+        root_model = emission_model._models[self.label]
+
         # If we haven't got a lines dictionary yet we'll make one
         if lines is None:
             lines = {}
@@ -2871,19 +2893,35 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # We need to make sure the root is being saved, otherwise this is a bit
         # nonsensical.
-        if not self.save:
+        if not root_model.save:
             raise exceptions.InconsistentArguments(
-                f"{self.label} is not being saved. There's no point in "
+                f"{root_model.label} is not being saved. There's no point in "
                 "generating at the root if they are not saved. Maybe you "
                 "want to use a child model you are saving instead?"
             )
 
+        # Build the execution queue for the active model tree before doing any
+        # existing-emission reuse checks so inactive branches are skipped.
+        tic("Building model queue")
+        queue = ModelQueue(root_model)
+        toc("Building model queue")
+
+        # Before we do anything else, check that we have the emitters needed by
+        # the active models in the queued execution graph.
+        for model in queue.models.values():
+            if emitters.get(model.emitter, None) is None:
+                raise exceptions.InconsistentArguments(
+                    f"Missing emitter '{model.emitter}' required by active "
+                    f"EmissionModel '{model.label}'."
+                )
+
         # Get any existing lines we are reusing
-        lines, particle_lines = self._get_existing_emissions(
+        lines, particle_lines = root_model._get_existing_emissions(
             emitters,
             lines,
             particle_lines,
             emission_type="lines",
+            models=queue.models.values(),
         )
 
         # Collect existing spectra from all emitters for scaling purposes
@@ -2900,11 +2938,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if len(lines) > 0:
             line_lams = lines[list(lines.keys())[0]].lam
 
-        # Build the execution queue for this model tree.
-        tic("Building model queue")
-        queue = ModelQueue(emission_model)
-        toc("Building model queue")
-
         # Execute the full model closure by processing each ready model once.
         while len(queue) > 0:
             this_model = queue.pop()
@@ -2918,11 +2951,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 queue.done(this_model, lines, particle_lines)
                 continue
 
-            # Skip models for emitters that are not being generated here while
-            # still keeping the dependency queue consistent.
+            # Active queued models must always have a matching emitter.
             if this_model.emitter not in emitters:
-                queue.done(this_model, lines, particle_lines)
-                continue
+                raise exceptions.InconsistentArguments(
+                    f"Active EmissionModel '{this_model.label}' requires "
+                    f"missing emitter '{this_model.emitter}'."
+                )
 
             # Get the emitter for this model now that it is ready to execute.
             emitter = emitters[this_model.emitter]

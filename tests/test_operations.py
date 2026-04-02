@@ -349,3 +349,168 @@ def test_inactive_unsaved_related_models_are_not_generated(
 
     assert "active_root" in random_part_stars.spectra
     assert "inactive_related" not in random_part_stars.spectra
+
+
+def test_unsaved_shared_line_dependency_survives_until_last_consumer(
+    random_part_stars,
+    test_grid,
+):
+    """Test unsaved shared line dependencies live until all consumers run."""
+    # Use a small line subset so the test stays focused on queue behaviour.
+    line_ids = test_grid.available_lines[:3]
+
+    # Measure the reference incident lines before building the shared DAG.
+    incident_reference = StellarEmissionModel(
+        label="incident_line_reference",
+        grid=test_grid,
+        extract="incident",
+    )
+    reference_lines = random_part_stars.get_lines(line_ids, incident_reference)
+    random_part_stars.clear_all_emissions()
+
+    # Build an unsaved extraction that is consumed both directly and through a
+    # downstream transformation.
+    incident = StellarEmissionModel(
+        label="incident_line_unsaved",
+        grid=test_grid,
+        extract="incident",
+        save=False,
+    )
+    attenuated = AttenuatedEmission(
+        label="attenuated_line_unsaved",
+        dust_curve=PowerLaw(slope=0.0),
+        apply_to=incident,
+        tau_v=0.1,
+        save=False,
+        emitter="stellar",
+    )
+    total = StellarEmissionModel(
+        label="total_line_saved",
+        combine=(incident, attenuated),
+    )
+
+    # Generate the lines and keep the root result for direct checks.
+    total_lines = random_part_stars.get_lines(line_ids, total)
+
+    # The unsaved intermediate models should have been deleted eagerly.
+    assert "incident_line_unsaved" not in random_part_stars.lines
+    assert "attenuated_line_unsaved" not in random_part_stars.lines
+    assert "total_line_saved" in random_part_stars.lines
+
+    # The shared dependency must still have survived long enough to build the
+    # correct final combined line collection.
+    expected_scaling = 1.0 + np.exp(-0.1)
+    assert np.allclose(
+        total_lines.luminosity,
+        reference_lines.luminosity * expected_scaling,
+    )
+    assert np.allclose(
+        total_lines.continuum,
+        reference_lines.continuum * expected_scaling,
+    )
+
+
+def test_related_line_models_are_executed_in_same_queue(
+    random_part_stars,
+    test_grid,
+):
+    """Test related line models are executed as part of the same queue."""
+    line_ids = test_grid.available_lines[:3]
+
+    # Build a saved extraction and a related attenuation model that depends on
+    # the same extracted lines.
+    incident = StellarEmissionModel(
+        label="incident_line_root",
+        grid=test_grid,
+        extract="incident",
+    )
+    attenuated = AttenuatedEmission(
+        label="incident_line_related",
+        dust_curve=PowerLaw(slope=0.0),
+        apply_to=incident,
+        tau_v=0.2,
+        emitter="stellar",
+    )
+    incident.related_models.add(attenuated)
+
+    # Generate the root model and ensure the related model is also produced.
+    incident_lines = random_part_stars.get_lines(line_ids, incident)
+
+    assert "incident_line_root" in random_part_stars.lines
+    assert "incident_line_related" in random_part_stars.lines
+    assert np.allclose(
+        incident_lines.luminosity,
+        random_part_stars.lines["incident_line_root"].luminosity,
+    )
+    assert np.all(
+        random_part_stars.lines["incident_line_related"].luminosity
+        <= random_part_stars.lines["incident_line_root"].luminosity
+    )
+
+
+def test_nested_related_line_models_are_executed_in_same_queue(
+    random_part_stars,
+    test_grid,
+):
+    """Test nested related line models are collected recursively."""
+    line_ids = test_grid.available_lines[:3]
+
+    # Build a root extraction and two related attenuations chained together.
+    incident = StellarEmissionModel(
+        label="nested_incident_line_root",
+        grid=test_grid,
+        extract="incident",
+    )
+    attenuated_once = AttenuatedEmission(
+        label="nested_incident_line_related_1",
+        dust_curve=PowerLaw(slope=0.0),
+        apply_to=incident,
+        tau_v=0.2,
+        emitter="stellar",
+    )
+    attenuated_twice = AttenuatedEmission(
+        label="nested_incident_line_related_2",
+        dust_curve=PowerLaw(slope=0.0),
+        apply_to=attenuated_once,
+        tau_v=0.3,
+        emitter="stellar",
+    )
+    incident.related_models.add(attenuated_once)
+    attenuated_once.related_models.add(attenuated_twice)
+
+    # Generate the root model and ensure both related models are also produced.
+    random_part_stars.get_lines(line_ids, incident)
+
+    assert "nested_incident_line_root" in random_part_stars.lines
+    assert "nested_incident_line_related_1" in random_part_stars.lines
+    assert "nested_incident_line_related_2" in random_part_stars.lines
+
+
+def test_inactive_unsaved_related_line_models_are_not_generated(
+    random_part_stars,
+    test_grid,
+):
+    """Test unsaved related-only line branches are skipped by the queue."""
+    line_ids = test_grid.available_lines[:3]
+
+    # Build an unsaved related model that is not required by any saved output.
+    root = StellarEmissionModel(
+        label="active_line_root",
+        grid=test_grid,
+        extract="incident",
+    )
+    unused_related = AttenuatedEmission(
+        label="inactive_line_related",
+        dust_curve=PowerLaw(slope=0.0),
+        apply_to=root,
+        tau_v=0.4,
+        emitter="stellar",
+        save=False,
+    )
+    root.related_models.add(unused_related)
+
+    # Generate the saved root and ensure the inactive branch is skipped.
+    random_part_stars.get_lines(line_ids, root)
+
+    assert "active_line_root" in random_part_stars.lines
+    assert "inactive_line_related" not in random_part_stars.lines

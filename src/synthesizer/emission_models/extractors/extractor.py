@@ -307,9 +307,17 @@ class IntegratedParticleExtractor(Extractor):
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Sed")
+
+            # Close the setup timer before returning through this early exit.
+            toc("Setting up integrated Lnu calculation")
+
             return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
         elif mask is not None and np.sum(mask) == 0:
             warn("A mask has filtered out all particles, returning empty Sed")
+
+            # Close the setup timer before returning through this early exit.
+            toc("Setting up integrated Lnu calculation")
+
             return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
 
         # Get the attributes from the emitter
@@ -404,6 +412,10 @@ class IntegratedParticleExtractor(Extractor):
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Line")
+
+            # Close the setup timer before returning through this early exit.
+            toc("Setting up particle line calculation")
+
             return LineCollection(
                 line_ids=self._grid.line_ids,
                 lam=self._line_lams,
@@ -412,6 +424,10 @@ class IntegratedParticleExtractor(Extractor):
             )
         elif mask is not None and np.sum(mask) == 0:
             warn("A mask has filtered out all particles, returning empty Line")
+
+            # Close the setup timer before returning through this early exit.
+            toc("Setting up particle line calculation")
+
             return LineCollection(
                 line_ids=self._grid.line_ids,
                 lam=self._line_lams,
@@ -554,12 +570,20 @@ class DopplerShiftedParticleExtractor(Extractor):
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Sed")
+
+            # Close the setup timer before returning through this early exit.
+            toc("Setting up particle Lnu (with velocity shift) calculation")
+
             return Sed(
                 model.lam,
                 np.zeros((emitter.nparticles, self._grid_nlam)) * erg / s / Hz,
             )
         elif mask is not None and np.sum(mask) == 0:
             warn("A mask has filtered out all particles, returning empty Sed")
+
+            # Close the setup timer before returning through this early exit.
+            toc("Setting up particle Lnu (with velocity shift) calculation")
+
             return Sed(
                 model.lam,
                 np.zeros((emitter.nparticles, self._grid_nlam)) * erg / s / Hz,
@@ -675,9 +699,17 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Sed")
+
+            # Close the setup timer before returning through this early exit.
+            toc("Setting up integrated Lnu (with velocity shift) calculation")
+
             return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
         elif mask is not None and np.sum(mask) == 0:
             warn("A mask has filtered out all particles, returning empty Sed")
+
+            # Close the setup timer before returning through this early exit.
+            toc("Setting up integrated Lnu (with velocity shift) calculation")
+
             return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
 
         # Get the attributes from the emitter
@@ -900,6 +932,10 @@ class ParticleExtractor(Extractor):
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Line")
+
+            # Close the setup timer before returning through this early exit.
+            toc("Setting up particle line calculation")
+
             return (
                 LineCollection(
                     line_ids=self._grid.line_ids,
@@ -922,6 +958,10 @@ class ParticleExtractor(Extractor):
 
         elif mask is not None and np.sum(mask) == 0:
             warn("A mask has filtered out all particles, returning empty Line")
+
+            # Close the setup timer before returning through this early exit.
+            toc("Setting up particle line calculation")
+
             return (
                 LineCollection(
                     line_ids=self._grid.line_ids,
