@@ -23,6 +23,8 @@ Keeping this logic in a dedicated module keeps execution-specific state out of
 
 from collections import deque
 
+import numpy as np
+
 from synthesizer import exceptions
 from synthesizer.extensions.timers import tic, toc
 
@@ -518,6 +520,18 @@ class ModelQueue:
             and existing_apply_to == new_apply_to
             and existing_combine == new_combine
             and existing_scale_by == new_scale_by
+            and self._values_equal(
+                existing_model.fixed_parameters,
+                new_model.fixed_parameters,
+            )
+            and self._values_equal(
+                existing_model.lam_mask,
+                new_model.lam_mask,
+            )
+            and self._values_equal(
+                existing_model.vel_shift,
+                new_model.vel_shift,
+            )
             and existing_model._is_extracting == new_model._is_extracting
             and existing_model._is_generating == new_model._is_generating
             and existing_model._is_transforming == new_model._is_transforming
@@ -547,6 +561,61 @@ class ModelQueue:
         if isinstance(model.apply_to, str):
             return model.apply_to
         return model.apply_to.label
+
+    def _values_equal(self, existing_value, new_value):
+        """Return whether two nested values are equal by value.
+
+        Args:
+            existing_value (Any):
+                The existing value attached to the stored model.
+            new_value (Any):
+                The new value attached to the candidate model.
+
+        Returns:
+            bool:
+                ``True`` when both values are equivalent by value, otherwise
+                ``False``.
+        """
+        # Recursively compare dictionary keys and values.
+        if isinstance(existing_value, dict) and isinstance(new_value, dict):
+            if set(existing_value) != set(new_value):
+                return False
+            return all(
+                self._values_equal(existing_value[key], new_value[key])
+                for key in existing_value
+            )
+
+        # Recursively compare tuple and list contents.
+        if isinstance(existing_value, (list, tuple)) and isinstance(
+            new_value, (list, tuple)
+        ):
+            if len(existing_value) != len(new_value):
+                return False
+            return all(
+                self._values_equal(existing_item, new_item)
+                for existing_item, new_item in zip(existing_value, new_value)
+            )
+
+        # Compare array-like values element-by-element.
+        if isinstance(existing_value, np.ndarray) or isinstance(
+            new_value, np.ndarray
+        ):
+            try:
+                return np.array_equal(existing_value, new_value)
+            except Exception:
+                return False
+
+        # Fall back to regular equality for scalar or object values.
+        try:
+            result = existing_value == new_value
+        except Exception:
+            return False
+
+        # Collapse array-like equality results into a single boolean.
+        if isinstance(result, np.ndarray):
+            return bool(np.all(result))
+
+        return bool(result)
 
     @staticmethod
     def _is_model_instance(obj):
