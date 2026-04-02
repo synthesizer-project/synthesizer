@@ -8,6 +8,7 @@
 #include "cpp_to_python.h"
 #include "reductions.h"
 #include "timers.h"
+#include "timers_init.h"
 
 /**
  * @brief Reduce Npart spectra to integrated spectra.
