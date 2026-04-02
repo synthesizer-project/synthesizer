@@ -1,4 +1,16 @@
-"""Analyze and compare timing profiles from multiple runs."""
+"""Analyze and compare timing profiles from multiple runs.
+
+This script is the generic timing-comparison tool. It compares multiple timing
+CSV files directly using arbitrary string labels, but it does not assume the
+labels encode numeric particle counts for scaling plots.
+
+Example:
+    Compare branch-level timing outputs with arbitrary string labels::
+
+        python analyse_timing.py --inputs main_full/timing.csv \
+            queue_full/timing.csv --labels main_full queue_full \
+            --output-dir timing_analysis
+"""
 
 from __future__ import annotations
 
@@ -101,11 +113,9 @@ def main() -> None:
                 filtered_ops.append(op)
                 break
 
-    # Convert labels to integers (particle counts)
-    nparticles = [int(label) for label in labels]
-
-    # Create line plot showing scaling
+    # Create a grouped comparison plot across the provided runs.
     fig, ax = plt.subplots(figsize=(12, 8))
+    x_positions = np.arange(len(labels))
 
     # Group operations by source for legend
     c_ops = [
@@ -126,7 +136,7 @@ def main() -> None:
             timing_data[label].get(op, {}).get("time", 0) for label in labels
         ]
         ax.plot(
-            nparticles,
+            x_positions,
             values,
             marker="o",
             linewidth=2,
@@ -143,7 +153,7 @@ def main() -> None:
             timing_data[label].get(op, {}).get("time", 0) for label in labels
         ]
         ax.plot(
-            nparticles,
+            x_positions,
             values,
             marker="s",
             linewidth=2,
@@ -159,7 +169,7 @@ def main() -> None:
         for label in labels
     ]
     ax.plot(
-        nparticles,
+        x_positions,
         total_values,
         marker="D",
         linewidth=3,
@@ -170,21 +180,11 @@ def main() -> None:
         alpha=0.7,
     )
 
-    # Add reference scaling line (O(n)) anchored at first data point
-    npart_ref = np.array(nparticles)
-    ax.plot(
-        npart_ref,
-        total_values[0] * (npart_ref / nparticles[0]),
-        "k:",
-        alpha=0.5,
-        linewidth=1.5,
-        label="O(n)",
-    )
-
-    ax.set_xlabel("Number of Particles", fontsize=12)
+    ax.set_xlabel("Run", fontsize=12)
     ax.set_ylabel("Time (seconds)", fontsize=12)
-    ax.set_xscale("log")
     ax.set_yscale("log")
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(labels, rotation=45, ha="right")
 
     # Create main legend for operations
     legend1 = ax.legend(loc="best", fontsize=9, ncol=2, framealpha=0.9)
@@ -223,6 +223,15 @@ def main() -> None:
     plot_file = args.output_dir / "timing_comparison.png"
     fig.savefig(plot_file, dpi=200)
     print(f"✓ Saved: {plot_file}")
+
+    # Write a second summary file with total runtime per run for quick scans.
+    totals_file = args.output_dir / "timing_totals.txt"
+    with open(totals_file, "w") as f:
+        f.write("Timing Totals\n")
+        f.write("=" * 60 + "\n\n")
+        for label, total in zip(labels, total_values):
+            f.write(f"{label}: {total:.6f}s\n")
+    print(f"✓ Saved: {totals_file}")
 
     # Create summary text
     summary_file = args.output_dir / "timing_summary.txt"
