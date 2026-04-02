@@ -254,6 +254,28 @@ class TestLineCollectionOperations:
         with pytest.raises(Exception):
             lines + other_lines
 
+    def test_addition_preserves_observed_fluxes(self, simple_line_collection):
+        """Observed-frame quantities should survive line addition."""
+        lines = simple_line_collection
+        other_lines = LineCollection(
+            line_ids=lines.line_ids,
+            lam=lines.lam,
+            lum=lines.luminosity,
+            cont=lines.continuum,
+        )
+
+        lines.get_flux0()
+        other_lines.get_flux0()
+
+        sum_lines = lines + other_lines
+
+        assert np.allclose(sum_lines.flux.value, 2.0 * lines.flux.value)
+        assert np.allclose(
+            sum_lines.continuum_flux.value,
+            2.0 * lines.continuum_flux.value,
+        )
+        assert np.allclose(sum_lines.obslam.value, lines.obslam.value)
+
     def test_multiplication(self, simple_line_collection):
         """Test multiplying line collections."""
         lines = simple_line_collection
