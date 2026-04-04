@@ -1343,9 +1343,13 @@ class DraineLiGrainCurves(AttenuationLaw):
         for key, value in dtg_inputs.items():
             not_within = np.logical_or(value < dtg_min, value > dtg_max)
             if np.sum(not_within) > 0:
+                invalid_values = np.atleast_1d(np.array(value[not_within]))
                 raise exceptions.InconsistentArguments(
                     f"Given dust-to-gas ratio for {key} "
-                    "is outside the grid values."
+                    "is outside the grid values. "
+                    f"Grid range: [{dtg_min}, {dtg_max}]. "
+                    f"Invalid values ({invalid_values.size}): "
+                    f"{invalid_values}. "
                     "Rerun the dust grid with updated range."
                 )
             arr = np.atleast_1d(np.array(value, dtype=float))
