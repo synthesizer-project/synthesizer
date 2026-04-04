@@ -1325,13 +1325,14 @@ class LineCollection:
         return self
 
     def apply_attenuation(
-        self, tau_v, dust_curve, mask=None, **dust_curve_kwargs
+        self, tau_v=None, dust_curve=None, mask=None, **dust_curve_kwargs
     ):
         """Apply attenuation to this LineCollection.
 
         Args:
             tau_v (float/np.ndarray of float):
-                The V-band optical depth for every star particle.
+                The V-band optical depth for every star particle. Optional for
+                attenuation laws that do not require it.
             dust_curve (synthesizer.emission_models.attenuation.*):
                 An instance of one of the dust attenuation models. (defined in
                 synthesizer/emission_models.attenuation.py)
@@ -1348,6 +1349,17 @@ class LineCollection:
                     A new LineCollection object containing the attenuated
                     lines.
         """
+        if dust_curve is None:
+            raise exceptions.MissingArgument("dust_curve must be provided")
+
+        if tau_v is None and "tau_v" in getattr(
+            dust_curve, "_required_params", ()
+        ):
+            raise exceptions.MissingArgument(
+                "tau_v is required by the selected attenuation law: "
+                f"{dust_curve.__class__.__name__}"
+            )
+
         # Ensure the mask is compatible with the spectra
         if mask is not None:
             if self._luminosity.ndim < 1:
