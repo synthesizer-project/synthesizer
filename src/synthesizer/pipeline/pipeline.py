@@ -4331,7 +4331,9 @@ class Pipeline:
 
             for rank, count in enumerate(counts):
                 # Calculate the length of the bar based on the relative size
-                bar_length = int((count / max_count) * 50) if max_count > 0 else 0
+                bar_length = (
+                    int((count / max_count) * 50) if max_count > 0 else 0
+                )
 
                 # Create the bar and append the list length in brackets
                 bar = "#" * bar_length
