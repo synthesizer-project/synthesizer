@@ -13,7 +13,7 @@ from synthesizer.emission_models.transformers.dust_attenuation import (
 )
 
 
-def _write_draine_li_grid(path: Path):
+def _write_draine_li_grid(path: Path, log_on_read=False):
     """Write a minimal attenuation grid in the standard Grid format."""
     with h5py.File(path, "w") as hdf:
         hdf.attrs["axes"] = np.array(["dtg"], dtype=object)
@@ -22,7 +22,7 @@ def _write_draine_li_grid(path: Path):
         axes = hdf.create_group("axes")
         dtg = axes.create_dataset("dtg", data=np.array([0.1, 0.2]))
         dtg.attrs["Units"] = "dimensionless"
-        dtg.attrs["log_on_read"] = False
+        dtg.attrs["log_on_read"] = log_on_read
 
         spectra = hdf.create_group("spectra")
         wavelength = spectra.create_dataset(
@@ -44,6 +44,14 @@ def draine_li_grid(tmp_path):
     """Create a temporary Draine-Li attenuation grid."""
     grid_path = tmp_path / "draine_li_test_grid.hdf5"
     _write_draine_li_grid(grid_path)
+    return grid_path
+
+
+@pytest.fixture
+def draine_li_log_grid(tmp_path):
+    """Create a temporary Draine-Li attenuation grid with log dtg."""
+    grid_path = tmp_path / "draine_li_log_test_grid.hdf5"
+    _write_draine_li_grid(grid_path, log_on_read=True)
     return grid_path
 
 
@@ -121,6 +129,53 @@ def test_draine_li_masks_zero_and_nan_columns(draine_li_grid):
 
     np.testing.assert_allclose(tau, expected)
     assert np.all(np.isfinite(tau))
+
+
+def test_draine_li_resamples_non_native_wavelengths(draine_li_grid):
+    """Non-native wavelength requests should use grid resampling."""
+    dust_curve = DraineLiGrainCurves(
+        grid_name=draine_li_grid.name,
+        grid_dir=draine_li_grid.parent,
+        grain_dict={"graphite": [0.01], "silicate": [0.1]},
+    )
+
+    lam = np.array([1500.0, 2500.0]) * angstrom
+    tau = dust_curve.get_tau_at_lam(
+        lam,
+        sigmalos_H=np.array([1.0]) * Msun / pc**2,
+        sigmalos_graphite_a0p01um=np.array([0.14]) * Msun / pc**2,
+        sigmalos_silicate_a0p1um=np.array([0.14]) * Msun / pc**2,
+    )
+
+    expected = _curve_to_tau(
+        np.array([1.5, 2.5]), 0.14 * Msun / pc**2
+    ) + _curve_to_tau(np.array([0.75, 1.25]), 0.14 * Msun / pc**2)
+
+    np.testing.assert_allclose(tau, expected)
+
+
+def test_draine_li_supports_log10_dtg_grids(draine_li_log_grid):
+    """Logarithmic dtg extraction grids should work correctly."""
+    dust_curve = DraineLiGrainCurves(
+        grid_name=draine_li_log_grid.name,
+        grid_dir=draine_li_log_grid.parent,
+        grain_dict={"graphite": [0.01]},
+    )
+
+    tau = dust_curve.get_tau_at_lam(
+        np.array([1000.0, 3000.0]) * angstrom,
+        sigmalos_H=np.array([1.0, 1.0]) * Msun / pc**2,
+        sigmalos_graphite_a0p01um=np.array([0.14, 0.28]) * Msun / pc**2,
+    )
+
+    expected = np.vstack(
+        [
+            _curve_to_tau(np.array([1.0, 3.0]), 0.14 * Msun / pc**2),
+            _curve_to_tau(np.array([2.0, 6.0]), 0.28 * Msun / pc**2),
+        ]
+    )
+
+    np.testing.assert_allclose(tau, expected)
 
 
 def test_draine_li_rejects_negative_columns(draine_li_grid):

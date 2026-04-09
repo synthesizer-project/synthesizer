@@ -1189,8 +1189,7 @@ class DraineLiGrainCurves(AttenuationLaw):
         model for extinction curves obtained from pre-processing the
         extinction efficiencies for the required grain size
         distribution. The different components and their relationship
-        with the dust-to-gas ratio have been interpolated
-        and LRU-cached"""
+        with the dust-to-gas ratio are extracted from a grid"""
         required_params = [
             f"sigmalos_{grain_type}_a{grain_size}um".replace(".", "p")
             for grain_type, grain_sizes in self.grain_dict.items()
@@ -1203,8 +1202,6 @@ class DraineLiGrainCurves(AttenuationLaw):
             required_params=required_params,
             require_tau_v=False,
         )
-        self._grid = None
-        self._grid_cache = {}
 
     def __repr__(self):
         """Return a string representation of the DraineLiGrainCurves object."""
@@ -1243,56 +1240,75 @@ class DraineLiGrainCurves(AttenuationLaw):
         if sigmalos_H is None:
             raise exceptions.MissingArgument("sigmalos_H is required")
 
-        for key, value in sigmalos_dust.items():
-            if np.atleast_1d(value).shape != np.atleast_1d(sigmalos_H).shape:
+        component_datasets = {
+            component_key: component_key.split("sigmalos_", 1)[-1].replace(
+                "0p", "0."
+            )
+            for component_key in sigmalos_dust
+        }
+
+        for component_key, dust_col in sigmalos_dust.items():
+            if (
+                np.atleast_1d(dust_col).shape
+                != np.atleast_1d(sigmalos_H).shape
+            ):
                 raise exceptions.InconsistentArguments(
-                    f"""
-                    Contents of los dust density and the
-                    los H density do not have the same shape
-                    in {key}!
-                    """
+                    "Contents of los dust density and los H density do not "
+                    f"have the same shape in {component_key}!"
                 )
-            elif isinstance(value, (unyt_quantity, unyt_array)):
+            elif isinstance(dust_col, (unyt_quantity, unyt_array)):
                 try:
-                    _ = value.to(sigmalos_H.units)
+                    _ = dust_col.to(sigmalos_H.units)
                 except Exception:
                     raise exceptions.InconsistentArguments(
-                        f"{key} must have units compatible with mass/length^2"
+                        f"{component_key} must have units compatible with "
+                        "mass/length^2"
                     )
             else:
                 raise exceptions.InconsistentArguments(
-                    f"""Provide units to the {key}
-                    quantity
-                    """
+                    f"Provide units to the {component_key} quantity"
                 )
 
         MU = 1.4
         M_H = 1.6738e-24 * g
         GAS_MASS_PER_H = (MU * M_H).to(Msun)
 
-        if self._grid is None:
-            spectra_to_read = [
-                param.split("sigmalos_", 1)[-1].replace("0p", "0.")
-                for param in self._required_params
-                if param != "sigmalos_H"
-            ]
-            self._grid = Grid(
-                self.grid_name,
-                self.grid_dir,
-                ignore_lines=True,
-                spectra_to_read=spectra_to_read,
-            )
-
         lam = np.atleast_1d(lam.to("Angstrom"))
-        cache_key = (lam.shape, tuple(np.round(lam.value, decimals=12)))
-        grid = self._grid_cache.get(cache_key)
-        if grid is None:
+        spectra_to_read = list(component_datasets.values())
+        native_grid = Grid(
+            self.grid_name,
+            self.grid_dir,
+            ignore_lines=True,
+            spectra_to_read=spectra_to_read,
+        )
+
+        native_indices = []
+        for lam_val in lam:
+            matches = np.isclose(native_grid.lam.value, lam_val.value)
+            if np.any(matches):
+                native_indices.append(np.flatnonzero(matches)[0])
+            else:
+                native_indices = None
+                break
+
+        if native_indices is not None:
+            grid = native_grid
+            grid.lam = grid.lam[native_indices]
+            for spectra_id in grid.available_spectra_emissions:
+                grid.spectra[spectra_id] = grid.spectra[spectra_id][
+                    ..., native_indices
+                ]
+            grid._ensure_spectra_data_contiguous()
+        elif lam.size > 1:
             grid = Grid(
                 self.grid_name,
                 self.grid_dir,
                 ignore_lines=True,
-                spectra_to_read=self._grid.available_spectra_emissions,
+                spectra_to_read=spectra_to_read,
+                new_lam=lam,
             )
+        else:
+            grid = native_grid
             for spectra_id in grid.available_spectra_emissions:
                 interp = interpolate.interp1d(
                     grid.lam.value,
@@ -1302,21 +1318,21 @@ class DraineLiGrainCurves(AttenuationLaw):
                     bounds_error=False,
                     fill_value="extrapolate",
                 )
-                grid.spectra[spectra_id] = interp(lam.value)
+                grid.spectra[spectra_id] = interp(lam.value)[..., np.newaxis]
             grid.lam = lam
             grid._ensure_spectra_data_contiguous()
-            self._grid_cache[cache_key] = grid
 
-        def _broadcast_column_density(value, size, name):
-            value = np.atleast_1d(value)
-            if value.size not in (1, size):
+        def _broadcast_column_density(column_density, size, name):
+            column_density = np.atleast_1d(column_density)
+            if column_density.size not in (1, size):
                 raise exceptions.InconsistentArguments(
-                    f"{name} length {value.size} incompatible with expected "
+                    f"{name} length {column_density.size} incompatible "
+                    "with expected "
                     f"size {size}."
                 )
-            if value.size == 1 and size > 1:
-                value = np.repeat(value, size)
-            return value
+            if column_density.size == 1 and size > 1:
+                column_density = np.repeat(column_density, size)
+            return column_density
 
         dtg_axis_name = grid._extract_axes[0]
         if (
@@ -1328,8 +1344,8 @@ class DraineLiGrainCurves(AttenuationLaw):
                 "single dtg axis."
             )
         grid_dtg = grid._extract_axes_values[dtg_axis_name]
-        dtg_min = np.min(grid_dtg)
-        dtg_max = np.max(grid_dtg)
+        grid_dtg_min = np.min(grid_dtg)
+        grid_dtg_max = np.max(grid_dtg)
 
         size = max(
             [np.atleast_1d(sigmalos_H).size]
@@ -1350,9 +1366,7 @@ class DraineLiGrainCurves(AttenuationLaw):
         tau_all = np.zeros((nparticles, grid.nlam), dtype=np.float32)
 
         for component_key, dust_col in sigmalos_dust.items():
-            dataset_key = component_key.split("sigmalos_", 1)[-1].replace(
-                "0p", "0."
-            )
+            dataset_key = component_datasets[component_key]
             if dataset_key not in grid.available_spectra_emissions:
                 raise exceptions.InconsistentArguments(
                     f"Grain type {dataset_key} not in the provided dust grid!"
@@ -1380,13 +1394,20 @@ class DraineLiGrainCurves(AttenuationLaw):
             dtg = np.ones(nparticles, dtype=float)
             dtg[valid] = dust_col.value[valid] / (sigmalos_H.value[valid] * MU)
 
-            not_within = valid & ((dtg < dtg_min) | (dtg > dtg_max))
+            dtg_grid_values = dtg
+            if dtg_axis_name == "log10dtg":
+                dtg_grid_values = np.log10(dtg_grid_values)
+
+            not_within = valid & (
+                (dtg_grid_values < grid_dtg_min)
+                | (dtg_grid_values > grid_dtg_max)
+            )
             if np.any(not_within):
                 invalid_values = np.atleast_1d(dtg[not_within])
                 raise exceptions.InconsistentArguments(
                     f"Given dust-to-gas ratio for {component_key} "
                     "is outside the grid values. "
-                    f"Grid range: [{dtg_min}, {dtg_max}]. "
+                    f"Grid range: [{grid_dtg_min}, {grid_dtg_max}]. "
                     f"Invalid values ({invalid_values.size}): "
                     f"{invalid_values}. "
                     "Rerun the dust grid with updated range."
@@ -1400,7 +1421,7 @@ class DraineLiGrainCurves(AttenuationLaw):
             if dtg_axis_name == "dtg":
                 emitter_kwargs[dtg_axis_name] = dtg
             else:
-                emitter_kwargs[dtg_axis_name] = np.log10(dtg)
+                emitter_kwargs[dtg_axis_name] = dtg_grid_values
             emitter = SimpleNamespace(**emitter_kwargs)
             model = SimpleNamespace(
                 fixed_parameters={},
