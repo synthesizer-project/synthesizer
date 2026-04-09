@@ -9,6 +9,27 @@ from synthesizer.emission_models import (
     StellarEmissionModel,
 )
 from synthesizer.emission_models.transformers import PowerLaw
+from synthesizer.emission_models.transformers.dust_attenuation import (
+    AttenuationLaw,
+)
+
+
+class NoTauDustCurve(AttenuationLaw):
+    """Simple attenuation law that does not require tau_v."""
+
+    def __init__(self, transmission=0.5):
+        """Initialise the fixed-transmission test dust curve."""
+        AttenuationLaw.__init__(
+            self,
+            description="test attenuation law without tau_v",
+            required_params=(),
+            require_tau_v=False,
+        )
+        self.transmission = transmission
+
+    def get_transmission(self, tau_v=None, lam=None, **dust_curve_kwargs):
+        """Return a constant transmission independent of tau_v."""
+        return np.full(np.atleast_1d(lam).shape, self.transmission)
 
 
 def test_single_star_extraction(
@@ -113,6 +134,15 @@ def test_attenuation_transform(unit_sed):
         "The attenuated SED is not correct"
         f" (original={unit_sed.lnu}, attenuated={att_unit_sed.lnu})"
     )
+
+
+def test_attenuation_transform_without_tau_v(unit_sed):
+    """Test attenuating an SED with a law that does not require tau_v."""
+    dcurve = NoTauDustCurve(transmission=0.25)
+
+    att_unit_sed = unit_sed.apply_attenuation(dust_curve=dcurve)
+
+    assert np.allclose(att_unit_sed.lnu, unit_sed.lnu * 0.25)
 
 
 def test_combination_spectra(

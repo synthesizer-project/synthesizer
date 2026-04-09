@@ -1508,8 +1508,8 @@ class Sed:
 
     def apply_attenuation(
         self,
-        tau_v,
-        dust_curve,
+        tau_v=None,
+        dust_curve=None,
         mask=None,
         **dust_curve_kwargs,
     ):
@@ -1517,7 +1517,8 @@ class Sed:
 
         Args:
             tau_v (float/np.ndarray of float):
-                The V-band optical depth for every star particle.
+                The V-band optical depth for every star particle. Optional for
+                attenuation laws that do not require it.
             dust_curve (synthesizer.emission_models.attenuation.*):
                 An instance of one of the dust attenuation models. (defined in
                 synthesizer/emission_models.attenuation.py)
@@ -1534,6 +1535,17 @@ class Sed:
                 A new Sed containing the rest frame spectra of self attenuated
                 by the transmission defined from tau_v and the dust curve.
         """
+        if dust_curve is None:
+            raise exceptions.MissingArgument("dust_curve must be provided")
+
+        if tau_v is None and "tau_v" in getattr(
+            dust_curve, "_required_params", ()
+        ):
+            raise exceptions.MissingArgument(
+                "tau_v is required by the selected attenuation law: "
+                f"{dust_curve.__class__.__name__}"
+            )
+
         # Ensure the mask is compatible with the spectra
         if mask is not None:
             if self._lnu.ndim < 2:
