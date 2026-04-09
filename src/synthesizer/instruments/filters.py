@@ -358,9 +358,8 @@ class FilterCollection:
 
         hdf.close()
 
-        # We're done loading so lets merge the filters, if they need to be
-        # resampled they will be at the end of the __init__
-        self._merge_filter_lams()
+        # Ensure loaded filters are harmonised onto the collection grid.
+        self._harmonise_loaded_filters()
 
     @classmethod
     def _from_hdf5(cls, hdf):
@@ -403,11 +402,49 @@ class FilterCollection:
             # Store the created filter
             fc.filters[filter_code] = filt
 
-        # We're done loading so lets merge the filters, if they need to be
-        # resampled they will be at the end of the __init__
-        fc._merge_filter_lams()
+        # Ensure loaded filters are harmonised onto the collection grid.
+        fc._harmonise_loaded_filters()
 
         return fc
+
+    def _harmonise_loaded_filters(self):
+        """Ensure loaded filters are consistent with the collection grid."""
+        if self.lam is None:
+            return
+
+        target_lam = self.lam
+        target_size = len(target_lam)
+
+        for filter_code in self.filter_codes:
+            filt = self.filters[filter_code]
+            lam_size = len(filt.lam)
+            transmission_size = len(filt.t)
+
+            on_collection_grid = lam_size == target_size
+            if on_collection_grid:
+                on_collection_grid = np.allclose(filt._lam, self._lam)
+
+            if on_collection_grid and transmission_size == target_size:
+                continue
+
+            has_original_grid = (
+                filt.original_lam is not None
+                and filt.original_t is not None
+                and len(filt.original_lam) == len(filt.original_t)
+            )
+
+            if not has_original_grid:
+                raise exceptions.InconsistentWavelengths(
+                    "Loaded filter collection contains inconsistent "
+                    f"wavelength and transmission arrays for {filter_code}. "
+                    "The cached file does not contain enough original filter "
+                    "information to harmonise this filter on load. Regenerate "
+                    "the cache file."
+                )
+
+            filt._interpolate_wavelength(new_lam=target_lam)
+
+        self._refresh_batch_cache()
 
     def _include_svo_filters(self, filter_codes):
         """Populate the `FilterCollection` with filters from SVO.
