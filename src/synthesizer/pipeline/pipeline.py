@@ -3952,7 +3952,9 @@ class Pipeline:
 
         # Write out the metadata
         self.io_helper.create_file_with_metadata(
-            self.instruments, self.emission_model
+            self.instruments,
+            self.emission_model,
+            include_lines=self._write_lines or self._write_flux_lines,
         )
 
         # In MPI land we need to collect together the galaxy counts on each
@@ -4073,14 +4075,14 @@ class Pipeline:
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_ids,
-                "Galaxies/Lines/IDs",
-                galaxy_indices,
+                self.line_ids if self.rank == 0 else None,
+                "Lines/IDs",
+                root=0,
             )
             self.io_helper.write_data(
-                self.line_lams,
-                "Galaxies/Lines/Wavelengths",
-                galaxy_indices,
+                self.line_lams if self.rank == 0 else None,
+                "Lines/Wavelengths",
+                root=0,
             )
 
         # Write observed emission line fluxes
