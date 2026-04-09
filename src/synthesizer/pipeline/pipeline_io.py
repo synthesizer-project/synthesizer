@@ -227,7 +227,12 @@ class PipelineIO:
         # Report how blazingly fast we are
         self._print(f"{message} took {elapsed:.3f} {units}.")
 
-    def create_file_with_metadata(self, instruments, emission_model):
+    def create_file_with_metadata(
+        self,
+        instruments,
+        emission_model,
+        include_lines=False,
+    ):
         """Write metadata to the HDF5 file.
 
         This writes useful metadata to the root group of the HDF5 file and
@@ -236,6 +241,8 @@ class PipelineIO:
         Args:
             instruments (dict): A dictionary of instrument objects.
             emission_model (dict): A dictionary of emission model objects.
+            include_lines (bool): Whether to create the root-level line
+                metadata group.
         """
         start = time.perf_counter()
 
@@ -255,9 +262,11 @@ class PipelineIO:
                 hdf.attrs["synthesizer_version"] = __version__
 
                 # Create groups for the instruments, emission model, and
-                # galaxies
+                # galaxies.
                 inst_group = hdf.create_group("Instruments")
                 model_group = hdf.create_group("EmissionModel")
+                if include_lines:
+                    hdf.create_group("Lines")
                 hdf.create_group("Galaxies")  # we'll use this in a mo
 
                 # Write out the instruments
@@ -430,6 +439,16 @@ class PipelineIO:
             if data is None or len(data) == 0:
                 return
 
+            # Root-level metadata should only be written once, even when using
+            # MPI or collective I/O.
+            if self.is_parallel and indexes is None:
+                if self.rank != root:
+                    return
+
+                self.write_datasets_recursive(data, key)
+                self._took(start, f"Writing {key} (and subgroups)")
+                return
+
             # Use the appropriate write method
             if self.is_collective:
                 # For collective I/O we need to create the datasets first, then
@@ -470,9 +489,6 @@ class PipelineIO:
 
             # Loop over the items in the source group
             for k, v in src.items():
-                if k in ["Instruments", "EmissionModel"]:
-                    continue
-
                 # If we found a group we need to recurse and create the group
                 # in the destination file if it doesn't exist. We also need to
                 # copy the attributes.
@@ -537,33 +553,25 @@ class PipelineIO:
                     temp_path.replace("<rank>", str(rank)),
                     "r",
                 ) as rank_hdf:
-                    # We only the metadata groups once
+                    # Copy root metadata once and only combine Galaxies
                     if rank == 0:
-                        # Copy the instruments over (no slice needed)
-                        hdf.create_group("Instruments")
-                        _recursive_copy(
-                            rank_hdf["Instruments"],
-                            hdf["Instruments"],
-                            slice=None,
-                        )
+                        for attr in rank_hdf.attrs:
+                            hdf.attrs[attr] = rank_hdf.attrs[attr]
 
-                        # Copy the emission model over (no slice needed)
-                        hdf.create_group("EmissionModel")
-                        _recursive_copy(
-                            rank_hdf["EmissionModel"],
-                            hdf["EmissionModel"],
-                            slice=None,
-                        )
+                        for key, value in rank_hdf.items():
+                            if key == "Galaxies":
+                                hdf.create_group("Galaxies")
+                                continue
+                            hdf.copy(value, key)
 
-                    # Copy the contents of the rank file to the output file
                     _recursive_copy(
-                        rank_hdf,
-                        hdf,
+                        rank_hdf["Galaxies"],
+                        hdf["Galaxies"],
                         slice=slice(starts[rank], ends[rank]),
                     )
 
-                # Delete the rank file
-                os.remove(temp_path.replace("<rank>", str(rank)))
+        for rank in range(self.size):
+            os.remove(temp_path.replace("<rank>", str(rank)))
 
         self._took(start, "Combining files")
 
@@ -601,8 +609,6 @@ class PipelineIO:
 
             def gather_datasets(group, group_path="/"):
                 for k, v in group.items():
-                    if k in ["Instruments", "EmissionModel"]:
-                        continue
                     current_path = f"{group_path}{k}"
                     if isinstance(v, h5py.Group):
                         gather_datasets(v, current_path + "/")
@@ -612,27 +618,30 @@ class PipelineIO:
                             (current_path, v.shape, v.dtype, dict(v.attrs))
                         )
 
-            gather_datasets(f0)
-
             # Gather group structure (to replicate in the virtual file)
             groups_info = []
 
             def gather_groups(group, group_path="/"):
                 for k, v in group.items():
-                    if k in ["Instruments", "EmissionModel"]:
-                        continue
                     current_path = f"{group_path}{k}"
                     if isinstance(v, h5py.Group):
                         groups_info.append((current_path, dict(v.attrs)))
                         gather_groups(v, current_path + "/")
 
-            gather_groups(f0)
+            gather_datasets(f0["Galaxies"], "/Galaxies/")
+            gather_groups(f0["Galaxies"], "/Galaxies/")
 
             # Create the virtual file
             with h5py.File(new_path, "w") as hdf:
-                for meta_group in ["Instruments", "EmissionModel"]:
-                    if meta_group in f0:
-                        hdf.copy(f0[meta_group], meta_group)
+                for attr in f0.attrs:
+                    hdf.attrs[attr] = f0.attrs[attr]
+
+                for key, value in f0.items():
+                    if key == "Galaxies":
+                        continue
+                    hdf.copy(value, key)
+
+                hdf.create_group("Galaxies")
 
                 # Create empty group structure
                 for gpath, gattrs in groups_info:
