@@ -94,7 +94,7 @@ class PipelineIO:
             )
 
         # Flags for behavior
-        self.is_parallel = comm is not None
+        self.is_parallel = comm is not None and self.size > 1
         self.is_root = self.rank == 0
         self.is_collective = self.is_parallel and self.PARALLEL and parallel_io
 
