@@ -21,11 +21,11 @@ that shared links can be created.
 When you run this script it will open the Box authorization page in your
 browser, start a temporary local callback server, exchange the returned
 auth code for an access token, and then update the `_data_ids.yml` database
-and create that file in the current directory.
+and write that file alongside this script.
 
-To update the Synthesizer database this script should be run in the
-`src/synthesizer/downloader` directory, and the resulting `_data_ids.yml` file
-should be committed to the repository.
+To update the Synthesizer database, run this script from anywhere in the
+repository and commit the resulting `src/synthesizer/downloader/_data_ids.yml`
+file.
 """
 
 import json
@@ -52,7 +52,8 @@ except ImportError as exc:
 # Define constants for the Box API and shared folder URL.
 BOX_API_URL = "https://api.box.com/2.0"
 SHARED_FOLDER_URL = "https://sussex.box.com/s/a48dk93irkp5bj13zc6xoco5o6phat4j"
-OUTPUT_YAML = "_data_ids.yml"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_YAML = os.path.join(SCRIPT_DIR, "_data_ids.yml")
 
 
 def _categorise_links(filepath: str) -> str:
@@ -474,7 +475,7 @@ def _update_box_links_database():
 
     Returns:
         None: The database is written to `OUTPUT_YAML` in the current
-        directory.
+        script directory.
     """
     # Load the Box OAuth configuration from the local environment.
     client_id = os.getenv("SYNTH_BOX_ID")
