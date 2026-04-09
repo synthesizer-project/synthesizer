@@ -1266,8 +1266,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                 An array of wavelengths or a single wavlength at which to
                 calculate optical depths (in AA, global unit).
             sigmalos_H (unyt array):
-                Line-of-sight H density in units of
-                Msun/pc^2
+                Line-of-sight H density in units of Msun/pc^2
             sigmalos_dust (Dict: unyt_array):
                 Dictionary containing the different
                 line-of-sight dust density of the dust
@@ -1336,11 +1335,20 @@ class DraineLiGrainCurves(AttenuationLaw):
             dtg_inputs[key] = value.to(Msun / pc**2) / (
                 sigmalos_H.to(Msun / pc**2) * MU
             )
+
         # Convert dtg inputs to numpy arrays or None
         # Determine number of samples
         dtg_arrays = {}
         lengths = []
         for key, value in dtg_inputs.items():
+            # Check values are finite and real numbers
+            # TEMPORARY
+            if not np.all(np.isfinite(value)) or not np.all(np.isreal(value)):
+                raise exceptions.InconsistentArguments(
+                    "Dust-to-gas ratio values must be finite real numbers."
+                    f"Found {np.sum(~np.isfinite(value))} non-finite and "
+                    f"{np.sum(~np.isreal(value))} non-real values in {key}."
+                )
             not_within = np.logical_or(value < dtg_min, value > dtg_max)
             if np.sum(not_within) > 0:
                 invalid_values = np.atleast_1d(np.array(value[not_within]))
