@@ -204,7 +204,7 @@ def download_dust_grid(destination):
     # Download the dust grid
     _download("draine_li_dust_emission_grid_MW_3p1.hdf5", destination)
     _download(
-        "dust_extcurve_draine_li_lognormal_asmall0p01_alarge0p1_apah0p005.hdf5",
+        "dust_extcurve_draine_li_lognormal_asmall0p01_alarge0p1_apah0p001.hdf5",
         destination,
     )
 

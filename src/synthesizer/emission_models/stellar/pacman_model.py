@@ -2220,8 +2220,8 @@ class BimodalPacmanEmission:
     and nebular continuum emission.
 
     All spectra produced have a young, old and combined component. The split
-    between young and old is by default 10 ^ 7 yr (10 Myr) but can be changed with the
-    age_pivot argument.
+    between young and old is by default 10 ^ 7 yr (10 Myr) but can be changed
+    with the age_pivot argument.
 
     This model will always produce:
         - young_incident: the stellar emission incident onto the ISM for the

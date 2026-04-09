@@ -1000,7 +1000,7 @@ class TestStringAliasMaskThreshold:
         assert any(m["thresh"] == "age_thresh_attr" for m in model.masks)
 
     def test_add_mask_string_thresh_cached_correctly(self, test_grid):
-        """Test that a string alias thresh is cached as-is in the mask string."""
+        """Test that string alias thresh is cached as-is in the mask string."""
         from synthesizer.emission_models import IncidentEmission
 
         model = IncidentEmission(grid=test_grid, label="incident_str_cache")
@@ -1016,7 +1016,7 @@ class TestStringAliasMaskThreshold:
         assert "age_thresh_attr" in mask_str
 
     def test_add_mask_rejects_plain_number_thresh(self, test_grid):
-        """Test that add_mask still rejects a bare number (no units, not str)."""
+        """Test that add_mask rejects a bare number (no units, not str)."""
         from synthesizer import exceptions
         from synthesizer.emission_models import IncidentEmission
 
