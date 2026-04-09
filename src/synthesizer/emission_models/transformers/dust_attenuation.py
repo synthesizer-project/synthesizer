@@ -15,6 +15,7 @@ Example usage::
     )
 """
 
+import copy
 import os
 from types import SimpleNamespace
 from typing import Dict
@@ -1206,6 +1207,18 @@ class DraineLiGrainCurves(AttenuationLaw):
             require_tau_v=False,
         )
 
+        spectra_to_read = [
+            param.split("sigmalos_", 1)[-1].replace("0p", "0.")
+            for param in required_params
+            if param != "sigmalos_H"
+        ]
+        self.grid = Grid(
+            self.grid_name,
+            self.grid_dir,
+            ignore_lines=True,
+            spectra_to_read=spectra_to_read,
+        )
+
     def __repr__(self):
         """Return a string representation of the DraineLiGrainCurves object."""
         return f"DraineLiGrainCurves(grid_name={self.grid_name})"
@@ -1272,30 +1285,18 @@ class DraineLiGrainCurves(AttenuationLaw):
                     f"Provide units to the {component_key} quantity"
                 )
 
-        # Normalise the target wavelengths and load only the grain components
-        # needed for this call from the attenuation grid.
+        # Normalise the target wavelengths and prepare a wavelength-matched
+        # view of the attenuation grid.
         lam = np.atleast_1d(lam.to("Angstrom"))
-        spectra_to_read = list(component_datasets.values())
 
         # Use the Grid wavelength machinery for multi-point requests. For a
         # single wavelength use a dedicated Grid helper because spectres needs
         # at least two wavelength bins.
         if lam.size > 1:
-            grid = Grid(
-                self.grid_name,
-                self.grid_dir,
-                ignore_lines=True,
-                spectra_to_read=spectra_to_read,
-                new_lam=lam,
-            )
+            grid = self.grid.reduce_rest_frame_lam(lam)
         else:
-            grid = Grid(
-                self.grid_name,
-                self.grid_dir,
-                ignore_lines=True,
-                spectra_to_read=spectra_to_read,
-            )
-            spectra_at_lam = grid.get_spectra_at_lam(lam)
+            grid = copy.deepcopy(self.grid)
+            spectra_at_lam = self.grid.get_spectra_at_lam(lam)
             for spectra_id, spectra in spectra_at_lam.items():
                 grid.spectra[spectra_id] = spectra[..., np.newaxis]
             grid.lam = lam
