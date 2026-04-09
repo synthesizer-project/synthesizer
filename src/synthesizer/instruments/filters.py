@@ -1574,9 +1574,10 @@ class FilterCollection:
             # Create transmission dataset
             f_grp.create_dataset("Transmission", data=filt.t)
 
-            # For an SVO filter we need the original wavelength and
-            # transmission curves
-            if filt.filter_type == "SVO":
+            # Persist the original wavelength and transmission curves whenever
+            # they are available so loaded filters can be reharmonised onto the
+            # collection grid if needed.
+            if filt.original_lam is not None and filt.original_t is not None:
                 f_grp.create_dataset(
                     "Original_Wavelength", data=filt._original_lam
                 )
@@ -1875,7 +1876,14 @@ class Filter:
         else:
             # For a generic filter just set the transmission and
             # wavelengths
+            self.filter_type = filter_type
             self.t = f_grp["Transmission"][:]
+            if "Original_Wavelength" in f_grp:
+                self.original_lam = unyt_array(
+                    f_grp["Original_Wavelength"][:], lam_units
+                )
+            if "Original_Transmission" in f_grp:
+                self.original_t = f_grp["Original_Transmission"][:]
 
     def clip_transmission(self):
         """Clip transmission curve between 0 and 1.
