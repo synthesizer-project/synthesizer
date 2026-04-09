@@ -1105,9 +1105,15 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Check there are actually galaxies...
+        # Check there are actually galaxies... and tell the user
         if len(galaxies) == 0:
-            self._print("No galaxies provided to add to the Pipeline.")
+            if self.using_mpi:
+                self._print(
+                    "No galaxies provided to add to the Pipeline on rank"
+                    f" {self.rank}."
+                )
+            else:
+                self._print("No galaxies provided to add to the Pipeline.")
 
         # Attach the galaxies
         self.galaxies = galaxies
@@ -4331,7 +4337,9 @@ class Pipeline:
 
             for rank, count in enumerate(counts):
                 # Calculate the length of the bar based on the relative size
-                bar_length = int((count / max_count) * 50)
+                bar_length = (
+                    int((count / max_count) * 50) if max_count > 0 else 0
+                )
 
                 # Create the bar and append the list length in brackets
                 bar = "#" * bar_length
