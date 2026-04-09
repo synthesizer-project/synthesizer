@@ -817,6 +817,40 @@ class Grid:
         if self.lines_available:
             self._remove_lines_outside_lam()
 
+    @accepts(lam=angstrom)
+    def get_spectra_at_lam(self, lam):
+        """Return spectra evaluated at a single wavelength.
+
+        Args:
+            lam (unyt_quantity/unyt_array):
+                The wavelength at which to evaluate the grid spectra.
+
+        Returns:
+            dict:
+                A dictionary mapping spectra ids to arrays with the same grid
+                shape as the source spectra, but with the wavelength axis
+                removed.
+        """
+        lam = np.atleast_1d(lam.to(angstrom))
+        if lam.size != 1:
+            raise exceptions.InconsistentArguments(
+                "get_spectra_at_lam expects exactly one wavelength."
+            )
+
+        spectra_at_lam = {}
+        for spectra_type in self.available_spectra_emissions:
+            interp = interp1d(
+                self._lam,
+                self.spectra[spectra_type],
+                axis=-1,
+                kind="linear",
+                bounds_error=False,
+                fill_value=0.0,
+            )
+            spectra_at_lam[spectra_type] = interp(lam.value)
+
+        return spectra_at_lam
+
     def __str__(self):
         """Return a string representation of the particle object.
 

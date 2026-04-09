@@ -53,6 +53,9 @@ __all__ = [
 ]
 
 _RESET_SENTINEL = object()
+_DRAINE_LI_MEAN_MOLECULAR_WEIGHT = 1.4
+_HYDROGEN_MASS = 1.6738e-24 * g
+_GAS_MASS_PER_H = (_DRAINE_LI_MEAN_MOLECULAR_WEIGHT * _HYDROGEN_MASS).to(Msun)
 
 
 class AttenuationLaw(Transformer):
@@ -1211,7 +1214,7 @@ class DraineLiGrainCurves(AttenuationLaw):
     def get_tau_at_lam(
         self,
         lam: unyt_array,
-        sigmalos_H: unyt_array = None,
+        sigmalos_H: unyt_array,
         **sigmalos_dust: unyt_array,
     ):
         """Calculate optical depth at a wavelength.
@@ -1236,10 +1239,8 @@ class DraineLiGrainCurves(AttenuationLaw):
                 if sigmalos input is array-like, otherwise shape (N_lambda,)).
                 Dimensionless
         """
-        # Some important argument requirements
-        if sigmalos_H is None:
-            raise exceptions.MissingArgument("sigmalos_H is required")
-
+        # Map the public keyword arguments onto the spectra names stored in
+        # the attenuation grid.
         component_datasets = {
             component_key: component_key.split("sigmalos_", 1)[-1].replace(
                 "0p", "0."
@@ -1247,6 +1248,8 @@ class DraineLiGrainCurves(AttenuationLaw):
             for component_key in sigmalos_dust
         }
 
+        # Validate that every dust column has the same shape as the hydrogen
+        # column and that all columns carry compatible surface-density units.
         for component_key, dust_col in sigmalos_dust.items():
             if (
                 np.atleast_1d(dust_col).shape
@@ -1269,37 +1272,15 @@ class DraineLiGrainCurves(AttenuationLaw):
                     f"Provide units to the {component_key} quantity"
                 )
 
-        MU = 1.4
-        M_H = 1.6738e-24 * g
-        GAS_MASS_PER_H = (MU * M_H).to(Msun)
-
+        # Normalise the target wavelengths and load only the grain components
+        # needed for this call from the attenuation grid.
         lam = np.atleast_1d(lam.to("Angstrom"))
         spectra_to_read = list(component_datasets.values())
-        native_grid = Grid(
-            self.grid_name,
-            self.grid_dir,
-            ignore_lines=True,
-            spectra_to_read=spectra_to_read,
-        )
 
-        native_indices = []
-        for lam_val in lam:
-            matches = np.isclose(native_grid.lam.value, lam_val.value)
-            if np.any(matches):
-                native_indices.append(np.flatnonzero(matches)[0])
-            else:
-                native_indices = None
-                break
-
-        if native_indices is not None:
-            grid = native_grid
-            grid.lam = grid.lam[native_indices]
-            for spectra_id in grid.available_spectra_emissions:
-                grid.spectra[spectra_id] = grid.spectra[spectra_id][
-                    ..., native_indices
-                ]
-            grid._ensure_spectra_data_contiguous()
-        elif lam.size > 1:
+        # Use the Grid wavelength machinery for multi-point requests. For a
+        # single wavelength use a dedicated Grid helper because spectres needs
+        # at least two wavelength bins.
+        if lam.size > 1:
             grid = Grid(
                 self.grid_name,
                 self.grid_dir,
@@ -1308,20 +1289,20 @@ class DraineLiGrainCurves(AttenuationLaw):
                 new_lam=lam,
             )
         else:
-            grid = native_grid
-            for spectra_id in grid.available_spectra_emissions:
-                interp = interpolate.interp1d(
-                    grid.lam.value,
-                    grid.spectra[spectra_id],
-                    axis=-1,
-                    kind="linear",
-                    bounds_error=False,
-                    fill_value="extrapolate",
-                )
-                grid.spectra[spectra_id] = interp(lam.value)[..., np.newaxis]
+            grid = Grid(
+                self.grid_name,
+                self.grid_dir,
+                ignore_lines=True,
+                spectra_to_read=spectra_to_read,
+            )
+            spectra_at_lam = grid.get_spectra_at_lam(lam)
+            for spectra_id, spectra in spectra_at_lam.items():
+                grid.spectra[spectra_id] = spectra[..., np.newaxis]
             grid.lam = lam
             grid._ensure_spectra_data_contiguous()
 
+        # Broadcast scalar columns to the common particle count so the rest of
+        # the calculation can assume particle-shaped arrays throughout.
         def _broadcast_column_density(column_density, size, name):
             column_density = np.atleast_1d(column_density)
             if column_density.size not in (1, size):
@@ -1334,6 +1315,8 @@ class DraineLiGrainCurves(AttenuationLaw):
                 column_density = np.repeat(column_density, size)
             return column_density
 
+        # The attenuation grid should expose exactly one extractable dtg axis,
+        # either in linear or logarithmic form.
         dtg_axis_name = grid._extract_axes[0]
         if (
             dtg_axis_name not in ("dtg", "log10dtg")
@@ -1347,6 +1330,8 @@ class DraineLiGrainCurves(AttenuationLaw):
         grid_dtg_min = np.min(grid_dtg)
         grid_dtg_max = np.max(grid_dtg)
 
+        # Determine the common particle count across hydrogen and dust columns,
+        # then expand the hydrogen column to that length.
         size = max(
             [np.atleast_1d(sigmalos_H).size]
             + [np.atleast_1d(value).size for value in sigmalos_dust.values()]
@@ -1362,16 +1347,21 @@ class DraineLiGrainCurves(AttenuationLaw):
                 "sigmalos_H must be non-negative."
             )
 
+        # Accumulate the contribution from each grain component into the final
+        # optical-depth array.
         nparticles = sigmalos_H.size
         tau_all = np.zeros((nparticles, grid.nlam), dtype=np.float32)
 
         for component_key, dust_col in sigmalos_dust.items():
+            # Check that this dust component is actually present on the grid.
             dataset_key = component_datasets[component_key]
             if dataset_key not in grid.available_spectra_emissions:
                 raise exceptions.InconsistentArguments(
                     f"Grain type {dataset_key} not in the provided dust grid!"
                 )
 
+            # Broadcast the component column, then reject any negative surface
+            # densities before masking the zero or non-finite entries.
             dust_col = _broadcast_column_density(
                 dust_col.to(Msun / pc**2),
                 nparticles,
@@ -1382,6 +1372,8 @@ class DraineLiGrainCurves(AttenuationLaw):
                     f"{component_key} must be non-negative."
                 )
 
+            # Particles with zero or non-finite columns should contribute no
+            # attenuation for this component, so we exclude them here.
             valid = (
                 np.isfinite(sigmalos_H.value)
                 & np.isfinite(dust_col.value)
@@ -1391,13 +1383,21 @@ class DraineLiGrainCurves(AttenuationLaw):
             if not np.any(valid):
                 continue
 
+            # Convert the valid columns into the dust-to-gas ratio sampled by
+            # the attenuation grid.
             dtg = np.ones(nparticles, dtype=float)
-            dtg[valid] = dust_col.value[valid] / (sigmalos_H.value[valid] * MU)
+            dtg[valid] = dust_col.value[valid] / (
+                sigmalos_H.value[valid] * _DRAINE_LI_MEAN_MOLECULAR_WEIGHT
+            )
 
+            # Match the grid axis space when checking bounds and when building
+            # the extractor input arrays.
             dtg_grid_values = dtg
             if dtg_axis_name == "log10dtg":
                 dtg_grid_values = np.log10(dtg_grid_values)
 
+            # Only valid particles are checked against the grid bounds. Any
+            # masked particles are ignored and remain zero contribution.
             not_within = valid & (
                 (dtg_grid_values < grid_dtg_min)
                 | (dtg_grid_values > grid_dtg_max)
@@ -1413,6 +1413,8 @@ class DraineLiGrainCurves(AttenuationLaw):
                     "Rerun the dust grid with updated range."
                 )
 
+            # Feed the particle dtg values into the standard ParticleExtractor
+            # machinery using a minimal adapter object.
             extractor = ParticleExtractor(grid, dataset_key)
             emitter_kwargs = {
                 "nparticles": nparticles,
@@ -1428,6 +1430,8 @@ class DraineLiGrainCurves(AttenuationLaw):
                 lam=grid.lam,
                 label="draine_li_grain_curves",
             )
+
+            # Extract attenuation curves for the valid particles only.
             component_curves, _ = extractor.generate_lnu(
                 emitter,
                 model,
@@ -1438,14 +1442,17 @@ class DraineLiGrainCurves(AttenuationLaw):
                 do_grid_check=False,
             )
 
+            # Convert from mag cm^2 / H nucleus into optical depth per dust
+            # surface density, then multiply by the dust column itself.
             component_tau = ((component_curves.lnu.value / 1.086) * cm**2).to(
                 pc**2
-            ) / GAS_MASS_PER_H
+            ) / _GAS_MASS_PER_H
             safe_dust_col = dust_col.copy()
             safe_dust_col[~valid] = 0.0 * dust_col.units
             tau_all += (component_tau * safe_dust_col[:, np.newaxis]).value
 
-        # if N == 1
+        # Preserve the previous scalar-like return shape for single-particle
+        # inputs.
         if tau_all.shape[0] == 1:
             return tau_all[0]
         return tau_all
