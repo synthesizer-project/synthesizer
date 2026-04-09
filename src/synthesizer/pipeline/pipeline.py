@@ -1105,9 +1105,15 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Check there are actually galaxies...
+        # Check there are actually galaxies... and tell the user
         if len(galaxies) == 0:
-            self._print("No galaxies provided to add to the Pipeline.")
+            if self.using_mpi:
+                self._print(
+                    "No galaxies provided to add to the Pipeline on rank"
+                    f" {self.rank}."
+                )
+            else:
+                self._print("No galaxies provided to add to the Pipeline.")
 
         # Attach the galaxies
         self.galaxies = galaxies
