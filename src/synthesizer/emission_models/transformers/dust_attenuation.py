@@ -16,14 +16,12 @@ Example usage::
 """
 
 import os
-from functools import lru_cache
-from typing import Callable, Dict
+from types import SimpleNamespace
+from typing import Dict
 
-import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 from dust_extinction import grain_models
-from numpy.typing import NDArray
 from scipy import interpolate
 from unyt import (
     Msun,
@@ -37,7 +35,9 @@ from unyt import (
 )
 
 from synthesizer import exceptions
+from synthesizer.emission_models.extractors.extractor import ParticleExtractor
 from synthesizer.emission_models.transformers.transformer import Transformer
+from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
 
@@ -1203,54 +1203,12 @@ class DraineLiGrainCurves(AttenuationLaw):
             required_params=required_params,
             require_tau_v=False,
         )
+        self._grid = None
+        self._grid_cache = {}
 
     def __repr__(self):
         """Return a string representation of the DraineLiGrainCurves object."""
         return f"DraineLiGrainCurves(grid_name={self.grid_name})"
-
-    @lru_cache(maxsize=8)
-    def _get_component_interp(
-        self, component_key: str, interp: str = "slinear"
-    ) -> Callable[[float | NDArray], NDArray]:
-        """Interpolate extinction across dust-to-gas ratio.
-
-        Uses scipy interpolate.interp1d to interpolate the extinction
-        per column density along the dust-to-gas ratio axis. The function
-        uses lru_cache to cache the interpolation instance.
-
-        Args:
-            component_key (str):
-                Dust grain dataset in the hdf5 to interpolate
-            interp (str):
-                The type of interpolation to use. Can be 'linear', 'nearest',
-                'nearest-up', 'zero', 'slinear', 'quadratic', 'cubic',
-                'previous', or 'next'. 'zero', 'slinear', 'quadratic' and
-                'cubic' refer to a spline interpolation of zeroth, first,
-                second or third order. Uses scipy.interpolate.interp1d.
-
-        Return:
-            interp1d object
-                Return an interp1d which maps dtg -> extinction curve
-                (values at every grid wavelength). Cached by (grid_dir,
-                grid_name, component_key).
-        """
-        # Check path
-        if not os.path.exists(f"{self.grid_dir}/{self.grid_name}.hdf5"):
-            raise exceptions.MissingArgument(
-                f"Grid file not found: {self.grid_dir}/{self.grid_name}.hdf5"
-            )
-        prefix = "extinction_curves"
-        with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as grid:
-            grid_dtg = np.array(grid["axes/dtg"])
-            comp_arr = np.array(grid[f"{prefix}/{component_key}"])
-        # Interpolate along dtg axis (axis=0)
-        return interpolate.interp1d(
-            grid_dtg,
-            comp_arr,
-            axis=0,
-            kind=interp,
-            assume_sorted=True,
-        )
 
     @accepts(lam=angstrom, sigmalos_H=Msun / pc**2)
     def get_tau_at_lam(
@@ -1308,140 +1266,163 @@ class DraineLiGrainCurves(AttenuationLaw):
                     """
                 )
 
-        # For some unit manipulation later
         MU = 1.4
-        M_H = 1.6738e-24 * g  # in grams per H
-        # In Msun units
+        M_H = 1.6738e-24 * g
         GAS_MASS_PER_H = (MU * M_H).to(Msun)
-        # Read wavelengths and dtg from grid
-        # Save all grain datasets
-        prefix = "extinction_curves"
-        with h5py.File(f"{self.grid_dir}/{self.grid_name}.hdf5", "r") as grid:
-            grid_dtg = np.array(grid["axes/dtg"])
-            grid_lam = (
-                np.array(grid[f"{prefix}/wavelength"]) * 1e4
-            )  # convert to Angstrom
-            grid_dataset_names = [
-                name
-                for name, obj in grid[prefix].items()
-                if isinstance(obj, h5py.Dataset)
+
+        if self._grid is None:
+            spectra_to_read = [
+                param.split("sigmalos_", 1)[-1].replace("0p", "0.")
+                for param in self._required_params
+                if param != "sigmalos_H"
             ]
-        # Check if the inputs are within the grids
-        dtg_min = np.min(grid_dtg)
-        dtg_max = np.max(grid_dtg)
-        # Map hdf5 components to inputs
-        dtg_inputs = {}
-        for key, value in sigmalos_dust.items():
-            dtg_inputs[key] = value.to(Msun / pc**2) / (
-                sigmalos_H.to(Msun / pc**2) * MU
+            self._grid = Grid(
+                self.grid_name,
+                self.grid_dir,
+                ignore_lines=True,
+                spectra_to_read=spectra_to_read,
             )
 
-        # Convert dtg inputs to numpy arrays or None
-        # Determine number of samples
-        dtg_arrays = {}
-        lengths = []
-        for key, value in dtg_inputs.items():
-            # Check values are finite and real numbers
-            # TEMPORARY
-            if not np.all(np.isfinite(value)) or not np.all(np.isreal(value)):
-                raise exceptions.InconsistentArguments(
-                    "Dust-to-gas ratio values must be finite real numbers."
-                    f"Found {np.sum(~np.isfinite(value))} non-finite and "
-                    f"{np.sum(~np.isreal(value))} non-real values in {key}."
+        lam = np.atleast_1d(lam.to("Angstrom"))
+        cache_key = (lam.shape, tuple(np.round(lam.value, decimals=12)))
+        grid = self._grid_cache.get(cache_key)
+        if grid is None:
+            grid = Grid(
+                self.grid_name,
+                self.grid_dir,
+                ignore_lines=True,
+                spectra_to_read=self._grid.available_spectra_emissions,
+            )
+            for spectra_id in grid.available_spectra_emissions:
+                interp = interpolate.interp1d(
+                    grid.lam.value,
+                    grid.spectra[spectra_id],
+                    axis=-1,
+                    kind="linear",
+                    bounds_error=False,
+                    fill_value="extrapolate",
                 )
-            not_within = np.logical_or(value < dtg_min, value > dtg_max)
-            if np.sum(not_within) > 0:
-                invalid_values = np.atleast_1d(np.array(value[not_within]))
+                grid.spectra[spectra_id] = interp(lam.value)
+            grid.lam = lam
+            grid._ensure_spectra_data_contiguous()
+            self._grid_cache[cache_key] = grid
+
+        def _broadcast_column_density(value, size, name):
+            value = np.atleast_1d(value)
+            if value.size not in (1, size):
                 raise exceptions.InconsistentArguments(
-                    f"Given dust-to-gas ratio for {key} "
+                    f"{name} length {value.size} incompatible with expected "
+                    f"size {size}."
+                )
+            if value.size == 1 and size > 1:
+                value = np.repeat(value, size)
+            return value
+
+        dtg_axis_name = grid._extract_axes[0]
+        if (
+            dtg_axis_name not in ("dtg", "log10dtg")
+            or len(grid._extract_axes) != 1
+        ):
+            raise exceptions.UnimplementedFunctionality(
+                "DraineLiGrainCurves only supports attenuation grids with a "
+                "single dtg axis."
+            )
+        grid_dtg = grid._extract_axes_values[dtg_axis_name]
+        dtg_min = np.min(grid_dtg)
+        dtg_max = np.max(grid_dtg)
+
+        size = max(
+            [np.atleast_1d(sigmalos_H).size]
+            + [np.atleast_1d(value).size for value in sigmalos_dust.values()]
+        )
+
+        sigmalos_H = _broadcast_column_density(
+            sigmalos_H.to(Msun / pc**2),
+            size,
+            "sigmalos_H",
+        )
+        if np.any(np.isfinite(sigmalos_H.value) & (sigmalos_H.value < 0.0)):
+            raise exceptions.InconsistentArguments(
+                "sigmalos_H must be non-negative."
+            )
+
+        nparticles = sigmalos_H.size
+        tau_all = np.zeros((nparticles, grid.nlam), dtype=np.float32)
+
+        for component_key, dust_col in sigmalos_dust.items():
+            dataset_key = component_key.split("sigmalos_", 1)[-1].replace(
+                "0p", "0."
+            )
+            if dataset_key not in grid.available_spectra_emissions:
+                raise exceptions.InconsistentArguments(
+                    f"Grain type {dataset_key} not in the provided dust grid!"
+                )
+
+            dust_col = _broadcast_column_density(
+                dust_col.to(Msun / pc**2),
+                nparticles,
+                component_key,
+            )
+            if np.any(np.isfinite(dust_col.value) & (dust_col.value < 0.0)):
+                raise exceptions.InconsistentArguments(
+                    f"{component_key} must be non-negative."
+                )
+
+            valid = (
+                np.isfinite(sigmalos_H.value)
+                & np.isfinite(dust_col.value)
+                & (sigmalos_H.value > 0.0)
+                & (dust_col.value > 0.0)
+            )
+            if not np.any(valid):
+                continue
+
+            dtg = np.ones(nparticles, dtype=float)
+            dtg[valid] = dust_col.value[valid] / (sigmalos_H.value[valid] * MU)
+
+            not_within = valid & ((dtg < dtg_min) | (dtg > dtg_max))
+            if np.any(not_within):
+                invalid_values = np.atleast_1d(dtg[not_within])
+                raise exceptions.InconsistentArguments(
+                    f"Given dust-to-gas ratio for {component_key} "
                     "is outside the grid values. "
                     f"Grid range: [{dtg_min}, {dtg_max}]. "
                     f"Invalid values ({invalid_values.size}): "
                     f"{invalid_values}. "
                     "Rerun the dust grid with updated range."
                 )
-            arr = np.atleast_1d(np.array(value, dtype=float))
-            dtg_arrays[key] = arr
-            lengths.append(arr.size)
-        N = max(lengths) if lengths else 1
-        M = lam.size
 
-        # Build Alam_NH Dict component: array of shape (N, L)
-        Alam_by_NH = {}
-        # Ensure consistent lengths across components
-        max_len = max(lengths) if lengths else 1
-        for klen in lengths:
-            if klen not in (1, max_len):
-                raise exceptions.InconsistentArguments(
-                    "All dust components must be scalar or have the same "
-                    f"length ({max_len})."
-                )
-        # For each provided component, get cached interp and
-        # evaluate at dtg array
-        for comp_key, dtg_arr in dtg_arrays.items():
-            if dtg_arr is None:
-                continue
-            # Strip sigmalos_ from key
-            dataset_key = comp_key.split("sigmalos_", 1)[-1]
-            dataset_key = dataset_key.replace("0p", "0.")
-            if dataset_key not in grid_dataset_names:
-                raise exceptions.InconsistentArguments(
-                    f"""
-                    Grain type {dataset_key} not in the
-                    provided dust grid!
-                    """
-                )
-            # Get cached interpolator (will open HDF5 and
-            # build interp1d on first call for this key)
-            f_dtg = self._get_component_interp(dataset_key)
-            # f_dtg accepts array-like dtg values and returns shape (N, L)
-            comp_vals = f_dtg(dtg_arr)
-            Alam_by_NH[comp_key] = comp_vals
-
-        # Interpolate along wavelength axis with the given 'lam'
-        lam_vals = np.atleast_1d(lam.to("Angstrom").value)
-        tau_all = np.zeros((N, M), dtype=np.float32)
-
-        for key, value in Alam_by_NH.items():
-            f_lam = interpolate.interp1d(
-                grid_lam,
-                value,
-                axis=1,
-                kind="slinear",
-                fill_value="extrapolate",
-                assume_sorted=True,
+            extractor = ParticleExtractor(grid, dataset_key)
+            emitter_kwargs = {
+                "nparticles": nparticles,
+                "model_param_cache": {},
+            }
+            if dtg_axis_name == "dtg":
+                emitter_kwargs[dtg_axis_name] = dtg
+            else:
+                emitter_kwargs[dtg_axis_name] = np.log10(dtg)
+            emitter = SimpleNamespace(**emitter_kwargs)
+            model = SimpleNamespace(
+                fixed_parameters={},
+                lam=grid.lam,
+                label="draine_li_grain_curves",
             )
-            # Let's store things for now in `tmp`
-            tmp = f_lam(lam_vals)  # shape (n_dtg, M)
+            component_curves, _ = extractor.generate_lnu(
+                emitter,
+                model,
+                mask=valid,
+                lam_mask=None,
+                grid_assignment_method="cic",
+                nthreads=1,
+                do_grid_check=False,
+            )
 
-            # Mag -> optical depth
-            tmp /= 1.086
-            # Attach area units cm^2 then convert to pc^2
-            tmp_area_pc2 = (tmp * cm**2).to(pc**2)
-            # Divide by GAS_MASS_PER_H (Msun per H) to get pc^2 / Msun
-            # This is because the grid is basically in units of
-            # mag cm^2 / H nucleus
-            tmp_pc2_per_msun = tmp_area_pc2 / GAS_MASS_PER_H
-            dust_col = sigmalos_dust[key].to(Msun / pc**2)
-            dust_col = np.atleast_1d(dust_col)
-            if dust_col.size not in (1, N):
-                raise exceptions.InconsistentArguments(
-                    f"""sigmalos component {comp_key} length
-                    {dust_col.size} incompatible with others."""
-                )
-            if dust_col.size == 1:
-                dust_col = np.repeat(dust_col, N)
-
-            # tau = tmp_pc2_per_msun (n_dtg x M) * dust_col[:, None]  (N x M)
-            # But n_dtg might be < N (if dtg is float for component).
-            # Broadcast accordingly:
-            if tmp_pc2_per_msun.shape[0] == 1 and N > 1:
-                tmp_pc2_per_msun = np.repeat(tmp_pc2_per_msun, N, axis=0)
-
-            # Multiply by the line-of-sight dust column density
-            # (sigmalos_dust[key]) to get unitless tau
-            # And add up all components
-            tau_all += tmp_pc2_per_msun * dust_col[:, np.newaxis]
+            component_tau = ((component_curves.lnu.value / 1.086) * cm**2).to(
+                pc**2
+            ) / GAS_MASS_PER_H
+            safe_dust_col = dust_col.copy()
+            safe_dust_col[~valid] = 0.0 * dust_col.units
+            tau_all += (component_tau * safe_dust_col[:, np.newaxis]).value
 
         # if N == 1
         if tau_all.shape[0] == 1:
