@@ -1050,20 +1050,6 @@ class Particles:
             nthreads,
         )
 
-    def _get_los_column_density_units(self, other_parts, density_attr):
-        """Get the units for a LOS column density result."""
-        density = getattr(other_parts, density_attr)
-
-        return density.units / other_parts.coordinates.units**2
-
-    def _wrap_los_column_density(self, column_density, units):
-        """Attach LOS column-density units without copying the data."""
-        return unyt_array(
-            column_density,
-            units,
-            bypass_validation=True,
-        )
-
     def get_los_column_density(
         self,
         other_parts,
@@ -1119,16 +1105,17 @@ class Particles:
             compute_column_density,
         )
 
-        column_density_units = self._get_los_column_density_units(
-            other_parts,
-            density_attr,
+        column_density_units = (
+            getattr(other_parts, density_attr).units
+            / other_parts.coordinates.units**2
         )
 
         # If have no particles return 0
         if self.nparticles == 0:
-            col_den = self._wrap_los_column_density(
+            col_den = unyt_array(
                 np.zeros(self.nparticles),
                 column_density_units,
+                bypass_validation=True,
             )
             if column_density_attr is not None:
                 setattr(self, column_density_attr, col_den)
@@ -1136,9 +1123,10 @@ class Particles:
 
         # If the other particles have no particles return 0
         if other_parts.nparticles == 0:
-            col_den = self._wrap_los_column_density(
+            col_den = unyt_array(
                 np.zeros(self.nparticles),
                 column_density_units,
+                bypass_validation=True,
             )
             if column_density_attr is not None:
                 setattr(self, column_density_attr, col_den)
@@ -1161,9 +1149,10 @@ class Particles:
                 nthreads,
             )
         )
-        col_den = self._wrap_los_column_density(
+        col_den = unyt_array(
             col_den,
             column_density_units,
+            bypass_validation=True,
         )
 
         # Set the column density attribute (if requested)
