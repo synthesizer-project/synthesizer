@@ -1260,6 +1260,7 @@ class DraineLiGrainCurves(AttenuationLaw):
         """
         # Map the public keyword arguments onto the spectra names stored in
         # the attenuation grid.
+        # TODO: modify the grid generation files to remove the need for this
         component_datasets = {
             component_key: component_key.split("sigmalos_", 1)[-1].replace(
                 "0p", "0."
