@@ -462,8 +462,10 @@ class Grid:
                     "containing a subset of spectra to read."
                 )
 
-            # Read the wavelengths
-            self.lam = hf[spectra_key + "/wavelength"][:]
+            # Read the wavelengths and attach the units stored on the file.
+            lams = hf[spectra_key + "/wavelength"][:]
+            lam_units = hf[spectra_key + "/wavelength"].attrs.get("Units")
+            self.lam = unyt_array(lams, lam_units).to(angstrom)
 
             # Get all our spectra
             for spectra_id in spectra_to_read:
