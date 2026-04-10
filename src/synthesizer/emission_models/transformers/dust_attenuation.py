@@ -1290,6 +1290,59 @@ class DraineLiGrainCurves(AttenuationLaw):
         self._grid_dtg_min = np.min(grid_dtg)
         self._grid_dtg_max = np.max(grid_dtg)
 
+    def _validate_column_densities(self, sigmalos_H, sigmalos_dust):
+        """Validate the input hydrogen and dust column densities.
+
+        Args:
+            sigmalos_H (unyt_array):
+                The line-of-sight hydrogen column density.
+            sigmalos_dust (dict):
+                The dust component column densities keyed by component name.
+
+        Raises:
+            exceptions.InconsistentArguments:
+                Raised if the column densities do not have matching shapes,
+                do not carry compatible units, or contain negative values.
+        """
+        # Ensure every dust column matches the hydrogen column shape and has
+        # compatible surface-density units.
+        for component_key, dust_col in sigmalos_dust.items():
+            if (
+                np.atleast_1d(dust_col).shape
+                != np.atleast_1d(sigmalos_H).shape
+            ):
+                raise exceptions.InconsistentArguments(
+                    "Contents of los dust density and los H density do not "
+                    f"have the same shape in {component_key}!"
+                )
+            if isinstance(dust_col, (unyt_quantity, unyt_array)):
+                try:
+                    _ = dust_col.to(sigmalos_H.units)
+                except Exception as e:
+                    raise exceptions.InconsistentArguments(
+                        f"{component_key} must have units compatible with "
+                        "mass/length^2"
+                    ) from e
+            else:
+                raise exceptions.InconsistentArguments(
+                    f"Provide units to the {component_key} quantity"
+                )
+
+        # Reject negative hydrogen columns before any masking or dtg
+        # calculations are attempted.
+        if np.any(np.isfinite(sigmalos_H.value) & (sigmalos_H.value < 0.0)):
+            raise exceptions.InconsistentArguments(
+                "sigmalos_H must be non-negative."
+            )
+
+        # Reject negative dust columns for every component before we enter the
+        # extraction loop.
+        for component_key, dust_col in sigmalos_dust.items():
+            if np.any(np.isfinite(dust_col.value) & (dust_col.value < 0.0)):
+                raise exceptions.InconsistentArguments(
+                    f"{component_key} must be non-negative."
+                )
+
     @accepts(lam=angstrom, sigmalos_H=Msun / pc**2)
     def get_tau_at_lam(
         self,
@@ -1329,29 +1382,9 @@ class DraineLiGrainCurves(AttenuationLaw):
             for component_key in sigmalos_dust
         }
 
-        # Validate that every dust column has the same shape as the hydrogen
-        # column and that all columns carry compatible surface-density units.
-        for component_key, dust_col in sigmalos_dust.items():
-            if (
-                np.atleast_1d(dust_col).shape
-                != np.atleast_1d(sigmalos_H).shape
-            ):
-                raise exceptions.InconsistentArguments(
-                    "Contents of los dust density and los H density do not "
-                    f"have the same shape in {component_key}!"
-                )
-            elif isinstance(dust_col, (unyt_quantity, unyt_array)):
-                try:
-                    _ = dust_col.to(sigmalos_H.units)
-                except Exception as e:
-                    raise exceptions.InconsistentArguments(
-                        f"{component_key} must have units compatible with "
-                        "mass/length^2"
-                    ) from e
-            else:
-                raise exceptions.InconsistentArguments(
-                    f"Provide units to the {component_key} quantity"
-                )
+        # Validate the per-call column-density inputs before any wavelength
+        # resampling or particle extraction is attempted.
+        self._validate_column_densities(sigmalos_H, sigmalos_dust)
 
         # Normalise the target wavelengths and prepare a wavelength-matched
         # view of the attenuation grid.
@@ -1399,11 +1432,6 @@ class DraineLiGrainCurves(AttenuationLaw):
             size,
             "sigmalos_H",
         )
-        if np.any(np.isfinite(sigmalos_H.value) & (sigmalos_H.value < 0.0)):
-            raise exceptions.InconsistentArguments(
-                "sigmalos_H must be non-negative."
-            )
-
         # Accumulate the contribution from each grain component into the final
         # optical-depth array.
         nparticles = sigmalos_H.size
@@ -1417,17 +1445,13 @@ class DraineLiGrainCurves(AttenuationLaw):
                     f"Grain type {dataset_key} not in the provided dust grid!"
                 )
 
-            # Broadcast the component column, then reject any negative surface
-            # densities before masking the zero or non-finite entries.
+            # Broadcast the component column, then mask the zero or non-finite
+            # entries before extraction.
             dust_col = _broadcast_column_density(
                 dust_col.to(Msun / pc**2),
                 nparticles,
                 component_key,
             )
-            if np.any(np.isfinite(dust_col.value) & (dust_col.value < 0.0)):
-                raise exceptions.InconsistentArguments(
-                    f"{component_key} must be non-negative."
-                )
 
             # Particles with zero or non-finite columns should contribute no
             # attenuation for this component, so we exclude them here.
