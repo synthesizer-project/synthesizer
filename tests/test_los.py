@@ -2,10 +2,11 @@
 
 import numpy as np
 import pytest
-from unyt import Mpc, Msun, Myr
+from unyt import Mpc, Msun, Myr, pc, unyt_array
 
 from synthesizer.exceptions import InconsistentArguments
 from synthesizer.particle import Galaxy, Gas, Stars
+from synthesizer.units import unyt_to_ndview
 
 
 @pytest.fixture
@@ -87,6 +88,132 @@ class TestLOSColumnDensity:
         assert np.allclose(one_star.tau_v, expected), (
             f"Expected star tau_v {expected}, got {one_star.tau_v}"
         )
+
+    def test_column_density_returns_units_and_stores_attr(
+        self, one_star, one_gas_front
+    ):
+        """LOS column density keeps the correct surface-density units."""
+        kernel = np.array([1.0])
+
+        col_den = one_star.get_los_column_density(
+            one_gas_front,
+            "masses",
+            kernel,
+            column_density_attr="sigmalos_mass",
+            force_loop=1,
+            min_count=10,
+        )
+
+        expected_units = (
+            one_gas_front.masses.units / one_gas_front.coordinates.units**2
+        )
+
+        assert isinstance(col_den, unyt_array)
+        assert col_den.units == expected_units
+        assert one_star.sigmalos_mass.units == expected_units
+        assert col_den is one_star.sigmalos_mass
+
+    def test_column_density_zero_particle_returns_unitful_array(
+        self, one_gas_front
+    ):
+        """Zero-particle LOS returns still carry the right units."""
+        empty_stars = Stars(
+            initial_masses=np.array([]) * Msun,
+            ages=np.array([]) * Myr,
+            metallicities=np.array([]),
+            redshift=0.0,
+            tau_v=np.array([]),
+            coordinates=np.empty((0, 3)) * Mpc,
+            smoothing_lengths=np.array([]) * Mpc,
+        )
+
+        col_den = empty_stars.get_los_column_density(
+            one_gas_front,
+            "masses",
+            np.array([1.0]),
+            column_density_attr="sigmalos_mass",
+            force_loop=1,
+            min_count=10,
+        )
+
+        expected_units = (
+            one_gas_front.masses.units / one_gas_front.coordinates.units**2
+        )
+
+        assert isinstance(col_den, unyt_array)
+        assert col_den.units == expected_units
+        assert col_den.size == 0
+        assert empty_stars.sigmalos_mass.units == expected_units
+
+    def test_column_density_empty_source_returns_unitful_array(self, one_star):
+        """Empty source particles still yield a unitful zero array."""
+        empty_gas = Gas(
+            masses=np.array([]) * Msun,
+            metallicities=np.array([]),
+            redshift=0.0,
+            coordinates=np.empty((0, 3)) * Mpc,
+            dust_to_metal_ratio=1.0,
+            smoothing_lengths=np.array([]) * Mpc,
+        )
+
+        col_den = one_star.get_los_column_density(
+            empty_gas,
+            "masses",
+            np.array([1.0]),
+            column_density_attr="sigmalos_mass",
+            force_loop=1,
+            min_count=10,
+        )
+
+        expected_units = (
+            empty_gas.masses.units / empty_gas.coordinates.units**2
+        )
+
+        assert isinstance(col_den, unyt_array)
+        assert col_den.units == expected_units
+        assert np.allclose(col_den.value, np.zeros(one_star.nparticles))
+        assert one_star.sigmalos_mass.units == expected_units
+
+    def test_tau_v_unit_conversion_uses_surface_density_units(
+        self, one_star, one_gas_front
+    ):
+        """Tau_v conversion uses unit conversion rather than raw relabeling."""
+        gal = Galaxy(
+            stars=one_star,
+            gas=one_gas_front,
+            redshift=0.0,
+            centre=None,
+        )
+
+        los_dustsds = one_star.get_los_column_density(
+            one_gas_front,
+            "dust_masses",
+            np.array([1.0]),
+            force_loop=1,
+            min_count=10,
+        )
+
+        expected_units = (
+            one_gas_front.dust_masses.units
+            / one_gas_front.coordinates.units**2
+        )
+
+        assert los_dustsds.units == expected_units
+        los_dustsds_pc = los_dustsds.copy()
+        assert np.allclose(
+            unyt_to_ndview(los_dustsds_pc, Msun / pc**2), [1e-8]
+        )
+
+        tau = gal.get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=np.array([1.0]),
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert np.allclose(tau, np.array([2e-8]))
+        assert not hasattr(tau, "units")
+        assert not hasattr(one_star.tau_v, "units")
 
     def test_column_density_behind_zero(self, one_star, one_gas_behind):
         """Test Gas particle behind column density."""

@@ -30,7 +30,7 @@ from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
 from synthesizer.synth_warnings import warn
-from synthesizer.units import accepts
+from synthesizer.units import accepts, unyt_to_ndview
 from synthesizer.utils.geometry import get_rotation_matrix
 
 
@@ -528,10 +528,8 @@ class Galaxy(BaseGalaxy):
             nthreads=nthreads,
         )  # Msun / Mpc**2
 
-        los_dustsds /= (1e6) ** 2  # Msun / pc**2
-
         # Finalise the calculation
-        tau_v = kappa * los_dustsds
+        tau_v = kappa * unyt_to_ndview(los_dustsds, Msun / pc**2)
 
         # Apply the mask if provided
         if mask is not None:
@@ -627,10 +625,8 @@ class Galaxy(BaseGalaxy):
             nthreads=nthreads,
         )
 
-        los_dustsds /= (1e6) ** 2  # Msun / pc**2
-
         # Finalise the calculation
-        tau_v = kappa * los_dustsds
+        tau_v = kappa * unyt_to_ndview(los_dustsds, Msun / pc**2)
 
         # Apply the mask if provided
         if mask is not None:
