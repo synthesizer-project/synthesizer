@@ -93,7 +93,8 @@ class PipelineIO:
                 "Cannot use parallel_io option."
             )
 
-        # Flags for behavior
+        # Treat a communicator of size 1 as a serial run so single-rank jobs do
+        # not create synthetic per-rank filenames such as ``_0``.
         self.is_parallel = comm is not None and self.size > 1
         self.is_root = self.rank == 0
         self.is_collective = self.is_parallel and self.PARALLEL and parallel_io
