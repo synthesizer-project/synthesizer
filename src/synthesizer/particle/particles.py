@@ -1130,6 +1130,11 @@ class Particles:
             raise exceptions.InconsistentArguments(
                 f"{other_parts.name} object is missing {density_attr}!"
             )
+        if not hasattr(density, "units"):
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object attribute {density_attr} must "
+                "have units to compute LOS column densities."
+            )
 
         # Get the units for the column density from the inputs
         column_density_units = density.units / other_parts.coordinates.units**2
