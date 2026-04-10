@@ -1152,13 +1152,13 @@ class DraineLiGrainCurves(AttenuationLaw):
     def __init__(self, grid_name: str, grid_dir: str, grain_dict: Dict = None):
         """Initialise the Draine and Li extinction curves.
 
-        Draine and Li extinction curves obtained from pre-processing
-        the extinction efficiencies for the required grain size
-        distribution. This is done in grid-generation repo under
+        Draine and Li extinction curves obtained from pre-processing the
+        extinction efficiencies for the required grain size distribution. This
+        is done in grid-generation repo under
         'grid-generation/src/synthesizer_grids/dust/
-        create_dustextcurve_draine_li.py' for the required dust
-        parameters. Currently only implemented for 2 grain sizes
-        of graphites and silicates, and 1 size of PAHs.
+        create_dustextcurve_draine_li.py' for the required dust parameters.
+        Currently only implemented for 2 grain sizes of graphites and
+        silicates, and 1 size of PAHs.
 
         Attributes:
             grid_name (string):
@@ -1174,32 +1174,42 @@ class DraineLiGrainCurves(AttenuationLaw):
                 E.g. grain_dict = {'graphite': [0.01, 0.1]}
 
         """
+        # Attach information about the grid file
         self.grid_name = grid_name
         self.grid_dir = grid_dir
+
+        # Attach the grain dict
         self.grain_dict = grain_dict
+
+        # We always need to be passed a grain dict, we only have it as a
+        # keyword argument so we can raise a clear error message if it is
+        # not provided
         if self.grain_dict is None:
             raise exceptions.MissingArgument(
-                """
-                Provide `grain_dict` argument in
-                initialisation of the type
-                grain_dict = {grain type: grain size bins}.
-                Example definition
-                grain_dict = {'graphite': [0.01, 0.1]}.
-                This should correspond to the grid that you
-                are providing.
-                """
+                "Provide `grain_dict` when initialising this dust law. "
+                "For example, use grain_dict = {'graphite': [0.01, 0.1]}. "
+                "The grain definition should correspond to the grid you are "
+                "providing."
             )
-        description = """DraineLiGrainCurves: Draine and Li dust grain
-        model for extinction curves obtained from pre-processing the
-        extinction efficiencies for the required grain size
-        distribution. The different components and their relationship
-        with the dust-to-gas ratio are extracted from a grid"""
+
+        # Define the description for the attenuation law.
+        description = (
+            "DraineLiGrainCurves: Draine and Li dust grain model for "
+            "extinction curves obtained from pre-processing the extinction "
+            "efficiencies for the required grain size distribution. The "
+            "different components and their relationship with the "
+            "dust-to-gas ratio are extracted from a grid."
+        )
+
+        # Define the required parameters based on the grain types and sizes
         required_params = [
             f"sigmalos_{grain_type}_a{grain_size}um".replace(".", "p")
             for grain_type, grain_sizes in self.grain_dict.items()
             for grain_size in grain_sizes
         ]
         required_params.append("sigmalos_H")
+
+        # Set up the parent class
         AttenuationLaw.__init__(
             self,
             description=description,
@@ -1207,16 +1217,12 @@ class DraineLiGrainCurves(AttenuationLaw):
             require_tau_v=False,
         )
 
-        spectra_to_read = [
-            param.split("sigmalos_", 1)[-1].replace("0p", "0.")
-            for param in required_params
-            if param != "sigmalos_H"
-        ]
+        # Create and attach the grid object containing the attenuation curves
+        # for the different grain components
         self.grid = Grid(
             self.grid_name,
             self.grid_dir,
             ignore_lines=True,
-            spectra_to_read=spectra_to_read,
         )
 
     def __repr__(self):
@@ -1528,11 +1534,8 @@ class DraineLiGrainCurves(AttenuationLaw):
         """
         if tau_v is not None:
             warn(
-                """
-                tau_v has been provided. However,
-                `DraineLiGrainCurves` does not use tau_v.
-                Ignoring tau_v in the calculation.
-                """
+                "tau_v has been provided, but `DraineLiGrainCurves` does not "
+                "use tau_v. Ignoring tau_v in the calculation."
             )
 
         # Set any additional parameters on the dust curve
