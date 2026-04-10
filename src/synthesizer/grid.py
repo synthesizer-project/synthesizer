@@ -429,11 +429,24 @@ class Grid:
                 spectra will be read.
         """
         with h5py.File(self.grid_filename, "r") as hf:
+            # Most of the time the key will be "spectra" but for dust
+            # attenuation curve grids the key is "extinction_curves"
+            if "spectra" in hf.keys():
+                spectra_key = "spectra"
+            elif "extinction_curves" in hf.keys():
+                spectra_key = "extinction_curves"
+            else:
+                raise exceptions.GridError(
+                    "No spectra found in the grid file. Either pass "
+                    "`ignore_spectra=True` or load a grid containing "
+                    "spectra."
+                )
+
             # Are we reading everything?
             if spectra_to_read is None:
-                spectra_to_read = self._get_spectra_ids_from_file()
+                spectra_to_read = self._get_spectra_ids_from_file(spectra_key)
             elif isinstance(spectra_to_read, list):
-                all_spectra = self._get_spectra_ids_from_file()
+                all_spectra = self._get_spectra_ids_from_file(spectra_key)
 
                 # Check the requested spectra are available
                 missing_spectra = set(spectra_to_read) - set(all_spectra)
@@ -450,11 +463,11 @@ class Grid:
                 )
 
             # Read the wavelengths
-            self.lam = hf["spectra/wavelength"][:]
+            self.lam = hf[spectra_key + "/wavelength"][:]
 
             # Get all our spectra
             for spectra_id in spectra_to_read:
-                self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
+                self.spectra[spectra_id] = hf[spectra_key][spectra_id][:]
 
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
@@ -722,15 +735,20 @@ class Grid:
         """Return the line IDs."""
         return self.available_lines
 
-    def _get_spectra_ids_from_file(self):
+    def _get_spectra_ids_from_file(self, spectra_key="spectra"):
         """Get a list of the spectra available in a grid file.
+
+        Args:
+            spectra_key (str):
+                The key in the HDF5 file under which the spectra are stored.
+                Defaults to "spectra".
 
         Returns:
             list:
                 List of available spectra
         """
         with h5py.File(self.grid_filename, "r") as hf:
-            spectra_keys = list(hf["spectra"].keys())
+            spectra_keys = list(hf[spectra_key].keys())
 
         # Clean up the available spectra list
         spectra_keys.remove("wavelength")
