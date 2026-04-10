@@ -251,6 +251,29 @@ class TestLOSColumnDensity:
                 min_count=10,
             )
 
+    def test_column_density_unitless_attr_raises_consistent_error(
+        self, one_star
+    ):
+        """Unitless density attributes should fail before unit access."""
+        bad_gas = Gas(
+            masses=np.array([1e6]) * Msun,
+            metallicities=np.array([0.01]),
+            redshift=0.0,
+            coordinates=np.array([[0.0, 0.0, 0.0]]) * Mpc,
+            dust_to_metal_ratio=1.0,
+            smoothing_lengths=np.array([1.0]) * Mpc,
+        )
+        bad_gas.unitless_density = np.array([1.0])
+
+        with pytest.raises(InconsistentArguments, match="unitless_density"):
+            one_star.get_los_column_density(
+                bad_gas,
+                "unitless_density",
+                np.array([1.0]),
+                force_loop=1,
+                min_count=10,
+            )
+
     def test_tau_v_unit_conversion_uses_surface_density_units(
         self, one_star, one_gas_front
     ):
