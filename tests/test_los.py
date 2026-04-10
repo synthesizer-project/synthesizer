@@ -145,6 +145,33 @@ class TestLOSColumnDensity:
         assert col_den.size == 0
         assert empty_stars.sigmalos_mass.units == expected_units
 
+    def test_column_density_zero_particle_mask_returns_masked_shape(
+        self, one_gas_front
+    ):
+        """Zero-particle early returns respect the masked output shape."""
+        empty_stars = Stars(
+            initial_masses=np.array([]) * Msun,
+            ages=np.array([]) * Myr,
+            metallicities=np.array([]),
+            redshift=0.0,
+            tau_v=np.array([]),
+            coordinates=np.empty((0, 3)) * Mpc,
+            smoothing_lengths=np.array([]) * Mpc,
+        )
+
+        col_den = empty_stars.get_los_column_density(
+            one_gas_front,
+            "masses",
+            np.array([1.0]),
+            mask=np.array([], dtype=bool),
+            column_density_attr="sigmalos_mass",
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert col_den.shape == (0,)
+        assert empty_stars.sigmalos_mass.shape == (0,)
+
     def test_column_density_empty_source_returns_unitful_array(self, one_star):
         """Empty source particles still yield a unitful zero array."""
         empty_gas = Gas(
@@ -173,6 +200,56 @@ class TestLOSColumnDensity:
         assert col_den.units == expected_units
         assert np.allclose(col_den.value, np.zeros(one_star.nparticles))
         assert one_star.sigmalos_mass.units == expected_units
+
+    def test_column_density_empty_source_mask_returns_masked_shape(
+        self, one_star
+    ):
+        """Empty source early returns match the number of masked targets."""
+        empty_gas = Gas(
+            masses=np.array([]) * Msun,
+            metallicities=np.array([]),
+            redshift=0.0,
+            coordinates=np.empty((0, 3)) * Mpc,
+            dust_to_metal_ratio=1.0,
+            smoothing_lengths=np.array([]) * Mpc,
+        )
+        mask = np.array([True])
+
+        col_den = one_star.get_los_column_density(
+            empty_gas,
+            "masses",
+            np.array([1.0]),
+            mask=mask,
+            column_density_attr="sigmalos_mass",
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert col_den.shape == (mask.sum(),)
+        assert one_star.sigmalos_mass.shape == (mask.sum(),)
+
+    def test_column_density_missing_attr_raises_consistent_error(
+        self, one_star
+    ):
+        """Missing density attributes should raise the LOS validation error."""
+        bad_gas = Gas(
+            masses=np.array([1e6]) * Msun,
+            metallicities=np.array([0.01]),
+            redshift=0.0,
+            coordinates=np.array([[0.0, 0.0, 0.0]]) * Mpc,
+            dust_to_metal_ratio=1.0,
+            smoothing_lengths=np.array([1.0]) * Mpc,
+        )
+        bad_gas.masses = None
+
+        with pytest.raises(InconsistentArguments):
+            one_star.get_los_column_density(
+                bad_gas,
+                "masses",
+                np.array([1.0]),
+                force_loop=1,
+                min_count=10,
+            )
 
     def test_tau_v_unit_conversion_uses_surface_density_units(
         self, one_star, one_gas_front
