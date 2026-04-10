@@ -10,7 +10,7 @@ import inspect
 
 import numpy as np
 from numpy.random import multivariate_normal
-from unyt import Mpc, Msun, km, pc, rad, s
+from unyt import Mpc, Msun, km, pc, rad, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
@@ -1050,6 +1050,20 @@ class Particles:
             nthreads,
         )
 
+    def _get_los_column_density_units(self, other_parts, density_attr):
+        """Get the units for a LOS column density result."""
+        density = getattr(other_parts, density_attr)
+
+        return density.units / other_parts.coordinates.units**2
+
+    def _wrap_los_column_density(self, column_density, units):
+        """Attach LOS column-density units without copying the data."""
+        return unyt_array(
+            column_density,
+            units,
+            bypass_validation=True,
+        )
+
     def get_los_column_density(
         self,
         other_parts,
@@ -1105,13 +1119,30 @@ class Particles:
             compute_column_density,
         )
 
+        column_density_units = self._get_los_column_density_units(
+            other_parts,
+            density_attr,
+        )
+
         # If have no particles return 0
         if self.nparticles == 0:
-            return np.zeros(self.nparticles)
+            col_den = self._wrap_los_column_density(
+                np.zeros(self.nparticles),
+                column_density_units,
+            )
+            if column_density_attr is not None:
+                setattr(self, column_density_attr, col_den)
+            return col_den
 
         # If the other particles have no particles return 0
         if other_parts.nparticles == 0:
-            return np.zeros(self.nparticles)
+            col_den = self._wrap_los_column_density(
+                np.zeros(self.nparticles),
+                column_density_units,
+            )
+            if column_density_attr is not None:
+                setattr(self, column_density_attr, col_den)
+            return col_den
 
         # If we don't have a mask make a fake one for consistency
         if mask is None:
@@ -1129,6 +1160,10 @@ class Particles:
                 min_count,
                 nthreads,
             )
+        )
+        col_den = self._wrap_los_column_density(
+            col_den,
+            column_density_units,
         )
 
         # Set the column density attribute (if requested)
