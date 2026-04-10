@@ -1232,18 +1232,22 @@ class DraineLiGrainCurves(AttenuationLaw):
 
     def _validate_grid(self):
         """Validate that the attenuation grid matches class expectations."""
+        # Ensure the supplied attenuation grid actually contains spectra.
         if not self.grid.available_spectra_emissions:
             raise exceptions.InconsistentArguments(
                 "DraineLiGrainCurves requires an attenuation grid with "
                 "spectra."
             )
 
+        # Ensure the extraction machinery only has to deal with a single dust
+        # to gas ratio axis.
         if len(self.grid._extract_axes) != 1:
             raise exceptions.UnimplementedFunctionality(
                 "DraineLiGrainCurves only supports attenuation grids with a "
                 "single dtg axis."
             )
 
+        # Record whether the grid uses a linear or logarithmic dtg axis.
         self._dtg_axis_name = self.grid._extract_axes[0]
         if self._dtg_axis_name not in ("dtg", "log10dtg"):
             raise exceptions.UnimplementedFunctionality(
@@ -1251,6 +1255,8 @@ class DraineLiGrainCurves(AttenuationLaw):
                 "dtg or log10dtg extraction axis."
             )
 
+        # Cache the set of available spectra and make sure every grain
+        # component implied by grain_dict exists on the grid.
         self._available_grain_spectra = set(
             self.grid.available_spectra_emissions
         )
@@ -1266,6 +1272,8 @@ class DraineLiGrainCurves(AttenuationLaw):
                 f"components: {sorted(missing_spectra)}"
             )
 
+        # Ensure the dtg axis values are numerically well behaved before we
+        # use them for particle validation and interpolation.
         grid_dtg = self.grid._extract_axes_values[self._dtg_axis_name]
         if not np.all(np.isfinite(grid_dtg)):
             raise exceptions.InconsistentArguments(
@@ -1277,6 +1285,8 @@ class DraineLiGrainCurves(AttenuationLaw):
                 "The attenuation grid dtg axis must be strictly increasing."
             )
 
+        # Cache the dtg range once so get_tau_at_lam only needs the per-call
+        # particle validation and extraction logic.
         self._grid_dtg_min = np.min(grid_dtg)
         self._grid_dtg_max = np.max(grid_dtg)
 
@@ -1374,6 +1384,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                 column_density = np.repeat(column_density, size)
             return column_density
 
+        # Reuse the validated grid axis metadata cached during construction.
         dtg_axis_name = self._dtg_axis_name
 
         # Determine the common particle count across hydrogen and dust columns,
@@ -1467,6 +1478,8 @@ class DraineLiGrainCurves(AttenuationLaw):
                 "nparticles": nparticles,
                 "model_param_cache": {},
             }
+            # Populate the extractor input with the dtg values in the same
+            # space used by the grid axis.
             if dtg_axis_name == "dtg":
                 emitter_kwargs[dtg_axis_name] = dtg
             else:
@@ -1494,6 +1507,9 @@ class DraineLiGrainCurves(AttenuationLaw):
             component_tau = ((component_curves.lnu.value / 1.086) * cm**2).to(
                 pc**2
             ) / _GAS_MASS_PER_H
+
+            # Zero any invalid particles before multiplying by the dust column
+            # so masked inputs stay masked in the final optical depth.
             safe_dust_col = dust_col.copy()
             safe_dust_col[~valid] = 0.0 * dust_col.units
             tau_all += (component_tau * safe_dust_col[:, np.newaxis]).value
