@@ -160,7 +160,7 @@ class InstrumentCollection:
                 if self.all_filters is None:
                     self.all_filters = deepcopy(instrument.filters)
                 else:
-                    self.all_filters += instrument.filters
+                    self.all_filters += deepcopy(instrument.filters)
 
     def write_instruments(self, filepath):
         """Save the instruments in the collection to a file.

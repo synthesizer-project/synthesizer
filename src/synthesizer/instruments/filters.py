@@ -414,7 +414,7 @@ class FilterCollection:
         if self.lam is None:
             return
 
-        # The colleciton wavelength is treated as gospel
+        # The collection wavelength is treated as gospel
         target_lam = self.lam
         target_size = len(target_lam)
 
