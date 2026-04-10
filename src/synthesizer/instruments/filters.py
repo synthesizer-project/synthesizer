@@ -409,30 +409,38 @@ class FilterCollection:
 
     def _harmonise_loaded_filters(self):
         """Ensure loaded filters are consistent with the collection grid."""
+        # If the collection does not define a shared wavelength grid there is
+        # nothing to harmonise after loading.
         if self.lam is None:
             return
 
+        # The colleciton wavelength is treated as gospel
         target_lam = self.lam
         target_size = len(target_lam)
 
+        # Make sure all filters are on the same wavelength (literally)
         for filter_code in self.filter_codes:
             filt = self.filters[filter_code]
             lam_size = len(filt.lam)
             transmission_size = len(filt.t)
 
+            # Nothing to do if the filter is already on the collection lams
             on_collection_grid = lam_size == target_size
             if on_collection_grid:
                 on_collection_grid = np.allclose(filt._lam, self._lam)
-
             if on_collection_grid and transmission_size == target_size:
                 continue
 
+            # We need the original wavelength and transmission arrays to be
+            # able to reinterpolate
             has_original_grid = (
                 filt.original_lam is not None
                 and filt.original_t is not None
                 and len(filt.original_lam) == len(filt.original_t)
             )
 
+            # If we don't have the original grid information we can't
+            # do anything
             if not has_original_grid:
                 raise exceptions.InconsistentWavelengths(
                     "Loaded filter collection contains inconsistent "
@@ -442,8 +450,11 @@ class FilterCollection:
                     "the cache file."
                 )
 
+            # Interpolate...
             filt._interpolate_wavelength(new_lam=target_lam)
 
+        # Refresh the batch cache to ensure it's consistent with the new
+        # filter grids
         self._refresh_batch_cache()
 
     def _include_svo_filters(self, filter_codes):
