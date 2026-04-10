@@ -1105,6 +1105,7 @@ class Particles:
             compute_column_density,
         )
 
+        # Get the units for the column density from the inputs
         column_density_units = (
             getattr(other_parts, density_attr).units
             / other_parts.coordinates.units**2
@@ -1149,6 +1150,8 @@ class Particles:
                 nthreads,
             )
         )
+
+        # Associate with the correct units
         col_den = unyt_array(
             col_den,
             column_density_units,
