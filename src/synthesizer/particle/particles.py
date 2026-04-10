@@ -1105,16 +1105,39 @@ class Particles:
             compute_column_density,
         )
 
+        # If we don't have a mask make a fake one for consistency
+        if mask is None:
+            mask = np.ones(self.nparticles, dtype=bool)
+        else:
+            mask = np.asarray(mask, dtype=bool)
+
+        if mask.size != self.nparticles:
+            raise exceptions.InconsistentArguments(
+                "The mask must be the same length as the number of "
+                f"particles. Got {mask.size} but expected {self.nparticles}."
+            )
+
+        masked_nparticles = np.count_nonzero(mask)
+
+        # Validate inputs before accessing their units
+        if other_parts.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing coordinates!"
+            )
+
+        density = getattr(other_parts, density_attr, None)
+        if density is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing {density_attr}!"
+            )
+
         # Get the units for the column density from the inputs
-        column_density_units = (
-            getattr(other_parts, density_attr).units
-            / other_parts.coordinates.units**2
-        )
+        column_density_units = density.units / other_parts.coordinates.units**2
 
         # If have no particles return 0
-        if self.nparticles == 0:
+        if self.nparticles == 0 or masked_nparticles == 0:
             col_den = unyt_array(
-                np.zeros(self.nparticles),
+                np.zeros(masked_nparticles),
                 column_density_units,
                 bypass_validation=True,
             )
@@ -1125,17 +1148,13 @@ class Particles:
         # If the other particles have no particles return 0
         if other_parts.nparticles == 0:
             col_den = unyt_array(
-                np.zeros(self.nparticles),
+                np.zeros(masked_nparticles),
                 column_density_units,
                 bypass_validation=True,
             )
             if column_density_attr is not None:
                 setattr(self, column_density_attr, col_den)
             return col_den
-
-        # If we don't have a mask make a fake one for consistency
-        if mask is None:
-            mask = np.ones(self.nparticles, dtype=bool)
 
         # Compute the column density
         col_den = compute_column_density(
