@@ -1343,6 +1343,39 @@ class DraineLiGrainCurves(AttenuationLaw):
                     f"{component_key} must be non-negative."
                 )
 
+    def _prepare_wavelengths(self, lam):
+        """Prepare a wavelength-matched attenuation grid.
+
+        Args:
+            lam (unyt_array):
+                The target wavelength array.
+
+        Returns:
+            tuple:
+                The normalised wavelength array and a grid matched to that
+                wavelength sampling.
+        """
+        # Normalise the requested wavelengths so the rest of the method can
+        # assume an explicit array in Angstrom.
+        lam = np.atleast_1d(lam.to("Angstrom"))
+
+        # For an array of wavelengths use the non-inplace Grid resampling
+        # helper so the stored base grid remains unchanged.
+        if lam.size > 1:
+            grid = self.grid.reduce_rest_frame_lam(lam)
+
+        # For a scalar wavelength use the dedicated single-wavelength helper,
+        # then write the result onto a copy of the base grid.
+        else:
+            grid = copy.deepcopy(self.grid)
+            spectra_at_lam = self.grid.get_spectra_at_lam(lam)
+            for spectra_id, spectra in spectra_at_lam.items():
+                grid.spectra[spectra_id] = spectra[..., np.newaxis]
+            grid.lam = lam
+            grid._ensure_spectra_data_contiguous()
+
+        return lam, grid
+
     @accepts(lam=angstrom, sigmalos_H=Msun / pc**2)
     def get_tau_at_lam(
         self,
@@ -1386,22 +1419,9 @@ class DraineLiGrainCurves(AttenuationLaw):
         # resampling or particle extraction is attempted.
         self._validate_column_densities(sigmalos_H, sigmalos_dust)
 
-        # Normalise the target wavelengths and prepare a wavelength-matched
-        # view of the attenuation grid.
-        lam = np.atleast_1d(lam.to("Angstrom"))
-
-        # Resample the grid onto the target wavelengths
-        if lam.size > 1:
-            grid = self.grid.reduce_rest_frame_lam(lam)
-        else:
-            # For a scalar we need to resample based on that wavelength
-            # manually on a copy of the grid
-            grid = copy.deepcopy(self.grid)
-            spectra_at_lam = self.grid.get_spectra_at_lam(lam)
-            for spectra_id, spectra in spectra_at_lam.items():
-                grid.spectra[spectra_id] = spectra[..., np.newaxis]
-            grid.lam = lam
-            grid._ensure_spectra_data_contiguous()
+        # Prepare a wavelength-matched view of the attenuation grid for this
+        # specific call.
+        lam, grid = self._prepare_wavelengths(lam)
 
         # Broadcast scalar columns to the common particle count so the rest of
         # the calculation can assume particle-shaped arrays throughout.
