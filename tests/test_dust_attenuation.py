@@ -214,3 +214,63 @@ def test_draine_li_rejects_negative_columns(draine_li_grid):
             sigmalos_H=np.array([1.0]) * Msun / pc**2,
             sigmalos_graphite_a0p01um=np.array([-0.14]) * Msun / pc**2,
         )
+
+
+def test_draine_li_rejects_invalid_grid_axis(tmp_path):
+    """The attenuation grid must expose exactly one dtg-like axis."""
+    grid_path = tmp_path / "bad_draine_li_grid.hdf5"
+    with h5py.File(grid_path, "w") as hdf:
+        hdf.attrs["axes"] = np.array(["size"], dtype=object)
+        hdf.attrs["WeightVariable"] = "None"
+
+        axes = hdf.create_group("axes")
+        size = axes.create_dataset("size", data=np.array([0.1, 0.2]))
+        size.attrs["Units"] = "dimensionless"
+        size.attrs["log_on_read"] = False
+
+        spectra = hdf.create_group("spectra")
+        wavelength = spectra.create_dataset(
+            "wavelength", data=np.array([1000.0, 2000.0, 3000.0])
+        )
+        wavelength.attrs["Units"] = "Å"
+        spectra.create_dataset(
+            "graphite_a0.01um",
+            data=np.array([[1.0, 2.0, 3.0], [2.0, 4.0, 6.0]]),
+        )
+
+    with pytest.raises(exceptions.UnimplementedFunctionality):
+        DraineLiGrainCurves(
+            grid_name=grid_path.name,
+            grid_dir=grid_path.parent,
+            grain_dict={"graphite": [0.01]},
+        )
+
+
+def test_draine_li_rejects_missing_component_grid(tmp_path):
+    """The attenuation grid must contain every requested grain component."""
+    grid_path = tmp_path / "missing_component_draine_li_grid.hdf5"
+    with h5py.File(grid_path, "w") as hdf:
+        hdf.attrs["axes"] = np.array(["dtg"], dtype=object)
+        hdf.attrs["WeightVariable"] = "None"
+
+        axes = hdf.create_group("axes")
+        dtg = axes.create_dataset("dtg", data=np.array([0.1, 0.2]))
+        dtg.attrs["Units"] = "dimensionless"
+        dtg.attrs["log_on_read"] = False
+
+        spectra = hdf.create_group("spectra")
+        wavelength = spectra.create_dataset(
+            "wavelength", data=np.array([1000.0, 2000.0, 3000.0])
+        )
+        wavelength.attrs["Units"] = "Å"
+        spectra.create_dataset(
+            "graphite_a0.01um",
+            data=np.array([[1.0, 2.0, 3.0], [2.0, 4.0, 6.0]]),
+        )
+
+    with pytest.raises(exceptions.InconsistentArguments):
+        DraineLiGrainCurves(
+            grid_name=grid_path.name,
+            grid_dir=grid_path.parent,
+            grain_dict={"graphite": [0.01], "silicate": [0.1]},
+        )

@@ -1224,10 +1224,61 @@ class DraineLiGrainCurves(AttenuationLaw):
             self.grid_dir,
             ignore_lines=True,
         )
+        self._validate_grid()
 
     def __repr__(self):
         """Return a string representation of the DraineLiGrainCurves object."""
         return f"DraineLiGrainCurves(grid_name={self.grid_name})"
+
+    def _validate_grid(self):
+        """Validate that the attenuation grid matches class expectations."""
+        if not self.grid.available_spectra_emissions:
+            raise exceptions.InconsistentArguments(
+                "DraineLiGrainCurves requires an attenuation grid with "
+                "spectra."
+            )
+
+        if len(self.grid._extract_axes) != 1:
+            raise exceptions.UnimplementedFunctionality(
+                "DraineLiGrainCurves only supports attenuation grids with a "
+                "single dtg axis."
+            )
+
+        self._dtg_axis_name = self.grid._extract_axes[0]
+        if self._dtg_axis_name not in ("dtg", "log10dtg"):
+            raise exceptions.UnimplementedFunctionality(
+                "DraineLiGrainCurves only supports attenuation grids with a "
+                "dtg or log10dtg extraction axis."
+            )
+
+        self._available_grain_spectra = set(
+            self.grid.available_spectra_emissions
+        )
+        expected_spectra = {
+            param.split("sigmalos_", 1)[-1].replace("0p", "0.")
+            for param in self._required_params
+            if param != "sigmalos_H"
+        }
+        missing_spectra = expected_spectra - self._available_grain_spectra
+        if missing_spectra:
+            raise exceptions.InconsistentArguments(
+                "The provided attenuation grid is missing the following grain "
+                f"components: {sorted(missing_spectra)}"
+            )
+
+        grid_dtg = self.grid._extract_axes_values[self._dtg_axis_name]
+        if not np.all(np.isfinite(grid_dtg)):
+            raise exceptions.InconsistentArguments(
+                "The attenuation grid dtg axis must contain only finite "
+                "values."
+            )
+        if np.any(np.diff(grid_dtg) <= 0.0):
+            raise exceptions.InconsistentArguments(
+                "The attenuation grid dtg axis must be strictly increasing."
+            )
+
+        self._grid_dtg_min = np.min(grid_dtg)
+        self._grid_dtg_max = np.max(grid_dtg)
 
     @accepts(lam=angstrom, sigmalos_H=Msun / pc**2)
     def get_tau_at_lam(
@@ -1282,11 +1333,11 @@ class DraineLiGrainCurves(AttenuationLaw):
             elif isinstance(dust_col, (unyt_quantity, unyt_array)):
                 try:
                     _ = dust_col.to(sigmalos_H.units)
-                except Exception:
+                except Exception as e:
                     raise exceptions.InconsistentArguments(
                         f"{component_key} must have units compatible with "
                         "mass/length^2"
-                    )
+                    ) from e
             else:
                 raise exceptions.InconsistentArguments(
                     f"Provide units to the {component_key} quantity"
@@ -1296,12 +1347,12 @@ class DraineLiGrainCurves(AttenuationLaw):
         # view of the attenuation grid.
         lam = np.atleast_1d(lam.to("Angstrom"))
 
-        # Use the Grid wavelength machinery for multi-point requests. For a
-        # single wavelength use a dedicated Grid helper because spectres needs
-        # at least two wavelength bins.
+        # Resample the grid onto the target wavelengths
         if lam.size > 1:
             grid = self.grid.reduce_rest_frame_lam(lam)
         else:
+            # For a scalar we need to resample based on that wavelength
+            # manually on a copy of the grid
             grid = copy.deepcopy(self.grid)
             spectra_at_lam = self.grid.get_spectra_at_lam(lam)
             for spectra_id, spectra in spectra_at_lam.items():
@@ -1323,20 +1374,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                 column_density = np.repeat(column_density, size)
             return column_density
 
-        # The attenuation grid should expose exactly one extractable dtg axis,
-        # either in linear or logarithmic form.
-        dtg_axis_name = grid._extract_axes[0]
-        if (
-            dtg_axis_name not in ("dtg", "log10dtg")
-            or len(grid._extract_axes) != 1
-        ):
-            raise exceptions.UnimplementedFunctionality(
-                "DraineLiGrainCurves only supports attenuation grids with a "
-                "single dtg axis."
-            )
-        grid_dtg = grid._extract_axes_values[dtg_axis_name]
-        grid_dtg_min = np.min(grid_dtg)
-        grid_dtg_max = np.max(grid_dtg)
+        dtg_axis_name = self._dtg_axis_name
 
         # Determine the common particle count across hydrogen and dust columns,
         # then expand the hydrogen column to that length.
@@ -1363,7 +1401,7 @@ class DraineLiGrainCurves(AttenuationLaw):
         for component_key, dust_col in sigmalos_dust.items():
             # Check that this dust component is actually present on the grid.
             dataset_key = component_datasets[component_key]
-            if dataset_key not in grid.available_spectra_emissions:
+            if dataset_key not in self._available_grain_spectra:
                 raise exceptions.InconsistentArguments(
                     f"Grain type {dataset_key} not in the provided dust grid!"
                 )
@@ -1407,15 +1445,16 @@ class DraineLiGrainCurves(AttenuationLaw):
             # Only valid particles are checked against the grid bounds. Any
             # masked particles are ignored and remain zero contribution.
             not_within = valid & (
-                (dtg_grid_values < grid_dtg_min)
-                | (dtg_grid_values > grid_dtg_max)
+                (dtg_grid_values < self._grid_dtg_min)
+                | (dtg_grid_values > self._grid_dtg_max)
             )
             if np.any(not_within):
                 invalid_values = np.atleast_1d(dtg[not_within])
                 raise exceptions.InconsistentArguments(
                     f"Given dust-to-gas ratio for {component_key} "
                     "is outside the grid values. "
-                    f"Grid range: [{grid_dtg_min}, {grid_dtg_max}]. "
+                    "Grid range: "
+                    f"[{self._grid_dtg_min}, {self._grid_dtg_max}]. "
                     f"Invalid values ({invalid_values.size}): "
                     f"{invalid_values}. "
                     "Rerun the dust grid with updated range."
