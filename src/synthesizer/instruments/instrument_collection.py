@@ -37,6 +37,8 @@ Example usage:
 
 """
 
+from copy import deepcopy
+
 import h5py
 
 from synthesizer import exceptions
@@ -156,9 +158,9 @@ class InstrumentCollection:
             # Add the filters to the collection
             if instrument.can_do_photometry:
                 if self.all_filters is None:
-                    self.all_filters = instrument.filters
+                    self.all_filters = deepcopy(instrument.filters)
                 else:
-                    self.all_filters += instrument.filters
+                    self.all_filters += deepcopy(instrument.filters)
 
     def write_instruments(self, filepath):
         """Save the instruments in the collection to a file.
