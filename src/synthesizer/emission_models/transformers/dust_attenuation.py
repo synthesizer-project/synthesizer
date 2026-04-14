@@ -1485,6 +1485,7 @@ class DraineLiGrainCurves(AttenuationLaw):
             # final optical-depth array.
             nparticles = sigmalos_H.size
             tau_all = np.zeros((nparticles, grid.nlam), dtype=np.float32)
+            extractor = None
 
             for component_key, dust_col in sigmalos_dust.items():
                 # Check that this dust component is actually present on the
@@ -1546,9 +1547,15 @@ class DraineLiGrainCurves(AttenuationLaw):
                         "Rerun the dust grid with updated range."
                     )
 
+                # Set up the extractor once per wavelength-matched grid, then
+                # switch the active spectra grid for each dust component.
+                if extractor is None:
+                    extractor = ParticleExtractor(grid, dataset_key)
+                else:
+                    extractor._spectra_grid = grid.spectra[dataset_key]
+
                 # Feed the particle dtg values into the standard
                 # ParticleExtractor machinery using a minimal adapter object.
-                extractor = ParticleExtractor(grid, dataset_key)
                 emitter_kwargs = {
                     "nparticles": nparticles,
                     "model_param_cache": {},
