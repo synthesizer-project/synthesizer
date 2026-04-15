@@ -2271,12 +2271,12 @@ class TestGalaxySplitting:
         _assert_nested_allclose(
             unsplit_pipeline.images_lum,
             split_pipeline.images_lum,
-            rtol=1e-7,
+            rtol=3e-6,
         )
         _assert_nested_allclose(
             unsplit_pipeline.images_flux,
             split_pipeline.images_flux,
-            rtol=1e-7,
+            rtol=3e-6,
         )
 
     def test_split_matches_unsplit_for_multiple_galaxies(

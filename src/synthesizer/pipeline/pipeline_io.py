@@ -93,8 +93,9 @@ class PipelineIO:
                 "Cannot use parallel_io option."
             )
 
-        # Flags for behavior
-        self.is_parallel = comm is not None
+        # Treat a communicator of size 1 as a serial run so single-rank jobs do
+        # not create synthetic per-rank filenames such as ``_0``.
+        self.is_parallel = comm is not None and self.size > 1
         self.is_root = self.rank == 0
         self.is_collective = self.is_parallel and self.PARALLEL and parallel_io
 
@@ -659,6 +660,7 @@ class PipelineIO:
                         src_file = temp_path.replace("<rank>", str(rank))
                         with h5py.File(src_file, "r") as rank_f:
                             src_dset = rank_f[dpath]
+                            src_shape = src_dset.shape
                             local_size = src_dset.shape[0]
 
                         # Ensure the local size is as expected
@@ -666,13 +668,39 @@ class PipelineIO:
                         if local_size != expected_size:
                             end_i = start_i + local_size
 
+                        target_shape = (end_i - start_i,) + shape[1:]
+
+                        if (
+                            len(src_shape) != len(shape)
+                            or src_shape[1:] != shape[1:]
+                        ):
+                            raise ValueError(
+                                "Cannot create virtual dataset mapping for "
+                                f"{dpath!r}: rank {rank} dataset in "
+                                f"{src_file!r} "
+                                f"has shape {src_shape}, but rank 0 defined "
+                                f"shape {shape}. Non-leading dimensions must "
+                                "match across rank files."
+                            )
+
                         # Create a virtual source for this rank
                         vsource = h5py.VirtualSource(
                             src_file, dpath, shape=(local_size,) + shape[1:]
                         )
 
                         # Map the portion of the layout to this source slice
-                        layout[start_i:end_i, ...] = vsource[...]
+                        try:
+                            layout[start_i:end_i, ...] = vsource[...]
+                        except ValueError as exc:
+                            raise ValueError(
+                                "Failed to map rank dataset into virtual "
+                                f"dataset for {dpath!r}. Rank {rank}, source "
+                                f"file {src_file!r}, source shape "
+                                f"{src_shape}, virtual slice "
+                                f"[{start_i}:{end_i}] with target "
+                                f"shape {target_shape}, final virtual shape "
+                                f"{final_shape}. Original error: {exc}"
+                            ) from exc
 
                     # Create the virtual dataset in the final file
                     vds = hdf.create_virtual_dataset(dpath, layout)
