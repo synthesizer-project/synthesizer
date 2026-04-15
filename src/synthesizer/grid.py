@@ -465,6 +465,8 @@ class Grid:
             # Read the wavelengths and attach the units stored on the file.
             lams = hf[spectra_key + "/wavelength"][:]
             lam_units = hf[spectra_key + "/wavelength"].attrs.get("Units")
+            if lam_units is None:
+                lam_units = angstrom
             self.lam = unyt_array(lams, lam_units).to(angstrom)
 
             # Get all our spectra
