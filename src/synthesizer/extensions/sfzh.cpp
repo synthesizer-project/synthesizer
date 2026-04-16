@@ -43,7 +43,7 @@
  */
 PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
-  tic("Computing SFZH");
+  tic("compute_sfzh");
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -95,7 +95,7 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   delete parts;
   delete grid_props;
 
-  toc("Computing SFZH");
+  toc("compute_sfzh");
 
   return Py_BuildValue("N", np_sfzh);
 }

@@ -246,7 +246,7 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
 void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
                      void *out, const int nthreads) {
 
-  tic("Cloud in Cell weight loop");
+  tic("weight_loop_cic");
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -269,7 +269,7 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
   weight_loop_cic_serial(grid_props, parts, out);
 
 #endif
-  toc("Cloud in Cell weight loop");
+  toc("weight_loop_cic");
 }
 
 /**
@@ -416,7 +416,7 @@ static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
 void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
                      void *out, const int nthreads) {
 
-  tic("Nearest Grid Point weight loop");
+  tic("weight_loop_ngp");
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -439,7 +439,7 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
   weight_loop_ngp_serial(grid_props, parts, out);
 
 #endif
-  toc("Nearest Grid Point weight loop");
+  toc("weight_loop_ngp");
 }
 
 /**
@@ -454,8 +454,8 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
  */
 PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
 
-  tic("Computing SFZH");
-  tic("Extracting Python data");
+  tic("compute_grid_weights");
+  tic("compute_grid_weights.extract_python_data");
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -497,7 +497,7 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
     return nullptr;
   }
 
-  toc("Extracting Python data");
+  toc("compute_grid_weights.extract_python_data");
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
@@ -534,7 +534,7 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
   delete part_props;
   delete grid_props;
 
-  toc("Computing SFZH");
+  toc("compute_grid_weights");
 
   return Py_BuildValue("N", out_weights);
 }

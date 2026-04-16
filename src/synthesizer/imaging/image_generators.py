@@ -326,7 +326,7 @@ def _generate_image_particle_hist(
     Returns:
         Image: The histogram image.
     """
-    tic("Setting up histogram image inputs")
+    tic("_generate_image_particle_hist.setup")
 
     # Ensure the signal is a 1D array and is a compatible size with the
     # coordinates
@@ -372,9 +372,9 @@ def _generate_image_particle_hist(
     # strip them off
     coordinates = coordinates.to_value(spatial_units)
 
-    toc("Setting up histogram image inputs")
+    toc("_generate_image_particle_hist.setup")
 
-    tic("Histogram image generation")
+    tic("_generate_image_particle_hist.generate")
 
     # Include normalisation in the original signal if we have one
     # (we'll divide by it later)
@@ -394,11 +394,11 @@ def _generate_image_particle_hist(
         weights=signal,
     )[0]
 
-    toc("Histogram image generation")
+    toc("_generate_image_particle_hist.generate")
 
     # Normalise the image by the normalisation if applicable
     if normalisation is not None:
-        tic("Normalisation of histogram image")
+        tic("_generate_image_particle_hist.normalise")
         norm_img = np.histogram2d(
             coordinates[:, 0],
             coordinates[:, 1],
@@ -411,7 +411,7 @@ def _generate_image_particle_hist(
 
         img.arr /= norm_img
 
-        toc("Normalisation of histogram image")
+        toc("_generate_image_particle_hist.normalise")
 
     return img
 
@@ -502,7 +502,7 @@ def _generate_image_particle_smoothed(
     Returns:
         Image: The smoothed image.
     """
-    tic("Setting up smoothed image inputs")
+    tic("_generate_image_particle_smoothed.setup")
 
     # Avoid cyclic imports
     from synthesizer.imaging import Image
@@ -576,7 +576,7 @@ def _generate_image_particle_smoothed(
         signal = signal.copy()
         signal *= normalisation.value
 
-    toc("Setting up smoothed image inputs")
+    toc("_generate_image_particle_smoothed.setup")
 
     # Get the (npix_x, npix_y, Nimg) array of images
     imgs_arr = make_img(
@@ -604,7 +604,7 @@ def _generate_image_particle_smoothed(
 
     # Apply the normalisation if needed
     if normalisation is not None:
-        tic("Normalisation of image")
+        tic("_generate_image_particle_smoothed.normalise")
         norm_img = Image(resolution=img.resolution, fov=img.fov)
         norm_img = _generate_image_particle_smoothed(
             norm_img,
@@ -619,7 +619,7 @@ def _generate_image_particle_smoothed(
         # Normalise the image by the normalisation property
         img.arr /= norm_img.arr
 
-        toc("Normalisation of image")
+        toc("_generate_image_particle_smoothed.normalise")
 
     return img
 
@@ -670,7 +670,7 @@ def _generate_images_particle_smoothed(
     Returns:
         ImageCollection: An image collection containing the smoothed images.
     """
-    tic("Setting up smoothed image inputs")
+    tic("_generate_images_particle_smoothed.setup")
 
     # Avoid cyclic imports
     from synthesizer.imaging import Image
@@ -756,7 +756,7 @@ def _generate_images_particle_smoothed(
     # to make the most of cache locality, so we transpose the signals
     signals = signals.T
 
-    toc("Setting up smoothed image inputs")
+    toc("_generate_images_particle_smoothed.setup")
 
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
@@ -776,23 +776,23 @@ def _generate_images_particle_smoothed(
 
     # Apply units if needs be
     if isinstance(signals, (unyt_quantity, unyt_array)):
-        tic("Applying units to smoothed images")
+        tic("_generate_images_particle_smoothed.apply_units")
         imgs_arr = unyt_array(
             imgs_arr,
             units=signals.units,
         )
-        toc("Applying units to smoothed images")
+        toc("_generate_images_particle_smoothed.apply_units")
 
     # Store the image arrays on the image collection (this will
     # automatically convert them to Image objects)
-    tic("Unpacking smoothed images")
+    tic("_generate_images_particle_smoothed.unpack")
     for ind, key in enumerate(labels):
         imgs[key] = imgs_arr[:, :, ind]
-    toc("Unpacking smoothed images")
+    toc("_generate_images_particle_smoothed.unpack")
 
     # Apply normalisation if needed
     if normalisations is not None:
-        tic("Normalisation of images")
+        tic("_generate_images_particle_smoothed.normalise")
         for ind, key in enumerate(labels):
             norm_img = Image(resolution=imgs.resolution, fov=imgs.fov)
             norm_img = _generate_image_particle_smoothed(
@@ -808,12 +808,12 @@ def _generate_images_particle_smoothed(
             # Normalise the image by the normalisation property
             imgs[key].arr /= norm_img.arr
 
-        toc("Normalisation of images")
+        toc("_generate_images_particle_smoothed.normalise")
 
     return imgs
 
 
-@timed("Setting up smoothed image inputs")
+@timed("_generate_image_parametric_smoothed")
 def _generate_image_parametric_smoothed(
     img,
     density_grid,
@@ -1096,7 +1096,7 @@ def _generate_ifu_particle_hist(
     Returns:
         SpectralCube: The histogram image.
     """
-    tic("Setting up histogram IFU inputs")
+    tic("_generate_ifu_particle_hist.setup")
 
     # Sample the spectra onto the wavelength grid
     sed = sed.get_resampled_sed(new_lam=ifu.lam)
@@ -1163,7 +1163,7 @@ def _generate_ifu_particle_hist(
     # TODO: We should do away with this and write a histogram backend
     kernel = Kernel().get_kernel()
 
-    toc("Setting up histogram IFU inputs")
+    toc("_generate_ifu_particle_hist.setup")
 
     ifu.arr = make_img(
         ensure_array_c_compatible_double(spectra),
@@ -1223,7 +1223,7 @@ def _generate_ifu_particle_smoothed(
     Returns:
         SpectralCube: The histogram image.
     """
-    tic("Setting up smoothed IFU inputs")
+    tic("_generate_ifu_particle_smoothed.setup")
 
     # Sample the spectra onto the wavelength grid
     sed = sed.get_resampled_sed(new_lam=ifu.lam)
@@ -1296,7 +1296,7 @@ def _generate_ifu_particle_smoothed(
     _coords[:, 0] += fov[0] / 2
     _coords[:, 1] += fov[1] / 2
 
-    toc("Setting up smoothed IFU inputs")
+    toc("_generate_ifu_particle_smoothed.setup")
 
     # Generate the IFU
     ifu.arr = make_img(
@@ -1340,7 +1340,7 @@ def _generate_ifu_parametric_smoothed(
         density_grid (unyt_array of float):
             The density grid to be smoothed over.
     """
-    tic("Computing parametric IFU")
+    tic("_generate_ifu_parametric_smoothed")
 
     # Sample the spectra onto the wavelength grid if we need to
     sed = sed.get_resampled_sed(new_lam=ifu.lam)
@@ -1371,7 +1371,7 @@ def _generate_ifu_parametric_smoothed(
     # Multiply the density grid by the sed to get the IFU
     ifu.arr = density_grid[:, :, None] * spectra
 
-    toc("Computing parametric IFU")
+    toc("_generate_ifu_parametric_smoothed")
 
     return ifu
 

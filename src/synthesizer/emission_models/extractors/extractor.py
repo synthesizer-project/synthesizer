@@ -81,7 +81,7 @@ class Extractor(ABC):
             The line wavelengths.
     """
 
-    @timed("Setting up the Extractor (including grid axis extraction)")
+    @timed("Extractor.__init__")
     def __init__(self, grid, extract):
         """Initialize the Extractor object.
 
@@ -136,7 +136,7 @@ class Extractor(ABC):
         # Finally, attach a pointer to the grid object
         self._grid = grid
 
-    @timed("Preparing particle data for extraction")
+    @timed("Extractor.get_emitter_attrs")
     def get_emitter_attrs(self, emitter, model, do_grid_check):
         """Get the attributes from the emitter.
 
@@ -205,7 +205,7 @@ class Extractor(ABC):
 
         return tuple(extracted), weight
 
-    @timed("Checking the particle data against the grid axes")
+    @timed("Extractor.check_emitter_attrs")
     def check_emitter_attrs(self, emitter, extracted_attrs):
         """Compute the fraction of emitter attributes outside the grid axes.
 
@@ -258,7 +258,7 @@ class IntegratedParticleExtractor(Extractor):
     to reduce the computation time.
     """
 
-    @timed("Generating integrated Lnu")
+    @timed("IntegratedParticleExtractor.generate_lnu")
     def generate_lnu(
         self,
         emitter,
@@ -295,21 +295,21 @@ class IntegratedParticleExtractor(Extractor):
         Returns:
             Sed: The integrated spectra.
         """
-        tic("Setting up integrated Lnu calculation")
+        tic("IntegratedParticleExtractor.generate_lnu.setup")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Sed")
 
             # Close the setup timer before returning through this early exit.
-            toc("Setting up integrated Lnu calculation")
+            toc("IntegratedParticleExtractor.generate_lnu.setup")
 
             return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
         elif mask is not None and np.sum(mask) == 0:
             warn("A mask has filtered out all particles, returning empty Sed")
 
             # Close the setup timer before returning through this early exit.
-            toc("Setting up integrated Lnu calculation")
+            toc("IntegratedParticleExtractor.generate_lnu.setup")
 
             return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
 
@@ -332,7 +332,7 @@ class IntegratedParticleExtractor(Extractor):
         else:
             grid_weights = None
 
-        toc("Setting up integrated Lnu calculation")
+        toc("IntegratedParticleExtractor.generate_lnu.setup")
 
         # Compute the integrated lnu array (this is attached to an Sed
         # object elsewhere)
@@ -400,14 +400,14 @@ class IntegratedParticleExtractor(Extractor):
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
         """
-        tic("Setting up particle line calculation")
+        tic("IntegratedParticleExtractor.generate_line.setup")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Line")
 
             # Close the setup timer before returning through this early exit.
-            toc("Setting up particle line calculation")
+            toc("IntegratedParticleExtractor.generate_line.setup")
 
             return LineCollection(
                 line_ids=self._grid.line_ids,
@@ -419,7 +419,7 @@ class IntegratedParticleExtractor(Extractor):
             warn("A mask has filtered out all particles, returning empty Line")
 
             # Close the setup timer before returning through this early exit.
-            toc("Setting up particle line calculation")
+            toc("IntegratedParticleExtractor.generate_line.setup")
 
             return LineCollection(
                 line_ids=self._grid.line_ids,
@@ -452,7 +452,7 @@ class IntegratedParticleExtractor(Extractor):
         grid_dims = np.array(self._grid_dims)
         grid_dims[-1] = self._grid.nlines
 
-        toc("Setting up particle line calculation")
+        toc("IntegratedParticleExtractor.generate_line.setup")
 
         # Compute the integrated line lum array
         emitter_attr_names = tuple(self._emitter_attributes)
@@ -558,14 +558,14 @@ class DopplerShiftedParticleExtractor(Extractor):
             Sed
                 The integrated spectra.
         """
-        tic("Setting up particle Lnu (with velocity shift) calculation")
+        tic("DopplerShiftedParticleExtractor.generate_lnu.setup")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Sed")
 
             # Close the setup timer before returning through this early exit.
-            toc("Setting up particle Lnu (with velocity shift) calculation")
+            toc("DopplerShiftedParticleExtractor.generate_lnu.setup")
 
             return Sed(
                 model.lam,
@@ -575,7 +575,7 @@ class DopplerShiftedParticleExtractor(Extractor):
             warn("A mask has filtered out all particles, returning empty Sed")
 
             # Close the setup timer before returning through this early exit.
-            toc("Setting up particle Lnu (with velocity shift) calculation")
+            toc("DopplerShiftedParticleExtractor.generate_lnu.setup")
 
             return Sed(
                 model.lam,
@@ -601,7 +601,7 @@ class DopplerShiftedParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        toc("Setting up particle Lnu (with velocity shift) calculation")
+        toc("DopplerShiftedParticleExtractor.generate_lnu.setup")
 
         # Compute the lnu array
         emitter_attr_names = tuple(self._emitter_attributes)
@@ -687,21 +687,21 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             Sed
                 The integrated spectra.
         """
-        tic("Setting up integrated Lnu (with velocity shift) calculation")
+        tic("IntegratedDopplerShiftedParticleExtractor.generate_lnu.setup")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Sed")
 
             # Close the setup timer before returning through this early exit.
-            toc("Setting up integrated Lnu (with velocity shift) calculation")
+            toc("IntegratedDopplerShiftedParticleExtractor.generate_lnu.setup")
 
             return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
         elif mask is not None and np.sum(mask) == 0:
             warn("A mask has filtered out all particles, returning empty Sed")
 
             # Close the setup timer before returning through this early exit.
-            toc("Setting up integrated Lnu (with velocity shift) calculation")
+            toc("IntegratedDopplerShiftedParticleExtractor.generate_lnu.setup")
 
             return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
 
@@ -724,7 +724,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        toc("Setting up integrated Lnu (with velocity shift) calculation")
+        toc("IntegratedDopplerShiftedParticleExtractor.generate_lnu.setup")
 
         # Compute the lnu array
         emitter_attr_names = tuple(self._emitter_attributes)
@@ -802,14 +802,14 @@ class ParticleExtractor(Extractor):
             Sed
                 The integrated spectra.
         """
-        tic("Setting up particle Lnu calculation")
+        tic("ParticleExtractor.generate_lnu.setup")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Sed")
 
             # Close the setup timer before returning through this early exit.
-            toc("Setting up particle Lnu calculation")
+            toc("ParticleExtractor.generate_lnu.setup")
 
             # Return empty Sed objects with the correct shape
             return (
@@ -829,7 +829,7 @@ class ParticleExtractor(Extractor):
             warn("A mask has filtered out all particles, returning empty Sed")
 
             # Close the setup timer before returning through this early exit.
-            toc("Setting up particle Lnu calculation")
+            toc("ParticleExtractor.generate_lnu.setup")
 
             # Return empty Sed objects with the correct shape
             return (
@@ -857,7 +857,7 @@ class ParticleExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        toc("Setting up particle Lnu calculation")
+        toc("ParticleExtractor.generate_lnu.setup")
 
         # Compute the lnu array
         emitter_attr_names = tuple(self._emitter_attributes)
@@ -920,14 +920,14 @@ class ParticleExtractor(Extractor):
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
         """
-        tic("Setting up particle line calculation")
+        tic("ParticleExtractor.generate_line.setup")
 
         # Check we actually have to do the calculation
         if emitter.nparticles == 0:
             warn("Found emitter with no particles, returning empty Line")
 
             # Close the setup timer before returning through this early exit.
-            toc("Setting up particle line calculation")
+            toc("ParticleExtractor.generate_line.setup")
 
             return (
                 LineCollection(
@@ -953,7 +953,7 @@ class ParticleExtractor(Extractor):
             warn("A mask has filtered out all particles, returning empty Line")
 
             # Close the setup timer before returning through this early exit.
-            toc("Setting up particle line calculation")
+            toc("ParticleExtractor.generate_line.setup")
 
             return (
                 LineCollection(
@@ -991,7 +991,7 @@ class ParticleExtractor(Extractor):
         grid_dims = np.array(self._grid_dims)
         grid_dims[-1] = self._grid.nlines
 
-        toc("Setting up particle line calculation")
+        toc("ParticleExtractor.generate_line.setup")
 
         # Compute the integrated line lum array
         emitter_attr_names = tuple(self._emitter_attributes)
@@ -1141,7 +1141,7 @@ class IntegratedParametricExtractor(Extractor):
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
         """
-        tic("Generating integrated Lnu")
+        tic("IntegratedParametricExtractor.generate_line")
 
         # Get a mask for non-zero bins in the SFZH
         mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
@@ -1168,7 +1168,7 @@ class IntegratedParametricExtractor(Extractor):
             lum = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0)
             cont = np.sum(grid_line_conts[mask] * sfzh[mask], axis=0)
 
-        toc("Generating integrated Lnu")
+        toc("IntegratedParametricExtractor.generate_line")
 
         return LineCollection(
             line_ids=self._grid.line_ids,

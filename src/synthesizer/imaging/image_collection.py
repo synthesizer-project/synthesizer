@@ -82,7 +82,7 @@ class ImageCollection(ImagingBase):
             The RGB image array.
     """
 
-    @timed("Creating ImageCollection")
+    @timed("ImageCollection.__init__")
     def __init__(
         self,
         resolution,
