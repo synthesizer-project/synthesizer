@@ -449,7 +449,7 @@ class Galaxy(BaseGalaxy):
             # Nothing to do here... YET
             pass
 
-    @timed("Calculating LOS tau_v")
+    @timed("Galaxy.get_stellar_los_tau_v")
     def get_stellar_los_tau_v(
         self,
         kappa,
@@ -542,7 +542,7 @@ class Galaxy(BaseGalaxy):
 
         return tau_v
 
-    @timed("Calculating LOS tau_v")
+    @timed("Galaxy.get_black_hole_los_tau_v")
     def get_black_hole_los_tau_v(
         self,
         kappa,
@@ -1408,7 +1408,7 @@ class Galaxy(BaseGalaxy):
 
         return img
 
-    @timed("Computing spectral data cubes")
+    @timed("Galaxy.get_data_cube")
     def get_data_cube(
         self,
         resolution,

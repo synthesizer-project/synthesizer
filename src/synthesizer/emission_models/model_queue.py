@@ -87,7 +87,7 @@ class ModelQueue:
         self._root_model = root_model
 
         # Build the executable model closure before compiling dependencies.
-        tic("Collecting model queue tree")
+        tic("ModelQueue.__init__.collect_tree")
         self.models = {}
         self._related_models = set()
         self._collect_model_tree(root_model)
@@ -108,10 +108,10 @@ class ModelQueue:
                 related_labels.add(model.label)
                 if model.label not in self.models:
                     self._collect_model_tree(model)
-        toc("Collecting model queue tree")
+        toc("ModelQueue.__init__.collect_tree")
 
         # Compile the dependency graph and runtime counters for this closure.
-        tic("Compiling model queue")
+        tic("ModelQueue.__init__.compile")
         full_dependencies = {}
         full_dependents = {label: [] for label in self.models}
         self.execution_rank = {}
@@ -179,7 +179,7 @@ class ModelQueue:
         )
         self._queue = deque(ready_labels)
         self._processed = set()
-        toc("Compiling model queue")
+        toc("ModelQueue.__init__.compile")
 
     def __len__(self):
         """Return the number of models currently ready to execute.

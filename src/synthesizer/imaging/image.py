@@ -62,7 +62,7 @@ class Image(ImagingBase):
             The weight map derived from the noise array.
     """
 
-    @timed("Creating Image")
+    @timed("Image.__init__")
     def __init__(
         self,
         resolution,

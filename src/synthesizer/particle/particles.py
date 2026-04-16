@@ -568,7 +568,7 @@ class Particles:
 
         return self.particle_photo_fnu
 
-    @timed("Generating mask")
+    @timed("Particles.get_mask")
     def get_mask(
         self,
         attr,

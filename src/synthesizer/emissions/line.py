@@ -117,7 +117,7 @@ class LineCollection:
     vacuum_wavelength = Quantity("wavelength")
 
     @accepts(lam=angstrom, lum=erg / s, cont=erg / s / Hz)
-    @timed("Creating LineCollection")
+    @timed("LineCollection.__init__")
     def __init__(self, line_ids, lam, lum, cont, description=None):
         """Initialise the collection of emission lines.
 

@@ -105,7 +105,7 @@ static void reduce_spectra_parallel(double *spectra, double *part_spectra,
 void reduce_spectra(double *spectra, double *part_spectra, int nlam, int npart,
                     int nthreads) {
 
-  tic("Reducing particle spectra");
+  tic("reduce_spectra");
   if (nthreads > 1) {
 #ifdef WITH_OPENMP
     reduce_spectra_parallel(spectra, part_spectra, nlam, npart, nthreads);
@@ -115,7 +115,7 @@ void reduce_spectra(double *spectra, double *part_spectra, int nlam, int npart,
   } else {
     reduce_spectra_serial(spectra, part_spectra, nlam, npart);
   }
-  toc("Reducing particle spectra");
+  toc("reduce_spectra");
 }
 
 /**

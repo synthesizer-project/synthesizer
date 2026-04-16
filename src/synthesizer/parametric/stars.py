@@ -446,7 +446,7 @@ class Stars(StarsComponent):
             # Otherwise calculate the total initial mass
             self.initial_mass = np.sum(self.sfzh) * Msun
 
-    @timed("Generating parametric mask")
+    @timed("Stars.get_mask")
     def get_mask(
         self,
         attr,

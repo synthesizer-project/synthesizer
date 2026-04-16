@@ -92,7 +92,7 @@ class Sed:
     obslam = Quantity("wavelength")
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
-    @timed("Creating Sed")
+    @timed("Sed.__init__")
     def __init__(self, lam, lnu=None, description=None):
         """Initialise a new spectral energy distribution object.
 
@@ -134,7 +134,7 @@ class Sed:
         self.photo_lnu = None
         self.photo_fnu = None
 
-    @timed("Summing Sed")
+    @timed("Sed.sum")
     def sum(self):
         """Sum the SED over all dimensions.
 
@@ -732,7 +732,7 @@ class Sed:
         """
         return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
 
-    @timed("Calculating bolometric luminosity")
+    @timed("Sed.measure_bolometric_luminosity")
     def measure_bolometric_luminosity(
         self,
         integration_method="trapz",
@@ -1179,7 +1179,7 @@ class Sed:
 
         return self.fnu
 
-    @timed("Getting Photometry (Lnu)")
+    @timed("Sed.get_photo_lnu")
     def get_photo_lnu(
         self, filters, verbose=True, nthreads=1, integration_method="trapz"
     ):
@@ -1201,7 +1201,7 @@ class Sed:
             (PhotometryCollection):
                 Rest-frame broadband luminosities.
         """
-        tic("Applying Filters (Lnu)")
+        tic("Sed.get_photo_lnu.apply_filters")
 
         # Apply all filters in one batched integration call.
         bb_lums = filters.apply_filters(
@@ -1210,10 +1210,10 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Applying Filters (Lnu)")
+        toc("Sed.get_photo_lnu.apply_filters")
 
         # Create the photometry collection and store it in the object
-        tic("Stacking Photometry (Lnu)")
+        tic("Sed.get_photo_lnu.stack_photometry")
         self.photo_lnu = PhotometryCollection(
             filters,
             photometry=unyt_array(
@@ -1222,11 +1222,11 @@ class Sed:
                 bypass_validation=True,
             ),
         )
-        toc("Stacking Photometry (Lnu)")
+        toc("Sed.get_photo_lnu.stack_photometry")
 
         return self.photo_lnu
 
-    @timed("Getting Photometry (Fnu)")
+    @timed("Sed.get_photo_fnu")
     def get_photo_fnu(
         self, filters, verbose=True, nthreads=1, integration_method="trapz"
     ):
@@ -1258,7 +1258,7 @@ class Sed:
                 )
             )
 
-        tic("Applying Filters (Fnu)")
+        tic("Sed.get_photo_fnu.apply_filters")
 
         # Apply all filters in one batched integration call.
         bb_fluxes = filters.apply_filters(
@@ -1267,10 +1267,10 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Applying Filters (Fnu)")
+        toc("Sed.get_photo_fnu.apply_filters")
 
         # Create the photometry collection and store it in the object
-        tic("Stacking Photometry (Fnu)")
+        tic("Sed.get_photo_fnu.stack_photometry")
         self.photo_fnu = PhotometryCollection(
             filters,
             photometry=unyt_array(
@@ -1279,7 +1279,7 @@ class Sed:
                 bypass_validation=True,
             ),
         )
-        toc("Stacking Photometry (Fnu)")
+        toc("Sed.get_photo_fnu.stack_photometry")
 
         return self.photo_fnu
 
@@ -1391,7 +1391,7 @@ class Sed:
 
         return index
 
-    @timed("Resampling Sed")
+    @timed("Sed.get_resampled_sed")
     def get_resampled_sed(self, resample_factor=None, new_lam=None):
         """Resample the spectra onto a new set of wavelength points.
 

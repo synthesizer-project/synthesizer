@@ -156,7 +156,7 @@ static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
  */
 static PyArrayObject *get_spectra(GridProps *grid_props, int nthreads) {
 
-  tic("Computing integrated spectra from weights");
+  tic("get_spectra");
 #ifdef WITH_OPENMP
   /* Do we have multiple threads to do the reduction on to the spectra? */
   PyArrayObject *np_spectra;
@@ -170,7 +170,7 @@ static PyArrayObject *get_spectra(GridProps *grid_props, int nthreads) {
   PyArrayObject *np_spectra = get_spectra_serial(grid_props);
 #endif
 
-  toc("Computing integrated spectra from weights");
+  toc("get_spectra");
 
   return np_spectra;
 }
@@ -191,7 +191,7 @@ static PyArrayObject *get_spectra(GridProps *grid_props, int nthreads) {
  */
 PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
-  tic("Computing integrated SED");
+  tic("compute_integrated_sed");
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -258,7 +258,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   delete grid_props;
   delete part_props;
 
-  toc("Computing integrated SED");
+  toc("compute_integrated_sed");
 
   return Py_BuildValue("NN", np_spectra, np_grid_weights);
 }

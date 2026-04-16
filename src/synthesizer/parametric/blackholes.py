@@ -158,7 +158,7 @@ class BlackHole(BlackholesComponent):
         # Initialise morphology using the in-built point-source class
         self.morphology = PointSource(offset=offset)
 
-    @timed("Generating parametric mask")
+    @timed("BlackHole.get_mask")
     def get_mask(
         self,
         attr,
