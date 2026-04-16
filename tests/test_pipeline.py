@@ -446,10 +446,10 @@ class TestPipelineTimingAnalysis:
         tmp_path,
         capsys,
     ):
-        """Analysis should write plots and summaries including untimed time."""
+        """Analysis should write plots and summaries with overhead time."""
         pipeline = Pipeline(
             emission_model=nebular_emission_model,
-            verbose=0,
+            verbose=1,
         )
 
         time.sleep(0.002)
@@ -466,17 +466,17 @@ class TestPipelineTimingAnalysis:
         summary = (tmp_path / "timing_summary.csv").read_text()
         assert "operation,seconds,fraction_percent,count,source" in summary
         assert "Test timing analysis op" in summary
-        assert "Untimed" in summary
+        assert "Overhead" in summary
         assert "Total" in summary
 
         stdout = capsys.readouterr().out
         assert "Pipeline Timing Analysis" in stdout
         assert "Test timing analysis op" in stdout
-        assert "Untimed" in stdout
+        assert "Overhead" in stdout
         assert "Total" in stdout
 
-    def test_build_timing_analysis_rows_adds_untimed_and_total(self):
-        """Row builder should append Untimed and Total entries."""
+    def test_build_timing_analysis_rows_adds_overhead_and_total(self):
+        """Row builder should append Overhead and Total entries."""
         rows = build_timing_analysis_rows(
             {
                 "Operation A": {
@@ -495,7 +495,7 @@ class TestPipelineTimingAnalysis:
 
         assert rows[0]["operation"] == "Operation A"
         assert rows[1]["operation"] == "Operation B"
-        assert rows[-2]["operation"] == "Untimed"
+        assert rows[-2]["operation"] == "Overhead"
         assert rows[-1]["operation"] == "Total"
         assert rows[-2]["seconds"] == pytest.approx(1.5)
         assert rows[-1]["seconds"] == pytest.approx(4.5)

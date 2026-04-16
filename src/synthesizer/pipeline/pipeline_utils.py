@@ -270,13 +270,13 @@ def combine_atomic_timing_snapshots(
             if combined[operation]["source"] != data["source"]:
                 combined[operation]["source"] = "Mixed"
 
-    # Sum the per-rank elapsed times so the untimed contribution is measured
+    # Sum the per-rank elapsed times so the overhead contribution is measured
     # in the same rank-seconds units as the atomic timing totals.
     return combined, sum(gathered_elapsed)
 
 
 def build_timing_analysis_rows(timing_data, total_elapsed):
-    """Build sorted timing rows including untimed and total entries.
+    """Build sorted timing rows including overhead and total entries.
 
     Args:
         timing_data (dict):
@@ -288,10 +288,10 @@ def build_timing_analysis_rows(timing_data, total_elapsed):
     Returns:
         list:
             A list of row dictionaries sorted by descending operation time,
-            with trailing ``Untimed`` and ``Total`` summary rows appended.
+            with trailing ``Overhead`` and ``Total`` summary rows appended.
     """
     # Account for any elapsed time that is not represented in the atomic timer
-    # totals so the report shows both timed and untimed fractions explicitly.
+    # totals so the report shows both timed and overhead fractions explicitly.
     timed_elapsed = sum(data["seconds"] for data in timing_data.values())
     untimed_elapsed = max(total_elapsed - timed_elapsed, 0.0)
 
@@ -318,11 +318,11 @@ def build_timing_analysis_rows(timing_data, total_elapsed):
     # important contributors are shown first in both tables and plots.
     rows.sort(key=lambda row: row["seconds"], reverse=True)
 
-    # Append explicit summary rows so the untimed contribution and total are
+    # Append explicit summary rows so the overhead contribution and total are
     # available to both the terminal table and the written CSV file.
     rows.append(
         {
-            "operation": "Untimed",
+            "operation": "Overhead",
             "seconds": untimed_elapsed,
             "fraction_percent": (
                 untimed_elapsed / total_elapsed * 100.0
@@ -346,25 +346,50 @@ def build_timing_analysis_rows(timing_data, total_elapsed):
     return rows
 
 
-def print_timing_analysis_table(rows):
+def print_timing_analysis_table(rows, print_func=print):
     """Print a timing analysis table to stdout.
 
     Args:
         rows (list):
             The timing rows produced by ``build_timing_analysis_rows``.
+        print_func (callable):
+            The function used to emit each formatted line. This defaults to the
+            built-in ``print`` but can be replaced with ``Pipeline._print`` to
+            match the standard pipeline logging style.
 
     Returns:
         None
     """
-    # Compute column widths from the data so the table remains aligned for
-    # operation names of varying lengths.
+    # Pre-format the row values so the final column widths reflect the exact
+    # strings that will be printed rather than just the raw underlying values.
+    formatted_rows = []
+    for row in rows:
+        formatted_rows.append(
+            {
+                "operation": row["operation"],
+                "seconds": f"{row['seconds']:.2f}",
+                "fraction_percent": f"{row['fraction_percent']:.2f}",
+                "count": "-" if row["count"] is None else str(row["count"]),
+                "source": row["source"],
+            }
+        )
+
+    # Compute column widths from the fully formatted data so every column is
+    # wide enough for both its header and its largest row value.
     operation_width = max(
-        len("Operation"), *(len(r["operation"]) for r in rows)
+        len("Operation"), *(len(r["operation"]) for r in formatted_rows)
     )
-    time_width = len("Time (s)")
-    frac_width = len("Fraction (%)")
-    count_width = len("Count")
-    source_width = max(len("Source"), *(len(r["source"]) for r in rows))
+    time_width = max(
+        len("Time (s)"), *(len(r["seconds"]) for r in formatted_rows)
+    )
+    frac_width = max(
+        len("Fraction (%)"),
+        *(len(r["fraction_percent"]) for r in formatted_rows),
+    )
+    count_width = max(len("Count"), *(len(r["count"]) for r in formatted_rows))
+    source_width = max(
+        len("Source"), *(len(r["source"]) for r in formatted_rows)
+    )
 
     # Construct a single divider string that can be reused for the header,
     # body separator, and closing line.
@@ -383,9 +408,9 @@ def print_timing_analysis_table(rows):
     )
 
     # Print the table header with the derived column widths.
-    print("Pipeline Timing Analysis")
-    print(divider)
-    print(
+    print_func("Pipeline Timing Analysis")
+    print_func(divider)
+    print_func(
         "| "
         + f"{'Operation':<{operation_width}}"
         + " | "
@@ -398,27 +423,26 @@ def print_timing_analysis_table(rows):
         + f"{'Source':<{source_width}}"
         + " |"
     )
-    print(divider)
+    print_func(divider)
 
     # Print each timing row, converting missing counts on summary rows into a
     # simple placeholder for readability.
-    for row in rows:
-        count = "-" if row["count"] is None else str(row["count"])
-        print(
+    for row in formatted_rows:
+        print_func(
             "| "
             + f"{row['operation']:<{operation_width}}"
             + " | "
-            + f"{row['seconds']:>{time_width}.6f}"
+            + f"{row['seconds']:>{time_width}}"
             + " | "
-            + f"{row['fraction_percent']:>{frac_width}.2f}"
+            + f"{row['fraction_percent']:>{frac_width}}"
             + " | "
-            + f"{count:>{count_width}}"
+            + f"{row['count']:>{count_width}}"
             + " | "
             + f"{row['source']:<{source_width}}"
             + " |"
         )
 
-    print(divider)
+    print_func(divider)
 
 
 def write_timing_analysis_summary(rows, outdir):
@@ -498,12 +522,12 @@ def plot_timing_analysis(rows, outdir):
             )
 
         # Use a categorical palette for the visible wedges while reserving
-        # neutral colours for the synthetic untimed and grouped slices.
+        # neutral colours for the synthetic overhead and grouped slices.
         palette = plt.cm.tab20(np.linspace(0, 1, max(len(pie_rows), 1)))
         colors = []
         palette_index = 0
         for row in pie_rows:
-            if row["operation"] == "Untimed":
+            if row["operation"] == "Overhead":
                 colors.append("#7f7f7f")
             elif row["operation"] == "Other <1%":
                 colors.append("#bab0ac")
@@ -585,10 +609,10 @@ def plot_timing_analysis(rows, outdir):
     y_positions = np.arange(len(bar_rows))
     bar_colors = []
 
-    # Colour the bar chart by timing source while keeping untimed time visually
+    # Colour the bar chart by timing source while keeping overhead visually
     # distinct from both Python and C timings.
     for row in bar_rows:
-        if row["operation"] == "Untimed":
+        if row["operation"] == "Overhead":
             bar_colors.append("#7f7f7f")
         elif row["source"] == "C":
             bar_colors.append("#4c72b0")
@@ -615,8 +639,8 @@ def plot_timing_analysis(rows, outdir):
     legend_labels = []
     seen_labels = set()
     for row, color in zip(bar_rows, bar_colors):
-        if row["operation"] == "Untimed":
-            label = "Untimed"
+        if row["operation"] == "Overhead":
+            label = "Overhead"
         elif row["source"] == "C":
             label = "C++"
         elif row["source"] == "Python":

@@ -980,8 +980,12 @@ class Pipeline:
         outdir = Path(outdir)
         outdir.mkdir(parents=True, exist_ok=True)
 
-        # Emit the terminal summary and save the CSV and plot diagnostics.
-        print_timing_analysis_table(rows)
+        # Emit the terminal summary using the standard pipeline logger so the
+        # timing report matches the rest of the pipeline output formatting.
+        print_timing_analysis_table(rows, print_func=self._print)
+
+        # Save the CSV summary and plot diagnostics to the requested output
+        # directory.
         write_timing_analysis_summary(rows, outdir)
         plot_timing_analysis(rows, outdir)
 
