@@ -1376,7 +1376,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                     "Provide units to the sigmalos_H quantity"
                 )
 
-            sigmalos_H_arr = np.asarray(sigmalos_H.ndview)
+            sigmalos_H_arr = np.atleast_1d(np.asarray(sigmalos_H.ndview))
             column_units = sigmalos_H.units
             nparticles = sigmalos_H_arr.size
             valid_hydrogen = np.isfinite(sigmalos_H_arr) & (
@@ -1398,73 +1398,6 @@ class DraineLiGrainCurves(AttenuationLaw):
             )
         finally:
             toc("DraineLiGrainCurves._get_sigmalos_h")
-
-    def _get_dtgs(self, sigmalos_H, sigmalos_dust):
-        """Validate inputs and derive broadcast DTG quantities.
-
-        Args:
-            sigmalos_H (unyt_array):
-                The line-of-sight hydrogen column density.
-            sigmalos_dust (dict):
-                The dust component column densities keyed by component name.
-
-        Raises:
-            exceptions.InconsistentArguments:
-                Raised if the column densities do not have broadcast-compatible
-                shapes, do not carry compatible units, or contain negative
-                values.
-
-        Returns:
-            tuple:
-                The common particle count, hydrogen column data, dust column
-                data keyed by component, the shared column-density units, and
-                the hydrogen validity information.
-        """
-        tic("DraineLiGrainCurves._get_dtgs")
-
-        try:
-            (
-                sigmalos_H_arr,
-                column_units,
-                nparticles,
-                valid_hydrogen,
-            ) = self._get_sigmalos_h(sigmalos_H)
-            dust_arrays = {}
-
-            for component_key, dust_col in sigmalos_dust.items():
-                if not isinstance(dust_col, (unyt_quantity, unyt_array)):
-                    raise exceptions.InconsistentArguments(
-                        f"Provide units to the {component_key} quantity"
-                    )
-
-                try:
-                    if dust_col.units == column_units:
-                        dust_arr = np.asarray(dust_col.ndview)
-                    else:
-                        dust_arr = np.asarray(dust_col.to(column_units).ndview)
-                except Exception as e:
-                    raise exceptions.InconsistentArguments(
-                        f"{component_key} must have units compatible with "
-                        f"{column_units}"
-                    ) from e
-
-                if dust_arr.size != nparticles:
-                    raise exceptions.InconsistentArguments(
-                        f"{component_key} has length {dust_arr.size}, but "
-                        f"expected {nparticles}."
-                    )
-
-                dust_arrays[component_key] = dust_arr
-
-            return (
-                nparticles,
-                sigmalos_H_arr,
-                dust_arrays,
-                column_units,
-                valid_hydrogen,
-            )
-        finally:
-            toc("DraineLiGrainCurves._get_dtgs")
 
     @accepts(lam=angstrom, sigmalos_H=Msun / pc**2)
     def get_tau_at_lam(
@@ -1508,15 +1441,14 @@ class DraineLiGrainCurves(AttenuationLaw):
                 for component_key in sigmalos_dust
             }
 
-            # Validate inputs and derive the broadcast DTG inputs before any
-            # wavelength resampling or particle extraction is attempted.
+            # Prepare hydrogen inputs once, then handle each dust column
+            # directly in the hot path to avoid helper overhead.
             (
-                nparticles,
                 sigmalos_H,
-                sigmalos_dust,
                 column_units,
+                nparticles,
                 valid_hydrogen,
-            ) = self._get_dtgs(sigmalos_H, sigmalos_dust)
+            ) = self._get_sigmalos_h(sigmalos_H)
 
             # Get or create the resampled grid for this wavelength.
             grid = self._get_resampled_grid(lam)
@@ -1548,6 +1480,33 @@ class DraineLiGrainCurves(AttenuationLaw):
 
             # Loop over the dust components
             for component_key, dust_col in sigmalos_dust.items():
+                if not isinstance(dust_col, (unyt_quantity, unyt_array)):
+                    raise exceptions.InconsistentArguments(
+                        f"Provide units to the {component_key} quantity"
+                    )
+
+                try:
+                    if dust_col.units == column_units:
+                        dust_col = np.atleast_1d(np.asarray(dust_col.ndview))
+                    else:
+                        dust_col = np.atleast_1d(
+                            np.asarray(dust_col.to(column_units).ndview)
+                        )
+                except Exception as e:
+                    raise exceptions.InconsistentArguments(
+                        f"{component_key} must have units compatible with "
+                        f"{column_units}"
+                    ) from e
+
+                if dust_col.size not in (1, nparticles):
+                    raise exceptions.InconsistentArguments(
+                        f"{component_key} has length {dust_col.size}, but "
+                        f"expected 1 or {nparticles}."
+                    )
+
+                if dust_col.size == 1 and nparticles > 1:
+                    dust_col = np.broadcast_to(dust_col, (nparticles,))
+
                 # Map the public keyword argument onto the spectra name stored
                 # in the attenuation grid
                 dataset_key = component_datasets[component_key]
