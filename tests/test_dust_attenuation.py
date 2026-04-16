@@ -142,16 +142,16 @@ def test_draine_li_resamples_non_native_wavelengths(draine_li_grid):
 
     tau = dust_curve.get_tau_at_lam(
         np.array([1500.0, 2500.0]) * angstrom,
-        sigmalos_H=np.array([1.0]) * Msun / pc**2,
-        sigmalos_graphite_a0p01um=np.array([0.14]) * Msun / pc**2,
-        sigmalos_silicate_a0p1um=np.array([0.14]) * Msun / pc**2,
+        sigmalos_H=np.array([1.0, 1.0]) * Msun / pc**2,
+        sigmalos_graphite_a0p01um=np.array([0.14, 0.14]) * Msun / pc**2,
+        sigmalos_silicate_a0p1um=np.array([0.14, 0.14]) * Msun / pc**2,
     )
 
     expected = _curve_to_tau(
         np.array([1.5, 2.5]), 0.14 * Msun / pc**2
     ) + _curve_to_tau(np.array([0.75, 1.25]), 0.14 * Msun / pc**2)
 
-    np.testing.assert_allclose(tau, expected)
+    np.testing.assert_allclose(tau, np.vstack([expected, expected]))
 
 
 def test_draine_li_resamples_scalar_wavelengths(draine_li_grid):
@@ -165,16 +165,16 @@ def test_draine_li_resamples_scalar_wavelengths(draine_li_grid):
 
     tau = dust_curve.get_tau_at_lam(
         np.array([1500.0]) * angstrom,
-        sigmalos_H=np.array([1.0]) * Msun / pc**2,
-        sigmalos_graphite_a0p01um=np.array([0.14]) * Msun / pc**2,
-        sigmalos_silicate_a0p1um=np.array([0.14]) * Msun / pc**2,
+        sigmalos_H=np.array([1.0, 1.0]) * Msun / pc**2,
+        sigmalos_graphite_a0p01um=np.array([0.14, 0.14]) * Msun / pc**2,
+        sigmalos_silicate_a0p1um=np.array([0.14, 0.14]) * Msun / pc**2,
     )
 
     expected = _curve_to_tau(
         np.array([1.5]), 0.14 * Msun / pc**2
     ) + _curve_to_tau(np.array([0.75]), 0.14 * Msun / pc**2)
 
-    np.testing.assert_allclose(tau, expected)
+    np.testing.assert_allclose(tau, np.vstack([expected, expected]))
 
 
 def test_draine_li_supports_log10_dtg_grids(draine_li_log_grid):
@@ -213,11 +213,11 @@ def test_draine_li_ignores_negative_columns(draine_li_grid):
 
     tau = dust_curve.get_tau_at_lam(
         np.array([1000.0]) * angstrom,
-        sigmalos_H=np.array([1.0]) * Msun / pc**2,
-        sigmalos_graphite_a0p01um=np.array([-0.14]) * Msun / pc**2,
+        sigmalos_H=np.array([1.0, 1.0]) * Msun / pc**2,
+        sigmalos_graphite_a0p01um=np.array([-0.14, -0.14]) * Msun / pc**2,
     )
 
-    np.testing.assert_allclose(tau, np.zeros(1))
+    np.testing.assert_allclose(tau, np.zeros((2, 1)))
 
 
 def test_draine_li_rejects_invalid_grid_axis(tmp_path):
