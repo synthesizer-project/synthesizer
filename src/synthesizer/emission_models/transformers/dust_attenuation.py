@@ -1152,6 +1152,7 @@ class DraineLiGrainCurves(AttenuationLaw):
             E.g. grain_dict = {'graphite': [0.01, 0.1]}
     """
 
+    @timed("DraineLiGrainCurves.__init__")
     def __init__(
         self,
         grid_name: str,
