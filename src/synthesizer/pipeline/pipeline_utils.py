@@ -6,7 +6,9 @@ import sys
 from collections import defaultdict
 from collections.abc import Mapping
 from functools import lru_cache
+from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Unit, unyt_array, unyt_quantity
 
@@ -179,6 +181,279 @@ def accumulate_pipeline_results_from_child(parent, *children):
                     )
 
     return parent
+
+
+def get_atomic_timing_snapshot():
+    """Return the current atomic timing snapshot for this process."""
+    from synthesizer.utils.operation_timers import OperationTimers
+
+    timers = OperationTimers()
+    timing_data = {}
+    for operation in timers.keys():
+        cumulative_time, call_count, source = timers[operation]
+        timing_data[operation] = {
+            "seconds": cumulative_time,
+            "count": call_count,
+            "source": source,
+        }
+
+    return timing_data
+
+
+def combine_atomic_timing_snapshots(
+    comm, using_mpi, rank, timing_data, total_elapsed
+):
+    """Combine timing snapshots across ranks when running under MPI."""
+    if not using_mpi:
+        return timing_data, total_elapsed
+
+    gathered_timings = comm.gather(timing_data, root=0)
+    gathered_elapsed = comm.gather(total_elapsed, root=0)
+
+    if rank != 0:
+        return None, None
+
+    combined = {}
+    for rank_timings in gathered_timings:
+        for operation, data in rank_timings.items():
+            if operation not in combined:
+                combined[operation] = {
+                    "seconds": 0.0,
+                    "count": 0,
+                    "source": data["source"],
+                }
+
+            combined[operation]["seconds"] += data["seconds"]
+            combined[operation]["count"] += data["count"]
+
+            if combined[operation]["source"] != data["source"]:
+                combined[operation]["source"] = "Mixed"
+
+    return combined, sum(gathered_elapsed)
+
+
+def build_timing_analysis_rows(timing_data, total_elapsed):
+    """Build sorted timing rows including untimed and total entries."""
+    timed_elapsed = sum(data["seconds"] for data in timing_data.values())
+    untimed_elapsed = max(total_elapsed - timed_elapsed, 0.0)
+
+    rows = []
+    for operation, data in timing_data.items():
+        fraction = (
+            data["seconds"] / total_elapsed * 100.0
+            if total_elapsed > 0.0
+            else 0.0
+        )
+        rows.append(
+            {
+                "operation": operation,
+                "seconds": data["seconds"],
+                "fraction_percent": fraction,
+                "count": data["count"],
+                "source": data["source"],
+            }
+        )
+
+    rows.sort(key=lambda row: row["seconds"], reverse=True)
+
+    rows.append(
+        {
+            "operation": "Untimed",
+            "seconds": untimed_elapsed,
+            "fraction_percent": (
+                untimed_elapsed / total_elapsed * 100.0
+                if total_elapsed > 0.0
+                else 0.0
+            ),
+            "count": None,
+            "source": "N/A",
+        }
+    )
+    rows.append(
+        {
+            "operation": "Total",
+            "seconds": total_elapsed,
+            "fraction_percent": 100.0 if total_elapsed > 0.0 else 0.0,
+            "count": None,
+            "source": "N/A",
+        }
+    )
+
+    return rows
+
+
+def print_timing_analysis_table(rows):
+    """Print a timing analysis table to stdout."""
+    operation_width = max(
+        len("Operation"), *(len(r["operation"]) for r in rows)
+    )
+    time_width = len("Time (s)")
+    frac_width = len("Fraction (%)")
+    count_width = len("Count")
+    source_width = max(len("Source"), *(len(r["source"]) for r in rows))
+
+    divider = (
+        "+"
+        + "-" * (operation_width + 2)
+        + "+"
+        + "-" * (time_width + 2)
+        + "+"
+        + "-" * (frac_width + 2)
+        + "+"
+        + "-" * (count_width + 2)
+        + "+"
+        + "-" * (source_width + 2)
+        + "+"
+    )
+
+    print("Pipeline Timing Analysis")
+    print(divider)
+    print(
+        "| "
+        + f"{'Operation':<{operation_width}}"
+        + " | "
+        + f"{'Time (s)':>{time_width}}"
+        + " | "
+        + f"{'Fraction (%)':>{frac_width}}"
+        + " | "
+        + f"{'Count':>{count_width}}"
+        + " | "
+        + f"{'Source':<{source_width}}"
+        + " |"
+    )
+    print(divider)
+
+    for row in rows:
+        count = "-" if row["count"] is None else str(row["count"])
+        print(
+            "| "
+            + f"{row['operation']:<{operation_width}}"
+            + " | "
+            + f"{row['seconds']:>{time_width}.6f}"
+            + " | "
+            + f"{row['fraction_percent']:>{frac_width}.2f}"
+            + " | "
+            + f"{count:>{count_width}}"
+            + " | "
+            + f"{row['source']:<{source_width}}"
+            + " |"
+        )
+
+    print(divider)
+
+
+def write_timing_analysis_summary(rows, outdir):
+    """Write the timing analysis summary CSV."""
+    outdir = Path(outdir)
+    summary_path = outdir / "timing_summary.csv"
+    with open(summary_path, "w") as handle:
+        handle.write("operation,seconds,fraction_percent,count,source\n")
+        for row in rows:
+            count = "" if row["count"] is None else row["count"]
+            handle.write(
+                f"{row['operation']},{row['seconds']:.12f},"
+                f"{row['fraction_percent']:.6f},{count},{row['source']}\n"
+            )
+
+
+def plot_timing_analysis(rows, outdir):
+    """Write timing analysis plots to disk."""
+    outdir = Path(outdir)
+    plot_rows = [row for row in rows if row["operation"] != "Total"]
+    nonzero_rows = [row for row in plot_rows if row["seconds"] > 0.0]
+
+    if nonzero_rows:
+        total_seconds = sum(row["seconds"] for row in nonzero_rows)
+        pie_rows = []
+        other_seconds = 0.0
+
+        for row in nonzero_rows:
+            fraction_percent = (
+                row["seconds"] / total_seconds * 100.0
+                if total_seconds > 0.0
+                else 0.0
+            )
+            if fraction_percent < 5.0:
+                other_seconds += row["seconds"]
+            else:
+                pie_rows.append(row)
+
+        if other_seconds > 0.0:
+            pie_rows.append(
+                {
+                    "operation": "Other <5%",
+                    "seconds": other_seconds,
+                    "source": "N/A",
+                }
+            )
+
+        colors = []
+        for row in pie_rows:
+            if row["operation"] == "Untimed":
+                colors.append("#7f7f7f")
+            elif row["operation"] == "Other <5%":
+                colors.append("#bab0ac")
+            elif row["source"] == "C":
+                colors.append("#4c72b0")
+            elif row["source"] == "Python":
+                colors.append("#dd8452")
+            else:
+                colors.append("#937860")
+
+        fig, ax = plt.subplots(figsize=(8, 8))
+        ax.pie(
+            [row["seconds"] for row in pie_rows],
+            labels=[row["operation"] for row in pie_rows],
+            autopct="%1.1f%%",
+            startangle=90,
+            colors=colors,
+        )
+        ax.set_title("Pipeline Timing Breakdown")
+        fig.tight_layout()
+        fig.savefig(outdir / "timing_pie.png", dpi=200)
+        plt.close(fig)
+    else:
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.text(
+            0.5,
+            0.5,
+            "No timing data available",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        ax.axis("off")
+        fig.tight_layout()
+        fig.savefig(outdir / "timing_pie.png", dpi=200)
+        plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(10, max(4, 0.45 * max(len(plot_rows), 1))))
+    y_positions = np.arange(len(plot_rows))
+    bar_colors = []
+    for row in plot_rows:
+        if row["operation"] == "Untimed":
+            bar_colors.append("#7f7f7f")
+        elif row["source"] == "C":
+            bar_colors.append("#4c72b0")
+        elif row["source"] == "Python":
+            bar_colors.append("#dd8452")
+        else:
+            bar_colors.append("#937860")
+
+    ax.barh(
+        y_positions,
+        [row["seconds"] for row in plot_rows],
+        color=bar_colors,
+    )
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels([row["operation"] for row in plot_rows])
+    ax.invert_yaxis()
+    ax.set_xlabel("Time (seconds)")
+    ax.set_title("Pipeline Timing Breakdown")
+    ax.grid(axis="x", alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(outdir / "timing_bar.png", dpi=200)
+    plt.close(fig)
 
 
 def discover_attr_paths_recursive(obj, prefix="", output_set=None):

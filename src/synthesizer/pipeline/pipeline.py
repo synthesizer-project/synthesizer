@@ -29,11 +29,12 @@ Example usage:
 """
 
 import time
+from pathlib import Path
 
 import numpy as np
 from unyt import unyt_array
 
-from synthesizer import check_openmp, exceptions
+from synthesizer import check_atomic_timing, check_openmp, exceptions
 from synthesizer.instruments import InstrumentCollection
 from synthesizer.particle import Galaxy as ParticleGalaxy
 from synthesizer.pipeline.pipeline_io import PipelineIO
@@ -41,11 +42,17 @@ from synthesizer.pipeline.pipeline_utils import (
     NO_MODEL_LABEL,
     OperationKwargsHandler,
     accumulate_pipeline_results_from_child,
+    build_timing_analysis_rows,
     clear_pipeline_outputs,
+    combine_atomic_timing_snapshots,
     combine_list_of_dicts,
     count_and_check_dict_recursive,
+    get_atomic_timing_snapshot,
     get_full_memory,
+    plot_timing_analysis,
+    print_timing_analysis_table,
     validate_noise_unit_compatibility,
+    write_timing_analysis_summary,
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.art import Art
@@ -928,6 +935,39 @@ class Pipeline:
                 )
             else:
                 self._print(f"Computing {key} took {elapsed:.2f} {units}")
+
+    def analyse_timings(self, outdir):
+        """Analyse accumulated atomic timings and write reports.
+
+        Args:
+            outdir (str or Path): Directory where timing outputs are written.
+        """
+        if not check_atomic_timing():
+            raise RuntimeError(
+                "Atomic timing not available. Recompile with: "
+                "ATOMIC_TIMING=1 pip install -e ."
+            )
+
+        timing_data = get_atomic_timing_snapshot()
+        total_elapsed = time.perf_counter() - self._start_time
+        timing_data, total_elapsed = combine_atomic_timing_snapshots(
+            self.comm,
+            self.using_mpi,
+            self.rank,
+            timing_data,
+            total_elapsed,
+        )
+
+        if self.using_mpi and self.rank != 0:
+            return None
+
+        rows = build_timing_analysis_rows(timing_data, total_elapsed)
+        outdir = Path(outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+
+        print_timing_analysis_table(rows)
+        write_timing_analysis_summary(rows, outdir)
+        plot_timing_analysis(rows, outdir)
 
     def report_operations(self):
         """Print the operations that will be performed by the Pipeline.

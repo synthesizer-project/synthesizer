@@ -1,6 +1,7 @@
 """Tests for the pipeline module."""
 
 import copy
+import time
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -8,10 +9,12 @@ import pytest
 from astropy.cosmology import Planck18 as cosmo
 from unyt import Mpc, kpc, unyt_array
 
-from synthesizer import exceptions
+from synthesizer import check_atomic_timing, exceptions
 from synthesizer.emissions import Sed
+from synthesizer.extensions.timers import reset_timings, tic, toc
 from synthesizer.pipeline.pipeline import Pipeline
 from synthesizer.pipeline.pipeline_utils import (
+    build_timing_analysis_rows,
     cached_split,
     combine_list_of_dicts,
     count_and_check_dict_recursive,
@@ -421,6 +424,107 @@ class TestPipelineInit:
         """Test invalid max_npart values are rejected."""
         with pytest.raises(ValueError, match="max_npart must be an int >= 1"):
             Pipeline(emission_model=nebular_emission_model, max_npart=0)
+
+
+class TestPipelineTimingAnalysis:
+    """Tests for Pipeline atomic timing analysis."""
+
+    def setup_method(self):
+        """Reset global atomic timings before each test."""
+        reset_timings()
+
+    @pytest.mark.skipif(
+        not check_atomic_timing(),
+        reason=(
+            "ATOMIC_TIMING not enabled. Recompile with: "
+            "ATOMIC_TIMING=1 pip install -e ."
+        ),
+    )
+    def test_analyse_timings_writes_outputs_and_returns_rows(
+        self,
+        nebular_emission_model,
+        tmp_path,
+        capsys,
+    ):
+        """Analysis should write plots and summaries including untimed time."""
+        pipeline = Pipeline(
+            emission_model=nebular_emission_model,
+            verbose=0,
+        )
+
+        time.sleep(0.002)
+        tic("Test timing analysis op")
+        time.sleep(0.002)
+        toc("Test timing analysis op")
+
+        result = pipeline.analyse_timings(tmp_path)
+
+        assert result is not None
+        operations = [row["operation"] for row in result["rows"]]
+        assert "Test timing analysis op" in operations
+        assert "Untimed" in operations
+        assert "Total" in operations
+
+        untimed_row = next(
+            row for row in result["rows"] if row["operation"] == "Untimed"
+        )
+        total_row = next(
+            row for row in result["rows"] if row["operation"] == "Total"
+        )
+        timed_row = next(
+            row
+            for row in result["rows"]
+            if row["operation"] == "Test timing analysis op"
+        )
+
+        assert timed_row["source"] == "Python"
+        assert timed_row["count"] == 1
+        assert timed_row["seconds"] > 0.0
+        assert untimed_row["seconds"] > 0.0
+        assert total_row["seconds"] >= timed_row["seconds"]
+        assert total_row["seconds"] >= untimed_row["seconds"]
+
+        assert (tmp_path / "timing_summary.csv").exists()
+        assert (tmp_path / "timing_bar.png").exists()
+        assert (tmp_path / "timing_pie.png").exists()
+
+        summary = (tmp_path / "timing_summary.csv").read_text()
+        assert "operation,seconds,fraction_percent,count,source" in summary
+        assert "Test timing analysis op" in summary
+        assert "Untimed" in summary
+        assert "Total" in summary
+
+        stdout = capsys.readouterr().out
+        assert "Pipeline Timing Analysis" in stdout
+        assert "Test timing analysis op" in stdout
+        assert "Untimed" in stdout
+        assert "Total" in stdout
+
+    def test_build_timing_analysis_rows_adds_untimed_and_total(self):
+        """Row builder should append Untimed and Total entries."""
+        rows = build_timing_analysis_rows(
+            {
+                "Operation A": {
+                    "seconds": 2.0,
+                    "count": 2,
+                    "source": "C",
+                },
+                "Operation B": {
+                    "seconds": 1.0,
+                    "count": 1,
+                    "source": "Python",
+                },
+            },
+            total_elapsed=4.5,
+        )
+
+        assert rows[0]["operation"] == "Operation A"
+        assert rows[1]["operation"] == "Operation B"
+        assert rows[-2]["operation"] == "Untimed"
+        assert rows[-1]["operation"] == "Total"
+        assert rows[-2]["seconds"] == pytest.approx(1.5)
+        assert rows[-1]["seconds"] == pytest.approx(4.5)
+        assert rows[-1]["fraction_percent"] == pytest.approx(100.0)
 
 
 class TestPipelineNotReady:
