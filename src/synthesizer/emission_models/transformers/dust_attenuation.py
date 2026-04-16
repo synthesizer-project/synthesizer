@@ -77,7 +77,10 @@ class AttenuationLaw(Transformer):
     """
 
     def __init__(
-        self, description, required_params=("tau_v",), require_tau_v=True
+        self,
+        description,
+        required_params=("tau_v",),
+        require_tau_v=True,
     ):
         """Initialise the parent and set common attributes.
 
@@ -1336,47 +1339,33 @@ class DraineLiGrainCurves(AttenuationLaw):
         """
         tic("DraineLiGrainCurves._get_resampled_grid")
         try:
-            tic("DraineLiGrainCurves._get_resampled_grid.prepare_lam")
-            try:
-                # Create a hashable key from the wavelength array.
-                lam_arr = np.atleast_1d(lam.to("Angstrom").ndview)
-                cache_key = tuple(lam_arr)
-            finally:
-                toc("DraineLiGrainCurves._get_resampled_grid.prepare_lam")
+            # `lam` has already been normalised to Angstrom by `@accepts`, so
+            # we can use its raw view directly here and avoid another unit
+            # conversion in the hot path.
+            lam_arr = np.atleast_1d(lam.ndview)
+            cache_key = tuple(lam_arr)
 
-            tic("DraineLiGrainCurves._get_resampled_grid.cache_lookup")
-            try:
-                # Check if we already have this configuration cached.
-                if cache_key in self._grid_cache:
-                    return self._grid_cache[cache_key]
-            finally:
-                toc("DraineLiGrainCurves._get_resampled_grid.cache_lookup")
+            # Check if we already have this configuration cached.
+            if cache_key in self._grid_cache:
+                return self._grid_cache[cache_key]
 
-            tic("DraineLiGrainCurves._get_resampled_grid.resample")
-            try:
-                # Resample the base grid to the requested wavelengths
-                if lam_arr.size == 1:
-                    # For scalar wavelengths, make a copy to avoid mutating
-                    # the base grid
-                    grid = copy.deepcopy(self._base_grid)
-                    # Pass the original lam with units to get_spectra_at_lam
-                    spectra_at_lam = grid.get_spectra_at_lam(lam)
-                    for spectra_id, spectra in spectra_at_lam.items():
-                        grid.spectra[spectra_id] = spectra[..., np.newaxis]
-                    grid.lam = lam_arr
-                    grid._ensure_spectra_data_contiguous()
-                else:
-                    # For arrays of wavelengths
-                    grid = self._base_grid.reduce_rest_frame_lam(lam)
-            finally:
-                toc("DraineLiGrainCurves._get_resampled_grid.resample")
+            # Resample the base grid to the requested wavelengths
+            if lam_arr.size == 1:
+                # For scalar wavelengths, make a copy to avoid mutating the
+                # base grid
+                grid = copy.deepcopy(self._base_grid)
+                # Pass the original lam with units to get_spectra_at_lam
+                spectra_at_lam = grid.get_spectra_at_lam(lam)
+                for spectra_id, spectra in spectra_at_lam.items():
+                    grid.spectra[spectra_id] = spectra[..., np.newaxis]
+                grid.lam = lam_arr
+                grid._ensure_spectra_data_contiguous()
+            else:
+                # For arrays of wavelengths
+                grid = self._base_grid.reduce_rest_frame_lam(lam)
 
-            tic("DraineLiGrainCurves._get_resampled_grid.cache_store")
-            try:
-                # Cache the resampled grid.
-                self._grid_cache[cache_key] = grid
-            finally:
-                toc("DraineLiGrainCurves._get_resampled_grid.cache_store")
+            # Cache the resampled grid.
+            self._grid_cache[cache_key] = grid
 
             return grid
         finally:
@@ -1458,168 +1447,111 @@ class DraineLiGrainCurves(AttenuationLaw):
             # Map the public keyword arguments onto the spectra names stored in
             # the attenuation grid.
             # TODO: modify the grid generation files to remove this remapping.
-            tic("DraineLiGrainCurves.get_tau_at_lam.component_mapping")
-            try:
-                component_datasets = {
-                    component_key: component_key.split("sigmalos_", 1)[
-                        -1
-                    ].replace("0p", "0.")
-                    for component_key in sigmalos_dust
-                }
-            finally:
-                toc("DraineLiGrainCurves.get_tau_at_lam.component_mapping")
+            component_datasets = {
+                component_key: component_key.split("sigmalos_", 1)[-1].replace(
+                    "0p", "0."
+                )
+                for component_key in sigmalos_dust
+            }
 
             # Prepare hydrogen column densities
-            tic("DraineLiGrainCurves.get_tau_at_lam.prepare_sigmalos_h")
-            try:
-                (
-                    sigmalos_H,
-                    column_units,
-                    nparticles,
-                    valid_hydrogen,
-                ) = self._get_sigmalos_h(sigmalos_H)
-            finally:
-                toc("DraineLiGrainCurves.get_tau_at_lam.prepare_sigmalos_h")
+            (
+                sigmalos_H,
+                column_units,
+                nparticles,
+                valid_hydrogen,
+            ) = self._get_sigmalos_h(sigmalos_H)
 
             # Get or create the resampled grid for this wavelength.
-            tic("DraineLiGrainCurves.get_tau_at_lam.get_grid")
-            try:
-                grid = self._get_resampled_grid(lam)
-            finally:
-                toc("DraineLiGrainCurves.get_tau_at_lam.get_grid")
+            grid = self._get_resampled_grid(lam)
 
             # Reuse the validated grid axis metadata cached during
             # construction.
             dtg_axis_name = self._dtg_axis_name
 
             # Verify all requested grain types are available
-            tic("DraineLiGrainCurves.get_tau_at_lam.check_components")
-            try:
-                for dataset_key in component_datasets.values():
-                    if dataset_key not in self._available_grain_spectra:
-                        raise exceptions.InconsistentArguments(
-                            "Grain type "
-                            f"{dataset_key} not in the provided dust grid!"
-                        )
-            finally:
-                toc("DraineLiGrainCurves.get_tau_at_lam.check_components")
+            for dataset_key in component_datasets.values():
+                if dataset_key not in self._available_grain_spectra:
+                    raise exceptions.InconsistentArguments(
+                        "Grain type "
+                        f"{dataset_key} not in the provided dust grid!"
+                    )
 
             # Accumulate the contribution from each grain component into the
             # final optical-depth array.
-            tic("DraineLiGrainCurves.get_tau_at_lam.setup_arrays")
-            try:
-                tau_all = np.zeros((nparticles, grid.nlam), dtype=np.float32)
-                tau_scale = ((1.0 * cm**2) / _GAS_MASS_PER_H).to(
-                    1 / column_units
-                ).value / 1.086
-                grid_dtg_axis = grid._extract_axes_values[dtg_axis_name]
-                grid_shape = np.array(grid.shape, dtype=np.int32)
-                grid_weights = np.ones(nparticles)
-                dtg = np.ones(nparticles, dtype=float)
-                valid = np.empty(nparticles, dtype=bool)
-                dust_scale = np.zeros(nparticles, dtype=float)
-            finally:
-                toc("DraineLiGrainCurves.get_tau_at_lam.setup_arrays")
+            tau_all = np.zeros((nparticles, grid.nlam), dtype=np.float32)
+            tau_scale = ((1.0 * cm**2) / _GAS_MASS_PER_H).to(
+                1 / column_units
+            ).value / 1.086
+            grid_dtg_axis = grid._extract_axes_values[dtg_axis_name]
+            grid_shape = np.array(grid.shape, dtype=np.int32)
+            grid_weights = np.ones(nparticles)
+            dtg = np.ones(nparticles, dtype=float)
+            valid = np.empty(nparticles, dtype=bool)
+            dust_scale = np.zeros(nparticles, dtype=float)
 
             # Loop over the dust components
             for component_key, dust_col in sigmalos_dust.items():
-                tic(
-                    "DraineLiGrainCurves.get_tau_at_lam.prepare_component_"
-                    "column"
-                )
-                try:
-                    # Unit conversion/validation for dust columns is now
-                    # handled by `@accepts(..., sigmalos_dust=...)`, so the
-                    # hot path only needs a cheap array view plus any required
-                    # broadcasting to the particle count.
-                    dust_col = np.atleast_1d(np.asarray(dust_col.ndview))
+                # Unit conversion/validation for dust columns is now handled
+                # by `@accepts(..., sigmalos_dust=...)`, so the hot path only
+                # needs a cheap array view plus any required broadcasting to
+                # the particle count.
+                dust_col = np.atleast_1d(np.asarray(dust_col.ndview))
 
-                    if dust_col.size not in (1, nparticles):
-                        raise exceptions.InconsistentArguments(
-                            f"{component_key} has length {dust_col.size}, "
-                            f"but expected 1 or {nparticles}."
-                        )
-
-                    if dust_col.size == 1 and nparticles > 1:
-                        dust_col = np.broadcast_to(dust_col, (nparticles,))
-                finally:
-                    toc(
-                        "DraineLiGrainCurves.get_tau_at_lam.prepare_component_"
-                        "column"
+                if dust_col.size not in (1, nparticles):
+                    raise exceptions.InconsistentArguments(
+                        f"{component_key} has length {dust_col.size}, but "
+                        f"expected 1 or {nparticles}."
                     )
+
+                if dust_col.size == 1 and nparticles > 1:
+                    dust_col = np.broadcast_to(dust_col, (nparticles,))
 
                 # Map the public keyword argument onto the spectra name stored
                 # in the attenuation grid
                 dataset_key = component_datasets[component_key]
 
-                tic("DraineLiGrainCurves.get_tau_at_lam.component_mask")
-                try:
-                    valid[:] = (
-                        valid_hydrogen
-                        & np.isfinite(dust_col)
-                        & (dust_col > 0.0)
-                    )
-                    if not np.any(valid):
-                        continue
-                finally:
-                    toc("DraineLiGrainCurves.get_tau_at_lam.component_mask")
+                valid[:] = (
+                    valid_hydrogen & np.isfinite(dust_col) & (dust_col > 0.0)
+                )
+                if not np.any(valid):
+                    continue
 
-                tic("DraineLiGrainCurves.get_tau_at_lam.component_dtg")
-                try:
-                    dtg.fill(1.0)
-                    dtg[valid] = dust_col[valid] / (
-                        sigmalos_H[valid] * _DRAINE_LI_MEAN_MOLECULAR_WEIGHT
-                    )
-                finally:
-                    toc("DraineLiGrainCurves.get_tau_at_lam.component_dtg")
+                dtg.fill(1.0)
+                dtg[valid] = dust_col[valid] / (
+                    sigmalos_H[valid] * _DRAINE_LI_MEAN_MOLECULAR_WEIGHT
+                )
 
                 # Log the grid axis if we need to
-                tic("DraineLiGrainCurves.get_tau_at_lam.component_axis_prep")
-                try:
-                    dtg_grid_values = (
-                        np.log10(dtg) if dtg_axis_name == "log10dtg" else dtg
-                    )
-                finally:
-                    toc(
-                        "DraineLiGrainCurves.get_tau_at_lam.component_axis_prep"
-                    )
+                dtg_grid_values = (
+                    np.log10(dtg) if dtg_axis_name == "log10dtg" else dtg
+                )
 
                 # Call the particle spectra extension directly for this single
                 # extraction axis instead of going through generate_lnu.
-                tic("DraineLiGrainCurves.get_tau_at_lam.component_extract")
-                try:
-                    component_curves, _ = compute_particle_seds(
-                        grid.spectra[dataset_key],
-                        (grid_dtg_axis,),
-                        (dtg_grid_values,),
-                        grid_weights,
-                        grid_shape,
-                        1,
-                        nparticles,
-                        grid.nlam,
-                        "cic",
-                        1,
-                        valid,
-                        None,
-                        (dtg_axis_name,),
-                    )
-                finally:
-                    toc("DraineLiGrainCurves.get_tau_at_lam.component_extract")
+                component_curves, _ = compute_particle_seds(
+                    grid.spectra[dataset_key],
+                    (grid_dtg_axis,),
+                    (dtg_grid_values,),
+                    grid_weights,
+                    grid_shape,
+                    1,
+                    nparticles,
+                    grid.nlam,
+                    "cic",
+                    1,
+                    valid,
+                    None,
+                    (dtg_axis_name,),
+                )
 
                 # Convert from mag cm^2 / H nucleus into optical depth per dust
                 # surface density, then multiply by the dust column itself.
-                tic("DraineLiGrainCurves.get_tau_at_lam.component_accumulate")
-                try:
-                    component_tau = component_curves * tau_scale
+                component_tau = component_curves * tau_scale
 
-                    dust_scale.fill(0.0)
-                    dust_scale[valid] = dust_col[valid]
-                    tau_all += component_tau * dust_scale[:, np.newaxis]
-                finally:
-                    toc(
-                        "DraineLiGrainCurves.get_tau_at_lam.component_"
-                        "accumulate"
-                    )
+                dust_scale.fill(0.0)
+                dust_scale[valid] = dust_col[valid]
+                tau_all += component_tau * dust_scale[:, np.newaxis]
 
             # Preserve the previous scalar-like return shape for
             # single-particle inputs.
