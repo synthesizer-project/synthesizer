@@ -50,6 +50,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
+from synthesizer.utils.operation_timers import timed
 
 
 class Sed:
@@ -91,6 +92,7 @@ class Sed:
     obslam = Quantity("wavelength")
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
+    @timed("Creating Sed")
     def __init__(self, lam, lnu=None, description=None):
         """Initialise a new spectral energy distribution object.
 
@@ -104,8 +106,6 @@ class Sed:
             description (str):
                 An optional descriptive string defining the Sed.
         """
-        tic("Creating Sed")
-
         # Set the description
         self.description = description
 
@@ -134,8 +134,7 @@ class Sed:
         self.photo_lnu = None
         self.photo_fnu = None
 
-        toc("Creating Sed")
-
+    @timed("Summing Sed")
     def sum(self):
         """Sum the SED over all dimensions.
 
@@ -150,8 +149,6 @@ class Sed:
             sed (object, Sed):
                 Summed 1D SED.
         """
-        tic("Summing Sed")
-
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
             # Define the axes to sum over to give only the final axis
@@ -171,13 +168,8 @@ class Sed:
                 new_sed.obslam = self.obslam
                 new_sed.redshift = self.redshift
 
-            toc("Summing Sed")
-
             return new_sed
         else:
-            # Close the timer before returning the original 1D Sed unchanged.
-            toc("Summing Sed")
-
             # If 1D, just return the original array
             return self
 
@@ -740,6 +732,7 @@ class Sed:
         """
         return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
 
+    @timed("Calculating bolometric luminosity")
     def measure_bolometric_luminosity(
         self,
         integration_method="trapz",
@@ -767,8 +760,6 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        tic("Calculating bolometric luminosity")
-
         # Calculate the bolometric luminosity
         # NOTE: the integration is done "backwards" when integrating over
         # frequency. It's faster to just multiply by -1 than to reverse the
@@ -779,8 +770,6 @@ class Sed:
             nthreads=nthreads,
             method=integration_method,
         )
-        toc("Calculating bolometric luminosity")
-
         return integral * self.lnu.units * self.nu.units
 
     @accepts(window=angstrom)
@@ -1190,6 +1179,7 @@ class Sed:
 
         return self.fnu
 
+    @timed("Getting Photometry (Lnu)")
     def get_photo_lnu(
         self, filters, verbose=True, nthreads=1, integration_method="trapz"
     ):
@@ -1211,8 +1201,6 @@ class Sed:
             (PhotometryCollection):
                 Rest-frame broadband luminosities.
         """
-        tic("Getting Photometry (Lnu)")
-
         tic("Applying Filters (Lnu)")
 
         # Apply all filters in one batched integration call.
@@ -1236,10 +1224,9 @@ class Sed:
         )
         toc("Stacking Photometry (Lnu)")
 
-        toc("Getting Photometry (Lnu)")
-
         return self.photo_lnu
 
+    @timed("Getting Photometry (Fnu)")
     def get_photo_fnu(
         self, filters, verbose=True, nthreads=1, integration_method="trapz"
     ):
@@ -1261,8 +1248,6 @@ class Sed:
             (PhotometryCollection):
                 Fluxes in each filter in filters.
         """
-        tic("Getting Photometry (Fnu)")
-
         # Ensure fluxes actually exist
         if (self.obslam is None) | (self.fnu is None):
             raise ValueError(
@@ -1295,8 +1280,6 @@ class Sed:
             ),
         )
         toc("Stacking Photometry (Fnu)")
-
-        toc("Getting Photometry (Fnu)")
 
         return self.photo_fnu
 
@@ -1408,6 +1391,7 @@ class Sed:
 
         return index
 
+    @timed("Resampling Sed")
     def get_resampled_sed(self, resample_factor=None, new_lam=None):
         """Resample the spectra onto a new set of wavelength points.
 
@@ -1431,8 +1415,6 @@ class Sed:
                 Either resample factor or new_lam must be supplied. If neither
                 or both are passed an error is raised.
         """
-        tic("Resampling Sed")
-
         # Ensure we have what we need
         if resample_factor is None and new_lam is None:
             raise exceptions.InconsistentArguments(
@@ -1483,8 +1465,6 @@ class Sed:
         sed._nu = np.nan_to_num(sed._nu)
         sed._obslam = np.nan_to_num(sed._obslam)
         sed._obsnu = np.nan_to_num(sed._obsnu)
-
-        toc("Resampling Sed")
 
         return sed
 
