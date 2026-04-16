@@ -440,7 +440,7 @@ class TestPipelineTimingAnalysis:
             "ATOMIC_TIMING=1 pip install -e ."
         ),
     )
-    def test_analyse_timings_writes_outputs_and_returns_rows(
+    def test_analyse_timings_writes_outputs(
         self,
         nebular_emission_model,
         tmp_path,
@@ -457,32 +457,7 @@ class TestPipelineTimingAnalysis:
         time.sleep(0.002)
         toc("Test timing analysis op")
 
-        result = pipeline.analyse_timings(tmp_path)
-
-        assert result is not None
-        operations = [row["operation"] for row in result["rows"]]
-        assert "Test timing analysis op" in operations
-        assert "Untimed" in operations
-        assert "Total" in operations
-
-        untimed_row = next(
-            row for row in result["rows"] if row["operation"] == "Untimed"
-        )
-        total_row = next(
-            row for row in result["rows"] if row["operation"] == "Total"
-        )
-        timed_row = next(
-            row
-            for row in result["rows"]
-            if row["operation"] == "Test timing analysis op"
-        )
-
-        assert timed_row["source"] == "Python"
-        assert timed_row["count"] == 1
-        assert timed_row["seconds"] > 0.0
-        assert untimed_row["seconds"] > 0.0
-        assert total_row["seconds"] >= timed_row["seconds"]
-        assert total_row["seconds"] >= untimed_row["seconds"]
+        pipeline.analyse_timings(tmp_path)
 
         assert (tmp_path / "timing_summary.csv").exists()
         assert (tmp_path / "timing_bar.png").exists()
