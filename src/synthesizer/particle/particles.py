@@ -1047,6 +1047,7 @@ class Particles:
             nthreads,
         )
 
+    @timed("Particles.get_los_column_density")
     def get_los_column_density(
         self,
         other_parts,

@@ -626,6 +626,7 @@ def _generate_image_particle_smoothed(
     return img
 
 
+@timed("_generate_images_particle_smoothed")
 def _generate_images_particle_smoothed(
     imgs,
     signals,
@@ -1071,6 +1072,7 @@ def _combine_image_collections(images, label, model_cache):
     return combined_img
 
 
+@timed("_generate_ifu_particle_hist")
 def _generate_ifu_particle_hist(
     ifu,
     sed,
@@ -1186,6 +1188,7 @@ def _generate_ifu_particle_hist(
     return ifu
 
 
+@timed("_generate_ifu_particle_smoothed")
 def _generate_ifu_particle_smoothed(
     ifu,
     sed,
@@ -1379,6 +1382,7 @@ def _generate_ifu_parametric_smoothed(
     return ifu
 
 
+@timed("_generate_ifu_generic")
 def _generate_ifu_generic(
     instrument,
     fov,
