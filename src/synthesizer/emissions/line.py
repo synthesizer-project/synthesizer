@@ -58,10 +58,10 @@ from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emissions import line_ratios
 from synthesizer.emissions.sed import Sed
 from synthesizer.emissions.utils import alias_to_line_id
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.operation_timers import timed
 
 
 class LineCollection:
@@ -117,6 +117,7 @@ class LineCollection:
     vacuum_wavelength = Quantity("wavelength")
 
     @accepts(lam=angstrom, lum=erg / s, cont=erg / s / Hz)
+    @timed("Creating LineCollection")
     def __init__(self, line_ids, lam, lum, cont, description=None):
         """Initialise the collection of emission lines.
 
@@ -132,8 +133,6 @@ class LineCollection:
             description (str):
                 A optional description of the line collection.
         """
-        tic("Creating LineCollection")
-
         # Set the description
         self.description = description
 
@@ -184,8 +183,6 @@ class LineCollection:
         # Get which diagrams we have available from the lines we contain
         self.available_diagrams = []
         self._which_diagrams()
-
-        toc("Creating LineCollection")
 
     @property
     def id(self):

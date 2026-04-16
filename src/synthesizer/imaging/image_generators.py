@@ -31,6 +31,7 @@ from synthesizer.units import unit_is_compatible
 from synthesizer.utils import (
     ensure_array_c_compatible_double,
 )
+from synthesizer.utils.operation_timers import timed
 
 _CENTERING_TOLERANCE = 1e-6
 
@@ -812,6 +813,7 @@ def _generate_images_particle_smoothed(
     return imgs
 
 
+@timed("Setting up smoothed image inputs")
 def _generate_image_parametric_smoothed(
     img,
     density_grid,
@@ -830,13 +832,9 @@ def _generate_image_parametric_smoothed(
     Returns:
         ImageCollection: An image collection containing the smoothed images.
     """
-    tic("Setting up smoothed image inputs")
-
     # Multiply the density grid by the sed to get the image
     img.arr = density_grid[:, :] * signal.value
     img.units = signal.units
-
-    toc("Setting up smoothed image inputs")
 
     return img
 

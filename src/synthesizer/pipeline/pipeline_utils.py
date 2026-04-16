@@ -360,14 +360,33 @@ def print_timing_analysis_table(rows, print_func=print):
     Returns:
         None
     """
+    # Filter the printed table to operations that contribute at least 0.01% of
+    # the total elapsed time so the displayed precision matches the fraction
+    # column. Always keep the synthetic summary rows.
+    filtered_rows = []
+    for row in rows:
+        if row["operation"] in ("Overhead", "Total"):
+            filtered_rows.append(row)
+            continue
+
+        if row["fraction_percent"] >= 0.01:
+            filtered_rows.append(row)
+
     # Pre-format the row values so the final column widths reflect the exact
     # strings that will be printed rather than just the raw underlying values.
     formatted_rows = []
-    for row in rows:
+    for row in filtered_rows:
+        # Show sub-centisecond timings in scientific notation so tiny but still
+        # visible entries are distinguishable in the printed table.
+        if 0.0 < row["seconds"] < 0.01:
+            seconds_str = f"{row['seconds']:.2e}"
+        else:
+            seconds_str = f"{row['seconds']:.2f}"
+
         formatted_rows.append(
             {
                 "operation": row["operation"],
-                "seconds": f"{row['seconds']:.2f}",
+                "seconds": seconds_str,
                 "fraction_percent": f"{row['fraction_percent']:.2f}",
                 "count": "-" if row["count"] is None else str(row["count"]),
                 "source": row["source"],

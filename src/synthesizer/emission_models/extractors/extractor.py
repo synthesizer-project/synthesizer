@@ -33,6 +33,7 @@ from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unyt_to_ndview
 from synthesizer.utils import get_attr_c_compatible_double
+from synthesizer.utils.operation_timers import timed
 
 
 class Extractor(ABC):
@@ -80,6 +81,7 @@ class Extractor(ABC):
             The line wavelengths.
     """
 
+    @timed("Setting up the Extractor (including grid axis extraction)")
     def __init__(self, grid, extract):
         """Initialize the Extractor object.
 
@@ -90,8 +92,6 @@ class Extractor(ABC):
                 The emission type to extract from the grid.
 
         """
-        tic("Setting up the Extractor (including grid axis extraction)")
-
         # Get the attribute names we will have to extract from the emitter
         self._emitter_attributes = grid._extract_axes
 
@@ -136,8 +136,7 @@ class Extractor(ABC):
         # Finally, attach a pointer to the grid object
         self._grid = grid
 
-        toc("Setting up the Extractor (including grid axis extraction)")
-
+    @timed("Preparing particle data for extraction")
     def get_emitter_attrs(self, emitter, model, do_grid_check):
         """Get the attributes from the emitter.
 
@@ -156,8 +155,6 @@ class Extractor(ABC):
             tuple
                 The extracted attributes and the weight variable.
         """
-        tic("Preparing particle data for extraction")
-
         # Set up a list to store the extracted attributes
         extracted = []
 
@@ -206,10 +203,9 @@ class Extractor(ABC):
         if isinstance(weight, (unyt_array, unyt_quantity)):
             weight = weight.ndview
 
-        toc("Preparing particle data for extraction")
-
         return tuple(extracted), weight
 
+    @timed("Checking the particle data against the grid axes")
     def check_emitter_attrs(self, emitter, extracted_attrs):
         """Compute the fraction of emitter attributes outside the grid axes.
 
@@ -222,8 +218,6 @@ class Extractor(ABC):
             extracted_attrs (tuple):
                 The extracted attributes from the emitter.
         """
-        tic("Checking the particle data against the grid axes")
-
         # Loop over the extracted attributes and check if they are outside the
         # grid axes, we'll do this by updating a mask for each attribute
         inside = np.zeros_like(extracted_attrs[0], dtype=bool)
@@ -242,8 +236,6 @@ class Extractor(ABC):
                 f"{frac_outside * 100:.2f}% of the attributes outside"
                 " the grid axes."
             )
-
-        toc("Checking the particle data against the grid axes")
 
     @abstractmethod
     def generate_lnu(self, *args, **kwargs):
@@ -266,6 +258,7 @@ class IntegratedParticleExtractor(Extractor):
     to reduce the computation time.
     """
 
+    @timed("Generating integrated Lnu")
     def generate_lnu(
         self,
         emitter,
@@ -1097,8 +1090,6 @@ class IntegratedParametricExtractor(Extractor):
         Returns:
             Sed: The integrated spectra.
         """
-        tic("Generating integrated Lnu")
-
         # Get a mask for non-zero bins in the SFZH
         mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
 
@@ -1114,8 +1105,6 @@ class IntegratedParametricExtractor(Extractor):
         # Compute the integrated lnu array by multiplying the sfzh by the
         # grid spectra
         spec = np.sum(grid_spectra[mask] * sfzh[mask], axis=0)
-
-        toc("Generating integrated Lnu")
 
         return Sed(model.lam, spec * erg / s / Hz)
 
