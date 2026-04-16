@@ -1126,6 +1126,7 @@ class Sed:
 
         return self.fnu
 
+    @timed("Sed.get_fnu")
     def get_fnu(self, cosmo, z, igm=None):
         """Calculate the observed frame spectral energy distribution.
 

@@ -305,6 +305,7 @@ def _standardize_imaging_units(
     return resolution, standardized_fov, standardized_coords, standardized_smls
 
 
+@timed("_generate_image_particle_hist")
 def _generate_image_particle_hist(
     img,
     signal,
@@ -463,6 +464,7 @@ def _generate_images_particle_hist(
     return imgs
 
 
+@timed("_generate_image_particle_smoothed")
 def _generate_image_particle_smoothed(
     img,
     signal,
@@ -876,6 +878,7 @@ def _generate_images_parametric_smoothed(
     return imgs
 
 
+@timed("_generate_image_collection_generic")
 def _generate_image_collection_generic(
     instrument,
     photometry,
