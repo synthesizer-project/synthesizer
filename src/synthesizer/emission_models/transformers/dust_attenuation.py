@@ -1633,32 +1633,36 @@ class DraineLiGrainCurves(AttenuationLaw):
             np.ndarray of float:
                 The transmission at each wavelength
         """
-        if tau_v is not None:
-            warn(
-                "tau_v has been provided, but `DraineLiGrainCurves` does not "
-                "use tau_v. Ignoring tau_v in the calculation."
-            )
-
-        # Set any additional parameters on the dust curve
-        self._set_params(**dust_curve_kwargs)
-
+        tic("DraineLiGrainCurves.get_transmission")
         try:
-            sigmalos_H = dust_curve_kwargs.get(
-                "sigmalos_H", getattr(self, "sigmalos_H", None)
-            )
-            # Gather sigmalos_* dust components: start with attributes,
-            # then override with kwargs
-            sigmalos_dust = {}
-            for key in vars(self):
-                if key.startswith("sigmalos_") and key != "sigmalos_H":
-                    sigmalos_dust[key] = getattr(self, key)
-            for key, value in dust_curve_kwargs.items():
-                if key.startswith("sigmalos_") and key != "sigmalos_H":
-                    sigmalos_dust[key] = value
-            # Compute tau_lam directly (tau_v is not used for this model)
-            tau_lam = self.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
-        finally:
-            # Always restore previous state
-            self._reset_params()
+            if tau_v is not None:
+                warn(
+                    "tau_v has been provided, but `DraineLiGrainCurves` does "
+                    "not use tau_v. Ignoring tau_v in the calculation."
+                )
 
-        return np.exp(-tau_lam)
+            # Set any additional parameters on the dust curve
+            self._set_params(**dust_curve_kwargs)
+
+            try:
+                sigmalos_H = dust_curve_kwargs.get(
+                    "sigmalos_H", getattr(self, "sigmalos_H", None)
+                )
+                # Gather sigmalos_* dust components: start with attributes,
+                # then override with kwargs
+                sigmalos_dust = {}
+                for key in vars(self):
+                    if key.startswith("sigmalos_") and key != "sigmalos_H":
+                        sigmalos_dust[key] = getattr(self, key)
+                for key, value in dust_curve_kwargs.items():
+                    if key.startswith("sigmalos_") and key != "sigmalos_H":
+                        sigmalos_dust[key] = value
+                # Compute tau_lam directly (tau_v is not used for this model)
+                tau_lam = self.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
+            finally:
+                # Always restore previous state
+                self._reset_params()
+
+            return np.exp(-tau_lam)
+        finally:
+            toc("DraineLiGrainCurves.get_transmission")
