@@ -1419,7 +1419,11 @@ class DraineLiGrainCurves(AttenuationLaw):
         finally:
             toc("DraineLiGrainCurves._get_sigmalos_h")
 
-    @accepts(lam=angstrom, sigmalos_H=Msun / pc**2)
+    @accepts(
+        lam=angstrom,
+        sigmalos_H=Msun / pc**2,
+        sigmalos_dust=Msun / pc**2,
+    )
     def get_tau_at_lam(
         self,
         lam: unyt_array,
@@ -1524,25 +1528,11 @@ class DraineLiGrainCurves(AttenuationLaw):
                     "column"
                 )
                 try:
-                    if not isinstance(dust_col, (unyt_quantity, unyt_array)):
-                        raise exceptions.InconsistentArguments(
-                            f"Provide units to the {component_key} quantity"
-                        )
-
-                    try:
-                        if dust_col.units == column_units:
-                            dust_col = np.atleast_1d(
-                                np.asarray(dust_col.ndview)
-                            )
-                        else:
-                            dust_col = np.atleast_1d(
-                                np.asarray(dust_col.to(column_units).ndview)
-                            )
-                    except Exception as e:
-                        raise exceptions.InconsistentArguments(
-                            f"{component_key} must have units compatible "
-                            f"with {column_units}"
-                        ) from e
+                    # Unit conversion/validation for dust columns is now
+                    # handled by `@accepts(..., sigmalos_dust=...)`, so the
+                    # hot path only needs a cheap array view plus any required
+                    # broadcasting to the particle count.
+                    dust_col = np.atleast_1d(np.asarray(dust_col.ndview))
 
                     if dust_col.size not in (1, nparticles):
                         raise exceptions.InconsistentArguments(
@@ -1639,7 +1629,11 @@ class DraineLiGrainCurves(AttenuationLaw):
         finally:
             toc("DraineLiGrainCurves.get_tau_at_lam")
 
-    @accepts(lam=angstrom, sigmalos_H=Msun / pc**2)
+    @accepts(
+        lam=angstrom,
+        sigmalos_H=Msun / pc**2,
+        sigmalos_dust=Msun / pc**2,
+    )
     def get_tau(
         self,
         lam: unyt_array,
