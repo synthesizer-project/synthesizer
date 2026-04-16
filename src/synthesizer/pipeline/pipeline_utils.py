@@ -184,9 +184,22 @@ def accumulate_pipeline_results_from_child(parent, *children):
 
 
 def get_atomic_timing_snapshot():
-    """Return the current atomic timing snapshot for this process."""
+    """Return the current atomic timing snapshot for this process.
+
+    Args:
+        None
+
+    Returns:
+        dict:
+            A dictionary keyed by operation name containing cumulative timing
+            information with ``seconds``, ``count``, and ``source`` entries.
+    """
+    # Import the timer wrapper lazily to avoid unnecessary import cost in code
+    # paths that never analyse timings.
     from synthesizer.utils.operation_timers import OperationTimers
 
+    # Convert the OperationTimers interface into a plain dictionary that is
+    # easier to gather, merge, serialise, and plot.
     timers = OperationTimers()
     timing_data = {}
     for operation in timers.keys():
@@ -203,16 +216,44 @@ def get_atomic_timing_snapshot():
 def combine_atomic_timing_snapshots(
     comm, using_mpi, rank, timing_data, total_elapsed
 ):
-    """Combine timing snapshots across ranks when running under MPI."""
+    """Combine timing snapshots across ranks when running under MPI.
+
+    Args:
+        comm:
+            The MPI communicator associated with the Pipeline.
+        using_mpi (bool):
+            Whether the Pipeline is currently running under MPI.
+        rank (int):
+            The rank of the current process.
+        timing_data (dict):
+            The local timing snapshot for this rank.
+        total_elapsed (float):
+            The wall-clock time elapsed on this rank since Pipeline
+            instantiation.
+
+    Returns:
+        tuple:
+            A pair ``(timing_data, total_elapsed)``. On non-MPI runs this is
+            just the input data. On MPI runs rank 0 receives the aggregated
+            timings and summed elapsed time, while all other ranks receive
+            ``(None, None)``.
+    """
+    # In the non-MPI case there is nothing to merge, so return the local
+    # timing snapshot unchanged.
     if not using_mpi:
         return timing_data, total_elapsed
 
+    # Gather both the detailed timings and the total elapsed time from every
+    # rank so rank 0 can produce a combined report.
     gathered_timings = comm.gather(timing_data, root=0)
     gathered_elapsed = comm.gather(total_elapsed, root=0)
 
+    # Non-root ranks do not write timing outputs, so they can return early.
     if rank != 0:
         return None, None
 
+    # Merge operation timings rank-by-rank, summing both cumulative time and
+    # invocation count for matching operation names.
     combined = {}
     for rank_timings in gathered_timings:
         for operation, data in rank_timings.items():
@@ -229,14 +270,33 @@ def combine_atomic_timing_snapshots(
             if combined[operation]["source"] != data["source"]:
                 combined[operation]["source"] = "Mixed"
 
+    # Sum the per-rank elapsed times so the untimed contribution is measured
+    # in the same rank-seconds units as the atomic timing totals.
     return combined, sum(gathered_elapsed)
 
 
 def build_timing_analysis_rows(timing_data, total_elapsed):
-    """Build sorted timing rows including untimed and total entries."""
+    """Build sorted timing rows including untimed and total entries.
+
+    Args:
+        timing_data (dict):
+            A timing dictionary keyed by operation name with ``seconds``,
+            ``count``, and ``source`` entries for each operation.
+        total_elapsed (float):
+            The total elapsed wall-clock time represented by the analysis.
+
+    Returns:
+        list:
+            A list of row dictionaries sorted by descending operation time,
+            with trailing ``Untimed`` and ``Total`` summary rows appended.
+    """
+    # Account for any elapsed time that is not represented in the atomic timer
+    # totals so the report shows both timed and untimed fractions explicitly.
     timed_elapsed = sum(data["seconds"] for data in timing_data.values())
     untimed_elapsed = max(total_elapsed - timed_elapsed, 0.0)
 
+    # Build one row per timed operation, including its contribution as a
+    # percentage of the total elapsed time.
     rows = []
     for operation, data in timing_data.items():
         fraction = (
@@ -254,8 +314,12 @@ def build_timing_analysis_rows(timing_data, total_elapsed):
             }
         )
 
+    # Present the operations in descending order of time spent so the most
+    # important contributors are shown first in both tables and plots.
     rows.sort(key=lambda row: row["seconds"], reverse=True)
 
+    # Append explicit summary rows so the untimed contribution and total are
+    # available to both the terminal table and the written CSV file.
     rows.append(
         {
             "operation": "Untimed",
@@ -283,7 +347,17 @@ def build_timing_analysis_rows(timing_data, total_elapsed):
 
 
 def print_timing_analysis_table(rows):
-    """Print a timing analysis table to stdout."""
+    """Print a timing analysis table to stdout.
+
+    Args:
+        rows (list):
+            The timing rows produced by ``build_timing_analysis_rows``.
+
+    Returns:
+        None
+    """
+    # Compute column widths from the data so the table remains aligned for
+    # operation names of varying lengths.
     operation_width = max(
         len("Operation"), *(len(r["operation"]) for r in rows)
     )
@@ -292,6 +366,8 @@ def print_timing_analysis_table(rows):
     count_width = len("Count")
     source_width = max(len("Source"), *(len(r["source"]) for r in rows))
 
+    # Construct a single divider string that can be reused for the header,
+    # body separator, and closing line.
     divider = (
         "+"
         + "-" * (operation_width + 2)
@@ -306,6 +382,7 @@ def print_timing_analysis_table(rows):
         + "+"
     )
 
+    # Print the table header with the derived column widths.
     print("Pipeline Timing Analysis")
     print(divider)
     print(
@@ -323,6 +400,8 @@ def print_timing_analysis_table(rows):
     )
     print(divider)
 
+    # Print each timing row, converting missing counts on summary rows into a
+    # simple placeholder for readability.
     for row in rows:
         count = "-" if row["count"] is None else str(row["count"])
         print(
@@ -343,9 +422,24 @@ def print_timing_analysis_table(rows):
 
 
 def write_timing_analysis_summary(rows, outdir):
-    """Write the timing analysis summary CSV."""
+    """Write the timing analysis summary CSV.
+
+    Args:
+        rows (list):
+            The timing rows produced by ``build_timing_analysis_rows``.
+        outdir (str or Path):
+            The directory where the timing summary CSV should be written.
+
+    Returns:
+        None
+    """
+    # Normalise the output path so callers can pass either strings or Path
+    # objects.
     outdir = Path(outdir)
     summary_path = outdir / "timing_summary.csv"
+
+    # Write a compact CSV summary that can be inspected manually or reused by
+    # other analysis scripts later.
     with open(summary_path, "w") as handle:
         handle.write("operation,seconds,fraction_percent,count,source\n")
         for row in rows:
@@ -357,23 +451,39 @@ def write_timing_analysis_summary(rows, outdir):
 
 
 def plot_timing_analysis(rows, outdir):
-    """Write timing analysis plots to disk."""
+    """Write timing analysis plots to disk.
+
+    Args:
+        rows (list):
+            The timing rows produced by ``build_timing_analysis_rows``.
+        outdir (str or Path):
+            The directory where the timing plots should be written.
+
+    Returns:
+        None
+    """
+    # Normalise the output path and drop the synthetic total row, since that
+    # row is only useful in the textual summary.
     outdir = Path(outdir)
     plot_rows = [row for row in rows if row["operation"] != "Total"]
     nonzero_rows = [row for row in plot_rows if row["seconds"] > 0.0]
 
+    # Build the pie chart from non-zero rows only so the chart focuses on the
+    # operations that actually contributed measurable time.
     if nonzero_rows:
         total_seconds = sum(row["seconds"] for row in nonzero_rows)
         pie_rows = []
         other_seconds = 0.0
 
+        # Group the smallest contributions into a single slice so the pie chart
+        # stays readable without a forest of overlapping labels.
         for row in nonzero_rows:
             fraction_percent = (
                 row["seconds"] / total_seconds * 100.0
                 if total_seconds > 0.0
                 else 0.0
             )
-            if fraction_percent < 5.0:
+            if fraction_percent < 1.0:
                 other_seconds += row["seconds"]
             else:
                 pie_rows.append(row)
@@ -381,25 +491,27 @@ def plot_timing_analysis(rows, outdir):
         if other_seconds > 0.0:
             pie_rows.append(
                 {
-                    "operation": "Other <5%",
+                    "operation": "Other <1%",
                     "seconds": other_seconds,
                     "source": "N/A",
                 }
             )
 
+        # Use a categorical palette for the visible wedges while reserving
+        # neutral colours for the synthetic untimed and grouped slices.
+        palette = plt.cm.tab20(np.linspace(0, 1, max(len(pie_rows), 1)))
         colors = []
+        palette_index = 0
         for row in pie_rows:
             if row["operation"] == "Untimed":
                 colors.append("#7f7f7f")
-            elif row["operation"] == "Other <5%":
+            elif row["operation"] == "Other <1%":
                 colors.append("#bab0ac")
-            elif row["source"] == "C":
-                colors.append("#4c72b0")
-            elif row["source"] == "Python":
-                colors.append("#dd8452")
             else:
-                colors.append("#937860")
+                colors.append(palette[palette_index])
+                palette_index += 1
 
+        # Save the main pie chart showing the fractional timing breakdown.
         fig, ax = plt.subplots(figsize=(8, 8))
         ax.pie(
             [row["seconds"] for row in pie_rows],
@@ -413,6 +525,8 @@ def plot_timing_analysis(rows, outdir):
         fig.savefig(outdir / "timing_pie.png", dpi=200)
         plt.close(fig)
     else:
+        # Fall back to a simple placeholder figure when there is no timing data
+        # to visualise yet.
         fig, ax = plt.subplots(figsize=(8, 4))
         ax.text(
             0.5,
@@ -427,9 +541,14 @@ def plot_timing_analysis(rows, outdir):
         fig.savefig(outdir / "timing_pie.png", dpi=200)
         plt.close(fig)
 
+    # Build the bar chart from the same non-total rows so absolute timings are
+    # available alongside the fractional pie chart view.
     fig, ax = plt.subplots(figsize=(10, max(4, 0.45 * max(len(plot_rows), 1))))
     y_positions = np.arange(len(plot_rows))
     bar_colors = []
+
+    # Colour the bar chart by timing source while keeping untimed time visually
+    # distinct from both Python and C timings.
     for row in plot_rows:
         if row["operation"] == "Untimed":
             bar_colors.append("#7f7f7f")
@@ -440,6 +559,7 @@ def plot_timing_analysis(rows, outdir):
         else:
             bar_colors.append("#937860")
 
+    # Save the horizontal bar chart ordered consistently with the input rows.
     ax.barh(
         y_positions,
         [row["seconds"] for row in plot_rows],

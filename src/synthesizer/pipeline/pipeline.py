@@ -940,16 +940,27 @@ class Pipeline:
         """Analyse accumulated atomic timings and write reports.
 
         Args:
-            outdir (str or Path): Directory where timing outputs are written.
+            outdir (str or Path):
+                Directory where timing outputs are written.
+
+        Returns:
+            None
         """
+        # Fail immediately with a clear message if atomic timing support is not
+        # available in the current installation.
         if not check_atomic_timing():
             raise RuntimeError(
                 "Atomic timing not available. Recompile with: "
                 "ATOMIC_TIMING=1 pip install -e ."
             )
 
+        # Snapshot the current rank-local timings and the total elapsed wall
+        # time since Pipeline instantiation.
         timing_data = get_atomic_timing_snapshot()
         total_elapsed = time.perf_counter() - self._start_time
+
+        # Merge timings across ranks when running under MPI so rank 0 can write
+        # a single aggregated report.
         timing_data, total_elapsed = combine_atomic_timing_snapshots(
             self.comm,
             self.using_mpi,
@@ -958,13 +969,18 @@ class Pipeline:
             total_elapsed,
         )
 
+        # Non-root ranks participate in the gather but do not print or write
+        # any timing outputs.
         if self.using_mpi and self.rank != 0:
             return None
 
+        # Build the human-readable timing rows and ensure the output directory
+        # exists before writing any files.
         rows = build_timing_analysis_rows(timing_data, total_elapsed)
         outdir = Path(outdir)
         outdir.mkdir(parents=True, exist_ok=True)
 
+        # Emit the terminal summary and save the CSV and plot diagnostics.
         print_timing_analysis_table(rows)
         write_timing_analysis_summary(rows, outdir)
         plot_timing_analysis(rows, outdir)
