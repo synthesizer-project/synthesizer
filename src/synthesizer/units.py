@@ -39,6 +39,7 @@ from unyt import (
 from unyt.exceptions import UnitConversionError
 
 from synthesizer import BASE_DIR, exceptions
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 
 # Define the path to your YAML file
@@ -788,56 +789,66 @@ def accepts(**units):
             Returns:
                 The result of the wrapped function.
             """
-            # Bind the incoming arguments to their parameter names so we can
-            # treat positional and keyword arguments uniformly
-            bound = func_signature.bind_partial(*args, **kwargs)
+            tic(f"accepts({func.__qualname__})")
+            try:
+                # Bind the incoming arguments to their parameter names so we
+                # can treat positional and keyword arguments uniformly.
+                bound = func_signature.bind_partial(*args, **kwargs)
 
-            # Loop over the bound arguments and check their units
-            for name, value in list(bound.arguments.items()):
-                param = parameters[name]
+                # Loop over the bound arguments and check their units.
+                for name, value in list(bound.arguments.items()):
+                    param = parameters[name]
 
-                # Handle the *args case
-                if param.kind is Parameter.VAR_POSITIONAL:
+                    # Handle the *args case.
+                    if param.kind is Parameter.VAR_POSITIONAL:
+                        if name in units:
+                            bound.arguments[name] = tuple(
+                                _check_arg(
+                                    {name: units[name]},
+                                    name,
+                                    inner_value,
+                                )
+                                for inner_value in value
+                            )
+                        continue
+
+                    # Handle the standard singular argument case.
+                    if param.kind is not Parameter.VAR_KEYWORD:
+                        if name in units:
+                            bound.arguments[name] = _check_arg(
+                                units, name, value
+                            )
+                        continue
+
+                    # **kwargs can either be registered as a whole
+                    # dictionary or as individual entries.
+
+                    # Handle the whole dictionary case.
                     if name in units:
-                        bound.arguments[name] = tuple(
-                            _check_arg({name: units[name]}, name, inner_value)
-                            for inner_value in value
-                        )
-                    continue
+                        converted = {}
+                        for inner_name, inner_value in value.items():
+                            converted[inner_name] = _check_arg(
+                                {inner_name: units[name]},
+                                inner_name,
+                                inner_value,
+                            )
+                        bound.arguments[name] = converted
+                        continue
 
-                # Handle the standard singular argument case
-                if param.kind is not Parameter.VAR_KEYWORD:
-                    if name in units:
-                        bound.arguments[name] = _check_arg(units, name, value)
-                    continue
-
-                # **kwargs are more complex, they can either be registered as
-                # a whole dictionary or as individual entries
-
-                # Handle the whole dictionary case
-                if name in units:
+                    # Handle the individual entries case.
                     converted = {}
                     for inner_name, inner_value in value.items():
-                        converted[inner_name] = _check_arg(
-                            {inner_name: units[name]},
-                            inner_name,
-                            inner_value,
-                        )
+                        if inner_name in units:
+                            converted[inner_name] = _check_arg(
+                                units, inner_name, inner_value
+                            )
+                        else:
+                            converted[inner_name] = inner_value
                     bound.arguments[name] = converted
-                    continue
 
-                # Handle the individual entries case
-                converted = {}
-                for inner_name, inner_value in value.items():
-                    if inner_name in units:
-                        converted[inner_name] = _check_arg(
-                            units, inner_name, inner_value
-                        )
-                    else:
-                        converted[inner_name] = inner_value
-                bound.arguments[name] = converted
-
-            return func(*bound.args, **bound.kwargs)
+                return func(*bound.args, **bound.kwargs)
+            finally:
+                toc(f"accepts({func.__qualname__})")
 
         return wrapped
 
