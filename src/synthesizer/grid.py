@@ -39,6 +39,7 @@ from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.data.initialise import get_grids_dir
 from synthesizer.emissions import LineCollection, Sed
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
@@ -138,77 +139,83 @@ class Grid:
                 the grid to (i.e. (lower_lam, upper_lam)). If new_lam is
                 provided these limits will be ignored.
         """
-        # Get the grid file path data
-        self.grid_dir = ""
-        self.grid_name = ""
-        self.grid_ext = "hdf5"  # can be updated if grid_name has an extension
-        self._parse_grid_path(grid_dir, grid_name)
-
-        # Prepare lists of available lines, spectra, and emissions
-        self.available_lines = []
-        self.available_spectra_emissions = []
-        self.available_line_emissions = []
-        self.available_emissions = []
-
-        # Set up property flags. These will be set when their property methods
-        # are first called to avoid reading the file too often.
-        self._reprocessed = None
-        self._lines_available = None
-        self._ignore_lines = ignore_lines
-
-        # Set up spectra and lines dictionaries (if we don't read them they'll
-        # just stay as empty dicts)
-        self.lam = None
-        self.spectra = {}
-        self.line_lams = None
-        self.line_lums = {}
-        self.line_conts = {}
-
-        # Set up cache for stellar fraction
-        self._stellar_frac = None
-
-        # Get the axes of the grid from the HDF5 file
-        self.axes = []  # axes names
-        self._axes_values = {}
-        self._axes_units = {}
-        self._extract_axes = []
-        self._extract_axes_values = {}
-        self._get_axes()
-
-        # Read in the metadata
-        self._weight_var = None
-        self._model_metadata = {}
-        self._get_grid_metadata()
-
-        # Get the ionising luminosity (if available)
-        self._get_ionising_luminosity()
-
-        # Read in spectra
-        if not ignore_spectra:
-            self._get_spectra_grid(spectra_to_read)
-
-            # Save the spectra keys as available emissions
-            self.available_spectra_emissions = list(self.spectra.keys())
-
-            # Prepare the wavelength axis (if new_lam and lam_lims are
-            # all None, this will do nothing, leaving the grid's wavelength
-            # array as it is in the HDF5 file)
-            self._prepare_lam_axis(new_lam, lam_lims)
-
-        # Read in lines but only if the grid has been reprocessed
-        if not ignore_lines and self.reprocessed:
-            self._get_lines_grid()
-
-            # Save the line lums keys as available emissions
-            self.available_line_emissions = list(self.line_lums.keys())
-
-        # Combine the two emissions lists and remove repeats
-        self.available_emissions = list(
-            set(
-                self.available_line_emissions
-                + self.available_spectra_emissions
+        tic("Grid.__init__")
+        try:
+            # Get the grid file path data
+            self.grid_dir = ""
+            self.grid_name = ""
+            self.grid_ext = (
+                "hdf5"  # can be updated if grid_name has an extension
             )
-        )
+            self._parse_grid_path(grid_dir, grid_name)
+
+            # Prepare lists of available lines, spectra, and emissions
+            self.available_lines = []
+            self.available_spectra_emissions = []
+            self.available_line_emissions = []
+            self.available_emissions = []
+
+            # Set up property flags. These will be set when their property
+            # methods are first called to avoid reading the file too often.
+            self._reprocessed = None
+            self._lines_available = None
+            self._ignore_lines = ignore_lines
+
+            # Set up spectra and lines dictionaries (if we don't read them
+            # they'll just stay as empty dicts)
+            self.lam = None
+            self.spectra = {}
+            self.line_lams = None
+            self.line_lums = {}
+            self.line_conts = {}
+
+            # Set up cache for stellar fraction
+            self._stellar_frac = None
+
+            # Get the axes of the grid from the HDF5 file
+            self.axes = []  # axes names
+            self._axes_values = {}
+            self._axes_units = {}
+            self._extract_axes = []
+            self._extract_axes_values = {}
+            self._get_axes()
+
+            # Read in the metadata
+            self._weight_var = None
+            self._model_metadata = {}
+            self._get_grid_metadata()
+
+            # Get the ionising luminosity (if available)
+            self._get_ionising_luminosity()
+
+            # Read in spectra
+            if not ignore_spectra:
+                self._get_spectra_grid(spectra_to_read)
+
+                # Save the spectra keys as available emissions
+                self.available_spectra_emissions = list(self.spectra.keys())
+
+                # Prepare the wavelength axis (if new_lam and lam_lims are
+                # all None, this will do nothing, leaving the grid's wavelength
+                # array as it is in the HDF5 file)
+                self._prepare_lam_axis(new_lam, lam_lims)
+
+            # Read in lines but only if the grid has been reprocessed
+            if not ignore_lines and self.reprocessed:
+                self._get_lines_grid()
+
+                # Save the line lums keys as available emissions
+                self.available_line_emissions = list(self.line_lums.keys())
+
+            # Combine the two emissions lists and remove repeats
+            self.available_emissions = list(
+                set(
+                    self.available_line_emissions
+                    + self.available_spectra_emissions
+                )
+            )
+        finally:
+            toc("Grid.__init__")
 
     def _ensure_axis_data_contiguous(self):
         """Ensure stored axis arrays are contiguous."""
@@ -429,11 +436,24 @@ class Grid:
                 spectra will be read.
         """
         with h5py.File(self.grid_filename, "r") as hf:
+            # Most of the time the key will be "spectra" but for dust
+            # attenuation curve grids the key is "extinction_curves"
+            if "spectra" in hf.keys():
+                spectra_key = "spectra"
+            elif "extinction_curves" in hf.keys():
+                spectra_key = "extinction_curves"
+            else:
+                raise exceptions.GridError(
+                    "No spectra found in the grid file. Either pass "
+                    "`ignore_spectra=True` or load a grid containing "
+                    "spectra."
+                )
+
             # Are we reading everything?
             if spectra_to_read is None:
-                spectra_to_read = self._get_spectra_ids_from_file()
+                spectra_to_read = self._get_spectra_ids_from_file(spectra_key)
             elif isinstance(spectra_to_read, list):
-                all_spectra = self._get_spectra_ids_from_file()
+                all_spectra = self._get_spectra_ids_from_file(spectra_key)
 
                 # Check the requested spectra are available
                 missing_spectra = set(spectra_to_read) - set(all_spectra)
@@ -449,12 +469,16 @@ class Grid:
                     "containing a subset of spectra to read."
                 )
 
-            # Read the wavelengths
-            self.lam = hf["spectra/wavelength"][:]
+            # Read the wavelengths and attach the units stored on the file.
+            lams = hf[spectra_key + "/wavelength"][:]
+            lam_units = hf[spectra_key + "/wavelength"].attrs.get("Units")
+            if lam_units is None:
+                lam_units = angstrom
+            self.lam = unyt_array(lams, lam_units).to(angstrom)
 
             # Get all our spectra
             for spectra_id in spectra_to_read:
-                self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
+                self.spectra[spectra_id] = hf[spectra_key][spectra_id][:]
 
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
@@ -722,15 +746,20 @@ class Grid:
         """Return the line IDs."""
         return self.available_lines
 
-    def _get_spectra_ids_from_file(self):
+    def _get_spectra_ids_from_file(self, spectra_key="spectra"):
         """Get a list of the spectra available in a grid file.
+
+        Args:
+            spectra_key (str):
+                The key in the HDF5 file under which the spectra are stored.
+                Defaults to "spectra".
 
         Returns:
             list:
                 List of available spectra
         """
         with h5py.File(self.grid_filename, "r") as hf:
-            spectra_keys = list(hf["spectra"].keys())
+            spectra_keys = list(hf[spectra_key].keys())
 
         # Clean up the available spectra list
         spectra_keys.remove("wavelength")
@@ -777,45 +806,87 @@ class Grid:
                 grid, or loop over the first axes. The latter is less memory
                 intensive, but slower. Defaults to False.
         """
-        # Loop over spectra to interpolate
-        for spectra_type in self.available_spectra_emissions:
-            # Are we doing the look up in one go, or looping?
-            if loop_grid:
-                new_spectra = [None] * len(self.spectra[spectra_type])
+        tic("Grid.interp_spectra")
+        try:
+            # Loop over spectra to interpolate
+            for spectra_type in self.available_spectra_emissions:
+                # Are we doing the look up in one go, or looping?
+                if loop_grid:
+                    new_spectra = [None] * len(self.spectra[spectra_type])
 
-                # Loop over first axis of spectra array
-                for i, _spec in enumerate(self.spectra[spectra_type]):
-                    new_spectra[i] = spectres(
+                    # Loop over first axis of spectra array
+                    for i, _spec in enumerate(self.spectra[spectra_type]):
+                        new_spectra[i] = spectres(
+                            new_lam.value,
+                            self._lam,
+                            _spec,
+                            fill=0,
+                            verbose=False,
+                        )
+
+                    del self.spectra[spectra_type]
+                    new_spectra = np.asarray(new_spectra)
+                else:
+                    # Evaluate the function at the desired wavelengths
+                    new_spectra = spectres(
                         new_lam.value,
                         self._lam,
-                        _spec,
+                        self.spectra[spectra_type],
                         fill=0,
                         verbose=False,
                     )
 
-                del self.spectra[spectra_type]
-                new_spectra = np.asarray(new_spectra)
-            else:
-                # Evaluate the function at the desired wavelengths
-                new_spectra = spectres(
-                    new_lam.value,
-                    self._lam,
-                    self.spectra[spectra_type],
-                    fill=0,
-                    verbose=False,
+                # Update this spectra
+                self.spectra[spectra_type] = new_spectra
+
+            # Update wavelength array
+            self.lam = new_lam
+
+            self._ensure_spectra_data_contiguous()
+
+            # Remove any lines outside the new wavelength range
+            if self.lines_available:
+                self._remove_lines_outside_lam()
+        finally:
+            toc("Grid.interp_spectra")
+
+    @accepts(lam=angstrom)
+    def get_spectra_at_lam(self, lam):
+        """Return spectra evaluated at a single wavelength.
+
+        Args:
+            lam (unyt_quantity/unyt_array):
+                The wavelength at which to evaluate the grid spectra.
+
+        Returns:
+            dict:
+                A dictionary mapping spectra ids to arrays with the same grid
+                shape as the source spectra, but with the wavelength axis
+                removed.
+        """
+        tic("Grid.get_spectra_at_lam")
+        try:
+            lam = np.atleast_1d(lam.to(angstrom))
+            if lam.size != 1:
+                raise exceptions.InconsistentArguments(
+                    "get_spectra_at_lam expects exactly one wavelength."
                 )
 
-            # Update this spectra
-            self.spectra[spectra_type] = new_spectra
+            spectra_at_lam = {}
+            for spectra_type in self.available_spectra_emissions:
+                interp = interp1d(
+                    self._lam,
+                    self.spectra[spectra_type],
+                    axis=-1,
+                    kind="linear",
+                    bounds_error=False,
+                    fill_value=0.0,
+                )
+                spectra_at_lam[spectra_type] = interp(lam.value)
 
-        # Update wavelength array
-        self.lam = new_lam
-
-        self._ensure_spectra_data_contiguous()
-
-        # Remove any lines outside the new wavelength range
-        if self.lines_available:
-            self._remove_lines_outside_lam()
+            return spectra_at_lam
+        finally:
+            toc("Grid.get_spectra_at_lam")
 
     def __str__(self):
         """Return a string representation of the particle object.
@@ -925,40 +996,44 @@ class Grid:
                 wavelength range. If inplace=True, returns None and modifies
                 the current grid.
         """
-        # Decide which grid to work on
-        if inplace:
-            grid = self
-        else:
-            grid = copy.deepcopy(self)
+        tic("Grid.reduce_rest_frame_range")
+        try:
+            # Decide which grid to work on
+            if inplace:
+                grid = self
+            else:
+                grid = copy.deepcopy(self)
 
-        # Check the limits are valid
-        if lam_min >= lam_max:
-            raise exceptions.InconsistentArguments(
-                "lam_min must be less than lam_max"
-            )
+            # Check the limits are valid
+            if lam_min >= lam_max:
+                raise exceptions.InconsistentArguments(
+                    "lam_min must be less than lam_max"
+                )
 
-        # Find the indices of the wavelength limits
-        min_index = grid.get_nearest_index(lam_min, grid.lam)
-        max_index = grid.get_nearest_index(lam_max, grid.lam) + 1
+            # Find the indices of the wavelength limits
+            min_index = grid.get_nearest_index(lam_min, grid.lam)
+            max_index = grid.get_nearest_index(lam_max, grid.lam) + 1
 
-        # Limit the wavelength array
-        grid.lam = grid.lam[min_index:max_index]
+            # Limit the wavelength array
+            grid.lam = grid.lam[min_index:max_index]
 
-        # Limit all the spectra arrays
-        for spectra_id in grid.available_spectra_emissions:
-            grid.spectra[spectra_id] = grid.spectra[spectra_id][
-                ..., min_index:max_index
-            ]
+            # Limit all the spectra arrays
+            for spectra_id in grid.available_spectra_emissions:
+                grid.spectra[spectra_id] = grid.spectra[spectra_id][
+                    ..., min_index:max_index
+                ]
 
-        grid._ensure_spectra_data_contiguous()
+            grid._ensure_spectra_data_contiguous()
 
-        # Remove lines outside the new wavelength range
-        if grid.lines_available:
-            grid._remove_lines_outside_lam()
+            # Remove lines outside the new wavelength range
+            if grid.lines_available:
+                grid._remove_lines_outside_lam()
 
-        # Return the grid if not inplace
-        if not inplace:
-            return grid
+            # Return the grid if not inplace
+            if not inplace:
+                return grid
+        finally:
+            toc("Grid.reduce_rest_frame_range")
 
     @accepts(lam_min=angstrom, lam_max=angstrom)
     def reduce_observed_range(self, lam_min, lam_max, redshift, inplace=False):
@@ -1186,17 +1261,21 @@ class Grid:
                 wavelength range. If inplace=True, returns None and modifies
                 the current grid.
         """
-        # Decide which grid to work on
-        if inplace:
-            grid = self
-        else:
-            grid = copy.deepcopy(self)
+        tic("Grid.reduce_rest_frame_lam")
+        try:
+            # Decide which grid to work on
+            if inplace:
+                grid = self
+            else:
+                grid = copy.deepcopy(self)
 
-        grid.interp_spectra(lam)
+            grid.interp_spectra(lam)
 
-        # Return the grid if not inplace
-        if not inplace:
-            return grid
+            # Return the grid if not inplace
+            if not inplace:
+                return grid
+        finally:
+            toc("Grid.reduce_rest_frame_lam")
 
     @accepts(lam=angstrom)
     def reduce_observed_lam(self, lam, redshift, inplace=False):
