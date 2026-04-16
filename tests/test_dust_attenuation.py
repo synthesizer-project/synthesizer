@@ -68,18 +68,18 @@ def _curve_to_tau(curve, dust_col):
 def test_draine_li_uses_grid_extraction(draine_li_grid):
     """Particle extraction reproduces the expected attenuation curves."""
     dust_curve = DraineLiGrainCurves(
+        lam=np.array([1500.0, 2500.0]) * angstrom,
         grid_name=draine_li_grid.name,
         grid_dir=draine_li_grid.parent,
         grain_dict={"graphite": [0.01], "silicate": [0.1]},
     )
 
-    lam = np.array([1500.0, 2500.0]) * angstrom
     sigmalos_h = np.array([1.0, 1.0]) * Msun / pc**2
     graphite = np.array([0.14, 0.28]) * Msun / pc**2
     silicate = np.array([0.14, 0.14]) * Msun / pc**2
 
     tau = dust_curve.get_tau_at_lam(
-        lam,
+        np.array([1500.0, 2500.0]) * angstrom,
         sigmalos_H=sigmalos_h,
         sigmalos_graphite_a0p01um=graphite,
         sigmalos_silicate_a0p1um=silicate,
@@ -104,18 +104,18 @@ def test_draine_li_uses_grid_extraction(draine_li_grid):
 def test_draine_li_masks_zero_and_nan_columns(draine_li_grid):
     """Zero and NaN line-of-sight columns should contribute zero tau."""
     dust_curve = DraineLiGrainCurves(
+        lam=np.array([1500.0, 2500.0]) * angstrom,
         grid_name=draine_li_grid.name,
         grid_dir=draine_li_grid.parent,
         grain_dict={"graphite": [0.01], "silicate": [0.1]},
     )
 
-    lam = np.array([1500.0, 2500.0]) * angstrom
     sigmalos_h = np.array([1.0, 0.0, np.nan, 1.0]) * Msun / pc**2
     graphite = np.array([0.14, 0.14, 0.14, np.nan]) * Msun / pc**2
     silicate = np.array([0.14, 0.14, 0.14, 0.14]) * Msun / pc**2
 
     tau = dust_curve.get_tau_at_lam(
-        lam,
+        np.array([1500.0, 2500.0]) * angstrom,
         sigmalos_H=sigmalos_h,
         sigmalos_graphite_a0p01um=graphite,
         sigmalos_silicate_a0p1um=silicate,
@@ -134,14 +134,14 @@ def test_draine_li_masks_zero_and_nan_columns(draine_li_grid):
 def test_draine_li_resamples_non_native_wavelengths(draine_li_grid):
     """Non-native wavelength requests should use grid resampling."""
     dust_curve = DraineLiGrainCurves(
+        lam=np.array([1500.0, 2500.0]) * angstrom,
         grid_name=draine_li_grid.name,
         grid_dir=draine_li_grid.parent,
         grain_dict={"graphite": [0.01], "silicate": [0.1]},
     )
 
-    lam = np.array([1500.0, 2500.0]) * angstrom
     tau = dust_curve.get_tau_at_lam(
-        lam,
+        np.array([1500.0, 2500.0]) * angstrom,
         sigmalos_H=np.array([1.0]) * Msun / pc**2,
         sigmalos_graphite_a0p01um=np.array([0.14]) * Msun / pc**2,
         sigmalos_silicate_a0p1um=np.array([0.14]) * Msun / pc**2,
@@ -157,6 +157,7 @@ def test_draine_li_resamples_non_native_wavelengths(draine_li_grid):
 def test_draine_li_resamples_scalar_wavelengths(draine_li_grid):
     """Scalar wavelength requests should also use grid resampling."""
     dust_curve = DraineLiGrainCurves(
+        lam=np.array([1500.0]) * angstrom,
         grid_name=draine_li_grid.name,
         grid_dir=draine_li_grid.parent,
         grain_dict={"graphite": [0.01], "silicate": [0.1]},
@@ -179,6 +180,7 @@ def test_draine_li_resamples_scalar_wavelengths(draine_li_grid):
 def test_draine_li_supports_log10_dtg_grids(draine_li_log_grid):
     """Logarithmic dtg extraction grids should work correctly."""
     dust_curve = DraineLiGrainCurves(
+        lam=np.array([1500.0, 2500.0]) * angstrom,
         grid_name=draine_li_log_grid.name,
         grid_dir=draine_li_log_grid.parent,
         grain_dict={"graphite": [0.01]},
@@ -203,6 +205,7 @@ def test_draine_li_supports_log10_dtg_grids(draine_li_log_grid):
 def test_draine_li_rejects_negative_columns(draine_li_grid):
     """Negative column densities should still raise an error."""
     dust_curve = DraineLiGrainCurves(
+        lam=np.array([1000.0]) * angstrom,
         grid_name=draine_li_grid.name,
         grid_dir=draine_li_grid.parent,
         grain_dict={"graphite": [0.01]},
@@ -240,6 +243,7 @@ def test_draine_li_rejects_invalid_grid_axis(tmp_path):
 
     with pytest.raises(exceptions.UnimplementedFunctionality):
         DraineLiGrainCurves(
+            lam=np.array([1000.0]) * angstrom,
             grid_name=grid_path.name,
             grid_dir=grid_path.parent,
             grain_dict={"graphite": [0.01]},
@@ -270,6 +274,7 @@ def test_draine_li_rejects_missing_component_grid(tmp_path):
 
     with pytest.raises(exceptions.InconsistentArguments):
         DraineLiGrainCurves(
+            lam=np.array([1000.0]) * angstrom,
             grid_name=grid_path.name,
             grid_dir=grid_path.parent,
             grain_dict={"graphite": [0.01], "silicate": [0.1]},

@@ -63,7 +63,7 @@ _GAS_MASS_PER_H = (_DRAINE_LI_MEAN_MOLECULAR_WEIGHT * _HYDROGEN_MASS).to(Msun)
 class AttenuationLaw(Transformer):
     """The base class for all attenuation laws.
 
-    A child of this class should define it's own get_tau method with any
+    A child of this class should define its own get_tau method with any
     model specific behaviours. This will be used by get_transmission (which
     itself can be overloaded by the child if needed).
 
@@ -1150,7 +1150,13 @@ class DraineLiGrainCurves(AttenuationLaw):
             E.g. grain_dict = {'graphite': [0.01, 0.1]}
     """
 
-    def __init__(self, grid_name: str, grid_dir: str, grain_dict: Dict = None):
+    def __init__(
+        self,
+        grid_name: str,
+        grid_dir: str,
+        grain_dict: Dict = None,
+        lam: unyt_array = None,
+    ):
         """Initialise the Draine and Li extinction curves.
 
         Draine and Li extinction curves obtained from pre-processing the
@@ -1173,6 +1179,10 @@ class DraineLiGrainCurves(AttenuationLaw):
                 corresponding centre of the grain size distribution in
                 microns.
                 E.g. grain_dict = {'graphite': [0.01, 0.1]}
+            lam (unyt_array, optional):
+                The target wavelength array for the extinction curves.
+                If provided, the grid will be resampled to these wavelengths
+                once at init time for better performance.
 
         """
         # Attach information about the grid file
@@ -1181,6 +1191,10 @@ class DraineLiGrainCurves(AttenuationLaw):
 
         # Attach the grain dict
         self.grain_dict = grain_dict
+
+        # Store the target wavelengths if provided
+        if lam is not None:
+            self.lam = lam.to("Angstrom")
 
         # We always need to be passed a grain dict, we only have it as a
         # keyword argument so we can raise a clear error message if it is
@@ -1220,12 +1234,24 @@ class DraineLiGrainCurves(AttenuationLaw):
 
         # Create and attach the grid object containing the attenuation curves
         # for the different grain components
-        self.grid = Grid(
+        self._base_grid = Grid(
             self.grid_name,
             self.grid_dir,
             ignore_lines=True,
         )
+        # Use the base grid for initial validation
+        self.grid = self._base_grid
         self._validate_grid()
+
+        # Cache for resampled grids and their extractors, keyed by wavelength
+        # tuple for quick lookup
+        self._grid_cache = {}
+        self._extractors_cache = {}
+
+        # If lam was provided at init, pre-compute the resampled grid and
+        # extractors for that wavelength
+        if hasattr(self, "lam"):
+            self._get_grid_and_extractors(self.lam)
 
     def __repr__(self):
         """Return a string representation of the DraineLiGrainCurves object."""
@@ -1296,6 +1322,55 @@ class DraineLiGrainCurves(AttenuationLaw):
             self._grid_dtg_max = np.max(grid_dtg)
         finally:
             toc("DraineLiGrainCurves._validate_grid")
+
+    def _get_grid_and_extractors(self, lam):
+        """Get or create a resampled grid and extractors for given wavelengths.
+
+        This method caches resampled grids and their extractors for performance
+        when the same wavelengths are requested multiple times.
+
+        Args:
+            lam (unyt_array):
+                The target wavelength array.
+
+        Returns:
+            tuple: (grid, extractors dict)
+        """
+        # Create a hashable key from the wavelength array
+        lam_arr = np.atleast_1d(lam.to("Angstrom").value)
+        cache_key = tuple(lam_arr)
+
+        # Check if we already have this configuration cached
+        if cache_key in self._grid_cache:
+            return self._grid_cache[cache_key], self._extractors_cache[
+                cache_key
+            ]
+
+        # Resample the base grid to the requested wavelengths
+        if lam_arr.size == 1:
+            # For scalar wavelengths, make a copy to avoid mutating the base
+            # grid
+            grid = copy.deepcopy(self._base_grid)
+            # Pass the original lam with units to get_spectra_at_lam
+            spectra_at_lam = grid.get_spectra_at_lam(lam)
+            for spectra_id, spectra in spectra_at_lam.items():
+                grid.spectra[spectra_id] = spectra[..., np.newaxis]
+            grid.lam = lam_arr
+            grid._ensure_spectra_data_contiguous()
+        else:
+            # For arrays of wavelengths
+            grid = self._base_grid.reduce_rest_frame_lam(lam)
+
+        # Create extractors for this resampled grid
+        extractors = {}
+        for dataset_key in self._available_grain_spectra:
+            extractors[dataset_key] = ParticleExtractor(grid, dataset_key)
+
+        # Cache both the grid and extractors
+        self._grid_cache[cache_key] = grid
+        self._extractors_cache[cache_key] = extractors
+
+        return grid, extractors
 
     def _validate_column_densities(self, sigmalos_H, sigmalos_dust):
         """Validate the input hydrogen and dust column densities.
@@ -1383,44 +1458,6 @@ class DraineLiGrainCurves(AttenuationLaw):
         finally:
             toc("DraineLiGrainCurves._validate_column_densities")
 
-    def _prepare_wavelengths(self, lam):
-        """Prepare a wavelength-matched attenuation grid.
-
-        Args:
-            lam (unyt_array):
-                The target wavelength array.
-
-        Returns:
-            tuple:
-                The normalised wavelength array and a grid matched to that
-                wavelength sampling.
-        """
-        tic("DraineLiGrainCurves._prepare_wavelengths")
-
-        try:
-            # Normalise the requested wavelengths so the rest of the method can
-            # assume an explicit array in Angstrom.
-            lam = np.atleast_1d(lam.to("Angstrom"))
-
-            # For an array of wavelengths use the non-inplace Grid resampling
-            # helper so the stored base grid remains unchanged.
-            if lam.size > 1:
-                grid = self.grid.reduce_rest_frame_lam(lam)
-
-            # For a scalar wavelength use the dedicated single-wavelength
-            # helper, then write the result onto a copy of the base grid.
-            else:
-                grid = copy.deepcopy(self.grid)
-                spectra_at_lam = self.grid.get_spectra_at_lam(lam)
-                for spectra_id, spectra in spectra_at_lam.items():
-                    grid.spectra[spectra_id] = spectra[..., np.newaxis]
-                grid.lam = lam
-                grid._ensure_spectra_data_contiguous()
-
-            return lam, grid
-        finally:
-            toc("DraineLiGrainCurves._prepare_wavelengths")
-
     @accepts(lam=angstrom, sigmalos_H=Msun / pc**2)
     def get_tau_at_lam(
         self,
@@ -1432,7 +1469,7 @@ class DraineLiGrainCurves(AttenuationLaw):
 
         Args:
             lam (unyt_array, float):
-                An array of wavelengths or a single wavlength at which to
+                An array of wavelengths or a single wavelength at which to
                 calculate optical depths (in AA, global unit).
             sigmalos_H (unyt array):
                 Line-of-sight H density in units of Msun/pc^2
@@ -1470,24 +1507,21 @@ class DraineLiGrainCurves(AttenuationLaw):
                 sigmalos_dust,
             )
 
-            # Prepare a wavelength-matched view of the attenuation grid for
-            # this specific call.
-            lam, grid = self._prepare_wavelengths(lam)
+            # Get or create the resampled grid and extractors for this
+            # wavelength
+            grid, extractors = self._get_grid_and_extractors(lam)
 
             # Reuse the validated grid axis metadata cached during
             # construction.
             dtg_axis_name = self._dtg_axis_name
 
-            # Build one extractor per requested component for this specific
-            # wavelength-matched grid.
-            extractors = {}
+            # Verify all requested grain types are available
             for dataset_key in component_datasets.values():
                 if dataset_key not in self._available_grain_spectra:
                     raise exceptions.InconsistentArguments(
                         "Grain type "
                         f"{dataset_key} not in the provided dust grid!"
                     )
-                extractors[dataset_key] = ParticleExtractor(grid, dataset_key)
 
             # Broadcast the hydrogen column with a view so scalar inputs do not
             # allocate repeated copies.

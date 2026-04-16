@@ -141,7 +141,11 @@ def main():
     )
     galaxy = galaxies[1]
 
+    # Create the test grid for wavelengths
+    grid = Grid("test_grid")
+
     draine_li = DraineLiGrainCurves(
+        lam=grid.lam,
         grid_name="dust_extcurve_draine_li_lognormal_asmall0p01_alarge0p1_apah0p001",
         grid_dir=None,
         grain_dict={
@@ -151,7 +155,6 @@ def main():
     )
 
     # Build the intrinsic reprocessed spectrum that we will attenuate by hand.
-    grid = Grid("test_grid")
     reprocessed_sed = build_reprocessed_sed(galaxy, grid)
 
     # Build the synthetic line-of-sight dust setups we want to compare.
