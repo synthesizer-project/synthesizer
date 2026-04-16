@@ -39,6 +39,7 @@ from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.data.initialise import get_grids_dir
 from synthesizer.emissions import LineCollection, Sed
+from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
@@ -799,45 +800,49 @@ class Grid:
                 grid, or loop over the first axes. The latter is less memory
                 intensive, but slower. Defaults to False.
         """
-        # Loop over spectra to interpolate
-        for spectra_type in self.available_spectra_emissions:
-            # Are we doing the look up in one go, or looping?
-            if loop_grid:
-                new_spectra = [None] * len(self.spectra[spectra_type])
+        tic("Grid.interp_spectra")
+        try:
+            # Loop over spectra to interpolate
+            for spectra_type in self.available_spectra_emissions:
+                # Are we doing the look up in one go, or looping?
+                if loop_grid:
+                    new_spectra = [None] * len(self.spectra[spectra_type])
 
-                # Loop over first axis of spectra array
-                for i, _spec in enumerate(self.spectra[spectra_type]):
-                    new_spectra[i] = spectres(
+                    # Loop over first axis of spectra array
+                    for i, _spec in enumerate(self.spectra[spectra_type]):
+                        new_spectra[i] = spectres(
+                            new_lam.value,
+                            self._lam,
+                            _spec,
+                            fill=0,
+                            verbose=False,
+                        )
+
+                    del self.spectra[spectra_type]
+                    new_spectra = np.asarray(new_spectra)
+                else:
+                    # Evaluate the function at the desired wavelengths
+                    new_spectra = spectres(
                         new_lam.value,
                         self._lam,
-                        _spec,
+                        self.spectra[spectra_type],
                         fill=0,
                         verbose=False,
                     )
 
-                del self.spectra[spectra_type]
-                new_spectra = np.asarray(new_spectra)
-            else:
-                # Evaluate the function at the desired wavelengths
-                new_spectra = spectres(
-                    new_lam.value,
-                    self._lam,
-                    self.spectra[spectra_type],
-                    fill=0,
-                    verbose=False,
-                )
+                # Update this spectra
+                self.spectra[spectra_type] = new_spectra
 
-            # Update this spectra
-            self.spectra[spectra_type] = new_spectra
+            # Update wavelength array
+            self.lam = new_lam
 
-        # Update wavelength array
-        self.lam = new_lam
+            self._ensure_spectra_data_contiguous()
 
-        self._ensure_spectra_data_contiguous()
-
-        # Remove any lines outside the new wavelength range
-        if self.lines_available:
-            self._remove_lines_outside_lam()
+            # Remove any lines outside the new wavelength range
+            if self.lines_available:
+                self._remove_lines_outside_lam()
+        finally:
+            toc("Grid.interp_spectra")
 
     @accepts(lam=angstrom)
     def get_spectra_at_lam(self, lam):
@@ -853,25 +858,29 @@ class Grid:
                 shape as the source spectra, but with the wavelength axis
                 removed.
         """
-        lam = np.atleast_1d(lam.to(angstrom))
-        if lam.size != 1:
-            raise exceptions.InconsistentArguments(
-                "get_spectra_at_lam expects exactly one wavelength."
-            )
+        tic("Grid.get_spectra_at_lam")
+        try:
+            lam = np.atleast_1d(lam.to(angstrom))
+            if lam.size != 1:
+                raise exceptions.InconsistentArguments(
+                    "get_spectra_at_lam expects exactly one wavelength."
+                )
 
-        spectra_at_lam = {}
-        for spectra_type in self.available_spectra_emissions:
-            interp = interp1d(
-                self._lam,
-                self.spectra[spectra_type],
-                axis=-1,
-                kind="linear",
-                bounds_error=False,
-                fill_value=0.0,
-            )
-            spectra_at_lam[spectra_type] = interp(lam.value)
+            spectra_at_lam = {}
+            for spectra_type in self.available_spectra_emissions:
+                interp = interp1d(
+                    self._lam,
+                    self.spectra[spectra_type],
+                    axis=-1,
+                    kind="linear",
+                    bounds_error=False,
+                    fill_value=0.0,
+                )
+                spectra_at_lam[spectra_type] = interp(lam.value)
 
-        return spectra_at_lam
+            return spectra_at_lam
+        finally:
+            toc("Grid.get_spectra_at_lam")
 
     def __str__(self):
         """Return a string representation of the particle object.
@@ -1242,17 +1251,21 @@ class Grid:
                 wavelength range. If inplace=True, returns None and modifies
                 the current grid.
         """
-        # Decide which grid to work on
-        if inplace:
-            grid = self
-        else:
-            grid = copy.deepcopy(self)
+        tic("Grid.reduce_rest_frame_lam")
+        try:
+            # Decide which grid to work on
+            if inplace:
+                grid = self
+            else:
+                grid = copy.deepcopy(self)
 
-        grid.interp_spectra(lam)
+            grid.interp_spectra(lam)
 
-        # Return the grid if not inplace
-        if not inplace:
-            return grid
+            # Return the grid if not inplace
+            if not inplace:
+                return grid
+        finally:
+            toc("Grid.reduce_rest_frame_lam")
 
     @accepts(lam=angstrom)
     def reduce_observed_lam(self, lam, redshift, inplace=False):
