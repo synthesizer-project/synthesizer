@@ -1378,16 +1378,22 @@ class DraineLiGrainCurves(AttenuationLaw):
 
         Returns:
             tuple:
-                The common particle count, broadcast hydrogen column array,
-                broadcast dust column arrays in hydrogen units, the shared
-                column-density units, and the valid hydrogen mask.
+                The common particle count, hydrogen column data, whether the
+                hydrogen column is scalar, dust column data keyed by component,
+                the shared column-density units, and the hydrogen validity
+                information.
         """
         tic("DraineLiGrainCurves._get_dtgs")
 
         try:
-            sigmalos_H_arr = np.atleast_1d(sigmalos_H.ndview)
+            sigmalos_H_arr = sigmalos_H.ndview
             column_units = sigmalos_H.units
-            nparticles = sigmalos_H_arr.size
+            hydrogen_is_scalar = np.ndim(sigmalos_H_arr) == 0
+            if hydrogen_is_scalar:
+                sigmalos_H_arr = sigmalos_H_arr.item()
+                nparticles = 1
+            else:
+                nparticles = sigmalos_H_arr.size
             dust_arrays = {}
 
             for component_key, dust_col in sigmalos_dust.items():
@@ -1398,56 +1404,56 @@ class DraineLiGrainCurves(AttenuationLaw):
 
                 try:
                     if dust_col.units == column_units:
-                        dust_arr = np.atleast_1d(dust_col.ndview)
+                        dust_arr = dust_col.ndview
                     else:
-                        dust_arr = np.atleast_1d(
-                            dust_col.to(column_units).ndview
-                        )
+                        dust_arr = dust_col.to(column_units).ndview
                 except Exception as e:
                     raise exceptions.InconsistentArguments(
                         f"{component_key} must have units compatible with "
                         f"{column_units}"
                     ) from e
 
-                dust_arrays[component_key] = dust_arr
-                if dust_arr.size > nparticles:
-                    nparticles = dust_arr.size
+                dust_is_scalar = np.ndim(dust_arr) == 0
+                if dust_is_scalar:
+                    dust_arr = dust_arr.item()
+                    dust_size = 1
+                else:
+                    dust_size = dust_arr.size
 
-            if sigmalos_H_arr.size not in (1, nparticles):
-                raise exceptions.InconsistentArguments(
-                    "sigmalos_H has length "
-                    f"{sigmalos_H_arr.size}, but expected 1 or "
-                    f"{nparticles}."
+                dust_arrays[component_key] = (dust_arr, dust_is_scalar)
+                if dust_size > nparticles:
+                    nparticles = dust_size
+
+            if hydrogen_is_scalar:
+                valid_hydrogen = np.isfinite(sigmalos_H_arr) and (
+                    sigmalos_H_arr > 0.0
                 )
-
-            if np.any(np.isfinite(sigmalos_H_arr) & (sigmalos_H_arr < 0.0)):
-                raise exceptions.InconsistentArguments(
-                    "sigmalos_H must be non-negative."
-                )
-
-            for component_key, dust_arr in dust_arrays.items():
-                if dust_arr.size not in (1, nparticles):
+            else:
+                if sigmalos_H_arr.size not in (1, nparticles):
                     raise exceptions.InconsistentArguments(
-                        f"{component_key} has length {dust_arr.size}, but "
+                        "sigmalos_H has length "
+                        f"{sigmalos_H_arr.size}, but expected 1 or "
+                        f"{nparticles}."
+                    )
+                valid_hydrogen = np.isfinite(sigmalos_H_arr) & (
+                    sigmalos_H_arr > 0.0
+                )
+
+            for component_key, (
+                dust_arr,
+                dust_is_scalar,
+            ) in dust_arrays.items():
+                dust_size = 1 if dust_is_scalar else dust_arr.size
+                if dust_size not in (1, nparticles):
+                    raise exceptions.InconsistentArguments(
+                        f"{component_key} has length {dust_size}, but "
                         f"expected 1 or {nparticles}."
                     )
-                if np.any(np.isfinite(dust_arr) & (dust_arr < 0.0)):
-                    raise exceptions.InconsistentArguments(
-                        f"{component_key} must be non-negative."
-                    )
-
-            sigmalos_H_arr = np.broadcast_to(sigmalos_H_arr, (nparticles,))
-            dust_arrays = {
-                component_key: np.broadcast_to(dust_arr, (nparticles,))
-                for component_key, dust_arr in dust_arrays.items()
-            }
-            valid_hydrogen = np.isfinite(sigmalos_H_arr) & (
-                sigmalos_H_arr > 0.0
-            )
 
             return (
                 nparticles,
                 sigmalos_H_arr,
+                hydrogen_is_scalar,
                 dust_arrays,
                 column_units,
                 valid_hydrogen,
@@ -1502,6 +1508,7 @@ class DraineLiGrainCurves(AttenuationLaw):
             (
                 nparticles,
                 sigmalos_H,
+                hydrogen_is_scalar,
                 sigmalos_dust,
                 column_units,
                 valid_hydrogen,
@@ -1528,28 +1535,67 @@ class DraineLiGrainCurves(AttenuationLaw):
             tau_scale = ((1.0 * cm**2) / _GAS_MASS_PER_H).to(
                 1 / column_units
             ).value / 1.086
+            grid_dtg_axis = grid._extract_axes_values[dtg_axis_name]
+            grid_shape = np.array(grid.shape, dtype=np.int32)
+            grid_weights = np.ones(nparticles)
+            dtg = np.ones(nparticles, dtype=float)
+            valid = np.empty(nparticles, dtype=bool)
+            dust_scale = np.zeros(nparticles, dtype=float)
 
             # Loop over the dust components
-            for component_key, dust_col in sigmalos_dust.items():
+            for component_key, (
+                dust_col,
+                dust_is_scalar,
+            ) in sigmalos_dust.items():
                 # Map the public keyword argument onto the spectra name stored
                 # in the attenuation grid
                 dataset_key = component_datasets[component_key]
 
-                # Get a mask for the particles with valid hydrogen and valid
-                # dust column densities for this component. We will only
-                # attempt to extract curves for these particles and treat
-                # the rest as having zero dust contribution.
-                valid = (
-                    valid_hydrogen & np.isfinite(dust_col) & (dust_col > 0.0)
-                )
-                if not np.any(valid):
-                    continue
+                if dust_is_scalar:
+                    if not (np.isfinite(dust_col) and dust_col > 0.0):
+                        continue
 
-                # Set up and populate the dust to gas ratio
-                dtg = np.ones(nparticles, dtype=float)
-                dtg[valid] = dust_col[valid] / (
-                    sigmalos_H[valid] * _DRAINE_LI_MEAN_MOLECULAR_WEIGHT
-                )
+                    if hydrogen_is_scalar:
+                        if not valid_hydrogen:
+                            continue
+                        valid.fill(True)
+                        dtg.fill(
+                            dust_col
+                            / (sigmalos_H * _DRAINE_LI_MEAN_MOLECULAR_WEIGHT)
+                        )
+                    else:
+                        valid[:] = valid_hydrogen
+                        if not np.any(valid):
+                            continue
+                        dtg.fill(1.0)
+                        dtg[valid] = dust_col / (
+                            sigmalos_H[valid]
+                            * _DRAINE_LI_MEAN_MOLECULAR_WEIGHT
+                        )
+                else:
+                    dust_finite = np.isfinite(dust_col)
+
+                    if hydrogen_is_scalar:
+                        if not valid_hydrogen:
+                            continue
+                        valid[:] = dust_finite & (dust_col > 0.0)
+                        if not np.any(valid):
+                            continue
+                        dtg.fill(1.0)
+                        dtg[valid] = dust_col[valid] / (
+                            sigmalos_H * _DRAINE_LI_MEAN_MOLECULAR_WEIGHT
+                        )
+                    else:
+                        valid[:] = (
+                            valid_hydrogen & dust_finite & (dust_col > 0.0)
+                        )
+                        if not np.any(valid):
+                            continue
+                        dtg.fill(1.0)
+                        dtg[valid] = dust_col[valid] / (
+                            sigmalos_H[valid]
+                            * _DRAINE_LI_MEAN_MOLECULAR_WEIGHT
+                        )
 
                 # Log the grid axis if we need to
                 dtg_grid_values = (
@@ -1560,10 +1606,10 @@ class DraineLiGrainCurves(AttenuationLaw):
                 # extraction axis instead of going through generate_lnu.
                 component_curves, _ = compute_particle_seds(
                     grid.spectra[dataset_key],
-                    (grid._extract_axes_values[dtg_axis_name],),
+                    (grid_dtg_axis,),
                     (dtg_grid_values,),
-                    np.ones(nparticles),
-                    np.array(grid.shape, dtype=np.int32),
+                    grid_weights,
+                    grid_shape,
                     1,
                     nparticles,
                     grid.nlam,
@@ -1578,14 +1624,12 @@ class DraineLiGrainCurves(AttenuationLaw):
                 # surface density, then multiply by the dust column itself.
                 component_tau = component_curves * tau_scale
 
-                tau_all += (
-                    component_tau
-                    * np.where(
-                        valid,
-                        dust_col,
-                        0.0,
-                    )[:, np.newaxis]
-                )
+                if dust_is_scalar:
+                    tau_all += component_tau * dust_col
+                else:
+                    dust_scale.fill(0.0)
+                    dust_scale[valid] = dust_col[valid]
+                    tau_all += component_tau * dust_scale[:, np.newaxis]
 
             # Preserve the previous scalar-like return shape for
             # single-particle inputs.
