@@ -56,6 +56,7 @@ from synthesizer.pipeline.pipeline_utils import (
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.art import Art
+from synthesizer.utils.operation_timers import timed
 
 
 class Pipeline:
@@ -1266,6 +1267,7 @@ class Pipeline:
 
         return _instruments
 
+    @timed("Pipeline._prepare_instruments")
     def _prepare_instruments(self):
         """Prewarm instrument filters onto the emission-model grid.
 
@@ -1634,6 +1636,7 @@ class Pipeline:
         # write or not write
         self.get_spectra(write=False)
 
+    @timed("Pipeline._get_observed_spectra")
     def _get_observed_spectra(self, galaxy):
         """Compute the observed spectra for each galaxy.
 
@@ -2056,6 +2059,7 @@ class Pipeline:
         # write or not write
         self.get_lines(line_ids=line_ids, write=False)
 
+    @timed("Pipeline._get_observed_lines")
     def _get_observed_lines(self, galaxy):
         """Compute the observed emission lines for each galaxy.
 
@@ -2240,6 +2244,7 @@ class Pipeline:
             write=False,
         )
 
+    @timed("Pipeline._get_images_luminosity")
     def _get_images_luminosity(self, galaxy):
         """Compute the luminosity images for the galaxies.
 
@@ -2490,6 +2495,7 @@ class Pipeline:
             write=False,
         )
 
+    @timed("Pipeline._get_images_flux")
     def _get_images_flux(self, galaxy):
         """Compute the flux images for the galaxies.
 
@@ -2707,6 +2713,7 @@ class Pipeline:
         # respect the original intent to write or not write
         self.get_spectra(write=False)
 
+    @timed("Pipeline._get_data_cubes_lnu")
     def _get_data_cubes_lnu(self, galaxy):
         """Compute the luminosity data cubes for the galaxy.
 
@@ -2895,6 +2902,7 @@ class Pipeline:
         # respect the original intent to write or not write
         self.get_observed_spectra(write=False, cosmo=cosmo, igm=igm)
 
+    @timed("Pipeline._get_data_cubes_fnu")
     def _get_data_cubes_fnu(self, galaxy):
         """Compute the flux density data cubes for the galaxy.
 
@@ -3024,6 +3032,7 @@ class Pipeline:
         # respect the original intent to write or not write
         self.get_spectra(write=False)
 
+    @timed("Pipeline._get_spectroscopy_lnu")
     def _get_spectroscopy_lnu(self, galaxy):
         """Compute the spectral luminosity density for the galaxy.
 
@@ -3140,6 +3149,7 @@ class Pipeline:
         # respect the original intent to write or not write
         self.get_observed_spectra(write=False, cosmo=cosmo, igm=igm)
 
+    @timed("Pipeline._get_spectroscopy_fnu")
     def _get_spectroscopy_fnu(self, galaxy):
         """Compute the spectral flux density for the galaxy.
 
@@ -3235,6 +3245,7 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Extra Analyses"] += time.perf_counter() - start
 
+    @timed("Pipeline._unpack_results")
     def _unpack_results(self, galaxy):
         """Unpack the results from the galaxy into the pipeline.
 
@@ -3572,6 +3583,7 @@ class Pipeline:
         # Done!
         self._op_timing["Unpacking results"] += time.perf_counter() - start
 
+    @timed("Pipeline.run")
     def run(self):
         """Run the pipeline.
 
@@ -3754,6 +3766,7 @@ class Pipeline:
         # Flag that we have run the pipeline
         self._analysis_complete = True
 
+    @timed("Pipeline._clean_outputs")
     def _clean_outputs(self):
         """Clean up the lists attached to the pipeline.
 
@@ -3980,6 +3993,7 @@ class Pipeline:
 
         self._took(start, "Cleaning outputs")
 
+    @timed("Pipeline.write")
     def write(self, outpath, verbose=None):
         """Write what we have produced to a HDF5 file.
 

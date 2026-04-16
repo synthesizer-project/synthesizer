@@ -867,6 +867,7 @@ class LineCollection:
 
         return self.flux
 
+    @timed("LineCollection.get_flux")
     def get_flux(self, cosmo, z, igm=None):
         """Calculate the line flux given a redshift and cosmology.
 
