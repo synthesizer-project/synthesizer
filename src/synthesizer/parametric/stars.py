@@ -303,6 +303,7 @@ class Stars(StarsComponent):
             self.metallicity_grid_type = None
 
     @accepts(instant_sf=yr)
+    @timed("ParametricStars._get_sfzh")
     def _get_sfzh(self, instant_sf, instant_metallicity):
         """Compute the SFZH for all possible combinations of input.
 
@@ -701,6 +702,7 @@ class Stars(StarsComponent):
         # Apply correction to the SFZH
         self.sfzh *= conversion
 
+    @timed("ParametricStars.get_sfzh")
     def get_sfzh(
         self,
         log10ages,

@@ -367,6 +367,7 @@ class IntegratedParticleExtractor(Extractor):
 
         return Sed(model.lam, spec * erg / s / Hz)
 
+    @timed("IntegratedParticleExtractor.generate_line")
     def generate_line(
         self,
         emitter,
@@ -521,6 +522,7 @@ class DopplerShiftedParticleExtractor(Extractor):
     width of the lines is accounted for in the spectra grid.
     """
 
+    @timed("DopplerShiftedParticleExtractor.generate_lnu")
     def generate_lnu(
         self,
         emitter,
@@ -650,6 +652,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
     width of the lines is accounted for in the spectra grid.
     """
 
+    @timed("IntegratedDopplerShiftedParticleExtractor.generate_lnu")
     def generate_lnu(
         self,
         emitter,
@@ -765,6 +768,7 @@ class ParticleExtractor(Extractor):
     based component.
     """
 
+    @timed("ParticleExtractor.generate_lnu")
     def generate_lnu(
         self,
         emitter,
@@ -887,6 +891,7 @@ class ParticleExtractor(Extractor):
 
         return part_sed, integrated_sed
 
+    @timed("ParticleExtractor.generate_line")
     def generate_line(
         self,
         emitter,
@@ -1054,6 +1059,7 @@ class IntegratedParametricExtractor(Extractor):
     emission.
     """
 
+    @timed("IntegratedParametricExtractor.generate_lnu")
     def generate_lnu(
         self,
         emitter,
