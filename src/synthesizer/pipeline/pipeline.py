@@ -56,7 +56,7 @@ from synthesizer.pipeline.pipeline_utils import (
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.art import Art
-from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.operation_timers import timed, timer
 
 
 class Pipeline:
@@ -3233,7 +3233,8 @@ class Pipeline:
             # Run the analysis function on this galaxy
             try:
                 func_start = time.perf_counter()
-                res = func(galaxy, *args, **kwargs)
+                with timer(f"Pipeline._run_extra_analysis.{key}"):
+                    res = func(galaxy, *args, **kwargs)
 
                 # Count the number of times we have run this function
                 self._op_counts["Extra Analyses"] += 1
@@ -3648,13 +3649,15 @@ class Pipeline:
 
         # Ok we are good to go! Report the last metadata and then get going
         if self.rank == 0:
-            self._report_instruments()
+            with timer("Pipeline.run.report_instruments"):
+                self._report_instruments()
 
         # Prewarm instruments before processing galaxies.
         self._prepare_instruments()
 
         # Print the header for the pipeline run to the console
-        self._print_progress_header()
+        with timer("Pipeline.run.print_progress_header"):
+            self._print_progress_header()
 
         # Loop over galaxies and compute what has been requested using get_*
         # signalling methods
@@ -3663,7 +3666,8 @@ class Pipeline:
             start_gal = time.perf_counter()
 
             # Pop the first galaxy from the list
-            gal = self.galaxies.pop(0)
+            with timer("Pipeline.run.pop_galaxy"):
+                gal = self.galaxies.pop(0)
 
             # Are we generating LOS optical depths?
             # Note that this can only be done on galaxies prior to any
@@ -3687,7 +3691,8 @@ class Pipeline:
             # containing the original gal above)
             while len(gals) > 0:
                 # Get the next galaxy
-                _gal = gals.pop(0)
+                with timer("Pipeline.run.pop_chunk"):
+                    _gal = gals.pop(0)
 
                 # Are we generating SFZHs?
                 if self._do_sfzh:
@@ -3749,8 +3754,11 @@ class Pipeline:
                 # parent galaxy once this chunk has been processed.
                 # Combine back onto the original galaxy if necessary
                 if _gal is not gal:
-                    accumulate_pipeline_results_from_child(gal, _gal)
-                    del _gal
+                    with timer("Pipeline.run.accumulate_child"):
+                        accumulate_pipeline_results_from_child(gal, _gal)
+
+                    with timer("Pipeline.run.cleanup_child"):
+                        del _gal
 
             # Run any extra analysis functions
             self._run_extra_analysis(gal)
@@ -3763,13 +3771,16 @@ class Pipeline:
             igal += 1
 
             # Now we can remove the galaxy to free up memory
-            del gal
+            with timer("Pipeline.run.cleanup_galaxy"):
+                del gal
 
         # print the footer for the pipeline run to the console
-        self._print_progress_footer()
+        with timer("Pipeline.run.print_progress_footer"):
+            self._print_progress_footer()
 
         # We're done! Report the time taken
-        self._report_total_timings()
+        with timer("Pipeline.run.report_total_timings"):
+            self._report_total_timings()
 
         # Clean up the outputs
         self._clean_outputs()
