@@ -1,5 +1,6 @@
 """Helpers for interacting with accumulated operation timings."""
 
+from contextlib import contextmanager
 from functools import wraps
 
 from synthesizer.extensions.timers import (
@@ -10,6 +11,34 @@ from synthesizer.extensions.timers import (
     tic,
     toc,
 )
+
+
+@contextmanager
+def timer(operation_name):
+    """Context manager that accumulates timing for a block of code.
+
+    The context manager records timing using the existing ``tic``/``toc``
+    machinery and guarantees that the matching ``toc`` call happens even if the
+    wrapped block raises an exception.
+
+    Args:
+        operation_name (str):
+            The operation name to use for the timing entry.
+
+    Returns:
+        Iterator[None]:
+            A context manager that wraps a code block in the timing
+            machinery.
+    """
+    # Start timing immediately before entering the wrapped block.
+    tic(operation_name)
+    try:
+        # Yield control back to the caller while the timer is active.
+        yield
+    finally:
+        # Always stop the timer, even if the wrapped block raises, so the
+        # timing stack remains balanced.
+        toc(operation_name)
 
 
 def timed(operation_name=None):
