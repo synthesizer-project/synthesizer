@@ -21,6 +21,7 @@ from synthesizer.instruments import InstrumentCollection
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
+from synthesizer.utils.operation_timers import timed
 
 # Special model label for operations that are not tied to a specific model.
 # This can be used for operations such as SFZH / SFH with no relation to
@@ -28,6 +29,7 @@ from synthesizer.units import unit_is_compatible
 NO_MODEL_LABEL = "no_model_label"
 
 
+@timed("clear_pipeline_outputs")
 def clear_pipeline_outputs(gal):
     """Clear additive pipeline outputs from a galaxy and components.
 
@@ -72,6 +74,7 @@ def clear_pipeline_outputs(gal):
                 setattr(obj, attr, value)
 
 
+@timed("accumulate_pipeline_results_from_child")
 def accumulate_pipeline_results_from_child(parent, *children):
     """Accumulate additive pipeline outputs from child galaxies.
 

@@ -179,6 +179,7 @@ class Galaxy(BaseGalaxy):
             self.sf_gas_mass = None
             self.sf_gas_metallicity = None
 
+    @timed("Galaxy.split")
     def split(self, max_npart):
         """Split a particle galaxy into child galaxies.
 
