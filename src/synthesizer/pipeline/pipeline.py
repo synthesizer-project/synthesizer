@@ -763,6 +763,7 @@ class Pipeline:
 
         self._print_progress_footer()
 
+    @timed("Pipeline._add_progress_row")
     def _add_progress_row(self, gal, igal, start):
         """Print a row for the progress report.
 
@@ -1342,6 +1343,7 @@ class Pipeline:
         # Flag that we will compute the LOS optical depths
         self._do_los_optical_depths = True
 
+    @timed("Pipeline._get_los_optical_depths")
     def _get_los_optical_depths(self, galaxy):
         """Compute the Line of Sight optical depths for all particles.
 
@@ -1427,6 +1429,7 @@ class Pipeline:
         # by default)
         self._write_sfzh = write or self._write_sfzh
 
+    @timed("Pipeline._get_sfzh")
     def _get_sfzh(self, galaxy):
         """Compute the SFZH grid for each galaxy.
 
@@ -1504,6 +1507,7 @@ class Pipeline:
         # by default)
         self._write_sfh = write or self._write_sfh
 
+    @timed("Pipeline._get_sfh")
     def _get_sfh(self, galaxy):
         """Compute the binned SFH for each galaxy.
 
@@ -1572,6 +1576,7 @@ class Pipeline:
         # Spectra has no kwargs so we don't need to store anything in
         # the handler (self._operation_kwargs)
 
+    @timed("Pipeline._get_spectra")
     def _get_spectra(self, galaxy):
         """Generate the spectra for the galaxies based on the EmissionModel.
 
@@ -1743,6 +1748,7 @@ class Pipeline:
         # write or not write
         self.get_spectra(write=False)
 
+    @timed("Pipeline._get_photometry_luminosities")
     def _get_photometry_luminosities(self, galaxy):
         """Compute the photometric luminosities from the generated spectra.
 
@@ -1860,6 +1866,7 @@ class Pipeline:
         # the original intent to write or not write
         self.get_observed_spectra(cosmo=cosmo, igm=igm, write=False)
 
+    @timed("Pipeline._get_photometry_fluxes")
     def _get_photometry_fluxes(self, galaxy):
         """Compute the photometric fluxes from the generated spectra.
 
@@ -1942,6 +1949,7 @@ class Pipeline:
         # Store the line IDs, we'll write these once later
         self.line_ids = line_ids
 
+    @timed("Pipeline._get_lines")
     def _get_lines(self, galaxy):
         """Generate the emission lines for the galaxies.
 
@@ -3192,6 +3200,7 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Spectroscopy Fnu"] += time.perf_counter() - start
 
+    @timed("Pipeline._run_extra_analysis")
     def _run_extra_analysis(self, galaxy):
         """Call any user provided analysis functions.
 
