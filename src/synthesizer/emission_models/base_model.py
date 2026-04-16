@@ -160,6 +160,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
     # Define quantities
     lam = Quantity("wavelength")
 
+    @timed("EmissionModel.__init__")
     def __init__(
         self,
         label,

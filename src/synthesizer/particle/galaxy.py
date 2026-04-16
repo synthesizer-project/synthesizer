@@ -61,6 +61,7 @@ class Galaxy(BaseGalaxy):
     """
 
     @accepts(centre=Mpc)
+    @timed("Galaxy.__init__")
     def __init__(
         self,
         name="particle galaxy",

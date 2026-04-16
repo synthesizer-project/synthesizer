@@ -99,6 +99,7 @@ class Stars(StarsComponent):
     initial_mass = Quantity("mass")
 
     @accepts(initial_mass=Msun.in_base("galactic"))
+    @timed("ParametricStars.__init__")
     def __init__(
         self,
         log10ages,

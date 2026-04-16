@@ -121,6 +121,7 @@ class Stars(Particles, StarsComponent):
         softening_length=Mpc,
         centre=Mpc,
     )
+    @timed("ParticleStars.__init__")
     def __init__(
         self,
         initial_masses,
