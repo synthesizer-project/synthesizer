@@ -17,7 +17,6 @@ Example usage::
 
 import copy
 import os
-from types import SimpleNamespace
 from typing import Dict
 
 import matplotlib.pyplot as plt
@@ -36,8 +35,8 @@ from unyt import (
 )
 
 from synthesizer import exceptions
-from synthesizer.emission_models.extractors.extractor import ParticleExtractor
 from synthesizer.emission_models.transformers.transformer import Transformer
+from synthesizer.extensions.particle_spectra import compute_particle_seds
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
@@ -1243,15 +1242,13 @@ class DraineLiGrainCurves(AttenuationLaw):
         self.grid = self._base_grid
         self._validate_grid()
 
-        # Cache for resampled grids and their extractors, keyed by wavelength
-        # tuple for quick lookup
+        # Cache resampled grids keyed by wavelength tuple for quick lookup.
         self._grid_cache = {}
-        self._extractors_cache = {}
 
-        # If lam was provided at init, pre-compute the resampled grid and
-        # extractors for that wavelength
+        # If lam was provided at init, pre-compute the resampled grid for that
+        # wavelength.
         if hasattr(self, "lam"):
-            self._get_grid_and_extractors(self.lam)
+            self._get_resampled_grid(self.lam)
 
     def __repr__(self):
         """Return a string representation of the DraineLiGrainCurves object."""
@@ -1323,28 +1320,26 @@ class DraineLiGrainCurves(AttenuationLaw):
         finally:
             toc("DraineLiGrainCurves._validate_grid")
 
-    def _get_grid_and_extractors(self, lam):
-        """Get or create a resampled grid and extractors for given wavelengths.
+    def _get_resampled_grid(self, lam):
+        """Get or create a resampled grid for given wavelengths.
 
-        This method caches resampled grids and their extractors for performance
-        when the same wavelengths are requested multiple times.
+        This method caches resampled grids for performance when the same
+        wavelengths are requested multiple times.
 
         Args:
             lam (unyt_array):
                 The target wavelength array.
 
         Returns:
-            tuple: (grid, extractors dict)
+            Grid: The resampled grid.
         """
-        # Create a hashable key from the wavelength array
+        # Create a hashable key from the wavelength array.
         lam_arr = np.atleast_1d(lam.to("Angstrom").value)
         cache_key = tuple(lam_arr)
 
-        # Check if we already have this configuration cached
+        # Check if we already have this configuration cached.
         if cache_key in self._grid_cache:
-            return self._grid_cache[cache_key], self._extractors_cache[
-                cache_key
-            ]
+            return self._grid_cache[cache_key]
 
         # Resample the base grid to the requested wavelengths
         if lam_arr.size == 1:
@@ -1361,16 +1356,10 @@ class DraineLiGrainCurves(AttenuationLaw):
             # For arrays of wavelengths
             grid = self._base_grid.reduce_rest_frame_lam(lam)
 
-        # Create extractors for this resampled grid
-        extractors = {}
-        for dataset_key in self._available_grain_spectra:
-            extractors[dataset_key] = ParticleExtractor(grid, dataset_key)
-
-        # Cache both the grid and extractors
+        # Cache the resampled grid.
         self._grid_cache[cache_key] = grid
-        self._extractors_cache[cache_key] = extractors
 
-        return grid, extractors
+        return grid
 
     def _validate_column_densities(self, sigmalos_H, sigmalos_dust):
         """Validate the input hydrogen and dust column densities.
@@ -1507,9 +1496,8 @@ class DraineLiGrainCurves(AttenuationLaw):
                 sigmalos_dust,
             )
 
-            # Get or create the resampled grid and extractors for this
-            # wavelength
-            grid, extractors = self._get_grid_and_extractors(lam)
+            # Get or create the resampled grid for this wavelength.
+            grid = self._get_resampled_grid(lam)
 
             # Reuse the validated grid axis metadata cached during
             # construction.
@@ -1535,27 +1523,11 @@ class DraineLiGrainCurves(AttenuationLaw):
             tau_all = np.zeros((nparticles, grid.nlam), dtype=np.float32)
             valid_hydrogen = np.isfinite(sigmalos_H) & (sigmalos_H > 0.0)
 
-            # Create a fake object to act as the "Emitter" that the extractor
-            # machinery expects
-            emitter = SimpleNamespace(
-                nparticles=nparticles,
-                model_param_cache={},
-            )
-
-            # Create a fake object to act as the "EmissionModel" that the
-            # extractor machinery expects
-            model = SimpleNamespace(
-                fixed_parameters={},
-                lam=grid.lam,
-                label="draine_li_grain_curves",
-            )
-
             # Loop over the dust components
             for component_key, dust_col in sigmalos_dust.items():
                 # Map the public keyword argument onto the spectra name stored
                 # in the attenuation grid
                 dataset_key = component_datasets[component_key]
-                extractor = extractors[dataset_key]
 
                 # Broadcast the dust column density to the common particle
                 # array shape (we get a view here so we don't allocate repeated
@@ -1586,23 +1558,29 @@ class DraineLiGrainCurves(AttenuationLaw):
                     np.log10(dtg) if dtg_axis_name == "log10dtg" else dtg
                 )
 
-                # Attach the axis to the "Emitter" object
-                setattr(emitter, dtg_axis_name, dtg_grid_values)
-                component_curves, _ = extractor.generate_lnu(
-                    emitter,
-                    model,
-                    mask=valid,
-                    lam_mask=None,
-                    grid_assignment_method="cic",
-                    nthreads=1,
-                    do_grid_check=False,
+                # Call the particle spectra extension directly for this single
+                # extraction axis instead of going through generate_lnu.
+                component_curves, _ = compute_particle_seds(
+                    grid.spectra[dataset_key],
+                    (grid._extract_axes_values[dtg_axis_name],),
+                    (dtg_grid_values,),
+                    np.ones(nparticles),
+                    np.array(grid.shape, dtype=np.int32),
+                    1,
+                    nparticles,
+                    grid.nlam,
+                    "cic",
+                    1,
+                    valid,
+                    None,
+                    (dtg_axis_name,),
                 )
 
                 # Convert from mag cm^2 / H nucleus into optical depth per dust
                 # surface density, then multiply by the dust column itself.
-                component_tau = (
-                    (component_curves.lnu.value / 1.086) * cm**2
-                ).to(pc**2).value / _GAS_MASS_PER_H.value
+                component_tau = ((component_curves / 1.086) * cm**2).to(
+                    pc**2
+                ).value / _GAS_MASS_PER_H.value
 
                 tau_all += (
                     component_tau
