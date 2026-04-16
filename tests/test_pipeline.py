@@ -470,7 +470,6 @@ class TestPipelineTimingAnalysis:
         assert "Total" in summary
 
         stdout = capsys.readouterr().out
-        assert "Pipeline Timing Analysis" in stdout
         assert "Test timing analysis op" in stdout
         assert "Overhead" in stdout
         assert "Total" in stdout

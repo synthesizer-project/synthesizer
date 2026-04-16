@@ -408,7 +408,6 @@ def print_timing_analysis_table(rows, print_func=print):
     )
 
     # Print the table header with the derived column widths.
-    print_func("Pipeline Timing Analysis")
     print_func(divider)
     print_func(
         "| "
