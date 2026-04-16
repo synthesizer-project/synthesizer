@@ -202,8 +202,8 @@ def test_draine_li_supports_log10_dtg_grids(draine_li_log_grid):
     np.testing.assert_allclose(tau, expected)
 
 
-def test_draine_li_rejects_negative_columns(draine_li_grid):
-    """Negative column densities should still raise an error."""
+def test_draine_li_ignores_negative_columns(draine_li_grid):
+    """Negative column densities are treated as non-contributing inputs."""
     dust_curve = DraineLiGrainCurves(
         lam=np.array([1000.0]) * angstrom,
         grid_name=draine_li_grid.name,
@@ -211,12 +211,13 @@ def test_draine_li_rejects_negative_columns(draine_li_grid):
         grain_dict={"graphite": [0.01]},
     )
 
-    with pytest.raises(exceptions.InconsistentArguments):
-        dust_curve.get_tau_at_lam(
-            np.array([1000.0]) * angstrom,
-            sigmalos_H=np.array([1.0]) * Msun / pc**2,
-            sigmalos_graphite_a0p01um=np.array([-0.14]) * Msun / pc**2,
-        )
+    tau = dust_curve.get_tau_at_lam(
+        np.array([1000.0]) * angstrom,
+        sigmalos_H=np.array([1.0]) * Msun / pc**2,
+        sigmalos_graphite_a0p01um=np.array([-0.14]) * Msun / pc**2,
+    )
+
+    np.testing.assert_allclose(tau, np.zeros(1))
 
 
 def test_draine_li_rejects_invalid_grid_axis(tmp_path):
