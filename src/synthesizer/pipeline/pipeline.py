@@ -130,6 +130,7 @@ class Pipeline:
             A list of Galaxy objects that have been loaded.
     """
 
+    @timed("Pipeline.__init__")
     def __init__(
         self,
         emission_model,
@@ -1153,6 +1154,7 @@ class Pipeline:
 
         self._print(f"Added analysis function: {result_key}")
 
+    @timed("Pipeline.add_galaxies")
     def add_galaxies(self, galaxies):
         """Add galaxies to the Pipeline.
 
