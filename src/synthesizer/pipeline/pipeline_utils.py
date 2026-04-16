@@ -512,17 +512,41 @@ def plot_timing_analysis(rows, outdir):
                 palette_index += 1
 
         # Save the main pie chart showing the fractional timing breakdown.
-        fig, ax = plt.subplots(figsize=(8, 8))
-        ax.pie(
+        fig, ax = plt.subplots(figsize=(9, 6))
+        wedges, _ = ax.pie(
             [row["seconds"] for row in pie_rows],
-            labels=[row["operation"] for row in pie_rows],
-            autopct="%1.1f%%",
+            labels=None,
             startangle=90,
+            counterclock=False,
             colors=colors,
         )
-        ax.set_title("Pipeline Timing Breakdown")
+
+        # Put the operation names in a legend instead of directly on the pie
+        # wedges so the figure stays readable when several slices are present.
+        legend_labels = []
+        for row in pie_rows:
+            fraction_percent = (
+                row["seconds"] / total_seconds * 100.0
+                if total_seconds > 0.0
+                else 0.0
+            )
+            legend_labels.append(
+                f"{row['operation']} ({fraction_percent:.1f}%)"
+            )
+        ax.legend(
+            wedges,
+            legend_labels,
+            loc="center left",
+            bbox_to_anchor=(1.02, 0.5),
+            frameon=False,
+        )
         fig.tight_layout()
-        fig.savefig(outdir / "timing_pie.png", dpi=200)
+        fig.savefig(
+            outdir / "timing_pie.png",
+            dpi=200,
+            bbox_inches="tight",
+            pad_inches=0.1,
+        )
         plt.close(fig)
     else:
         # Fall back to a simple placeholder figure when there is no timing data
@@ -541,15 +565,29 @@ def plot_timing_analysis(rows, outdir):
         fig.savefig(outdir / "timing_pie.png", dpi=200)
         plt.close(fig)
 
-    # Build the bar chart from the same non-total rows so absolute timings are
+    # Restrict the bar chart to the same >1% contributions used in the pie
+    # chart so both plots focus on the materially important timing costs.
+    bar_rows = []
+    if nonzero_rows:
+        total_seconds = sum(row["seconds"] for row in nonzero_rows)
+        for row in plot_rows:
+            fraction_percent = (
+                row["seconds"] / total_seconds * 100.0
+                if total_seconds > 0.0
+                else 0.0
+            )
+            if fraction_percent >= 1.0:
+                bar_rows.append(row)
+
+    # Build the bar chart from the filtered rows so absolute timings are
     # available alongside the fractional pie chart view.
-    fig, ax = plt.subplots(figsize=(10, max(4, 0.45 * max(len(plot_rows), 1))))
-    y_positions = np.arange(len(plot_rows))
+    fig, ax = plt.subplots(figsize=(10, max(4, 0.45 * max(len(bar_rows), 1))))
+    y_positions = np.arange(len(bar_rows))
     bar_colors = []
 
     # Colour the bar chart by timing source while keeping untimed time visually
     # distinct from both Python and C timings.
-    for row in plot_rows:
+    for row in bar_rows:
         if row["operation"] == "Untimed":
             bar_colors.append("#7f7f7f")
         elif row["source"] == "C":
@@ -562,15 +600,42 @@ def plot_timing_analysis(rows, outdir):
     # Save the horizontal bar chart ordered consistently with the input rows.
     ax.barh(
         y_positions,
-        [row["seconds"] for row in plot_rows],
+        [row["seconds"] for row in bar_rows],
         color=bar_colors,
     )
     ax.set_yticks(y_positions)
-    ax.set_yticklabels([row["operation"] for row in plot_rows])
+    ax.set_yticklabels([row["operation"] for row in bar_rows])
     ax.invert_yaxis()
     ax.set_xlabel("Time (seconds)")
-    ax.set_title("Pipeline Timing Breakdown")
     ax.grid(axis="x", alpha=0.3)
+
+    # Add a legend explaining the meaning of the bar colours so the source of
+    # each timing contribution is clear without inspecting the code.
+    legend_entries = []
+    legend_labels = []
+    seen_labels = set()
+    for row, color in zip(bar_rows, bar_colors):
+        if row["operation"] == "Untimed":
+            label = "Untimed"
+        elif row["source"] == "C":
+            label = "C++"
+        elif row["source"] == "Python":
+            label = "Python"
+        else:
+            label = row["source"]
+
+        if label in seen_labels:
+            continue
+
+        seen_labels.add(label)
+        legend_entries.append(
+            plt.Rectangle((0, 0), 1, 1, facecolor=color, edgecolor="none")
+        )
+        legend_labels.append(label)
+
+    if legend_entries:
+        ax.legend(legend_entries, legend_labels, loc="lower right")
+
     fig.tight_layout()
     fig.savefig(outdir / "timing_bar.png", dpi=200)
     plt.close(fig)
