@@ -1334,7 +1334,7 @@ class DraineLiGrainCurves(AttenuationLaw):
             Grid: The resampled grid.
         """
         # Create a hashable key from the wavelength array.
-        lam_arr = np.atleast_1d(lam.to("Angstrom").value)
+        lam_arr = np.atleast_1d(lam.to("Angstrom").ndview)
         cache_key = tuple(lam_arr)
 
         # Check if we already have this configuration cached.
@@ -1361,8 +1361,8 @@ class DraineLiGrainCurves(AttenuationLaw):
 
         return grid
 
-    def _validate_column_densities(self, sigmalos_H, sigmalos_dust):
-        """Validate the input hydrogen and dust column densities.
+    def _get_dtgs(self, sigmalos_H, sigmalos_dust):
+        """Validate inputs and derive broadcast DTG quantities.
 
         Args:
             sigmalos_H (unyt_array):
@@ -1377,75 +1377,83 @@ class DraineLiGrainCurves(AttenuationLaw):
                 values.
 
         Returns:
-            int:
-                The common particle count implied by the inputs.
+            tuple:
+                The common particle count, broadcast hydrogen column array,
+                broadcast dust column arrays in hydrogen units, the shared
+                column-density units, and the valid hydrogen mask.
         """
-        tic("DraineLiGrainCurves._validate_column_densities")
+        tic("DraineLiGrainCurves._get_dtgs")
 
         try:
-            # Work out the common particle count implied by the scalar or
-            # particle-resolved inputs.
-            nparticles = max(
-                [np.atleast_1d(sigmalos_H).size]
-                + [
-                    np.atleast_1d(value).size
-                    for value in sigmalos_dust.values()
-                ]
-            )
+            sigmalos_H_arr = np.atleast_1d(sigmalos_H.ndview)
+            column_units = sigmalos_H.units
+            nparticles = sigmalos_H_arr.size
+            dust_arrays = {}
 
-            # Ensure every dust column can broadcast to the common particle
-            # count and has compatible surface-density units.
             for component_key, dust_col in sigmalos_dust.items():
-                if np.atleast_1d(dust_col).size not in (1, nparticles):
-                    raise exceptions.InconsistentArguments(
-                        f"{component_key} has length "
-                        f"{np.atleast_1d(dust_col).size}, but expected 1 or "
-                        f"{nparticles}."
-                    )
-                if isinstance(dust_col, (unyt_quantity, unyt_array)):
-                    try:
-                        _ = dust_col.to(sigmalos_H.units)
-                    except Exception as e:
-                        raise exceptions.InconsistentArguments(
-                            f"{component_key} must have units compatible "
-                            "with mass/length^2"
-                        ) from e
-                else:
+                if not isinstance(dust_col, (unyt_quantity, unyt_array)):
                     raise exceptions.InconsistentArguments(
                         f"Provide units to the {component_key} quantity"
                     )
 
-            # Ensure the hydrogen column can also broadcast to the common
-            # particle count.
-            if np.atleast_1d(sigmalos_H).size not in (1, nparticles):
+                try:
+                    if dust_col.units == column_units:
+                        dust_arr = np.atleast_1d(dust_col.ndview)
+                    else:
+                        dust_arr = np.atleast_1d(
+                            dust_col.to(column_units).ndview
+                        )
+                except Exception as e:
+                    raise exceptions.InconsistentArguments(
+                        f"{component_key} must have units compatible with "
+                        f"{column_units}"
+                    ) from e
+
+                dust_arrays[component_key] = dust_arr
+                if dust_arr.size > nparticles:
+                    nparticles = dust_arr.size
+
+            if sigmalos_H_arr.size not in (1, nparticles):
                 raise exceptions.InconsistentArguments(
                     "sigmalos_H has length "
-                    f"{np.atleast_1d(sigmalos_H).size}, but expected 1 or "
+                    f"{sigmalos_H_arr.size}, but expected 1 or "
                     f"{nparticles}."
                 )
 
-            # Reject negative hydrogen columns before any masking or dtg
-            # calculations are attempted.
-            if np.any(
-                np.isfinite(sigmalos_H.value) & (sigmalos_H.value < 0.0)
-            ):
+            if np.any(np.isfinite(sigmalos_H_arr) & (sigmalos_H_arr < 0.0)):
                 raise exceptions.InconsistentArguments(
                     "sigmalos_H must be non-negative."
                 )
 
-            # Reject negative dust columns for every component before we enter
-            # the extraction loop.
-            for component_key, dust_col in sigmalos_dust.items():
-                if np.any(
-                    np.isfinite(dust_col.value) & (dust_col.value < 0.0)
-                ):
+            for component_key, dust_arr in dust_arrays.items():
+                if dust_arr.size not in (1, nparticles):
+                    raise exceptions.InconsistentArguments(
+                        f"{component_key} has length {dust_arr.size}, but "
+                        f"expected 1 or {nparticles}."
+                    )
+                if np.any(np.isfinite(dust_arr) & (dust_arr < 0.0)):
                     raise exceptions.InconsistentArguments(
                         f"{component_key} must be non-negative."
                     )
 
-            return nparticles
+            sigmalos_H_arr = np.broadcast_to(sigmalos_H_arr, (nparticles,))
+            dust_arrays = {
+                component_key: np.broadcast_to(dust_arr, (nparticles,))
+                for component_key, dust_arr in dust_arrays.items()
+            }
+            valid_hydrogen = np.isfinite(sigmalos_H_arr) & (
+                sigmalos_H_arr > 0.0
+            )
+
+            return (
+                nparticles,
+                sigmalos_H_arr,
+                dust_arrays,
+                column_units,
+                valid_hydrogen,
+            )
         finally:
-            toc("DraineLiGrainCurves._validate_column_densities")
+            toc("DraineLiGrainCurves._get_dtgs")
 
     @accepts(lam=angstrom, sigmalos_H=Msun / pc**2)
     def get_tau_at_lam(
@@ -1489,12 +1497,15 @@ class DraineLiGrainCurves(AttenuationLaw):
                 for component_key in sigmalos_dust
             }
 
-            # Validate the per-call column-density inputs before any wavelength
-            # resampling or particle extraction is attempted.
-            nparticles = self._validate_column_densities(
+            # Validate inputs and derive the broadcast DTG inputs before any
+            # wavelength resampling or particle extraction is attempted.
+            (
+                nparticles,
                 sigmalos_H,
                 sigmalos_dust,
-            )
+                column_units,
+                valid_hydrogen,
+            ) = self._get_dtgs(sigmalos_H, sigmalos_dust)
 
             # Get or create the resampled grid for this wavelength.
             grid = self._get_resampled_grid(lam)
@@ -1511,31 +1522,18 @@ class DraineLiGrainCurves(AttenuationLaw):
                         f"{dataset_key} not in the provided dust grid!"
                     )
 
-            # Broadcast the hydrogen column with a view so scalar inputs do not
-            # allocate repeated copies.
-            sigmalos_H = np.broadcast_to(
-                np.atleast_1d(sigmalos_H.to(Msun / pc**2).value),
-                (nparticles,),
-            )
-
             # Accumulate the contribution from each grain component into the
             # final optical-depth array.
             tau_all = np.zeros((nparticles, grid.nlam), dtype=np.float32)
-            valid_hydrogen = np.isfinite(sigmalos_H) & (sigmalos_H > 0.0)
+            tau_scale = ((1.0 * cm**2) / _GAS_MASS_PER_H).to(
+                1 / column_units
+            ).value / 1.086
 
             # Loop over the dust components
             for component_key, dust_col in sigmalos_dust.items():
                 # Map the public keyword argument onto the spectra name stored
                 # in the attenuation grid
                 dataset_key = component_datasets[component_key]
-
-                # Broadcast the dust column density to the common particle
-                # array shape (we get a view here so we don't allocate repeated
-                # copies for scalar inputs).
-                dust_col = np.broadcast_to(
-                    np.atleast_1d(dust_col.to(Msun / pc**2).value),
-                    (nparticles,),
-                )
 
                 # Get a mask for the particles with valid hydrogen and valid
                 # dust column densities for this component. We will only
@@ -1578,9 +1576,7 @@ class DraineLiGrainCurves(AttenuationLaw):
 
                 # Convert from mag cm^2 / H nucleus into optical depth per dust
                 # surface density, then multiply by the dust column itself.
-                component_tau = ((component_curves / 1.086) * cm**2).to(
-                    pc**2
-                ).value / _GAS_MASS_PER_H.value
+                component_tau = component_curves * tau_scale
 
                 tau_all += (
                     component_tau
