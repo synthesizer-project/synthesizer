@@ -1364,34 +1364,40 @@ class DraineLiGrainCurves(AttenuationLaw):
 
     def _get_sigmalos_h(self, sigmalos_H):
         """Prepare hydrogen column inputs for DTG calculations."""
-        cache_key = id(sigmalos_H)
-        cached = self._sigmalos_h_cache.get(cache_key)
-        if cached is not None and cached[0] is sigmalos_H:
-            return cached[1:]
+        tic("DraineLiGrainCurves._get_sigmalos_h")
+        try:
+            cache_key = id(sigmalos_H)
+            cached = self._sigmalos_h_cache.get(cache_key)
+            if cached is not None and cached[0] is sigmalos_H:
+                return cached[1:]
 
-        if not isinstance(sigmalos_H, (unyt_quantity, unyt_array)):
-            raise exceptions.InconsistentArguments(
-                "Provide units to the sigmalos_H quantity"
+            if not isinstance(sigmalos_H, (unyt_quantity, unyt_array)):
+                raise exceptions.InconsistentArguments(
+                    "Provide units to the sigmalos_H quantity"
+                )
+
+            sigmalos_H_arr = np.asarray(sigmalos_H.ndview)
+            column_units = sigmalos_H.units
+            nparticles = sigmalos_H_arr.size
+            valid_hydrogen = np.isfinite(sigmalos_H_arr) & (
+                sigmalos_H_arr > 0.0
             )
 
-        sigmalos_H_arr = np.asarray(sigmalos_H.ndview)
-        column_units = sigmalos_H.units
-        nparticles = sigmalos_H_arr.size
-        valid_hydrogen = np.isfinite(sigmalos_H_arr) & (sigmalos_H_arr > 0.0)
-
-        self._sigmalos_h_cache[cache_key] = (
-            sigmalos_H,
-            sigmalos_H_arr,
-            column_units,
-            nparticles,
-            valid_hydrogen,
-        )
-        return (
-            sigmalos_H_arr,
-            column_units,
-            nparticles,
-            valid_hydrogen,
-        )
+            self._sigmalos_h_cache[cache_key] = (
+                sigmalos_H,
+                sigmalos_H_arr,
+                column_units,
+                nparticles,
+                valid_hydrogen,
+            )
+            return (
+                sigmalos_H_arr,
+                column_units,
+                nparticles,
+                valid_hydrogen,
+            )
+        finally:
+            toc("DraineLiGrainCurves._get_sigmalos_h")
 
     def _get_dtgs(self, sigmalos_H, sigmalos_dust):
         """Validate inputs and derive broadcast DTG quantities.
