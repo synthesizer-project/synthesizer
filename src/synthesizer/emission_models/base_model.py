@@ -56,9 +56,9 @@ from synthesizer.emission_models.operations import (
     Generation,
     Transformation,
 )
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity
+from synthesizer.utils.operation_timers import timed, timer
 
 
 class EmissionModel(Extraction, Generation, Transformation, Combination):
@@ -159,6 +159,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
     # Define quantities
     lam = Quantity("wavelength")
 
+    @timed("EmissionModel.__init__")
     def __init__(
         self,
         label,
@@ -2411,6 +2412,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         return emissions, particle_emissions
 
+    @timed("EmissionModel._get_spectra")
     def _get_spectra(
         self,
         emitters,
@@ -2516,8 +2518,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
-        tic("Generating all spectra")
-
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -2525,17 +2525,16 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         emission_model = copy.copy(self)
 
         # Apply any overrides we have
-        tic("Applying model overrides")
-        self._apply_overrides(
-            emission_model,
-            dust_curves=dust_curves,
-            tau_v=tau_v,
-            fesc=fesc,
-            covering_fraction=covering_fraction,
-            mask=mask,
-            vel_shift=vel_shift,
-        )
-        toc("Applying model overrides")
+        with timer("EmissionModel._get_spectra.apply_overrides"):
+            self._apply_overrides(
+                emission_model,
+                dust_curves=dust_curves,
+                tau_v=tau_v,
+                fesc=fesc,
+                covering_fraction=covering_fraction,
+                mask=mask,
+                vel_shift=vel_shift,
+            )
 
         # Work with the overridden root instance stored in the model tree so
         # root-level overrides are reflected in any queue and reuse logic.
@@ -2558,9 +2557,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Build the execution queue for the active model tree before doing any
         # existing-emission reuse checks so inactive branches are skipped.
-        tic("Building model queue")
-        queue = ModelQueue(root_model)
-        toc("Building model queue")
+        with timer("EmissionModel._get_spectra.build_model_queue"):
+            queue = ModelQueue(root_model)
 
         # Before we do anything else, check that we have the emitters needed by
         # the active models in the queued execution graph.
@@ -2572,15 +2570,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
         # Get any existing spectra we are reusing
-        tic("Getting existing emissions")
-        spectra, particle_spectra = root_model._get_existing_emissions(
-            emitters,
-            spectra,
-            particle_spectra,
-            emission_type="spectra",
-            models=queue.models.values(),
-        )
-        toc("Getting existing emissions")
+        with timer("EmissionModel._get_spectra.get_existing_emissions"):
+            spectra, particle_spectra = root_model._get_existing_emissions(
+                emitters,
+                spectra,
+                particle_spectra,
+                emission_type="spectra",
+                models=queue.models.values(),
+            )
 
         # Execute the full model closure by processing each ready model once.
         while len(queue) > 0:
@@ -2759,10 +2756,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if len(particle_spectra) > 0:
                 particle_spectra = func(particle_spectra, emitters, self)
 
-        toc("Generating all spectra")
-
         return spectra, particle_spectra
 
+    @timed("EmissionModel._get_lines")
     def _get_lines(
         self,
         line_ids,
@@ -2865,8 +2861,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate lines attribute of the component
                 (lines/particle_lines)
         """
-        tic("Generating all lines")
-
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -2905,9 +2899,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Build the execution queue for the active model tree before doing any
         # existing-emission reuse checks so inactive branches are skipped.
-        tic("Building model queue")
-        queue = ModelQueue(root_model)
-        toc("Building model queue")
+        with timer("EmissionModel._get_lines.build_model_queue"):
+            queue = ModelQueue(root_model)
 
         # Before we do anything else, check that we have the emitters needed by
         # the active models in the queued execution graph.
@@ -3094,8 +3087,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             lines = func(lines, emitters, self)
             if len(particle_lines) > 0:
                 particle_lines = func(particle_lines, emitters, self)
-
-        toc("Generating all lines")
 
         return lines, particle_lines
 

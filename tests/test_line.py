@@ -377,6 +377,25 @@ class TestLineCollectionFlux:
 class TestLineRatiosAndDiagrams:
     """Test line ratio and diagram functionality."""
 
+    def test_ratio_and_diagram_metadata_is_lazy(self, line_ratio_collection):
+        """Ratio and diagram discovery should be deferred until needed."""
+        lines = line_ratio_collection
+
+        assert lines._line2index is None
+        assert lines._available_ratios is None
+        assert lines._available_diagrams is None
+
+        line2index = lines.line2index
+        ratios = lines.available_ratios
+        diagrams = lines.available_diagrams
+
+        assert isinstance(line2index, dict)
+        assert isinstance(ratios, list)
+        assert isinstance(diagrams, list)
+        assert lines._line2index is line2index
+        assert lines._available_ratios is ratios
+        assert lines._available_diagrams is diagrams
+
     def test_available_ratios(self, line_ratio_collection):
         """Test that available ratios are correctly identified."""
         lines = line_ratio_collection

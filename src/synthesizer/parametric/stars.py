@@ -31,11 +31,11 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
 from synthesizer.emission_models.utils import get_param
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Grid
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.units import Quantity, accepts
+from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.stats import weighted_mean, weighted_median
 
@@ -99,6 +99,7 @@ class Stars(StarsComponent):
     initial_mass = Quantity("mass")
 
     @accepts(initial_mass=Msun.in_base("galactic"))
+    @timed("ParametricStars.__init__")
     def __init__(
         self,
         log10ages,
@@ -303,6 +304,7 @@ class Stars(StarsComponent):
             self.metallicity_grid_type = None
 
     @accepts(instant_sf=yr)
+    @timed("ParametricStars._get_sfzh")
     def _get_sfzh(self, instant_sf, instant_metallicity):
         """Compute the SFZH for all possible combinations of input.
 
@@ -446,6 +448,7 @@ class Stars(StarsComponent):
             # Otherwise calculate the total initial mass
             self.initial_mass = np.sum(self.sfzh) * Msun
 
+    @timed("Stars.get_mask")
     def get_mask(
         self,
         attr,
@@ -477,8 +480,6 @@ class Stars(StarsComponent):
             mask (np.ndarray):
                 The mask array.
         """
-        tic("Generating parametric mask")
-
         # Get the attribute
         attr = get_param(attr, attr_override_obj, None, self)
 
@@ -533,8 +534,6 @@ class Stars(StarsComponent):
                     f"or an axis (mask.shape={new_mask.shape}, "
                     f"sfzh.shape={self.sfzh.shape})"
                 )
-
-        toc("Generating parametric mask")
 
         return new_mask
 
@@ -704,6 +703,7 @@ class Stars(StarsComponent):
         # Apply correction to the SFZH
         self.sfzh *= conversion
 
+    @timed("ParametricStars.get_sfzh")
     def get_sfzh(
         self,
         log10ages,

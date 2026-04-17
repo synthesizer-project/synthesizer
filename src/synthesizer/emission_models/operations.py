@@ -20,8 +20,8 @@ from synthesizer.emission_models.extractors.extractor import (
 )
 from synthesizer.emission_models.utils import cache_model_params
 from synthesizer.emissions import LineCollection, Sed, integrate_particle_sed
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Template
+from synthesizer.utils.operation_timers import timer
 
 
 class Extraction:
@@ -114,44 +114,42 @@ class Extraction:
         emitter = emitters[this_model.emitter]
 
         # Do we have to define a property mask?
-        tic("Getting the mask")
-        this_mask = None
-        for mask_dict in this_model.masks:
-            this_mask = emitter.get_mask(
-                **mask_dict,
-                mask=this_mask,
-                attr_override_obj=this_model,
-            )
-        toc("Getting the mask")
+        with timer("Extraction._extract_spectra.get_mask"):
+            this_mask = None
+            for mask_dict in this_model.masks:
+                this_mask = emitter.get_mask(
+                    **mask_dict,
+                    mask=this_mask,
+                    attr_override_obj=this_model,
+                )
 
         # Get the appropriate extractor
-        tic("Getting the extractor")
-        if this_model.per_particle and this_model.vel_shift:
-            extractor = DopplerShiftedParticleExtractor(
-                this_model.grid,
-                this_model.extract,
-            )
-        elif this_model.per_particle:
-            extractor = ParticleExtractor(
-                this_model.grid,
-                this_model.extract,
-            )
-        elif this_model.vel_shift:
-            extractor = IntegratedDopplerShiftedParticleExtractor(
-                this_model.grid,
-                this_model.extract,
-            )
-        elif emitter.is_parametric and not isinstance(emitter, BlackHole):
-            extractor = IntegratedParametricExtractor(
-                this_model.grid,
-                this_model.extract,
-            )
-        else:
-            extractor = IntegratedParticleExtractor(
-                this_model.grid,
-                this_model.extract,
-            )
-        toc("Getting the extractor")
+        with timer("Extraction._extract_spectra.get_extractor"):
+            if this_model.per_particle and this_model.vel_shift:
+                extractor = DopplerShiftedParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            elif this_model.per_particle:
+                extractor = ParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            elif this_model.vel_shift:
+                extractor = IntegratedDopplerShiftedParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            elif emitter.is_parametric and not isinstance(emitter, BlackHole):
+                extractor = IntegratedParametricExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            else:
+                extractor = IntegratedParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
 
         # Get the spectra (note that result is a tuple containing the
         # particle spectra and the integrated spectra if per_particle
@@ -935,40 +933,28 @@ class Combination:
             dict:
                 The dictionary of lines.
         """
-        # Get the right out lines dict and create the right entry
-        out_lines = {}
-
-        # Get the right exist lines dict and create the output lines
         if this_model.per_particle:
             in_lines = particle_lines
-            out_lines = LineCollection(
-                line_ids=particle_lines[
-                    this_model._combine_labels[0]
-                ].line_ids,
-                lam=particle_lines[this_model._combine_labels[0]].lam,
-                lum=np.zeros_like(
-                    particle_lines[this_model._combine_labels[0]].luminosity
-                ),
-                cont=np.zeros_like(
-                    particle_lines[this_model._combine_labels[0]].continuum
-                ),
-            )
         else:
             in_lines = lines
-            out_lines = LineCollection(
-                line_ids=lines[this_model._combine_labels[0]].line_ids,
-                lam=lines[this_model._combine_labels[0]].lam,
-                lum=np.zeros_like(
-                    lines[this_model._combine_labels[0]].luminosity
-                ),
-                cont=np.zeros_like(
-                    lines[this_model._combine_labels[0]].continuum
-                ),
-            )
 
-        # Loop over combination models adding the lines
+        template = in_lines[this_model._combine_labels[0]]
+        out_luminosity = np.zeros_like(template._luminosity)
+        out_continuum = np.zeros_like(template._continuum)
+
+        # Combine raw arrays directly and construct one LineCollection at the
+        # end to avoid repeated constructor and metadata work in hot loops.
         for combine_label in this_model._combine_labels:
-            out_lines += in_lines[combine_label]
+            combine_lines = in_lines[combine_label]
+            out_luminosity += combine_lines._luminosity
+            out_continuum += combine_lines._continuum
+
+        out_lines = LineCollection(
+            line_ids=template.line_ids,
+            lam=template.lam,
+            lum=out_luminosity * template.luminosity.units,
+            cont=out_continuum * template.continuum.units,
+        )
 
         # Cache the model on the emitter
         cache_model_params(this_model, emitter)

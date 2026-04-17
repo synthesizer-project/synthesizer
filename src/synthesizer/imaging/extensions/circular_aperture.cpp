@@ -357,7 +357,7 @@ static double calculate_overlap(const double res, const double r, const int nx,
  */
 static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
 
-  tic("Calculating signal in aperture");
+  tic("calculate_circular_overlap");
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -395,7 +395,7 @@ static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
   /* Construct the ouput. */
   PyObject *np_signal = Py_BuildValue("d", signal);
 
-  toc("Calculating signal in aperture");
+  toc("calculate_circular_overlap");
 
   return np_signal;
 }

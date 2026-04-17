@@ -24,7 +24,6 @@ from unyt import Mpc, Msun, Myr, pc, rad, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging import Image, SpectralCube
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
@@ -32,6 +31,7 @@ from synthesizer.particle.stars import Stars
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts, unyt_to_ndview
 from synthesizer.utils.geometry import get_rotation_matrix
+from synthesizer.utils.operation_timers import timed
 
 
 class Galaxy(BaseGalaxy):
@@ -61,6 +61,7 @@ class Galaxy(BaseGalaxy):
     """
 
     @accepts(centre=Mpc)
+    @timed("Galaxy.__init__")
     def __init__(
         self,
         name="particle galaxy",
@@ -179,6 +180,7 @@ class Galaxy(BaseGalaxy):
             self.sf_gas_mass = None
             self.sf_gas_metallicity = None
 
+    @timed("Galaxy.split")
     def split(self, max_npart):
         """Split a particle galaxy into child galaxies.
 
@@ -449,6 +451,7 @@ class Galaxy(BaseGalaxy):
             # Nothing to do here... YET
             pass
 
+    @timed("Galaxy.get_stellar_los_tau_v")
     def get_stellar_los_tau_v(
         self,
         kappa,
@@ -500,8 +503,6 @@ class Galaxy(BaseGalaxy):
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
-        tic("Calculating LOS tau_v")
-
         # Ensure we have stars and gas
         if self.stars is None:
             raise exceptions.InconsistentArguments(
@@ -541,10 +542,9 @@ class Galaxy(BaseGalaxy):
         # Store the result in self.stars
         setattr(self.stars, tau_v_attr, tau_vs)
 
-        toc("Calculating LOS tau_v")
-
         return tau_v
 
+    @timed("Galaxy.get_black_hole_los_tau_v")
     def get_black_hole_los_tau_v(
         self,
         kappa,
@@ -597,8 +597,6 @@ class Galaxy(BaseGalaxy):
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
-        tic("Calculating LOS tau_v")
-
         # Ensure we have black holes and gas
         if self.black_holes is None:
             raise exceptions.InconsistentArguments(
@@ -637,8 +635,6 @@ class Galaxy(BaseGalaxy):
 
         # Store the result in self.black_holes
         setattr(self.black_holes, "tau_v", tau_vs)
-
-        toc("Calculating LOS tau_v")
 
         return tau_v
 
@@ -1414,6 +1410,7 @@ class Galaxy(BaseGalaxy):
 
         return img
 
+    @timed("Galaxy.get_data_cube")
     def get_data_cube(
         self,
         resolution,
@@ -1475,8 +1472,6 @@ class Galaxy(BaseGalaxy):
                 The spectral data cube object containing the derived
                 data cube.
         """
-        tic("Computing spectral data cubes")
-
         # Make sure we have an image to make
         if stellar_spectra is None and blackhole_spectra is None:
             raise exceptions.InconsistentArguments(
@@ -1596,12 +1591,9 @@ class Galaxy(BaseGalaxy):
 
         # Return the images, combining if there are multiple components
         if stellar_spectra is not None and blackhole_spectra is not None:
-            toc("Computing spectral data cubes")
             return stellar_cube + blackhole_cube
         elif stellar_spectra is not None:
-            toc("Computing spectral data cubes")
             return stellar_cube
-        toc("Computing spectral data cubes")
         return blackhole_cube
 
     def get_projected_angular_coordinates(self, cosmo, los_dists=None):

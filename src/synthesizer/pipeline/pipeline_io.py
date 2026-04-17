@@ -27,6 +27,7 @@ from synthesizer.pipeline.pipeline_utils import (
     unify_dict_structure_across_ranks,
 )
 from synthesizer.synth_warnings import warn
+from synthesizer.utils.operation_timers import timed
 
 
 class PipelineIO:
@@ -54,6 +55,7 @@ class PipelineIO:
     else:
         PARALLEL = False
 
+    @timed("PipelineIO.__init__")
     def __init__(
         self,
         filepath,
@@ -228,6 +230,7 @@ class PipelineIO:
         # Report how blazingly fast we are
         self._print(f"{message} took {elapsed:.3f} {units}.")
 
+    @timed("PipelineIO.create_file_with_metadata")
     def create_file_with_metadata(
         self,
         instruments,
@@ -420,6 +423,7 @@ class PipelineIO:
 
         return paths
 
+    @timed("PipelineIO.write_data")
     def write_data(self, data, key, indexes=None, root=0):
         """Write data using the appropriate method based on the environment.
 
@@ -468,6 +472,7 @@ class PipelineIO:
         except Exception as e:
             self._print(f"Failed to write {key} - {e}")
 
+    @timed("PipelineIO.combine_rank_files")
     def combine_rank_files(self):
         """Combine the rank files into a single file.
 
@@ -576,6 +581,7 @@ class PipelineIO:
 
         self._took(start, "Combining files")
 
+    @timed("PipelineIO.combine_rank_files_virtual")
     def combine_rank_files_virtual(self):
         """Combine the rank files into a single virtual file.
 
