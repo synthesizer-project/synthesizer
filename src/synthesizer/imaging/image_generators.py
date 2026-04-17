@@ -23,7 +23,6 @@ from synthesizer.conversions import (
     angular_to_spatial_at_z,
     spatial_to_angular_at_z,
 )
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.extensions.image import make_img
 from synthesizer.kernel_functions import Kernel
 from synthesizer.synth_warnings import warn
@@ -31,7 +30,7 @@ from synthesizer.units import unit_is_compatible
 from synthesizer.utils import (
     ensure_array_c_compatible_double,
 )
-from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.operation_timers import timed, timer
 
 _CENTERING_TOLERANCE = 1e-6
 
@@ -327,92 +326,84 @@ def _generate_image_particle_hist(
     Returns:
         Image: The histogram image.
     """
-    tic("_generate_image_particle_hist.setup")
+    with timer("_generate_image_particle_hist.setup"):
+        # Ensure the signal is a 1D array and is a compatible size with the
+        # coordinates
+        if signal.ndim != 1:
+            raise exceptions.InconsistentArguments(
+                "Signal must be a 1D array for a histogram image"
+                f" (got {signal.ndim})."
+            )
+        if signal.size != coordinates.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Signal and coordinates must be the same size"
+                f" for a histogram image (got {signal.size} and "
+                f"{coordinates.shape[0]})."
+            )
 
-    # Ensure the signal is a 1D array and is a compatible size with the
-    # coordinates
-    if signal.ndim != 1:
-        raise exceptions.InconsistentArguments(
-            "Signal must be a 1D array for a histogram image"
-            f" (got {signal.ndim})."
-        )
-    if signal.size != coordinates.shape[0]:
-        raise exceptions.InconsistentArguments(
-            "Signal and coordinates must be the same size"
-            f" for a histogram image (got {signal.size} and "
-            f"{coordinates.shape[0]})."
-        )
+        # Ensure the coordinates are compatible with the fov/resolution
+        # Note that the resolution and fov are already guaranteed to be
+        # compatible with each other at this point
+        if not unit_is_compatible(coordinates, img.resolution.units):
+            raise exceptions.InconsistentArguments(
+                "Coordinates must be compatible with the image resolution "
+                f"units (got {coordinates.units} and {img.resolution.units})."
+            )
 
-    # Ensure the coordinates are compatible with the fov/resolution
-    # Note that the resolution and fov are already guaranteed to be
-    # compatible with each other at this point
-    if not unit_is_compatible(coordinates, img.resolution.units):
-        raise exceptions.InconsistentArguments(
-            "Coordinates must be compatible with the image resolution units"
-            f" (got {coordinates.units} and {img.resolution.units})."
-        )
+        # Ensure coordinates have been centred
+        _validate_centered_coordinates(coordinates, warn_only=True)
 
-    # Ensure coordinates have been centred
-    _validate_centered_coordinates(coordinates, warn_only=True)
+        # Strip off and store the units on the signal if they are present
+        if isinstance(signal, (unyt_quantity, unyt_array)):
+            img.units = signal.units
+            signal = signal.value
 
-    # Strip off and store the units on the signal if they are present
-    if isinstance(signal, (unyt_quantity, unyt_array)):
-        img.units = signal.units
-        signal = signal.value
+        # Return an empty image if there are no particles
+        if signal.size == 0:
+            img.arr = np.zeros(img.npix)
+            return img.arr * img.units if img.units is not None else img.arr
 
-    # Return an empty image if there are no particles
-    if signal.size == 0:
-        img.arr = np.zeros(img.npix)
-        return img.arr * img.units if img.units is not None else img.arr
+        # Unpack the image properties and ensure we agree on the units
+        spatial_units = img.resolution.units
+        fov = img.fov.to_value(spatial_units)
 
-    # Unpack the image properties and ensure we agree on the units
-    spatial_units = img.resolution.units
-    fov = img.fov.to_value(spatial_units)
+        # Convert coordinates and smoothing lengths to the correct units and
+        # strip them off
+        coordinates = coordinates.to_value(spatial_units)
 
-    # Convert coordinates and smoothing lengths to the correct units and
-    # strip them off
-    coordinates = coordinates.to_value(spatial_units)
+    with timer("_generate_image_particle_hist.generate"):
+        # Include normalisation in the original signal if we have one
+        # (we'll divide by it later)
+        if normalisation is not None:
+            # Make sure we are working on a copy of the signal so as not to
+            # modify the original
+            signal = signal.copy()
+            signal *= normalisation.value
 
-    toc("_generate_image_particle_hist.setup")
-
-    tic("_generate_image_particle_hist.generate")
-
-    # Include normalisation in the original signal if we have one
-    # (we'll divide by it later)
-    if normalisation is not None:
-        # Make sure we are working on a copy of the signal so as not to
-        # modify the original
-        signal = signal.copy()
-        signal *= normalisation.value
-
-    img.arr = np.histogram2d(
-        coordinates[:, 0],
-        coordinates[:, 1],
-        bins=(
-            np.linspace(-fov[0] / 2, fov[0] / 2, img.npix[0] + 1),
-            np.linspace(-fov[1] / 2, fov[1] / 2, img.npix[1] + 1),
-        ),
-        weights=signal,
-    )[0]
-
-    toc("_generate_image_particle_hist.generate")
-
-    # Normalise the image by the normalisation if applicable
-    if normalisation is not None:
-        tic("_generate_image_particle_hist.normalise")
-        norm_img = np.histogram2d(
+        img.arr = np.histogram2d(
             coordinates[:, 0],
             coordinates[:, 1],
             bins=(
                 np.linspace(-fov[0] / 2, fov[0] / 2, img.npix[0] + 1),
                 np.linspace(-fov[1] / 2, fov[1] / 2, img.npix[1] + 1),
             ),
-            weights=normalisation.value,
+            weights=signal,
         )[0]
 
-        img.arr /= norm_img
+    # Normalise the image by the normalisation if applicable
+    if normalisation is not None:
+        with timer("_generate_image_particle_hist.normalise"):
+            norm_img = np.histogram2d(
+                coordinates[:, 0],
+                coordinates[:, 1],
+                bins=(
+                    np.linspace(-fov[0] / 2, fov[0] / 2, img.npix[0] + 1),
+                    np.linspace(-fov[1] / 2, fov[1] / 2, img.npix[1] + 1),
+                ),
+                weights=normalisation.value,
+            )[0]
 
-        toc("_generate_image_particle_hist.normalise")
+            img.arr /= norm_img
 
     return img
 
@@ -504,81 +495,78 @@ def _generate_image_particle_smoothed(
     Returns:
         Image: The smoothed image.
     """
-    tic("_generate_image_particle_smoothed.setup")
+    with timer("_generate_image_particle_smoothed.setup"):
+        # Avoid cyclic imports
+        from synthesizer.imaging import Image
 
-    # Avoid cyclic imports
-    from synthesizer.imaging import Image
+        # Ensure the signal is a 1D array and is a compatible size with the
+        # coordinates and smoothing lengths
+        if signal.ndim != 1:
+            raise exceptions.InconsistentArguments(
+                "Signal must be a 1D array for a smoothed image"
+                f" (got {signal.ndim})."
+            )
+        if signal.size != cent_coords.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Signal and coordinates must be the same size"
+                f" for a smoothed image (got {signal.size} and "
+                f"{cent_coords.shape[0]})."
+            )
+        if signal.size != smoothing_lengths.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Signal and smoothing lengths must be the same size"
+                f" for a smoothed image (got {signal.size} and "
+                f"{smoothing_lengths.shape[0]})."
+            )
+        if cent_coords.shape[0] != smoothing_lengths.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Coordinates and smoothing lengths must be the same size"
+                f" for a smoothed image (got {cent_coords.shape[0]} and "
+                f"{smoothing_lengths.shape[0]})."
+            )
 
-    # Ensure the signal is a 1D array and is a compatible size with the
-    # coordinates and smoothing lengths
-    if signal.ndim != 1:
-        raise exceptions.InconsistentArguments(
-            "Signal must be a 1D array for a smoothed image"
-            f" (got {signal.ndim})."
-        )
-    if signal.size != cent_coords.shape[0]:
-        raise exceptions.InconsistentArguments(
-            "Signal and coordinates must be the same size"
-            f" for a smoothed image (got {signal.size} and "
-            f"{cent_coords.shape[0]})."
-        )
-    if signal.size != smoothing_lengths.shape[0]:
-        raise exceptions.InconsistentArguments(
-            "Signal and smoothing lengths must be the same size"
-            f" for a smoothed image (got {signal.size} and "
-            f"{smoothing_lengths.shape[0]})."
-        )
-    if cent_coords.shape[0] != smoothing_lengths.shape[0]:
-        raise exceptions.InconsistentArguments(
-            "Coordinates and smoothing lengths must be the same size"
-            f" for a smoothed image (got {cent_coords.shape[0]} and "
-            f"{smoothing_lengths.shape[0]})."
-        )
+        # Ensure the coordinates are compatible with the fov/resolution
+        # Note that the resolution and fov are already guaranteed to be
+        # compatible with each other at this point
+        if not unit_is_compatible(cent_coords, img.resolution.units):
+            raise exceptions.InconsistentArguments(
+                "Coordinates must be compatible with the image resolution "
+                f"units (got {cent_coords.units} and {img.resolution.units})."
+            )
 
-    # Ensure the coordinates are compatible with the fov/resolution
-    # Note that the resolution and fov are already guaranteed to be
-    # compatible with each other at this point
-    if not unit_is_compatible(cent_coords, img.resolution.units):
-        raise exceptions.InconsistentArguments(
-            "Coordinates must be compatible with the image resolution units"
-            f" (got {cent_coords.units} and {img.resolution.units})."
-        )
+        # Ensure the smoothing lengths are compatible with the fov/resolution
+        # Note that the resolution and fov are already guaranteed to be
+        # compatible with each other at this point
+        if not unit_is_compatible(smoothing_lengths, img.resolution.units):
+            raise exceptions.InconsistentArguments(
+                "Smoothing lengths must be compatible with the image "
+                f"resolution units (got {smoothing_lengths.units} and "
+                f"{img.resolution.units})."
+            )
 
-    # Ensure the smoothing lengths are compatible with the fov/resolution
-    # Note that the resolution and fov are already guaranteed to be
-    # compatible with each other at this point
-    if not unit_is_compatible(smoothing_lengths, img.resolution.units):
-        raise exceptions.InconsistentArguments(
-            "Smoothing lengths must be compatible with the image resolution "
-            f"units (got {smoothing_lengths.units} and "
-            f"{img.resolution.units})."
-        )
+        # Ensure coordinates have been centred
+        _validate_centered_coordinates(cent_coords)
 
-    # Ensure coordinates have been centred
-    _validate_centered_coordinates(cent_coords)
+        # Get the spatial units we'll work with
+        spatial_units = img.resolution.units
 
-    # Get the spatial units we'll work with
-    spatial_units = img.resolution.units
+        # Unpack the image properties we need
+        fov = img.fov.to_value(spatial_units)
+        res = img.resolution.to_value(spatial_units)
 
-    # Unpack the image properties we need
-    fov = img.fov.to_value(spatial_units)
-    res = img.resolution.to_value(spatial_units)
+        # Shift the centred coordinates by half the FOV
+        # (this is to ensure the image is centered on the emitter)
+        _coords = cent_coords.to(spatial_units).value
+        _coords[:, 0] += fov[0] / 2.0
+        _coords[:, 1] += fov[1] / 2.0
+        _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
 
-    # Shift the centred coordinates by half the FOV
-    # (this is to ensure the image is centered on the emitter)
-    _coords = cent_coords.to(spatial_units).value
-    _coords[:, 0] += fov[0] / 2.0
-    _coords[:, 1] += fov[1] / 2.0
-    _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
-
-    # Apply normalisation to original signal if needed
-    if normalisation is not None:
-        # Make sure we are working on a copy of the signal so as not to
-        # modify the original
-        signal = signal.copy()
-        signal *= normalisation.value
-
-    toc("_generate_image_particle_smoothed.setup")
+        # Apply normalisation to original signal if needed
+        if normalisation is not None:
+            # Make sure we are working on a copy of the signal so as not to
+            # modify the original
+            signal = signal.copy()
+            signal *= normalisation.value
 
     # Get the (npix_x, npix_y, Nimg) array of images
     imgs_arr = make_img(
@@ -606,22 +594,20 @@ def _generate_image_particle_smoothed(
 
     # Apply the normalisation if needed
     if normalisation is not None:
-        tic("_generate_image_particle_smoothed.normalise")
-        norm_img = Image(resolution=img.resolution, fov=img.fov)
-        norm_img = _generate_image_particle_smoothed(
-            norm_img,
-            signal=normalisation,
-            cent_coords=cent_coords,
-            smoothing_lengths=smoothing_lengths,
-            kernel=kernel,
-            kernel_threshold=kernel_threshold,
-            nthreads=nthreads,
-        )
+        with timer("_generate_image_particle_smoothed.normalise"):
+            norm_img = Image(resolution=img.resolution, fov=img.fov)
+            norm_img = _generate_image_particle_smoothed(
+                norm_img,
+                signal=normalisation,
+                cent_coords=cent_coords,
+                smoothing_lengths=smoothing_lengths,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+            )
 
-        # Normalise the image by the normalisation property
-        img.arr /= norm_img.arr
-
-        toc("_generate_image_particle_smoothed.normalise")
+            # Normalise the image by the normalisation property
+            img.arr /= norm_img.arr
 
     return img
 
@@ -673,93 +659,90 @@ def _generate_images_particle_smoothed(
     Returns:
         ImageCollection: An image collection containing the smoothed images.
     """
-    tic("_generate_images_particle_smoothed.setup")
+    with timer("_generate_images_particle_smoothed.setup"):
+        # Avoid cyclic imports
+        from synthesizer.imaging import Image
 
-    # Avoid cyclic imports
-    from synthesizer.imaging import Image
+        # Ensure the signals are 2D arrays and are compatible sizes with the
+        # coordinates and smoothing lengths and the number of images
+        if signals.ndim != 2:
+            raise exceptions.InconsistentArguments(
+                "Signals must be a 2D array for a smoothed image"
+                f" (got {signals.ndim})."
+            )
+        if signals.shape[1] != cent_coords.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Signals and coordinates must be the same size"
+                f" for a smoothed image (got {signals.shape[1]} and "
+                f"{cent_coords.shape[0]})."
+            )
+        if signals.shape[1] != smoothing_lengths.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Signals and smoothing lengths must be the same size"
+                f" for a smoothed image (got {signals.shape[1]} and "
+                f"{smoothing_lengths.shape[0]})."
+            )
+        if cent_coords.shape[0] != smoothing_lengths.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Coordinates and smoothing lengths must be the same size"
+                f" for a smoothed image (got {cent_coords.shape[0]} and "
+                f"{smoothing_lengths.shape[0]})."
+            )
+        if signals.shape[0] != len(labels):
+            raise exceptions.InconsistentArguments(
+                "Signals should have an entry for each signal "
+                f"label (got {signals.shape[0]} and {len(labels)})."
+            )
 
-    # Ensure the signals are 2D arrays and are compatible sizes with the
-    # coordinates and smoothing lengths and the number of images
-    if signals.ndim != 2:
-        raise exceptions.InconsistentArguments(
-            "Signals must be a 2D array for a smoothed image"
-            f" (got {signals.ndim})."
-        )
-    if signals.shape[1] != cent_coords.shape[0]:
-        raise exceptions.InconsistentArguments(
-            "Signals and coordinates must be the same size"
-            f" for a smoothed image (got {signals.shape[1]} and "
-            f"{cent_coords.shape[0]})."
-        )
-    if signals.shape[1] != smoothing_lengths.shape[0]:
-        raise exceptions.InconsistentArguments(
-            "Signals and smoothing lengths must be the same size"
-            f" for a smoothed image (got {signals.shape[1]} and "
-            f"{smoothing_lengths.shape[0]})."
-        )
-    if cent_coords.shape[0] != smoothing_lengths.shape[0]:
-        raise exceptions.InconsistentArguments(
-            "Coordinates and smoothing lengths must be the same size"
-            f" for a smoothed image (got {cent_coords.shape[0]} and "
-            f"{smoothing_lengths.shape[0]})."
-        )
-    if signals.shape[0] != len(labels):
-        raise exceptions.InconsistentArguments(
-            "Signals should have an entry for each signal "
-            f"label (got {signals.shape[0]} and {len(labels)})."
-        )
+        # Ensure the coordinates are compatible with the fov/resolution
+        # Note that the resolution and fov are already guaranteed to be
+        # compatible with each other at this point
+        if not unit_is_compatible(cent_coords, imgs.resolution.units):
+            raise exceptions.InconsistentArguments(
+                "Coordinates must be compatible with the image resolution "
+                f"units (got {cent_coords.units} and {imgs.resolution.units})."
+            )
 
-    # Ensure the coordinates are compatible with the fov/resolution
-    # Note that the resolution and fov are already guaranteed to be
-    # compatible with each other at this point
-    if not unit_is_compatible(cent_coords, imgs.resolution.units):
-        raise exceptions.InconsistentArguments(
-            "Coordinates must be compatible with the image resolution units"
-            f" (got {cent_coords.units} and {imgs.resolution.units})."
-        )
+        # Ensure the smoothing lengths are compatible with the fov/resolution
+        # Note that the resolution and fov are already guaranteed to be
+        # compatible with each other at this point
+        if not unit_is_compatible(smoothing_lengths, imgs.resolution.units):
+            raise exceptions.InconsistentArguments(
+                "Smoothing lengths must be compatible with the image "
+                f"resolution units (got {smoothing_lengths.units} and "
+                f"{imgs.resolution.units})."
+            )
 
-    # Ensure the smoothing lengths are compatible with the fov/resolution
-    # Note that the resolution and fov are already guaranteed to be
-    # compatible with each other at this point
-    if not unit_is_compatible(smoothing_lengths, imgs.resolution.units):
-        raise exceptions.InconsistentArguments(
-            "Smoothing lengths must be compatible with the image resolution "
-            f"units (got {smoothing_lengths.units} and "
-            f"{imgs.resolution.units})."
-        )
+        # Ensure coordinates have been centred
+        _validate_centered_coordinates(cent_coords, warn_only=True)
 
-    # Ensure coordinates have been centred
-    _validate_centered_coordinates(cent_coords, warn_only=True)
+        # Get the spatial units we'll work with
+        spatial_units = imgs.resolution.units
 
-    # Get the spatial units we'll work with
-    spatial_units = imgs.resolution.units
+        # Unpack the image properties we need
+        fov = imgs.fov.to_value(spatial_units)
+        res = imgs.resolution.to_value(spatial_units)
 
-    # Unpack the image properties we need
-    fov = imgs.fov.to_value(spatial_units)
-    res = imgs.resolution.to_value(spatial_units)
+        # Shift the centred coordinates by half the FOV
+        # (this is to ensure the image is centered on the emitter)
+        _coords = cent_coords.to(spatial_units).value
+        _coords[:, 0] += fov[0] / 2.0
+        _coords[:, 1] += fov[1] / 2.0
+        _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
 
-    # Shift the centred coordinates by half the FOV
-    # (this is to ensure the image is centered on the emitter)
-    _coords = cent_coords.to(spatial_units).value
-    _coords[:, 0] += fov[0] / 2.0
-    _coords[:, 1] += fov[1] / 2.0
-    _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
+        # Apply normalisation to original signal if needed
+        if normalisations is not None:
+            # Make sure we are working on a copy of the signals so as not to
+            # modify the original
+            signals = signals.copy()
 
-    # Apply normalisation to original signal if needed
-    if normalisations is not None:
-        # Make sure we are working on a copy of the signals so as not to
-        # modify the original
-        signals = signals.copy()
+            # Apply the normalisation to the corresponding signal
+            for ind, key in enumerate(labels):
+                signals[ind, :] *= normalisations[key].value
 
-        # Apply the normalisation to the corresponding signal
-        for ind, key in enumerate(labels):
-            signals[ind, :] *= normalisations[key].value
-
-    # In the C++ extension we want to be dealing with (Npart, Nimg) signals
-    # to make the most of cache locality, so we transpose the signals
-    signals = signals.T
-
-    toc("_generate_images_particle_smoothed.setup")
+        # In the C++ extension we want to be dealing with (Npart, Nimg)
+        # signals to make the most of cache locality, so we transpose them.
+        signals = signals.T
 
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
@@ -779,39 +762,35 @@ def _generate_images_particle_smoothed(
 
     # Apply units if needs be
     if isinstance(signals, (unyt_quantity, unyt_array)):
-        tic("_generate_images_particle_smoothed.apply_units")
-        imgs_arr = unyt_array(
-            imgs_arr,
-            units=signals.units,
-        )
-        toc("_generate_images_particle_smoothed.apply_units")
+        with timer("_generate_images_particle_smoothed.apply_units"):
+            imgs_arr = unyt_array(
+                imgs_arr,
+                units=signals.units,
+            )
 
     # Store the image arrays on the image collection (this will
     # automatically convert them to Image objects)
-    tic("_generate_images_particle_smoothed.unpack")
-    for ind, key in enumerate(labels):
-        imgs[key] = imgs_arr[:, :, ind]
-    toc("_generate_images_particle_smoothed.unpack")
+    with timer("_generate_images_particle_smoothed.unpack"):
+        for ind, key in enumerate(labels):
+            imgs[key] = imgs_arr[:, :, ind]
 
     # Apply normalisation if needed
     if normalisations is not None:
-        tic("_generate_images_particle_smoothed.normalise")
-        for ind, key in enumerate(labels):
-            norm_img = Image(resolution=imgs.resolution, fov=imgs.fov)
-            norm_img = _generate_image_particle_smoothed(
-                norm_img,
-                signal=normalisations[key],
-                cent_coords=cent_coords,
-                smoothing_lengths=smoothing_lengths,
-                kernel=kernel,
-                kernel_threshold=kernel_threshold,
-                nthreads=nthreads,
-            )
+        with timer("_generate_images_particle_smoothed.normalise"):
+            for ind, key in enumerate(labels):
+                norm_img = Image(resolution=imgs.resolution, fov=imgs.fov)
+                norm_img = _generate_image_particle_smoothed(
+                    norm_img,
+                    signal=normalisations[key],
+                    cent_coords=cent_coords,
+                    smoothing_lengths=smoothing_lengths,
+                    kernel=kernel,
+                    kernel_threshold=kernel_threshold,
+                    nthreads=nthreads,
+                )
 
-            # Normalise the image by the normalisation property
-            imgs[key].arr /= norm_img.arr
-
-        toc("_generate_images_particle_smoothed.normalise")
+                # Normalise the image by the normalisation property
+                imgs[key].arr /= norm_img.arr
 
     return imgs
 
@@ -1101,74 +1080,71 @@ def _generate_ifu_particle_hist(
     Returns:
         SpectralCube: The histogram image.
     """
-    tic("_generate_ifu_particle_hist.setup")
+    with timer("_generate_ifu_particle_hist.setup"):
+        # Sample the spectra onto the wavelength grid
+        sed = sed.get_resampled_sed(new_lam=ifu.lam)
 
-    # Sample the spectra onto the wavelength grid
-    sed = sed.get_resampled_sed(new_lam=ifu.lam)
+        # Store the Sed and quantity
+        ifu.sed = sed
+        ifu.quantity = quantity
 
-    # Store the Sed and quantity
-    ifu.sed = sed
-    ifu.quantity = quantity
+        # Get the spectra we will be sorting into the spectral cube
+        spectra = getattr(sed, quantity, None)
+        if spectra is None:
+            raise exceptions.MissingSpectraType(
+                f"Can't make an image for {quantity},"
+                " it does not exist in the Sed."
+            )
 
-    # Get the spectra we will be sorting into the spectral cube
-    spectra = getattr(sed, quantity, None)
-    if spectra is None:
-        raise exceptions.MissingSpectraType(
-            f"Can't make an image for {quantity},"
-            " it does not exist in the Sed."
-        )
+        # Strip off and store the units on the spectra for later
+        ifu.units = spectra.units
+        spectra = spectra.ndview
 
-    # Strip off and store the units on the spectra for later
-    ifu.units = spectra.units
-    spectra = spectra.ndview
+        # Ensure the spectra is 2D with a spectra per particle
+        if spectra.ndim != 2:
+            raise exceptions.InconsistentArguments(
+                "Spectra must be a 2D array for an IFU image"
+                f" (got {spectra.ndim})."
+            )
+        if spectra.shape[0] != cent_coords.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Spectra and coordinates must be the same size"
+                f" for an IFU image (got {spectra.shape[0]} and "
+                f"{cent_coords.shape[0]})."
+            )
 
-    # Ensure the spectra is 2D with a spectra per particle
-    if spectra.ndim != 2:
-        raise exceptions.InconsistentArguments(
-            "Spectra must be a 2D array for an IFU image"
-            f" (got {spectra.ndim})."
-        )
-    if spectra.shape[0] != cent_coords.shape[0]:
-        raise exceptions.InconsistentArguments(
-            "Spectra and coordinates must be the same size"
-            f" for an IFU image (got {spectra.shape[0]} and "
-            f"{cent_coords.shape[0]})."
-        )
+        # Ensure the coordinates are compatible with the fov/resolution
+        # Note that the resolution and fov are already guaranteed to be
+        # compatible with each other at this point
+        if not unit_is_compatible(cent_coords, ifu.resolution.units):
+            raise exceptions.InconsistentArguments(
+                "Coordinates must be compatible with the IFU resolution units"
+                f" (got {cent_coords.units} and {ifu.resolution.units})."
+            )
 
-    # Ensure the coordinates are compatible with the fov/resolution
-    # Note that the resolution and fov are already guaranteed to be
-    # compatible with each other at this point
-    if not unit_is_compatible(cent_coords, ifu.resolution.units):
-        raise exceptions.InconsistentArguments(
-            "Coordinates must be compatible with the IFU resolution units"
-            f" (got {cent_coords.units} and {ifu.resolution.units})."
-        )
+        # Get the spatial units we'll work with
+        spatial_units = ifu.resolution.units
 
-    # Get the spatial units we'll work with
-    spatial_units = ifu.resolution.units
+        # Get some IFU properties we'll need
+        fov = ifu.fov.to_value(spatial_units)
+        res = ifu.resolution.to_value(spatial_units)
 
-    # Get some IFU properties we'll need
-    fov = ifu.fov.to_value(spatial_units)
-    res = ifu.resolution.to_value(spatial_units)
+        # Convert coordinates and smoothing lengths to the correct units and
+        # strip them off
+        _coords = cent_coords.to(spatial_units).value
 
-    # Convert coordinates and smoothing lengths to the correct units and
-    # strip them off
-    _coords = cent_coords.to(spatial_units).value
+        # Ensure coordinates have been centred
+        _validate_centered_coordinates(cent_coords, warn_only=True)
 
-    # Ensure coordinates have been centred
-    _validate_centered_coordinates(cent_coords, warn_only=True)
+        # Prepare the inputs, we need to make sure we are passing C contiguous
+        # arrays.
+        _coords[:, 0] += fov[0] / 2
+        _coords[:, 1] += fov[1] / 2
+        smls = np.zeros(cent_coords.shape[0], dtype=np.float64)
 
-    # Prepare the inputs, we need to make sure we are passing C contiguous
-    # arrays.
-    _coords[:, 0] += fov[0] / 2
-    _coords[:, 1] += fov[1] / 2
-    smls = np.zeros(cent_coords.shape[0], dtype=np.float64)
-
-    # Get the kernel
-    # TODO: We should do away with this and write a histogram backend
-    kernel = Kernel().get_kernel()
-
-    toc("_generate_ifu_particle_hist.setup")
+        # Get the kernel
+        # TODO: We should do away with this and write a histogram backend
+        kernel = Kernel().get_kernel()
 
     ifu.arr = make_img(
         ensure_array_c_compatible_double(spectra),
@@ -1229,80 +1205,77 @@ def _generate_ifu_particle_smoothed(
     Returns:
         SpectralCube: The histogram image.
     """
-    tic("_generate_ifu_particle_smoothed.setup")
+    with timer("_generate_ifu_particle_smoothed.setup"):
+        # Sample the spectra onto the wavelength grid
+        sed = sed.get_resampled_sed(new_lam=ifu.lam)
 
-    # Sample the spectra onto the wavelength grid
-    sed = sed.get_resampled_sed(new_lam=ifu.lam)
+        # Store the Sed and quantity
+        ifu.sed = sed
+        ifu.quantity = quantity
 
-    # Store the Sed and quantity
-    ifu.sed = sed
-    ifu.quantity = quantity
+        # Get the spectra we will be sorting into the spectral cube
+        spectra = getattr(sed, quantity, None)
+        if spectra is None:
+            raise exceptions.MissingSpectraType(
+                f"Can't make an image for {quantity},"
+                " it does not exist in the Sed."
+            )
 
-    # Get the spectra we will be sorting into the spectral cube
-    spectra = getattr(sed, quantity, None)
-    if spectra is None:
-        raise exceptions.MissingSpectraType(
-            f"Can't make an image for {quantity},"
-            " it does not exist in the Sed."
-        )
+        # Strip off and store the units on the spectra for later
+        ifu.units = spectra.units
+        # TODO: Rethink IFU path to avoid contiguous conversion.
+        # Consider an IFU-specific backend that consumes native layout.
+        spectra = ensure_array_c_compatible_double(spectra.ndview)
 
-    # Strip off and store the units on the spectra for later
-    ifu.units = spectra.units
-    # TODO: Rethink IFU path to avoid contiguous conversion.
-    # Consider an IFU-specific backend that consumes native layout.
-    spectra = ensure_array_c_compatible_double(spectra.ndview)
+        # Ensure the spectra is 2D with a spectra per particle
+        if spectra.ndim != 2:
+            raise exceptions.InconsistentArguments(
+                f"Spectra must be a 2D array for an IFU (got {spectra.ndim})."
+            )
+        if spectra.shape[0] != cent_coords.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Spectra and coordinates must be the same size"
+                f" for an IFU (got {spectra.shape[0]} and "
+                f"{cent_coords.shape[0]})."
+            )
 
-    # Ensure the spectra is 2D with a spectra per particle
-    if spectra.ndim != 2:
-        raise exceptions.InconsistentArguments(
-            f"Spectra must be a 2D array for an IFU (got {spectra.ndim})."
-        )
-    if spectra.shape[0] != cent_coords.shape[0]:
-        raise exceptions.InconsistentArguments(
-            "Spectra and coordinates must be the same size"
-            f" for an IFU (got {spectra.shape[0]} and "
-            f"{cent_coords.shape[0]})."
-        )
+        # Ensure the coordinates are compatible with the fov/resolution
+        # Note that the resolution and fov are already guaranteed to be
+        # compatible with each other at this point
+        if not unit_is_compatible(cent_coords, ifu.resolution.units):
+            raise exceptions.InconsistentArguments(
+                "Coordinates must be compatible with the IFU resolution units"
+                f" (got {cent_coords.units} and {ifu.resolution.units})."
+            )
 
-    # Ensure the coordinates are compatible with the fov/resolution
-    # Note that the resolution and fov are already guaranteed to be
-    # compatible with each other at this point
-    if not unit_is_compatible(cent_coords, ifu.resolution.units):
-        raise exceptions.InconsistentArguments(
-            "Coordinates must be compatible with the IFU resolution units"
-            f" (got {cent_coords.units} and {ifu.resolution.units})."
-        )
+        # Ensure the smoothing lengths are compatible with the fov/resolution
+        # Note that the resolution and fov are already guaranteed to be
+        # compatible with each other at this point
+        if not unit_is_compatible(smoothing_lengths, ifu.resolution.units):
+            raise exceptions.InconsistentArguments(
+                "Smoothing lengths must be compatible with the IFU resolution "
+                f"units (got {smoothing_lengths.units} and "
+                f"{ifu.resolution.units})."
+            )
 
-    # Ensure the smoothing lengths are compatible with the fov/resolution
-    # Note that the resolution and fov are already guaranteed to be
-    # compatible with each other at this point
-    if not unit_is_compatible(smoothing_lengths, ifu.resolution.units):
-        raise exceptions.InconsistentArguments(
-            "Smoothing lengths must be compatible with the IFU resolution "
-            f"units (got {smoothing_lengths.units} and "
-            f"{ifu.resolution.units})."
-        )
+        # Get the spatial units we'll work with
+        spatial_units = ifu.resolution.units
 
-    # Get the spatial units we'll work with
-    spatial_units = ifu.resolution.units
+        # Get some IFU properties we'll need
+        fov = ifu.fov.to_value(spatial_units)
+        res = ifu.resolution.to_value(spatial_units)
 
-    # Get some IFU properties we'll need
-    fov = ifu.fov.to_value(spatial_units)
-    res = ifu.resolution.to_value(spatial_units)
+        # Convert coordinates and smoothing lengths to the correct units and
+        # strip them off
+        _coords = cent_coords.to_value(spatial_units)
 
-    # Convert coordinates and smoothing lengths to the correct units and
-    # strip them off
-    _coords = cent_coords.to_value(spatial_units)
+        # Ensure coordinates have been centred
+        _validate_centered_coordinates(cent_coords)
 
-    # Ensure coordinates have been centred
-    _validate_centered_coordinates(cent_coords)
-
-    # Shift the centred coordinates by half the FOV to lie in the
-    # range [0, FOV]
-    _coords[:, 0] += fov[0] / 2
-    _coords[:, 1] += fov[1] / 2
-
-    toc("_generate_ifu_particle_smoothed.setup")
+        # Shift the centred coordinates by half the FOV to lie in the
+        # range [0, FOV]
+        _coords[:, 0] += fov[0] / 2
+        _coords[:, 1] += fov[1] / 2
 
     # Generate the IFU
     ifu.arr = make_img(
@@ -1325,6 +1298,7 @@ def _generate_ifu_particle_smoothed(
     return ifu
 
 
+@timed("_generate_ifu_parametric_smoothed")
 def _generate_ifu_parametric_smoothed(
     ifu,
     sed,
@@ -1346,8 +1320,6 @@ def _generate_ifu_parametric_smoothed(
         density_grid (unyt_array of float):
             The density grid to be smoothed over.
     """
-    tic("_generate_ifu_parametric_smoothed")
-
     # Sample the spectra onto the wavelength grid if we need to
     sed = sed.get_resampled_sed(new_lam=ifu.lam)
 
@@ -1376,8 +1348,6 @@ def _generate_ifu_parametric_smoothed(
 
     # Multiply the density grid by the sed to get the IFU
     ifu.arr = density_grid[:, :, None] * spectra
-
-    toc("_generate_ifu_parametric_smoothed")
 
     return ifu
 

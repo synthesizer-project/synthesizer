@@ -20,8 +20,8 @@ from synthesizer.emission_models.extractors.extractor import (
 )
 from synthesizer.emission_models.utils import cache_model_params
 from synthesizer.emissions import LineCollection, Sed, integrate_particle_sed
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Template
+from synthesizer.utils.operation_timers import timer
 
 
 class Extraction:
@@ -114,44 +114,42 @@ class Extraction:
         emitter = emitters[this_model.emitter]
 
         # Do we have to define a property mask?
-        tic("Extraction._extract_spectra.get_mask")
-        this_mask = None
-        for mask_dict in this_model.masks:
-            this_mask = emitter.get_mask(
-                **mask_dict,
-                mask=this_mask,
-                attr_override_obj=this_model,
-            )
-        toc("Extraction._extract_spectra.get_mask")
+        with timer("Extraction._extract_spectra.get_mask"):
+            this_mask = None
+            for mask_dict in this_model.masks:
+                this_mask = emitter.get_mask(
+                    **mask_dict,
+                    mask=this_mask,
+                    attr_override_obj=this_model,
+                )
 
         # Get the appropriate extractor
-        tic("Extraction._extract_spectra.get_extractor")
-        if this_model.per_particle and this_model.vel_shift:
-            extractor = DopplerShiftedParticleExtractor(
-                this_model.grid,
-                this_model.extract,
-            )
-        elif this_model.per_particle:
-            extractor = ParticleExtractor(
-                this_model.grid,
-                this_model.extract,
-            )
-        elif this_model.vel_shift:
-            extractor = IntegratedDopplerShiftedParticleExtractor(
-                this_model.grid,
-                this_model.extract,
-            )
-        elif emitter.is_parametric and not isinstance(emitter, BlackHole):
-            extractor = IntegratedParametricExtractor(
-                this_model.grid,
-                this_model.extract,
-            )
-        else:
-            extractor = IntegratedParticleExtractor(
-                this_model.grid,
-                this_model.extract,
-            )
-        toc("Extraction._extract_spectra.get_extractor")
+        with timer("Extraction._extract_spectra.get_extractor"):
+            if this_model.per_particle and this_model.vel_shift:
+                extractor = DopplerShiftedParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            elif this_model.per_particle:
+                extractor = ParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            elif this_model.vel_shift:
+                extractor = IntegratedDopplerShiftedParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            elif emitter.is_parametric and not isinstance(emitter, BlackHole):
+                extractor = IntegratedParametricExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            else:
+                extractor = IntegratedParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
 
         # Get the spectra (note that result is a tuple containing the
         # particle spectra and the integrated spectra if per_particle

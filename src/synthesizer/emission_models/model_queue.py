@@ -26,7 +26,7 @@ from collections import deque
 import numpy as np
 
 from synthesizer import exceptions
-from synthesizer.extensions.timers import tic, toc
+from synthesizer.utils.operation_timers import timer
 
 
 class ModelQueue:
@@ -87,99 +87,98 @@ class ModelQueue:
         self._root_model = root_model
 
         # Build the executable model closure before compiling dependencies.
-        tic("ModelQueue.__init__.collect_tree")
-        self.models = {}
-        self._related_models = set()
-        self._collect_model_tree(root_model)
+        with timer("ModelQueue.__init__.collect_tree"):
+            self.models = {}
+            self._related_models = set()
+            self._collect_model_tree(root_model)
 
-        # Keep walking newly discovered related models until the full closure
-        # of additional roots has been exhausted.
-        related_labels = set()
-        while True:
-            pending_related_models = [
-                model
-                for model in self._related_models
-                if model.label not in related_labels
-            ]
-            if len(pending_related_models) == 0:
-                break
+            # Keep walking newly discovered related models until the full
+            # closure of additional roots has been exhausted.
+            related_labels = set()
+            while True:
+                pending_related_models = [
+                    model
+                    for model in self._related_models
+                    if model.label not in related_labels
+                ]
+                if len(pending_related_models) == 0:
+                    break
 
-            for model in pending_related_models:
-                related_labels.add(model.label)
-                if model.label not in self.models:
-                    self._collect_model_tree(model)
-        toc("ModelQueue.__init__.collect_tree")
+                for model in pending_related_models:
+                    related_labels.add(model.label)
+                    if model.label not in self.models:
+                        self._collect_model_tree(model)
 
         # Compile the dependency graph and runtime counters for this closure.
-        tic("ModelQueue.__init__.compile")
-        full_dependencies = {}
-        full_dependents = {label: [] for label in self.models}
-        self.execution_rank = {}
+        with timer("ModelQueue.__init__.compile"):
+            full_dependencies = {}
+            full_dependents = {label: [] for label in self.models}
+            self.execution_rank = {}
 
-        # Compile the full dependency graph before pruning inactive branches.
-        for rank, (label, model) in enumerate(self.models.items()):
-            self.execution_rank[label] = rank
-            model_dependencies = self._get_model_dependencies(model)
-            full_dependencies[label] = tuple(
-                dependency.label for dependency in model_dependencies
+            # Compile the full dependency graph before pruning inactive
+            # branches.
+            for rank, (label, model) in enumerate(self.models.items()):
+                self.execution_rank[label] = rank
+                model_dependencies = self._get_model_dependencies(model)
+                full_dependencies[label] = tuple(
+                    dependency.label for dependency in model_dependencies
+                )
+
+                for dependency in model_dependencies:
+                    full_dependents[dependency.label].append(label)
+
+            # Mark only models needed to produce saved outputs as active. This
+            # backwards walk lets us skip unsaved branches that do not
+            # contribute to any saved emission.
+            self.active = self._get_active(self.models, full_dependencies)
+
+            # Prune the graph down to the active subgraph before queueing it so
+            # inactive models do not contribute to queue state or lifetimes.
+            self.models = {
+                label: model
+                for label, model in self.models.items()
+                if self.is_active(label)
+            }
+            self.dependencies = {
+                label: tuple(
+                    dependency_label
+                    for dependency_label in full_dependencies[label]
+                    if self.is_active(dependency_label)
+                )
+                for label in self.models
+            }
+            self.dependents = {
+                label: tuple(
+                    dependent_label
+                    for dependent_label in full_dependents[label]
+                    if self.is_active(dependent_label)
+                )
+                for label in self.models
+            }
+
+            # Initialise the pending dependency counts and model lifetimes
+            # using only the active subgraph that will actually be executed.
+            self.pending_dependencies = {
+                label: len(dep_labels)
+                for label, dep_labels in self.dependencies.items()
+            }
+            self.lifetime = {
+                label: len(dep_labels)
+                for label, dep_labels in self.dependents.items()
+            }
+
+            # Seed the ready queue using the compiled execution ordering so
+            # independent branches still run deterministically.
+            ready_labels = sorted(
+                [
+                    label
+                    for label, count in self.pending_dependencies.items()
+                    if count == 0
+                ],
+                key=self.execution_rank.get,
             )
-
-            for dependency in model_dependencies:
-                full_dependents[dependency.label].append(label)
-
-        # Mark only models needed to produce saved outputs as active. This
-        # backwards walk lets us skip unsaved branches that do not contribute
-        # to any saved emission.
-        self.active = self._get_active(self.models, full_dependencies)
-
-        # Prune the graph down to the active subgraph before queueing it so
-        # inactive models do not contribute to queue state or lifetimes.
-        self.models = {
-            label: model
-            for label, model in self.models.items()
-            if self.is_active(label)
-        }
-        self.dependencies = {
-            label: tuple(
-                dependency_label
-                for dependency_label in full_dependencies[label]
-                if self.is_active(dependency_label)
-            )
-            for label in self.models
-        }
-        self.dependents = {
-            label: tuple(
-                dependent_label
-                for dependent_label in full_dependents[label]
-                if self.is_active(dependent_label)
-            )
-            for label in self.models
-        }
-
-        # Initialise the pending dependency counts and model lifetimes using
-        # only the active subgraph that will actually be executed.
-        self.pending_dependencies = {
-            label: len(dep_labels)
-            for label, dep_labels in self.dependencies.items()
-        }
-        self.lifetime = {
-            label: len(dep_labels)
-            for label, dep_labels in self.dependents.items()
-        }
-
-        # Seed the ready queue using the compiled execution ordering so
-        # independent branches still run deterministically.
-        ready_labels = sorted(
-            [
-                label
-                for label, count in self.pending_dependencies.items()
-                if count == 0
-            ],
-            key=self.execution_rank.get,
-        )
-        self._queue = deque(ready_labels)
-        self._processed = set()
-        toc("ModelQueue.__init__.compile")
+            self._queue = deque(ready_labels)
+            self._processed = set()
 
     def __len__(self):
         """Return the number of models currently ready to execute.

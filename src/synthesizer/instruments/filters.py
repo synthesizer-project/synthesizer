@@ -46,7 +46,7 @@ from synthesizer.utils.integrate import (
     integrate_weighted_last_axis,
     trapezoid,
 )
-from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.operation_timers import timed, timer
 
 
 @accepts(new_lam=angstrom)
@@ -1047,6 +1047,7 @@ class FilterCollection:
             },
         )
 
+    @timed("FilterCollection._get_batched_weights")
     def _get_batched_weights(
         self,
         xs,
@@ -1161,6 +1162,7 @@ class FilterCollection:
         )
         return weights, denominators, starts, ends
 
+    @timed("FilterCollection.apply_filters")
     def apply_filters(
         self,
         arr,
@@ -1215,16 +1217,17 @@ class FilterCollection:
             method=integration_method,
         )
 
-        return compute_photometry(
-            xs,
-            arr,
-            weights,
-            denominators,
-            starts,
-            ends,
-            nthreads,
-            integration_method,
-        )
+        with timer("FilterCollection.apply_filters.compute_photometry"):
+            return compute_photometry(
+                xs,
+                arr,
+                weights,
+                denominators,
+                starts,
+                ends,
+                nthreads,
+                integration_method,
+            )
 
     def unify_with_grid(self, grid, loop_spectra=False):
         """Unify a grid with this FilterCollection.
@@ -2162,6 +2165,7 @@ class Filter:
             return False
         return True
 
+    @timed("Filter._get_weighted_integration_data")
     def _get_weighted_integration_data(self, xs, original_xs, space):
         """Return transmission and integration weights for a target grid."""
         # Fast-path: if xs matches the filter's native grid, we can use self.t
