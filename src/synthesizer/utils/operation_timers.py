@@ -1,11 +1,109 @@
-"""Dict-like interface to C++ accumulated operation timings."""
+"""Helpers for interacting with accumulated operation timings."""
+
+from contextlib import contextmanager
+from functools import wraps
 
 from synthesizer.extensions.timers import (
     get_operation_names,
     get_operation_source,
     get_operation_timings,
     reset_timings,
+    tic,
+    toc,
 )
+
+
+@contextmanager
+def timer(operation_name):
+    """Context manager that accumulates timing for a block of code.
+
+    The context manager records timing using the existing ``tic``/``toc``
+    machinery and guarantees that the matching ``toc`` call happens even if the
+    wrapped block raises an exception.
+
+    Args:
+        operation_name (str):
+            The operation name to use for the timing entry.
+
+    Returns:
+        Iterator[None]:
+            A context manager that wraps a code block in the timing
+            machinery.
+    """
+    # Start timing immediately before entering the wrapped block.
+    tic(operation_name)
+    try:
+        # Yield control back to the caller while the timer is active.
+        yield
+    finally:
+        # Always stop the timer, even if the wrapped block raises, so the
+        # timing stack remains balanced.
+        toc(operation_name)
+
+
+def timed(operation_name=None):
+    """Return a decorator that accumulates timing for a wrapped function.
+
+    The decorator records timing using the existing ``tic``/``toc`` machinery
+    and guarantees that the matching ``toc`` call happens even if the wrapped
+    function raises an exception.
+
+    Args:
+        operation_name (str, optional):
+            The operation name to use for the timing entry. If omitted, the
+            wrapped function's ``__qualname__`` will be used.
+
+    Returns:
+        callable:
+            A decorator that wraps a function in the timing machinery.
+    """
+
+    # Return the actual decorator so callers can optionally configure the
+    # operation name at decoration time.
+    def decorator(func):
+        """Wrap a function so it contributes to the accumulated timings.
+
+        Args:
+            func (callable):
+                The function to wrap with timing instrumentation.
+
+        Returns:
+            callable:
+                A wrapped function with the same interface as ``func``.
+        """
+        # Resolve the timer label once at decoration time so each invocation
+        # uses a stable operation name.
+        timer_name = (
+            func.__qualname__ if operation_name is None else operation_name
+        )
+
+        @wraps(func)
+        def wrapped(*args, **kwargs):
+            """Execute a wrapped function while accumulating timings.
+
+            Args:
+                *args:
+                    Positional arguments passed to the wrapped function.
+                **kwargs:
+                    Keyword arguments passed to the wrapped function.
+
+            Returns:
+                The result returned by the wrapped function.
+            """
+            # Start timing immediately before calling the wrapped function.
+            tic(timer_name)
+            try:
+                # Return the wrapped function result unchanged so the decorator
+                # is transparent aside from its timing side effect.
+                return func(*args, **kwargs)
+            finally:
+                # Always stop the timer, even if the wrapped function raises,
+                # so the timing stack remains balanced.
+                toc(timer_name)
+
+        return wrapped
+
+    return decorator
 
 
 class OperationTimers:

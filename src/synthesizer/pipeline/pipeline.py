@@ -29,11 +29,12 @@ Example usage:
 """
 
 import time
+from pathlib import Path
 
 import numpy as np
 from unyt import unyt_array
 
-from synthesizer import check_openmp, exceptions
+from synthesizer import check_atomic_timing, check_openmp, exceptions
 from synthesizer.instruments import InstrumentCollection
 from synthesizer.particle import Galaxy as ParticleGalaxy
 from synthesizer.pipeline.pipeline_io import PipelineIO
@@ -41,14 +42,21 @@ from synthesizer.pipeline.pipeline_utils import (
     NO_MODEL_LABEL,
     OperationKwargsHandler,
     accumulate_pipeline_results_from_child,
+    build_timing_analysis_rows,
     clear_pipeline_outputs,
+    combine_atomic_timing_snapshots,
     combine_list_of_dicts,
     count_and_check_dict_recursive,
+    get_atomic_timing_snapshot,
     get_full_memory,
+    plot_timing_analysis,
+    print_timing_analysis_table,
     validate_noise_unit_compatibility,
+    write_timing_analysis_summary,
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.art import Art
+from synthesizer.utils.operation_timers import timed, timer
 
 
 class Pipeline:
@@ -122,6 +130,7 @@ class Pipeline:
             A list of Galaxy objects that have been loaded.
     """
 
+    @timed("Pipeline.__init__")
     def __init__(
         self,
         emission_model,
@@ -754,6 +763,7 @@ class Pipeline:
 
         self._print_progress_footer()
 
+    @timed("Pipeline._add_progress_row")
     def _add_progress_row(self, gal, igal, start):
         """Print a row for the progress report.
 
@@ -929,6 +939,59 @@ class Pipeline:
             else:
                 self._print(f"Computing {key} took {elapsed:.2f} {units}")
 
+    def analyse_timings(self, outdir):
+        """Analyse accumulated atomic timings and write reports.
+
+        Args:
+            outdir (str or Path):
+                Directory where timing outputs are written.
+
+        Returns:
+            None
+        """
+        # Fail immediately with a clear message if atomic timing support is not
+        # available in the current installation.
+        if not check_atomic_timing():
+            raise RuntimeError(
+                "Atomic timing not available. Recompile with: "
+                "ATOMIC_TIMING=1 pip install -e ."
+            )
+
+        # Snapshot the current rank-local timings and the total elapsed wall
+        # time since Pipeline instantiation.
+        timing_data = get_atomic_timing_snapshot()
+        total_elapsed = time.perf_counter() - self._start_time
+
+        # Merge timings across ranks when running under MPI so rank 0 can write
+        # a single aggregated report.
+        timing_data, total_elapsed = combine_atomic_timing_snapshots(
+            self.comm,
+            self.using_mpi,
+            self.rank,
+            timing_data,
+            total_elapsed,
+        )
+
+        # Non-root ranks participate in the gather but do not print or write
+        # any timing outputs.
+        if self.using_mpi and self.rank != 0:
+            return None
+
+        # Build the human-readable timing rows and ensure the output directory
+        # exists before writing any files.
+        rows = build_timing_analysis_rows(timing_data, total_elapsed)
+        outdir = Path(outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+
+        # Emit the terminal summary using the standard pipeline logger so the
+        # timing report matches the rest of the pipeline output formatting.
+        print_timing_analysis_table(rows, print_func=self._print)
+
+        # Save the CSV summary and plot diagnostics to the requested output
+        # directory.
+        write_timing_analysis_summary(rows, outdir)
+        plot_timing_analysis(rows, outdir)
+
     def report_operations(self):
         """Print the operations that will be performed by the Pipeline.
 
@@ -1092,6 +1155,7 @@ class Pipeline:
 
         self._print(f"Added analysis function: {result_key}")
 
+    @timed("Pipeline.add_galaxies")
     def add_galaxies(self, galaxies):
         """Add galaxies to the Pipeline.
 
@@ -1206,6 +1270,7 @@ class Pipeline:
 
         return _instruments
 
+    @timed("Pipeline._prepare_instruments")
     def _prepare_instruments(self):
         """Prewarm instrument filters onto the emission-model grid.
 
@@ -1278,6 +1343,7 @@ class Pipeline:
         # Flag that we will compute the LOS optical depths
         self._do_los_optical_depths = True
 
+    @timed("Pipeline._get_los_optical_depths")
     def _get_los_optical_depths(self, galaxy):
         """Compute the Line of Sight optical depths for all particles.
 
@@ -1363,6 +1429,7 @@ class Pipeline:
         # by default)
         self._write_sfzh = write or self._write_sfzh
 
+    @timed("Pipeline._get_sfzh")
     def _get_sfzh(self, galaxy):
         """Compute the SFZH grid for each galaxy.
 
@@ -1440,6 +1507,7 @@ class Pipeline:
         # by default)
         self._write_sfh = write or self._write_sfh
 
+    @timed("Pipeline._get_sfh")
     def _get_sfh(self, galaxy):
         """Compute the binned SFH for each galaxy.
 
@@ -1508,6 +1576,7 @@ class Pipeline:
         # Spectra has no kwargs so we don't need to store anything in
         # the handler (self._operation_kwargs)
 
+    @timed("Pipeline._get_spectra")
     def _get_spectra(self, galaxy):
         """Generate the spectra for the galaxies based on the EmissionModel.
 
@@ -1574,6 +1643,7 @@ class Pipeline:
         # write or not write
         self.get_spectra(write=False)
 
+    @timed("Pipeline._get_observed_spectra")
     def _get_observed_spectra(self, galaxy):
         """Compute the observed spectra for each galaxy.
 
@@ -1678,6 +1748,7 @@ class Pipeline:
         # write or not write
         self.get_spectra(write=False)
 
+    @timed("Pipeline._get_photometry_luminosities")
     def _get_photometry_luminosities(self, galaxy):
         """Compute the photometric luminosities from the generated spectra.
 
@@ -1795,6 +1866,7 @@ class Pipeline:
         # the original intent to write or not write
         self.get_observed_spectra(cosmo=cosmo, igm=igm, write=False)
 
+    @timed("Pipeline._get_photometry_fluxes")
     def _get_photometry_fluxes(self, galaxy):
         """Compute the photometric fluxes from the generated spectra.
 
@@ -1877,6 +1949,7 @@ class Pipeline:
         # Store the line IDs, we'll write these once later
         self.line_ids = line_ids
 
+    @timed("Pipeline._get_lines")
     def _get_lines(self, galaxy):
         """Generate the emission lines for the galaxies.
 
@@ -1996,6 +2069,7 @@ class Pipeline:
         # write or not write
         self.get_lines(line_ids=line_ids, write=False)
 
+    @timed("Pipeline._get_observed_lines")
     def _get_observed_lines(self, galaxy):
         """Compute the observed emission lines for each galaxy.
 
@@ -2180,6 +2254,7 @@ class Pipeline:
             write=False,
         )
 
+    @timed("Pipeline._get_images_luminosity")
     def _get_images_luminosity(self, galaxy):
         """Compute the luminosity images for the galaxies.
 
@@ -2430,6 +2505,7 @@ class Pipeline:
             write=False,
         )
 
+    @timed("Pipeline._get_images_flux")
     def _get_images_flux(self, galaxy):
         """Compute the flux images for the galaxies.
 
@@ -2647,6 +2723,7 @@ class Pipeline:
         # respect the original intent to write or not write
         self.get_spectra(write=False)
 
+    @timed("Pipeline._get_data_cubes_lnu")
     def _get_data_cubes_lnu(self, galaxy):
         """Compute the luminosity data cubes for the galaxy.
 
@@ -2835,6 +2912,7 @@ class Pipeline:
         # respect the original intent to write or not write
         self.get_observed_spectra(write=False, cosmo=cosmo, igm=igm)
 
+    @timed("Pipeline._get_data_cubes_fnu")
     def _get_data_cubes_fnu(self, galaxy):
         """Compute the flux density data cubes for the galaxy.
 
@@ -2964,6 +3042,7 @@ class Pipeline:
         # respect the original intent to write or not write
         self.get_spectra(write=False)
 
+    @timed("Pipeline._get_spectroscopy_lnu")
     def _get_spectroscopy_lnu(self, galaxy):
         """Compute the spectral luminosity density for the galaxy.
 
@@ -3080,6 +3159,7 @@ class Pipeline:
         # respect the original intent to write or not write
         self.get_observed_spectra(write=False, cosmo=cosmo, igm=igm)
 
+    @timed("Pipeline._get_spectroscopy_fnu")
     def _get_spectroscopy_fnu(self, galaxy):
         """Compute the spectral flux density for the galaxy.
 
@@ -3120,6 +3200,7 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Spectroscopy Fnu"] += time.perf_counter() - start
 
+    @timed("Pipeline._run_extra_analysis")
     def _run_extra_analysis(self, galaxy):
         """Call any user provided analysis functions.
 
@@ -3152,7 +3233,8 @@ class Pipeline:
             # Run the analysis function on this galaxy
             try:
                 func_start = time.perf_counter()
-                res = func(galaxy, *args, **kwargs)
+                with timer(f"Pipeline._run_extra_analysis.{key}"):
+                    res = func(galaxy, *args, **kwargs)
 
                 # Count the number of times we have run this function
                 self._op_counts["Extra Analyses"] += 1
@@ -3175,6 +3257,7 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Extra Analyses"] += time.perf_counter() - start
 
+    @timed("Pipeline._unpack_results")
     def _unpack_results(self, galaxy):
         """Unpack the results from the galaxy into the pipeline.
 
@@ -3512,6 +3595,7 @@ class Pipeline:
         # Done!
         self._op_timing["Unpacking results"] += time.perf_counter() - start
 
+    @timed("Pipeline.run")
     def run(self):
         """Run the pipeline.
 
@@ -3565,13 +3649,15 @@ class Pipeline:
 
         # Ok we are good to go! Report the last metadata and then get going
         if self.rank == 0:
-            self._report_instruments()
+            with timer("Pipeline.run.report_instruments"):
+                self._report_instruments()
 
         # Prewarm instruments before processing galaxies.
         self._prepare_instruments()
 
         # Print the header for the pipeline run to the console
-        self._print_progress_header()
+        with timer("Pipeline.run.print_progress_header"):
+            self._print_progress_header()
 
         # Loop over galaxies and compute what has been requested using get_*
         # signalling methods
@@ -3580,7 +3666,8 @@ class Pipeline:
             start_gal = time.perf_counter()
 
             # Pop the first galaxy from the list
-            gal = self.galaxies.pop(0)
+            with timer("Pipeline.run.pop_galaxy"):
+                gal = self.galaxies.pop(0)
 
             # Are we generating LOS optical depths?
             # Note that this can only be done on galaxies prior to any
@@ -3604,7 +3691,8 @@ class Pipeline:
             # containing the original gal above)
             while len(gals) > 0:
                 # Get the next galaxy
-                _gal = gals.pop(0)
+                with timer("Pipeline.run.pop_chunk"):
+                    _gal = gals.pop(0)
 
                 # Are we generating SFZHs?
                 if self._do_sfzh:
@@ -3666,8 +3754,11 @@ class Pipeline:
                 # parent galaxy once this chunk has been processed.
                 # Combine back onto the original galaxy if necessary
                 if _gal is not gal:
-                    accumulate_pipeline_results_from_child(gal, _gal)
-                    del _gal
+                    with timer("Pipeline.run.accumulate_child"):
+                        accumulate_pipeline_results_from_child(gal, _gal)
+
+                    with timer("Pipeline.run.cleanup_child"):
+                        del _gal
 
             # Run any extra analysis functions
             self._run_extra_analysis(gal)
@@ -3680,13 +3771,22 @@ class Pipeline:
             igal += 1
 
             # Now we can remove the galaxy to free up memory
-            del gal
+            with timer("Pipeline.run.cleanup_galaxy"):
+                del gal
 
         # print the footer for the pipeline run to the console
-        self._print_progress_footer()
+        with timer("Pipeline.run.print_progress_footer"):
+            self._print_progress_footer()
+
+        # Synchronise ranks before reporting timings so waiting time is
+        # measured separately from the report aggregation and printing.
+        if self.using_mpi:
+            with timer("Pipeline.run.synchronisation"):
+                self.comm.Barrier()
 
         # We're done! Report the time taken
-        self._report_total_timings()
+        with timer("Pipeline.run.report_total_timings"):
+            self._report_total_timings()
 
         # Clean up the outputs
         self._clean_outputs()
@@ -3694,6 +3794,7 @@ class Pipeline:
         # Flag that we have run the pipeline
         self._analysis_complete = True
 
+    @timed("Pipeline._clean_outputs")
     def _clean_outputs(self):
         """Clean up the lists attached to the pipeline.
 
@@ -3920,6 +4021,7 @@ class Pipeline:
 
         self._took(start, "Cleaning outputs")
 
+    @timed("Pipeline.write")
     def write(self, outpath, verbose=None):
         """Write what we have produced to a HDF5 file.
 
