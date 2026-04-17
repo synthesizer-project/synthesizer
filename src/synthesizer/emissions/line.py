@@ -57,42 +57,15 @@ from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emissions import line_ratios
 from synthesizer.emissions.sed import Sed
-from synthesizer.emissions.utils import alias_to_line_id
+from synthesizer.emissions.utils import (
+    DIAGRAM_REQUIREMENTS,
+    RATIO_REQUIREMENTS,
+    alias_to_line_id,
+)
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
-
-
-def _get_ratio_requirements():
-    """Precompute required line ids for each ratio definition."""
-    requirements = {}
-    for ratio_id, ratio in line_ratios.ratios.items():
-        ratio_line_ids = set()
-        for line_ids in ratio:
-            ratio_line_ids.update(
-                line_id.strip() for line_id in line_ids.split(",")
-            )
-        requirements[ratio_id] = frozenset(ratio_line_ids)
-    return requirements
-
-
-def _get_diagram_requirements():
-    """Precompute required line ids for each diagram definition."""
-    requirements = {}
-    for diagram_id, diagram in line_ratios.diagrams.items():
-        diagram_line_ids = set()
-        for ratio in diagram:
-            for line_ids in ratio:
-                diagram_line_ids.update(
-                    line_id.strip() for line_id in line_ids.split(",")
-                )
-        requirements[diagram_id] = frozenset(diagram_line_ids)
-    return requirements
-
-
-_RATIO_REQUIREMENTS = _get_ratio_requirements()
-_DIAGRAM_REQUIREMENTS = _get_diagram_requirements()
 
 
 class LineCollection:
@@ -233,7 +206,7 @@ class LineCollection:
             },
             "available_ratios": tuple(
                 ratio_id
-                for ratio_id, ratio_line_ids in _RATIO_REQUIREMENTS.items()
+                for ratio_id, ratio_line_ids in RATIO_REQUIREMENTS.items()
                 if ratio_line_ids.issubset(individual_line_ids)
             ),
             "available_diagrams": tuple(
@@ -241,7 +214,7 @@ class LineCollection:
                 for (
                     diagram_id,
                     diagram_line_ids,
-                ) in _DIAGRAM_REQUIREMENTS.items()
+                ) in DIAGRAM_REQUIREMENTS.items()
                 if diagram_line_ids.issubset(line_id_set)
             ),
         }
