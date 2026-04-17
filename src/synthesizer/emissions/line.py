@@ -58,9 +58,11 @@ from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emissions import line_ratios
 from synthesizer.emissions.sed import Sed
 from synthesizer.emissions.utils import (
-    DIAGRAM_REQUIREMENTS,
-    RATIO_REQUIREMENTS,
     alias_to_line_id,
+    get_available_diagram_ids,
+    get_available_ratio_ids,
+    get_line2index,
+    get_line_id_signature,
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
@@ -120,8 +122,6 @@ class LineCollection:
     obslam = Quantity("wavelength")
     vacuum_wavelength = Quantity("wavelength")
 
-    _metadata_cache = {}
-
     @accepts(lam=angstrom, lum=erg / s, cont=erg / s / Hz)
     @timed("LineCollection.__init__")
     def __init__(self, line_ids, lam, lum, cont, description=None):
@@ -172,54 +172,13 @@ class LineCollection:
         self.flux = None
         self.continuum_flux = None
 
-        # So we can do easy look ups in the future we need to make an index
-        # look up table to map line ids to indices and enable dictionary like
-        # look ups
-        self._metadata = self._get_metadata(self.line_ids)
-        self._line2index = self._metadata["line2index"]
-
         # Atrributes to enable looping
         self._current_ind = 0
 
-        # Delay ratio/diagram discovery until first access. Most production
-        # paths only need the line payload and never query this metadata.
+        # Delay all constructor-side metadata work until first access
+        self._line2index = None
         self._available_ratios = None
         self._available_diagrams = None
-
-    @classmethod
-    def _get_metadata(cls, line_ids):
-        """Get cached metadata for a line-id signature."""
-        signature = tuple(line_ids)
-        metadata = cls._metadata_cache.get(signature)
-        if metadata is not None:
-            return metadata
-
-        line_id_set = set(signature)
-        individual_line_ids = {
-            line_id.strip()
-            for line_ids in signature
-            for line_id in line_ids.split(",")
-        }
-        metadata = {
-            "line2index": {
-                line_id: index for index, line_id in enumerate(signature)
-            },
-            "available_ratios": tuple(
-                ratio_id
-                for ratio_id, ratio_line_ids in RATIO_REQUIREMENTS.items()
-                if ratio_line_ids.issubset(individual_line_ids)
-            ),
-            "available_diagrams": tuple(
-                diagram_id
-                for (
-                    diagram_id,
-                    diagram_line_ids,
-                ) in DIAGRAM_REQUIREMENTS.items()
-                if diagram_line_ids.issubset(line_id_set)
-            ),
-        }
-        cls._metadata_cache[signature] = metadata
-        return metadata
 
     @property
     def id(self):
@@ -283,29 +242,78 @@ class LineCollection:
 
     @property
     def available_ratios(self):
-        """Return ratio ids lazily derived from the available lines."""
+        """Return ratio ids lazily derived from the available lines.
+
+        Returns:
+            list:
+                The predefined ratio ids available for this collection.
+        """
         if self._available_ratios is None:
-            self._available_ratios = list(self._metadata["available_ratios"])
+            # Get the hashable signature for the line ids
+            signature = get_line_id_signature(self.line_ids)
+
+            # Get the available ratio ids for this signature and remember
+            # it for later
+            self._available_ratios = list(get_available_ratio_ids(signature))
         return self._available_ratios
 
     @available_ratios.setter
     def available_ratios(self, value):
-        """Allow explicit override of the cached ratio list."""
+        """Allow explicit override of the cached ratio list.
+
+        Args:
+            value (iterable or None):
+                The ratio ids to cache on the instance, or None to clear the
+                cached value.
+        """
         self._available_ratios = list(value) if value is not None else None
 
     @property
     def available_diagrams(self):
-        """Return diagram ids lazily derived from the available lines."""
+        """Return diagram ids lazily derived from the available lines.
+
+        Returns:
+            list:
+                The predefined diagram ids available for this collection.
+        """
         if self._available_diagrams is None:
+            # Get the hashable signature for the line ids
+            signature = get_line_id_signature(self.line_ids)
+
+            # Get the available diagram ids for this signature and remember it
+            # for later
             self._available_diagrams = list(
-                self._metadata["available_diagrams"]
+                get_available_diagram_ids(signature)
             )
         return self._available_diagrams
 
     @available_diagrams.setter
     def available_diagrams(self, value):
-        """Allow explicit override of the cached diagram list."""
+        """Allow explicit override of the cached diagram list.
+
+        Args:
+            value (iterable or None):
+                The diagram ids to cache on the instance, or None to clear the
+                cached value.
+        """
         self._available_diagrams = list(value) if value is not None else None
+
+    @property
+    def line2index(self):
+        """Return the line-id to index mapping lazily.
+
+        Returns:
+            dict:
+                A mapping from each stored line id to its array index.
+        """
+        if self._line2index is None:
+            # Get the hashable signature for the line ids
+            signature = get_line_id_signature(self.line_ids)
+
+            # Get the line2index mapping for this signature and remember it
+            # for later
+            self._line2index = get_line2index(signature)
+        return self._line2index
 
     @property
     def vacuum_wavelengths(self):
@@ -648,15 +656,15 @@ class LineCollection:
             new_line = LineCollection(
                 line_ids=[line_id],
                 lam=unyt_array(
-                    [self.lam[self._line2index[line_id]]],
+                    [self.lam[self.line2index[line_id]]],
                     self.lam.units,
                 ),
                 lum=unyt_array(
-                    [self.luminosity[..., self._line2index[line_id]]],
+                    [self.luminosity[..., self.line2index[line_id]]],
                     self.luminosity.units,
                 ),
                 cont=unyt_array(
-                    [self.continuum[..., self._line2index[line_id]]],
+                    [self.continuum[..., self.line2index[line_id]]],
                     self.continuum.units,
                 ),
             )
@@ -664,15 +672,15 @@ class LineCollection:
             # Copy over the flux and observed wavelength if they exist
             if self.flux is not None:
                 new_line.flux = unyt_array(
-                    [self.flux[..., self._line2index[line_id]]],
+                    [self.flux[..., self.line2index[line_id]]],
                     self.flux.units,
                 )
                 new_line.continuum_flux = unyt_array(
-                    [self.continuum_flux[..., self._line2index[line_id]]],
+                    [self.continuum_flux[..., self.line2index[line_id]]],
                     self.continuum_flux.units,
                 )
                 new_line.obslam = unyt_array(
-                    [self.obslam[self._line2index[line_id]]],
+                    [self.obslam[self.line2index[line_id]]],
                     self.obslam.units,
                 )
 
@@ -687,34 +695,34 @@ class LineCollection:
             ]
 
             # Loop over the lines and combine them into a single line
-            new_lam = self.lam[self._line2index[line_ids[0]]]
-            new_lum = self.luminosity[..., self._line2index[line_ids[0]]]
-            new_cont = self.continuum[..., self._line2index[line_ids[0]]]
+            new_lam = self.lam[self.line2index[line_ids[0]]]
+            new_lum = self.luminosity[..., self.line2index[line_ids[0]]]
+            new_cont = self.continuum[..., self.line2index[line_ids[0]]]
             new_flux = (
-                self.flux[..., self._line2index[line_ids[0]]]
+                self.flux[..., self.line2index[line_ids[0]]]
                 if self.flux is not None
                 else None
             )
             new_obs_cont = (
-                self.continuum_flux[..., self._line2index[line_ids[0]]]
+                self.continuum_flux[..., self.line2index[line_ids[0]]]
                 if self.continuum_flux is not None
                 else None
             )
             new_obslam = (
-                self.obslam[self._line2index[line_ids[0]]]
+                self.obslam[self.line2index[line_ids[0]]]
                 if self.obslam is not None
                 else None
             )
             for li in line_ids[1:]:
-                new_lam += self.lam[self._line2index[li]]
-                new_lum += self.luminosity[..., self._line2index[li]]
-                new_cont += self.continuum[..., self._line2index[li]]
+                new_lam += self.lam[self.line2index[li]]
+                new_lum += self.luminosity[..., self.line2index[li]]
+                new_cont += self.continuum[..., self.line2index[li]]
                 if self.flux is not None:
-                    new_flux += self.flux[..., self._line2index[li]]
+                    new_flux += self.flux[..., self.line2index[li]]
                     new_obs_cont += self.continuum_flux[
-                        ..., self._line2index[li]
+                        ..., self.line2index[li]
                     ]
-                    new_obslam += self.obslam[self._line2index[li]]
+                    new_obslam += self.obslam[self.line2index[li]]
 
             # Create the new line (converting the wavelength to the mean of the
             # individual lines)
@@ -875,12 +883,14 @@ class LineCollection:
 
     def _which_ratios(self):
         """Determine the available line ratios for this LineCollection."""
-        self.available_ratios = self._metadata["available_ratios"]
+        signature = get_line_id_signature(self.line_ids)
+        self.available_ratios = get_available_ratio_ids(signature)
         return self.available_ratios
 
     def _which_diagrams(self):
         """Determine the available line diagrams for this LineCollection."""
-        self.available_diagrams = self._metadata["available_diagrams"]
+        signature = get_line_id_signature(self.line_ids)
+        self.available_diagrams = get_available_diagram_ids(signature)
         return self.available_diagrams
 
     def get_flux0(self):

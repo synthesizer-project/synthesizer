@@ -42,6 +42,8 @@ Example usage:
 
 """
 
+from functools import lru_cache
+
 import numpy as np
 from unyt import angstrom
 
@@ -193,13 +195,21 @@ def flatten_linelist(list_to_flatten):
 
 
 def get_ratio_requirements():
-    """Precompute required line ids for each ratio definition."""
+    """Precompute required line ids for each ratio definition.
+
+    Returns:
+        dict:
+            A mapping from ratio id to the frozen set of required line ids.
+    """
     # Import lazily to avoid a module cycle: line_ratios imports alias helpers
     # from this module while LineCollection imports these cached requirements.
     from synthesizer.emissions import line_ratios
 
+    # Build a mapping from ratio id to the full set of line ids required to
+    # evaluate that ratio.
     requirements = {}
     for ratio_id, ratio in line_ratios.ratios.items():
+        # Collect the individual constituent line ids for this ratio.
         ratio_line_ids = set()
 
         # Expand any composite entries so each ratio maps to the individual
@@ -209,19 +219,30 @@ def get_ratio_requirements():
                 line_id.strip() for line_id in line_ids.split(",")
             )
 
+        # Freeze the required-id set so it is safe to cache and reuse.
         requirements[ratio_id] = frozenset(ratio_line_ids)
 
+    # Return the full ratio requirement lookup for module-level reuse.
     return requirements
 
 
 def get_diagram_requirements():
-    """Precompute required line ids for each diagram definition."""
+    """Precompute required line ids for each diagram definition.
+
+    Returns:
+        dict:
+            A mapping from diagram id to the frozen set of required line ids.
+    """
     # Import lazily to avoid a module cycle: line_ratios imports alias helpers
     # from this module while LineCollection imports these cached requirements.
     from synthesizer.emissions import line_ratios
 
+    # Build a mapping from diagram id to the full set of line ids required to
+    # evaluate all ratios in that diagnostic diagram.
     requirements = {}
     for diagram_id, diagram in line_ratios.diagrams.items():
+        # Collect the individual constituent line ids used anywhere in this
+        # diagram's component ratios.
         diagram_line_ids = set()
 
         # Diagrams are defined in terms of ratios, so flatten both the ratio
@@ -232,9 +253,96 @@ def get_diagram_requirements():
                     line_id.strip() for line_id in line_ids.split(",")
                 )
 
+        # Freeze the required-id set so it is safe to cache and reuse.
         requirements[diagram_id] = frozenset(diagram_line_ids)
 
+    # Return the full diagram requirement lookup for module-level reuse.
     return requirements
+
+
+def get_line_id_signature(line_ids):
+    """Return the canonical cache key for a line-id sequence.
+
+    Args:
+        line_ids (array-like):
+            The ordered sequence of line ids describing the collection.
+
+    Returns:
+        tuple:
+            The ordered line ids converted into a hashable cache key.
+    """
+    # Use the exact ordered line-id tuple as the cache key. This preserves the
+    # collection ordering used by LineCollection and any array-based lookups.
+    return tuple(line_ids)
+
+
+@lru_cache(maxsize=100)
+def get_line2index(signature):
+    """Get a cached line-id to index mapping.
+
+    Args:
+        signature (tuple):
+            The ordered tuple of line ids describing the collection.
+
+    Returns:
+        dict:
+            A mapping from each stored line id to its array index.
+    """
+    # Build the mapping from each stored line id to its array index
+    return {line_id: index for index, line_id in enumerate(signature)}
+
+
+@lru_cache(maxsize=100)
+def get_available_ratio_ids(signature):
+    """Get the cached ratio ids for a line-id signature.
+
+    Args:
+        signature (tuple):
+            The ordered tuple of line ids describing the collection.
+
+    Returns:
+        tuple:
+            The tuple of predefined ratio ids available for these lines.
+    """
+    # Split any composite entries such as doublets into their individual
+    # constituent line ids
+    individual_line_ids = {
+        line_id.strip()
+        for line_ids in signature
+        for line_id in line_ids.split(",")
+    }
+
+    # Determine which predefined ratios are available by checking whether each
+    # ratio's required constituent ids are present
+    return tuple(
+        ratio_id
+        for ratio_id, ratio_line_ids in RATIO_REQUIREMENTS.items()
+        if ratio_line_ids.issubset(individual_line_ids)
+    )
+
+
+@lru_cache(maxsize=None)
+def get_available_diagram_ids(signature):
+    """Get the cached diagram ids for a line-id signature.
+
+    Args:
+        signature (tuple):
+            The ordered tuple of line ids describing the collection.
+
+    Returns:
+        tuple:
+            The tuple of predefined diagram ids available for these lines.
+    """
+    # Build the set of full stored line ids
+    line_id_set = set(signature)
+
+    # Determine which predefined diagrams are available by checking whether
+    # each diagram's required line ids are present in the collection
+    return tuple(
+        diagram_id
+        for diagram_id, diagram_line_ids in DIAGRAM_REQUIREMENTS.items()
+        if diagram_line_ids.issubset(line_id_set)
+    )
 
 
 def get_roman_numeral(number):
