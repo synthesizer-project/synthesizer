@@ -3778,6 +3778,12 @@ class Pipeline:
         with timer("Pipeline.run.print_progress_footer"):
             self._print_progress_footer()
 
+        # Synchronise ranks before reporting timings so waiting time is
+        # measured separately from the report aggregation and printing.
+        if self.using_mpi:
+            with timer("Pipeline.run.synchronisation"):
+                self.comm.Barrier()
+
         # We're done! Report the time taken
         with timer("Pipeline.run.report_total_timings"):
             self._report_total_timings()
