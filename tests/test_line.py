@@ -381,14 +381,18 @@ class TestLineRatiosAndDiagrams:
         """Ratio and diagram discovery should be deferred until needed."""
         lines = line_ratio_collection
 
+        assert lines._line2index is None
         assert lines._available_ratios is None
         assert lines._available_diagrams is None
 
+        line2index = lines.line2index
         ratios = lines.available_ratios
         diagrams = lines.available_diagrams
 
+        assert isinstance(line2index, dict)
         assert isinstance(ratios, list)
         assert isinstance(diagrams, list)
+        assert lines._line2index is line2index
         assert lines._available_ratios is ratios
         assert lines._available_diagrams is diagrams
 
