@@ -44,7 +44,6 @@ from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.extensions.reductions import reduce_particle_spectra
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
@@ -1202,8 +1201,6 @@ class Sed:
             (PhotometryCollection):
                 Rest-frame broadband luminosities.
         """
-        tic("Sed.get_photo_lnu.apply_filters")
-
         # Apply all filters in one batched integration call.
         bb_lums = filters.apply_filters(
             self._lnu,
@@ -1211,10 +1208,8 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Sed.get_photo_lnu.apply_filters")
 
         # Create the photometry collection and store it in the object
-        tic("Sed.get_photo_lnu.stack_photometry")
         self.photo_lnu = PhotometryCollection(
             filters,
             photometry=unyt_array(
@@ -1223,7 +1218,6 @@ class Sed:
                 bypass_validation=True,
             ),
         )
-        toc("Sed.get_photo_lnu.stack_photometry")
 
         return self.photo_lnu
 
@@ -1259,8 +1253,6 @@ class Sed:
                 )
             )
 
-        tic("Sed.get_photo_fnu.apply_filters")
-
         # Apply all filters in one batched integration call.
         bb_fluxes = filters.apply_filters(
             self._fnu,
@@ -1268,10 +1260,8 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Sed.get_photo_fnu.apply_filters")
 
         # Create the photometry collection and store it in the object
-        tic("Sed.get_photo_fnu.stack_photometry")
         self.photo_fnu = PhotometryCollection(
             filters,
             photometry=unyt_array(
@@ -1280,7 +1270,6 @@ class Sed:
                 bypass_validation=True,
             ),
         )
-        toc("Sed.get_photo_fnu.stack_photometry")
 
         return self.photo_fnu
 
