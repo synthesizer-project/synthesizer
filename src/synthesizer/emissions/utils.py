@@ -192,6 +192,51 @@ def flatten_linelist(list_to_flatten):
     return list(set(flattened_list))
 
 
+def get_ratio_requirements():
+    """Precompute required line ids for each ratio definition."""
+    # Import lazily to avoid a module cycle: line_ratios imports alias helpers
+    # from this module while LineCollection imports these cached requirements.
+    from synthesizer.emissions import line_ratios
+
+    requirements = {}
+    for ratio_id, ratio in line_ratios.ratios.items():
+        ratio_line_ids = set()
+
+        # Expand any composite entries so each ratio maps to the individual
+        # line ids that must be present in a LineCollection.
+        for line_ids in ratio:
+            ratio_line_ids.update(
+                line_id.strip() for line_id in line_ids.split(",")
+            )
+
+        requirements[ratio_id] = frozenset(ratio_line_ids)
+
+    return requirements
+
+
+def get_diagram_requirements():
+    """Precompute required line ids for each diagram definition."""
+    # Import lazily to avoid a module cycle: line_ratios imports alias helpers
+    # from this module while LineCollection imports these cached requirements.
+    from synthesizer.emissions import line_ratios
+
+    requirements = {}
+    for diagram_id, diagram in line_ratios.diagrams.items():
+        diagram_line_ids = set()
+
+        # Diagrams are defined in terms of ratios, so flatten both the ratio
+        # pairs and any composite line entries into one required-id set.
+        for ratio in diagram:
+            for line_ids in ratio:
+                diagram_line_ids.update(
+                    line_id.strip() for line_id in line_ids.split(",")
+                )
+
+        requirements[diagram_id] = frozenset(diagram_line_ids)
+
+    return requirements
+
+
 def get_roman_numeral(number):
     """Convert an integer into a roman numeral str.
 
@@ -411,3 +456,7 @@ def combine_list_of_seds(sed_list):
         out_sed = out_sed.concat(sed)
 
     return out_sed
+
+
+RATIO_REQUIREMENTS = get_ratio_requirements()
+DIAGRAM_REQUIREMENTS = get_diagram_requirements()
