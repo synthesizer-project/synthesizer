@@ -64,6 +64,37 @@ from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
 
 
+def _get_ratio_requirements():
+    """Precompute required line ids for each ratio definition."""
+    requirements = {}
+    for ratio_id, ratio in line_ratios.ratios.items():
+        ratio_line_ids = set()
+        for line_ids in ratio:
+            ratio_line_ids.update(
+                line_id.strip() for line_id in line_ids.split(",")
+            )
+        requirements[ratio_id] = frozenset(ratio_line_ids)
+    return requirements
+
+
+def _get_diagram_requirements():
+    """Precompute required line ids for each diagram definition."""
+    requirements = {}
+    for diagram_id, diagram in line_ratios.diagrams.items():
+        diagram_line_ids = set()
+        for ratio in diagram:
+            for line_ids in ratio:
+                diagram_line_ids.update(
+                    line_id.strip() for line_id in line_ids.split(",")
+                )
+        requirements[diagram_id] = frozenset(diagram_line_ids)
+    return requirements
+
+
+_RATIO_REQUIREMENTS = _get_ratio_requirements()
+_DIAGRAM_REQUIREMENTS = _get_diagram_requirements()
+
+
 class LineCollection:
     """A class holding a collection of emission lines.
 
@@ -116,6 +147,8 @@ class LineCollection:
     obslam = Quantity("wavelength")
     vacuum_wavelength = Quantity("wavelength")
 
+    _metadata_cache = {}
+
     @accepts(lam=angstrom, lum=erg / s, cont=erg / s / Hz)
     @timed("LineCollection.__init__")
     def __init__(self, line_ids, lam, lum, cont, description=None):
@@ -141,7 +174,7 @@ class LineCollection:
         # passed as a string or a list of lines.
         if isinstance(line_ids, str):
             line_ids = [line_ids]
-        self.line_ids = np.array(line_ids, dtype=str)
+        self.line_ids = np.asarray(line_ids, dtype=str)
 
         # How many lines do we have?
         self.nlines = len(self.line_ids)
@@ -169,20 +202,51 @@ class LineCollection:
         # So we can do easy look ups in the future we need to make an index
         # look up table to map line ids to indices and enable dictionary like
         # look ups
-        self._line2index = {
-            line_id: i for i, line_id in enumerate(self.line_ids)
-        }
+        self._metadata = self._get_metadata(self.line_ids)
+        self._line2index = self._metadata["line2index"]
 
         # Atrributes to enable looping
         self._current_ind = 0
 
-        # Get which ratios we have available from the lines we contain
-        self.available_ratios = []
-        self._which_ratios()
+        # Delay ratio/diagram discovery until first access. Most production
+        # paths only need the line payload and never query this metadata.
+        self._available_ratios = None
+        self._available_diagrams = None
 
-        # Get which diagrams we have available from the lines we contain
-        self.available_diagrams = []
-        self._which_diagrams()
+    @classmethod
+    def _get_metadata(cls, line_ids):
+        """Get cached metadata for a line-id signature."""
+        signature = tuple(line_ids)
+        metadata = cls._metadata_cache.get(signature)
+        if metadata is not None:
+            return metadata
+
+        line_id_set = set(signature)
+        individual_line_ids = {
+            line_id.strip()
+            for line_ids in signature
+            for line_id in line_ids.split(",")
+        }
+        metadata = {
+            "line2index": {
+                line_id: index for index, line_id in enumerate(signature)
+            },
+            "available_ratios": tuple(
+                ratio_id
+                for ratio_id, ratio_line_ids in _RATIO_REQUIREMENTS.items()
+                if ratio_line_ids.issubset(individual_line_ids)
+            ),
+            "available_diagrams": tuple(
+                diagram_id
+                for (
+                    diagram_id,
+                    diagram_line_ids,
+                ) in _DIAGRAM_REQUIREMENTS.items()
+                if diagram_line_ids.issubset(line_id_set)
+            ),
+        }
+        cls._metadata_cache[signature] = metadata
+        return metadata
 
     @property
     def id(self):
@@ -243,6 +307,32 @@ class LineCollection:
             for lids in self.line_ids
             for lid in lids.split(",")
         )
+
+    @property
+    def available_ratios(self):
+        """Return ratio ids lazily derived from the available lines."""
+        if self._available_ratios is None:
+            self._available_ratios = list(self._metadata["available_ratios"])
+        return self._available_ratios
+
+    @available_ratios.setter
+    def available_ratios(self, value):
+        """Allow explicit override of the cached ratio list."""
+        self._available_ratios = list(value) if value is not None else None
+
+    @property
+    def available_diagrams(self):
+        """Return diagram ids lazily derived from the available lines."""
+        if self._available_diagrams is None:
+            self._available_diagrams = list(
+                self._metadata["available_diagrams"]
+            )
+        return self._available_diagrams
+
+    @available_diagrams.setter
+    def available_diagrams(self, value):
+        """Allow explicit override of the cached diagram list."""
+        self._available_diagrams = list(value) if value is not None else None
 
     @property
     def vacuum_wavelengths(self):
@@ -812,37 +902,13 @@ class LineCollection:
 
     def _which_ratios(self):
         """Determine the available line ratios for this LineCollection."""
-        # Create list of available line ratios
-        for ratio_id, ratio in line_ratios.ratios.items():
-            # Create a set from the ratio line ids while also unpacking
-            # any comma separated lines
-            ratio_line_ids = set()
-            for lis in ratio:
-                ratio_line_ids.update({li.strip() for li in lis.split(",")})
-
-            # If we have all the lines required for this ratio, add it to the
-            # list of available ratios
-            if ratio_line_ids.issubset(self._individual_line_ids):
-                self.available_ratios.append(ratio_id)
+        self.available_ratios = self._metadata["available_ratios"]
+        return self.available_ratios
 
     def _which_diagrams(self):
         """Determine the available line diagrams for this LineCollection."""
-        # Create list of available line diagnostics
-        self.available_diagrams = []
-        for diagram_id, diagram in line_ratios.diagrams.items():
-            # Create a set from the diagram line ids while also unpacking
-            # any comma separated lines
-            diagram_line_ids = set()
-            for ratio in diagram:
-                for lis in ratio:
-                    diagram_line_ids.update(
-                        {li.strip() for li in lis.split(",")}
-                    )
-
-            # If we have all the lines required for this diagram, add it to the
-            # list of available diagrams
-            if set(diagram_line_ids).issubset(self.line_ids):
-                self.available_diagrams.append(diagram_id)
+        self.available_diagrams = self._metadata["available_diagrams"]
+        return self.available_diagrams
 
     def get_flux0(self):
         """Calculate the rest frame line flux.
