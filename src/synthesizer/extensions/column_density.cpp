@@ -606,10 +606,38 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   return Py_BuildValue("N", np_surf_dens);
 }
 
+/**
+ * @brief Stub entry point for LOS column densities with smoothed inputs.
+ *
+ * This path exists so the Python interface and extension data flow can be
+ * staged separately from the kernel-overlap implementation.
+ *
+ * @param self The Python self object.
+ * @param args The Python argument tuple.
+ * @return Always NULL with a NotImplementedError set.
+ */
+PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
+
+  /* We don't need these arguments yet, but the function signature must remain
+   * stable while we stage the implementation. */
+  (void)self;
+  (void)args;
+
+  PyErr_SetString(
+      PyExc_NotImplementedError,
+      "LOS column densities with kernel-smoothed input particles "
+      "have not yet been implemented in the extension.");
+  return NULL;
+}
+
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef LosMethods[] = {
     {"compute_column_density", (PyCFunction)compute_column_density,
      METH_VARARGS, "Method for calculating line of sight surface densities."},
+    {"compute_column_density_smoothed",
+     (PyCFunction)compute_column_density_smoothed, METH_VARARGS,
+     "Method for calculating line of sight surface densities with smoothed "
+     "input particles."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */
