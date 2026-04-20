@@ -1464,15 +1464,15 @@ class DraineLiGrainCurves(AttenuationLaw):
         # Accumulate the contribution from each grain component into the final
         # optical-depth array.
         tau_all = np.zeros((nparticles, grid.nlam), dtype=np.float32)
-        tau_scale = ((1.0 * cm**2) / _GAS_MASS_PER_H).to(
-            1 / column_units
-        ).value / 1.086
+        tau_scale = (
+            ((1.0 * cm**2) / _GAS_MASS_PER_H).to(1 / column_units).ndview
+        )
         grid_dtg_axis = grid._extract_axes_values[dtg_axis_name]
         grid_shape = np.array(grid.shape, dtype=np.int32)
         grid_weights = np.ones(nparticles)
         dtg = np.ones(nparticles, dtype=float)
         valid = np.empty(nparticles, dtype=bool)
-        dust_scale = np.zeros(nparticles, dtype=float)
+        hydrogen_column_scale = np.zeros(nparticles, dtype=float)
 
         # Loop over the dust components
         for component_key, dust_col in sigmalos_dust.items():
@@ -1513,7 +1513,7 @@ class DraineLiGrainCurves(AttenuationLaw):
 
             # Call the particle spectra extension directly for this single
             # extraction axis instead of going through generate_lnu.
-            component_curves, _ = compute_particle_seds(
+            component_alam_by_hydrogen_col, _ = compute_particle_seds(
                 grid.spectra[dataset_key],
                 (grid_dtg_axis,),
                 (dtg_grid_values,),
@@ -1529,13 +1529,17 @@ class DraineLiGrainCurves(AttenuationLaw):
                 (dtg_axis_name,),
             )
 
-            # Convert from mag cm^2 / H nucleus into optical depth per dust
-            # surface density, then multiply by the dust column itself.
-            component_tau = component_curves * tau_scale
+            # Grid values are in units of mag cm^2 / H nucleus, so we need to
+            # convert from mag cm^2 / H nucleus into optical depth per hydrogen
+            # column
+            component_tau = component_alam_by_hydrogen_col / 1.086
+            # Convert to units of optical depth per column density in the
+            # input sigmalos_H units
+            component_tau *= tau_scale
 
-            dust_scale.fill(0.0)
-            dust_scale[valid] = dust_col[valid]
-            tau_all += component_tau * dust_scale[:, np.newaxis]
+            hydrogen_column_scale.fill(0.0)
+            hydrogen_column_scale[valid] = sigmalos_H[valid]
+            tau_all += component_tau * hydrogen_column_scale[:, np.newaxis]
 
         # Preserve the previous scalar-like return shape for single-particle
         # inputs.
@@ -1577,22 +1581,30 @@ class DraineLiGrainCurves(AttenuationLaw):
                 if sigmalos input is array-like, otherwise shape (N_lambda,)).
                 Dimensionless
         """
-        if sigmalos_H is None and len(sigmalos_dust) == 0:
+        if sigmalos_H is None:
             sigmalos_H = getattr(self, "sigmalos_H", None)
+
+        if not sigmalos_dust:
             # Collect any attributes starting with 'sigmalos_'
             sigmalos_dust = {
                 key: getattr(self, key)
                 for key in vars(self)
                 if key.startswith("sigmalos_") and key != "sigmalos_H"
             }
+
         tau_lam = self.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
         tau_V = self.get_tau_at_lam(
             5500 * angstrom, sigmalos_H, **sigmalos_dust
         )
-        # tau_lam: (N, M) or (M,), tau_V: (N,) or scalar (M==1)
-        if np.ndim(tau_V) <= 1:
-            return tau_lam / tau_V
-        return tau_lam / tau_V[:, np.newaxis]
+
+        # Ignore divide-by-zero and invalid operations because zero column
+        # densities will result in tau_V = 0. The resulting NaNs and Infs are
+        # subsequently cleaned up by np.nan_to_num.
+        with np.errstate(invalid="ignore", divide="ignore"):
+            out = tau_lam / tau_V
+
+        out = np.nan_to_num(out, nan=0.0, posinf=0.0, neginf=0.0)
+        return out
 
     @accepts(lam=angstrom)
     @timed("DraineLiGrainCurves.get_transmission")
