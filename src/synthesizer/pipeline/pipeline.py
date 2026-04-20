@@ -1874,6 +1874,153 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Cosmic SED Lnu"] += time.perf_counter() - start
 
+    def get_observed_cosmic_sed(
+        self,
+        cosmo,
+        igm=None,
+        gal_attr=None,
+        lower_bound=None,
+        upper_bound=None,
+        label=None,
+        write=True,
+    ):
+        """Flag that the Pipeline should compute the observed cosmic SED.
+
+        This will signal the Pipeline to sum the observed spectra into a
+        single observer-frame cosmic SED when the run method is called.
+
+        Args:
+            cosmo (astropy.cosmology.Cosmology):
+                The cosmology to use for the observed spectra.
+            igm (IGMBase):
+                The IGM model to use for the attenuation of the spectra.
+            gal_attr (str):
+                The name of a galaxy attribute to use as a filter for the
+                cosmic SED.
+            lower_bound (float/unyt_quantity):
+                The lower bound to apply to the filter attribute.
+            upper_bound (float/unyt_quantity):
+                The upper bound to apply to the filter attribute.
+            label (str):
+                An optional label for this cosmic SED in the outputs.
+            write (bool):
+                Whether to write out the observed cosmic SED. Default is True.
+        """
+        # If either bound is provided we need an emitter attribute to apply
+        # the filter to
+        if (
+            lower_bound is not None or upper_bound is not None
+        ) and gal_attr is None:
+            raise exceptions.InconsistentArguments(
+                "If either lower_bound or upper_bound is provided, gal_attr "
+                "must be provided to apply the filter to."
+            )
+
+        # Store the arguments for the operation
+        self._operation_kwargs.add(
+            NO_MODEL_LABEL,
+            "get_observed_cosmic_sed",
+            cosmo=cosmo,
+            igm=igm,
+            gal_attr=gal_attr,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            label=label,
+        )
+
+        # Flag that we will compute the observed cosmic SED
+        self._do_cosmic_fnu = True
+
+        # Flag that we will want to write out the observed cosmic SED
+        self._write_cosmic_fnu = write or self._write_cosmic_fnu
+
+        # To compute the observed cosmic SED we need the observed spectra.
+        self.get_observed_spectra(cosmo=cosmo, igm=igm, write=False)
+
+    @timed("Pipeline._get_observed_cosmic_sed")
+    def _get_observed_cosmic_sed(self, galaxy):
+        """Compute the observed cosmic SED contribution for a galaxy.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to compute the observed cosmic SED contribution for.
+        """
+        start = time.perf_counter()
+
+        for _, op_kwargs in self._operation_kwargs["get_observed_cosmic_sed"]:
+            # Set up the filter based on the provided kwargs
+            if op_kwargs["gal_attr"] is not None:
+                gal_value = getattr(galaxy, op_kwargs["gal_attr"], None)
+
+                if gal_value is None:
+                    raise exceptions.PipelineNotReady(
+                        f"Galaxy does not have attribute "
+                        f"{op_kwargs['gal_attr']} "
+                        "to apply the cosmic SED filter: "
+                        f"{op_kwargs['lower_bound']} < "
+                        f"{op_kwargs['gal_attr']} < "
+                        f"{op_kwargs['upper_bound']}"
+                    )
+
+                if (
+                    op_kwargs["lower_bound"] is not None
+                    and gal_value < op_kwargs["lower_bound"]
+                ):
+                    continue
+                if (
+                    op_kwargs["upper_bound"] is not None
+                    and gal_value > op_kwargs["upper_bound"]
+                ):
+                    continue
+
+            label = op_kwargs["label"]
+            if label is None:
+                if op_kwargs["gal_attr"] is None:
+                    label = "All"
+                else:
+                    lower = (
+                        op_kwargs["lower_bound"]
+                        if op_kwargs["lower_bound"] is not None
+                        else "-inf"
+                    )
+                    upper = (
+                        op_kwargs["upper_bound"]
+                        if op_kwargs["upper_bound"] is not None
+                        else "inf"
+                    )
+                    label = (
+                        f"{lower} < {op_kwargs['gal_attr']} < {upper}".replace(
+                            ".", "p"
+                        )
+                    )
+
+            for model_label, sed in galaxy.spectra.items():
+                cosmic_sed = self.cosmic_fnus["Galaxy"].setdefault(label, {})
+                cosmic_sed.setdefault(model_label, 0 * sed.fnu)
+                cosmic_sed[model_label] += sed.fnu
+            if galaxy.stars is not None:
+                for model_label, sed in galaxy.stars.spectra.items():
+                    cosmic_sed = self.cosmic_fnus["Stars"].setdefault(
+                        label, {}
+                    )
+                    cosmic_sed.setdefault(model_label, 0 * sed.fnu)
+                    cosmic_sed[model_label] += sed.fnu
+            if galaxy.black_holes is not None:
+                for model_label, sed in galaxy.black_holes.spectra.items():
+                    cosmic_sed = self.cosmic_fnus["BlackHole"].setdefault(
+                        label, {}
+                    )
+                    cosmic_sed.setdefault(model_label, 0 * sed.fnu)
+                    cosmic_sed[model_label] += sed.fnu
+            if galaxy.gas is not None:
+                pass  # TODO: At the moment gas can't contribute
+
+        # Count the number of observed cosmic SED contributions
+        self._op_counts["Cosmic SED Fnu"] += 1
+
+        # Record the time taken
+        self._op_timing["Cosmic SED Fnu"] += time.perf_counter() - start
+
     def get_photometry_luminosities(
         self,
         *instruments,
