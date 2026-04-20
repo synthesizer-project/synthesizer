@@ -1050,6 +1050,93 @@ class Particles:
             nthreads,
         )
 
+    def _prepare_smoothed_los_args(
+        self,
+        other_parts,
+        attr,
+        kernel,
+        mask,
+        threshold,
+        force_loop,
+        min_count,
+        nthreads,
+    ):
+        """Prepare the arguments for smoothed LOS column density computation.
+
+        Args:
+            other_parts (Particles):
+                The other particles to compute the column density with.
+            attr (str):
+                The attribute to compute the column density of.
+            kernel (array_like, float):
+                A 1D description of the SPH kernel. Values must be in ascending
+                order such that a k element array can be indexed for the value
+                of impact parameter q via kernel[int(k*q)]. Note, this can be
+                an arbitrary kernel.
+            mask (bool):
+                A mask to be applied to the stars. Surface densities will only
+                be computed and returned for stars with True in the mask.
+            threshold (float):
+                The threshold above which the SPH kernel is 0. This is normally
+                at a value of the impact parameter of q = r / h = 1.
+            force_loop (bool):
+                Whether to force the use of a simple loop rather than the tree.
+            min_count (int):
+                The minimum number of particles allowed in a leaf cell when
+                using the tree. This can be used for tuning the tree
+                performance.
+            nthreads (int):
+                The number of threads to use for the calculation.
+        """
+        if self.smoothing_lengths is None:
+            raise exceptions.InconsistentArguments(
+                f"{self.name} object is missing smoothing lengths!"
+            )
+
+        (
+            kernel,
+            pos_i,
+            pos_j,
+            smls,
+            surf_den_vals,
+            npart_i,
+            npart_j,
+            kdim,
+            threshold,
+            force_loop,
+            min_count,
+            nthreads,
+        ) = self._prepare_los_args(
+            other_parts,
+            attr,
+            kernel,
+            mask,
+            threshold,
+            force_loop,
+            min_count,
+            nthreads,
+        )
+
+        input_smls = np.ascontiguousarray(
+            self._smoothing_lengths[mask], dtype=np.float64
+        )
+
+        return (
+            kernel,
+            pos_i,
+            input_smls,
+            pos_j,
+            smls,
+            surf_den_vals,
+            npart_i,
+            npart_j,
+            kdim,
+            threshold,
+            force_loop,
+            min_count,
+            nthreads,
+        )
+
     def get_los_column_density(
         self,
         other_parts,
@@ -1109,6 +1196,7 @@ class Particles:
         """
         from synthesizer.extensions.column_density import (
             compute_column_density,
+            compute_column_density_smoothed,
         )
 
         # If have no particles return 0
@@ -1119,30 +1207,45 @@ class Particles:
         if other_parts.nparticles == 0:
             return np.zeros(self.nparticles)
 
-        # Kernel-smoothed input particles are handled by a separate LOS path.
-        if not as_points:
-            raise exceptions.UnimplementedFunctionality(
-                "LOS column densities with kernel-smoothed input particles "
-                "have not yet been implemented."
-            )
-
         # If we don't have a mask make a fake one for consistency
         if mask is None:
             mask = np.ones(self.nparticles, dtype=bool)
 
-        # Compute the column density
-        col_den = compute_column_density(
-            *self._prepare_los_args(
-                other_parts,
-                density_attr,
-                kernel,
-                mask,
-                threshold,
-                force_loop,
-                min_count,
-                nthreads,
+        # Compute the column density. Smoothed input particles use a dedicated
+        # extension path so the data flow is explicit before the overlap
+        # machinery is implemented.
+        if as_points:
+            col_den = compute_column_density(
+                *self._prepare_los_args(
+                    other_parts,
+                    density_attr,
+                    kernel,
+                    mask,
+                    threshold,
+                    force_loop,
+                    min_count,
+                    nthreads,
+                )
             )
-        )
+        else:
+            try:
+                col_den = compute_column_density_smoothed(
+                    *self._prepare_smoothed_los_args(
+                        other_parts,
+                        density_attr,
+                        kernel,
+                        mask,
+                        threshold,
+                        force_loop,
+                        min_count,
+                        nthreads,
+                    )
+                )
+            except NotImplementedError as exc:
+                raise exceptions.UnimplementedFunctionality(
+                    "LOS column densities with kernel-smoothed input "
+                    "particles have not yet been implemented."
+                ) from exc
 
         # Set the column density attribute (if requested)
         if column_density_attr is not None:

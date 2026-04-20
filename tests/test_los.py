@@ -4,7 +4,10 @@ import numpy as np
 import pytest
 from unyt import Mpc, Msun, Myr
 
-from synthesizer.exceptions import InconsistentArguments
+from synthesizer.exceptions import (
+    InconsistentArguments,
+    UnimplementedFunctionality,
+)
 from synthesizer.particle import Galaxy, Gas, Stars
 
 
@@ -103,6 +106,80 @@ class TestLOSColumnDensity:
         )
         assert np.allclose(tau, 0.0)
         assert np.allclose(one_star.tau_v, 0.0)
+
+    def test_column_density_as_points_default(self, one_star, one_gas_front):
+        """Test the default point-particle LOS path remains unchanged."""
+        gal = Galaxy(
+            stars=one_star,
+            gas=one_gas_front,
+            redshift=0.0,
+            centre=None,
+        )
+        kernel = np.array([1.0])
+
+        tau_default = gal.get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=kernel,
+            force_loop=1,
+            min_count=10,
+        )
+        tau_explicit = gal.get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=kernel,
+            as_points=True,
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert np.allclose(tau_default, tau_explicit)
+
+    def test_column_density_smoothed_input_unimplemented(
+        self, one_star, one_gas_front
+    ):
+        """Test the staged smoothed-input LOS path fails explicitly."""
+        gal = Galaxy(
+            stars=one_star,
+            gas=one_gas_front,
+            redshift=0.0,
+            centre=None,
+        )
+
+        with pytest.raises(UnimplementedFunctionality):
+            gal.get_stellar_los_tau_v(
+                kappa=2.0,
+                kernel=np.array([1.0]),
+                as_points=False,
+                force_loop=1,
+                min_count=10,
+            )
+
+    def test_column_density_smoothed_input_requires_smoothing_lengths(
+        self, one_gas_front
+    ):
+        """Test smoothed-input LOS requires input smoothing lengths."""
+        star = Stars(
+            initial_masses=np.array([1.0]) * Msun,
+            ages=np.array([1.0]) * Myr,
+            metallicities=np.array([0.02]),
+            redshift=0.0,
+            tau_v=np.array([0.0]),
+            coordinates=np.array([[0.0, 0.0, 1.0]]) * Mpc,
+        )
+        gal = Galaxy(
+            stars=star,
+            gas=one_gas_front,
+            redshift=0.0,
+            centre=None,
+        )
+
+        with pytest.raises(InconsistentArguments):
+            gal.get_stellar_los_tau_v(
+                kappa=2.0,
+                kernel=np.array([1.0]),
+                as_points=False,
+                force_loop=1,
+                min_count=10,
+            )
 
     def test_missing_components(self, one_star, one_gas_front):
         """Raises when stars or gas missing."""
