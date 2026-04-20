@@ -1120,12 +1120,6 @@ class Particles:
                 f"{self.name} object is missing smoothing lengths!"
             )
 
-        if not force_loop:
-            raise exceptions.UnimplementedFunctionality(
-                "LOS column densities with kernel-smoothed input particles "
-                "currently require force_loop=True."
-            )
-
         _, radial_kernel = self._get_los_kernel_components(kernel)
         if radial_kernel is None:
             raise exceptions.InconsistentArguments(
