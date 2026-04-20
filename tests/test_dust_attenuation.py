@@ -55,13 +55,13 @@ def draine_li_log_grid(tmp_path):
     return grid_path
 
 
-def _curve_to_tau(curve, dust_col):
+def _curve_to_tau(curve, hydrogen_col):
     """Convert a curve in mag cm^2 / H to optical depth."""
     mu = 1.4
     m_h = 1.6738e-24 * g
     gas_mass_per_h = (mu * m_h).to(Msun)
     return (
-        (((curve / 1.086) * cm**2).to(pc**2) / gas_mass_per_h) * dust_col
+        (((curve / 1.086) * cm**2).to(pc**2) / gas_mass_per_h) * hydrogen_col
     ).value
 
 
@@ -87,14 +87,14 @@ def test_draine_li_uses_grid_extraction(draine_li_grid):
 
     expected = np.vstack(
         [
-            _curve_to_tau(np.array([1.5, 2.5]), 0.14 * Msun / pc**2),
-            _curve_to_tau(np.array([3.0, 5.0]), 0.28 * Msun / pc**2),
+            _curve_to_tau(np.array([1.5, 2.5]), 1.0 * Msun / pc**2),
+            _curve_to_tau(np.array([3.0, 5.0]), 1.0 * Msun / pc**2),
         ]
     )
     expected += np.vstack(
         [
-            _curve_to_tau(np.array([0.75, 1.25]), 0.14 * Msun / pc**2),
-            _curve_to_tau(np.array([0.75, 1.25]), 0.14 * Msun / pc**2),
+            _curve_to_tau(np.array([0.75, 1.25]), 1.0 * Msun / pc**2),
+            _curve_to_tau(np.array([0.75, 1.25]), 1.0 * Msun / pc**2),
         ]
     )
 
@@ -123,9 +123,9 @@ def test_draine_li_masks_zero_and_nan_columns(draine_li_grid):
 
     expected = np.zeros((4, 2))
     expected[0] = _curve_to_tau(
-        np.array([1.5, 2.5]), 0.14 * Msun / pc**2
-    ) + _curve_to_tau(np.array([0.75, 1.25]), 0.14 * Msun / pc**2)
-    expected[3] = _curve_to_tau(np.array([0.75, 1.25]), 0.14 * Msun / pc**2)
+        np.array([1.5, 2.5]), 1.0 * Msun / pc**2
+    ) + _curve_to_tau(np.array([0.75, 1.25]), 1.0 * Msun / pc**2)
+    expected[3] = _curve_to_tau(np.array([0.75, 1.25]), 1.0 * Msun / pc**2)
 
     np.testing.assert_allclose(tau, expected)
     assert np.all(np.isfinite(tau))
@@ -148,8 +148,8 @@ def test_draine_li_resamples_non_native_wavelengths(draine_li_grid):
     )
 
     expected = _curve_to_tau(
-        np.array([1.5, 2.5]), 0.14 * Msun / pc**2
-    ) + _curve_to_tau(np.array([0.75, 1.25]), 0.14 * Msun / pc**2)
+        np.array([1.5, 2.5]), 1.0 * Msun / pc**2
+    ) + _curve_to_tau(np.array([0.75, 1.25]), 1.0 * Msun / pc**2)
 
     np.testing.assert_allclose(tau, np.vstack([expected, expected]))
 
@@ -171,8 +171,8 @@ def test_draine_li_resamples_scalar_wavelengths(draine_li_grid):
     )
 
     expected = _curve_to_tau(
-        np.array([1.5]), 0.14 * Msun / pc**2
-    ) + _curve_to_tau(np.array([0.75]), 0.14 * Msun / pc**2)
+        np.array([1.5]), 1.0 * Msun / pc**2
+    ) + _curve_to_tau(np.array([0.75]), 1.0 * Msun / pc**2)
 
     np.testing.assert_allclose(tau, np.vstack([expected, expected]))
 
@@ -194,8 +194,8 @@ def test_draine_li_supports_log10_dtg_grids(draine_li_log_grid):
 
     expected = np.vstack(
         [
-            _curve_to_tau(np.array([1.5, 2.5]), 0.14 * Msun / pc**2),
-            _curve_to_tau(np.array([3.0, 5.0]), 0.28 * Msun / pc**2),
+            _curve_to_tau(np.array([1.5, 2.5]), 1.0 * Msun / pc**2),
+            _curve_to_tau(np.array([3.0, 5.0]), 1.0 * Msun / pc**2),
         ]
     )
 
@@ -280,3 +280,37 @@ def test_draine_li_rejects_missing_component_grid(tmp_path):
             grid_dir=grid_path.parent,
             grain_dict={"graphite": [0.01], "silicate": [0.1]},
         )
+
+
+def test_draine_li_tau_independent_of_hydrogen(draine_li_grid):
+    """Tau should depend only on dust column density, not hydrogen column."""
+    dust_curve = DraineLiGrainCurves(
+        lam=np.array([1500.0, 2500.0]) * angstrom,
+        grid_name=draine_li_grid.name,
+        grid_dir=draine_li_grid.parent,
+        grain_dict={"graphite": [0.01], "silicate": [0.1]},
+    )
+
+    lam = np.array([1500.0, 2500.0]) * angstrom
+    graphite = np.array([0.14, 0.14]) * Msun / pc**2
+    silicate = np.array([0.14, 0.14]) * Msun / pc**2
+
+    # Case 1: Base hydrogen column density
+    sigmalos_h_1 = np.array([1.0, 1.0]) * Msun / pc**2
+    tau_1 = dust_curve.get_tau_at_lam(
+        lam,
+        sigmalos_H=sigmalos_h_1,
+        sigmalos_graphite_a0p01um=graphite,
+        sigmalos_silicate_a0p1um=silicate,
+    )
+
+    # Case 2: Half hydrogen column density (double the dust-to-gas ratio)
+    sigmalos_h_2 = np.array([0.5, 0.5]) * Msun / pc**2
+    tau_2 = dust_curve.get_tau_at_lam(
+        lam,
+        sigmalos_H=sigmalos_h_2,
+        sigmalos_graphite_a0p01um=graphite,
+        sigmalos_silicate_a0p1um=silicate,
+    )
+
+    np.testing.assert_allclose(tau_1, tau_2)
