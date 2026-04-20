@@ -303,7 +303,7 @@ class LineCollection:
         """Return the line-id to index mapping lazily.
 
         Returns:
-            dict:
+            Mapping:
                 A mapping from each stored line id to its array index.
         """
         if self._line2index is None:

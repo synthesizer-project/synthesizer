@@ -389,12 +389,15 @@ class TestLineRatiosAndDiagrams:
         ratios = lines.available_ratios
         diagrams = lines.available_diagrams
 
-        assert isinstance(line2index, dict)
+        assert line2index[lines.line_ids[0]] == 0
         assert isinstance(ratios, list)
         assert isinstance(diagrams, list)
         assert lines._line2index is line2index
         assert lines._available_ratios is ratios
         assert lines._available_diagrams is diagrams
+
+        with pytest.raises(TypeError):
+            line2index[lines.line_ids[0]] = 99
 
     def test_available_ratios(self, line_ratio_collection):
         """Test that available ratios are correctly identified."""
