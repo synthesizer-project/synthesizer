@@ -1465,7 +1465,7 @@ class DraineLiGrainCurves(AttenuationLaw):
         # optical-depth array.
         tau_all = np.zeros((nparticles, grid.nlam), dtype=np.float32)
         tau_scale = (
-            ((1.0 * cm**2) / _GAS_MASS_PER_H).to(1 / column_units).value
+            ((1.0 * cm**2) / _GAS_MASS_PER_H).to(1 / column_units).ndview
         )
         grid_dtg_axis = grid._extract_axes_values[dtg_axis_name]
         grid_shape = np.array(grid.shape, dtype=np.int32)
@@ -1513,7 +1513,7 @@ class DraineLiGrainCurves(AttenuationLaw):
 
             # Call the particle spectra extension directly for this single
             # extraction axis instead of going through generate_lnu.
-            component_Alam_by_NH, _ = compute_particle_seds(
+            component_alam_by_hydrogen_col, _ = compute_particle_seds(
                 grid.spectra[dataset_key],
                 (grid_dtg_axis,),
                 (dtg_grid_values,),
@@ -1532,7 +1532,7 @@ class DraineLiGrainCurves(AttenuationLaw):
             # Grid values are in units of mag cm^2 / H nucleus, so we need to
             # convert from mag cm^2 / H nucleus into optical depth per hydrogen
             # column
-            component_tau = component_Alam_by_NH / 1.086
+            component_tau = component_alam_by_hydrogen_col / 1.086
             # Convert to units of optical depth per column density in the
             # input sigmalos_H units
             component_tau *= tau_scale
@@ -1597,6 +1597,9 @@ class DraineLiGrainCurves(AttenuationLaw):
             5500 * angstrom, sigmalos_H, **sigmalos_dust
         )
 
+        # Ignore divide-by-zero and invalid operations because zero column
+        # densities will result in tau_V = 0. The resulting NaNs and Infs are
+        # subsequently cleaned up by np.nan_to_num.
         with np.errstate(invalid="ignore", divide="ignore"):
             out = tau_lam / tau_V
 
