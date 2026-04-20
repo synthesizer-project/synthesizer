@@ -1581,22 +1581,27 @@ class DraineLiGrainCurves(AttenuationLaw):
                 if sigmalos input is array-like, otherwise shape (N_lambda,)).
                 Dimensionless
         """
-        if sigmalos_H is None and len(sigmalos_dust) == 0:
+        if sigmalos_H is None:
             sigmalos_H = getattr(self, "sigmalos_H", None)
+
+        if not sigmalos_dust:
             # Collect any attributes starting with 'sigmalos_'
             sigmalos_dust = {
                 key: getattr(self, key)
                 for key in vars(self)
                 if key.startswith("sigmalos_") and key != "sigmalos_H"
             }
+
         tau_lam = self.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
         tau_V = self.get_tau_at_lam(
             5500 * angstrom, sigmalos_H, **sigmalos_dust
         )
-        # tau_lam: (N, M) or (M,), tau_V: (N,) or scalar (M==1)
-        if np.ndim(tau_V) <= 1:
-            return tau_lam / tau_V
-        return tau_lam / tau_V[:, np.newaxis]
+
+        with np.errstate(invalid="ignore", divide="ignore"):
+            out = tau_lam / tau_V
+
+        out = np.nan_to_num(out, nan=0.0, posinf=0.0, neginf=0.0)
+        return out
 
     @accepts(lam=angstrom)
     @timed("DraineLiGrainCurves.get_transmission")
