@@ -846,9 +846,10 @@ def accepts(**units):
                             converted[inner_name] = inner_value
                     bound.arguments[name] = converted
 
-                return func(*bound.args, **bound.kwargs)
             finally:
                 toc(f"accepts({func.__qualname__})")
+
+            return func(*bound.args, **bound.kwargs)
 
         return wrapped
 

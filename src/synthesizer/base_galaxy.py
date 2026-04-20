@@ -21,6 +21,7 @@ from synthesizer.imaging.image_generators import (
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.operation_timers import timed
 
 
 class BaseGalaxy:
@@ -63,6 +64,7 @@ class BaseGalaxy:
     """
 
     @accepts(centre=Mpc)
+    @timed("BaseGalaxy.__init__")
     def __init__(self, stars, gas, black_holes, redshift, centre, **kwargs):
         """Instantiate the base Galaxy class.
 
