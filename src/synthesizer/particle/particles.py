@@ -1055,6 +1055,7 @@ class Particles:
         other_parts,
         density_attr,
         kernel,
+        as_points=True,
         column_density_attr=None,
         mask=None,
         threshold=1,
@@ -1078,6 +1079,11 @@ class Particles:
                 order such that a k element array can be indexed for the value
                 of impact parameter q via kernel[int(k*q)]. Note, this can be
                 an arbitrary kernel.
+            as_points (bool):
+                Whether to treat the input particles in this Particles instance
+                as point-like when evaluating the LOS column density. If False,
+                the input particle kernels must also be accounted for. Default
+                is True.
             column_density_attr (str):
                 The attribute to store the column density in on the Particles
                 instance. If None, the column density will not be stored. By
@@ -1112,6 +1118,13 @@ class Particles:
         # If the other particles have no particles return 0
         if other_parts.nparticles == 0:
             return np.zeros(self.nparticles)
+
+        # Kernel-smoothed input particles are handled by a separate LOS path.
+        if not as_points:
+            raise exceptions.UnimplementedFunctionality(
+                "LOS column densities with kernel-smoothed input particles "
+                "have not yet been implemented."
+            )
 
         # If we don't have a mask make a fake one for consistency
         if mask is None:

@@ -453,6 +453,7 @@ class Galaxy(BaseGalaxy):
         self,
         kappa,
         kernel,
+        as_points=True,
         tau_v_attr="tau_v",
         mask=None,
         threshold=1,
@@ -478,6 +479,10 @@ class Galaxy(BaseGalaxy):
                 order such that a k element array can be indexed for the value
                 of impact parameter q via kernel[int(k*q)]. Note, this can be
                 an arbitrary kernel.
+            as_points (bool):
+                Whether to treat the stellar particles as point-like when
+                evaluating the LOS optical depth. If False, the stellar kernels
+                must also be accounted for. Default is True.
             tau_v_attr (str):
                 The attribute to store the tau_v values in the stars object.
                 Defaults to "tau_v".
@@ -521,6 +526,7 @@ class Galaxy(BaseGalaxy):
             self.gas,
             "dust_masses",
             kernel,
+            as_points=as_points,
             mask=mask,
             threshold=threshold,
             force_loop=force_loop,
@@ -551,6 +557,7 @@ class Galaxy(BaseGalaxy):
         self,
         kappa,
         kernel,
+        as_points=True,
         tau_v_attr="tau_v",
         mask=None,
         threshold=1,
@@ -576,6 +583,10 @@ class Galaxy(BaseGalaxy):
                 order such that a k element array can be indexed for the value
                 of impact parameter q via kernel[int(k*q)]. Note, this can be
                 an arbitrary kernel.
+            as_points (bool):
+                Whether to treat the black hole particles as point-like when
+                evaluating the LOS optical depth. If False, the black hole
+                kernels must also be accounted for. Default is True.
             tau_v_attr (str):
                 The attribute to store the tau_v values in the black_holes
                 object. Defaults to "tau_v".
@@ -620,6 +631,7 @@ class Galaxy(BaseGalaxy):
             self.gas,
             "dust_masses",
             kernel,
+            as_points=as_points,
             mask=mask,
             threshold=threshold,
             force_loop=force_loop,
