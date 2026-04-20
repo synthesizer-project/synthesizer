@@ -24,6 +24,13 @@
 #include "timers_init.h"
 #endif
 
+/* Forward declaration for the projected-kernel tree recursion used by the
+ * smoothed-input tree traversal when a whole node is entirely in front. */
+static double calculate_los_recursive(struct cell *c, const double x,
+                                      const double y, const double z,
+                                      double threshold, int kdim,
+                                      const double *kernel);
+
 /**
  * @brief Computes the line of sight surface densities with a loop.
  *
@@ -383,6 +390,79 @@ static double calculate_smoothed_source_contribution(
 }
 
 /**
+ * @brief Recursively calculate smoothed LOS surface density contributions.
+ *
+ * @param c The cell to calculate the surface densities for.
+ * @param x The x position of the input sample point.
+ * @param y The y position of the input sample point.
+ * @param z The z position of the input sample point.
+ * @param threshold The support threshold in units of the smoothing length.
+ * @param kdim The dimension of the kernel tables.
+ * @param zdim The dimension of the LOS-coordinate table.
+ * @param projected_kernel The projected kernel lookup table.
+ * @param truncated_kernel The truncated LOS kernel lookup table.
+ * @return The LOS surface density contribution for this sample point.
+ */
+static double calculate_los_recursive_smoothed(
+    struct cell *c, const double x, const double y, const double z,
+    const double threshold, const int kdim, const int zdim,
+    const double *projected_kernel, const double *truncated_kernel) {
+
+  const double max_sml = sqrt(c->max_sml_squ);
+  const double support_max = threshold * max_sml;
+  const double cell_z_min = c->loc[2] - support_max;
+  const double cell_z_max = c->loc[2] + c->width + support_max;
+
+  /* Early exit if the expanded node is entirely behind the sample point. */
+  if (cell_z_min >= z) {
+    return 0.0;
+  }
+
+  /* Early exit if the projected distance between the point and cell is more
+   * than the maximum support radius in the cell. */
+  if ((threshold * threshold * c->max_sml_squ) < min_projected_dist2(c, x, y)) {
+    return 0.0;
+  }
+
+  /* If the whole node is in front of the sample point we can use the existing
+   * projected-kernel recursion. */
+  if (cell_z_max <= z) {
+    return calculate_los_recursive(c, x, y, z, threshold, kdim,
+                                   projected_kernel);
+  }
+
+  double surf_dens = 0.0;
+
+  if (c->split) {
+    for (int ip = 0; ip < 8; ip++) {
+      struct cell *cp = &c->progeny[ip];
+
+      if (cp->part_count == 0) {
+        continue;
+      }
+
+      surf_dens += calculate_los_recursive_smoothed(
+          cp, x, y, z, threshold, kdim, zdim, projected_kernel,
+          truncated_kernel);
+    }
+  } else {
+    int npart_j = c->part_count;
+    struct particle *parts = c->particles;
+
+    for (int j = 0; j < npart_j; j++) {
+      struct particle *part = &parts[j];
+
+      surf_dens += calculate_smoothed_source_contribution(
+          x, y, z, part->sml, threshold * part->sml, part->pos[0], part->pos[1],
+          part->pos[2], part->surf_den_var, projected_kernel, truncated_kernel,
+          kdim, zdim);
+    }
+  }
+
+  return surf_dens;
+}
+
+/**
  * @brief Computes smoothed-input LOS surface densities with a loop.
  *
  * This correctness-first implementation handles only the brute-force loop path
@@ -561,6 +641,160 @@ static void los_loop_smoothed(
 #endif
 
   toc("Loop surface density calculation with smoothed inputs");
+}
+
+/**
+ * @brief Computes smoothed-input LOS surface densities with a tree.
+ *
+ * @param root The root of the tree.
+ * @param pos_i The positions of the input particles.
+ * @param input_smls The smoothing lengths of the input particles.
+ * @param projected_kernel The full projected LOS kernel lookup table.
+ * @param radial_kernel The 1D radial kernel lookup table.
+ * @param truncated_kernel The truncated LOS kernel lookup table.
+ * @param surf_dens The array to store the surface densities in.
+ * @param npart_i The number of input particles.
+ * @param kdim The dimension of the kernel lookup tables.
+ * @param zdim The dimension of the LOS coordinate table.
+ * @param threshold The support threshold in units of the smoothing length.
+ */
+static void los_tree_smoothed_serial(
+    struct cell *root, const double *pos_i, const double *input_smls,
+    const double *projected_kernel, const double *radial_kernel,
+    const double *truncated_kernel, double *surf_dens, const int npart_i,
+    const int kdim, const int zdim, const double threshold) {
+
+  const int nxy = 16;
+  const int nz = 16;
+  const double dxy = 2.0 / nxy;
+  const double dz = 2.0 / nz;
+
+  for (int i = 0; i < npart_i; i++) {
+    const double hi = input_smls[i];
+    const double support_i = threshold * hi;
+    const double xi = pos_i[i * 3];
+    const double yi = pos_i[i * 3 + 1];
+    const double zi = pos_i[i * 3 + 2];
+
+    double particle_surf_dens = 0.0;
+    double weight_sum = 0.0;
+
+    for (int ix = 0; ix < nxy; ix++) {
+      const double qx = -1.0 + (ix + 0.5) * dxy;
+
+      for (int iy = 0; iy < nxy; iy++) {
+        const double qy = -1.0 + (iy + 0.5) * dxy;
+
+        for (int iz = 0; iz < nz; iz++) {
+          const double qz = -1.0 + (iz + 0.5) * dz;
+          const double qr = sqrt(qx * qx + qy * qy + qz * qz);
+
+          if (qr >= 1.0) {
+            continue;
+          }
+
+          const double input_weight = get_kernel_value(radial_kernel, kdim, qr);
+          if (input_weight == 0.0) {
+            continue;
+          }
+
+          const double x = xi + support_i * qx;
+          const double y = yi + support_i * qy;
+          const double z = zi + support_i * qz;
+
+          const double sample_surf_dens = calculate_los_recursive_smoothed(
+              root, x, y, z, threshold, kdim, zdim, projected_kernel,
+              truncated_kernel);
+
+          particle_surf_dens += input_weight * sample_surf_dens;
+          weight_sum += input_weight;
+        }
+      }
+    }
+
+    if (weight_sum > 0.0) {
+      particle_surf_dens /= weight_sum;
+    }
+
+    surf_dens[i] = particle_surf_dens;
+  }
+}
+
+#ifdef WITH_OPENMP
+static void los_tree_smoothed_omp(
+    struct cell *root, const double *pos_i, const double *input_smls,
+    const double *projected_kernel, const double *radial_kernel,
+    const double *truncated_kernel, double *surf_dens, const int npart_i,
+    const int kdim, const int zdim, const double threshold,
+    const int nthreads) {
+
+  int nparti_per_thread = npart_i / nthreads;
+
+#pragma omp parallel num_threads(nthreads)
+  {
+    int tid = omp_get_thread_num();
+    int start = tid * nparti_per_thread;
+    int end = (tid == nthreads - 1) ? npart_i : (tid + 1) * nparti_per_thread;
+
+    double *surf_dens_thread = new double[end - start]();
+
+    los_tree_smoothed_serial(root, &pos_i[start * 3], &input_smls[start],
+                             projected_kernel, radial_kernel, truncated_kernel,
+                             surf_dens_thread, end - start, kdim, zdim,
+                             threshold);
+
+#pragma omp critical
+    { memcpy(&surf_dens[start], surf_dens_thread,
+             sizeof(double) * (end - start)); }
+
+    delete[] surf_dens_thread;
+  }
+}
+#endif
+
+/**
+ * @brief Computes smoothed-input LOS surface densities with a tree.
+ *
+ * @param root The root of the cell tree.
+ * @param pos_i The positions of the input particles.
+ * @param input_smls The smoothing lengths of the input particles.
+ * @param projected_kernel The full projected LOS kernel lookup table.
+ * @param radial_kernel The 1D radial kernel lookup table.
+ * @param truncated_kernel The truncated LOS kernel lookup table.
+ * @param surf_dens The array to store the surface densities in.
+ * @param npart_i The number of input particles.
+ * @param kdim The dimension of the kernel lookup tables.
+ * @param zdim The dimension of the LOS coordinate table.
+ * @param threshold The support threshold in units of the smoothing length.
+ * @param nthreads The number of threads to use.
+ */
+static void los_tree_smoothed(
+    struct cell *root, const double *pos_i, const double *input_smls,
+    const double *projected_kernel, const double *radial_kernel,
+    const double *truncated_kernel, double *surf_dens, const int npart_i,
+    const int kdim, const int zdim, const double threshold,
+    const int nthreads) {
+
+  tic("Recursive surface density calculation with smoothed inputs");
+
+#ifdef WITH_OPENMP
+  if (nthreads > 1) {
+    los_tree_smoothed_omp(root, pos_i, input_smls, projected_kernel,
+                          radial_kernel, truncated_kernel, surf_dens, npart_i,
+                          kdim, zdim, threshold, nthreads);
+  } else {
+    los_tree_smoothed_serial(root, pos_i, input_smls, projected_kernel,
+                             radial_kernel, truncated_kernel, surf_dens,
+                             npart_i, kdim, zdim, threshold);
+  }
+#else
+  (void)nthreads;
+  los_tree_smoothed_serial(root, pos_i, input_smls, projected_kernel,
+                           radial_kernel, truncated_kernel, surf_dens, npart_i,
+                           kdim, zdim, threshold);
+#endif
+
+  toc("Recursive surface density calculation with smoothed inputs");
 }
 
 /**
@@ -936,15 +1170,6 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  if (!force_loop) {
-    PyErr_SetString(
-        PyExc_NotImplementedError,
-        "Smoothed-input LOS column densities currently require force_loop.");
-    return NULL;
-  }
-
-  (void)min_count;
-
   const double *kernel = extract_data_double(np_kernel, "kernel");
   const double *radial_kernel =
       extract_data_double(np_radial_kernel, "radial_kernel");
@@ -968,9 +1193,25 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
       (PyArrayObject *)PyArray_ZEROS(1, np_dims, NPY_DOUBLE, 0);
   double *surf_dens = static_cast<double *>(PyArray_DATA(np_surf_dens));
 
-  los_loop_smoothed(pos_i, input_smls, pos_j, smls, surf_den_val, kernel,
-                    radial_kernel, truncated_kernel, surf_dens, npart_i,
-                    npart_j, kdim, zdim, threshold, nthreads);
+  if (force_loop || npart_j < min_count) {
+    los_loop_smoothed(pos_i, input_smls, pos_j, smls, surf_den_val, kernel,
+                      radial_kernel, truncated_kernel, surf_dens, npart_i,
+                      npart_j, kdim, zdim, threshold, nthreads);
+    return Py_BuildValue("N", np_surf_dens);
+  }
+
+  int ncells = 1;
+  int maxdepth = MAX_DEPTH;
+  struct cell *root = new struct cell[1];
+
+  construct_cell_tree(pos_j, smls, surf_den_val, npart_j, root, ncells,
+                      maxdepth, min_count);
+
+  los_tree_smoothed(root, pos_i, input_smls, kernel, radial_kernel,
+                    truncated_kernel, surf_dens, npart_i, kdim, zdim,
+                    threshold, nthreads);
+
+  cleanup_cell_tree(root);
 
   return Py_BuildValue("N", np_surf_dens);
 }

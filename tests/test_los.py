@@ -6,7 +6,6 @@ from unyt import Mpc, Msun, Myr
 
 from synthesizer.exceptions import (
     InconsistentArguments,
-    UnimplementedFunctionality,
 )
 from synthesizer.kernel_functions import Kernel
 from synthesizer.particle import Galaxy, Gas, Stars
@@ -321,25 +320,55 @@ class TestLOSColumnDensity:
         assert np.all(tau_compact >= 0.0)
         assert not np.allclose(tau_full, tau_compact, rtol=1e-3, atol=0.0)
 
-    def test_column_density_smoothed_input_force_loop_only(
-        self, one_star, one_gas_front
-    ):
-        """Test the staged smoothed-input LOS path requires force_loop."""
-        gal = Galaxy(
-            stars=one_star,
-            gas=one_gas_front,
+    def test_column_density_smoothed_input_tree_matches_force_loop(self):
+        """Test the smoothed-input tree path matches the loop reference."""
+        rng = np.random.default_rng(42)
+        nstars = 4
+        ngas = 24
+
+        stars = Stars(
+            initial_masses=np.ones(nstars) * Msun,
+            ages=np.ones(nstars) * Myr,
+            metallicities=np.full(nstars, 0.02),
+            redshift=0.0,
+            tau_v=np.zeros(nstars),
+            coordinates=rng.normal(0.0, 0.25, size=(nstars, 3)) * Mpc,
+        )
+        stars.smoothing_lengths = np.full(nstars, 0.3) * Mpc
+
+        gas = Gas(
+            masses=np.full(ngas, 1e6) * Msun,
+            metallicities=np.full(ngas, 0.01),
+            redshift=0.0,
+            coordinates=rng.normal(0.0, 0.3, size=(ngas, 3)) * Mpc,
+            dust_to_metal_ratio=1.0,
+            smoothing_lengths=np.full(ngas, 0.25) * Mpc,
+        )
+
+        galaxy = Galaxy(
+            stars=stars,
+            gas=gas,
             redshift=0.0,
             centre=None,
         )
+        kernel = Kernel(name="uniform", binsize=32)
 
-        with pytest.raises(UnimplementedFunctionality):
-            gal.get_stellar_los_tau_v(
-                kappa=2.0,
-                kernel=Kernel(name="uniform", binsize=8),
-                as_points=False,
-                force_loop=0,
-                min_count=10,
-            )
+        tau_loop = galaxy.get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=kernel,
+            as_points=False,
+            force_loop=1,
+            min_count=10,
+        )
+        tau_tree = galaxy.get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=kernel,
+            as_points=False,
+            force_loop=0,
+            min_count=4,
+        )
+
+        assert np.allclose(tau_tree, tau_loop, rtol=2e-2, atol=0.0)
 
     def test_column_density_smoothed_input_front_saturates(self):
         """Test fully front contributors give the same smoothed result."""
