@@ -71,6 +71,7 @@ class Kernel:
 
         self._projected_kernel = None
         self._radial_kernel = None
+        self._truncated_los_kernel = None
 
     def _get_bins(self):
         """Get the dimensionless radial bins used for kernel lookups."""
@@ -137,6 +138,40 @@ class Kernel:
             kernel[ii] = self.f(radius)
 
         self._radial_kernel = kernel
+
+        return kernel.copy()
+
+    def get_truncated_los_kernel(self):
+        """Compute the truncated LOS kernel lookup table.
+
+        This table stores the cumulative integral of the 3D radial kernel
+        along the line of sight as a function of impact parameter and
+        dimensionless LOS coordinate.
+
+        Returns:
+            np.ndarray: The cumulative LOS kernel values for each impact
+                parameter and LOS coordinate.
+        """
+        if self._truncated_los_kernel is not None:
+            return self._truncated_los_kernel.copy()
+
+        bins = self._get_bins()
+        z_bins = np.linspace(-1.0, 1.0, 2 * self.binsize + 1)
+        kernel = np.zeros((bins.size, z_bins.size))
+
+        for ii, impact_parameter in enumerate(bins):
+            integrand = np.zeros_like(z_bins)
+
+            for iz, z_value in enumerate(z_bins):
+                radius = np.sqrt(z_value**2 + impact_parameter**2)
+                if radius < 1.0:
+                    integrand[iz] = self.f(radius)
+
+            kernel[ii] = integrate.cumulative_trapezoid(
+                integrand, z_bins, initial=0.0
+            )
+
+        self._truncated_los_kernel = kernel
 
         return kernel.copy()
 

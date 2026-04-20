@@ -1120,12 +1120,28 @@ class Particles:
                 f"{self.name} object is missing smoothing lengths!"
             )
 
+        if not force_loop:
+            raise exceptions.UnimplementedFunctionality(
+                "LOS column densities with kernel-smoothed input particles "
+                "currently require force_loop=True."
+            )
+
         _, radial_kernel = self._get_los_kernel_components(kernel)
         if radial_kernel is None:
             raise exceptions.InconsistentArguments(
                 "LOS column densities with kernel-smoothed input particles "
                 "require a Kernel instance so the 3D radial kernel is "
                 "available."
+            )
+
+        truncated_kernel = None
+        if hasattr(kernel, "get_truncated_los_kernel"):
+            truncated_kernel = kernel.get_truncated_los_kernel()
+        if truncated_kernel is None:
+            raise exceptions.InconsistentArguments(
+                "LOS column densities with kernel-smoothed input particles "
+                "require a Kernel instance that provides a truncated LOS "
+                "kernel table."
             )
 
         (
@@ -1155,9 +1171,16 @@ class Particles:
         input_smls = np.ascontiguousarray(
             self._smoothing_lengths[mask], dtype=np.float64
         )
+        radial_kernel = np.ascontiguousarray(radial_kernel, dtype=np.float64)
+        truncated_kernel = np.ascontiguousarray(
+            truncated_kernel, dtype=np.float64
+        )
+        zdim = truncated_kernel.shape[1]
 
         return (
             kernel,
+            radial_kernel,
+            truncated_kernel,
             pos_i,
             input_smls,
             pos_j,
@@ -1166,6 +1189,7 @@ class Particles:
             npart_i,
             npart_j,
             kdim,
+            zdim,
             threshold,
             force_loop,
             min_count,

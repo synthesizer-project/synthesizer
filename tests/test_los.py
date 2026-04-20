@@ -60,6 +60,32 @@ def one_gas_behind():
 class TestLOSColumnDensity:
     """Test the line of sight column density calculations."""
 
+    @staticmethod
+    def _make_star(z=1.0, smoothing_length=1.0):
+        """Create a single star particle for LOS tests."""
+        star = Stars(
+            initial_masses=np.array([1.0]) * Msun,
+            ages=np.array([1.0]) * Myr,
+            metallicities=np.array([0.02]),
+            redshift=0.0,
+            tau_v=np.array([0.0]),
+            coordinates=np.array([[0.0, 0.0, z]]) * Mpc,
+        )
+        star.smoothing_lengths = np.array([smoothing_length]) * Mpc
+        return star
+
+    @staticmethod
+    def _make_gas(z=0.0, smoothing_length=1.0):
+        """Create a single gas particle for LOS tests."""
+        return Gas(
+            masses=np.array([1e6]) * Msun,
+            metallicities=np.array([0.01]),
+            redshift=0.0,
+            coordinates=np.array([[0.0, 0.0, z]]) * Mpc,
+            dust_to_metal_ratio=1.0,
+            smoothing_lengths=np.array([smoothing_length]) * Mpc,
+        )
+
     def test_column_density_in_front(self, one_star, one_gas_front):
         """Test Gas particle in front column density and tau_v."""
         gal = Galaxy(
@@ -134,25 +160,36 @@ class TestLOSColumnDensity:
 
         assert np.allclose(tau_default, tau_explicit)
 
-    def test_column_density_smoothed_input_unimplemented(
+    def test_column_density_smoothed_input_changes_result(
         self, one_star, one_gas_front
     ):
-        """Test the staged smoothed-input LOS path fails explicitly."""
+        """Test the smoothed-input LOS path differs from point-particle LOS."""
         gal = Galaxy(
             stars=one_star,
             gas=one_gas_front,
             redshift=0.0,
             centre=None,
         )
+        kernel = Kernel(name="uniform", binsize=32)
 
-        with pytest.raises(UnimplementedFunctionality):
-            gal.get_stellar_los_tau_v(
-                kappa=2.0,
-                kernel=Kernel(name="uniform", binsize=8),
-                as_points=False,
-                force_loop=1,
-                min_count=10,
-            )
+        tau_points = gal.get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=kernel,
+            as_points=True,
+            force_loop=1,
+            min_count=10,
+        )
+        tau_smoothed = gal.get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=kernel,
+            as_points=False,
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert np.all(np.isfinite(tau_smoothed))
+        assert np.all(tau_smoothed > 0.0)
+        assert not np.allclose(tau_points, tau_smoothed, rtol=1e-3, atol=0.0)
 
     def test_column_density_accepts_kernel_object(
         self, one_star, one_gas_front
@@ -228,6 +265,172 @@ class TestLOSColumnDensity:
                 force_loop=1,
                 min_count=10,
             )
+
+    def test_column_density_smoothed_input_front_non_zero(
+        self, one_star, one_gas_front
+    ):
+        """Test the staged smoothed-input LOS path gives a finite result."""
+        gal = Galaxy(
+            stars=one_star,
+            gas=one_gas_front,
+            redshift=0.0,
+            centre=None,
+        )
+
+        tau = gal.get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=Kernel(name="uniform", binsize=32),
+            as_points=False,
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert np.all(np.isfinite(tau))
+        assert np.all(tau > 0.0)
+
+    def test_column_density_smoothed_input_threshold_changes_result(
+        self, one_star, one_gas_front
+    ):
+        """Test smoothed-input LOS honours the support threshold."""
+        gal = Galaxy(
+            stars=one_star,
+            gas=one_gas_front,
+            redshift=0.0,
+            centre=None,
+        )
+
+        tau_full = gal.get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=Kernel(name="uniform", binsize=32),
+            as_points=False,
+            threshold=1.0,
+            force_loop=1,
+            min_count=10,
+        )
+        tau_compact = gal.get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=Kernel(name="uniform", binsize=32),
+            as_points=False,
+            threshold=0.5,
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert np.all(np.isfinite(tau_full))
+        assert np.all(np.isfinite(tau_compact))
+        assert np.all(tau_compact >= 0.0)
+        assert not np.allclose(tau_full, tau_compact, rtol=1e-3, atol=0.0)
+
+    def test_column_density_smoothed_input_force_loop_only(
+        self, one_star, one_gas_front
+    ):
+        """Test the staged smoothed-input LOS path requires force_loop."""
+        gal = Galaxy(
+            stars=one_star,
+            gas=one_gas_front,
+            redshift=0.0,
+            centre=None,
+        )
+
+        with pytest.raises(UnimplementedFunctionality):
+            gal.get_stellar_los_tau_v(
+                kappa=2.0,
+                kernel=Kernel(name="uniform", binsize=8),
+                as_points=False,
+                force_loop=0,
+                min_count=10,
+            )
+
+    def test_column_density_smoothed_input_front_saturates(self):
+        """Test fully front contributors give the same smoothed result."""
+        kernel = Kernel(name="uniform", binsize=32)
+        tau_front_far = Galaxy(
+            stars=self._make_star(),
+            gas=self._make_gas(z=-3.0),
+            redshift=0.0,
+            centre=None,
+        ).get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=kernel,
+            as_points=False,
+            force_loop=1,
+            min_count=10,
+        )
+        tau_front_edge = Galaxy(
+            stars=self._make_star(),
+            gas=self._make_gas(z=-2.0),
+            redshift=0.0,
+            centre=None,
+        ).get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=kernel,
+            as_points=False,
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert np.allclose(tau_front_far, tau_front_edge, rtol=1e-3, atol=0.0)
+
+    def test_column_density_smoothed_input_behind_zero(self):
+        """Test fully behind contributors give zero smoothed attenuation."""
+        tau = Galaxy(
+            stars=self._make_star(),
+            gas=self._make_gas(z=3.0),
+            redshift=0.0,
+            centre=None,
+        ).get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=Kernel(name="uniform", binsize=32),
+            as_points=False,
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert np.allclose(tau, 0.0)
+
+    def test_column_density_smoothed_input_straddling_is_intermediate(self):
+        """Test straddling contributors interpolate between front and back."""
+        kernel = Kernel(name="uniform", binsize=32)
+        tau_front = Galaxy(
+            stars=self._make_star(),
+            gas=self._make_gas(z=-3.0),
+            redshift=0.0,
+            centre=None,
+        ).get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=kernel,
+            as_points=False,
+            force_loop=1,
+            min_count=10,
+        )
+        tau_straddle = Galaxy(
+            stars=self._make_star(),
+            gas=self._make_gas(z=0.0),
+            redshift=0.0,
+            centre=None,
+        ).get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=kernel,
+            as_points=False,
+            force_loop=1,
+            min_count=10,
+        )
+        tau_back = Galaxy(
+            stars=self._make_star(),
+            gas=self._make_gas(z=2.5),
+            redshift=0.0,
+            centre=None,
+        ).get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=kernel,
+            as_points=False,
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert np.all(tau_front > tau_straddle)
+        assert np.all(tau_straddle > tau_back)
+        assert np.all(tau_back > 0.0)
 
     def test_missing_components(self, one_star, one_gas_front):
         """Raises when stars or gas missing."""

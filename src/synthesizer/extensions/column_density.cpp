@@ -263,6 +263,307 @@ static void los_loop(const double *pos_i, const double *pos_j,
 }
 
 /**
+ * @brief Get a kernel lookup value at a dimensionless radius.
+ *
+ * @param kernel The 1D kernel lookup table.
+ * @param kdim The number of entries in the kernel lookup table.
+ * @param q The dimensionless radius.
+ * @return The interpolated kernel value.
+ */
+static double get_kernel_value(const double *kernel, const int kdim,
+                               const double q) {
+
+  if (q < 0.0 || q >= 1.0) {
+    return 0.0;
+  }
+
+  const double scaled = q * (kdim - 1);
+  const int index = static_cast<int>(scaled);
+  const int next_index = std::min(kdim - 1, index + 1);
+  const double frac = scaled - index;
+
+  return kernel[index] + frac * (kernel[next_index] - kernel[index]);
+}
+
+/**
+ * @brief Get a truncated LOS kernel value.
+ *
+ * @param kernel The 2D truncated LOS kernel lookup table.
+ * @param kdim The number of impact-parameter entries.
+ * @param zdim The number of LOS-coordinate entries.
+ * @param q The dimensionless impact parameter.
+ * @param z The dimensionless LOS coordinate.
+ * @return The interpolated cumulative LOS kernel value.
+ */
+static double get_truncated_kernel_value(const double *kernel, const int kdim,
+                                         const int zdim, const double q,
+                                         const double z) {
+
+  if (q < 0.0 || q >= 1.0) {
+    return 0.0;
+  }
+
+  const double clamped_z = std::max(-1.0, std::min(1.0, z));
+
+  const double scaled_q = q * (kdim - 1);
+  const int q_index = static_cast<int>(scaled_q);
+  const int q_next = std::min(kdim - 1, q_index + 1);
+  const double q_frac = scaled_q - q_index;
+
+  const double scaled_z = 0.5 * (clamped_z + 1.0) * (zdim - 1);
+  const int z_index = static_cast<int>(scaled_z);
+  const int z_next = std::min(zdim - 1, z_index + 1);
+  const double z_frac = scaled_z - z_index;
+
+  const double v00 = kernel[q_index * zdim + z_index];
+  const double v01 = kernel[q_index * zdim + z_next];
+  const double v10 = kernel[q_next * zdim + z_index];
+  const double v11 = kernel[q_next * zdim + z_next];
+
+  const double vz0 = v00 + z_frac * (v01 - v00);
+  const double vz1 = v10 + z_frac * (v11 - v10);
+
+  return vz0 + q_frac * (vz1 - vz0);
+}
+
+/**
+ * @brief Computes the smoothed LOS contribution of one source particle.
+ *
+ * @param x The x-coordinate of the input sample point.
+ * @param y The y-coordinate of the input sample point.
+ * @param z The z-coordinate of the input sample point.
+ * @param hj The smoothing length of the source particle.
+ * @param support_j The support radius of the source particle.
+ * @param xj The x-coordinate of the source particle.
+ * @param yj The y-coordinate of the source particle.
+ * @param zj The z-coordinate of the source particle.
+ * @param surf_den_val The source surface density value.
+ * @param projected_kernel The full projected LOS kernel lookup table.
+ * @param truncated_kernel The truncated LOS kernel lookup table.
+ * @param kdim The number of impact-parameter entries.
+ * @param zdim The number of LOS-coordinate entries.
+ * @return The source contribution at the input sample point.
+ */
+static double calculate_smoothed_source_contribution(
+    const double x, const double y, const double z, const double hj,
+    const double support_j, const double xj, const double yj, const double zj,
+    const double surf_den_val, const double *projected_kernel,
+    const double *truncated_kernel, const int kdim, const int zdim) {
+
+  const double dx = xj - x;
+  const double dy = yj - y;
+  const double b = sqrt(dx * dx + dy * dy);
+
+  if (b >= support_j) {
+    return 0.0;
+  }
+
+  const double q = b / support_j;
+  const double prefactor = surf_den_val / (hj * hj);
+  const double z_min = zj - support_j;
+  const double z_max = zj + support_j;
+
+  /* If the whole source kernel is in front of the sample point we can use the
+   * full projected kernel lookup. */
+  if (z >= z_max) {
+    return prefactor * get_kernel_value(projected_kernel, kdim, q);
+  }
+
+  /* If the whole source kernel is behind the sample point there is no
+   * foreground contribution. */
+  if (z <= z_min) {
+    return 0.0;
+  }
+
+  /* Otherwise the sample point cuts through the source kernel and we need the
+   * truncated foreground contribution. */
+  const double z_upper = (z - zj) / support_j;
+  return prefactor * get_truncated_kernel_value(truncated_kernel, kdim, zdim, q,
+                                                z_upper);
+}
+
+/**
+ * @brief Computes smoothed-input LOS surface densities with a loop.
+ *
+ * This correctness-first implementation handles only the brute-force loop path
+ * for threshold=1 and evaluates the exact foreground contribution by
+ * integrating the source kernel in front of each sample point in the input
+ * kernel.
+ *
+ * @param pos_i The positions of the input particles.
+ * @param input_smls The smoothing lengths of the input particles.
+ * @param pos_j The positions of the contributing particles.
+ * @param smls The smoothing lengths of the contributing particles.
+ * @param surf_den_vals The source values to accumulate.
+ * @param radial_kernel The 1D radial kernel lookup table.
+ * @param truncated_kernel The truncated LOS kernel lookup table.
+ * @param surf_dens The array to store the surface densities in.
+ * @param npart_i The number of input particles.
+ * @param npart_j The number of contributing particles.
+ * @param kdim The dimension of the radial kernel table.
+ * @param zdim The dimension of the LOS coordinate table.
+ */
+static void los_loop_smoothed_serial(
+    const double *pos_i, const double *input_smls, const double *pos_j,
+    const double *smls, const double *surf_den_vals,
+    const double *projected_kernel, const double *radial_kernel,
+    const double *truncated_kernel, double *surf_dens, const int npart_i,
+    const int npart_j, const int kdim, const int zdim,
+    const double threshold) {
+
+  const int nxy = 16;
+  const int nz = 16;
+  const double dxy = 2.0 / nxy;
+  const double dz = 2.0 / nz;
+
+  for (int i = 0; i < npart_i; i++) {
+
+    const double hi = input_smls[i];
+    const double support_i = threshold * hi;
+    const double xi = pos_i[i * 3];
+    const double yi = pos_i[i * 3 + 1];
+    const double zi = pos_i[i * 3 + 2];
+
+    double particle_surf_dens = 0.0;
+    double weight_sum = 0.0;
+
+    for (int ix = 0; ix < nxy; ix++) {
+      const double qx = -1.0 + (ix + 0.5) * dxy;
+
+      for (int iy = 0; iy < nxy; iy++) {
+        const double qy = -1.0 + (iy + 0.5) * dxy;
+
+        for (int iz = 0; iz < nz; iz++) {
+          const double qz = -1.0 + (iz + 0.5) * dz;
+          const double qr = sqrt(qx * qx + qy * qy + qz * qz);
+
+          if (qr >= 1.0) {
+            continue;
+          }
+
+          const double input_weight = get_kernel_value(radial_kernel, kdim, qr);
+          if (input_weight == 0.0) {
+            continue;
+          }
+
+          const double x = xi + support_i * qx;
+          const double y = yi + support_i * qy;
+          const double z = zi + support_i * qz;
+
+          double sample_surf_dens = 0.0;
+
+          for (int j = 0; j < npart_j; j++) {
+            const double hj = smls[j];
+            const double support_j = threshold * hj;
+            const double xj = pos_j[j * 3];
+            const double yj = pos_j[j * 3 + 1];
+            const double zj = pos_j[j * 3 + 2];
+            const double surf_den_val = surf_den_vals[j];
+
+            sample_surf_dens += calculate_smoothed_source_contribution(
+                x, y, z, hj, support_j, xj, yj, zj, surf_den_val,
+                projected_kernel, truncated_kernel, kdim, zdim);
+          }
+
+          particle_surf_dens += input_weight * sample_surf_dens;
+          weight_sum += input_weight;
+        }
+      }
+    }
+
+    if (weight_sum > 0.0) {
+      particle_surf_dens /= weight_sum;
+    }
+
+    surf_dens[i] = particle_surf_dens;
+  }
+}
+
+#ifdef WITH_OPENMP
+static void los_loop_smoothed_omp(
+    const double *pos_i, const double *input_smls, const double *pos_j,
+    const double *smls, const double *surf_den_vals,
+    const double *projected_kernel, const double *radial_kernel,
+    const double *truncated_kernel, double *surf_dens, const int npart_i,
+    const int npart_j, const int kdim, const int zdim,
+    const double threshold, const int nthreads) {
+
+  int nparti_per_thread = npart_i / nthreads;
+
+#pragma omp parallel num_threads(nthreads)
+  {
+    int tid = omp_get_thread_num();
+    int start = tid * nparti_per_thread;
+    int end = (tid == nthreads - 1) ? npart_i : (tid + 1) * nparti_per_thread;
+
+    double *surf_dens_thread = new double[end - start]();
+
+    los_loop_smoothed_serial(
+        &pos_i[start * 3], &input_smls[start], pos_j, smls, surf_den_vals,
+        projected_kernel, radial_kernel, truncated_kernel, surf_dens_thread,
+        end - start, npart_j, kdim, zdim, threshold);
+
+#pragma omp critical
+    { memcpy(&surf_dens[start], surf_dens_thread,
+             sizeof(double) * (end - start)); }
+
+    delete[] surf_dens_thread;
+  }
+}
+#endif
+
+/**
+ * @brief Computes smoothed-input LOS surface densities with a loop.
+ *
+ * @param pos_i The positions of the input particles.
+ * @param input_smls The smoothing lengths of the input particles.
+ * @param pos_j The positions of the contributing particles.
+ * @param smls The smoothing lengths of the contributing particles.
+ * @param surf_den_vals The source values to accumulate.
+ * @param projected_kernel The full projected LOS kernel lookup table.
+ * @param radial_kernel The 1D radial kernel lookup table.
+ * @param truncated_kernel The truncated LOS kernel lookup table.
+ * @param surf_dens The array to store the surface densities in.
+ * @param npart_i The number of input particles.
+ * @param npart_j The number of contributing particles.
+ * @param kdim The dimension of the kernel lookup tables.
+ * @param zdim The dimension of the LOS coordinate table.
+ * @param threshold The support threshold in units of the smoothing length.
+ * @param nthreads The number of threads to use.
+ */
+static void los_loop_smoothed(
+    const double *pos_i, const double *input_smls, const double *pos_j,
+    const double *smls, const double *surf_den_vals,
+    const double *projected_kernel, const double *radial_kernel,
+    const double *truncated_kernel, double *surf_dens, const int npart_i,
+    const int npart_j, const int kdim, const int zdim,
+    const double threshold, const int nthreads) {
+
+  tic("Loop surface density calculation with smoothed inputs");
+
+#ifdef WITH_OPENMP
+  if (nthreads > 1) {
+    los_loop_smoothed_omp(pos_i, input_smls, pos_j, smls, surf_den_vals,
+                          projected_kernel, radial_kernel, truncated_kernel,
+                          surf_dens, npart_i, npart_j, kdim, zdim, threshold,
+                          nthreads);
+  } else {
+    los_loop_smoothed_serial(pos_i, input_smls, pos_j, smls, surf_den_vals,
+                             projected_kernel, radial_kernel,
+                             truncated_kernel, surf_dens, npart_i, npart_j,
+                             kdim, zdim, threshold);
+  }
+#else
+  (void)nthreads;
+  los_loop_smoothed_serial(pos_i, input_smls, pos_j, smls, surf_den_vals,
+                           projected_kernel, radial_kernel, truncated_kernel,
+                           surf_dens, npart_i, npart_j, kdim, zdim, threshold);
+#endif
+
+  toc("Loop surface density calculation with smoothed inputs");
+}
+
+/**
  * @brief Recursively calculate the line of sight surface densities.
  *
  * This will recurse to the leaves of the cell tree, any cells further than the
@@ -618,16 +919,60 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
  */
 PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
 
-  /* We don't need these arguments yet, but the function signature must remain
-   * stable while we stage the implementation. */
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
   (void)self;
-  (void)args;
 
-  PyErr_SetString(
-      PyExc_NotImplementedError,
-      "LOS column densities with kernel-smoothed input particles "
-      "have not yet been implemented in the extension.");
-  return NULL;
+  int npart_i, npart_j, kdim, zdim, force_loop, min_count, nthreads;
+  double threshold;
+  PyArrayObject *np_kernel, *np_radial_kernel, *np_truncated_kernel, *np_pos_i,
+      *np_input_smls, *np_pos_j, *np_smls, *np_surf_den_val;
+
+  if (!PyArg_ParseTuple(args, "OOOOOOOOiiiidiii", &np_kernel,
+                        &np_radial_kernel, &np_truncated_kernel, &np_pos_i,
+                        &np_input_smls, &np_pos_j, &np_smls,
+                        &np_surf_den_val, &npart_i, &npart_j, &kdim, &zdim,
+                        &threshold, &force_loop, &min_count, &nthreads)) {
+    return NULL;
+  }
+
+  if (!force_loop) {
+    PyErr_SetString(
+        PyExc_NotImplementedError,
+        "Smoothed-input LOS column densities currently require force_loop.");
+    return NULL;
+  }
+
+  (void)min_count;
+
+  const double *kernel = extract_data_double(np_kernel, "kernel");
+  const double *radial_kernel =
+      extract_data_double(np_radial_kernel, "radial_kernel");
+  const double *truncated_kernel =
+      extract_data_double(np_truncated_kernel, "truncated_kernel");
+  const double *pos_i = extract_data_double(np_pos_i, "pos_i");
+  const double *input_smls = extract_data_double(np_input_smls, "input_smls");
+  const double *pos_j = extract_data_double(np_pos_j, "pos_j");
+  const double *smls = extract_data_double(np_smls, "smls");
+  const double *surf_den_val =
+      extract_data_double(np_surf_den_val, "surf_den_val");
+
+  if (kernel == NULL || radial_kernel == NULL || truncated_kernel == NULL ||
+      pos_i == NULL || input_smls == NULL || pos_j == NULL || smls == NULL ||
+      surf_den_val == NULL) {
+    return NULL;
+  }
+
+  npy_intp np_dims[1] = {npart_i};
+  PyArrayObject *np_surf_dens =
+      (PyArrayObject *)PyArray_ZEROS(1, np_dims, NPY_DOUBLE, 0);
+  double *surf_dens = static_cast<double *>(PyArray_DATA(np_surf_dens));
+
+  los_loop_smoothed(pos_i, input_smls, pos_j, smls, surf_den_val, kernel,
+                    radial_kernel, truncated_kernel, surf_dens, npart_i,
+                    npart_j, kdim, zdim, threshold, nthreads);
+
+  return Py_BuildValue("N", np_surf_dens);
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
