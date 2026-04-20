@@ -2288,6 +2288,8 @@ class TestGalaxySplitting:
         for pipeline in (unsplit_pipeline, split_pipeline):
             pipeline.get_spectra()
             pipeline.get_observed_spectra(cosmo=cosmo)
+            pipeline.get_cosmic_sed()
+            pipeline.get_observed_cosmic_sed(cosmo=cosmo)
             pipeline.get_sfzh(
                 log10ages=test_grid.log10ages,
                 metallicities=test_grid.metallicities,
@@ -2298,6 +2300,8 @@ class TestGalaxySplitting:
         for attr in (
             "lnu_spectra",
             "fnu_spectra",
+            "cosmic_lnus",
+            "cosmic_fnus",
             "sfzhs",
             "sfhs",
         ):
