@@ -37,10 +37,10 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.extensions.particle_spectra import compute_particle_seds
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
+from synthesizer.utils.operation_timers import timed
 
 this_dir, this_filename = os.path.split(__file__)
 
@@ -1152,6 +1152,7 @@ class DraineLiGrainCurves(AttenuationLaw):
             E.g. grain_dict = {'graphite': [0.01, 0.1]}
     """
 
+    @timed("DraineLiGrainCurves.__init__")
     def __init__(
         self,
         grid_name: str,
@@ -1258,72 +1259,68 @@ class DraineLiGrainCurves(AttenuationLaw):
         """Return a string representation of the DraineLiGrainCurves object."""
         return f"DraineLiGrainCurves(grid_name={self.grid_name})"
 
+    @timed("DraineLiGrainCurves._validate_grid")
     def _validate_grid(self):
         """Validate that the attenuation grid matches class expectations."""
-        tic("DraineLiGrainCurves._validate_grid")
-
-        try:
-            # Ensure the supplied attenuation grid actually contains spectra.
-            if not self.grid.available_spectra_emissions:
-                raise exceptions.InconsistentArguments(
-                    "DraineLiGrainCurves requires an attenuation grid with "
-                    "spectra."
-                )
-
-            # Ensure the extraction machinery only has to deal with a single
-            # dust to gas ratio axis.
-            if len(self.grid._extract_axes) != 1:
-                raise exceptions.UnimplementedFunctionality(
-                    "DraineLiGrainCurves only supports attenuation grids with "
-                    "a single dtg axis."
-                )
-
-            # Record whether the grid uses a linear or logarithmic dtg axis.
-            self._dtg_axis_name = self.grid._extract_axes[0]
-            if self._dtg_axis_name not in ("dtg", "log10dtg"):
-                raise exceptions.UnimplementedFunctionality(
-                    "DraineLiGrainCurves only supports attenuation grids with "
-                    "a dtg or log10dtg extraction axis."
-                )
-
-            # Cache the set of available spectra and make sure every grain
-            # component implied by grain_dict exists on the grid.
-            self._available_grain_spectra = set(
-                self.grid.available_spectra_emissions
+        # Ensure the supplied attenuation grid actually contains spectra.
+        if not self.grid.available_spectra_emissions:
+            raise exceptions.InconsistentArguments(
+                "DraineLiGrainCurves requires an attenuation grid with "
+                "spectra."
             )
-            expected_spectra = {
-                param.split("sigmalos_", 1)[-1].replace("0p", "0.")
-                for param in self._required_params
-                if param != "sigmalos_H"
-            }
-            missing_spectra = expected_spectra - self._available_grain_spectra
-            if missing_spectra:
-                raise exceptions.InconsistentArguments(
-                    "The provided attenuation grid is missing the following "
-                    f"grain components: {sorted(missing_spectra)}"
-                )
 
-            # Ensure the dtg axis values are numerically well behaved before we
-            # use them for particle validation and interpolation.
-            grid_dtg = self.grid._extract_axes_values[self._dtg_axis_name]
-            if not np.all(np.isfinite(grid_dtg)):
-                raise exceptions.InconsistentArguments(
-                    "The attenuation grid dtg axis must contain only finite "
-                    "values."
-                )
-            if np.any(np.diff(grid_dtg) <= 0.0):
-                raise exceptions.InconsistentArguments(
-                    "The attenuation grid dtg axis must be strictly "
-                    "increasing."
-                )
+        # Ensure the extraction machinery only has to deal with a single dust
+        # to gas ratio axis.
+        if len(self.grid._extract_axes) != 1:
+            raise exceptions.UnimplementedFunctionality(
+                "DraineLiGrainCurves only supports attenuation grids with "
+                "a single dtg axis."
+            )
 
-            # Cache the dtg range once so get_tau_at_lam only needs the
-            # per-call particle validation and extraction logic.
-            self._grid_dtg_min = np.min(grid_dtg)
-            self._grid_dtg_max = np.max(grid_dtg)
-        finally:
-            toc("DraineLiGrainCurves._validate_grid")
+        # Record whether the grid uses a linear or logarithmic dtg axis.
+        self._dtg_axis_name = self.grid._extract_axes[0]
+        if self._dtg_axis_name not in ("dtg", "log10dtg"):
+            raise exceptions.UnimplementedFunctionality(
+                "DraineLiGrainCurves only supports attenuation grids with "
+                "a dtg or log10dtg extraction axis."
+            )
 
+        # Cache the set of available spectra and make sure every grain
+        # component implied by grain_dict exists on the grid.
+        self._available_grain_spectra = set(
+            self.grid.available_spectra_emissions
+        )
+        expected_spectra = {
+            param.split("sigmalos_", 1)[-1].replace("0p", "0.")
+            for param in self._required_params
+            if param != "sigmalos_H"
+        }
+        missing_spectra = expected_spectra - self._available_grain_spectra
+        if missing_spectra:
+            raise exceptions.InconsistentArguments(
+                "The provided attenuation grid is missing the following "
+                f"grain components: {sorted(missing_spectra)}"
+            )
+
+        # Ensure the dtg axis values are numerically well behaved before we use
+        # them for particle validation and interpolation.
+        grid_dtg = self.grid._extract_axes_values[self._dtg_axis_name]
+        if not np.all(np.isfinite(grid_dtg)):
+            raise exceptions.InconsistentArguments(
+                "The attenuation grid dtg axis must contain only finite "
+                "values."
+            )
+        if np.any(np.diff(grid_dtg) <= 0.0):
+            raise exceptions.InconsistentArguments(
+                "The attenuation grid dtg axis must be strictly increasing."
+            )
+
+        # Cache the dtg range once so get_tau_at_lam only needs the per-call
+        # particle validation and extraction logic.
+        self._grid_dtg_min = np.min(grid_dtg)
+        self._grid_dtg_max = np.max(grid_dtg)
+
+    @timed("DraineLiGrainCurves._get_resampled_grid")
     def _get_resampled_grid(self, lam):
         """Get or create a resampled grid for given wavelengths.
 
@@ -1337,82 +1334,74 @@ class DraineLiGrainCurves(AttenuationLaw):
         Returns:
             Grid: The resampled grid.
         """
-        tic("DraineLiGrainCurves._get_resampled_grid")
-        try:
-            # `lam` has already been normalised to Angstrom by `@accepts`, so
-            # we can use its raw view directly here and avoid another unit
-            # conversion in the hot path.
-            lam_arr = np.atleast_1d(lam.ndview)
-            cache_key = tuple(lam_arr)
+        # `lam` has already been normalised to Angstrom by `@accepts`, so we
+        # can use its raw view directly here and avoid another unit conversion
+        # in the hot path.
+        lam_arr = np.atleast_1d(lam.ndview)
+        cache_key = tuple(lam_arr)
 
-            # Check if we already have this configuration cached.
-            if cache_key in self._grid_cache:
-                return self._grid_cache[cache_key]
+        # Check if we already have this configuration cached.
+        if cache_key in self._grid_cache:
+            return self._grid_cache[cache_key]
 
-            # Resample the base grid to the requested wavelengths
-            if lam_arr.size == 1:
-                # For scalar wavelengths, make a copy to avoid mutating the
-                # base grid
-                grid = copy.deepcopy(self._base_grid)
-                # Pass the original lam with units to get_spectra_at_lam
-                spectra_at_lam = grid.get_spectra_at_lam(lam)
-                for spectra_id, spectra in spectra_at_lam.items():
-                    grid.spectra[spectra_id] = spectra[..., np.newaxis]
-                grid.lam = lam_arr
-                grid._ensure_spectra_data_contiguous()
-            else:
-                # For arrays of wavelengths
-                grid = self._base_grid.reduce_rest_frame_lam(lam)
+        # Resample the base grid to the requested wavelengths
+        if lam_arr.size == 1:
+            # For scalar wavelengths, make a copy to avoid mutating the base
+            # grid.
+            grid = copy.deepcopy(self._base_grid)
+            # Pass the original lam with units to get_spectra_at_lam
+            spectra_at_lam = grid.get_spectra_at_lam(lam)
+            for spectra_id, spectra in spectra_at_lam.items():
+                grid.spectra[spectra_id] = spectra[..., np.newaxis]
+            grid.lam = lam_arr
+            grid._ensure_spectra_data_contiguous()
+        else:
+            # For arrays of wavelengths
+            grid = self._base_grid.reduce_rest_frame_lam(lam)
 
-            # Cache the resampled grid.
-            self._grid_cache[cache_key] = grid
+        # Cache the resampled grid.
+        self._grid_cache[cache_key] = grid
 
-            return grid
-        finally:
-            toc("DraineLiGrainCurves._get_resampled_grid")
+        return grid
 
+    @timed("DraineLiGrainCurves._get_sigmalos_h")
     def _get_sigmalos_h(self, sigmalos_H):
         """Prepare hydrogen column inputs for DTG calculations."""
-        tic("DraineLiGrainCurves._get_sigmalos_h")
-        try:
-            cache_key = id(sigmalos_H)
-            cached = self._sigmalos_h_cache.get(cache_key)
-            if cached is not None and cached[0] is sigmalos_H:
-                return cached[1:]
+        cache_key = id(sigmalos_H)
+        cached = self._sigmalos_h_cache.get(cache_key)
+        if cached is not None and cached[0] is sigmalos_H:
+            return cached[1:]
 
-            if not isinstance(sigmalos_H, (unyt_quantity, unyt_array)):
-                raise exceptions.InconsistentArguments(
-                    "Provide units to the sigmalos_H quantity"
-                )
-
-            sigmalos_H_arr = np.atleast_1d(np.asarray(sigmalos_H.ndview))
-            column_units = sigmalos_H.units
-            nparticles = sigmalos_H_arr.size
-            valid_hydrogen = np.isfinite(sigmalos_H_arr) & (
-                sigmalos_H_arr > 0.0
+        if not isinstance(sigmalos_H, (unyt_quantity, unyt_array)):
+            raise exceptions.InconsistentArguments(
+                "Provide units to the sigmalos_H quantity"
             )
 
-            self._sigmalos_h_cache[cache_key] = (
-                sigmalos_H,
-                sigmalos_H_arr,
-                column_units,
-                nparticles,
-                valid_hydrogen,
-            )
-            return (
-                sigmalos_H_arr,
-                column_units,
-                nparticles,
-                valid_hydrogen,
-            )
-        finally:
-            toc("DraineLiGrainCurves._get_sigmalos_h")
+        sigmalos_H_arr = np.atleast_1d(np.asarray(sigmalos_H.ndview))
+        column_units = sigmalos_H.units
+        nparticles = sigmalos_H_arr.size
+        valid_hydrogen = np.isfinite(sigmalos_H_arr) & (sigmalos_H_arr > 0.0)
+
+        self._sigmalos_h_cache[cache_key] = (
+            sigmalos_H,
+            sigmalos_H_arr,
+            column_units,
+            nparticles,
+            valid_hydrogen,
+        )
+        return (
+            sigmalos_H_arr,
+            column_units,
+            nparticles,
+            valid_hydrogen,
+        )
 
     @accepts(
         lam=angstrom,
         sigmalos_H=Msun / pc**2,
         sigmalos_dust=Msun / pc**2,
     )
+    @timed("DraineLiGrainCurves.get_tau_at_lam")
     def get_tau_at_lam(
         self,
         lam: unyt_array,
@@ -1441,125 +1430,118 @@ class DraineLiGrainCurves(AttenuationLaw):
                 if sigmalos input is array-like, otherwise shape (N_lambda,)).
                 Dimensionless
         """
-        tic("DraineLiGrainCurves.get_tau_at_lam")
+        # Map the public keyword arguments onto the spectra names stored in the
+        # attenuation grid. TODO: modify the grid generation files to remove
+        # this remapping.
+        component_datasets = {
+            component_key: component_key.split("sigmalos_", 1)[-1].replace(
+                "0p", "0."
+            )
+            for component_key in sigmalos_dust
+        }
 
-        try:
-            # Map the public keyword arguments onto the spectra names stored in
+        # Prepare hydrogen column densities
+        (
+            sigmalos_H,
+            column_units,
+            nparticles,
+            valid_hydrogen,
+        ) = self._get_sigmalos_h(sigmalos_H)
+
+        # Get or create the resampled grid for this wavelength.
+        grid = self._get_resampled_grid(lam)
+
+        # Reuse the validated grid axis metadata cached during construction.
+        dtg_axis_name = self._dtg_axis_name
+
+        # Verify all requested grain types are available
+        for dataset_key in component_datasets.values():
+            if dataset_key not in self._available_grain_spectra:
+                raise exceptions.InconsistentArguments(
+                    f"Grain type {dataset_key} not in the provided dust grid!"
+                )
+
+        # Accumulate the contribution from each grain component into the final
+        # optical-depth array.
+        tau_all = np.zeros((nparticles, grid.nlam), dtype=np.float32)
+        tau_scale = ((1.0 * cm**2) / _GAS_MASS_PER_H).to(
+            1 / column_units
+        ).value / 1.086
+        grid_dtg_axis = grid._extract_axes_values[dtg_axis_name]
+        grid_shape = np.array(grid.shape, dtype=np.int32)
+        grid_weights = np.ones(nparticles)
+        dtg = np.ones(nparticles, dtype=float)
+        valid = np.empty(nparticles, dtype=bool)
+        dust_scale = np.zeros(nparticles, dtype=float)
+
+        # Loop over the dust components
+        for component_key, dust_col in sigmalos_dust.items():
+            # Unit conversion/validation for dust columns is now handled by
+            # `@accepts(..., sigmalos_dust=...)`, so the hot path only needs a
+            # cheap array view plus any required broadcasting to the particle
+            # count.
+            dust_col = np.atleast_1d(np.asarray(dust_col.ndview))
+
+            if dust_col.size not in (1, nparticles):
+                raise exceptions.InconsistentArguments(
+                    f"{component_key} has length {dust_col.size}, but "
+                    f"expected 1 or {nparticles}."
+                )
+
+            if dust_col.size == 1 and nparticles > 1:
+                dust_col = np.broadcast_to(dust_col, (nparticles,))
+
+            # Map the public keyword argument onto the spectra name stored in
             # the attenuation grid.
-            # TODO: modify the grid generation files to remove this remapping.
-            component_datasets = {
-                component_key: component_key.split("sigmalos_", 1)[-1].replace(
-                    "0p", "0."
-                )
-                for component_key in sigmalos_dust
-            }
+            dataset_key = component_datasets[component_key]
 
-            # Prepare hydrogen column densities
-            (
-                sigmalos_H,
-                column_units,
+            valid[:] = (
+                valid_hydrogen & np.isfinite(dust_col) & (dust_col > 0.0)
+            )
+            if not np.any(valid):
+                continue
+
+            dtg.fill(1.0)
+            dtg[valid] = dust_col[valid] / (
+                sigmalos_H[valid] * _DRAINE_LI_MEAN_MOLECULAR_WEIGHT
+            )
+
+            # Log the grid axis if we need to
+            dtg_grid_values = (
+                np.log10(dtg) if dtg_axis_name == "log10dtg" else dtg
+            )
+
+            # Call the particle spectra extension directly for this single
+            # extraction axis instead of going through generate_lnu.
+            component_curves, _ = compute_particle_seds(
+                grid.spectra[dataset_key],
+                (grid_dtg_axis,),
+                (dtg_grid_values,),
+                grid_weights,
+                grid_shape,
+                1,
                 nparticles,
-                valid_hydrogen,
-            ) = self._get_sigmalos_h(sigmalos_H)
+                grid.nlam,
+                "cic",
+                1,
+                valid,
+                None,
+                (dtg_axis_name,),
+            )
 
-            # Get or create the resampled grid for this wavelength.
-            grid = self._get_resampled_grid(lam)
+            # Convert from mag cm^2 / H nucleus into optical depth per dust
+            # surface density, then multiply by the dust column itself.
+            component_tau = component_curves * tau_scale
 
-            # Reuse the validated grid axis metadata cached during
-            # construction.
-            dtg_axis_name = self._dtg_axis_name
+            dust_scale.fill(0.0)
+            dust_scale[valid] = dust_col[valid]
+            tau_all += component_tau * dust_scale[:, np.newaxis]
 
-            # Verify all requested grain types are available
-            for dataset_key in component_datasets.values():
-                if dataset_key not in self._available_grain_spectra:
-                    raise exceptions.InconsistentArguments(
-                        "Grain type "
-                        f"{dataset_key} not in the provided dust grid!"
-                    )
-
-            # Accumulate the contribution from each grain component into the
-            # final optical-depth array.
-            tau_all = np.zeros((nparticles, grid.nlam), dtype=np.float32)
-            tau_scale = ((1.0 * cm**2) / _GAS_MASS_PER_H).to(
-                1 / column_units
-            ).value / 1.086
-            grid_dtg_axis = grid._extract_axes_values[dtg_axis_name]
-            grid_shape = np.array(grid.shape, dtype=np.int32)
-            grid_weights = np.ones(nparticles)
-            dtg = np.ones(nparticles, dtype=float)
-            valid = np.empty(nparticles, dtype=bool)
-            dust_scale = np.zeros(nparticles, dtype=float)
-
-            # Loop over the dust components
-            for component_key, dust_col in sigmalos_dust.items():
-                # Unit conversion/validation for dust columns is now handled
-                # by `@accepts(..., sigmalos_dust=...)`, so the hot path only
-                # needs a cheap array view plus any required broadcasting to
-                # the particle count.
-                dust_col = np.atleast_1d(np.asarray(dust_col.ndview))
-
-                if dust_col.size not in (1, nparticles):
-                    raise exceptions.InconsistentArguments(
-                        f"{component_key} has length {dust_col.size}, but "
-                        f"expected 1 or {nparticles}."
-                    )
-
-                if dust_col.size == 1 and nparticles > 1:
-                    dust_col = np.broadcast_to(dust_col, (nparticles,))
-
-                # Map the public keyword argument onto the spectra name stored
-                # in the attenuation grid
-                dataset_key = component_datasets[component_key]
-
-                valid[:] = (
-                    valid_hydrogen & np.isfinite(dust_col) & (dust_col > 0.0)
-                )
-                if not np.any(valid):
-                    continue
-
-                dtg.fill(1.0)
-                dtg[valid] = dust_col[valid] / (
-                    sigmalos_H[valid] * _DRAINE_LI_MEAN_MOLECULAR_WEIGHT
-                )
-
-                # Log the grid axis if we need to
-                dtg_grid_values = (
-                    np.log10(dtg) if dtg_axis_name == "log10dtg" else dtg
-                )
-
-                # Call the particle spectra extension directly for this single
-                # extraction axis instead of going through generate_lnu.
-                component_curves, _ = compute_particle_seds(
-                    grid.spectra[dataset_key],
-                    (grid_dtg_axis,),
-                    (dtg_grid_values,),
-                    grid_weights,
-                    grid_shape,
-                    1,
-                    nparticles,
-                    grid.nlam,
-                    "cic",
-                    1,
-                    valid,
-                    None,
-                    (dtg_axis_name,),
-                )
-
-                # Convert from mag cm^2 / H nucleus into optical depth per dust
-                # surface density, then multiply by the dust column itself.
-                component_tau = component_curves * tau_scale
-
-                dust_scale.fill(0.0)
-                dust_scale[valid] = dust_col[valid]
-                tau_all += component_tau * dust_scale[:, np.newaxis]
-
-            # Preserve the previous scalar-like return shape for
-            # single-particle inputs.
-            if tau_all.shape[0] == 1:
-                return tau_all[0]
-            return tau_all
-        finally:
-            toc("DraineLiGrainCurves.get_tau_at_lam")
+        # Preserve the previous scalar-like return shape for single-particle
+        # inputs.
+        if tau_all.shape[0] == 1:
+            return tau_all[0]
+        return tau_all
 
     @accepts(
         lam=angstrom,
@@ -1613,6 +1595,7 @@ class DraineLiGrainCurves(AttenuationLaw):
         return tau_lam / tau_V[:, np.newaxis]
 
     @accepts(lam=angstrom)
+    @timed("DraineLiGrainCurves.get_transmission")
     def get_transmission(self, tau_v=None, lam=None, **dust_curve_kwargs):
         """Compute the transmission curve.
 
@@ -1633,36 +1616,32 @@ class DraineLiGrainCurves(AttenuationLaw):
             np.ndarray of float:
                 The transmission at each wavelength
         """
-        tic("DraineLiGrainCurves.get_transmission")
+        if tau_v is not None:
+            warn(
+                "tau_v has been provided, but `DraineLiGrainCurves` does "
+                "not use tau_v. Ignoring tau_v in the calculation."
+            )
+
+        # Set any additional parameters on the dust curve
+        self._set_params(**dust_curve_kwargs)
+
         try:
-            if tau_v is not None:
-                warn(
-                    "tau_v has been provided, but `DraineLiGrainCurves` does "
-                    "not use tau_v. Ignoring tau_v in the calculation."
-                )
-
-            # Set any additional parameters on the dust curve
-            self._set_params(**dust_curve_kwargs)
-
-            try:
-                sigmalos_H = dust_curve_kwargs.get(
-                    "sigmalos_H", getattr(self, "sigmalos_H", None)
-                )
-                # Gather sigmalos_* dust components: start with attributes,
-                # then override with kwargs
-                sigmalos_dust = {}
-                for key in vars(self):
-                    if key.startswith("sigmalos_") and key != "sigmalos_H":
-                        sigmalos_dust[key] = getattr(self, key)
-                for key, value in dust_curve_kwargs.items():
-                    if key.startswith("sigmalos_") and key != "sigmalos_H":
-                        sigmalos_dust[key] = value
-                # Compute tau_lam directly (tau_v is not used for this model)
-                tau_lam = self.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
-            finally:
-                # Always restore previous state
-                self._reset_params()
-
-            return np.exp(-tau_lam)
+            sigmalos_H = dust_curve_kwargs.get(
+                "sigmalos_H", getattr(self, "sigmalos_H", None)
+            )
+            # Gather sigmalos_* dust components: start with attributes, then
+            # override with kwargs.
+            sigmalos_dust = {}
+            for key in vars(self):
+                if key.startswith("sigmalos_") and key != "sigmalos_H":
+                    sigmalos_dust[key] = getattr(self, key)
+            for key, value in dust_curve_kwargs.items():
+                if key.startswith("sigmalos_") and key != "sigmalos_H":
+                    sigmalos_dust[key] = value
+            # Compute tau_lam directly (tau_v is not used for this model)
+            tau_lam = self.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
         finally:
-            toc("DraineLiGrainCurves.get_transmission")
+            # Always restore previous state
+            self._reset_params()
+
+        return np.exp(-tau_lam)

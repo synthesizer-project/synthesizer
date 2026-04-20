@@ -39,7 +39,6 @@ from unyt import Hz, angstrom, c, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer._version import __version__
 from synthesizer.extensions.photometry import compute_photometry
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
@@ -47,6 +46,7 @@ from synthesizer.utils.integrate import (
     integrate_weighted_last_axis,
     trapezoid,
 )
+from synthesizer.utils.operation_timers import timed, timer
 
 
 @accepts(new_lam=angstrom)
@@ -185,6 +185,7 @@ class FilterCollection:
 
     accepts(new_lam=angstrom)
 
+    @timed("FilterCollection.__init__")
     def __init__(
         self,
         filter_codes=None,
@@ -239,88 +240,83 @@ class FilterCollection:
                 Are we printing out information about the filters as they
                 are created? Defaults to True.
         """
-        tic("FilterCollection.__init__")
-        try:
-            # Define lists to hold our filters and filter codes
-            self.filters = {}
-            self.filter_codes = []
-            self._batch_cache = FilterCache()
+        # Define lists to hold our filters and filter codes
+        self.filters = {}
+        self.filter_codes = []
+        self._batch_cache = FilterCache()
 
-            # Attribute for looping
-            self._current_ind = 0
+        # Attribute for looping
+        self._current_ind = 0
 
-            # Ensure we haven't been passed both a path and parameters
-            if path is not None:
-                if filter_codes is not None:
-                    warn(
-                        "If a path is passed only the saved FilterCollection "
-                        "is loaded! Create a separate FilterCollection with "
-                        "these filter codes and add them.",
-                    )
-                if tophat_dict is not None:
-                    warn(
-                        "If a path is passed only the saved FilterCollection "
-                        "is loaded! Create a separate FilterCollection with "
-                        "this top hat dictionary and add them."
-                    )
-                if generic_dict is not None:
-                    warn(
-                        "If a path is passed only the saved FilterCollection "
-                        "is loaded! Create a separate FilterCollection with "
-                        "this generic dictionary and add them."
-                    )
+        # Ensure we haven't been passed both a path and parameters
+        if path is not None:
+            if filter_codes is not None:
+                warn(
+                    "If a path is passed only the saved FilterCollection "
+                    "is loaded! Create a separate FilterCollection with "
+                    "these filter codes and add them.",
+                )
+            if tophat_dict is not None:
+                warn(
+                    "If a path is passed only the saved FilterCollection "
+                    "is loaded! Create a separate FilterCollection with "
+                    "this top hat dictionary and add them."
+                )
+            if generic_dict is not None:
+                warn(
+                    "If a path is passed only the saved FilterCollection "
+                    "is loaded! Create a separate FilterCollection with "
+                    "this generic dictionary and add them."
+                )
 
-            # Are we loading an old filter collection?
-            if path is not None:
-                # Load the FilterCollection from the file
-                self._load_filters(path)
+        # Are we loading an old filter collection?
+        if path is not None:
+            # Load the FilterCollection from the file
+            self._load_filters(path)
 
-            # Are we creating an empty FilterCollection?
-            elif (
-                filter_codes is None
-                and tophat_dict is None
-                and generic_dict is None
-                and filters is None
-            ):
-                self.lam = None
-                return
+        # Are we creating an empty FilterCollection?
+        elif (
+            filter_codes is None
+            and tophat_dict is None
+            and generic_dict is None
+            and filters is None
+        ):
+            self.lam = None
+            return
 
-            else:
-                # Ok, we aren't loading one. Make the filters instead.
+        else:
+            # Ok, we aren't loading one. Make the filters instead.
 
-                # Do we have an wavelength array? If so we will resample the
-                # transmissions.
-                self.lam = new_lam
+            # Do we have an wavelength array? If so we will resample the
+            # transmissions.
+            self.lam = new_lam
 
-                # Let's make the filters
-                if filter_codes is not None:
-                    self._include_svo_filters(filter_codes)
-                if tophat_dict is not None:
-                    self._include_top_hat_filters(tophat_dict)
-                if generic_dict is not None:
-                    self._include_generic_filters(generic_dict)
-                if filters is not None:
-                    self._include_synthesizer_filters(filters)
+            # Let's make the filters
+            if filter_codes is not None:
+                self._include_svo_filters(filter_codes)
+            if tophat_dict is not None:
+                self._include_top_hat_filters(tophat_dict)
+            if generic_dict is not None:
+                self._include_generic_filters(generic_dict)
+            if filters is not None:
+                self._include_synthesizer_filters(filters)
 
-                # How many filters are there?
-                self.nfilters = len(self.filter_codes)
+            # How many filters are there?
+            self.nfilters = len(self.filter_codes)
 
-                # If we weren't passed a wavelength grid we need to resample
-                # the filters onto a universal wavelength grid.
-                if self.lam is None:
-                    self.resample_filters(fill_gaps=fill_gaps, verbose=verbose)
+            # If we weren't passed a wavelength grid we need to resample the
+            # filters onto a universal wavelength grid.
+            if self.lam is None:
+                self.resample_filters(fill_gaps=fill_gaps, verbose=verbose)
 
-            # If we were passed a wavelength array we need to resample on to
-            # it. NOTE: this can also be done for a loaded FilterCollection so
-            # we just do it here outside the logic
-            if new_lam is not None:
-                self.resample_filters(new_lam=new_lam, verbose=verbose)
+        # If we were passed a wavelength array we need to resample on to it.
+        # NOTE: this can also be done for a loaded FilterCollection so we just
+        # do it here outside the logic.
+        if new_lam is not None:
+            self.resample_filters(new_lam=new_lam, verbose=verbose)
 
-            # Build cached 2D transmission matrix for the current collection
-            # grid.
-            self._refresh_batch_cache()
-        finally:
-            toc("FilterCollection.__init__")
+        # Build cached 2D transmission matrix for the current collection grid.
+        self._refresh_batch_cache()
 
     def _load_filters(self, path=None):
         """Load a `FilterCollection` from a HDF5 file.
@@ -939,6 +935,7 @@ class FilterCollection:
         return new_lam * piv_lams[0].units
 
     @accepts(new_lam=angstrom)
+    @timed("FilterCollection.resample_filters")
     def resample_filters(
         self,
         new_lam=None,
@@ -980,44 +977,40 @@ class FilterCollection:
             verbose (bool):
                 Are we talking?
         """
-        tic("FilterCollection.resample_filters")
-        try:
-            # Do we need to find a wavelength array from the filters?
-            if new_lam is None:
-                # Get the wavelength limits
-                min_lam, max_lam = self.get_non_zero_lam_lims()
+        # Do we need to find a wavelength array from the filters?
+        if new_lam is None:
+            # Get the wavelength limits
+            min_lam, max_lam = self.get_non_zero_lam_lims()
 
-                # Are we making an array with a fixed size?
-                if lam_size is not None:
-                    # Create wavelength array
-                    new_lam = np.linspace(min_lam, max_lam, lam_size)
+            # Are we making an array with a fixed size?
+            if lam_size is not None:
+                # Create wavelength array
+                new_lam = np.linspace(min_lam, max_lam, lam_size)
 
-                else:
-                    # Ok, we are trying to be clever, merge the filter
-                    # wavelength arrays into a single array.
-                    new_lam = self._merge_filter_lams(fill_gaps=fill_gaps)
+            else:
+                # Ok, we are trying to be clever, merge the filter wavelength
+                # arrays into a single array.
+                new_lam = self._merge_filter_lams(fill_gaps=fill_gaps)
 
-                if verbose:
-                    print(
-                        "Calculated wavelength array: \n"
-                        + "min = %.2e Angstrom\n" % new_lam.min()
-                        + "max = %.2e Angstrom\n" % new_lam.max()
-                        + "FilterCollection.lam.size = %d" % new_lam.size
-                    )
+            if verbose:
+                print(
+                    "Calculated wavelength array: \n"
+                    + "min = %.2e Angstrom\n" % new_lam.min()
+                    + "max = %.2e Angstrom\n" % new_lam.max()
+                    + "FilterCollection.lam.size = %d" % new_lam.size
+                )
 
-            # Loop over filters unifying them onto this wavelength array
-            # NOTE: Filters already on self.lam will be unaffected but doing a
-            # np.all condition to check for matches and skip them is more
-            # expensive than just doing the interpolation for all filters
-            for fcode in self.filters:
-                f = self.filters[fcode]
-                f._interpolate_wavelength(new_lam=new_lam)
+        # Loop over filters unifying them onto this wavelength array NOTE:
+        # Filters already on self.lam will be unaffected but doing a np.all
+        # condition to check for matches and skip them is more expensive than
+        # just doing the interpolation for all filters.
+        for fcode in self.filters:
+            f = self.filters[fcode]
+            f._interpolate_wavelength(new_lam=new_lam)
 
-            # Set the wavelength array
-            self.lam = new_lam
-            self._refresh_batch_cache()
-        finally:
-            toc("FilterCollection.resample_filters")
+        # Set the wavelength array
+        self.lam = new_lam
+        self._refresh_batch_cache()
 
     @staticmethod
     def _grid_cache_key(xs, space):
@@ -1054,6 +1047,7 @@ class FilterCollection:
             },
         )
 
+    @timed("FilterCollection._get_batched_weights")
     def _get_batched_weights(
         self,
         xs,
@@ -1168,6 +1162,7 @@ class FilterCollection:
         )
         return weights, denominators, starts, ends
 
+    @timed("FilterCollection.apply_filters")
     def apply_filters(
         self,
         arr,
@@ -1222,16 +1217,17 @@ class FilterCollection:
             method=integration_method,
         )
 
-        return compute_photometry(
-            xs,
-            arr,
-            weights,
-            denominators,
-            starts,
-            ends,
-            nthreads,
-            integration_method,
-        )
+        with timer("FilterCollection.apply_filters.compute_photometry"):
+            return compute_photometry(
+                xs,
+                arr,
+                weights,
+                denominators,
+                starts,
+                ends,
+                nthreads,
+                integration_method,
+            )
 
     def unify_with_grid(self, grid, loop_spectra=False):
         """Unify a grid with this FilterCollection.
@@ -1251,6 +1247,7 @@ class FilterCollection:
         grid.interp_spectra(self.lam, loop_spectra)
 
     @accepts(lam=angstrom)
+    @timed("FilterCollection.prepare_for_grid")
     def prepare_for_grid(self, lam=None):
         """Prepare filter integration caches for a wavelength grid.
 
@@ -1259,36 +1256,32 @@ class FilterCollection:
                 The wavelength grid to prepare for. If None, the collection's
                 current wavelength grid is used.
         """
-        tic("FilterCollection.prepare_for_grid")
-        try:
-            # Default to the collection's wavelength grid.
-            if lam is None:
-                lam = self.lam
+        # Default to the collection's wavelength grid.
+        if lam is None:
+            lam = self.lam
 
-            if lam is None:
-                raise exceptions.InconsistentArguments(
-                    "Cannot prepare filters without a wavelength grid."
-                )
+        if lam is None:
+            raise exceptions.InconsistentArguments(
+                "Cannot prepare filters without a wavelength grid."
+            )
 
-            # Ensure filter transmission arrays match the target grid first.
-            self.resample_filters(new_lam=lam, verbose=False)
+        # Ensure filter transmission arrays match the target grid first.
+        self.resample_filters(new_lam=lam, verbose=False)
 
-            # Precompute both wavelength- and frequency-space integration data.
-            for filt in self.filters.values():
-                filt.prepare_for_grid(lam=lam)
+        # Precompute both wavelength- and frequency-space integration data.
+        for filt in self.filters.values():
+            filt.prepare_for_grid(lam=lam)
 
-            # Precompute collection-level batched weights and denominators.
-            lam_vals = lam.ndview
-            native_payload = self._batch_cache.get(("__native__",))
-            if native_payload is None:
-                raise exceptions.InconsistentArguments(
-                    "Failed to prepare native filter cache for this grid."
-                )
-            nu_vals = native_payload["nu_native"]
-            self._get_batched_weights(lam_vals, space="lam", method="trapz")
-            self._get_batched_weights(nu_vals, space="nu", method="trapz")
-        finally:
-            toc("FilterCollection.prepare_for_grid")
+        # Precompute collection-level batched weights and denominators.
+        lam_vals = lam.ndview
+        native_payload = self._batch_cache.get(("__native__",))
+        if native_payload is None:
+            raise exceptions.InconsistentArguments(
+                "Failed to prepare native filter cache for this grid."
+            )
+        nu_vals = native_payload["nu_native"]
+        self._get_batched_weights(lam_vals, space="lam", method="trapz")
+        self._get_batched_weights(nu_vals, space="nu", method="trapz")
 
     def _transmission_curve_ax(self, ax, **kwargs):
         """Add filter transmission curves to a given axes.
@@ -1693,6 +1686,7 @@ class Filter:
         lam_fwhm=angstrom,
         new_lam=angstrom,
     )
+    @timed("Filter.__init__")
     def __init__(
         self,
         filter_code,
@@ -1729,82 +1723,78 @@ class Filter:
                 The HDF5 root group of a HDF5 file from which to load the
                 filter.
         """
-        tic("Filter.__init__")
-        try:
-            # Metadata of this filter
-            self.filter_code = filter_code
-            self.observatory = None
-            self.instrument = None
-            self.filter_ = None
-            self.filter_type = None
+        # Metadata of this filter
+        self.filter_code = filter_code
+        self.observatory = None
+        self.instrument = None
+        self.filter_ = None
+        self.filter_type = None
 
-            # Properties for a top hat filter
-            self.lam_min = lam_min
-            self.lam_max = lam_max
-            self.lam_eff = lam_eff
-            self.lam_fwhm = lam_fwhm
+        # Properties for a top hat filter
+        self.lam_min = lam_min
+        self.lam_max = lam_max
+        self.lam_eff = lam_eff
+        self.lam_fwhm = lam_fwhm
 
-            # Properties for a filter from SVO
-            self.svo_url = None
+        # Properties for a filter from SVO
+        self.svo_url = None
 
-            # Define transmission curve and wavelength (if provided) of
-            # this filter
-            self.t = transmission
-            self.lam = new_lam
-            self.original_lam = new_lam
-            self.original_t = transmission
-            self._shifted_t = None
-            self._integration_cache = FilterCache()
-            self._native_grid_keys = {}
+        # Define transmission curve and wavelength (if provided) of this
+        # filter.
+        self.t = transmission
+        self.lam = new_lam
+        self.original_lam = new_lam
+        self.original_t = transmission
+        self._shifted_t = None
+        self._integration_cache = FilterCache()
+        self._native_grid_keys = {}
 
-            # Are loading from a hdf5 group?
-            if hdf is not None:
-                self._load_filter_from_hdf5(hdf)
+        # Are loading from a hdf5 group?
+        if hdf is not None:
+            self._load_filter_from_hdf5(hdf)
 
-            # Is this a generic filter? (Everything other than the label is
-            # defined above.)
-            elif transmission is not None and new_lam is not None:
-                self.filter_type = "Generic"
+        # Is this a generic filter? (Everything other than the label is
+        # defined above.)
+        elif transmission is not None and new_lam is not None:
+            self.filter_type = "Generic"
 
-            # Is this a top hat filter?
-            elif (lam_min is not None and lam_max is not None) or (
-                lam_eff is not None and lam_fwhm is not None
-            ):
-                self._make_top_hat_filter()
+        # Is this a top hat filter?
+        elif (lam_min is not None and lam_max is not None) or (
+            lam_eff is not None and lam_fwhm is not None
+        ):
+            self._make_top_hat_filter()
 
-            # Is this an SVO filter?
-            elif "/" in filter_code and "." in filter_code:
-                self._make_svo_filter()
+        # Is this an SVO filter?
+        elif "/" in filter_code and "." in filter_code:
+            self._make_svo_filter()
 
-            # Otherwise we haven't got a valid combination of inputs.
-            else:
-                raise exceptions.InconsistentArguments(
-                    "Invalid combination of filter inputs. \n For a generic "
-                    "filter provide a transmission and wavelength array. "
-                    "\nFor a filter from the SVO database provide a filter "
-                    "code of the form Observatory/Instrument.Filter that "
-                    "matches the database."
-                    " \nFor a top hat provide either a minimum and maximum "
-                    "wavelength or an effective wavelength and FWHM."
-                )
+        # Otherwise we haven't got a valid combination of inputs.
+        else:
+            raise exceptions.InconsistentArguments(
+                "Invalid combination of filter inputs. \n For a generic "
+                "filter provide a transmission and wavelength array. "
+                "\nFor a filter from the SVO database provide a filter "
+                "code of the form Observatory/Instrument.Filter that "
+                "matches the database."
+                " \nFor a top hat provide either a minimum and maximum "
+                "wavelength or an effective wavelength and FWHM."
+            )
 
-            # Define the original wavelength and transmission for property
-            # calculation later.
-            if self.original_lam is None:
-                self.original_lam = self.lam
-            if self.original_t is None:
-                self.original_t = self.t
+        # Define the original wavelength and transmission for property
+        # calculation later.
+        if self.original_lam is None:
+            self.original_lam = self.lam
+        if self.original_t is None:
+            self.original_t = self.t
 
-            # Calculate frequencies
-            self.nu = (c / self.lam).to("Hz").value
-            self.original_nu = (c / self.original_lam).to("Hz").value
-            self._update_native_grid_keys()
+        # Calculate frequencies
+        self.nu = (c / self.lam).to("Hz").value
+        self.original_nu = (c / self.original_lam).to("Hz").value
+        self._update_native_grid_keys()
 
-            # Ensure transmission curves are in a valid range (we expect 0-1,
-            # some SVO curves return strange values above this e.g. ~60-80)
-            self.clip_transmission()
-        finally:
-            toc("Filter.__init__")
+        # Ensure transmission curves are in a valid range (we expect 0-1,
+        # some SVO curves return strange values above this e.g. ~60-80)
+        self.clip_transmission()
 
     @property
     def transmission(self):
@@ -2070,6 +2060,7 @@ class Filter:
             self.t = self.original_t
 
     @accepts(new_lam=angstrom)
+    @timed("Filter._interpolate_wavelength")
     def _interpolate_wavelength(self, new_lam=None):
         """Interpolate a the transmission curve onto the a wavelength array.
 
@@ -2082,67 +2073,57 @@ class Filter:
             array-like (float):
                 Transmission curve interpolated onto the new wavelength array.
         """
-        tic("Filter._interpolate_wavelength")
-        try:
-            # If we've been handed a wavelength array we must overwrite the
-            # current one
-            if new_lam is not None:
-                # Warn the user if we're about to truncate the existing
-                # wavelength array
-                truncated = False
-                if (
-                    new_lam.min()
-                    > self.original_lam[self.original_t > 0].min()
-                ):
-                    truncated = True
-                if (
-                    new_lam.max()
-                    < self.original_lam[self.original_t > 0].max()
-                ):
-                    truncated = True
-                if truncated:
-                    warn(
-                        f"{self.filter_code} will be truncated where "
-                        "transmission is non-zero "
-                        "(old_lam_bounds = "
-                        f"({self.lam[self.t > 0].min():.2e}, "
-                        f"{self.lam[self.t > 0].max():.2e}), "
-                        "new_lam_bounds = "
-                        f"({new_lam.min():.2e}, {new_lam.max():.2e}))"
-                    )
-
-                self.lam = new_lam
-
-            # Perform interpolation
-            self.t = np.interp(
-                self._lam,
-                self._original_lam,
-                self.original_t,
-                left=0.0,
-                right=0.0,
-            )
-
-            # Ensure we don't have 0 transmission
-            if self.t.sum() == 0:
-                raise exceptions.InconsistentWavelengths(
-                    "Interpolated transmission curve has no non-zero values. "
-                    f"Consider removing this filter ({self.filter_code}), "
-                    "extending the wavelength range or increasing the "
-                    "wavelength."
+        # If we've been handed a wavelength array we must overwrite the current
+        # one.
+        if new_lam is not None:
+            # Warn the user if we're about to truncate the existing wavelength
+            # array.
+            truncated = False
+            if new_lam.min() > self.original_lam[self.original_t > 0].min():
+                truncated = True
+            if new_lam.max() < self.original_lam[self.original_t > 0].max():
+                truncated = True
+            if truncated:
+                warn(
+                    f"{self.filter_code} will be truncated where "
+                    "transmission is non-zero "
+                    "(old_lam_bounds = "
+                    f"({self.lam[self.t > 0].min():.2e}, "
+                    f"{self.lam[self.t > 0].max():.2e}), "
+                    "new_lam_bounds = "
+                    f"({new_lam.min():.2e}, {new_lam.max():.2e}))"
                 )
 
-            # And ensure transmission is in expected range
-            self.clip_transmission()
+            self.lam = new_lam
 
-            # Keep dependent frequency grid in sync with the wavelength grid.
-            self.nu = (c / self.lam).to("Hz").value
-            self._update_native_grid_keys()
+        # Perform interpolation
+        self.t = np.interp(
+            self._lam,
+            self._original_lam,
+            self.original_t,
+            left=0.0,
+            right=0.0,
+        )
 
-            # Reset any cached integration data because the transmission curve
-            # has changed.
-            self._reset_integration_cache()
-        finally:
-            toc("Filter._interpolate_wavelength")
+        # Ensure we don't have 0 transmission
+        if self.t.sum() == 0:
+            raise exceptions.InconsistentWavelengths(
+                "Interpolated transmission curve has no non-zero values. "
+                f"Consider removing this filter ({self.filter_code}), "
+                "extending the wavelength range or increasing the "
+                "wavelength."
+            )
+
+        # And ensure transmission is in expected range
+        self.clip_transmission()
+
+        # Keep dependent frequency grid in sync with the wavelength grid.
+        self.nu = (c / self.lam).to("Hz").value
+        self._update_native_grid_keys()
+
+        # Reset any cached integration data because the transmission curve has
+        # changed.
+        self._reset_integration_cache()
 
     def _reset_integration_cache(self):
         """Clear cached integration data."""
@@ -2184,6 +2165,7 @@ class Filter:
             return False
         return True
 
+    @timed("Filter._get_weighted_integration_data")
     def _get_weighted_integration_data(self, xs, original_xs, space):
         """Return transmission and integration weights for a target grid."""
         # Fast-path: if xs matches the filter's native grid, we can use self.t
@@ -2248,6 +2230,7 @@ class Filter:
         )
 
     @accepts(lam=angstrom)
+    @timed("Filter.prepare_for_grid")
     def prepare_for_grid(self, lam=None, nu=None):
         """Precompute interpolation/weight data for a target grid.
 
@@ -2257,38 +2240,32 @@ class Filter:
             lam (np.ndarray of float): Wavelength grid.
             nu (np.ndarray of float): Frequency grid.
         """
-        tic("Filter.prepare_for_grid")
-        try:
-            if lam is None and nu is None:
-                # Prepare native wavelength and frequency grids.
-                self._get_weighted_integration_data(
-                    self._lam, self._original_lam, "lam"
-                )
-                self._get_weighted_integration_data(
-                    self._nu, self._original_nu, "nu"
-                )
-                return
+        if lam is None and nu is None:
+            # Prepare native wavelength and frequency grids.
+            self._get_weighted_integration_data(
+                self._lam, self._original_lam, "lam"
+            )
+            self._get_weighted_integration_data(
+                self._nu, self._original_nu, "nu"
+            )
+            return
 
-            if lam is not None:
-                xs = lam.ndview
-                self._get_weighted_integration_data(
-                    xs, self._original_lam, "lam"
-                )
-                # If we have a wavelength grid we can also precompute the
-                # matching frequency-grid cache entries.
-                nu = (c / (xs * angstrom)).to("Hz")
-                self._get_weighted_integration_data(
-                    nu.value,
-                    self._original_nu,
-                    "nu",
-                )
+        if lam is not None:
+            xs = lam.ndview
+            self._get_weighted_integration_data(xs, self._original_lam, "lam")
+            # If we have a wavelength grid we can also precompute the matching
+            # frequency-grid cache entries.
+            nu = (c / (xs * angstrom)).to("Hz")
+            self._get_weighted_integration_data(
+                nu.value,
+                self._original_nu,
+                "nu",
+            )
 
-            if nu is not None:
-                self._get_weighted_integration_data(
-                    nu.ndview, self._original_nu, "nu"
-                )
-        finally:
-            toc("Filter.prepare_for_grid")
+        if nu is not None:
+            self._get_weighted_integration_data(
+                nu.ndview, self._original_nu, "nu"
+            )
 
     def _resolve_integration_grid(self, lam=None, nu=None):
         """Resolve integration grid arrays for filter convolution.

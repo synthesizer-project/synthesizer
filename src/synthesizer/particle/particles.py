@@ -14,12 +14,12 @@ from unyt import Mpc, Msun, km, pc, rad, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
 from synthesizer.utils.geometry import get_rotation_matrix
+from synthesizer.utils.operation_timers import timed
 
 
 class Particles:
@@ -568,6 +568,7 @@ class Particles:
 
         return self.particle_photo_fnu
 
+    @timed("Particles.get_mask")
     def get_mask(
         self,
         attr,
@@ -599,8 +600,6 @@ class Particles:
             mask (np.ndarray):
                 The mask array.
         """
-        tic("Generating mask")
-
         # Get the attribute
         attr_str = attr
         try:
@@ -672,8 +671,6 @@ class Particles:
         # Combine with the existing mask
         if mask is not None:
             new_mask = np.logical_and(new_mask, mask)
-
-        toc("Generating mask")
 
         return new_mask
 
@@ -1050,6 +1047,7 @@ class Particles:
             nthreads,
         )
 
+    @timed("Particles.get_los_column_density")
     def get_los_column_density(
         self,
         other_parts,

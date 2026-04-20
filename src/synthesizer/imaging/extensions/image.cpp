@@ -87,7 +87,7 @@ static std::vector<weighted_cell>
 build_balanced_work_list(struct cell *root, int nthreads,
                          double balance_tolerance = 2.0) {
 
-  tic("Splitting cell tree over threads");
+  tic("build_balanced_work_list");
 
   std::vector<weighted_cell> work_list;
   work_list.emplace_back(root);
@@ -163,7 +163,7 @@ build_balanced_work_list(struct cell *root, int nthreads,
     final_min_cost = std::min(final_min_cost, wc.cost);
   }
 
-  toc("Splitting cell tree over threads");
+  toc("build_balanced_work_list");
 
   return work_list;
 }
@@ -511,7 +511,7 @@ void populate_smoothed_image(const double *pix_values, const double *kernel,
                              const double threshold, const int kdim,
                              double *img, const int nimgs, struct cell *root,
                              const int nthreads) {
-  tic("Populating smoothed image");
+  tic("populate_smoothed_image");
 
   /* Compute normalization to conserve flux when truncating kernel. */
   double norm_factor = compute_kernel_norm(kernel, kdim, threshold);
@@ -541,7 +541,7 @@ void populate_smoothed_image(const double *pix_values, const double *kernel,
                                  root);
 #endif
 
-  toc("Populating smoothed image");
+  toc("populate_smoothed_image");
 }
 
 /**
@@ -567,7 +567,9 @@ void populate_smoothed_image(const double *pix_values, const double *kernel,
  */
 PyObject *make_img(PyObject *self, PyObject *args) {
 
-  tic("Extracting Python data");
+  tic("make_img");
+
+  tic("make_img.extract_python_data");
 
   /* We don't need the self argument but it has to be there. Tell the
    * compiler we don't care. */
@@ -598,9 +600,9 @@ PyObject *make_img(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  toc("Extracting Python data");
+  toc("make_img.extract_python_data");
 
-  tic("Cell tree construction");
+  tic("make_img.construct_cell_tree");
 
   /* Allocate cells array. The first cell will be the root and then we
    * will dynamically nibble off cells for the progeny. */
@@ -611,9 +613,9 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   construct_cell_tree(pos, smoothing_lengths, smoothing_lengths, npart, root,
                       ncells, MAX_DEPTH, 100);
 
-  toc("Cell tree construction");
+  toc("make_img.construct_cell_tree");
 
-  tic("Creating output image array");
+  tic("make_img.create_output_array");
 
   /* Create the zeroed image numpy array. */
   npy_intp np_img_dims[3] = {npix_x, npix_y, nimgs};
@@ -621,7 +623,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
       (PyArrayObject *)PyArray_ZEROS(3, np_img_dims, NPY_DOUBLE, 0);
   double *img = (double *)PyArray_DATA(np_img);
 
-  toc("Creating output image array");
+  toc("make_img.create_output_array");
 
   /* Populate the image. */
   populate_smoothed_image(pix_values, kernel, res, npix_x, npix_y, npart,
@@ -630,7 +632,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   /* Cleanup the cell tree. */
   cleanup_cell_tree(root);
 
-  toc("Computing smoothed image");
+  toc("make_img");
 
   return Py_BuildValue("N", np_img);
 }

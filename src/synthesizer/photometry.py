@@ -14,8 +14,8 @@ import numpy as np
 from unyt import Hz, cm, erg, s
 
 from synthesizer import exceptions
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.units import Quantity, accepts
+from synthesizer.utils.operation_timers import timed
 
 
 class PhotometryCollection:
@@ -54,6 +54,7 @@ class PhotometryCollection:
             erg / s / cm**2 / Hz,
         )
     )
+    @timed("PhotometryCollection.__init__")
     def __init__(self, filters, photometry):
         """Instantiate the photometry collection.
 
@@ -63,45 +64,37 @@ class PhotometryCollection:
             photometry (Quantity):
                 Array of photometry values with units.
         """
-        tic("PhotometryCollection.__init__")
-        try:
-            if filters is None:
-                raise exceptions.InconsistentArguments(
-                    "filters must be provided for PhotometryCollection."
-                )
-
-            # Store the filter collection
-            self.filters = filters
-
-            self.filter_codes = list(filters.filter_codes)
-            if photometry.shape[0] != len(self.filter_codes):
-                raise exceptions.InconsistentArguments(
-                    "The leading photometry axis does not match the number "
-                    f"of filter codes ({photometry.shape[0]} != "
-                    f"{len(self.filter_codes)})."
-                )
-
-            is_flux = (
-                photometry.units == self.__class__.__dict__["photo_fnu"].unit
+        if filters is None:
+            raise exceptions.InconsistentArguments(
+                "filters must be provided for PhotometryCollection."
             )
 
-            # Keep raw ndarray storage and rely on Quantity descriptors for
-            # units.
-            self._photometry_data = photometry.ndview
+        # Store the filter collection
+        self.filters = filters
 
-            if is_flux:
-                self.photo_fnu = self._photometry_data
-                self.photo_lnu = None
-            else:
-                self.photo_lnu = self._photometry_data
-                self.photo_fnu = None
+        self.filter_codes = list(filters.filter_codes)
+        if photometry.shape[0] != len(self.filter_codes):
+            raise exceptions.InconsistentArguments(
+                "The leading photometry axis does not match the number "
+                f"of filter codes ({photometry.shape[0]} != "
+                f"{len(self.filter_codes)})."
+            )
 
-            # Construct an index lookup into the photometry array.
-            self._code_to_index = {
-                f: i for i, f in enumerate(self.filter_codes)
-            }
-        finally:
-            toc("PhotometryCollection.__init__")
+        is_flux = photometry.units == self.__class__.__dict__["photo_fnu"].unit
+
+        # Keep raw ndarray storage and rely on Quantity descriptors for
+        # units.
+        self._photometry_data = photometry.ndview
+
+        if is_flux:
+            self.photo_fnu = self._photometry_data
+            self.photo_lnu = None
+        else:
+            self.photo_lnu = self._photometry_data
+            self.photo_fnu = None
+
+        # Construct an index lookup into the photometry array.
+        self._code_to_index = {f: i for i, f in enumerate(self.filter_codes)}
 
     @property
     def photometry(self):

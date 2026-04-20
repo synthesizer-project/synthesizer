@@ -34,6 +34,7 @@ from synthesizer.particle.particles import Particles
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.util_funcs import combine_arrays
 
 
@@ -120,6 +121,7 @@ class Stars(Particles, StarsComponent):
         softening_length=Mpc,
         centre=Mpc,
     )
+    @timed("ParticleStars.__init__")
     def __init__(
         self,
         initial_masses,
@@ -1066,6 +1068,7 @@ class Stars(Particles, StarsComponent):
             prop_names,
         )
 
+    @timed("ParticleStars.get_sfzh")
     def get_sfzh(
         self,
         log10ages,
@@ -1240,6 +1243,7 @@ class Stars(Particles, StarsComponent):
             prop_names,
         )
 
+    @timed("ParticleStars.get_sfh")
     def get_sfh(self, log10ages, grid_assignment_method="cic", nthreads=0):
         """Generate the SFH of these stars in terms of mass.
 
@@ -1397,6 +1401,7 @@ class Stars(Particles, StarsComponent):
             prop_names,
         )
 
+    @timed("ParticleStars.get_metal_dist")
     def get_metal_dist(
         self,
         metallicities,

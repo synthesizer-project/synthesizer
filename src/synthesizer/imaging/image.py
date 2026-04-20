@@ -24,7 +24,6 @@ from scipy.ndimage import zoom
 from unyt import arcsecond, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image_generators import (
     _generate_image_parametric_smoothed,
@@ -33,6 +32,7 @@ from synthesizer.imaging.image_generators import (
 )
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.operation_timers import timed
 
 
 class Image(ImagingBase):
@@ -62,6 +62,7 @@ class Image(ImagingBase):
             The weight map derived from the noise array.
     """
 
+    @timed("Image.__init__")
     def __init__(
         self,
         resolution,
@@ -81,8 +82,6 @@ class Image(ImagingBase):
                 to an image instance. Mostly used internally when methods
                 make a new image instance for self.
         """
-        tic("Creating Image")
-
         # Instantiate the base class holding the geometry
         ImagingBase.__init__(self, resolution, fov)
 
@@ -100,8 +99,6 @@ class Image(ImagingBase):
         # Set up the noise array and weight map
         self.noise_arr = None
         self.weight_map = None
-
-        toc("Creating Image")
 
     @property
     def img(self):

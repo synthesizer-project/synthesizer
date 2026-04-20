@@ -50,7 +50,6 @@ import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_generators import (
@@ -59,6 +58,7 @@ from synthesizer.imaging.image_generators import (
     _generate_images_particle_smoothed,
 )
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.operation_timers import timed
 
 
 class ImageCollection(ImagingBase):
@@ -82,6 +82,7 @@ class ImageCollection(ImagingBase):
             The RGB image array.
     """
 
+    @timed("ImageCollection.__init__")
     def __init__(
         self,
         resolution,
@@ -104,7 +105,6 @@ class ImageCollection(ImagingBase):
             imgs (dict):
                 A dictionary of images to be turned into a collection.
         """
-        tic("Creating ImageCollection")
         # Instantiate the base class holding the geometry
         ImagingBase.__init__(self, resolution, fov)
 
@@ -130,8 +130,6 @@ class ImageCollection(ImagingBase):
             for f, img in imgs.items():
                 self.imgs[f] = img
                 self.filter_codes.append(f)
-
-        toc("Creating ImageCollection")
 
     @property
     def shape(self):

@@ -30,12 +30,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install wheel
           sudo apt install pandoc
-          WITH_OPENMP=1 pip install .[test,docs]
           # Install loader dependencies (doing this separately because bigfile
           # is not set up properly and depends on numpy and cython, the former
           # we depend on, the latter we need to install)
           pip install cython
-          WITH_OPENMP=1 pip install .[bluetides,eagle]
+          WITH_OPENMP=1 ATOMIC_TIMING=1 pip install .[test,docs,bluetides,eagle]
           # These optional dependencies are needed for the docs and test but 
           # neither are on PyPI so must be installed separately
           pip install "illustris_python @ git+https://github.com/illustristng/illustris_python.git@master"

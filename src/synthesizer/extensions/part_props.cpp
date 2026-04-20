@@ -30,7 +30,7 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
     : np_weights_(np_weights), np_velocities_(np_velocities),
       np_mask_(np_mask), part_tuple_(part_tuple) {
 
-  tic("Constructing C++ Particles object");
+  tic("Particles.__init__");
 
   /* Assign the number of particles. */
   npart = npart_;
@@ -67,7 +67,7 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
     }
   }
 
-  toc("Constructing C++ Particles object");
+  toc("Particles.__init__");
 }
 
 /**
@@ -382,7 +382,7 @@ static void get_particle_indices_and_fracs_parallel(GridProps *grid_props,
 void get_particle_indices_and_fracs(GridProps *grid_props, Particles *parts,
                                     int nthreads) {
 
-  tic("Finding particle grid indices and fractions");
+  tic("get_particle_indices_and_fracs");
 
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
@@ -394,7 +394,7 @@ void get_particle_indices_and_fracs(GridProps *grid_props, Particles *parts,
   get_particle_indices_and_fracs_serial(grid_props, parts);
 #endif /* WITH_OPENMP */
 
-  toc("Finding particle grid indices and fractions");
+  toc("get_particle_indices_and_fracs");
 }
 
 /**
@@ -480,7 +480,7 @@ static void get_particle_indices_parallel(GridProps *grid_props,
 void get_particle_indices(GridProps *grid_props, Particles *parts,
                           int nthreads) {
 
-  tic("Finding particle grid indices");
+  tic("get_particle_indices");
 
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
@@ -492,5 +492,5 @@ void get_particle_indices(GridProps *grid_props, Particles *parts,
   get_particle_indices_serial(grid_props, parts);
 #endif /* WITH_OPENMP */
 
-  toc("Finding particle grid indices");
+  toc("get_particle_indices");
 }
