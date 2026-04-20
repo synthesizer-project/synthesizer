@@ -974,10 +974,10 @@ class Particles:
             attr (str):
                 The attribute to compute the column density of.
             kernel (array_like, float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+                A 1D description of the LOS-projected SPH kernel, or a
+                `synthesizer.kernel_functions.Kernel` instance. Values must be
+                in ascending order such that a k element array can be indexed
+                for the value of impact parameter q via kernel[int(k*q)].
             mask (bool):
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
@@ -993,6 +993,8 @@ class Particles:
             nthreads (int):
                 The number of threads to use for the calculation.
         """
+        projected_kernel, _ = self._get_los_kernel_components(kernel)
+
         # Ensure we actually have the properties needed
         if self.coordinates is None:
             raise exceptions.InconsistentArguments(
@@ -1012,7 +1014,7 @@ class Particles:
             )
 
         # Set up the kernel inputs to the C function.
-        kernel = np.ascontiguousarray(kernel, dtype=np.float64)
+        kernel = np.ascontiguousarray(projected_kernel, dtype=np.float64)
         kdim = kernel.size
 
         # Get particle counts
@@ -1050,6 +1052,31 @@ class Particles:
             nthreads,
         )
 
+    @staticmethod
+    def _get_los_kernel_components(kernel):
+        """Extract projected and radial kernel tables for LOS calculations.
+
+        Args:
+            kernel (array_like or Kernel):
+                Either a precomputed LOS-projected kernel lookup table or a
+                `synthesizer.kernel_functions.Kernel` instance.
+
+        Returns:
+            tuple:
+                A tuple containing the projected kernel lookup table and the
+                3D radial kernel lookup table if available.
+        """
+        if hasattr(kernel, "get_kernel"):
+            projected_kernel = kernel.get_kernel()
+            radial_kernel = None
+
+            if hasattr(kernel, "get_radial_kernel"):
+                radial_kernel = kernel.get_radial_kernel()
+
+            return projected_kernel, radial_kernel
+
+        return kernel, None
+
     def _prepare_smoothed_los_args(
         self,
         other_parts,
@@ -1069,10 +1096,10 @@ class Particles:
             attr (str):
                 The attribute to compute the column density of.
             kernel (array_like, float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+                A 1D description of the LOS-projected SPH kernel, or a
+                `synthesizer.kernel_functions.Kernel` instance. Values must be
+                in ascending order such that a k element array can be indexed
+                for the value of impact parameter q via kernel[int(k*q)].
             mask (bool):
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
@@ -1091,6 +1118,14 @@ class Particles:
         if self.smoothing_lengths is None:
             raise exceptions.InconsistentArguments(
                 f"{self.name} object is missing smoothing lengths!"
+            )
+
+        _, radial_kernel = self._get_los_kernel_components(kernel)
+        if radial_kernel is None:
+            raise exceptions.InconsistentArguments(
+                "LOS column densities with kernel-smoothed input particles "
+                "require a Kernel instance so the 3D radial kernel is "
+                "available."
             )
 
         (
@@ -1162,10 +1197,10 @@ class Particles:
             density_attr (str):
                 The attribute to use to calculate the column density.
             kernel (np.ndarray of float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+                A 1D description of the LOS-projected SPH kernel, or a
+                `synthesizer.kernel_functions.Kernel` instance. Values must be
+                in ascending order such that a k element array can be indexed
+                for the value of impact parameter q via kernel[int(k*q)].
             as_points (bool):
                 Whether to treat the input particles in this Particles instance
                 as point-like when evaluating the LOS column density. If False,

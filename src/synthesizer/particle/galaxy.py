@@ -475,10 +475,10 @@ class Galaxy(BaseGalaxy):
             kappa (float):
                 The dust opacity in units of Msun / pc**2.
             kernel (np.ndarray of float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+                A 1D description of the LOS-projected SPH kernel, or a
+                `synthesizer.kernel_functions.Kernel` instance. Values must be
+                in ascending order such that a k element array can be indexed
+                for the value of impact parameter q via kernel[int(k*q)].
             as_points (bool):
                 Whether to treat the stellar particles as point-like when
                 evaluating the LOS optical depth. If False, the stellar kernels
@@ -579,10 +579,10 @@ class Galaxy(BaseGalaxy):
             kappa (float):
                 The dust opacity in units of Msun / pc**2.
             kernel (np.ndarray of float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+                A 1D description of the LOS-projected SPH kernel, or a
+                `synthesizer.kernel_functions.Kernel` instance. Values must be
+                in ascending order such that a k element array can be indexed
+                for the value of impact parameter q via kernel[int(k*q)].
             as_points (bool):
                 Whether to treat the black hole particles as point-like when
                 evaluating the LOS optical depth. If False, the black hole
