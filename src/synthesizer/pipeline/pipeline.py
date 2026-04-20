@@ -289,6 +289,8 @@ class Pipeline:
         self.sfhs = []
         self.lnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.fnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.cosmic_lnus = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.cosmic_fnus = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.luminosities = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.line_lums = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
@@ -1679,6 +1681,167 @@ class Pipeline:
 
         # Record the time taken
         self._op_timing["Fnu Spectra"] += time.perf_counter() - start
+
+    def get_cosmic_sed(
+        self,
+        gal_attr=None,
+        lower_bound=None,
+        upper_bound=None,
+        label=None,
+        write=True,
+    ):
+        """Flag that the Pipeline should compute the cosmic SED.
+
+        This will signal the Pipeline to sum the spectra into a single
+        cosmic SED when the run method is called.
+
+        The cosmic SED can be computed for a subset of galaxies based on a
+        particular galaxy/star/black hole/gas property. By default it will be
+        computed for all galaxies.
+
+        Calling this method multiple times with different property bounds will
+        compute a cosmic SED for each set of bounds, allowing for comparisons
+        between different subsets of the galaxy population.
+
+        Args:
+            gal_attr (str):
+                The name of a galaxy attribute to use as a filter for the
+                cosmic SED. This should be a singular value that can be
+                compared to the lower_bound and upper_bound, i.e.
+                lower < gal_attr < upper. If None, the cosmic SED will include
+                a contribution from all galaxies. Default is None.
+            lower_bound (float/unyt_quantity):
+                The lower bound to apply to the filter attribute. If None,
+                no lower bound will be applied. Default is None.
+            upper_bound (float/unyt_quantity):
+                The upper bound to apply to the filter attribute. If None,
+                no upper bound will be applied. Default is None.
+            label (str):
+                An optional label for this cosmic SED in the outputs. If not
+                provided and no bounds are provided the label will be "All".
+                If bounds are provided but no label is provided the label will
+                be "{lower_bound}<{gal_attr}<{upper_bound}". Default is None.
+            write (bool):
+                Whether to write out the cosmic SED. Default is True.
+        """
+        # If either bound is provided we need an emitter attribute to apply
+        # the filter to
+        if (
+            lower_bound is not None or upper_bound is not None
+        ) and gal_attr is None:
+            raise exceptions.InconsistentArguments(
+                "If either lower_bound or upper_bound is provided, gal_attr "
+                "must be provided to apply the filter to."
+            )
+
+        # Store the arguments for the operation
+        self._operation_kwargs.add(
+            NO_MODEL_LABEL,
+            "get_cosmic_sed",
+            gal_attr=gal_attr,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            label=label,
+        )
+
+        # Flag that we will compute the cosmic SED
+        self._do_cosmic_lnu = True
+
+        # Flag that we will want to write out the cosmic SED (calling the
+        # get_cosmic_sed method is considered the intent to write it out by
+        # default)
+        self._write_cosmic_lnu = write or self._write_cosmic_lnu
+
+        # To compute the cosmic SED we need to ensure the spectra are computed
+        # first. Note that this is safe if the user has already called
+        # get_spectra, it will just leave the flag as True and respect the
+        # original intent to write or not write the spectra.
+        self.get_spectra(write=False)
+
+    @timed("Pipeline._get_cosmic_sed")
+    def _get_cosmic_sed(self, galaxy):
+        """Compute the cosmic SED for a galaxy.
+
+        This is a helper function that computes the contribution of a single
+        galaxy to the cosmic SED. The contributions from all galaxies will be
+        summed together to get the final cosmic SED.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to compute the cosmic SED contribution for.
+        """
+        # Get the operation kwargs for this operation
+        op_kwargs = self._operation_kwargs.get_unique_kwargs("get_cosmic_sed")
+
+        # Set up the filter based on the provided kwargs
+        if op_kwargs["gal_attr"] is not None:
+            # Get the value of the attribute to apply the filter to
+            gal_value = getattr(galaxy, op_kwargs["gal_attr"], None)
+
+            # If the galaxy doesn't have the attribute throw an error, we
+            # can't proceed
+            if gal_value is None:
+                raise exceptions.PipelineNotReady(
+                    f"Galaxy does not have attribute {op_kwargs['gal_attr']} "
+                    "to apply the cosmic SED filter: "
+                    f"{op_kwargs['lower_bound']} < "
+                    f"{op_kwargs['gal_attr']} < {op_kwargs['upper_bound']}"
+                )
+
+            # If we are outside the bounds we have nothing to contribute
+            if (
+                op_kwargs["lower_bound"] is not None
+                and gal_value < op_kwargs["lower_bound"]
+            ):
+                return
+            if (
+                op_kwargs["upper_bound"] is not None
+                and gal_value > op_kwargs["upper_bound"]
+            ):
+                return
+
+        # Get the label for this contribution to the cosmic SED
+        label = op_kwargs["label"]
+        if label is None:
+            # We have no label, make one
+            if op_kwargs["gal_attr"] is None:
+                label = "All"
+            else:
+                lower = (
+                    op_kwargs["lower_bound"]
+                    if op_kwargs["lower_bound"] is not None
+                    else "-inf"
+                )
+                upper = (
+                    op_kwargs["upper_bound"]
+                    if op_kwargs["upper_bound"] is not None
+                    else "inf"
+                )
+                label = f"{lower} < {op_kwargs['gal_attr']} < {upper}".replace(
+                    ".", "p"
+                )
+
+        # Loop over the spectra on the galaxy and all its components and sum
+        # them into the cosmic SED dictionary on the pipeline with the label
+        # as the key.
+        for model_label, sed in galaxy.spectra.items():
+            cosmic_sed = self.cosmic_lnus["Galaxy"].setdefault(label, {})
+            cosmic_sed.setdefault(model_label, np.zeros_like(sed._lnu))
+            cosmic_sed[model_label] += sed._lnu
+        if galaxy.stars is not None:
+            for model_label, sed in galaxy.stars.spectra.items():
+                cosmic_sed = self.cosmic_lnus["Stars"].setdefault(label, {})
+                cosmic_sed.setdefault(model_label, np.zeros_like(sed._lnu))
+                cosmic_sed[model_label] += sed._lnu
+        if galaxy.black_holes is not None:
+            for model_label, sed in galaxy.black_holes.spectra.items():
+                cosmic_sed = self.cosmic_lnus["BlackHoles"].setdefault(
+                    label, {}
+                )
+                cosmic_sed.setdefault(model_label, np.zeros_like(sed._lnu))
+                cosmic_sed[model_label] += sed._lnu
+        if galaxy.gas is not None:
+            pass  # TODO: At the moment gas can't contribute to the cosmic SED
 
     def get_photometry_luminosities(
         self,
