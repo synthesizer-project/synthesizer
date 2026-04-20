@@ -43,6 +43,7 @@ Example usage:
 """
 
 from functools import lru_cache
+from types import MappingProxyType
 
 import numpy as np
 from unyt import angstrom
@@ -194,6 +195,7 @@ def flatten_linelist(list_to_flatten):
     return list(set(flattened_list))
 
 
+@lru_cache(maxsize=1)
 def get_ratio_requirements():
     """Precompute required line ids for each ratio definition.
 
@@ -226,6 +228,7 @@ def get_ratio_requirements():
     return requirements
 
 
+@lru_cache(maxsize=1)
 def get_diagram_requirements():
     """Precompute required line ids for each diagram definition.
 
@@ -285,11 +288,15 @@ def get_line2index(signature):
             The ordered tuple of line ids describing the collection.
 
     Returns:
-        dict:
+        MappingProxyType:
             A mapping from each stored line id to its array index.
     """
-    # Build the mapping from each stored line id to its array index
-    return {line_id: index for index, line_id in enumerate(signature)}
+    # Build the mapping from each stored line id to its array index.
+    line2index = {line_id: index for index, line_id in enumerate(signature)}
+
+    # Wrap the mapping in a read-only proxy so callers cannot mutate the
+    # shared cached object by accident.
+    return MappingProxyType(line2index)
 
 
 @lru_cache(maxsize=100)
@@ -316,12 +323,12 @@ def get_available_ratio_ids(signature):
     # ratio's required constituent ids are present
     return tuple(
         ratio_id
-        for ratio_id, ratio_line_ids in RATIO_REQUIREMENTS.items()
+        for ratio_id, ratio_line_ids in get_ratio_requirements().items()
         if ratio_line_ids.issubset(individual_line_ids)
     )
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=100)
 def get_available_diagram_ids(signature):
     """Get the cached diagram ids for a line-id signature.
 
@@ -333,15 +340,21 @@ def get_available_diagram_ids(signature):
         tuple:
             The tuple of predefined diagram ids available for these lines.
     """
-    # Build the set of full stored line ids
-    line_id_set = set(signature)
+    # Expand any composite stored ids such as doublets into their individual
+    # constituent line ids so diagrams can match against the atomic
+    # requirements defined in line_ratios.
+    expanded_line_id_set = {
+        line_id.strip()
+        for line_ids in signature
+        for line_id in line_ids.split(",")
+    }
 
     # Determine which predefined diagrams are available by checking whether
     # each diagram's required line ids are present in the collection
     return tuple(
         diagram_id
-        for diagram_id, diagram_line_ids in DIAGRAM_REQUIREMENTS.items()
-        if diagram_line_ids.issubset(line_id_set)
+        for diagram_id, diagram_line_ids in get_diagram_requirements().items()
+        if diagram_line_ids.issubset(expanded_line_id_set)
     )
 
 
@@ -564,7 +577,3 @@ def combine_list_of_seds(sed_list):
         out_sed = out_sed.concat(sed)
 
     return out_sed
-
-
-RATIO_REQUIREMENTS = get_ratio_requirements()
-DIAGRAM_REQUIREMENTS = get_diagram_requirements()
