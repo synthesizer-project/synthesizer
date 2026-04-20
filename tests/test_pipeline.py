@@ -2272,8 +2272,18 @@ class TestGalaxySplitting:
         unsplit_galaxy = copy.deepcopy(random_particle_galaxy)
         split_galaxy = copy.deepcopy(random_particle_galaxy)
         split_threshold = max(2, split_galaxy.stars.nparticles // 4)
+        unsplit_galaxy.calculate_integrated_stellar_properties()
+        split_galaxy.calculate_integrated_stellar_properties()
 
-        assert len(split_galaxy.split(split_threshold)) > 1
+        split_children = split_galaxy.split(split_threshold)
+        assert len(split_children) > 1
+
+        unsplit_galaxy._cosmic_filter_test = 2.0
+        split_galaxy._cosmic_filter_test = 2.0
+        for child in split_children:
+            child._cosmic_filter_test = 1.0
+
+        lower_bound = 1.5
 
         unsplit_pipeline = self._make_pipeline(
             copy.deepcopy(nebular_emission_model),
@@ -2288,14 +2298,26 @@ class TestGalaxySplitting:
         for pipeline in (unsplit_pipeline, split_pipeline):
             pipeline.get_spectra()
             pipeline.get_observed_spectra(cosmo=cosmo)
-            pipeline.get_cosmic_sed()
-            pipeline.get_observed_cosmic_sed(cosmo=cosmo)
+            pipeline.get_cosmic_sed(
+                gal_attr="_cosmic_filter_test",
+                lower_bound=lower_bound,
+            )
+            pipeline.get_observed_cosmic_sed(
+                cosmo=cosmo,
+                gal_attr="_cosmic_filter_test",
+                lower_bound=lower_bound,
+            )
             pipeline.get_sfzh(
                 log10ages=test_grid.log10ages,
                 metallicities=test_grid.metallicities,
             )
             pipeline.get_sfh(log10ages=test_grid.log10ages)
             pipeline.run()
+
+        assert any(unsplit_pipeline.cosmic_lnus.values())
+        assert any(unsplit_pipeline.cosmic_fnus.values())
+        assert any(split_pipeline.cosmic_lnus.values())
+        assert any(split_pipeline.cosmic_fnus.values())
 
         for attr in (
             "lnu_spectra",

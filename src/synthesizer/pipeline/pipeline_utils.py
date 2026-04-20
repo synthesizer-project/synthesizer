@@ -974,6 +974,13 @@ def sum_dicts_recursive(dicts):
     return summed
 
 
+def sanitise_hdf5_key_part(value):
+    """Return a HDF5-safe string fragment for generated labels."""
+    return (
+        str(value).replace(".", "p").replace("/", "_per_").replace("\\", "_")
+    )
+
+
 def unify_dict_structure_across_ranks(data, comm, root=0):
     """Recursively unify the structure of a dictionary across all ranks.
 
