@@ -51,6 +51,7 @@ from synthesizer.pipeline.pipeline_utils import (
     get_full_memory,
     plot_timing_analysis,
     print_timing_analysis_table,
+    sanitise_hdf5_key_part,
     sum_dicts_recursive,
     validate_noise_unit_compatibility,
     write_timing_analysis_summary,
@@ -1838,11 +1839,11 @@ class Pipeline:
                         if op_kwargs["upper_bound"] is not None
                         else "inf"
                     )
-                    label = (
-                        f"{lower} < {op_kwargs['gal_attr']} < {upper}".replace(
-                            ".", "p"
-                        )
+                    label = sanitise_hdf5_key_part(
+                        f"{lower} < {op_kwargs['gal_attr']} < {upper}"
                     )
+            else:
+                label = sanitise_hdf5_key_part(label)
 
             # Loop over the spectra on the galaxy and all its components and
             # sum them into the cosmic SED dictionary on the pipeline with the
@@ -1988,11 +1989,11 @@ class Pipeline:
                         if op_kwargs["upper_bound"] is not None
                         else "inf"
                     )
-                    label = (
-                        f"{lower} < {op_kwargs['gal_attr']} < {upper}".replace(
-                            ".", "p"
-                        )
+                    label = sanitise_hdf5_key_part(
+                        f"{lower} < {op_kwargs['gal_attr']} < {upper}"
                     )
+            else:
+                label = sanitise_hdf5_key_part(label)
 
             for model_label, sed in galaxy.spectra.items():
                 cosmic_sed = self.cosmic_fnus["Galaxy"].setdefault(label, {})
@@ -4053,14 +4054,6 @@ class Pipeline:
                 if self._do_fnu_spectra:
                     self._get_observed_spectra(_gal)
 
-                # Are we generating rest-frame cosmic SEDs?
-                if self._do_cosmic_lnu:
-                    self._get_cosmic_sed(_gal)
-
-                # Are we generating observer-frame cosmic SEDs?
-                if self._do_cosmic_fnu:
-                    self._get_observed_cosmic_sed(_gal)
-
                 # Are we generating photometric luminosities?
                 if self._do_luminosities:
                     self._get_photometry_luminosities(_gal)
@@ -4110,6 +4103,14 @@ class Pipeline:
 
                     with timer("Pipeline.run.cleanup_child"):
                         del _gal
+
+            # Cosmic SEDs must be measured on the fully accumulated parent
+            # galaxy so any split-galaxy filtering uses integrated properties.
+            if self._do_cosmic_lnu:
+                self._get_cosmic_sed(gal)
+
+            if self._do_cosmic_fnu:
+                self._get_observed_cosmic_sed(gal)
 
             # Run any extra analysis functions
             self._run_extra_analysis(gal)
