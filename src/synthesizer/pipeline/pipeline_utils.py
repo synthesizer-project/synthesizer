@@ -940,6 +940,40 @@ def combine_list_of_dicts(dicts):
     return recursive_merge(dicts)
 
 
+def sum_dicts_recursive(dicts):
+    """Sum a list of nested dictionaries with additive leaves.
+
+    Args:
+        dicts (list):
+            A list of dictionaries or additive leaf values.
+
+    Returns:
+        dict or object:
+            The recursively summed dictionary or leaf value.
+    """
+    values = [value for value in dicts if value is not None]
+    if len(values) == 0:
+        return {}
+
+    if not isinstance(values[0], dict):
+        total = values[0]
+        for value in values[1:]:
+            total = total + value
+        return total
+
+    summed = {}
+    keys = set()
+    for value in values:
+        keys.update(value.keys())
+
+    for key in keys:
+        summed[key] = sum_dicts_recursive(
+            [value[key] for value in values if key in value]
+        )
+
+    return summed
+
+
 def unify_dict_structure_across_ranks(data, comm, root=0):
     """Recursively unify the structure of a dictionary across all ranks.
 
