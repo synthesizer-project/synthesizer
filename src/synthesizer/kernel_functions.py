@@ -69,6 +69,15 @@ class Kernel:
         else:
             raise ValueError("Kernel name not defined")
 
+        self._projected_kernel = None
+        self._radial_kernel = None
+
+    def _get_bins(self):
+        """Get the dimensionless radial bins used for kernel lookups."""
+        bins = np.arange(0, 1.0, 1.0 / self.binsize)
+        bins = np.append(bins, 1.0)
+        return bins
+
     def W_dz(self, z, b):
         """Calculate the kernel density function W(r) as a function of z.
 
@@ -94,10 +103,12 @@ class Kernel:
         Returns:
             np.ndarray: The kernel values for each impact parameter.
         """
+        if self._projected_kernel is not None:
+            return self._projected_kernel.copy()
+
         kernel = np.zeros(self.binsize + 1)
 
-        bins = np.arange(0, 1.0, 1.0 / self.binsize)
-        bins = np.append(bins, 1.0)
+        bins = self._get_bins()
 
         for ii in range(self.binsize):
             y, yerr = integrate.quad(
@@ -105,7 +116,29 @@ class Kernel:
             )
             kernel[ii] = y * 2.0
 
-        return kernel
+        self._projected_kernel = kernel
+
+        return kernel.copy()
+
+    def get_radial_kernel(self):
+        """Compute the 3D radial kernel lookup table.
+
+        Returns:
+            np.ndarray: The 3D radial kernel values for each dimensionless
+                radius.
+        """
+        if self._radial_kernel is not None:
+            return self._radial_kernel.copy()
+
+        bins = self._get_bins()
+        kernel = np.zeros(self.binsize + 1)
+
+        for ii, radius in enumerate(bins):
+            kernel[ii] = self.f(radius)
+
+        self._radial_kernel = kernel
+
+        return kernel.copy()
 
     def create_kernel(self):
         """Save the computed kernel for easy look-up as .npz file."""

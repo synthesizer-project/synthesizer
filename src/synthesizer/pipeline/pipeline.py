@@ -1256,7 +1256,8 @@ class Pipeline:
 
         Args:
             kernel (array-like):
-                The gas SPH kernel.
+                The gas LOS-projected SPH kernel, or a
+                `synthesizer.kernel_functions.Kernel` instance.
             kernel_threshold (float):
                 The threshold of the kernel. Default is 1.0.
             kappa (float):

@@ -8,6 +8,7 @@ from synthesizer.exceptions import (
     InconsistentArguments,
     UnimplementedFunctionality,
 )
+from synthesizer.kernel_functions import Kernel
 from synthesizer.particle import Galaxy, Gas, Stars
 
 
@@ -147,11 +148,38 @@ class TestLOSColumnDensity:
         with pytest.raises(UnimplementedFunctionality):
             gal.get_stellar_los_tau_v(
                 kappa=2.0,
-                kernel=np.array([1.0]),
+                kernel=Kernel(name="uniform", binsize=8),
                 as_points=False,
                 force_loop=1,
                 min_count=10,
             )
+
+    def test_column_density_accepts_kernel_object(
+        self, one_star, one_gas_front
+    ):
+        """Test the point-particle LOS path accepts Kernel instances."""
+        gal = Galaxy(
+            stars=one_star,
+            gas=one_gas_front,
+            redshift=0.0,
+            centre=None,
+        )
+        kernel = Kernel(name="uniform", binsize=8)
+
+        tau_object = gal.get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=kernel,
+            force_loop=1,
+            min_count=10,
+        )
+        tau_array = gal.get_stellar_los_tau_v(
+            kappa=2.0,
+            kernel=kernel.get_kernel(),
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert np.allclose(tau_object, tau_array)
 
     def test_column_density_smoothed_input_requires_smoothing_lengths(
         self, one_gas_front
@@ -167,6 +195,26 @@ class TestLOSColumnDensity:
         )
         gal = Galaxy(
             stars=star,
+            gas=one_gas_front,
+            redshift=0.0,
+            centre=None,
+        )
+
+        with pytest.raises(InconsistentArguments):
+            gal.get_stellar_los_tau_v(
+                kappa=2.0,
+                kernel=Kernel(name="uniform", binsize=8),
+                as_points=False,
+                force_loop=1,
+                min_count=10,
+            )
+
+    def test_column_density_smoothed_input_requires_kernel_object(
+        self, one_star, one_gas_front
+    ):
+        """Test smoothed-input LOS requires a kernel object."""
+        gal = Galaxy(
+            stars=one_star,
             gas=one_gas_front,
             redshift=0.0,
             centre=None,
