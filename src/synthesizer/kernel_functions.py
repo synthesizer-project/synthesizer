@@ -19,8 +19,6 @@ Example usage:
     kernel_data = kernel.get_kernel()
 """
 
-import os
-
 import numpy as np
 from scipy import integrate
 
@@ -295,7 +293,7 @@ class Kernel:
         return qx, qy, qz, weights
 
     @timed("Kernel._build_overlap_kernel")
-    def _build_overlap_kernel(self):
+    def _build_overlap_kernel(self, nthreads=1):
         """Construct the smoothed LOS overlap kernel look-up table.
 
         The overlap kernel tabulates the kernel-averaged LOS contribution of a
@@ -320,6 +318,11 @@ class Kernel:
             tuple:
                 A tuple containing the overlap kernel table and the q, u, and
                 eta grids that index it.
+
+        Args:
+            nthreads (int):
+                The number of threads to use when evaluating the overlap table
+                in the C++ extension.
 
         Notes:
             The overlap table is built in two stages. Python first constructs
@@ -354,10 +357,7 @@ class Kernel:
         truncated_kernel, trunc_q, trunc_z = self._get_truncated_los_kernel()
 
         # Hand the prepared inputs to the C++ extension, which returns a
-        # C-contiguous overlap table with shape `(q, u, eta)`. We use the local
-        # CPU count here because this is a one-off build step whose cost is
-        # dominated by embarrassingly parallel table evaluation rather than any
-        # shared mutable state.
+        # C-contiguous overlap table with shape `(q, u, eta)`.
         kernel = compute_overlap_kernel(
             np.ascontiguousarray(q_grid, dtype=np.float64),
             np.ascontiguousarray(u_grid, dtype=np.float64),
@@ -375,7 +375,7 @@ class Kernel:
             qx.size,
             trunc_q.size,
             trunc_z.size,
-            os.cpu_count() or 1,
+            nthreads,
         )
 
         return kernel, q_grid, u_grid, eta_grid
@@ -413,7 +413,7 @@ class Kernel:
         return kernel.copy()
 
     @timed("Kernel.get_overlap_kernel")
-    def get_overlap_kernel(self):
+    def get_overlap_kernel(self, nthreads=1):
         """Compute the overlap kernel lookup table.
 
         This table describes the kernel-averaged line-of-sight contribution of
@@ -433,6 +433,12 @@ class Kernel:
             tuple:
                 A tuple containing the overlap kernel table and the q, u, and
                 eta grids used to index it.
+
+        Args:
+            nthreads (int):
+                The number of threads to use if the overlap table needs to be
+                built. Cached overlap tables are returned directly regardless
+                of this value.
         """
         # Return the cached table set if it has already been computed.
         if self._overlap_kernel is not None:
@@ -444,7 +450,9 @@ class Kernel:
             )
 
         # Construct the overlap kernel and cache it for future use.
-        kernel, q_grid, u_grid, eta_grid = self._build_overlap_kernel()
+        kernel, q_grid, u_grid, eta_grid = self._build_overlap_kernel(
+            nthreads=nthreads
+        )
         self._overlap_kernel = kernel
         self._overlap_q = q_grid
         self._overlap_u = u_grid
