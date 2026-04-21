@@ -32,7 +32,7 @@ import time
 from pathlib import Path
 
 import numpy as np
-from unyt import unyt_array
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import check_atomic_timing, check_openmp, exceptions
 from synthesizer.instruments import InstrumentCollection
@@ -47,10 +47,13 @@ from synthesizer.pipeline.pipeline_utils import (
     combine_atomic_timing_snapshots,
     combine_list_of_dicts,
     count_and_check_dict_recursive,
+    divide_dicts_recursive,
     get_atomic_timing_snapshot,
     get_full_memory,
     plot_timing_analysis,
     print_timing_analysis_table,
+    sanitise_hdf5_key_part,
+    sum_dicts_recursive,
     validate_noise_unit_compatibility,
     write_timing_analysis_summary,
 )
@@ -232,6 +235,8 @@ class Pipeline:
         self._do_los_optical_depths = False
         self._do_lnu_spectra = False
         self._do_fnu_spectra = False
+        self._do_cosmic_lnu = False
+        self._do_cosmic_fnu = False
         self._do_luminosities = False
         self._do_fluxes = False
         self._do_lum_lines = False
@@ -256,6 +261,8 @@ class Pipeline:
         # Define flags for what we will write out
         self._write_lnu_spectra = False
         self._write_fnu_spectra = False
+        self._write_cosmic_lnu = False
+        self._write_cosmic_fnu = False
         self._write_luminosities = False
         self._write_fluxes = False
         self._write_lines = False
@@ -289,6 +296,18 @@ class Pipeline:
         self.sfhs = []
         self.lnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.fnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.cosmic_lnus = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.cosmic_fnus = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self._cosmic_lnu_counts = {
+            "Galaxy": {},
+            "Stars": {},
+            "BlackHole": {},
+        }
+        self._cosmic_fnu_counts = {
+            "Galaxy": {},
+            "Stars": {},
+            "BlackHole": {},
+        }
         self.luminosities = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.line_lums = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
@@ -317,6 +336,8 @@ class Pipeline:
             "SFH": 0.0,
             "Lnu Spectra": 0.0,
             "Fnu Spectra": 0.0,
+            "Cosmic SED Lnu": 0.0,
+            "Cosmic SED Fnu": 0.0,
             "Luminosities": 0.0,
             "Fluxes": 0.0,
             "Emission Line Luminosities": 0.0,
@@ -342,6 +363,8 @@ class Pipeline:
             "SFH": 0,
             "Lnu Spectra": 0,
             "Fnu Spectra": 0,
+            "Cosmic SED Lnu": 0,
+            "Cosmic SED Fnu": 0,
             "Luminosities": 0,
             "Fluxes": 0,
             "Emission Line Luminosities": 0,
@@ -1029,6 +1052,16 @@ class Pipeline:
             + str(self._write_fnu_spectra).rjust(15)
         )
         self._print(
+            "Cosmic SED Lnu".ljust(30)
+            + str(self._do_cosmic_lnu).rjust(15)
+            + str(self._write_cosmic_lnu).rjust(15)
+        )
+        self._print(
+            "Cosmic SED Fnu".ljust(30)
+            + str(self._do_cosmic_fnu).rjust(15)
+            + str(self._write_cosmic_fnu).rjust(15)
+        )
+        self._print(
             "Photometric Luminosities".ljust(30)
             + str(self._do_luminosities).rjust(15)
             + str(self._write_luminosities).rjust(15)
@@ -1224,7 +1257,7 @@ class Pipeline:
     def _add_instruments(self, instruments):
         """Add instruments to the Pipeline.
 
-        This is a helprer used to attach instruments to the pipeline. Note
+        This is a helper used to attach instruments to the pipeline. Note
         that these instruments are only used for book keeping. The machinery
         to apply instruments to the right operation is handled by the
         OperationKwargsHandler (self._operation_kwargs).
@@ -1679,6 +1712,445 @@ class Pipeline:
 
         # Record the time taken
         self._op_timing["Fnu Spectra"] += time.perf_counter() - start
+
+    def get_cosmic_sed(
+        self,
+        gal_attr=None,
+        lower_bound=None,
+        upper_bound=None,
+        label=None,
+        average=False,
+        volume=None,
+        write=True,
+    ):
+        """Flag that the Pipeline should compute the cosmic SED.
+
+        This will signal the Pipeline to sum the spectra into a single
+        cosmic SED when the run method is called.
+
+        The cosmic SED can be computed for a subset of galaxies based on a
+        particular galaxy/star/black hole/gas property. By default it will be
+        computed for all galaxies.
+
+        Calling this method multiple times with different property bounds will
+        compute a cosmic SED for each set of bounds, allowing for comparisons
+        between different subsets of the galaxy population.
+
+        Args:
+            gal_attr (str):
+                The name of a galaxy attribute to use as a filter for the
+                cosmic SED. This should be a singular value that can be
+                compared to the lower_bound and upper_bound, i.e.
+                lower < gal_attr < upper. If None, the cosmic SED will include
+                a contribution from all galaxies. Default is None.
+            lower_bound (float/unyt_quantity):
+                The lower bound to apply to the filter attribute. If None,
+                no lower bound will be applied. Default is None.
+            upper_bound (float/unyt_quantity):
+                The upper bound to apply to the filter attribute. If None,
+                no upper bound will be applied. Default is None.
+            label (str):
+                An optional label for this cosmic SED in the outputs. If not
+                provided and no bounds are provided the label will be "All".
+                If bounds are provided but no label is provided the label will
+                be "{lower_bound}<{gal_attr}<{upper_bound}". Default is None.
+            average (bool):
+                Whether to return the average cosmic SED rather than the sum.
+                Default is False.
+            volume (unyt_quantity):
+                An optional volume used to normalise each contribution during
+                accumulation. Default is None.
+            write (bool):
+                Whether to write out the cosmic SED. Default is True.
+        """
+        # If either bound is provided we need an emitter attribute to apply
+        # the filter to
+        if (
+            lower_bound is not None or upper_bound is not None
+        ) and gal_attr is None:
+            raise exceptions.InconsistentArguments(
+                "If either lower_bound or upper_bound is provided, gal_attr "
+                "must be provided to apply the filter to."
+            )
+
+        if (
+            lower_bound is not None
+            and upper_bound is not None
+            and lower_bound > upper_bound
+        ):
+            raise exceptions.InconsistentArguments(
+                "lower_bound cannot be greater than upper_bound."
+            )
+
+        # Volume normalisation needs a unit-carrying quantity so the cosmic
+        # SED keeps physically meaningful units.
+        if volume is not None and not isinstance(volume, unyt_quantity):
+            raise exceptions.InconsistentArguments(
+                "volume must be a unyt_quantity with units if provided."
+            )
+
+        if volume is not None and volume <= 0 * volume.units:
+            raise exceptions.InconsistentArguments(
+                "volume must be greater than 0 if provided."
+            )
+
+        # Store the arguments for the operation
+        self._operation_kwargs.add(
+            NO_MODEL_LABEL,
+            "get_cosmic_sed",
+            gal_attr=gal_attr,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            label=label,
+            average=average,
+            volume=volume,
+        )
+
+        # Flag that we will compute the cosmic SED
+        self._do_cosmic_lnu = True
+
+        # Flag that we will want to write out the cosmic SED (calling the
+        # get_cosmic_sed method is considered the intent to write it out by
+        # default)
+        self._write_cosmic_lnu = write or self._write_cosmic_lnu
+
+        # To compute the cosmic SED we need to ensure the spectra are computed
+        # first. Note that this is safe if the user has already called
+        # get_spectra, it will just leave the flag as True and respect the
+        # original intent to write or not write the spectra.
+        self.get_spectra(write=False)
+
+    @timed("Pipeline._get_cosmic_sed")
+    def _get_cosmic_sed(self, galaxy):
+        """Compute the cosmic SED for a galaxy.
+
+        This is a helper function that computes the contribution of a single
+        galaxy to the cosmic SED. The contributions from all galaxies will be
+        summed together to get the final cosmic SED.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to compute the cosmic SED contribution for.
+        """
+        start = time.perf_counter()
+
+        for _, op_kwargs in self._operation_kwargs["get_cosmic_sed"]:
+            # Volume normalisation is applied per contribution so the final MPI
+            # reduction can remain a simple additive sum.
+            volume = op_kwargs["volume"]
+
+            # Set up the filter based on the provided kwargs
+            if op_kwargs["gal_attr"] is not None:
+                # Get the value of the attribute to apply the filter to
+                gal_value = getattr(galaxy, op_kwargs["gal_attr"], None)
+
+                # If the galaxy doesn't have the attribute throw an error, we
+                # can't proceed
+                if gal_value is None:
+                    raise exceptions.PipelineNotReady(
+                        "Galaxy does not have attribute "
+                        f"{op_kwargs['gal_attr']} "
+                        "to apply the cosmic SED filter: "
+                        f"{op_kwargs['lower_bound']} < "
+                        f"{op_kwargs['gal_attr']} < "
+                        f"{op_kwargs['upper_bound']}"
+                    )
+
+                # If we are outside the bounds we have nothing to contribute
+                if (
+                    op_kwargs["lower_bound"] is not None
+                    and gal_value < op_kwargs["lower_bound"]
+                ):
+                    continue
+                if (
+                    op_kwargs["upper_bound"] is not None
+                    and gal_value > op_kwargs["upper_bound"]
+                ):
+                    continue
+
+            # Get the label for this contribution to the cosmic SED
+            label = op_kwargs["label"]
+            if label is None:
+                # We have no label, make one
+                if op_kwargs["gal_attr"] is None:
+                    label = "All"
+                else:
+                    lower = (
+                        op_kwargs["lower_bound"]
+                        if op_kwargs["lower_bound"] is not None
+                        else "-inf"
+                    )
+                    upper = (
+                        op_kwargs["upper_bound"]
+                        if op_kwargs["upper_bound"] is not None
+                        else "inf"
+                    )
+                    label = sanitise_hdf5_key_part(
+                        f"{lower} < {op_kwargs['gal_attr']} < {upper}"
+                    )
+            else:
+                label = sanitise_hdf5_key_part(label)
+
+            # Loop over the spectra on the galaxy and all its components and
+            # sum them into the cosmic SED dictionary on the pipeline with the
+            # label as the key. When averaging is requested we also keep a
+            # parallel count dictionary so the final mean can be computed after
+            # all ranks have been combined.
+            for model_label, sed in galaxy.spectra.items():
+                cosmic_sed = self.cosmic_lnus["Galaxy"].setdefault(label, {})
+                cosmic_counts = self._cosmic_lnu_counts["Galaxy"].setdefault(
+                    label, {}
+                )
+                contribution = sed.lnu if volume is None else sed.lnu / volume
+                cosmic_sed.setdefault(model_label, 0 * contribution)
+                cosmic_counts.setdefault(model_label, 0)
+                cosmic_sed[model_label] += contribution
+                cosmic_counts[model_label] += 1
+            if galaxy.stars is not None:
+                for model_label, sed in galaxy.stars.spectra.items():
+                    cosmic_sed = self.cosmic_lnus["Stars"].setdefault(
+                        label, {}
+                    )
+                    cosmic_counts = self._cosmic_lnu_counts[
+                        "Stars"
+                    ].setdefault(label, {})
+                    contribution = (
+                        sed.lnu if volume is None else sed.lnu / volume
+                    )
+                    cosmic_sed.setdefault(model_label, 0 * contribution)
+                    cosmic_counts.setdefault(model_label, 0)
+                    cosmic_sed[model_label] += contribution
+                    cosmic_counts[model_label] += 1
+            if galaxy.black_holes is not None:
+                for model_label, sed in galaxy.black_holes.spectra.items():
+                    cosmic_sed = self.cosmic_lnus["BlackHole"].setdefault(
+                        label, {}
+                    )
+                    cosmic_counts = self._cosmic_lnu_counts[
+                        "BlackHole"
+                    ].setdefault(label, {})
+                    contribution = (
+                        sed.lnu if volume is None else sed.lnu / volume
+                    )
+                    cosmic_sed.setdefault(model_label, 0 * contribution)
+                    cosmic_counts.setdefault(model_label, 0)
+                    cosmic_sed[model_label] += contribution
+                    cosmic_counts[model_label] += 1
+            if galaxy.gas is not None:
+                pass  # TODO: At the moment gas can't contribute
+
+        # Count the number of cosmic SED contributions
+        self._op_counts["Cosmic SED Lnu"] += 1
+
+        # Record the time taken
+        self._op_timing["Cosmic SED Lnu"] += time.perf_counter() - start
+
+    def get_observed_cosmic_sed(
+        self,
+        cosmo,
+        igm=None,
+        gal_attr=None,
+        lower_bound=None,
+        upper_bound=None,
+        label=None,
+        average=False,
+        volume=None,
+        write=True,
+    ):
+        """Flag that the Pipeline should compute the observed cosmic SED.
+
+        This will signal the Pipeline to sum the observed spectra into a
+        single observer-frame cosmic SED when the run method is called.
+
+        Args:
+            cosmo (astropy.cosmology.Cosmology):
+                The cosmology to use for the observed spectra.
+            igm (IGMBase):
+                The IGM model to use for the attenuation of the spectra.
+            gal_attr (str):
+                The name of a galaxy attribute to use as a filter for the
+                cosmic SED.
+            lower_bound (float/unyt_quantity):
+                The lower bound to apply to the filter attribute.
+            upper_bound (float/unyt_quantity):
+                The upper bound to apply to the filter attribute.
+            label (str):
+                An optional label for this cosmic SED in the outputs.
+            average (bool):
+                Whether to return the average observed cosmic SED rather than
+                the sum. Default is False.
+            volume (unyt_quantity):
+                An optional volume used to normalise each contribution during
+                accumulation. Default is None.
+            write (bool):
+                Whether to write out the observed cosmic SED. Default is True.
+        """
+        # If either bound is provided we need an emitter attribute to apply
+        # the filter to
+        if (
+            lower_bound is not None or upper_bound is not None
+        ) and gal_attr is None:
+            raise exceptions.InconsistentArguments(
+                "If either lower_bound or upper_bound is provided, gal_attr "
+                "must be provided to apply the filter to."
+            )
+
+        if (
+            lower_bound is not None
+            and upper_bound is not None
+            and lower_bound > upper_bound
+        ):
+            raise exceptions.InconsistentArguments(
+                "lower_bound cannot be greater than upper_bound."
+            )
+
+        # As for the rest-frame path, volume normalisation must be unit-aware
+        # so observer-frame cosmic SEDs carry the correct dimensions.
+        if volume is not None and not isinstance(volume, unyt_quantity):
+            raise exceptions.InconsistentArguments(
+                "volume must be a unyt_quantity with units if provided."
+            )
+
+        if volume is not None and volume <= 0 * volume.units:
+            raise exceptions.InconsistentArguments(
+                "volume must be greater than 0 if provided."
+            )
+
+        # Store the arguments for the operation
+        self._operation_kwargs.add(
+            NO_MODEL_LABEL,
+            "get_observed_cosmic_sed",
+            cosmo=cosmo,
+            igm=igm,
+            gal_attr=gal_attr,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            label=label,
+            average=average,
+            volume=volume,
+        )
+
+        # Flag that we will compute the observed cosmic SED
+        self._do_cosmic_fnu = True
+
+        # Flag that we will want to write out the observed cosmic SED
+        self._write_cosmic_fnu = write or self._write_cosmic_fnu
+
+        # To compute the observed cosmic SED we need the observed spectra.
+        self.get_observed_spectra(cosmo=cosmo, igm=igm, write=False)
+
+    @timed("Pipeline._get_observed_cosmic_sed")
+    def _get_observed_cosmic_sed(self, galaxy):
+        """Compute the observed cosmic SED contribution for a galaxy.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to compute the observed cosmic SED contribution for.
+        """
+        start = time.perf_counter()
+
+        for _, op_kwargs in self._operation_kwargs["get_observed_cosmic_sed"]:
+            # Apply the same per-contribution volume normalisation in the
+            # observer frame as the rest-frame path.
+            volume = op_kwargs["volume"]
+
+            # Set up the filter based on the provided kwargs
+            if op_kwargs["gal_attr"] is not None:
+                gal_value = getattr(galaxy, op_kwargs["gal_attr"], None)
+
+                if gal_value is None:
+                    raise exceptions.PipelineNotReady(
+                        f"Galaxy does not have attribute "
+                        f"{op_kwargs['gal_attr']} "
+                        "to apply the cosmic SED filter: "
+                        f"{op_kwargs['lower_bound']} < "
+                        f"{op_kwargs['gal_attr']} < "
+                        f"{op_kwargs['upper_bound']}"
+                    )
+
+                if (
+                    op_kwargs["lower_bound"] is not None
+                    and gal_value < op_kwargs["lower_bound"]
+                ):
+                    continue
+                if (
+                    op_kwargs["upper_bound"] is not None
+                    and gal_value > op_kwargs["upper_bound"]
+                ):
+                    continue
+
+            label = op_kwargs["label"]
+            if label is None:
+                if op_kwargs["gal_attr"] is None:
+                    label = "All"
+                else:
+                    lower = (
+                        op_kwargs["lower_bound"]
+                        if op_kwargs["lower_bound"] is not None
+                        else "-inf"
+                    )
+                    upper = (
+                        op_kwargs["upper_bound"]
+                        if op_kwargs["upper_bound"] is not None
+                        else "inf"
+                    )
+                    label = sanitise_hdf5_key_part(
+                        f"{lower} < {op_kwargs['gal_attr']} < {upper}"
+                    )
+            else:
+                label = sanitise_hdf5_key_part(label)
+
+            # As for the rest-frame cosmic SED we accumulate both the summed
+            # contribution and, when needed, the number of contributors per
+            # leaf so averages can be formed after MPI reduction.
+            for model_label, sed in galaxy.spectra.items():
+                cosmic_sed = self.cosmic_fnus["Galaxy"].setdefault(label, {})
+                cosmic_counts = self._cosmic_fnu_counts["Galaxy"].setdefault(
+                    label, {}
+                )
+                contribution = sed.fnu if volume is None else sed.fnu / volume
+                cosmic_sed.setdefault(model_label, 0 * contribution)
+                cosmic_counts.setdefault(model_label, 0)
+                cosmic_sed[model_label] += contribution
+                cosmic_counts[model_label] += 1
+            if galaxy.stars is not None:
+                for model_label, sed in galaxy.stars.spectra.items():
+                    cosmic_sed = self.cosmic_fnus["Stars"].setdefault(
+                        label, {}
+                    )
+                    cosmic_counts = self._cosmic_fnu_counts[
+                        "Stars"
+                    ].setdefault(label, {})
+                    contribution = (
+                        sed.fnu if volume is None else sed.fnu / volume
+                    )
+                    cosmic_sed.setdefault(model_label, 0 * contribution)
+                    cosmic_counts.setdefault(model_label, 0)
+                    cosmic_sed[model_label] += contribution
+                    cosmic_counts[model_label] += 1
+            if galaxy.black_holes is not None:
+                for model_label, sed in galaxy.black_holes.spectra.items():
+                    cosmic_sed = self.cosmic_fnus["BlackHole"].setdefault(
+                        label, {}
+                    )
+                    cosmic_counts = self._cosmic_fnu_counts[
+                        "BlackHole"
+                    ].setdefault(label, {})
+                    contribution = (
+                        sed.fnu if volume is None else sed.fnu / volume
+                    )
+                    cosmic_sed.setdefault(model_label, 0 * contribution)
+                    cosmic_counts.setdefault(model_label, 0)
+                    cosmic_sed[model_label] += contribution
+                    cosmic_counts[model_label] += 1
+            if galaxy.gas is not None:
+                pass  # TODO: At the moment gas can't contribute
+
+        # Count the number of observed cosmic SED contributions
+        self._op_counts["Cosmic SED Fnu"] += 1
+
+        # Record the time taken
+        self._op_timing["Cosmic SED Fnu"] += time.perf_counter() - start
 
     def get_photometry_luminosities(
         self,
@@ -3628,6 +4100,8 @@ class Pipeline:
             self._do_los_optical_depths,
             self._do_lnu_spectra,
             self._do_fnu_spectra,
+            self._do_cosmic_lnu,
+            self._do_cosmic_fnu,
             self._do_luminosities,
             self._do_fluxes,
             self._do_lum_lines,
@@ -3760,6 +4234,14 @@ class Pipeline:
                     with timer("Pipeline.run.cleanup_child"):
                         del _gal
 
+            # Cosmic SEDs must be measured on the fully accumulated parent
+            # galaxy so any split-galaxy filtering uses integrated properties.
+            if self._do_cosmic_lnu:
+                self._get_cosmic_sed(gal)
+
+            if self._do_cosmic_fnu:
+                self._get_observed_cosmic_sed(gal)
+
             # Run any extra analysis functions
             self._run_extra_analysis(gal)
 
@@ -3821,6 +4303,120 @@ class Pipeline:
             self.fnu_spectra["Stars"][spec_type] = unyt_array(spec)
         for spec_type, spec in self.fnu_spectra["BlackHole"].items():
             self.fnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
+
+        # Cosmic SEDs are global products rather than per-galaxy arrays, so in
+        # MPI mode we first gather and sum them onto rank 0. If averaging was
+        # requested we do the same for the parallel contributor counts so the
+        # final division is performed on the globally summed result.
+        if self.using_mpi:
+            cosmic_lnus = self.comm.gather(self.cosmic_lnus, root=0)
+            cosmic_fnus = self.comm.gather(self.cosmic_fnus, root=0)
+            cosmic_lnu_counts = self.comm.gather(
+                self._cosmic_lnu_counts, root=0
+            )
+            cosmic_fnu_counts = self.comm.gather(
+                self._cosmic_fnu_counts, root=0
+            )
+            if self.rank == 0:
+                self.cosmic_lnus = sum_dicts_recursive(cosmic_lnus)
+                self.cosmic_fnus = sum_dicts_recursive(cosmic_fnus)
+                self._cosmic_lnu_counts = sum_dicts_recursive(
+                    cosmic_lnu_counts
+                )
+                self._cosmic_fnu_counts = sum_dicts_recursive(
+                    cosmic_fnu_counts
+                )
+
+        # Convert any requested summed cosmic SEDs into averages once all
+        # contributions have been combined locally or across MPI ranks.
+        averaged = set()
+        for _, op_kwargs in self._operation_kwargs["get_cosmic_sed"]:
+            if op_kwargs["average"]:
+                label = op_kwargs["label"]
+                if label is None:
+                    if op_kwargs["gal_attr"] is None:
+                        label = "All"
+                    else:
+                        lower = (
+                            op_kwargs["lower_bound"]
+                            if op_kwargs["lower_bound"] is not None
+                            else "-inf"
+                        )
+                        upper = (
+                            op_kwargs["upper_bound"]
+                            if op_kwargs["upper_bound"] is not None
+                            else "inf"
+                        )
+                        label = sanitise_hdf5_key_part(
+                            f"{lower} < {op_kwargs['gal_attr']} < {upper}"
+                        )
+                else:
+                    label = sanitise_hdf5_key_part(label)
+
+                for component in self.cosmic_lnus:
+                    if (
+                        label in self.cosmic_lnus[component]
+                        and (component, label) not in averaged
+                    ):
+                        self.cosmic_lnus[component][label] = (
+                            divide_dicts_recursive(
+                                self.cosmic_lnus[component][label],
+                                self._cosmic_lnu_counts[component][label],
+                            )
+                        )
+                        averaged.add((component, label))
+
+        # Observer-frame cosmic SEDs follow the same post-reduction averaging
+        # path as the rest-frame version.
+        averaged = set()
+        for _, op_kwargs in self._operation_kwargs["get_observed_cosmic_sed"]:
+            if op_kwargs["average"]:
+                label = op_kwargs["label"]
+                if label is None:
+                    if op_kwargs["gal_attr"] is None:
+                        label = "All"
+                    else:
+                        lower = (
+                            op_kwargs["lower_bound"]
+                            if op_kwargs["lower_bound"] is not None
+                            else "-inf"
+                        )
+                        upper = (
+                            op_kwargs["upper_bound"]
+                            if op_kwargs["upper_bound"] is not None
+                            else "inf"
+                        )
+                        label = sanitise_hdf5_key_part(
+                            f"{lower} < {op_kwargs['gal_attr']} < {upper}"
+                        )
+                else:
+                    label = sanitise_hdf5_key_part(label)
+
+                for component in self.cosmic_fnus:
+                    if (
+                        label in self.cosmic_fnus[component]
+                        and (component, label) not in averaged
+                    ):
+                        self.cosmic_fnus[component][label] = (
+                            divide_dicts_recursive(
+                                self.cosmic_fnus[component][label],
+                                self._cosmic_fnu_counts[component][label],
+                            )
+                        )
+                        averaged.add((component, label))
+
+        for component in self.cosmic_lnus:
+            for label, spectra in self.cosmic_lnus[component].items():
+                for spec_type, spec in spectra.items():
+                    self.cosmic_lnus[component][label][spec_type] = unyt_array(
+                        spec
+                    )
+        for component in self.cosmic_fnus:
+            for label, spectra in self.cosmic_fnus[component].items():
+                for spec_type, spec in spectra.items():
+                    self.cosmic_fnus[component][label][spec_type] = unyt_array(
+                        spec
+                    )
 
         # Convert the lists of luminosities to unyt arrays
         for spec_type, phot in self.luminosities["Galaxy"].items():
@@ -4112,6 +4708,36 @@ class Pipeline:
                 self.fnu_spectra["BlackHole"],
                 "Galaxies/BlackHoles/Photometry/SpectralFluxDensities",
                 galaxy_indices,
+            )
+
+        # Write cosmic spectral luminosity densities
+        if self._write_cosmic_lnu:
+            self.io_helper.write_data(
+                self.cosmic_lnus["Galaxy"],
+                "CosmicSED/Galaxy/SpectralLuminosityDensities",
+            )
+            self.io_helper.write_data(
+                self.cosmic_lnus["Stars"],
+                "CosmicSED/Stars/SpectralLuminosityDensities",
+            )
+            self.io_helper.write_data(
+                self.cosmic_lnus["BlackHole"],
+                "CosmicSED/BlackHoles/SpectralLuminosityDensities",
+            )
+
+        # Write cosmic spectral flux densities
+        if self._write_cosmic_fnu:
+            self.io_helper.write_data(
+                self.cosmic_fnus["Galaxy"],
+                "CosmicSED/Galaxy/SpectralFluxDensities",
+            )
+            self.io_helper.write_data(
+                self.cosmic_fnus["Stars"],
+                "CosmicSED/Stars/SpectralFluxDensities",
+            )
+            self.io_helper.write_data(
+                self.cosmic_fnus["BlackHole"],
+                "CosmicSED/BlackHoles/SpectralFluxDensities",
             )
 
         # Write photometric luminosities

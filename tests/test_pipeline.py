@@ -665,6 +665,34 @@ class TestPipelineOperations:
             > 0
         ), "No spectra were calculated"
 
+    def test_get_cosmic_sed_rejects_inverted_bounds(
+        self, pipeline_with_galaxies
+    ):
+        """Cosmic SED signalling should reject inverted bounds."""
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="lower_bound cannot be greater than upper_bound",
+        ):
+            pipeline_with_galaxies.get_cosmic_sed(
+                gal_attr="stellar_mass",
+                lower_bound=2,
+                upper_bound=1,
+            )
+
+    def test_get_observed_cosmic_sed_rejects_non_positive_volume(
+        self,
+        pipeline_with_galaxies,
+    ):
+        """Observed cosmic SED signalling should require positive volume."""
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="volume must be greater than 0 if provided",
+        ):
+            pipeline_with_galaxies.get_observed_cosmic_sed(
+                cosmo=cosmo,
+                volume=0 * Mpc**3,
+            )
+
     def test_run_pipeline_fnu_spectra(
         self,
         pipeline_with_galaxies,
@@ -2272,8 +2300,18 @@ class TestGalaxySplitting:
         unsplit_galaxy = copy.deepcopy(random_particle_galaxy)
         split_galaxy = copy.deepcopy(random_particle_galaxy)
         split_threshold = max(2, split_galaxy.stars.nparticles // 4)
+        unsplit_galaxy.calculate_integrated_stellar_properties()
+        split_galaxy.calculate_integrated_stellar_properties()
 
-        assert len(split_galaxy.split(split_threshold)) > 1
+        split_children = split_galaxy.split(split_threshold)
+        assert len(split_children) > 1
+
+        unsplit_galaxy._cosmic_filter_test = 2.0
+        split_galaxy._cosmic_filter_test = 2.0
+        for child in split_children:
+            child._cosmic_filter_test = 1.0
+
+        lower_bound = 1.5
 
         unsplit_pipeline = self._make_pipeline(
             copy.deepcopy(nebular_emission_model),
@@ -2288,6 +2326,15 @@ class TestGalaxySplitting:
         for pipeline in (unsplit_pipeline, split_pipeline):
             pipeline.get_spectra()
             pipeline.get_observed_spectra(cosmo=cosmo)
+            pipeline.get_cosmic_sed(
+                gal_attr="_cosmic_filter_test",
+                lower_bound=lower_bound,
+            )
+            pipeline.get_observed_cosmic_sed(
+                cosmo=cosmo,
+                gal_attr="_cosmic_filter_test",
+                lower_bound=lower_bound,
+            )
             pipeline.get_sfzh(
                 log10ages=test_grid.log10ages,
                 metallicities=test_grid.metallicities,
@@ -2295,9 +2342,16 @@ class TestGalaxySplitting:
             pipeline.get_sfh(log10ages=test_grid.log10ages)
             pipeline.run()
 
+        assert any(unsplit_pipeline.cosmic_lnus.values())
+        assert any(unsplit_pipeline.cosmic_fnus.values())
+        assert any(split_pipeline.cosmic_lnus.values())
+        assert any(split_pipeline.cosmic_fnus.values())
+
         for attr in (
             "lnu_spectra",
             "fnu_spectra",
+            "cosmic_lnus",
+            "cosmic_fnus",
             "sfzhs",
             "sfhs",
         ):
@@ -2305,6 +2359,145 @@ class TestGalaxySplitting:
                 getattr(unsplit_pipeline, attr),
                 getattr(split_pipeline, attr),
             )
+
+    def test_cosmic_sed_average_and_volume(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+    ):
+        """Average and volume-normalised cosmic SEDs should match sums."""
+        galaxies_sum = [
+            copy.deepcopy(random_particle_galaxy),
+            copy.deepcopy(random_particle_galaxy),
+        ]
+        galaxies_avg = [copy.deepcopy(gal) for gal in galaxies_sum]
+
+        sum_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            galaxies_sum,
+        )
+        avg_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            galaxies_avg,
+        )
+
+        n_contributors = len(galaxies_sum)
+        volume = 2 * Mpc**3
+
+        sum_pipeline.get_cosmic_sed(label="sum")
+        sum_pipeline.get_observed_cosmic_sed(cosmo=cosmo, label="sum")
+        sum_pipeline.run()
+
+        avg_pipeline.get_cosmic_sed(
+            label="avg",
+            average=True,
+            volume=volume,
+        )
+        avg_pipeline.get_observed_cosmic_sed(
+            cosmo=cosmo,
+            label="avg",
+            average=True,
+            volume=volume,
+        )
+        avg_pipeline.run()
+
+        assert any(sum_pipeline.cosmic_lnus.values())
+        assert any(sum_pipeline.cosmic_fnus.values())
+        assert any(avg_pipeline.cosmic_lnus.values())
+        assert any(avg_pipeline.cosmic_fnus.values())
+
+        for component in sum_pipeline.cosmic_lnus:
+            if "sum" not in sum_pipeline.cosmic_lnus[component]:
+                continue
+            assert "avg" in avg_pipeline.cosmic_lnus[component]
+            for model_label, spec in sum_pipeline.cosmic_lnus[component][
+                "sum"
+            ].items():
+                expected = spec / n_contributors / volume
+                _assert_nested_allclose(
+                    avg_pipeline.cosmic_lnus[component]["avg"][model_label],
+                    expected,
+                )
+
+        for component in sum_pipeline.cosmic_fnus:
+            if "sum" not in sum_pipeline.cosmic_fnus[component]:
+                continue
+            assert "avg" in avg_pipeline.cosmic_fnus[component]
+            for model_label, spec in sum_pipeline.cosmic_fnus[component][
+                "sum"
+            ].items():
+                expected = spec / n_contributors / volume
+                _assert_nested_allclose(
+                    avg_pipeline.cosmic_fnus[component]["avg"][model_label],
+                    expected,
+                )
+
+    def test_cosmic_sed_duplicate_average_requests_share_label(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+    ):
+        """Duplicate average requests with one label should not re-average."""
+        galaxies_sum = [
+            copy.deepcopy(random_particle_galaxy),
+            copy.deepcopy(random_particle_galaxy),
+        ]
+        galaxies_avg = [copy.deepcopy(gal) for gal in galaxies_sum]
+
+        sum_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            galaxies_sum,
+        )
+        avg_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            galaxies_avg,
+        )
+
+        n_contributors = len(galaxies_sum)
+
+        sum_pipeline.get_cosmic_sed(label="sum")
+        sum_pipeline.get_observed_cosmic_sed(cosmo=cosmo, label="sum")
+        sum_pipeline.run()
+
+        avg_pipeline.get_cosmic_sed(label="dup", average=True)
+        avg_pipeline.get_cosmic_sed(label="dup", average=True)
+        avg_pipeline.get_observed_cosmic_sed(
+            cosmo=cosmo,
+            label="dup",
+            average=True,
+        )
+        avg_pipeline.get_observed_cosmic_sed(
+            cosmo=cosmo,
+            label="dup",
+            average=True,
+        )
+        avg_pipeline.run()
+
+        for component in sum_pipeline.cosmic_lnus:
+            if "sum" not in sum_pipeline.cosmic_lnus[component]:
+                continue
+            assert "dup" in avg_pipeline.cosmic_lnus[component]
+            for model_label, spec in sum_pipeline.cosmic_lnus[component][
+                "sum"
+            ].items():
+                expected = spec / n_contributors
+                _assert_nested_allclose(
+                    avg_pipeline.cosmic_lnus[component]["dup"][model_label],
+                    expected,
+                )
+
+        for component in sum_pipeline.cosmic_fnus:
+            if "sum" not in sum_pipeline.cosmic_fnus[component]:
+                continue
+            assert "dup" in avg_pipeline.cosmic_fnus[component]
+            for model_label, spec in sum_pipeline.cosmic_fnus[component][
+                "sum"
+            ].items():
+                expected = spec / n_contributors
+                _assert_nested_allclose(
+                    avg_pipeline.cosmic_fnus[component]["dup"][model_label],
+                    expected,
+                )
 
     def test_split_matches_unsplit_resolved_outputs(
         self,
