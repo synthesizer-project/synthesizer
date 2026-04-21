@@ -665,6 +665,34 @@ class TestPipelineOperations:
             > 0
         ), "No spectra were calculated"
 
+    def test_get_cosmic_sed_rejects_inverted_bounds(
+        self, pipeline_with_galaxies
+    ):
+        """Cosmic SED signalling should reject inverted bounds."""
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="lower_bound cannot be greater than upper_bound",
+        ):
+            pipeline_with_galaxies.get_cosmic_sed(
+                gal_attr="stellar_mass",
+                lower_bound=2,
+                upper_bound=1,
+            )
+
+    def test_get_observed_cosmic_sed_rejects_non_positive_volume(
+        self,
+        pipeline_with_galaxies,
+    ):
+        """Observed cosmic SED signalling should require positive volume."""
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="volume must be greater than 0 if provided",
+        ):
+            pipeline_with_galaxies.get_observed_cosmic_sed(
+                cosmo=cosmo,
+                volume=0 * Mpc**3,
+            )
+
     def test_run_pipeline_fnu_spectra(
         self,
         pipeline_with_galaxies,
@@ -2356,14 +2384,10 @@ class TestGalaxySplitting:
         n_contributors = len(galaxies_sum)
         volume = 2 * Mpc**3
 
-        sum_pipeline.get_spectra()
-        sum_pipeline.get_observed_spectra(cosmo=cosmo)
         sum_pipeline.get_cosmic_sed(label="sum")
         sum_pipeline.get_observed_cosmic_sed(cosmo=cosmo, label="sum")
         sum_pipeline.run()
 
-        avg_pipeline.get_spectra()
-        avg_pipeline.get_observed_spectra(cosmo=cosmo)
         avg_pipeline.get_cosmic_sed(
             label="avg",
             average=True,
