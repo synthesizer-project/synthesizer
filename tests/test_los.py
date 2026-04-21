@@ -59,6 +59,8 @@ def one_gas_behind():
 class TestLOSColumnDensity:
     """Test the line of sight column density calculations."""
 
+    _UNIFORM_W0 = 1.0 / ((4.0 / 3.0) * np.pi)
+
     @staticmethod
     def _make_star(z=1.0, smoothing_length=1.0):
         """Create a single star particle for LOS tests."""
@@ -83,6 +85,112 @@ class TestLOSColumnDensity:
             coordinates=np.array([[0.0, 0.0, z]]) * Mpc,
             dust_to_metal_ratio=1.0,
             smoothing_lengths=np.array([smoothing_length]) * Mpc,
+        )
+
+    @classmethod
+    def _uniform_overlap_reference(
+        cls,
+        star_position,
+        star_smoothing_length,
+        gas_position,
+        gas_smoothing_length,
+        gas_dust_mass,
+        nsample=90,
+    ):
+        """Compute a high-resolution reference for the uniform kernel.
+
+        This reference does not use the LOS extension tables. Instead it
+        averages the exact truncated uniform-kernel LOS contribution over a
+        dense grid of sample points inside the input particle kernel.
+        """
+        mids = np.linspace(-1.0 + 1.0 / nsample, 1.0 - 1.0 / nsample, nsample)
+        qx, qy, qz = np.meshgrid(mids, mids, mids, indexing="ij")
+        mask = qx * qx + qy * qy + qz * qz < 1.0
+
+        qx = qx[mask]
+        qy = qy[mask]
+        qz = qz[mask]
+
+        x = star_position[0] + star_smoothing_length * qx
+        y = star_position[1] + star_smoothing_length * qy
+        z = star_position[2] + star_smoothing_length * qz
+
+        dx = gas_position[0] - x
+        dy = gas_position[1] - y
+        projected_q2 = (dx * dx + dy * dy) / (gas_smoothing_length**2)
+        inside = projected_q2 < 1.0
+
+        values = np.zeros_like(x)
+        if np.any(inside):
+            z_extent = np.sqrt(1.0 - projected_q2[inside])
+            z_upper = (z[inside] - gas_position[2]) / gas_smoothing_length
+            upper = np.minimum(z_extent, z_upper)
+            foreground_length = np.maximum(0.0, upper + z_extent)
+            values[inside] = (
+                gas_dust_mass
+                / (gas_smoothing_length**2)
+                * cls._UNIFORM_W0
+                * foreground_length
+            )
+
+        return values.mean()
+
+    def _assert_uniform_overlap_matches_reference(
+        self,
+        star_position,
+        gas_position,
+        star_smoothing_length=1.0,
+        gas_smoothing_length=1.0,
+        rtol=7e-3,
+        expect_non_zero=True,
+    ):
+        """Assert the smoothed LOS result matches an independent reference."""
+        star = self._make_star(
+            z=star_position[2],
+            smoothing_length=star_smoothing_length,
+        )
+        star.coordinates = np.array([star_position]) * Mpc
+
+        gas = self._make_gas(
+            z=gas_position[2],
+            smoothing_length=gas_smoothing_length,
+        )
+        gas.coordinates = np.array([gas_position]) * Mpc
+
+        galaxy = Galaxy(
+            stars=star,
+            gas=gas,
+            redshift=0.0,
+            centre=None,
+        )
+        kernel = Kernel(name="uniform", binsize=128)
+
+        measured = galaxy.stars.get_los_column_density(
+            galaxy.gas,
+            "dust_masses",
+            kernel=kernel,
+            as_points=False,
+            force_loop=1,
+            min_count=10,
+        )[0]
+        reference = self._uniform_overlap_reference(
+            np.array(star_position),
+            star_smoothing_length,
+            np.array(gas_position),
+            gas_smoothing_length,
+            gas.dust_masses[0].value,
+        )
+
+        if expect_non_zero:
+            assert measured > 0.0
+            assert reference > 0.0
+        else:
+            assert np.isclose(measured, 0.0)
+            assert np.isclose(reference, 0.0)
+
+        assert np.isclose(measured, reference, rtol=rtol, atol=0.0), (
+            f"Expected {reference:.8e}, got {measured:.8e} for star "
+            f"at {star_position} and gas at {gas_position}."
         )
 
     def test_column_density_in_front(self, one_star, one_gas_front):
@@ -460,6 +568,53 @@ class TestLOSColumnDensity:
         assert np.all(tau_front > tau_straddle)
         assert np.all(tau_straddle > tau_back)
         assert np.all(tau_back > 0.0)
+
+    def test_uniform_overlap_matches_reference_fully_front(self):
+        """Test a fully front uniform-kernel overlap against a reference."""
+        self._assert_uniform_overlap_matches_reference(
+            star_position=(0.0, 0.0, 1.0),
+            gas_position=(0.0, 0.0, -1.0),
+        )
+
+    def test_uniform_overlap_matches_reference_fully_front_offset(self):
+        """Test an offset fully front overlap against a reference."""
+        self._assert_uniform_overlap_matches_reference(
+            star_position=(0.0, 0.0, 1.0),
+            gas_position=(0.6, 0.0, -1.0),
+        )
+
+    def test_uniform_overlap_matches_reference_straddling(self):
+        """Test a straddling uniform-kernel overlap against a reference."""
+        self._assert_uniform_overlap_matches_reference(
+            star_position=(0.0, 0.0, 1.0),
+            gas_position=(0.0, 0.0, 0.5),
+        )
+
+    def test_uniform_overlap_matches_reference_straddling_offset(self):
+        """Test an offset straddling overlap against a reference."""
+        self._assert_uniform_overlap_matches_reference(
+            star_position=(0.0, 0.0, 1.0),
+            gas_position=(0.6, 0.0, 0.5),
+        )
+
+    def test_uniform_overlap_matches_reference_no_projected_overlap(self):
+        """Test a non-overlapping projected geometry against a reference."""
+        self._assert_uniform_overlap_matches_reference(
+            star_position=(0.0, 0.0, 1.0),
+            gas_position=(2.5, 0.0, -1.0),
+            expect_non_zero=False,
+        )
+
+    def test_uniform_overlap_matches_reference_different_smoothing_lengths(
+        self,
+    ):
+        """Test different smoothing lengths against a reference."""
+        self._assert_uniform_overlap_matches_reference(
+            star_position=(0.0, 0.0, 1.0),
+            gas_position=(0.3, 0.0, 0.4),
+            star_smoothing_length=0.6,
+            gas_smoothing_length=1.2,
+        )
 
     def test_missing_components(self, one_star, one_gas_front):
         """Raises when stars or gas missing."""
