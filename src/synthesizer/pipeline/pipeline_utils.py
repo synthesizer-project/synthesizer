@@ -981,6 +981,17 @@ def sanitise_hdf5_key_part(value):
     )
 
 
+def divide_dicts_recursive(data, divisors):
+    """Divide nested dictionary leaves by matching nested divisors."""
+    if isinstance(data, dict):
+        return {
+            key: divide_dicts_recursive(data[key], divisors[key])
+            for key in data
+            if key in divisors
+        }
+    return data / divisors
+
+
 def unify_dict_structure_across_ranks(data, comm, root=0):
     """Recursively unify the structure of a dictionary across all ranks.
 

@@ -2332,6 +2332,82 @@ class TestGalaxySplitting:
                 getattr(split_pipeline, attr),
             )
 
+    def test_cosmic_sed_average_and_volume(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+    ):
+        """Average and volume-normalised cosmic SEDs should match sums."""
+        galaxies_sum = [
+            copy.deepcopy(random_particle_galaxy),
+            copy.deepcopy(random_particle_galaxy),
+        ]
+        galaxies_avg = [copy.deepcopy(gal) for gal in galaxies_sum]
+
+        sum_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            galaxies_sum,
+        )
+        avg_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            galaxies_avg,
+        )
+
+        n_contributors = len(galaxies_sum)
+        volume = 2 * Mpc**3
+
+        sum_pipeline.get_spectra()
+        sum_pipeline.get_observed_spectra(cosmo=cosmo)
+        sum_pipeline.get_cosmic_sed(label="sum")
+        sum_pipeline.get_observed_cosmic_sed(cosmo=cosmo, label="sum")
+        sum_pipeline.run()
+
+        avg_pipeline.get_spectra()
+        avg_pipeline.get_observed_spectra(cosmo=cosmo)
+        avg_pipeline.get_cosmic_sed(
+            label="avg",
+            average=True,
+            volume=volume,
+        )
+        avg_pipeline.get_observed_cosmic_sed(
+            cosmo=cosmo,
+            label="avg",
+            average=True,
+            volume=volume,
+        )
+        avg_pipeline.run()
+
+        assert any(sum_pipeline.cosmic_lnus.values())
+        assert any(sum_pipeline.cosmic_fnus.values())
+        assert any(avg_pipeline.cosmic_lnus.values())
+        assert any(avg_pipeline.cosmic_fnus.values())
+
+        for component in sum_pipeline.cosmic_lnus:
+            if "sum" not in sum_pipeline.cosmic_lnus[component]:
+                continue
+            assert "avg" in avg_pipeline.cosmic_lnus[component]
+            for model_label, spec in sum_pipeline.cosmic_lnus[component][
+                "sum"
+            ].items():
+                expected = spec / n_contributors / volume
+                _assert_nested_allclose(
+                    avg_pipeline.cosmic_lnus[component]["avg"][model_label],
+                    expected,
+                )
+
+        for component in sum_pipeline.cosmic_fnus:
+            if "sum" not in sum_pipeline.cosmic_fnus[component]:
+                continue
+            assert "avg" in avg_pipeline.cosmic_fnus[component]
+            for model_label, spec in sum_pipeline.cosmic_fnus[component][
+                "sum"
+            ].items():
+                expected = spec / n_contributors / volume
+                _assert_nested_allclose(
+                    avg_pipeline.cosmic_fnus[component]["avg"][model_label],
+                    expected,
+                )
+
     def test_split_matches_unsplit_resolved_outputs(
         self,
         random_particle_galaxy,
