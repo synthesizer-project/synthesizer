@@ -26,11 +26,10 @@
 /**
  * @brief Evaluate the overlap kernel table for smoothed LOS calculations.
  *
- * This helper builds the expensive `G(q, u, eta)` table used by the fast
- * smoothed-input LOS path. The surrounding Python code prepares the coordinate
- * grids, sampled input-kernel points, and truncated LOS kernel table. The hot
- * nested loop over `(q, u, eta)` is then executed here in C++ so we avoid the
- * large temporary NumPy arrays used by the original Python implementation.
+ * This helper builds the `G(q, u, eta)` table used by the smoothed-input LOS
+ * path. The surrounding Python code prepares the coordinate grids, sampled
+ * input-kernel points, and truncated LOS kernel table. The dense numeric loop
+ * over `(q, u, eta)` is then executed here in C++.
  *
  * The work naturally factorises over `eta` slices, so the OpenMP path
  * parallelises that outer loop when multiple threads are requested. This is a
@@ -38,8 +37,7 @@
  * writes to a disjoint contiguous slab of the output array and therefore needs
  * no synchronisation between threads.
  *
- * The runtime geometry mirrors the mathematical definition used in the Python
- * theory notes. For each tabulated `eta = h_i / h_j` we place the sampled input
+ * For each tabulated `eta = h_i / h_j` we place the sampled input
  * kernel support at coordinates `(eta * qx, eta * qy, eta * qz)`, place the
  * source-particle centre at projected offset `q * (1 + eta)`, and shift the
  * upper LOS integration boundary by `u * (1 + eta)`. The truncated LOS table is
@@ -77,7 +75,8 @@ static void build_overlap_kernel_table(
     const int trunc_zdim, const int nthreads) {
 
 #ifdef WITH_OPENMP
-#pragma omp parallel for num_threads(nthreads) schedule(static) if (nthreads > 1)
+#pragma omp parallel for num_threads(nthreads)                                 \
+    schedule(static) if (nthreads > 1)
 #endif
   for (int ieta = 0; ieta < etadim; ieta++) {
 
@@ -131,10 +130,9 @@ static void build_overlap_kernel_table(
  * truncated LOS kernel table. This extension evaluates the expensive overlap
  * table in C++ and returns a NumPy array with shape `(qdim, udim, etadim)`.
  *
- * This intentionally keeps the public Python API unchanged. `Kernel` remains
- * responsible for constructing the tabulated coordinate arrays and any cheap
- * helper tables, while the extension is only asked to execute the dense numeric
- * triple loop where C++ and OpenMP provide a clear advantage.
+ * `Kernel` remains responsible for constructing the tabulated coordinate arrays
+ * and helper tables, while this extension evaluates the dense numeric triple
+ * loop.
  *
  * @param np_q_grid The overlap-table q-axis.
  * @param np_u_grid The overlap-table u-axis.
@@ -166,11 +164,10 @@ PyObject *compute_overlap_kernel(PyObject *self, PyObject *args) {
       *np_trunc_q, *np_trunc_z;
 
   if (!PyArg_ParseTuple(args, "OOOOOOOOOOiiiiiii", &np_q_grid, &np_u_grid,
-                        &np_eta_grid, &np_sample_x, &np_sample_y,
-                        &np_sample_z, &np_sample_weights,
-                        &np_truncated_kernel, &np_trunc_q, &np_trunc_z, &qdim,
-                        &udim, &etadim, &nsample, &trunc_qdim, &trunc_zdim,
-                        &nthreads)) {
+                        &np_eta_grid, &np_sample_x, &np_sample_y, &np_sample_z,
+                        &np_sample_weights, &np_truncated_kernel, &np_trunc_q,
+                        &np_trunc_z, &qdim, &udim, &etadim, &nsample,
+                        &trunc_qdim, &trunc_zdim, &nthreads)) {
     return NULL;
   }
 
@@ -228,14 +225,14 @@ static PyMethodDef KernelMethods[] = {
 /* Make this importable. */
 static struct PyModuleDef moduledef = {
     PyModuleDef_HEAD_INIT,
-    "kernel",                                 /* m_name */
-    "A module to build LOS kernel tables",    /* m_doc */
-    -1,                                        /* m_size */
-    KernelMethods,                             /* m_methods */
-    NULL,                                      /* m_reload */
-    NULL,                                      /* m_traverse */
-    NULL,                                      /* m_clear */
-    NULL,                                      /* m_free */
+    "kernel",                              /* m_name */
+    "A module to build LOS kernel tables", /* m_doc */
+    -1,                                    /* m_size */
+    KernelMethods,                         /* m_methods */
+    NULL,                                  /* m_reload */
+    NULL,                                  /* m_traverse */
+    NULL,                                  /* m_clear */
+    NULL,                                  /* m_free */
 };
 
 PyMODINIT_FUNC PyInit_kernel(void) {
