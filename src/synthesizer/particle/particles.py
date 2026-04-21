@@ -19,7 +19,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
 from synthesizer.utils.geometry import get_rotation_matrix
-from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.operation_timers import timed, timer
 
 
 class Particles:
@@ -1070,17 +1070,18 @@ class Particles:
                 The other particles to compute the column density with.
             attr (str):
                 The attribute to compute the column density of.
-            kernel (array_like, float):
-                A 1D description of the LOS-projected SPH kernel, or a
-                `synthesizer.kernel_functions.Kernel` instance. Values must be
-                in ascending order such that a k element array can be indexed
-                for the value of impact parameter q via kernel[int(k*q)].
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance. Smoothed LOS
+                calculations require the overlap table returned by
+                `Kernel.get_overlap_kernel()`, so raw projected-kernel arrays
+                are not accepted on this path.
             mask (bool):
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
             threshold (float):
-                The threshold above which the SPH kernel is 0. This is normally
-                at a value of the impact parameter of q = r / h = 1.
+                The threshold above which the SPH kernel is 0. This sets the
+                effective support radius used when mapping particle pairs onto
+                the overlap table at runtime.
             force_loop (bool):
                 Whether to force the use of a simple loop rather than the tree.
             min_count (int):
@@ -1095,61 +1096,62 @@ class Particles:
                 f"{self.name} object is missing smoothing lengths!"
             )
 
-        # Smoothed LOS calculations require the full set of LOS kernel tables,
-        # not just the projected kernel used by the original point-particle
-        # machinery.
-        if not hasattr(kernel, "get_los_table_set"):
+        # Smoothed LOS calculations require the overlap kernel table rather
+        # than the point-particle projected kernel used by the LOS machinery.
+        if not hasattr(kernel, "get_overlap_kernel"):
             raise exceptions.InconsistentArguments(
                 "LOS column densities with kernel-smoothed input particles "
-                "require a Kernel instance so the LOS kernel tables are "
+                "require a Kernel instance so the overlap kernel table is "
                 "available."
             )
 
-        projected_kernel, radial_kernel, truncated_kernel = (
-            kernel.get_los_table_set()
-        )
+        with timer("Particles._prepare_smoothed_los_args.get_overlap_kernel"):
+            overlap_kernel, q_grid, u_grid, eta_grid = (
+                kernel.get_overlap_kernel()
+            )
 
-        (
-            kernel,
-            pos_i,
-            pos_j,
-            smls,
-            surf_den_vals,
-            npart_i,
-            npart_j,
-            kdim,
-            threshold,
-            force_loop,
-            min_count,
-            nthreads,
-        ) = self._prepare_los_args(
-            other_parts,
-            attr,
-            projected_kernel,
-            mask,
-            threshold,
-            force_loop,
-            min_count,
-            nthreads,
-        )
+        # Set up the overlap-kernel inputs to the C function. The extension
+        # uses the tabulated coordinate arrays explicitly for trilinear
+        # lookup.
+        with timer("Particles._prepare_smoothed_los_args.pack_arguments"):
+            overlap_kernel = np.ascontiguousarray(
+                overlap_kernel, dtype=np.float64
+            )
+            q_grid = np.ascontiguousarray(q_grid, dtype=np.float64)
+            u_grid = np.ascontiguousarray(u_grid, dtype=np.float64)
+            eta_grid = np.ascontiguousarray(eta_grid, dtype=np.float64)
+            qdim = q_grid.size
+            udim = u_grid.size
+            etadim = eta_grid.size
 
-        # Package the extra data needed by the smoothed-input extension path:
-        # the input smoothing lengths, the 3D radial input kernel, and the
-        # truncated LOS kernel used when a source kernel straddles a sampled
-        # point in the LOS direction.
-        input_smls = np.ascontiguousarray(
-            self._smoothing_lengths[mask], dtype=np.float64
-        )
-        radial_kernel = np.ascontiguousarray(radial_kernel, dtype=np.float64)
-        truncated_kernel = np.ascontiguousarray(
-            truncated_kernel, dtype=np.float64
-        )
-        zdim = truncated_kernel.shape[1]
+            # Get particle counts.
+            npart_i = self.nparticles
+            npart_j = other_parts.nparticles
+
+            # Set up the inputs from this particle instance.
+            pos_i = np.ascontiguousarray(
+                self._coordinates[mask, :], dtype=np.float64
+            )
+            input_smls = np.ascontiguousarray(
+                self._smoothing_lengths[mask], dtype=np.float64
+            )
+
+            # Set up the inputs from the other particle instance.
+            pos_j = np.ascontiguousarray(
+                other_parts._coordinates, dtype=np.float64
+            )
+            smls = np.ascontiguousarray(
+                other_parts._smoothing_lengths, dtype=np.float64
+            )
+            surf_den_vals = np.ascontiguousarray(
+                getattr(other_parts, attr), dtype=np.float64
+            )
 
         return (
-            kernel,
-            radial_kernel,
-            truncated_kernel,
+            overlap_kernel,
+            q_grid,
+            u_grid,
+            eta_grid,
             pos_i,
             input_smls,
             pos_j,
@@ -1157,8 +1159,9 @@ class Particles:
             surf_den_vals,
             npart_i,
             npart_j,
-            kdim,
-            zdim,
+            qdim,
+            udim,
+            etadim,
             threshold,
             force_loop,
             min_count,
@@ -1285,8 +1288,7 @@ class Particles:
             return col_den
 
         # Compute the column density. Smoothed input particles use a dedicated
-        # extension path so the data flow is explicit before the overlap
-        # machinery is implemented.
+        # extension path based on the overlap kernel table.
         if as_points:
             col_den = compute_column_density(
                 *self._prepare_los_args(
@@ -1301,24 +1303,20 @@ class Particles:
                 )
             )
         else:
-            try:
-                col_den = compute_column_density_smoothed(
-                    *self._prepare_smoothed_los_args(
-                        other_parts,
-                        density_attr,
-                        kernel,
-                        mask,
-                        threshold,
-                        force_loop,
-                        min_count,
-                        nthreads,
-                    )
+            with timer("Particles.get_los_column_density.prepare_smoothed"):
+                smoothed_args = self._prepare_smoothed_los_args(
+                    other_parts,
+                    density_attr,
+                    kernel,
+                    mask,
+                    threshold,
+                    force_loop,
+                    min_count,
+                    nthreads,
                 )
-            except NotImplementedError as exc:
-                raise exceptions.UnimplementedFunctionality(
-                    "LOS column densities with kernel-smoothed input "
-                    "particles have not yet been implemented."
-                ) from exc
+
+            with timer("Particles.get_los_column_density.compute_smoothed"):
+                col_den = compute_column_density_smoothed(*smoothed_args)
 
         # Associate with the correct units
         col_den = unyt_array(
