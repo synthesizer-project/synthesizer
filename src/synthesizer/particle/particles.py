@@ -993,7 +993,10 @@ class Particles:
             nthreads (int):
                 The number of threads to use for the calculation.
         """
-        projected_kernel, _ = self._get_los_kernel_components(kernel)
+        if hasattr(kernel, "get_kernel"):
+            projected_kernel = kernel.get_kernel()
+        else:
+            projected_kernel = kernel
 
         # Ensure we actually have the properties needed
         if self.coordinates is None:
@@ -1052,31 +1055,6 @@ class Particles:
             nthreads,
         )
 
-    @staticmethod
-    def _get_los_kernel_components(kernel):
-        """Extract projected and radial kernel tables for LOS calculations.
-
-        Args:
-            kernel (array_like or Kernel):
-                Either a precomputed LOS-projected kernel lookup table or a
-                `synthesizer.kernel_functions.Kernel` instance.
-
-        Returns:
-            tuple:
-                A tuple containing the projected kernel lookup table and the
-                3D radial kernel lookup table if available.
-        """
-        if hasattr(kernel, "get_kernel"):
-            projected_kernel = kernel.get_kernel()
-            radial_kernel = None
-
-            if hasattr(kernel, "get_radial_kernel"):
-                radial_kernel = kernel.get_radial_kernel()
-
-            return projected_kernel, radial_kernel
-
-        return kernel, None
-
     def _prepare_smoothed_los_args(
         self,
         other_parts,
@@ -1120,23 +1098,19 @@ class Particles:
                 f"{self.name} object is missing smoothing lengths!"
             )
 
-        _, radial_kernel = self._get_los_kernel_components(kernel)
-        if radial_kernel is None:
+        # Smoothed LOS calculations require the full set of LOS kernel tables,
+        # not just the projected kernel used by the original point-particle
+        # machinery.
+        if not hasattr(kernel, "get_los_table_set"):
             raise exceptions.InconsistentArguments(
                 "LOS column densities with kernel-smoothed input particles "
-                "require a Kernel instance so the 3D radial kernel is "
+                "require a Kernel instance so the LOS kernel tables are "
                 "available."
             )
 
-        truncated_kernel = None
-        if hasattr(kernel, "get_truncated_los_kernel"):
-            truncated_kernel = kernel.get_truncated_los_kernel()
-        if truncated_kernel is None:
-            raise exceptions.InconsistentArguments(
-                "LOS column densities with kernel-smoothed input particles "
-                "require a Kernel instance that provides a truncated LOS "
-                "kernel table."
-            )
+        projected_kernel, radial_kernel, truncated_kernel = (
+            kernel.get_los_table_set()
+        )
 
         (
             kernel,
@@ -1154,7 +1128,7 @@ class Particles:
         ) = self._prepare_los_args(
             other_parts,
             attr,
-            kernel,
+            projected_kernel,
             mask,
             threshold,
             force_loop,
@@ -1162,6 +1136,10 @@ class Particles:
             nthreads,
         )
 
+        # Package the extra data needed by the smoothed-input extension path:
+        # the input smoothing lengths, the 3D radial input kernel, and the
+        # truncated LOS kernel used when a source kernel straddles a sampled
+        # point in the LOS direction.
         input_smls = np.ascontiguousarray(
             self._smoothing_lengths[mask], dtype=np.float64
         )

@@ -74,7 +74,13 @@ class Kernel:
         self._truncated_los_kernel = None
 
     def _get_bins(self):
-        """Get the dimensionless radial bins used for kernel lookups."""
+        """Get the dimensionless radial bins used for kernel lookups.
+
+        All kernel tables in this class are tabulated in units of the kernel
+        support radius. This helper centralises the construction of those
+        dimensionless bins so the projected, radial, and truncated LOS tables
+        all use consistent sampling.
+        """
         bins = np.arange(0, 1.0, 1.0 / self.binsize)
         bins = np.append(bins, 1.0)
         return bins
@@ -104,19 +110,25 @@ class Kernel:
         Returns:
             np.ndarray: The kernel values for each impact parameter.
         """
+        # Return the cached kernel if it has already been computed
         if self._projected_kernel is not None:
             return self._projected_kernel.copy()
 
+        # Set up an array to hold the kernel values for each impact parameter
         kernel = np.zeros(self.binsize + 1)
 
+        # Get the dimensionless impact parameter bins
         bins = self._get_bins()
 
+        # For each impact parameter, compute the integral of W(r) along the
+        # line of sight
         for ii in range(self.binsize):
             y, yerr = integrate.quad(
                 self._integral_func(bins[ii]), 0, np.sqrt(1.0 - bins[ii] ** 2)
             )
             kernel[ii] = y * 2.0
 
+        # Cache the results for future use
         self._projected_kernel = kernel
 
         return kernel.copy()
@@ -124,19 +136,30 @@ class Kernel:
     def get_radial_kernel(self):
         """Compute the 3D radial kernel lookup table.
 
+        This is the raw 3D kernel profile evaluated as a function of the
+        dimensionless radius. It is used by the smoothed-input LOS machinery to
+        weight sampled points inside the input particle support.
+
         Returns:
             np.ndarray: The 3D radial kernel values for each dimensionless
                 radius.
         """
+        # Return the cached kernel if it has already been computed
         if self._radial_kernel is not None:
             return self._radial_kernel.copy()
 
+        # Get the dimensionless radius bins
         bins = self._get_bins()
+
+        # Set up an array to hold the kernel values for each dimensionless
+        # radii
         kernel = np.zeros(self.binsize + 1)
 
+        # For each dimensionless radius, compute the kernel value
         for ii, radius in enumerate(bins):
             kernel[ii] = self.f(radius)
 
+        # Cache the results for future use
         self._radial_kernel = kernel
 
         return kernel.copy()
@@ -146,34 +169,66 @@ class Kernel:
 
         This table stores the cumulative integral of the 3D radial kernel
         along the line of sight as a function of impact parameter and
-        dimensionless LOS coordinate.
+        dimensionless LOS coordinate. In practice this means each row gives the
+        foreground mass contribution of a source kernel up to a chosen LOS
+        coordinate for a fixed projected impact parameter.
 
         Returns:
             np.ndarray: The cumulative LOS kernel values for each impact
                 parameter and LOS coordinate.
         """
+        # Return the cached kernel if it has already been computed
         if self._truncated_los_kernel is not None:
             return self._truncated_los_kernel.copy()
 
+        # Get the dimensionless impact parameter bins and LOS coordinate bins
         bins = self._get_bins()
         z_bins = np.linspace(-1.0, 1.0, 2 * self.binsize + 1)
+
+        # Set up an array to hold the cumulative LOS kernel values for each
+        # impact parameter and LOS coordinate
         kernel = np.zeros((bins.size, z_bins.size))
 
+        # For each impact parameter, compute the cumulative integral of W(r)
+        # along the line of sight up to each LOS coordinate
         for ii, impact_parameter in enumerate(bins):
+            # For a fixed projected impact parameter, tabulate the cumulative
+            # LOS integral of the kernel from the back of the support to every
+            # sampled LOS coordinate.
             integrand = np.zeros_like(z_bins)
-
             for iz, z_value in enumerate(z_bins):
                 radius = np.sqrt(z_value**2 + impact_parameter**2)
                 if radius < 1.0:
                     integrand[iz] = self.f(radius)
-
             kernel[ii] = integrate.cumulative_trapezoid(
                 integrand, z_bins, initial=0.0
             )
 
+        # Cache the results for future use
         self._truncated_los_kernel = kernel
 
         return kernel.copy()
+
+    def get_los_table_set(self):
+        """Get all kernel lookup tables needed by the LOS machinery.
+
+        Returns:
+            tuple:
+                A tuple containing the projected kernel lookup table, the 3D
+                radial kernel lookup table, and the truncated LOS kernel lookup
+                table.
+
+        Notes:
+            The point-particle LOS path only needs the projected kernel. The
+            smoothed-input LOS path additionally needs the 3D radial kernel of
+            the input particle and the cumulative truncated LOS kernel used to
+            recover partial foreground contributions.
+        """
+        return (
+            self.get_kernel(),
+            self.get_radial_kernel(),
+            self.get_truncated_los_kernel(),
+        )
 
     def create_kernel(self):
         """Save the computed kernel for easy look-up as .npz file."""
