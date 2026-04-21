@@ -1773,11 +1773,25 @@ class Pipeline:
                 "must be provided to apply the filter to."
             )
 
+        if (
+            lower_bound is not None
+            and upper_bound is not None
+            and lower_bound > upper_bound
+        ):
+            raise exceptions.InconsistentArguments(
+                "lower_bound cannot be greater than upper_bound."
+            )
+
         # Volume normalisation needs a unit-carrying quantity so the cosmic
         # SED keeps physically meaningful units.
         if volume is not None and not isinstance(volume, unyt_quantity):
             raise exceptions.InconsistentArguments(
                 "volume must be a unyt_quantity with units if provided."
+            )
+
+        if volume is not None and volume <= 0 * volume.units:
+            raise exceptions.InconsistentArguments(
+                "volume must be greater than 0 if provided."
             )
 
         # Store the arguments for the operation
@@ -1981,11 +1995,25 @@ class Pipeline:
                 "must be provided to apply the filter to."
             )
 
+        if (
+            lower_bound is not None
+            and upper_bound is not None
+            and lower_bound > upper_bound
+        ):
+            raise exceptions.InconsistentArguments(
+                "lower_bound cannot be greater than upper_bound."
+            )
+
         # As for the rest-frame path, volume normalisation must be unit-aware
         # so observer-frame cosmic SEDs carry the correct dimensions.
         if volume is not None and not isinstance(volume, unyt_quantity):
             raise exceptions.InconsistentArguments(
                 "volume must be a unyt_quantity with units if provided."
+            )
+
+        if volume is not None and volume <= 0 * volume.units:
+            raise exceptions.InconsistentArguments(
+                "volume must be greater than 0 if provided."
             )
 
         # Store the arguments for the operation
