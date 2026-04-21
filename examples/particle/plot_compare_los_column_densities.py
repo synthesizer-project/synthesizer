@@ -60,6 +60,10 @@ template_galaxy = camels_galaxies[0]
 
 def resample_coordinates(coordinates, smoothing_lengths, nparticles):
     """Resample a particle distribution around a template geometry."""
+    # Draw particles with replacement from the small CAMELS seed system, then
+    # jitter them by a fraction of their smoothing length. This preserves the
+    # rough spatial scale and LOS geometry of the template while creating a
+    # larger benchmark problem for the tree and loop implementations.
     indices = np.random.choice(
         coordinates.shape[0], size=nparticles, replace=True
     )
@@ -70,6 +74,9 @@ def resample_coordinates(coordinates, smoothing_lengths, nparticles):
 
 
 if args.refine:
+    # Build a larger synthetic system with the same broad geometry as the local
+    # CAMELS example. This keeps the example self-contained while still
+    # giving a more demanding comparison between the LOS algorithms.
     nstars = 1000
     ngas = 10000
 
@@ -120,11 +127,22 @@ else:
     ngas = galaxy.gas.nparticles
 
 # Use a Kernel instance so both the point-particle and smoothed-input paths
-# can access the look-up tables they need.
+# can access the look-up tables they need. In point mode the projected kernel
+# is used, while in smoothed mode the same object also provides the overlap
+# table needed to average the LOS column density across the input-particle
+# support.
 kernel = Kernel(name="cubic", binsize=256)
 
-# Calculate LOS dust column densities for the point-particle loop path, the
-# point-particle tree path, and the smoothed-input tree path.
+# Calculate LOS dust column densities in three configurations:
+#
+# 1. point-particle loop: the original direct double loop,
+# 2. point-particle tree: the original tree-accelerated point approximation,
+# 3. smoothed-input tree: the new overlap-based calculation that averages over
+#    the stellar smoothing kernel rather than treating the star as a point.
+#
+# Comparing all three in one place makes it clear how much the tree helps in
+# the original approximation and what extra cost is paid for the more physical
+# smoothed-input treatment.
 start = time.time()
 point_loop_col_den = galaxy.stars.get_los_column_density(
     galaxy.gas,
@@ -157,6 +175,10 @@ smoothed_col_den = galaxy.stars.get_los_column_density(
 )
 smoothed_time = time.time() - start
 
+# Report both the absolute timings and a few simple diagnostics. The point-path
+# residual should stay small because the loop and tree are evaluating the same
+# point-particle problem, while the smoothed-input sum is expected to differ
+# because it is solving a different, kernel-averaged LOS problem.
 print(
     f"Point-particle loop LOS column densities took {point_loop_time:.4f} s "
     f"for nstars={nstars} and ngas={ngas}"
@@ -187,6 +209,10 @@ print(
 )
 
 
+# Plot the point-tree and smoothed-input answers against one another. The
+# dashed one-to-one line is only a visual guide: departures from that line are
+# expected because the smoothed-input result averages over each stellar kernel
+# rather than evaluating the LOS column density only at the stellar centre.
 fig, ax = plt.subplots(figsize=(6, 5))
 
 ax.scatter(point_tree_col_den, smoothed_col_den, s=10, alpha=0.8)
