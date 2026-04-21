@@ -4329,6 +4329,7 @@ class Pipeline:
 
         # Convert any requested summed cosmic SEDs into averages once all
         # contributions have been combined locally or across MPI ranks.
+        averaged = set()
         for _, op_kwargs in self._operation_kwargs["get_cosmic_sed"]:
             if op_kwargs["average"]:
                 label = op_kwargs["label"]
@@ -4353,16 +4354,21 @@ class Pipeline:
                     label = sanitise_hdf5_key_part(label)
 
                 for component in self.cosmic_lnus:
-                    if label in self.cosmic_lnus[component]:
+                    if (
+                        label in self.cosmic_lnus[component]
+                        and (component, label) not in averaged
+                    ):
                         self.cosmic_lnus[component][label] = (
                             divide_dicts_recursive(
                                 self.cosmic_lnus[component][label],
                                 self._cosmic_lnu_counts[component][label],
                             )
                         )
+                        averaged.add((component, label))
 
         # Observer-frame cosmic SEDs follow the same post-reduction averaging
         # path as the rest-frame version.
+        averaged = set()
         for _, op_kwargs in self._operation_kwargs["get_observed_cosmic_sed"]:
             if op_kwargs["average"]:
                 label = op_kwargs["label"]
@@ -4387,13 +4393,17 @@ class Pipeline:
                     label = sanitise_hdf5_key_part(label)
 
                 for component in self.cosmic_fnus:
-                    if label in self.cosmic_fnus[component]:
+                    if (
+                        label in self.cosmic_fnus[component]
+                        and (component, label) not in averaged
+                    ):
                         self.cosmic_fnus[component][label] = (
                             divide_dicts_recursive(
                                 self.cosmic_fnus[component][label],
                                 self._cosmic_fnu_counts[component][label],
                             )
                         )
+                        averaged.add((component, label))
 
         for component in self.cosmic_lnus:
             for label, spectra in self.cosmic_lnus[component].items():

@@ -2432,6 +2432,73 @@ class TestGalaxySplitting:
                     expected,
                 )
 
+    def test_cosmic_sed_duplicate_average_requests_share_label(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+    ):
+        """Duplicate average requests with one label should not re-average."""
+        galaxies_sum = [
+            copy.deepcopy(random_particle_galaxy),
+            copy.deepcopy(random_particle_galaxy),
+        ]
+        galaxies_avg = [copy.deepcopy(gal) for gal in galaxies_sum]
+
+        sum_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            galaxies_sum,
+        )
+        avg_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            galaxies_avg,
+        )
+
+        n_contributors = len(galaxies_sum)
+
+        sum_pipeline.get_cosmic_sed(label="sum")
+        sum_pipeline.get_observed_cosmic_sed(cosmo=cosmo, label="sum")
+        sum_pipeline.run()
+
+        avg_pipeline.get_cosmic_sed(label="dup", average=True)
+        avg_pipeline.get_cosmic_sed(label="dup", average=True)
+        avg_pipeline.get_observed_cosmic_sed(
+            cosmo=cosmo,
+            label="dup",
+            average=True,
+        )
+        avg_pipeline.get_observed_cosmic_sed(
+            cosmo=cosmo,
+            label="dup",
+            average=True,
+        )
+        avg_pipeline.run()
+
+        for component in sum_pipeline.cosmic_lnus:
+            if "sum" not in sum_pipeline.cosmic_lnus[component]:
+                continue
+            assert "dup" in avg_pipeline.cosmic_lnus[component]
+            for model_label, spec in sum_pipeline.cosmic_lnus[component][
+                "sum"
+            ].items():
+                expected = spec / n_contributors
+                _assert_nested_allclose(
+                    avg_pipeline.cosmic_lnus[component]["dup"][model_label],
+                    expected,
+                )
+
+        for component in sum_pipeline.cosmic_fnus:
+            if "sum" not in sum_pipeline.cosmic_fnus[component]:
+                continue
+            assert "dup" in avg_pipeline.cosmic_fnus[component]
+            for model_label, spec in sum_pipeline.cosmic_fnus[component][
+                "sum"
+            ].items():
+                expected = spec / n_contributors
+                _assert_nested_allclose(
+                    avg_pipeline.cosmic_fnus[component]["dup"][model_label],
+                    expected,
+                )
+
     def test_split_matches_unsplit_resolved_outputs(
         self,
         random_particle_galaxy,
