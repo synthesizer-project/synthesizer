@@ -940,6 +940,58 @@ def combine_list_of_dicts(dicts):
     return recursive_merge(dicts)
 
 
+def sum_dicts_recursive(dicts):
+    """Sum a list of nested dictionaries with additive leaves.
+
+    Args:
+        dicts (list):
+            A list of dictionaries or additive leaf values.
+
+    Returns:
+        dict or object:
+            The recursively summed dictionary or leaf value.
+    """
+    values = [value for value in dicts if value is not None]
+    if len(values) == 0:
+        return {}
+
+    if not isinstance(values[0], dict):
+        total = values[0]
+        for value in values[1:]:
+            total = total + value
+        return total
+
+    summed = {}
+    keys = set()
+    for value in values:
+        keys.update(value.keys())
+
+    for key in keys:
+        summed[key] = sum_dicts_recursive(
+            [value[key] for value in values if key in value]
+        )
+
+    return summed
+
+
+def sanitise_hdf5_key_part(value):
+    """Return a HDF5-safe string fragment for generated labels."""
+    return (
+        str(value).replace(".", "p").replace("/", "_per_").replace("\\", "_")
+    )
+
+
+def divide_dicts_recursive(data, divisors):
+    """Divide nested dictionary leaves by matching nested divisors."""
+    if isinstance(data, dict):
+        return {
+            key: divide_dicts_recursive(data[key], divisors[key])
+            for key in data
+            if key in divisors
+        }
+    return data / divisors
+
+
 def unify_dict_structure_across_ranks(data, comm, root=0):
     """Recursively unify the structure of a dictionary across all ranks.
 
