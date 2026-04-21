@@ -137,7 +137,7 @@ class Kernel:
         if self._radial_kernel is not None:
             return self._radial_kernel.copy()
 
-        with timer("Building LOS radial kernel table"):
+        with timer("Kernel._get_radial_kernel"):
             # Get the dimensionless radius bins and set up the output
             bins = self._get_bins()
             kernel = np.zeros(self.binsize + 1)
@@ -170,7 +170,7 @@ class Kernel:
             z_bins = np.linspace(-1.0, 1.0, 2 * self.binsize + 1)
             return self._truncated_los_kernel.copy(), bins, z_bins
 
-        with timer("Building truncated LOS kernel table"):
+        with timer("Kernel._get_truncated_los_kernel"):
             # Get the projected-separation and LOS-coordinate bins and set up
             # the output
             bins = self._get_bins()
@@ -269,7 +269,7 @@ class Kernel:
                 points inside the unit support sphere and their associated
                 radial-kernel weights.
         """
-        with timer("Preparing overlap kernel sample points"):
+        with timer("Kernel._get_overlap_sample_points"):
             # Construct a regular grid of candidate sample points in the unit
             # cube and keep only those that fall inside the unit support sphere
             mids = np.linspace(
@@ -294,7 +294,7 @@ class Kernel:
 
         return qx, qy, qz, weights
 
-    @timed("Building overlap kernel table")
+    @timed("Kernel._build_overlap_kernel")
     def _build_overlap_kernel(self):
         """Construct the smoothed LOS overlap kernel look-up table.
 
@@ -412,7 +412,7 @@ class Kernel:
 
         return kernel.copy()
 
-    @timed("Preparing overlap kernel lookup")
+    @timed("Kernel.get_overlap_kernel")
     def get_overlap_kernel(self):
         """Compute the overlap kernel lookup table.
 
