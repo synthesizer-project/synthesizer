@@ -135,14 +135,16 @@ kernel = Kernel(name="cubic", binsize=256)
 
 # Calculate LOS dust column densities in three configurations:
 #
-# 1. point-particle loop: the original direct double loop,
-# 2. point-particle tree: the original tree-accelerated point approximation,
-# 3. smoothed-input tree: the new overlap-based calculation that averages over
-#    the stellar smoothing kernel rather than treating the star as a point.
+# 1. point-particle loop: evaluate the point-particle LOS approximation with a
+#    direct double loop,
+# 2. point-particle tree: evaluate the same point-particle approximation with
+#    tree acceleration,
+# 3. smoothed-input tree: evaluate the kernel-averaged LOS column density by
+#    averaging over the stellar smoothing kernel.
 #
-# Comparing all three in one place makes it clear how much the tree helps in
-# the original approximation and what extra cost is paid for the more physical
-# smoothed-input treatment.
+# Comparing all three in one place makes it clear how much the tree helps for
+# the point-particle approximation and what extra cost is paid for the
+# kernel-averaged smoothed-input treatment.
 start = time.time()
 point_loop_col_den = galaxy.stars.get_los_column_density(
     galaxy.gas,
