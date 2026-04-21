@@ -1107,7 +1107,7 @@ class Particles:
 
         with timer("Particles._prepare_smoothed_los_args.get_overlap_kernel"):
             overlap_kernel, q_grid, u_grid, eta_grid = (
-                kernel.get_overlap_kernel()
+                kernel.get_overlap_kernel(nthreads=nthreads)
             )
 
         # Set up the overlap-kernel inputs to the C function. The extension
