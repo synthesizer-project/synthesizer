@@ -16,7 +16,6 @@
 #include <Python.h>
 
 /* Local includes. */
-#include "cpp_to_python.h"
 #include "kernel_utils.h"
 #include "octree.h"
 #include "property_funcs.h"
@@ -608,148 +607,178 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
 }
 
 /**
- * @brief Computes the smoothed LOS contribution at a sample point.
+ * @brief Compute one pairwise smoothed-input LOS contribution.
  *
- * @param x The x-coordinate of the input sample point.
- * @param y The y-coordinate of the input sample point.
- * @param z The z-coordinate of the input sample point.
+ * Each input/source particle pair is mapped onto the precomputed overlap table
+ * `G(q, u, eta)` and contributes exactly once.
+ *
+ * The runtime pair coordinates are defined using the support radii of the input
+ * and source particles:
+ *
+ *   q   = b / (R_i + R_j)
+ *   u   = (z_i - z_j) / (R_i + R_j)
+ *   eta = h_i / h_j
+ *
+ * where `R = threshold * h` is the effective support radius used by the LOS
+ * calculation. The overlap table then returns the kernel-averaged fraction of
+ * the source LOS kernel seen by the input particle.
+ *
+ * @param xi The x position of the input particle.
+ * @param yi The y position of the input particle.
+ * @param zi The z position of the input particle.
+ * @param hi The smoothing length of the input particle.
+ * @param xj The x position of the source particle.
+ * @param yj The y position of the source particle.
+ * @param zj The z position of the source particle.
  * @param hj The smoothing length of the source particle.
- * @param support_j The support radius of the source particle.
- * @param xj The x-coordinate of the source particle.
- * @param yj The y-coordinate of the source particle.
- * @param zj The z-coordinate of the source particle.
- * @param surf_den_val The source surface density value.
- * @param projected_kernel The full projected LOS kernel lookup table.
- * @param truncated_kernel The truncated LOS kernel lookup table.
- * @param kdim The number of impact-parameter entries.
- * @param zdim The number of LOS-coordinate entries.
+ * @param surf_den_val The source value to accumulate.
+ * @param overlap_kernel The overlap kernel lookup table.
+ * @param q_grid The q-axis of the overlap table.
+ * @param u_grid The u-axis of the overlap table.
+ * @param eta_grid The eta-axis of the overlap table.
+ * @param qdim The number of q-grid entries.
+ * @param udim The number of u-grid entries.
+ * @param etadim The number of eta-grid entries.
+ * @param threshold The support threshold in units of the smoothing length.
  *
- * @return The source contribution at the input sample point.
+ * @return The LOS surface density contribution for this pair.
  */
-static double calculate_smoothed_source_contribution(
-    const double x, const double y, const double z, const double hj,
-    const double support_j, const double xj, const double yj, const double zj,
-    const double surf_den_val, const double *projected_kernel,
-    const double *truncated_kernel, const int kdim, const int zdim) {
+static inline double calculate_smoothed_pair_contribution(
+    const double xi, const double yi, const double zi, const double hi,
+    const double xj, const double yj, const double zj, const double hj,
+    const double surf_den_val, const double *overlap_kernel,
+    const double *q_grid, const double *u_grid, const double *eta_grid,
+    const int qdim, const int udim, const int etadim, const double threshold) {
 
-  /* Calculate the projected separation between the sample and the
-   * input sample point. This is the impact parameter. */
-  const double dx = xj - x;
-  const double dy = yj - y;
-  const double b = sqrt(dx * dx + dy * dy);
-
-  /* Early exit when the projected separation is larger than the kernel. */
-  if (b >= support_j) {
+  /* Reject pathological zero-support pairs before doing any further work. */
+  if (hj <= 0.0) {
     return 0.0;
   }
 
-  /* Calculate the dimensionless projected separation and the kernel
-   * normalisation term. */
-  const double q = b / support_j;
-  const double prefactor = surf_den_val / (hj * hj);
-  const double z_min = zj - support_j;
-  const double z_max = zj + support_j;
-
-  /* If the full support of the source kernel lies entirely behind the sampled
-   * point then the source contributes nothing. */
-  if (z <= z_min) {
+  /* Convert smoothing lengths to the support radii used by the LOS solver. */
+  const double support_i = threshold * hi;
+  const double support_j = threshold * hj;
+  const double support_sum = support_i + support_j;
+  if (support_sum <= 0.0) {
     return 0.0;
   }
 
-  /* If the full source kernel lies in front of the sampled point then the
-   * foreground contribution is simply the full projected LOS kernel. */
-  if (z >= z_max) {
-    return prefactor * get_kernel_value(projected_kernel, kdim, q);
+  /* Compute the projected particle-centre separation. We stay in squared form
+   * for the first overlap rejection to avoid an unnecessary square root in the
+   * common no-overlap case. */
+  const double dx = xj - xi;
+  const double dy = yj - yi;
+  const double b2 = dx * dx + dy * dy;
+  const double support_sum2 = support_sum * support_sum;
+
+  /* If the projected supports do not overlap, the kernel average is zero. */
+  if (b2 >= support_sum2) {
+    return 0.0;
   }
 
-  /* Otherwise we have an overlap and need to account for the fraciton of the
-   * source kernel that contributes to the foreground column density. */
-  const double z_upper = (z - zj) / support_j;
-  return prefactor *
-         get_truncated_kernel_value(truncated_kernel, kdim, zdim, q, z_upper);
+  /* If the source kernel lies entirely behind the input kernel there is no
+   * foreground contribution anywhere within the input support. */
+  if ((zj - support_j) >= (zi + support_i)) {
+    return 0.0;
+  }
+
+  /* Map this pair onto the tabulated overlap coordinates. */
+  const double b = sqrt(b2);
+  const double q = b / support_sum;
+  const double u = (zi - zj) / support_sum;
+  const double eta = hi / hj;
+
+  /* The table contains the kernel-averaged LOS contribution. Only the source
+   * normalisation remains to be applied at runtime. */
+  return surf_den_val / (hj * hj) *
+         get_overlap_kernel_value(overlap_kernel, q_grid, u_grid, eta_grid,
+                                  qdim, udim, etadim, q, u, eta);
 }
 
 /**
- * @brief Recursively calculate smoothed LOS surface density contributions.
+ * @brief Recursively calculate smoothed-input LOS surface densities.
  *
- * @param c The cell to calculate the surface densities for.
- * @param x The x position of the input sample point.
- * @param y The y position of the input sample point.
- * @param z The z position of the input sample point.
+ * The source tree is traversed once per input particle. Internal nodes are
+ * pruned when even the largest possible source support in that node cannot
+ * overlap the input support in projection or along the line of sight. Once we
+ * reach a leaf, each source particle contributes exactly once via the overlap
+ * table.
+ *
+ * @param c The cell to traverse.
+ * @param xi The x position of the input particle.
+ * @param yi The y position of the input particle.
+ * @param zi The z position of the input particle.
+ * @param hi The smoothing length of the input particle.
+ * @param overlap_kernel The overlap kernel lookup table.
+ * @param q_grid The q-axis of the overlap table.
+ * @param u_grid The u-axis of the overlap table.
+ * @param eta_grid The eta-axis of the overlap table.
+ * @param qdim The number of q-grid entries.
+ * @param udim The number of u-grid entries.
+ * @param etadim The number of eta-grid entries.
  * @param threshold The support threshold in units of the smoothing length.
- * @param kdim The dimension of the kernel tables.
- * @param zdim The dimension of the LOS-coordinate table.
- * @param projected_kernel The projected kernel lookup table.
- * @param truncated_kernel The truncated LOS kernel lookup table.
- * @return The LOS surface density contribution for this sample point.
+ *
+ * @return The LOS surface density contribution from this node.
  */
-static double calculate_los_recursive_smoothed(struct cell *c, const double x,
-                                               const double y, const double z,
-                                               const double threshold,
-                                               const int kdim, const int zdim,
-                                               const double *projected_kernel,
-                                               const double *truncated_kernel) {
+static double calculate_los_recursive_smoothed(
+    struct cell *c, const double xi, const double yi, const double zi,
+    const double hi, const double *overlap_kernel, const double *q_grid,
+    const double *u_grid, const double *eta_grid, const int qdim,
+    const int udim, const int etadim, const double threshold) {
 
-  /* Compute the extent of the kernel support. */
-  const double max_sml = sqrt(c->max_sml_squ);
-  const double support_max = threshold * max_sml;
+  /* The input-particle support radius is fixed along this traversal. */
+  const double support_i = threshold * hi;
+
+  /* The node can only contain source particles up to this support radius. */
+  const double support_max = threshold * sqrt(c->max_sml_squ);
+
+  /* Reject nodes whose source kernels are entirely behind the full input
+   * support. */
   const double cell_z_min = c->loc[2] - support_max;
-  const double cell_z_max = c->loc[2] + c->width + support_max;
-
-  /* Eayl exit if the source is entirely behind the sampled point. */
-  if (cell_z_min >= z) {
+  if (cell_z_min >= (zi + support_i)) {
     return 0.0;
   }
 
-  /* Early exit if the projected distance between the cell and the sampled point
-   * is larger than the maximum smoothing length in the cell. */
-  if ((threshold * threshold * c->max_sml_squ) < min_projected_dist2(c, x, y)) {
+  /* Reject nodes whose projected bounding box stays further away than the
+   * combined input and maximum source support. */
+  const double support_sum = support_i + support_max;
+  if ((support_sum * support_sum) < min_projected_dist2(c, xi, yi)) {
     return 0.0;
   }
 
-  /* If the full kernel support of the cell lies in front of the sampled point
-   * then we can use the full projected kernel contribution for all particles in
-   * the cell. */
-  if (cell_z_max <= z) {
-    return calculate_los_recursive(c, x, y, z, threshold, kdim,
-                                   projected_kernel);
-  }
-
+  /* Accumulate the contribution from this node. */
   double surf_dens = 0.0;
 
-  /* If we get here then we have an overlap and need to account for the fraction
-   * of the source kernels that contribute to the foreground column density. We
-   * need to recurse to the leaves to do this properly. */
   if (c->split) {
-    /* Loop over progeny. */
+
+    /* Internal nodes are traversed recursively until we reach leaves, where we
+     * can evaluate the exact pairwise overlap with each source particle. */
     for (int ip = 0; ip < 8; ip++) {
       struct cell *cp = &c->progeny[ip];
 
-      /* Skip empty progeny. */
       if (cp->part_count == 0) {
         continue;
       }
 
-      /* Recurse... */
-      surf_dens +=
-          calculate_los_recursive_smoothed(cp, x, y, z, threshold, kdim, zdim,
-                                           projected_kernel, truncated_kernel);
+      surf_dens += calculate_los_recursive_smoothed(
+          cp, xi, yi, zi, hi, overlap_kernel, q_grid, u_grid, eta_grid, qdim,
+          udim, etadim, threshold);
     }
+
   } else {
 
-    /* We're in a leaf process the particles. */
-    int npart_j = c->part_count;
+    /* Once in a leaf we are back to the same one-pair-at-a-time structure as
+     * the simple loop implementation. */
+    const int npart_j = c->part_count;
     struct particle *parts = c->particles;
 
-    /* Once in a leaf we can fall back to the exact per-particle front / behind
-     * / straddling logic for each source particle. */
     for (int j = 0; j < npart_j; j++) {
       struct particle *part = &parts[j];
 
-      surf_dens += calculate_smoothed_source_contribution(
-          x, y, z, part->sml, threshold * part->sml, part->pos[0], part->pos[1],
-          part->pos[2], part->surf_den_var, projected_kernel, truncated_kernel,
-          kdim, zdim);
+      surf_dens += calculate_smoothed_pair_contribution(
+          xi, yi, zi, hi, part->pos[0], part->pos[1], part->pos[2], part->sml,
+          part->surf_den_var, overlap_kernel, q_grid, u_grid, eta_grid, qdim,
+          udim, etadim, threshold);
     }
   }
 
@@ -757,455 +786,323 @@ static double calculate_los_recursive_smoothed(struct cell *c, const double x,
 }
 
 /**
- * @brief Computes smoothed-input LOS surface densities with a loop.
+ * @brief Compute smoothed-input LOS surface densities with a loop.
+ *
+ * For each input particle we loop over source particles, reject non-overlapping
+ * pairs, interpolate the overlap table once, and apply the source prefactor.
  *
  * @param pos_i The positions of the input particles.
  * @param input_smls The smoothing lengths of the input particles.
- * @param pos_j The positions of the contributing particles.
- * @param smls The smoothing lengths of the contributing particles.
+ * @param pos_j The positions of the source particles.
+ * @param smls The smoothing lengths of the source particles.
  * @param surf_den_vals The source values to accumulate.
- * @param projected_kernel The full projected LOS kernel lookup table.
- * @param radial_kernel The 1D radial kernel lookup table.
- * @param truncated_kernel The truncated LOS kernel lookup table.
+ * @param overlap_kernel The overlap kernel lookup table.
+ * @param q_grid The q-axis of the overlap table.
+ * @param u_grid The u-axis of the overlap table.
+ * @param eta_grid The eta-axis of the overlap table.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of input particles.
- * @param npart_j The number of contributing particles.
- * @param kdim The dimension of the kernel lookup tables.
- * @param zdim The dimension of the LOS coordinate table.
+ * @param npart_j The number of source particles.
+ * @param qdim The number of q-grid entries.
+ * @param udim The number of u-grid entries.
+ * @param etadim The number of eta-grid entries.
  * @param threshold The support threshold in units of the smoothing length.
  */
 static void los_loop_smoothed_serial(
     const double *pos_i, const double *input_smls, const double *pos_j,
     const double *smls, const double *surf_den_vals,
-    const double *projected_kernel, const double *radial_kernel,
-    const double *truncated_kernel, double *surf_dens, const int npart_i,
-    const int npart_j, const int kdim, const int zdim, const double threshold) {
-
-  /* We will sample the input particle kernel with a fixed number of points in
-   * each dimension. This is a trade off between accuracy and speed. We want to
-   * sample enough points to get a good estimate of the kernel-averaged column
-   * density but not so many that the calculation becomes too slow. */
-  const int nxy = LOS_SMOOTHED_INPUT_NDIM;
-  const int nz = LOS_SMOOTHED_INPUT_NDIM;
-  const double dxy = 2.0 / nxy;
-  const double dz = 2.0 / nz;
+    const double *overlap_kernel, const double *q_grid, const double *u_grid,
+    const double *eta_grid, double *surf_dens, const int npart_i,
+    const int npart_j, const int qdim, const int udim, const int etadim,
+    const double threshold) {
 
   /* Loop over the input particles. */
   for (int i = 0; i < npart_i; i++) {
 
-    /* Unpack the particle data. */
-    const double hi = input_smls[i];
-    const double support_i = threshold * hi;
     const double xi = pos_i[i * 3];
     const double yi = pos_i[i * 3 + 1];
     const double zi = pos_i[i * 3 + 2];
+    const double hi = input_smls[i];
 
-    /* We accumulate a weighted average of the foreground column density across
-     * the full support of the input particle kernel. */
-    double particle_surf_dens = 0.0;
-    double weight_sum = 0.0;
-
-    /* Loop over the sample points. */
-    for (int ix = 0; ix < nxy; ix++) {
-      const double qx = -1.0 + (ix + 0.5) * dxy;
-      for (int iy = 0; iy < nxy; iy++) {
-        const double qy = -1.0 + (iy + 0.5) * dxy;
-        for (int iz = 0; iz < nz; iz++) {
-          const double qz = -1.0 + (iz + 0.5) * dz;
-          const double qr = sqrt(qx * qx + qy * qy + qz * qz);
-
-          /* Skip points outside the kernel support. */
-          if (qr >= 1.0) {
-            continue;
-          }
-
-          /* Weight each sampled point by the 3D radial kernel of the input
-           * particle. */
-          const double input_weight = get_kernel_value(radial_kernel, kdim, qr);
-          if (input_weight == 0.0) {
-            continue;
-          }
-
-          /* Get the physical coordinates of this sampled point. */
-          const double x = xi + support_i * qx;
-          const double y = yi + support_i * qy;
-          const double z = zi + support_i * qz;
-
-          double sample_surf_dens = 0.0;
-
-          /* Evaluate the foreground source contribution seen by this sampled
-           * point by summing over all source particles. */
-          for (int j = 0; j < npart_j; j++) {
-            const double hj = smls[j];
-            const double support_j = threshold * hj;
-            const double xj = pos_j[j * 3];
-            const double yj = pos_j[j * 3 + 1];
-            const double zj = pos_j[j * 3 + 2];
-            const double surf_den_val = surf_den_vals[j];
-
-            sample_surf_dens += calculate_smoothed_source_contribution(
-                x, y, z, hj, support_j, xj, yj, zj, surf_den_val,
-                projected_kernel, truncated_kernel, kdim, zdim);
-          }
-
-          /* Add this sampled point to the weighted average for the input
-           * particle. */
-          particle_surf_dens += input_weight * sample_surf_dens;
-          weight_sum += input_weight;
-        }
-      }
+    /* Each source particle contributes at most once to this input particle. */
+    for (int j = 0; j < npart_j; j++) {
+      surf_dens[i] += calculate_smoothed_pair_contribution(
+          xi, yi, zi, hi, pos_j[j * 3], pos_j[j * 3 + 1], pos_j[j * 3 + 2],
+          smls[j], surf_den_vals[j], overlap_kernel, q_grid, u_grid, eta_grid,
+          qdim, udim, etadim, threshold);
     }
-
-    /* Renormalise by the total sampled kernel weight so the result is the
-     * kernel-averaged foreground column density. */
-    if (weight_sum > 0.0) {
-      particle_surf_dens /= weight_sum;
-    }
-
-    surf_dens[i] = particle_surf_dens;
   }
 }
 
 #ifdef WITH_OPENMP
 /**
- * @brief Computes smoothed-input LOS surface densities with a loop.
+ * @brief Parallel smoothed-input LOS loop implementation.
  *
- * This is the parallel version of the smoothed-input loop calculation. The
- * input particles are split into contiguous chunks, each thread computes the
- * smoothed LOS column density for its own chunk, and the thread-local results
- * are then copied back into the shared output array.
+ * The input particles are split into contiguous chunks and each thread writes
+ * to a thread-local result buffer before copying back to the shared output
+ * array.
  *
  * @param pos_i The positions of the input particles.
  * @param input_smls The smoothing lengths of the input particles.
- * @param pos_j The positions of the contributing particles.
- * @param smls The smoothing lengths of the contributing particles.
+ * @param pos_j The positions of the source particles.
+ * @param smls The smoothing lengths of the source particles.
  * @param surf_den_vals The source values to accumulate.
- * @param projected_kernel The full projected LOS kernel lookup table.
- * @param radial_kernel The 1D radial kernel lookup table.
- * @param truncated_kernel The truncated LOS kernel lookup table.
+ * @param overlap_kernel The overlap kernel lookup table.
+ * @param q_grid The q-axis of the overlap table.
+ * @param u_grid The u-axis of the overlap table.
+ * @param eta_grid The eta-axis of the overlap table.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of input particles.
- * @param npart_j The number of contributing particles.
- * @param kdim The dimension of the kernel lookup tables.
- * @param zdim The dimension of the LOS coordinate table.
+ * @param npart_j The number of source particles.
+ * @param qdim The number of q-grid entries.
+ * @param udim The number of u-grid entries.
+ * @param etadim The number of eta-grid entries.
  * @param threshold The support threshold in units of the smoothing length.
  * @param nthreads The number of threads to use.
  */
 static void los_loop_smoothed_omp(
     const double *pos_i, const double *input_smls, const double *pos_j,
     const double *smls, const double *surf_den_vals,
-    const double *projected_kernel, const double *radial_kernel,
-    const double *truncated_kernel, double *surf_dens, const int npart_i,
-    const int npart_j, const int kdim, const int zdim, const double threshold,
-    const int nthreads) {
+    const double *overlap_kernel, const double *q_grid, const double *u_grid,
+    const double *eta_grid, double *surf_dens, const int npart_i,
+    const int npart_j, const int qdim, const int udim, const int etadim,
+    const double threshold, const int nthreads) {
 
-  /* How many input particles should each thread get? */
   int nparti_per_thread = npart_i / nthreads;
 
 #pragma omp parallel num_threads(nthreads)
   {
-    /* Get the thread number. */
     int tid = omp_get_thread_num();
-
-    /* Get the start and end indices for this thread. */
     int start = tid * nparti_per_thread;
     int end = (tid == nthreads - 1) ? npart_i : (tid + 1) * nparti_per_thread;
 
-    /* Get this threads chunk of the results array to write to. We get a chunk
-     * here to avoid cache locality issues. */
     double *surf_dens_thread = new double[end - start]();
 
-    /* Compute the smoothed-input LOS column densities for this thread's chunk
-     * using the serial loop implementation. */
     los_loop_smoothed_serial(&pos_i[start * 3], &input_smls[start], pos_j, smls,
-                             surf_den_vals, projected_kernel, radial_kernel,
-                             truncated_kernel, surf_dens_thread, end - start,
-                             npart_j, kdim, zdim, threshold);
+                             surf_den_vals, overlap_kernel, q_grid, u_grid,
+                             eta_grid, surf_dens_thread, end - start, npart_j,
+                             qdim, udim, etadim, threshold);
 
-    /* Copy the results back to the main array. */
 #pragma omp critical
     {
       memcpy(&surf_dens[start], surf_dens_thread,
              sizeof(double) * (end - start));
     }
 
-    /* Clean up the thread's chunk of the results array. */
     delete[] surf_dens_thread;
   }
 }
 #endif
 
 /**
- * @brief Computes smoothed-input LOS surface densities with a loop.
+ * @brief Wrapper around the smoothed-input LOS loop implementations.
  *
  * @param pos_i The positions of the input particles.
  * @param input_smls The smoothing lengths of the input particles.
- * @param pos_j The positions of the contributing particles.
- * @param smls The smoothing lengths of the contributing particles.
+ * @param pos_j The positions of the source particles.
+ * @param smls The smoothing lengths of the source particles.
  * @param surf_den_vals The source values to accumulate.
- * @param projected_kernel The full projected LOS kernel lookup table.
- * @param radial_kernel The 1D radial kernel lookup table.
- * @param truncated_kernel The truncated LOS kernel lookup table.
+ * @param overlap_kernel The overlap kernel lookup table.
+ * @param q_grid The q-axis of the overlap table.
+ * @param u_grid The u-axis of the overlap table.
+ * @param eta_grid The eta-axis of the overlap table.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of input particles.
- * @param npart_j The number of contributing particles.
- * @param kdim The dimension of the kernel lookup tables.
- * @param zdim The dimension of the LOS coordinate table.
+ * @param npart_j The number of source particles.
+ * @param qdim The number of q-grid entries.
+ * @param udim The number of u-grid entries.
+ * @param etadim The number of eta-grid entries.
  * @param threshold The support threshold in units of the smoothing length.
  * @param nthreads The number of threads to use.
  */
 static void los_loop_smoothed(const double *pos_i, const double *input_smls,
                               const double *pos_j, const double *smls,
                               const double *surf_den_vals,
-                              const double *projected_kernel,
-                              const double *radial_kernel,
-                              const double *truncated_kernel, double *surf_dens,
+                              const double *overlap_kernel,
+                              const double *q_grid, const double *u_grid,
+                              const double *eta_grid, double *surf_dens,
                               const int npart_i, const int npart_j,
-                              const int kdim, const int zdim,
+                              const int qdim, const int udim, const int etadim,
                               const double threshold, const int nthreads) {
 
   tic("Loop surface density calculation with smoothed inputs");
 
 #ifdef WITH_OPENMP
-
-  /* Call the appropriate version of the function based on the number of
-   * threads. */
   if (nthreads > 1) {
     los_loop_smoothed_omp(pos_i, input_smls, pos_j, smls, surf_den_vals,
-                          projected_kernel, radial_kernel, truncated_kernel,
-                          surf_dens, npart_i, npart_j, kdim, zdim, threshold,
+                          overlap_kernel, q_grid, u_grid, eta_grid, surf_dens,
+                          npart_i, npart_j, qdim, udim, etadim, threshold,
                           nthreads);
   } else {
     los_loop_smoothed_serial(pos_i, input_smls, pos_j, smls, surf_den_vals,
-                             projected_kernel, radial_kernel, truncated_kernel,
-                             surf_dens, npart_i, npart_j, kdim, zdim,
+                             overlap_kernel, q_grid, u_grid, eta_grid,
+                             surf_dens, npart_i, npart_j, qdim, udim, etadim,
                              threshold);
   }
 #else
   (void)nthreads;
   los_loop_smoothed_serial(pos_i, input_smls, pos_j, smls, surf_den_vals,
-                           projected_kernel, radial_kernel, truncated_kernel,
-                           surf_dens, npart_i, npart_j, kdim, zdim, threshold);
+                           overlap_kernel, q_grid, u_grid, eta_grid, surf_dens,
+                           npart_i, npart_j, qdim, udim, etadim, threshold);
 #endif
 
   toc("Loop surface density calculation with smoothed inputs");
 }
 
 /**
- * @brief Computes smoothed-input LOS surface densities with a tree.
+ * @brief Compute smoothed-input LOS surface densities with a tree.
  *
- * @param root The root of the tree.
+ * Python prepares arrays, the extension traverses the source tree once per
+ * input particle, and each source particle contributes exactly once at the
+ * leaves.
+ *
+ * @param root The root of the source-particle tree.
  * @param pos_i The positions of the input particles.
  * @param input_smls The smoothing lengths of the input particles.
- * @param projected_kernel The full projected LOS kernel lookup table.
- * @param radial_kernel The 1D radial kernel lookup table.
- * @param truncated_kernel The truncated LOS kernel lookup table.
+ * @param overlap_kernel The overlap kernel lookup table.
+ * @param q_grid The q-axis of the overlap table.
+ * @param u_grid The u-axis of the overlap table.
+ * @param eta_grid The eta-axis of the overlap table.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of input particles.
- * @param kdim The dimension of the kernel lookup tables.
- * @param zdim The dimension of the LOS coordinate table.
+ * @param qdim The number of q-grid entries.
+ * @param udim The number of u-grid entries.
+ * @param etadim The number of eta-grid entries.
  * @param threshold The support threshold in units of the smoothing length.
  */
 static void los_tree_smoothed_serial(
     struct cell *root, const double *pos_i, const double *input_smls,
-    const double *projected_kernel, const double *radial_kernel,
-    const double *truncated_kernel, double *surf_dens, const int npart_i,
-    const int kdim, const int zdim, const double threshold) {
+    const double *overlap_kernel, const double *q_grid, const double *u_grid,
+    const double *eta_grid, double *surf_dens, const int npart_i,
+    const int qdim, const int udim, const int etadim, const double threshold) {
 
-  /* We will sample the input particle kernel with a fixed number of points in
-   * each dimension. This is a trade off between accuracy and speed. We want to
-   * sample enough points to get a good estimate of the kernel-averaged column
-   * density but not so many that the calculation becomes too slow. */
-  const int nxy = LOS_SMOOTHED_INPUT_NDIM;
-  const int nz = LOS_SMOOTHED_INPUT_NDIM;
-  const double dxy = 2.0 / nxy;
-  const double dz = 2.0 / nz;
-
-  /* Loop over the input particles. */
   for (int i = 0; i < npart_i; i++) {
-    const double hi = input_smls[i];
-    const double support_i = threshold * hi;
-    const double xi = pos_i[i * 3];
-    const double yi = pos_i[i * 3 + 1];
-    const double zi = pos_i[i * 3 + 2];
-
-    double particle_surf_dens = 0.0;
-    double weight_sum = 0.0;
-
-    /* Loop over the sample points in the kernel of this input particle. */
-    for (int ix = 0; ix < nxy; ix++) {
-      const double qx = -1.0 + (ix + 0.5) * dxy;
-      for (int iy = 0; iy < nxy; iy++) {
-        const double qy = -1.0 + (iy + 0.5) * dxy;
-        for (int iz = 0; iz < nz; iz++) {
-          const double qz = -1.0 + (iz + 0.5) * dz;
-          const double qr = sqrt(qx * qx + qy * qy + qz * qz);
-
-          /* Skip points outside the kernel support. */
-          if (qr >= 1.0) {
-            continue;
-          }
-
-          /* Weight each sampled point by the 3D input-particle kernel. */
-          const double input_weight = get_kernel_value(radial_kernel, kdim, qr);
-          if (input_weight == 0.0) {
-            continue;
-          }
-
-          /* Get the physical coordinates of this sampled point. */
-          const double x = xi + support_i * qx;
-          const double y = yi + support_i * qy;
-          const double z = zi + support_i * qz;
-
-          /* Query the tree for the foreground source column density seen by
-           * this sampled point. */
-          const double sample_surf_dens = calculate_los_recursive_smoothed(
-              root, x, y, z, threshold, kdim, zdim, projected_kernel,
-              truncated_kernel);
-
-          /* Accumulate the weighted contribution of this sampled point. */
-          particle_surf_dens += input_weight * sample_surf_dens;
-          weight_sum += input_weight;
-        }
-      }
-    }
-
-    /* Renormalise by the total sampled kernel weight to recover a kernel
-     * average rather than an unnormalised weighted sum. */
-    if (weight_sum > 0.0) {
-      particle_surf_dens /= weight_sum;
-    }
-
-    surf_dens[i] = particle_surf_dens;
+    surf_dens[i] = calculate_los_recursive_smoothed(
+        root, pos_i[i * 3], pos_i[i * 3 + 1], pos_i[i * 3 + 2], input_smls[i],
+        overlap_kernel, q_grid, u_grid, eta_grid, qdim, udim, etadim,
+        threshold);
   }
 }
 
 #ifdef WITH_OPENMP
 /**
- * @brief Computes smoothed-input LOS surface densities with a tree.
+ * @brief Parallel smoothed-input LOS tree implementation.
  *
- * This is the parallel version of the smoothed-input tree calculation. As in
- * the original tree-based OpenMP implementation, the input particles are split
- * into contiguous chunks, each thread traverses the shared source tree for its
- * own chunk, and the thread-local results are then copied back into the shared
- * output array.
- *
- * @param root The root of the tree.
+ * @param root The root of the source-particle tree.
  * @param pos_i The positions of the input particles.
  * @param input_smls The smoothing lengths of the input particles.
- * @param projected_kernel The full projected LOS kernel lookup table.
- * @param radial_kernel The 1D radial kernel lookup table.
- * @param truncated_kernel The truncated LOS kernel lookup table.
+ * @param overlap_kernel The overlap kernel lookup table.
+ * @param q_grid The q-axis of the overlap table.
+ * @param u_grid The u-axis of the overlap table.
+ * @param eta_grid The eta-axis of the overlap table.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of input particles.
- * @param kdim The dimension of the kernel lookup tables.
- * @param zdim The dimension of the LOS coordinate table.
+ * @param qdim The number of q-grid entries.
+ * @param udim The number of u-grid entries.
+ * @param etadim The number of eta-grid entries.
  * @param threshold The support threshold in units of the smoothing length.
  * @param nthreads The number of threads to use.
  */
 static void los_tree_smoothed_omp(struct cell *root, const double *pos_i,
                                   const double *input_smls,
-                                  const double *projected_kernel,
-                                  const double *radial_kernel,
-                                  const double *truncated_kernel,
-                                  double *surf_dens, const int npart_i,
-                                  const int kdim, const int zdim,
+                                  const double *overlap_kernel,
+                                  const double *q_grid, const double *u_grid,
+                                  const double *eta_grid, double *surf_dens,
+                                  const int npart_i, const int qdim,
+                                  const int udim, const int etadim,
                                   const double threshold, const int nthreads) {
 
-  /* How many input particles should each thread get? */
   int nparti_per_thread = npart_i / nthreads;
 
 #pragma omp parallel num_threads(nthreads)
   {
-    /* Get the thread number. */
     int tid = omp_get_thread_num();
-
-    /* Get the start and end indices for this thread. */
     int start = tid * nparti_per_thread;
     int end = (tid == nthreads - 1) ? npart_i : (tid + 1) * nparti_per_thread;
 
-    /* Get this threads chunk of the results array to write to. We get a chunk
-     * here to avoid cache locality issues. */
     double *surf_dens_thread = new double[end - start]();
 
-    /* Compute the smoothed-input LOS column densities for this thread's chunk
-     * using the serial tree implementation. */
     los_tree_smoothed_serial(root, &pos_i[start * 3], &input_smls[start],
-                             projected_kernel, radial_kernel, truncated_kernel,
-                             surf_dens_thread, end - start, kdim, zdim,
+                             overlap_kernel, q_grid, u_grid, eta_grid,
+                             surf_dens_thread, end - start, qdim, udim, etadim,
                              threshold);
 
-    /* Copy the results back to the main array. */
 #pragma omp critical
     {
       memcpy(&surf_dens[start], surf_dens_thread,
              sizeof(double) * (end - start));
     }
 
-    /* Clean up the thread's chunk of the results array. */
     delete[] surf_dens_thread;
   }
 }
 #endif
 
 /**
- * @brief Computes smoothed-input LOS surface densities with a tree.
+ * @brief Wrapper around the smoothed-input LOS tree implementations.
  *
- * @param root The root of the cell tree.
+ * @param root The root of the source-particle tree.
  * @param pos_i The positions of the input particles.
  * @param input_smls The smoothing lengths of the input particles.
- * @param projected_kernel The full projected LOS kernel lookup table.
- * @param radial_kernel The 1D radial kernel lookup table.
- * @param truncated_kernel The truncated LOS kernel lookup table.
+ * @param overlap_kernel The overlap kernel lookup table.
+ * @param q_grid The q-axis of the overlap table.
+ * @param u_grid The u-axis of the overlap table.
+ * @param eta_grid The eta-axis of the overlap table.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of input particles.
- * @param kdim The dimension of the kernel lookup tables.
- * @param zdim The dimension of the LOS coordinate table.
+ * @param qdim The number of q-grid entries.
+ * @param udim The number of u-grid entries.
+ * @param etadim The number of eta-grid entries.
  * @param threshold The support threshold in units of the smoothing length.
  * @param nthreads The number of threads to use.
  */
 static void los_tree_smoothed(struct cell *root, const double *pos_i,
                               const double *input_smls,
-                              const double *projected_kernel,
-                              const double *radial_kernel,
-                              const double *truncated_kernel, double *surf_dens,
-                              const int npart_i, const int kdim, const int zdim,
-                              const double threshold, const int nthreads) {
+                              const double *overlap_kernel,
+                              const double *q_grid, const double *u_grid,
+                              const double *eta_grid, double *surf_dens,
+                              const int npart_i, const int qdim, const int udim,
+                              const int etadim, const double threshold,
+                              const int nthreads) {
 
   tic("Recursive surface density calculation with smoothed inputs");
 
 #ifdef WITH_OPENMP
-  /* Call the appropriate version of the function based on the number of
-   * threads. */
   if (nthreads > 1) {
-    los_tree_smoothed_omp(root, pos_i, input_smls, projected_kernel,
-                          radial_kernel, truncated_kernel, surf_dens, npart_i,
-                          kdim, zdim, threshold, nthreads);
+    los_tree_smoothed_omp(root, pos_i, input_smls, overlap_kernel, q_grid,
+                          u_grid, eta_grid, surf_dens, npart_i, qdim, udim,
+                          etadim, threshold, nthreads);
   } else {
-    los_tree_smoothed_serial(root, pos_i, input_smls, projected_kernel,
-                             radial_kernel, truncated_kernel, surf_dens,
-                             npart_i, kdim, zdim, threshold);
+    los_tree_smoothed_serial(root, pos_i, input_smls, overlap_kernel, q_grid,
+                             u_grid, eta_grid, surf_dens, npart_i, qdim, udim,
+                             etadim, threshold);
   }
 #else
   (void)nthreads;
-  los_tree_smoothed_serial(root, pos_i, input_smls, projected_kernel,
-                           radial_kernel, truncated_kernel, surf_dens, npart_i,
-                           kdim, zdim, threshold);
+  los_tree_smoothed_serial(root, pos_i, input_smls, overlap_kernel, q_grid,
+                           u_grid, eta_grid, surf_dens, npart_i, qdim, udim,
+                           etadim, threshold);
 #endif
 
   toc("Recursive surface density calculation with smoothed inputs");
 }
 
 /**
- * @brief Computes the smoothed-input LOS surface densities for each particle.
+ * @brief Compute smoothed-input LOS surface densities for each particle.
  *
- * This will calculate the LOS surface density of an arbitrary property of one
- * set of particles for the positions of another set of particles, averaging
- * the answer across the full support of the input-particle kernel.
+ * This will calculate the line-of-sight surface density of an arbitrary
+ * property of one set of particles for the positions of another set of
+ * particles, averaging the answer across the support of each input particle.
  *
- * @param np_kernel The projected kernel to use for the calculation.
- * @param np_radial_kernel The 3D radial input-kernel lookup table.
- * @param np_truncated_kernel The cumulative truncated LOS kernel lookup table.
+ * The smoothed-input path uses the precomputed overlap kernel table together
+ * with its q, u, and eta coordinate axes. The public Python layer prepares
+ * those arrays, and this extension dispatches to either the pairwise loop or
+ * the tree walk.
+ *
+ * @param np_overlap_kernel The overlap kernel lookup table.
+ * @param np_q_grid The q-axis of the overlap table.
+ * @param np_u_grid The u-axis of the overlap table.
+ * @param np_eta_grid The eta-axis of the overlap table.
  * @param np_pos_i The positions of the input particles.
  */
 PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
@@ -1214,16 +1111,16 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  int npart_i, npart_j, kdim, zdim, force_loop, min_count, nthreads;
+  int npart_i, npart_j, qdim, udim, etadim, force_loop, min_count, nthreads;
   double threshold;
-  PyArrayObject *np_kernel, *np_radial_kernel, *np_truncated_kernel, *np_pos_i,
-      *np_input_smls, *np_pos_j, *np_smls, *np_surf_den_val;
+  PyArrayObject *np_overlap_kernel, *np_q_grid, *np_u_grid, *np_eta_grid,
+      *np_pos_i, *np_input_smls, *np_pos_j, *np_smls, *np_surf_den_val;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOOiiiidiii", &np_kernel, &np_radial_kernel,
-                        &np_truncated_kernel, &np_pos_i, &np_input_smls,
-                        &np_pos_j, &np_smls, &np_surf_den_val, &npart_i,
-                        &npart_j, &kdim, &zdim, &threshold, &force_loop,
-                        &min_count, &nthreads)) {
+  if (!PyArg_ParseTuple(args, "OOOOOOOOOiiiiidiii", &np_overlap_kernel,
+                        &np_q_grid, &np_u_grid, &np_eta_grid, &np_pos_i,
+                        &np_input_smls, &np_pos_j, &np_smls, &np_surf_den_val,
+                        &npart_i, &npart_j, &qdim, &udim, &etadim, &threshold,
+                        &force_loop, &min_count, &nthreads)) {
     return NULL;
   }
 
@@ -1243,24 +1140,19 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
                     "densities with must be greater than zero.");
     return NULL;
   }
-  if (kdim == 0) {
+  if (qdim == 0 || udim == 0 || etadim == 0) {
     PyErr_SetString(PyExc_ValueError,
-                    "The kernel dimension must be greater than zero.");
-    return NULL;
-  }
-  if (zdim == 0) {
-    PyErr_SetString(PyExc_ValueError,
-                    "The truncated kernel dimension must be greater than "
+                    "All overlap kernel dimensions must be greater than "
                     "zero.");
     return NULL;
   }
 
   /* Extract pointers to the actual data in the numpy arrays. */
-  const double *kernel = extract_data_double(np_kernel, "kernel");
-  const double *radial_kernel =
-      extract_data_double(np_radial_kernel, "radial_kernel");
-  const double *truncated_kernel =
-      extract_data_double(np_truncated_kernel, "truncated_kernel");
+  const double *overlap_kernel =
+      extract_data_double(np_overlap_kernel, "overlap_kernel");
+  const double *q_grid = extract_data_double(np_q_grid, "q_grid");
+  const double *u_grid = extract_data_double(np_u_grid, "u_grid");
+  const double *eta_grid = extract_data_double(np_eta_grid, "eta_grid");
   const double *pos_i = extract_data_double(np_pos_i, "pos_i");
   const double *input_smls = extract_data_double(np_input_smls, "input_smls");
   const double *pos_j = extract_data_double(np_pos_j, "pos_j");
@@ -1270,9 +1162,9 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
 
   /* One of the data extractions failed and set a Python error. Return NULL
    * to propagate the exception back to Python. */
-  if (kernel == NULL || radial_kernel == NULL || truncated_kernel == NULL ||
-      pos_i == NULL || input_smls == NULL || pos_j == NULL || smls == NULL ||
-      surf_den_val == NULL) {
+  if (overlap_kernel == NULL || q_grid == NULL || u_grid == NULL ||
+      eta_grid == NULL || pos_i == NULL || input_smls == NULL ||
+      pos_j == NULL || smls == NULL || surf_den_val == NULL) {
     return NULL;
   }
 
@@ -1282,15 +1174,17 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
       (PyArrayObject *)PyArray_ZEROS(1, np_dims, NPY_DOUBLE, 0);
   double *surf_dens = static_cast<double *>(PyArray_DATA(np_surf_dens));
 
-  /* No point constructing cells if there aren't enough source particles to
-   * make a useful tree below depth 0, or if we've explicitly been told to use
-   * the loop implementation. */
+  /* No point constructing a source tree if there are too few source particles
+   * to justify it, or if we have explicitly been asked to use the loop path. */
   if (force_loop || npart_j < min_count) {
 
-    /* Use the simple sampled-input loop over input and source particles. */
-    los_loop_smoothed(pos_i, input_smls, pos_j, smls, surf_den_val, kernel,
-                      radial_kernel, truncated_kernel, surf_dens, npart_i,
-                      npart_j, kdim, zdim, threshold, nthreads);
+    /* Use the simple pairwise loop over input and source particles. */
+    tic("Dispatching smoothed LOS loop path");
+    los_loop_smoothed(pos_i, input_smls, pos_j, smls, surf_den_val,
+                      overlap_kernel, q_grid, u_grid, eta_grid, surf_dens,
+                      npart_i, npart_j, qdim, udim, etadim, threshold,
+                      nthreads);
+    toc("Dispatching smoothed LOS loop path");
 
     toc("Calculating smoothed surface densities");
 
@@ -1299,6 +1193,7 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
 
   /* Allocate the root cell. The tree construction routine will dynamically
    * allocate progeny cells beneath this root as required. */
+  tic("Constructing smoothed LOS source tree");
   int ncells = 1;
   int maxdepth = MAX_DEPTH;
   struct cell *root = new struct cell[1];
@@ -1306,14 +1201,19 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
   /* Construct the source-particle cell tree. */
   construct_cell_tree(pos_j, smls, surf_den_val, npart_j, root, ncells,
                       maxdepth, min_count);
+  toc("Constructing smoothed LOS source tree");
 
   /* Calculate the smoothed LOS surface densities using the tree. */
-  los_tree_smoothed(root, pos_i, input_smls, kernel, radial_kernel,
-                    truncated_kernel, surf_dens, npart_i, kdim, zdim, threshold,
+  tic("Dispatching smoothed LOS tree path");
+  los_tree_smoothed(root, pos_i, input_smls, overlap_kernel, q_grid, u_grid,
+                    eta_grid, surf_dens, npart_i, qdim, udim, etadim, threshold,
                     nthreads);
+  toc("Dispatching smoothed LOS tree path");
 
-  /* Clean up the cell tree. */
+  /* Clean up the source-particle cell tree. */
+  tic("Cleaning up smoothed LOS source tree");
   cleanup_cell_tree(root);
+  toc("Cleaning up smoothed LOS source tree");
 
   toc("Calculating smoothed surface densities");
 
