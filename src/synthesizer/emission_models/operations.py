@@ -933,40 +933,28 @@ class Combination:
             dict:
                 The dictionary of lines.
         """
-        # Get the right out lines dict and create the right entry
-        out_lines = {}
-
-        # Get the right exist lines dict and create the output lines
         if this_model.per_particle:
             in_lines = particle_lines
-            out_lines = LineCollection(
-                line_ids=particle_lines[
-                    this_model._combine_labels[0]
-                ].line_ids,
-                lam=particle_lines[this_model._combine_labels[0]].lam,
-                lum=np.zeros_like(
-                    particle_lines[this_model._combine_labels[0]].luminosity
-                ),
-                cont=np.zeros_like(
-                    particle_lines[this_model._combine_labels[0]].continuum
-                ),
-            )
         else:
             in_lines = lines
-            out_lines = LineCollection(
-                line_ids=lines[this_model._combine_labels[0]].line_ids,
-                lam=lines[this_model._combine_labels[0]].lam,
-                lum=np.zeros_like(
-                    lines[this_model._combine_labels[0]].luminosity
-                ),
-                cont=np.zeros_like(
-                    lines[this_model._combine_labels[0]].continuum
-                ),
-            )
 
-        # Loop over combination models adding the lines
+        template = in_lines[this_model._combine_labels[0]]
+        out_luminosity = np.zeros_like(template._luminosity)
+        out_continuum = np.zeros_like(template._continuum)
+
+        # Combine raw arrays directly and construct one LineCollection at the
+        # end to avoid repeated constructor and metadata work in hot loops.
         for combine_label in this_model._combine_labels:
-            out_lines += in_lines[combine_label]
+            combine_lines = in_lines[combine_label]
+            out_luminosity += combine_lines._luminosity
+            out_continuum += combine_lines._continuum
+
+        out_lines = LineCollection(
+            line_ids=template.line_ids,
+            lam=template.lam,
+            lum=out_luminosity * template.luminosity.units,
+            cont=out_continuum * template.continuum.units,
+        )
 
         # Cache the model on the emitter
         cache_model_params(this_model, emitter)
