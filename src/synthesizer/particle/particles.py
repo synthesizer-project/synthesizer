@@ -1009,8 +1009,26 @@ class Particles:
             )
 
         # Set up the kernel inputs to the C function.
-        kernel = np.ascontiguousarray(kernel, dtype=np.float64)
+        if not hasattr(kernel, "get_kernel") or not hasattr(
+            kernel, "get_truncated_los_kernel"
+        ):
+            raise exceptions.InconsistentArguments(
+                "LOS column densities require a Kernel instance so the "
+                "projected and truncated LOS kernel tables are available."
+            )
+
+        projected_kernel = np.ascontiguousarray(
+            kernel.get_kernel(), dtype=np.float64
+        )
+        truncated_kernel, _, z_grid = kernel.get_truncated_los_kernel()
+        truncated_kernel = np.ascontiguousarray(
+            truncated_kernel, dtype=np.float64
+        )
+
+        # Set up the kernel inputs to the C function.
+        kernel = projected_kernel
         kdim = kernel.size
+        zdim = truncated_kernel.shape[1]
 
         # Get particle counts
         npart_i = self.nparticles
@@ -1034,6 +1052,7 @@ class Particles:
 
         return (
             kernel,
+            truncated_kernel,
             pos_i,
             pos_j,
             smls,
@@ -1041,6 +1060,7 @@ class Particles:
             npart_i,
             npart_j,
             kdim,
+            zdim,
             threshold,
             force_loop,
             min_count,
@@ -1071,11 +1091,10 @@ class Particles:
                 The other particles to calculate the column density with.
             density_attr (str):
                 The attribute to use to calculate the column density.
-            kernel (np.ndarray of float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance. LOS column
+                densities require both the projected kernel table and the
+                truncated LOS kernel table.
             column_density_attr (str):
                 The attribute to store the column density in on the Particles
                 instance. If None, the column density will not be stored. By
