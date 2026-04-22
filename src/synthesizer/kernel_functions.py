@@ -49,7 +49,13 @@ class Kernel:
     particles respectively.
     """
 
-    def __init__(self, name="sph_anarchy", binsize=10000):
+    def __init__(
+        self,
+        name="sph_anarchy",
+        binsize=10000,
+        truncated_q_binsize=None,
+        truncated_z_binsize=1000,
+    ):
         """Initialize the kernel class.
 
         Args:
@@ -57,10 +63,21 @@ class Kernel:
                 The name of the kernel to use. Options are: "uniform",
                 "sph_anarchy", "gadget_2", "cubic", "quintic".
             binsize (int):
-                The number of bins to use for the kernel tables.
+                The number of bins to use for the projected LOS kernel table.
+            truncated_q_binsize (int, optional):
+                The number of bins to use along the impact-parameter axis of
+                the truncated LOS kernel table. If omitted this falls back to
+                ``binsize``.
+            truncated_z_binsize (int):
+                The number of bins to use along the LOS truncation axis of the
+                truncated LOS kernel table.
         """
         self.name = name
         self.binsize = binsize
+        self.truncated_q_binsize = (
+            binsize if truncated_q_binsize is None else truncated_q_binsize
+        )
+        self.truncated_z_binsize = truncated_z_binsize
 
         # Set the kernel function based on the provided name.
         if name == "uniform":
@@ -80,15 +97,27 @@ class Kernel:
         self._projected_kernel = None
         self._truncated_los_kernel = None
 
-    def _get_bins(self):
+    def _get_bins(self, binsize=None):
         """Get the dimensionless radial bins used for kernel lookups.
+
+        Args:
+            binsize (int, optional):
+                The number of bins to generate. If omitted this uses the
+                projected-kernel resolution.
 
         Returns:
             np.ndarray: The dimensionless bins spanning the kernel support.
         """
-        bins = np.arange(0, 1.0, 1.0 / self.binsize)
+        if binsize is None:
+            binsize = self.binsize
+
+        bins = np.arange(0, 1.0, 1.0 / binsize)
         bins = np.append(bins, 1.0)
         return bins
+
+    def _get_z_bins(self):
+        """Get the dimensionless LOS truncation bins for the 2D lookup."""
+        return np.linspace(-1.0, 1.0, self.truncated_z_binsize + 1)
 
     def W_dz(self, z, b):
         """Calculate the kernel density function W(r) as a function of z.
@@ -156,14 +185,14 @@ class Kernel:
         """
         # Return the cached kernel if it has already been computed.
         if self._truncated_los_kernel is not None:
-            bins = self._get_bins()
-            z_bins = np.linspace(-1.0, 1.0, 2 * self.binsize + 1)
+            bins = self._get_bins(self.truncated_q_binsize)
+            z_bins = self._get_z_bins()
             return self._truncated_los_kernel.copy(), bins, z_bins
 
         # Get the projected-separation and LOS-coordinate bins and set up the
         # output.
-        bins = self._get_bins()
-        z_bins = np.linspace(-1.0, 1.0, 2 * self.binsize + 1)
+        bins = self._get_bins(self.truncated_q_binsize)
+        z_bins = self._get_z_bins()
         kernel = np.zeros((bins.size, z_bins.size))
 
         # For each projected separation, integrate the kernel cumulatively
