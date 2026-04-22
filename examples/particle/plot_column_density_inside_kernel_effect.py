@@ -163,6 +163,8 @@ axes[1].plot([0.0, max_col], [0.0, max_col], "k--", lw=1, label="1:1 line")
 axes[1].set_xlabel("Fully-behind column density")
 axes[1].set_ylabel("Inside-kernel column density")
 axes[1].legend(loc="upper left")
+axes[1].set_yscale("log")
+axes[1].set_xscale("log")
 
 plt.tight_layout()
 plt.show()
