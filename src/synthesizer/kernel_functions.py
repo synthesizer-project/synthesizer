@@ -15,6 +15,7 @@ Available kernels include:
 import numpy as np
 from scipy import integrate
 
+from synthesizer.extensions.kernel import compute_truncated_los_kernel
 from synthesizer.utils.operation_timers import timed
 
 
@@ -193,19 +194,11 @@ class Kernel:
         # output.
         bins = self._get_bins(self.truncated_q_binsize)
         z_bins = self._get_z_bins()
-        kernel = np.zeros((bins.size, z_bins.size))
-
-        # For each projected separation, integrate the kernel cumulatively
-        # along the LOS coordinate.
-        for ii, impact_parameter in enumerate(bins):
-            integrand = np.zeros_like(z_bins)
-            for iz, z_value in enumerate(z_bins):
-                radius = np.sqrt(z_value**2 + impact_parameter**2)
-                if radius < 1.0:
-                    integrand[iz] = self.f(radius)
-            kernel[ii] = integrate.cumulative_trapezoid(
-                integrand, z_bins, initial=0.0
-            )
+        kernel = compute_truncated_los_kernel(
+            np.ascontiguousarray(bins, dtype=np.float64),
+            np.ascontiguousarray(z_bins, dtype=np.float64),
+            self.name,
+        )
 
         # Cache it.
         self._truncated_los_kernel = kernel
