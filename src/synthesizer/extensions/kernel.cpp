@@ -1,5 +1,5 @@
 /******************************************************************************
- * C extension helpers for LOS kernel-table construction.
+ * C extension helpers for LOS kernel evaluation and table construction.
  *****************************************************************************/
 
 /* C headers. */
@@ -20,7 +20,15 @@
 #include "property_funcs.h"
 
 /**
- * @brief Evaluate the uniform kernel.
+ * @brief Evaluate the uniform kernel at a dimensionless radius.
+ *
+ * All kernel functions in this file assume the public ``Kernel`` convention
+ * used on the Python side: the support radius is normalised to unity and the
+ * returned value is the 3D kernel density at the requested radius.
+ *
+ * @param r The dimensionless radius.
+ *
+ * @return The kernel value.
  */
 static inline double uniform(const double r) {
   if (r < 1.0) {
@@ -30,7 +38,11 @@ static inline double uniform(const double r) {
 }
 
 /**
- * @brief Evaluate the SPH Anarchy kernel.
+ * @brief Evaluate the SPH Anarchy kernel at a dimensionless radius.
+ *
+ * @param r The dimensionless radius.
+ *
+ * @return The kernel value.
  */
 static inline double sph_anarchy(const double r) {
   if (r <= 1.0) {
@@ -43,7 +55,11 @@ static inline double sph_anarchy(const double r) {
 }
 
 /**
- * @brief Evaluate the Gadget-2 kernel.
+ * @brief Evaluate the Gadget-2 kernel at a dimensionless radius.
+ *
+ * @param r The dimensionless radius.
+ *
+ * @return The kernel value.
  */
 static inline double gadget_2(const double r) {
   if (r < 0.5) {
@@ -58,7 +74,11 @@ static inline double gadget_2(const double r) {
 }
 
 /**
- * @brief Evaluate the cubic kernel.
+ * @brief Evaluate the cubic kernel at a dimensionless radius.
+ *
+ * @param r The dimensionless radius.
+ *
+ * @return The kernel value.
  */
 static inline double cubic(const double r) {
   if (r < 0.5) {
@@ -73,7 +93,11 @@ static inline double cubic(const double r) {
 }
 
 /**
- * @brief Evaluate the quintic kernel.
+ * @brief Evaluate the quintic kernel at a dimensionless radius.
+ *
+ * @param r The dimensionless radius.
+ *
+ * @return The kernel value.
  */
 static inline double quintic(const double r) {
   if (r < 0.333333333) {
@@ -97,7 +121,14 @@ static inline double quintic(const double r) {
 typedef double (*kernel_func)(double);
 
 /**
- * @brief Map a kernel name onto the corresponding analytic function.
+ * @brief Map a public kernel name onto the corresponding analytic function.
+ *
+ * Keeping the name dispatch in one place ensures the Python wrappers and the
+ * truncated LOS table builder both use exactly the same implementation.
+ *
+ * @param name The public kernel name.
+ *
+ * @return Pointer to the matching kernel function, or ``NULL`` if unknown.
  */
 static kernel_func get_kernel_function(const char *name) {
   if (strcmp(name, "uniform") == 0) {
@@ -122,7 +153,16 @@ static kernel_func get_kernel_function(const char *name) {
  * @brief Build the truncated LOS kernel lookup table.
  *
  * The output table is stored with projected-separation index first and
- * LOS-coordinate index second.
+ * LOS-coordinate index second. For each projected separation we walk once
+ * along the LOS grid and accumulate the trapezoidal integral in place. This
+ * avoids the large temporary Python arrays that dominated the old build path.
+ *
+ * @param kernel The output kernel table in row-major order.
+ * @param q_grid The projected-separation grid.
+ * @param z_grid The LOS truncation grid.
+ * @param qdim The number of projected-separation bins.
+ * @param zdim The number of LOS bins.
+ * @param func The analytic kernel function to evaluate.
  */
 static void build_truncated_los_kernel(double *kernel, const double *q_grid,
                                        const double *z_grid,
@@ -137,6 +177,9 @@ static void build_truncated_los_kernel(double *kernel, const double *q_grid,
     double prev_value = 0.0;
     double prev_z = z_grid[0];
 
+    /* The cumulative integral is defined to be zero at the first tabulated
+     * LOS coordinate. We still evaluate the kernel there so the first
+     * trapezoid uses the correct left-hand endpoint value. */
     {
       const double radius = sqrt(prev_z * prev_z + q * q);
       if (radius < 1.0) {
@@ -163,45 +206,122 @@ static void build_truncated_los_kernel(double *kernel, const double *q_grid,
 }
 
 /**
- * @brief Python wrapper for truncated LOS kernel-table construction.
+ * @brief Evaluate a named kernel on a 1D radius array.
  *
- * Args:
- *   q_grid: 1D float64 C-contiguous projected-separation grid.
- *   z_grid: 1D float64 C-contiguous LOS-coordinate grid.
- *   kernel_name: Name of the analytic kernel to evaluate.
+ * This exposes the analytic kernel implementations to Python so the public
+ * ``uniform`` / ``cubic`` / etc. helpers can delegate to the same code used by
+ * the C++ table builders instead of duplicating the formulas.
  *
- * Returns:
- *   A 2D float64 NumPy array with shape ``(q_grid.size, z_grid.size)``.
+ * @param self The module instance (unused).
+ * @param args Python arguments containing a 1D radius array and kernel name.
+ *
+ * @return A 1D float64 NumPy array of kernel values.
  */
-PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
+PyObject *evaluate_kernel(PyObject *self, PyObject *args) {
 
   (void)self;
 
-  PyArrayObject *np_q_grid, *np_z_grid;
+  /* Parse the Python inputs: a contiguous radius array and the public kernel
+   * name to evaluate. */
+  PyArrayObject *np_radii;
   const char *kernel_name;
 
-  if (!PyArg_ParseTuple(args, "OOs", &np_q_grid, &np_z_grid, &kernel_name)) {
+  if (!PyArg_ParseTuple(args, "O!s", &PyArray_Type, &np_radii, &kernel_name)) {
     return NULL;
   }
 
-  if (PyArray_NDIM(np_q_grid) != 1 || PyArray_NDIM(np_z_grid) != 1) {
-    PyErr_SetString(PyExc_ValueError,
-                    "q_grid and z_grid must both be 1D arrays.");
+  /* The evaluator is intentionally simple: one radius axis in, one values
+   * axis out. Reject higher-dimensional inputs here rather than silently
+   * flattening them inside the extension. */
+  if (PyArray_NDIM(np_radii) != 1) {
+    PyErr_SetString(PyExc_ValueError, "radii must be a 1D array.");
     return NULL;
   }
 
-  const double *q_grid = extract_data_double(np_q_grid, "q_grid");
-  const double *z_grid = extract_data_double(np_z_grid, "z_grid");
-  if (q_grid == NULL || z_grid == NULL) {
+  /* Extract a raw pointer to the float64 radius data. The shared property
+   * helper also checks the dtype and contiguity requirements for us. */
+  const double *radii = extract_data_double(np_radii, "radii");
+  if (radii == NULL) {
     return NULL;
   }
 
+  /* Resolve the analytic kernel once so the loop body only pays a direct
+   * function-pointer call for each tabulated radius. */
   kernel_func func = get_kernel_function(kernel_name);
   if (func == NULL) {
     PyErr_SetString(PyExc_ValueError, "Kernel name not defined");
     return NULL;
   }
 
+  /* Allocate the NumPy output array that will hold the evaluated kernel
+   * values one-for-one with the input radii. */
+  const int ndim = static_cast<int>(PyArray_DIM(np_radii, 0));
+  npy_intp dims[1] = {ndim};
+  PyArrayObject *np_values =
+      (PyArrayObject *)PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
+  double *values = static_cast<double *>(PyArray_DATA(np_values));
+
+  /* The evaluation is embarrassingly parallel across radii, so when OpenMP is
+   * available we can distribute the loop without any synchronisation. */
+#ifdef WITH_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+  for (int i = 0; i < ndim; i++) {
+    values[i] = func(radii[i]);
+  }
+
+  /* Transfer ownership of the newly created array back to Python. */
+  return Py_BuildValue("N", np_values);
+}
+
+/**
+ * @brief Python wrapper for truncated LOS kernel-table construction.
+ *
+ * Python prepares the q and z lookup grids, while this wrapper selects the
+ * analytic kernel and returns the cumulative LOS table as a dense NumPy array.
+ *
+ * @param self The module instance (unused).
+ * @param args Python arguments containing the q-grid, z-grid, and kernel name.
+ *
+ * @return A 2D float64 NumPy array with shape ``(q_grid.size, z_grid.size)``.
+ */
+PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
+
+  (void)self;
+
+  /* Parse the precomputed q-grid and z-grid supplied by Python along with the
+   * public kernel name that selects the analytic kernel shape. */
+  PyArrayObject *np_q_grid, *np_z_grid;
+  const char *kernel_name;
+
+  if (!PyArg_ParseTuple(args, "O!O!s", &PyArray_Type, &np_q_grid,
+                        &PyArray_Type, &np_z_grid, &kernel_name)) {
+    return NULL;
+  }
+
+  /* The truncated LOS table is defined on a rectilinear q-z grid, so reject
+   * anything other than two 1D lookup axes here. */
+  if (PyArray_NDIM(np_q_grid) != 1 || PyArray_NDIM(np_z_grid) != 1) {
+    PyErr_SetString(PyExc_ValueError,
+                    "q_grid and z_grid must both be 1D arrays.");
+    return NULL;
+  }
+
+  /* Extract the raw float64 axis data after validating dtype and contiguity. */
+  const double *q_grid = extract_data_double(np_q_grid, "q_grid");
+  const double *z_grid = extract_data_double(np_z_grid, "z_grid");
+  if (q_grid == NULL || z_grid == NULL) {
+    return NULL;
+  }
+
+  /* Resolve the analytic kernel once before entering the numeric builder. */
+  kernel_func func = get_kernel_function(kernel_name);
+  if (func == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Kernel name not defined");
+    return NULL;
+  }
+
+  /* Allocate the dense output table using the supplied q and z grid sizes. */
   const int qdim = static_cast<int>(PyArray_DIM(np_q_grid, 0));
   const int zdim = static_cast<int>(PyArray_DIM(np_z_grid, 0));
 
@@ -210,12 +330,17 @@ PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
       (PyArrayObject *)PyArray_ZEROS(2, dims, NPY_DOUBLE, 0);
   double *kernel = static_cast<double *>(PyArray_DATA(np_kernel));
 
+  /* Fill the output table in place using the shared C++ kernel evaluator. */
   build_truncated_los_kernel(kernel, q_grid, z_grid, qdim, zdim, func);
 
+  /* Transfer ownership of the completed NumPy array back to Python. */
   return Py_BuildValue("N", np_kernel);
 }
 
+/* Expose the Python-callable entry points for this extension module. */
 static PyMethodDef KernelMethods[] = {
+    {"evaluate_kernel", (PyCFunction)evaluate_kernel, METH_VARARGS,
+     "Evaluate a named kernel on a 1D array of radii."},
     {"compute_truncated_los_kernel", (PyCFunction)compute_truncated_los_kernel,
      METH_VARARGS, "Build the truncated LOS kernel table."},
     {NULL, NULL, 0, NULL}};
@@ -232,6 +357,8 @@ static struct PyModuleDef moduledef = {
     NULL,
 };
 
+/* Create the module and initialise the NumPy C API before any of the wrapped
+ * entry points are called from Python. */
 PyMODINIT_FUNC PyInit_kernel(void) {
   PyObject *m = PyModule_Create(&moduledef);
   if (m == NULL) {

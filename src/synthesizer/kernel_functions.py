@@ -15,8 +15,34 @@ Available kernels include:
 import numpy as np
 from scipy import integrate
 
-from synthesizer.extensions.kernel import compute_truncated_los_kernel
+from synthesizer.extensions.kernel import (
+    compute_truncated_los_kernel,
+    evaluate_kernel,
+)
 from synthesizer.utils.operation_timers import timed
+
+
+def _call_kernel_function(kernel_name, r):
+    """Evaluate a named kernel via the shared C++ implementation.
+
+    Args:
+        kernel_name (str):
+            The public kernel name.
+        r (float or np.ndarray):
+            The dimensionless radius or radii to evaluate.
+
+    Returns:
+        float or np.ndarray:
+            The kernel value(s), preserving scalar inputs as scalars.
+    """
+    input_array = np.asarray(r, dtype=np.float64)
+    radii = np.ascontiguousarray(np.atleast_1d(input_array).ravel())
+    values = evaluate_kernel(radii, kernel_name)
+
+    if input_array.ndim == 0:
+        return float(values[0])
+
+    return values.reshape(input_array.shape)
 
 
 class Kernel:
@@ -230,9 +256,7 @@ def uniform(r):
     Returns:
         float: The value of the uniform kernel.
     """
-    if r < 1.0:
-        return 1.0 / ((4.0 / 3.0) * np.pi)
-    return 0.0
+    return _call_kernel_function("uniform", r)
 
 
 def sph_anarchy(r):
@@ -244,11 +268,7 @@ def sph_anarchy(r):
     Returns:
         float: The value of the SPH Anarchy kernel.
     """
-    if r <= 1.0:
-        return (21.0 / (2.0 * np.pi)) * (
-            (1.0 - r) * (1.0 - r) * (1.0 - r) * (1.0 - r) * (1.0 + 4.0 * r)
-        )
-    return 0.0
+    return _call_kernel_function("sph_anarchy", r)
 
 
 def gadget_2(r):
@@ -260,11 +280,7 @@ def gadget_2(r):
     Returns:
         float: The value of the Gadget-2 kernel.
     """
-    if r < 0.5:
-        return (8.0 / np.pi) * (1.0 - 6 * (r * r) + 6 * (r * r * r))
-    if r < 1.0:
-        return (16.0 / np.pi) * ((1.0 - r) * (1.0 - r) * (1.0 - r))
-    return 0.0
+    return _call_kernel_function("gadget_2", r)
 
 
 def cubic(r):
@@ -276,11 +292,7 @@ def cubic(r):
     Returns:
         float: The value of the cubic kernel.
     """
-    if r < 0.5:
-        return 2.546479089470 + 15.278874536822 * (r - 1.0) * r * r
-    if r < 1.0:
-        return 5.092958178941 * (1.0 - r) * (1.0 - r) * (1.0 - r)
-    return 0.0
+    return _call_kernel_function("cubic", r)
 
 
 def quintic(r):
@@ -292,31 +304,4 @@ def quintic(r):
     Returns:
         float: The value of the quintic kernel.
     """
-    if r < 0.333333333:
-        return 27.0 * (
-            6.4457752 * r * r * r * r * (1.0 - r)
-            - 1.4323945 * r * r
-            + 0.17507044
-        )
-    if r < 0.666666667:
-        return 27.0 * (
-            3.2228876 * r * r * r * r * (r - 3.0)
-            + 10.7429587 * r * r * r
-            - 5.01338071 * r * r
-            + 0.5968310366 * r
-            + 0.1352817016
-        )
-    if r < 1.0:
-        return (
-            27.0
-            * 0.64457752
-            * (
-                -r * r * r * r * r
-                + 5.0 * r * r * r * r
-                - 10.0 * r * r * r
-                + 10.0 * r * r
-                - 5.0 * r
-                + 1.0
-            )
-        )
-    return 0.0
+    return _call_kernel_function("quintic", r)
