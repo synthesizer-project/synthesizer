@@ -12,11 +12,46 @@
 
 /* Local includes. */
 #include "cpp_to_python.h"
+#include "integration.h"
 #include "property_funcs.h"
 #include "timers.h"
 #ifdef ATOMIC_TIMING
 #include "timers_init.h"
 #endif
+
+double trapz_1d(const double *x, const double *y, size_t n) {
+  double integral = 0.0;
+
+  if (n < 2) {
+    return integral;
+  }
+
+  for (size_t j = 0; j < n - 1; ++j) {
+    integral += 0.5 * (x[j + 1] - x[j]) * (y[j + 1] + y[j]);
+  }
+
+  return integral;
+}
+
+double simps_1d(const double *x, const double *y, size_t n) {
+  double integral = 0.0;
+
+  if (n < 2) {
+    return integral;
+  }
+
+  for (size_t j = 0; j < (n - 1) / 2; ++j) {
+    const size_t k = 2 * j;
+    integral +=
+        (x[k + 2] - x[k]) * (y[k] + 4 * y[k + 1] + y[k + 2]) / 6.0;
+  }
+
+  if ((n - 1) % 2 != 0) {
+    integral += 0.5 * (x[n - 1] - x[n - 2]) * (y[n - 1] + y[n - 2]);
+  }
+
+  return integral;
+}
 
 /**
  * @brief Serial trapezoidal integration.
@@ -29,10 +64,7 @@ static double *trapz_last_axis_serial(double *x, double *y, npy_intp n,
   double *integral = (double *)calloc(num_elements, sizeof(double));
 
   for (npy_intp i = 0; i < num_elements; ++i) {
-    for (npy_intp j = 0; j < n - 1; ++j) {
-      integral[i] +=
-          0.5 * (x[j + 1] - x[j]) * (y[i * n + j + 1] + y[i * n + j]);
-    }
+    integral[i] = trapz_1d(x, y + i * n, static_cast<size_t>(n));
   }
 
   return integral;
@@ -53,10 +85,7 @@ static double *trapz_last_axis_parallel(double *x, double *y, npy_intp n,
 #pragma omp parallel for num_threads(nthreads)                                 \
     reduction(+ : integral[ : num_elements])
   for (npy_intp i = 0; i < num_elements; ++i) {
-    for (npy_intp j = 0; j < n - 1; ++j) {
-      integral[i] +=
-          0.5 * (x[j + 1] - x[j]) * (y[i * n + j + 1] + y[i * n + j]);
-    }
+    integral[i] = trapz_1d(x, y + i * n, static_cast<size_t>(n));
   }
   return integral;
 }
@@ -145,19 +174,7 @@ static double *simps_last_axis_serial(double *x, double *y, npy_intp n,
   double *integral = (double *)calloc(num_elements, sizeof(double));
 
   for (npy_intp i = 0; i < num_elements; ++i) {
-    if (n < 2) {
-      continue; /* If the array has less than 2 elements, skip */
-    }
-    for (npy_intp j = 0; j < (n - 1) / 2; ++j) {
-      npy_intp k = 2 * j;
-      integral[i] += (x[k + 2] - x[k]) *
-                     (y[i * n + k] + 4 * y[i * n + k + 1] + y[i * n + k + 2]) /
-                     6.0;
-    }
-    if ((n - 1) % 2 != 0) {
-      integral[i] +=
-          0.5 * (x[n - 1] - x[n - 2]) * (y[i * n + n - 1] + y[i * n + n - 2]);
-    }
+    integral[i] = simps_1d(x, y + i * n, static_cast<size_t>(n));
   }
 
   return integral;
@@ -178,20 +195,7 @@ static double *simps_last_axis_parallel(double *x, double *y, npy_intp n,
 #pragma omp parallel for num_threads(nthreads)                                 \
     reduction(+ : integral[ : num_elements])
   for (npy_intp i = 0; i < num_elements; ++i) {
-    if (n < 2) {
-      continue; /* If the array has less than 2 elements, skip */
-    }
-
-    for (npy_intp j = 0; j < (n - 1) / 2; ++j) {
-      npy_intp k = 2 * j;
-      integral[i] += (x[k + 2] - x[k]) *
-                     (y[i * n + k] + 4 * y[i * n + k + 1] + y[i * n + k + 2]) /
-                     6.0;
-    }
-    if ((n - 1) % 2 != 0) {
-      integral[i] +=
-          0.5 * (x[n - 1] - x[n - 2]) * (y[i * n + n - 1] + y[i * n + n - 2]);
-    }
+    integral[i] = simps_1d(x, y + i * n, static_cast<size_t>(n));
   }
 
   return integral;
