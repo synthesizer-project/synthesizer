@@ -115,12 +115,11 @@ galaxy = Galaxy("Galaxy", stars=stars, gas=gas, redshift=1)
 
 # Get the SPH kernel
 sph_kernel = Kernel()
-kernel_data = sph_kernel.get_kernel()
 
 # Calculate the tau_vs
 galaxy.get_stellar_los_tau_v(
     kappa=0.07,
-    kernel=kernel_data,
+    kernel=sph_kernel,
     force_loop=False,
 )
 

@@ -476,11 +476,10 @@ class Galaxy(BaseGalaxy):
         Args:
             kappa (float):
                 The dust opacity in units of Msun / pc**2.
-            kernel (np.ndarray of float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance. LOS optical
+                depth calculations require both the projected LOS kernel table
+                and the truncated LOS kernel table.
             tau_v_attr (str):
                 The attribute to store the tau_v values in the stars object.
                 Defaults to "tau_v".
@@ -569,11 +568,10 @@ class Galaxy(BaseGalaxy):
         Args:
             kappa (float):
                 The dust opacity in units of Msun / pc**2.
-            kernel (np.ndarray of float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance. LOS optical
+                depth calculations require both the projected LOS kernel table
+                and the truncated LOS kernel table.
             tau_v_attr (str):
                 The attribute to store the tau_v values in the black_holes
                 object. Defaults to "tau_v".
