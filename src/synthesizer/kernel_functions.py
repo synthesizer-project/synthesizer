@@ -15,6 +15,8 @@ Available kernels include:
 import numpy as np
 from scipy import integrate
 
+from synthesizer.utils.operation_timers import timed
+
 
 class Kernel:
     """A class describing a SPH kernel integrated along the line-of-sight.
@@ -104,6 +106,7 @@ class Kernel:
         """Calculate W(r) as a function of z for a given impact parameter."""
         return lambda z: self.W_dz(z, impact_parameter)
 
+    @timed("Kernel.get_kernel")
     def get_kernel(self):
         """Compute the projected LOS kernel table.
 
@@ -136,6 +139,7 @@ class Kernel:
 
         return kernel.copy()
 
+    @timed("Kernel.get_truncated_los_kernel")
     def get_truncated_los_kernel(self):
         """Compute the truncated LOS kernel lookup table.
 
@@ -179,6 +183,7 @@ class Kernel:
 
         return self._truncated_los_kernel.copy(), bins, z_bins
 
+    @timed("Kernel.create_kernel")
     def create_kernel(self):
         """Save the computed projected kernel for easy look-up as .npz file."""
         kernel = self.get_kernel()
