@@ -13,9 +13,9 @@ Available kernels include:
 """
 
 import numpy as np
-from scipy import integrate
 
 from synthesizer.extensions.kernel import (
+    compute_projected_kernel,
     compute_truncated_los_kernel,
     evaluate_kernel,
 )
@@ -178,17 +178,10 @@ class Kernel:
 
         # Get the dimensionless impact-parameter bins and set up the output.
         bins = self._get_bins()
-        kernel = np.zeros(self.binsize + 1)
-
-        # For each impact parameter, integrate the kernel through the full LOS
-        # extent of the source support.
-        for ii, impact_parameter in enumerate(bins[:-1]):
-            value, _ = integrate.quad(
-                self._integral_func(impact_parameter),
-                0,
-                np.sqrt(1.0 - impact_parameter**2),
-            )
-            kernel[ii] = value * 2.0
+        kernel = compute_projected_kernel(
+            np.ascontiguousarray(bins, dtype=np.float64),
+            self.name,
+        )
 
         # Cache it.
         self._projected_kernel = kernel
