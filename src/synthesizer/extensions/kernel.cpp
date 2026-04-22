@@ -47,9 +47,8 @@ static inline double uniform(const double r) {
 static inline double sph_anarchy(const double r) {
   if (r <= 1.0) {
     const double one_minus_r = 1.0 - r;
-    return (21.0 / (2.0 * M_PI)) * (one_minus_r * one_minus_r *
-                                     one_minus_r * one_minus_r *
-                                     (1.0 + 4.0 * r));
+    return (21.0 / (2.0 * M_PI)) * (one_minus_r * one_minus_r * one_minus_r *
+                                    one_minus_r * (1.0 + 4.0 * r));
   }
   return 0.0;
 }
@@ -67,8 +66,7 @@ static inline double gadget_2(const double r) {
   }
   if (r < 1.0) {
     const double one_minus_r = 1.0 - r;
-    return (16.0 / M_PI) *
-           (one_minus_r * one_minus_r * one_minus_r);
+    return (16.0 / M_PI) * (one_minus_r * one_minus_r * one_minus_r);
   }
   return 0.0;
 }
@@ -86,8 +84,7 @@ static inline double cubic(const double r) {
   }
   if (r < 1.0) {
     const double one_minus_r = 1.0 - r;
-    return 5.092958178941 *
-           (one_minus_r * one_minus_r * one_minus_r);
+    return 5.092958178941 * (one_minus_r * one_minus_r * one_minus_r);
   }
   return 0.0;
 }
@@ -101,19 +98,18 @@ static inline double cubic(const double r) {
  */
 static inline double quintic(const double r) {
   if (r < 0.333333333) {
-    return 27.0 * (6.4457752 * r * r * r * r * (1.0 - r) -
-                   1.4323945 * r * r + 0.17507044);
+    return 27.0 * (6.4457752 * r * r * r * r * (1.0 - r) - 1.4323945 * r * r +
+                   0.17507044);
   }
   if (r < 0.666666667) {
     return 27.0 *
-           (3.2228876 * r * r * r * r * (r - 3.0) +
-            10.7429587 * r * r * r - 5.01338071 * r * r +
-            0.5968310366 * r + 0.1352817016);
+           (3.2228876 * r * r * r * r * (r - 3.0) + 10.7429587 * r * r * r -
+            5.01338071 * r * r + 0.5968310366 * r + 0.1352817016);
   }
   if (r < 1.0) {
     return 27.0 * 0.64457752 *
-           (-r * r * r * r * r + 5.0 * r * r * r * r -
-            10.0 * r * r * r + 10.0 * r * r - 5.0 * r + 1.0);
+           (-r * r * r * r * r + 5.0 * r * r * r * r - 10.0 * r * r * r +
+            10.0 * r * r - 5.0 * r + 1.0);
   }
   return 0.0;
 }
@@ -165,9 +161,8 @@ static kernel_func get_kernel_function(const char *name) {
  * @param func The analytic kernel function to evaluate.
  */
 static void build_truncated_los_kernel(double *kernel, const double *q_grid,
-                                       const double *z_grid,
-                                       const int qdim, const int zdim,
-                                       kernel_func func) {
+                                       const double *z_grid, const int qdim,
+                                       const int zdim, kernel_func func) {
 #ifdef WITH_OPENMP
 #pragma omp parallel for schedule(static)
 #endif
@@ -294,8 +289,8 @@ PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
   PyArrayObject *np_q_grid, *np_z_grid;
   const char *kernel_name;
 
-  if (!PyArg_ParseTuple(args, "O!O!s", &PyArray_Type, &np_q_grid,
-                        &PyArray_Type, &np_z_grid, &kernel_name)) {
+  if (!PyArg_ParseTuple(args, "O!O!s", &PyArray_Type, &np_q_grid, &PyArray_Type,
+                        &np_z_grid, &kernel_name)) {
     return NULL;
   }
 
