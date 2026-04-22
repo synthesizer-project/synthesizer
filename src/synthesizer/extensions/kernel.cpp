@@ -17,6 +17,7 @@
 #include <Python.h>
 
 /* Local includes. */
+#include "integration.h"
 #include "property_funcs.h"
 
 /**
@@ -116,6 +117,11 @@ static inline double quintic(const double r) {
 
 typedef double (*kernel_func)(double);
 
+/* Use a fixed even number of sub-intervals for Simpson integration so the
+ * projected LOS kernel builder is deterministic and easy to compare against
+ * the Python quad-based reference in tests. */
+static const int PROJECTED_KERNEL_SIMPSON_STEPS = 256;
+
 /**
  * @brief Map a public kernel name onto the corresponding analytic function.
  *
@@ -143,6 +149,81 @@ static kernel_func get_kernel_function(const char *name) {
     return quintic;
   }
   return NULL;
+}
+
+/**
+ * @brief Integrate the projected LOS kernel at one impact parameter.
+ *
+ * This evaluates
+ *
+ *     2 * integral_0^sqrt(1 - q^2) W(sqrt(z^2 + q^2)) dz
+ *
+ * using the shared composite Simpson helper from ``integration.cpp`` on a
+ * fixed tabulated LOS grid. The fixed rule keeps the extension simple and fast
+ * while still producing a stable value that can be checked against the
+ * existing ``scipy.integrate.quad`` reference in the unit tests.
+ *
+ * @param q The dimensionless impact parameter.
+ * @param func The analytic kernel function to evaluate.
+ *
+ * @return The projected LOS kernel value at ``q``.
+ */
+static inline double integrate_projected_kernel(const double q,
+                                                kernel_func func) {
+  if (q < 0.0 || q >= 1.0) {
+    return 0.0;
+  }
+
+  const double zmax = sqrt(1.0 - q * q);
+  if (zmax == 0.0) {
+    return 0.0;
+  }
+
+  double z_values[PROJECTED_KERNEL_SIMPSON_STEPS + 1];
+  double integrand[PROJECTED_KERNEL_SIMPSON_STEPS + 1];
+  const double dz = zmax / PROJECTED_KERNEL_SIMPSON_STEPS;
+
+  for (int iz = 0; iz <= PROJECTED_KERNEL_SIMPSON_STEPS; iz++) {
+    const double z = dz * iz;
+    z_values[iz] = z;
+    double radius = sqrt(z * z + q * q);
+
+    /* The projected LOS integral is unchanged by the value at the single
+     * endpoint z=zmax, but fixed-grid Simpson integration samples that point
+     * explicitly. Nudge the final sample infinitesimally inside the compact
+     * support so kernels with a hard edge, such as the uniform kernel, do not
+     * pick up an artificial zero-valued endpoint. */
+    if (iz == PROJECTED_KERNEL_SIMPSON_STEPS && radius >= 1.0) {
+      radius = nextafter(1.0, 0.0);
+    }
+
+    integrand[iz] = func(radius);
+  }
+
+  return 2.0 * simps_1d(z_values, integrand,
+                        PROJECTED_KERNEL_SIMPSON_STEPS + 1);
+}
+
+/**
+ * @brief Build the projected LOS kernel lookup table.
+ *
+ * The output is a 1D table indexed by dimensionless projected separation. Each
+ * entry stores the full LOS integral through the source kernel at that impact
+ * parameter.
+ *
+ * @param kernel The output projected kernel table.
+ * @param q_grid The projected-separation lookup grid.
+ * @param qdim The number of projected-separation bins.
+ * @param func The analytic kernel function to evaluate.
+ */
+static void build_projected_kernel(double *kernel, const double *q_grid,
+                                   const int qdim, kernel_func func) {
+#ifdef WITH_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+  for (int iq = 0; iq < qdim; iq++) {
+    kernel[iq] = integrate_projected_kernel(q_grid[iq], func);
+  }
 }
 
 /**
@@ -270,6 +351,65 @@ PyObject *evaluate_kernel(PyObject *self, PyObject *args) {
 }
 
 /**
+ * @brief Python wrapper for projected LOS kernel-table construction.
+ *
+ * Python prepares the projected-separation lookup grid and this wrapper fills
+ * the corresponding full LOS kernel table using the shared C++ kernel
+ * evaluator.
+ *
+ * @param self The module instance (unused).
+ * @param args Python arguments containing the q-grid and kernel name.
+ *
+ * @return A 1D float64 NumPy array with the projected LOS kernel values.
+ */
+PyObject *compute_projected_kernel(PyObject *self, PyObject *args) {
+
+  (void)self;
+
+  /* Parse the precomputed projected-separation grid and the public kernel
+   * name used to select the analytic kernel shape. */
+  PyArrayObject *np_q_grid;
+  const char *kernel_name;
+
+  if (!PyArg_ParseTuple(args, "O!s", &PyArray_Type, &np_q_grid,
+                        &kernel_name)) {
+    return NULL;
+  }
+
+  /* The projected kernel is defined on a single 1D q-axis. */
+  if (PyArray_NDIM(np_q_grid) != 1) {
+    PyErr_SetString(PyExc_ValueError, "q_grid must be a 1D array.");
+    return NULL;
+  }
+
+  /* Extract the raw float64 axis data after validating dtype and contiguity. */
+  const double *q_grid = extract_data_double(np_q_grid, "q_grid");
+  if (q_grid == NULL) {
+    return NULL;
+  }
+
+  /* Resolve the analytic kernel once before entering the numeric builder. */
+  kernel_func func = get_kernel_function(kernel_name);
+  if (func == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Kernel name not defined");
+    return NULL;
+  }
+
+  /* Allocate the dense output table using the supplied q-grid size. */
+  const int qdim = static_cast<int>(PyArray_DIM(np_q_grid, 0));
+  npy_intp dims[1] = {qdim};
+  PyArrayObject *np_kernel =
+      (PyArrayObject *)PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
+  double *kernel = static_cast<double *>(PyArray_DATA(np_kernel));
+
+  /* Fill the output table in place using the fixed-rule projected integrator. */
+  build_projected_kernel(kernel, q_grid, qdim, func);
+
+  /* Transfer ownership of the completed NumPy array back to Python. */
+  return Py_BuildValue("N", np_kernel);
+}
+
+/**
  * @brief Python wrapper for truncated LOS kernel-table construction.
  *
  * Python prepares the q and z lookup grids, while this wrapper selects the
@@ -336,6 +476,8 @@ PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
 static PyMethodDef KernelMethods[] = {
     {"evaluate_kernel", (PyCFunction)evaluate_kernel, METH_VARARGS,
      "Evaluate a named kernel on a 1D array of radii."},
+    {"compute_projected_kernel", (PyCFunction)compute_projected_kernel,
+     METH_VARARGS, "Build the projected LOS kernel table."},
     {"compute_truncated_los_kernel", (PyCFunction)compute_truncated_los_kernel,
      METH_VARARGS, "Build the truncated LOS kernel table."},
     {NULL, NULL, 0, NULL}};
