@@ -58,7 +58,7 @@ def make_gas():
 np.random.seed(42)
 
 nstar = 1000
-kernel = Kernel(name="uniform", binsize=128)
+kernel = Kernel(binsize=128)
 gas = make_gas()
 
 # Draw a shared set of projected x/y offsets uniformly across the kernel
