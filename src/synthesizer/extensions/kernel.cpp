@@ -339,6 +339,10 @@ PyObject *evaluate_kernel(PyObject *self, PyObject *args) {
   npy_intp dims[1] = {ndim};
   PyArrayObject *np_values =
       (PyArrayObject *)PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
+  if (np_values == NULL) {
+    PyErr_NoMemory();
+    return NULL;
+  }
   double *values = static_cast<double *>(PyArray_DATA(np_values));
 
   /* The evaluation is embarrassingly parallel across radii, so when OpenMP is
@@ -404,6 +408,10 @@ PyObject *compute_projected_kernel(PyObject *self, PyObject *args) {
   npy_intp dims[1] = {qdim};
   PyArrayObject *np_kernel =
       (PyArrayObject *)PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
+  if (np_kernel == NULL) {
+    PyErr_NoMemory();
+    return NULL;
+  }
   double *kernel = static_cast<double *>(PyArray_DATA(np_kernel));
 
   /* Fill the output table in place using the fixed-rule projected integrator. */
@@ -463,10 +471,19 @@ PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
   /* Allocate the dense output table using the supplied q and z grid sizes. */
   const int qdim = static_cast<int>(PyArray_DIM(np_q_grid, 0));
   const int zdim = static_cast<int>(PyArray_DIM(np_z_grid, 0));
+  if (zdim == 0) {
+    PyErr_SetString(PyExc_ValueError,
+                    "z_grid must contain at least one element.");
+    return NULL;
+  }
 
   npy_intp dims[2] = {qdim, zdim};
   PyArrayObject *np_kernel =
       (PyArrayObject *)PyArray_ZEROS(2, dims, NPY_DOUBLE, 0);
+  if (np_kernel == NULL) {
+    PyErr_NoMemory();
+    return NULL;
+  }
   double *kernel = static_cast<double *>(PyArray_DATA(np_kernel));
 
   /* Fill the output table in place using the shared C++ kernel evaluator. */

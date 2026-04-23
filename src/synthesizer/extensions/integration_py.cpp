@@ -4,6 +4,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+#include <cmath>
 #include <Python.h>
 
 #ifdef WITH_OPENMP
@@ -33,10 +34,10 @@ static bool is_uniform_grid(const double *x, size_t n) {
   }
 
   const double dx = x[1] - x[0];
-  const double tol = 1.0e-12 * fmax(1.0, fabs(dx));
+  const double tol = 1.0e-12 * std::fmax(1.0, std::fabs(dx));
 
   for (size_t i = 1; i < n - 1; ++i) {
-    if (fabs((x[i + 1] - x[i]) - dx) > tol) {
+    if (std::fabs((x[i + 1] - x[i]) - dx) > tol) {
       return false;
     }
   }
@@ -95,7 +96,16 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  if (PyArray_NDIM(xs) != 1) {
+    PyErr_SetString(PyExc_ValueError, "xs must be a 1D array.");
+    return NULL;
+  }
+
   npy_intp ndim = PyArray_NDIM(ys);
+  if (ndim < 1) {
+    PyErr_SetString(PyExc_ValueError, "ys must have at least 1 dimension.");
+    return NULL;
+  }
   npy_intp *shape = PyArray_SHAPE(ys);
   npy_intp n = shape[ndim - 1];
 
@@ -106,10 +116,16 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
   }
 
   double *x = extract_data_double(xs, "xs");
-  double *y = (double *)PyArray_DATA(ys);
+  double *y = extract_data_double(ys, "ys");
   npy_intp num_elements = PyArray_SIZE(ys) / n;
 
-  if (x == NULL) {
+  if (PyArray_DIM(xs, 0) != n) {
+    PyErr_SetString(PyExc_ValueError,
+                    "xs must match ys along the final axis.");
+    return NULL;
+  }
+
+  if (x == NULL || y == NULL) {
     return NULL;
   }
 
@@ -194,7 +210,16 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  if (PyArray_NDIM(xs) != 1) {
+    PyErr_SetString(PyExc_ValueError, "xs must be a 1D array.");
+    return NULL;
+  }
+
   npy_intp ndim = PyArray_NDIM(ys);
+  if (ndim < 1) {
+    PyErr_SetString(PyExc_ValueError, "ys must have at least 1 dimension.");
+    return NULL;
+  }
   npy_intp *shape = PyArray_SHAPE(ys);
   npy_intp n = shape[ndim - 1];
 
@@ -205,10 +230,16 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
   }
 
   double *x = extract_data_double(xs, "xs");
-  double *y = (double *)PyArray_DATA(ys);
+  double *y = extract_data_double(ys, "ys");
   npy_intp num_elements = PyArray_SIZE(ys) / n;
 
-  if (x == NULL) {
+  if (PyArray_DIM(xs, 0) != n) {
+    PyErr_SetString(PyExc_ValueError,
+                    "xs must match ys along the final axis.");
+    return NULL;
+  }
+
+  if (x == NULL || y == NULL) {
     return NULL;
   }
   if (!is_uniform_grid(x, static_cast<size_t>(n))) {
