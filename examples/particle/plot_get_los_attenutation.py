@@ -119,8 +119,8 @@ gas = Gas(
 # Create galaxy object
 galaxy = Galaxy("Galaxy", stars=stars, gas=gas, redshift=1)
 
-# Get the kernel
-kernel = Kernel().get_kernel()
+# Get the kernel object
+kernel = Kernel()
 
 # Calculate the tau_vs
 start = time.time()
