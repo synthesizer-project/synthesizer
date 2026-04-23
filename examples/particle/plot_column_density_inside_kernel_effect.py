@@ -7,9 +7,10 @@ particle (e.g. star) lying within a source particle's (e.g. gas) kernel when
 calculating line-of-sight column densities and treating the input as a point
 source.
 
-This is done by placing particles within the kernel of a foreground gas
-particle and comparing the LOS column densities to a matched sample of
-particles placed well behind the gas kernel.
+This is done by placing particles throughout the kernel of a foreground gas
+particle and comparing the true LOS columns to a simple point-particle
+approximation that snaps stars in front of the gas centre to fully in front of
+the kernel and stars behind the gas centre to fully behind it.
 
 This example demonstrates the importance of a change implemented to the
 LOS column density calculation in v1.1.0.
@@ -49,7 +50,7 @@ def make_gas():
         masses=np.array([1e6]) * Msun,
         metallicities=np.array([0.01]),
         redshift=0.0,
-        coordinates=np.array([[0.0, 0.0, 1.0]]) * Mpc,
+        coordinates=np.array([[0.0, 0.0, 1.2]]) * Mpc,
         dust_to_metal_ratio=1.0,
         smoothing_lengths=np.array([1.0]) * Mpc,
     )
@@ -58,26 +59,45 @@ def make_gas():
 nstar = 1000
 kernel = Kernel(binsize=128)
 gas = make_gas()
+gas_z = gas.coordinates[0, 2].value
+approx_offset = 1.1
 
-# Draw a shared set of projected x/y offsets uniformly across the kernel
-# diameter so the geometry plot can show the full source support directly in an
-# x-z slice.
+# Draw stars uniformly throughout the spherical kernel support so the example
+# compares stars in front of and behind the gas-centre plane at matched random
+# positions within the same kernel volume.
 rng = np.random.default_rng(42)
-xy = rng.uniform(-0.85, 0.85, size=(nstar, 2))
+offsets = []
+while len(offsets) < nstar:
+    trial = rng.uniform(-1.0, 1.0, size=(nstar, 3))
+    trial = trial[np.sum(trial**2, axis=1) <= 1.0]
+    offsets.extend(trial.tolist())
+offsets = np.asarray(offsets[:nstar])
 
-# Place one sample inside the gas kernel and another well behind it, with the
-# observer-side origin at z = 0.
-z_inside = rng.uniform(0.2, 1.8, size=nstar)
-z_behind = rng.uniform(2.4, 3.2, size=nstar)
+# Shift the sampled offsets onto the gas-particle centre. These are the true
+# star positions inside the gas kernel.
+inside_positions = offsets.copy()
+inside_positions[:, 2] += gas_z
 
-inside_positions = np.column_stack((xy, z_inside))
-behind_positions = np.column_stack((xy, z_behind))
+# Build a simple point-particle approximation by snapping stars on the observer
+# side of the gas centre to fully in front of the kernel and stars on the far
+# side to fully behind it.
+front_mask = inside_positions[:, 2] < gas_z
+behind_mask = ~front_mask
+
+approx_positions = inside_positions.copy()
+approx_positions[front_mask, 2] = gas_z - approx_offset
+approx_positions[behind_mask, 2] = gas_z + approx_offset
+
+# Also build a matched full-column reference by placing every star fully behind
+# the gas kernel at the same projected separation.
+full_column_positions = inside_positions.copy()
+full_column_positions[:, 2] = gas_z + approx_offset
 
 stars_inside = make_stars(inside_positions)
-stars_behind = make_stars(behind_positions)
+stars_approx = make_stars(approx_positions)
+stars_full = make_stars(full_column_positions)
 
 gal_inside = Galaxy("inside", stars=stars_inside, gas=gas, redshift=0.0)
-gal_behind = Galaxy("behind", stars=stars_behind, gas=gas, redshift=0.0)
 
 col_den_inside = stars_inside.get_los_column_density(
     gas,
@@ -86,7 +106,14 @@ col_den_inside = stars_inside.get_los_column_density(
     force_loop=1,
     min_count=10,
 )
-col_den_behind = stars_behind.get_los_column_density(
+col_den_approx = stars_approx.get_los_column_density(
+    gas,
+    "dust_masses",
+    kernel,
+    force_loop=1,
+    min_count=10,
+)
+col_den_full = stars_full.get_los_column_density(
     gas,
     "dust_masses",
     kernel,
@@ -100,23 +127,22 @@ tau_inside = gal_inside.get_stellar_los_tau_v(
     force_loop=1,
     min_count=10,
 )
-tau_behind = gal_behind.get_stellar_los_tau_v(
-    kappa=0.07,
-    kernel=kernel,
-    force_loop=1,
-    min_count=10,
-)
+
+inside_fraction = (col_den_inside / col_den_full).value
+approx_fraction = np.where(front_mask, 0.0, 1.0)
 
 print(f"Median inside-kernel column density: {np.median(col_den_inside):.4e}")
-print(f"Median fully-behind column density: {np.median(col_den_behind):.4e}")
+print(
+    "Median point-approximation column density: "
+    f"{np.median(col_den_approx):.4e}"
+)
 print(f"Median inside-kernel tau_v: {np.median(tau_inside):.4e}")
-print(f"Median fully-behind tau_v: {np.median(tau_behind):.4e}")
+print(f"Median true column fraction: {np.median(inside_fraction):.4f}")
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
 # Plot the LOS geometry in the x-z plane so the full spherical support is
 # visible directly.
-gas_z = gas.coordinates[0, 2].value
 boundary_x = np.linspace(-1.0, 1.0, 256)
 boundary_z = np.sqrt(1.0 - boundary_x**2)
 
@@ -124,56 +150,108 @@ axes[0].fill_between(
     boundary_x,
     gas_z - boundary_z,
     gas_z + boundary_z,
-    color="tab:blue",
-    alpha=0.2,
-    label="Gas kernel",
+    color="#8ecae6",
+    alpha=0.35,
+    label="Gas kernel support",
+)
+axes[0].axhline(
+    gas_z,
+    color="#023047",
+    lw=1.2,
+    ls=":",
+    label="Gas-centre plane",
 )
 axes[0].scatter(
-    inside_positions[:, 0],
-    z_inside,
-    s=6,
-    alpha=0.5,
-    label="Stars inside",
+    inside_positions[front_mask, 0],
+    inside_positions[front_mask, 2],
+    s=24,
+    marker="*",
+    alpha=0.75,
+    color="#d62828",
+    label="Real stars inside: observer side",
 )
 axes[0].scatter(
-    behind_positions[:, 0],
-    z_behind,
-    s=6,
-    alpha=0.5,
-    label="Stars behind",
+    inside_positions[behind_mask, 0],
+    inside_positions[behind_mask, 2],
+    s=24,
+    marker="*",
+    alpha=0.75,
+    color="#2a9d8f",
+    label="Real stars inside: far side",
 )
-axes[0].scatter([0.0], [gas_z], color="tab:blue", s=80, label="Gas centre")
-axes[0].set_xlim(-1.1, 1.1)
-axes[0].set_ylim(0.0, 3.3)
+axes[0].scatter(
+    approx_positions[front_mask, 0],
+    approx_positions[front_mask, 2],
+    s=26,
+    marker="*",
+    facecolors="none",
+    edgecolors="#9d0208",
+    linewidths=0.9,
+    alpha=0.9,
+    label="Point approximation: fully in front",
+)
+axes[0].scatter(
+    approx_positions[behind_mask, 0],
+    approx_positions[behind_mask, 2],
+    s=26,
+    marker="*",
+    facecolors="none",
+    edgecolors="#1b7f6b",
+    linewidths=0.9,
+    alpha=0.9,
+    label="Point approximation: fully behind",
+)
+axes[0].scatter(
+    [0.0],
+    [gas_z],
+    color="#023047",
+    s=90,
+    marker="o",
+    label="Gas particle",
+)
+axes[0].set_xlim(-1.55, 1.55)
+axes[0].set_ylim(gas_z - 1.55, gas_z + 1.55)
+axes[0].set_aspect("equal")
 axes[0].set_xlabel("x [Mpc]")
 axes[0].set_ylabel("LOS z [Mpc]")
+axes[0].set_title("Real stars and the point-particle approximation")
 
-# Compare the measured column densities for the two matched samples.
+# Compare the true fractional column to the simplified centre-based point
+# approximation.
 axes[1].scatter(
-    col_den_behind,
-    col_den_inside,
-    s=8,
-    alpha=0.6,
-    label="Matched stellar samples",
+    inside_positions[front_mask, 2] - gas_z,
+    inside_fraction[front_mask],
+    s=18,
+    marker="*",
+    alpha=0.75,
+    color="#d62828",
+    label="Truncated LOS",
 )
-max_col = max(np.max(col_den_inside), np.max(col_den_behind))
-positive_min = min(
-    np.min(col_den_inside[col_den_inside > 0.0]),
-    np.min(col_den_behind[col_den_behind > 0.0]),
+axes[1].scatter(
+    inside_positions[behind_mask, 2] - gas_z,
+    inside_fraction[behind_mask],
+    s=18,
+    marker="*",
+    alpha=0.75,
+    color="#2a9d8f",
 )
-line_floor = min(positive_min, max_col) * 1.0e-3
-axes[1].plot(
-    [line_floor, max_col],
-    [line_floor, max_col],
-    "k--",
-    lw=1,
-    label="1:1 line",
+axes[1].step(
+    [-1.0, 0.0, 1.0],
+    [0.0, 1.0, 1.0],
+    where="post",
+    color="#264653",
+    lw=2.0,
+    ls="--",
+    label="Kernel-centred",
 )
-axes[1].set_xlabel("Fully-behind column density")
-axes[1].set_ylabel("Inside-kernel column density")
+axes[1].set_xlim(-1.05, 1.05)
+axes[1].set_ylim(-0.02, 1.05)
+axes[1].set_xlabel(
+    r"Relative LOS position $(z_\star - z_{\rm gas}) / h_{\rm gas}$"
+)
+axes[1].set_ylabel("LOS column / full foreground column")
+axes[1].set_title("Continuous truth versus step-function approximation")
 axes[1].legend(loc="upper left")
-axes[1].set_yscale("log")
-axes[1].set_xscale("log")
 
 plt.tight_layout()
 plt.show()
