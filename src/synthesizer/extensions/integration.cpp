@@ -26,8 +26,17 @@ double simps_1d(const double *x, const double *y, size_t n) {
 
   for (size_t j = 0; j < (n - 1) / 2; ++j) {
     const size_t k = 2 * j;
-    integral +=
-        (x[k + 2] - x[k]) * (y[k] + 4 * y[k + 1] + y[k + 2]) / 6.0;
+    const double h0 = x[k + 1] - x[k];
+    const double h1 = x[k + 2] - x[k + 1];
+
+    if (h0 == 0.0 || h1 == 0.0) {
+      continue;
+    }
+
+    integral += (h0 + h1) / 6.0 *
+                ((2.0 - h1 / h0) * y[k] +
+                 ((h0 + h1) * (h0 + h1) / (h0 * h1)) * y[k + 1] +
+                 (2.0 - h0 / h1) * y[k + 2]);
   }
 
   if ((n - 1) % 2 != 0) {

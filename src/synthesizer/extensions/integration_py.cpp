@@ -21,31 +21,6 @@
 #endif
 
 /**
- * @brief Check whether a 1D x grid is uniformly spaced.
- *
- * @param x 1D array of x values.
- * @param n Number of samples.
- *
- * @return True if the spacing is uniform within a small tolerance.
- */
-static bool is_uniform_grid(const double *x, size_t n) {
-  if (n < 3) {
-    return true;
-  }
-
-  const double dx = x[1] - x[0];
-  const double tol = 1.0e-12 * std::fmax(1.0, std::fabs(dx));
-
-  for (size_t i = 1; i < n - 1; ++i) {
-    if (std::fabs((x[i + 1] - x[i]) - dx) > tol) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-/**
  * @brief Serial trapezoidal integration over the final axis.
  */
 static double *trapz_last_axis_serial(double *x, double *y, npy_intp n,
@@ -240,11 +215,6 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
   }
 
   if (x == NULL || y == NULL) {
-    return NULL;
-  }
-  if (!is_uniform_grid(x, static_cast<size_t>(n))) {
-    PyErr_SetString(PyExc_ValueError,
-                    "Simpson integration requires uniformly spaced xs.");
     return NULL;
   }
 
