@@ -41,11 +41,16 @@
  *            surface densities from.
  * @param surf_den_vals The surface density values of the particles to compute
  *            the surface densities from.
- * @param kernel The kernel to use for the calculation.
+ * @param kernel The projected LOS kernel lookup table.
+ * @param truncated_kernel The truncated LOS kernel lookup table storing
+ *        cumulative LOS contributions for inside-kernel paths.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of star particles.
  * @param npart_j The number of gas particles.
- * @param kdim The dimension of the kernel.
+ * @param kdim The number of projected-kernel entries.
+ * @param trunc_qdim The number of projected-separation entries in the
+ *        truncated kernel table.
+ * @param zdim The number of LOS-coordinate entries in the truncated table.
  * @param threshold The threshold for the kernel.
  */
 static void los_loop_serial(const double *pos_i, const double *pos_j,
@@ -54,6 +59,7 @@ static void los_loop_serial(const double *pos_i, const double *pos_j,
                             const double *truncated_kernel,
                             double *surf_dens, const int npart_i,
                             const int npart_j, const int kdim,
+                            const int trunc_qdim,
                             const int zdim, const double threshold) {
 
   /* Loop over particle postions. */
@@ -100,7 +106,7 @@ static void los_loop_serial(const double *pos_i, const double *pos_j,
       if (z < (zj + threshold * sml)) {
         const double z_trunc = (z - zj) / (threshold * sml);
         kvalue = get_truncated_kernel_value(
-            truncated_kernel, kdim, zdim, q / threshold, z_trunc);
+            truncated_kernel, trunc_qdim, zdim, q / threshold, z_trunc);
       } else {
         kvalue = get_kernel_value(kernel, kdim, q / threshold);
       }
@@ -127,11 +133,16 @@ static void los_loop_serial(const double *pos_i, const double *pos_j,
  *            surface densities from.
  * @param surf_den_vals The surface density values of the particles to compute
  *            the surface densities from.
- * @param kernel The kernel to use for the calculation.
+ * @param kernel The projected LOS kernel lookup table.
+ * @param truncated_kernel The truncated LOS kernel lookup table storing
+ *        cumulative LOS contributions for inside-kernel paths.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of star particles.
  * @param npart_j The number of gas particles.
- * @param kdim The dimension of the kernel.
+ * @param kdim The number of projected-kernel entries.
+ * @param trunc_qdim The number of projected-separation entries in the
+ *        truncated kernel table.
+ * @param zdim The number of LOS-coordinate entries in the truncated table.
  * @param threshold The threshold for the kernel.
  * @param nthreads The number of threads to use.
  */
@@ -141,7 +152,8 @@ static void los_loop_omp(const double *pos_i, const double *pos_j,
                          const double *kernel,
                          const double *truncated_kernel, double *surf_dens,
                          const int npart_i, const int npart_j,
-                         const int kdim, const int zdim,
+                         const int kdim, const int trunc_qdim,
+                         const int zdim,
                          const double threshold, const int nthreads) {
 
   /* How many particles should each thread get? */
@@ -207,7 +219,7 @@ static void los_loop_omp(const double *pos_i, const double *pos_j,
         if (z < (zj + threshold * sml)) {
           const double z_trunc = (z - zj) / (threshold * sml);
           kvalue = get_truncated_kernel_value(
-              truncated_kernel, kdim, zdim, q / threshold, z_trunc);
+              truncated_kernel, trunc_qdim, zdim, q / threshold, z_trunc);
         } else {
           kvalue = get_kernel_value(kernel, kdim, q / threshold);
         }
@@ -242,11 +254,16 @@ static void los_loop_omp(const double *pos_i, const double *pos_j,
  * @param pos_j The positions of the gas particles.
  * @param smls The smoothing lengths of the gas particles.
  * @param surf_den_vals The surface density values of the gas particles.
- * @param kernel The kernel to use for the calculation.
+ * @param kernel The projected LOS kernel lookup table.
+ * @param truncated_kernel The truncated LOS kernel lookup table storing
+ *        cumulative LOS contributions for inside-kernel paths.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of star particles.
  * @param npart_j The number of gas particles.
- * @param kdim The dimension of the kernel.
+ * @param kdim The number of projected-kernel entries.
+ * @param trunc_qdim The number of projected-separation entries in the
+ *        truncated kernel table.
+ * @param zdim The number of LOS-coordinate entries in the truncated table.
  * @param threshold The threshold for the kernel.
  * @param nthreads The number of threads to use.
  */
@@ -254,7 +271,8 @@ static void los_loop(const double *pos_i, const double *pos_j,
                      const double *smls, const double *surf_den_vals,
                      const double *kernel, const double *truncated_kernel,
                      double *surf_dens, const int npart_i, const int npart_j,
-                     const int kdim, const int zdim, const double threshold,
+                     const int kdim, const int trunc_qdim,
+                     const int zdim, const double threshold,
                      const int nthreads) {
 
   tic("los_loop");
@@ -264,12 +282,12 @@ static void los_loop(const double *pos_i, const double *pos_j,
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
     los_loop_omp(pos_i, pos_j, smls, surf_den_vals, kernel, truncated_kernel,
-                 surf_dens, npart_i, npart_j, kdim, zdim, threshold,
+                 surf_dens, npart_i, npart_j, kdim, trunc_qdim, zdim, threshold,
                  nthreads);
   } else {
     los_loop_serial(pos_i, pos_j, smls, surf_den_vals, kernel,
-                    truncated_kernel, surf_dens, npart_i, npart_j, kdim, zdim,
-                    threshold);
+                    truncated_kernel, surf_dens, npart_i, npart_j, kdim,
+                    trunc_qdim, zdim, threshold);
   }
 
 #else
@@ -278,8 +296,8 @@ static void los_loop(const double *pos_i, const double *pos_j,
 
   /* If we don't have OpenMP call the serial version. */
   los_loop_serial(pos_i, pos_j, smls, surf_den_vals, kernel,
-                  truncated_kernel, surf_dens, npart_i, npart_j, kdim, zdim,
-                  threshold);
+                  truncated_kernel, surf_dens, npart_i, npart_j, kdim,
+                  trunc_qdim, zdim, threshold);
 
 #endif
   toc("los_loop");
@@ -298,13 +316,19 @@ static void los_loop(const double *pos_i, const double *pos_j,
  * @param y The y position of the star particle.
  * @param z The z position of the star particle.
  * @param threshold The threshold for the kernel.
- * @param kdim The dimension of the kernel.
- * @param kernel The kernel to use for the calculation.
+ * @param kdim The number of projected-kernel entries.
+ * @param trunc_qdim The number of projected-separation entries in the
+ *        truncated kernel table.
+ * @param zdim The number of LOS-coordinate entries in the truncated table.
+ * @param kernel The projected LOS kernel lookup table.
+ * @param truncated_kernel The truncated LOS kernel lookup table storing
+ *        cumulative LOS contributions for inside-kernel paths.
  */
 static double calculate_los_recursive(struct cell *c, const double x,
                                       const double y, const double z,
                                       double threshold, int kdim,
-                                      int zdim, const double *kernel,
+                                      int trunc_qdim, int zdim,
+                                      const double *kernel,
                                       const double *truncated_kernel) {
 
   /* Early exit if the cell is entirely behind the position. */
@@ -334,8 +358,9 @@ static double calculate_los_recursive(struct cell *c, const double x,
       }
 
       /* Recurse... */
-      surf_dens += calculate_los_recursive(cp, x, y, z, threshold, kdim, zdim,
-                                           kernel, truncated_kernel);
+      surf_dens += calculate_los_recursive(
+          cp, x, y, z, threshold, kdim, trunc_qdim, zdim, kernel,
+          truncated_kernel);
     }
 
   } else {
@@ -378,7 +403,7 @@ static double calculate_los_recursive(struct cell *c, const double x,
       if (z < (part->pos[2] + threshold * part->sml)) {
         const double z_trunc = (z - part->pos[2]) / (threshold * part->sml);
         kvalue = get_truncated_kernel_value(
-            truncated_kernel, kdim, zdim, q / threshold, z_trunc);
+            truncated_kernel, trunc_qdim, zdim, q / threshold, z_trunc);
       } else {
         kvalue = get_kernel_value(kernel, kdim, q / threshold);
       }
@@ -403,16 +428,22 @@ static double calculate_los_recursive(struct cell *c, const double x,
  * @param pos_i The positions of the star particles.
  * @param smls The smoothing lengths of the gas particles.
  * @param surf_den_vals The surface density values of the gas particles.
- * @param kernel The kernel to use for the calculation.
+ * @param kernel The projected LOS kernel lookup table.
+ * @param truncated_kernel The truncated LOS kernel lookup table storing
+ *        cumulative LOS contributions for inside-kernel paths.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of star particles.
- * @param kdim The dimension of the kernel.
+ * @param kdim The number of projected-kernel entries.
+ * @param trunc_qdim The number of projected-separation entries in the
+ *        truncated kernel table.
+ * @param zdim The number of LOS-coordinate entries in the truncated table.
  * @param threshold The threshold for the kernel.
  */
 static void los_tree_serial(struct cell *root, const double *pos_i,
                             const double *kernel,
                             const double *truncated_kernel, double *surf_dens,
-                            const int npart_i, const int kdim, const int zdim,
+                            const int npart_i, const int kdim,
+                            const int trunc_qdim, const int zdim,
                             const double threshold) {
 
   /* Loop over the particles we are calculating the surface density for. */
@@ -422,7 +453,7 @@ static void los_tree_serial(struct cell *root, const double *pos_i,
        * skipping all cells out of range of this particle. */
     surf_dens[i] = calculate_los_recursive(
         root, pos_i[i * 3], pos_i[i * 3 + 1], pos_i[i * 3 + 2], threshold,
-        kdim, zdim, kernel, truncated_kernel);
+        kdim, trunc_qdim, zdim, kernel, truncated_kernel);
   }
 }
 
@@ -438,10 +469,15 @@ static void los_tree_serial(struct cell *root, const double *pos_i,
  * @param pos_i The positions of the star particles.
  * @param smls The smoothing lengths of the gas particles.
  * @param surf_den_vals The surface density values of the gas particles.
- * @param kernel The kernel to use for the calculation.
+ * @param kernel The projected LOS kernel lookup table.
+ * @param truncated_kernel The truncated LOS kernel lookup table storing
+ *        cumulative LOS contributions for inside-kernel paths.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of star particles.
- * @param kdim The dimension of the kernel.
+ * @param kdim The number of projected-kernel entries.
+ * @param trunc_qdim The number of projected-separation entries in the
+ *        truncated kernel table.
+ * @param zdim The number of LOS-coordinate entries in the truncated table.
  * @param threshold The threshold for the kernel.
  * @param nthreads The number of threads to use.
  */
@@ -449,7 +485,8 @@ static void los_tree_serial(struct cell *root, const double *pos_i,
 static void los_tree_omp(struct cell *root, const double *pos_i,
                          const double *kernel,
                          const double *truncated_kernel, double *surf_dens,
-                         const int npart_i, const int kdim, const int zdim,
+                         const int npart_i, const int kdim,
+                         const int trunc_qdim, const int zdim,
                          const double threshold, const int nthreads) {
 
   /* How many particles should each thread get? */
@@ -476,7 +513,7 @@ static void los_tree_omp(struct cell *root, const double *pos_i,
        * skipping all cells out of range of this particle. */
       surf_dens_thread[i - start] = calculate_los_recursive(
           root, pos_i[i * 3], pos_i[i * 3 + 1], pos_i[i * 3 + 2], threshold,
-          kdim, zdim, kernel, truncated_kernel);
+          kdim, trunc_qdim, zdim, kernel, truncated_kernel);
     }
 
     /* Copy the results back to the main array. */
@@ -500,17 +537,23 @@ static void los_tree_omp(struct cell *root, const double *pos_i,
  * @param pos_i The positions of the star particles.
  * @param smls The smoothing lengths of the gas particles.
  * @param surf_den_vals The surface density values of the gas particles.
- * @param kernel The kernel to use for the calculation.
+ * @param kernel The projected LOS kernel lookup table.
+ * @param truncated_kernel The truncated LOS kernel lookup table storing
+ *        cumulative LOS contributions for inside-kernel paths.
  * @param surf_dens The array to store the surface densities in.
  * @param npart_i The number of star particles.
- * @param kdim The dimension of the kernel.
+ * @param kdim The number of projected-kernel entries.
+ * @param trunc_qdim The number of projected-separation entries in the
+ *        truncated kernel table.
+ * @param zdim The number of LOS-coordinate entries in the truncated table.
  * @param threshold The threshold for the kernel.
  * @param nthreads The number of threads to use.
  */
 static void los_tree(struct cell *root, const double *pos_i,
                      const double *kernel, const double *truncated_kernel,
                      double *surf_dens, const int npart_i, const int kdim,
-                     const int zdim, const double threshold,
+                     const int trunc_qdim, const int zdim,
+                     const double threshold,
                      const int nthreads) {
 
   tic("los_tree");
@@ -520,10 +563,10 @@ static void los_tree(struct cell *root, const double *pos_i,
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
     los_tree_omp(root, pos_i, kernel, truncated_kernel, surf_dens, npart_i,
-                 kdim, zdim, threshold, nthreads);
+                 kdim, trunc_qdim, zdim, threshold, nthreads);
   } else {
     los_tree_serial(root, pos_i, kernel, truncated_kernel, surf_dens, npart_i,
-                    kdim, zdim, threshold);
+                    kdim, trunc_qdim, zdim, threshold);
   }
 
 #else
@@ -532,7 +575,7 @@ static void los_tree(struct cell *root, const double *pos_i,
 
   /* If we don't have OpenMP call the serial version. */
   los_tree_serial(root, pos_i, kernel, truncated_kernel, surf_dens, npart_i,
-                  kdim, zdim, threshold);
+                  kdim, trunc_qdim, zdim, threshold);
 
 #endif
   toc("los_tree");
@@ -545,11 +588,14 @@ static void los_tree(struct cell *root, const double *pos_i,
  * property of one set of particles for the positions of another set of
  * particles.
  *
- * The kernel is assumed to be a 1D array of values that are
- * evaluated at the separations of the particles. The kernel is assumed to be
- * normalised such that the integral of the kernel over all space is 1.
+ * The projected kernel is assumed to be a 1D array of values evaluated at the
+ * separations of the particles. The truncated kernel is assumed to be a 2D
+ * lookup table tabulated in projected separation and LOS truncation
+ * coordinate. Both are assumed to be normalised consistently with the Python
+ * ``Kernel`` helper.
  *
- * @param np_kernel The kernel to use for the calculation.
+ * @param np_kernel The projected LOS kernel lookup table.
+ * @param np_truncated_kernel The truncated LOS kernel lookup table.
  * @param np_pos_i The positions of the star particles.
  */
 PyObject *compute_column_density(PyObject *self, PyObject *args) {
@@ -558,15 +604,17 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
    * we don't care. */
   (void)self;
 
-  int npart_i, npart_j, kdim, zdim, force_loop, min_count, nthreads;
+  int npart_i, npart_j, kdim, trunc_qdim, zdim, force_loop, min_count,
+      nthreads;
   double threshold;
   PyArrayObject *np_kernel, *np_truncated_kernel, *np_pos_i, *np_pos_j,
       *np_smls, *np_surf_den_val;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOiiiidiii", &np_kernel,
-                        &np_truncated_kernel, &np_pos_i, &np_pos_j, &np_smls,
-                        &np_surf_den_val, &npart_i, &npart_j, &kdim, &zdim,
-                        &threshold, &force_loop, &min_count, &nthreads))
+  if (!PyArg_ParseTuple(args, "OOOOOOiiiiidiii", &np_kernel,
+                         &np_truncated_kernel, &np_pos_i, &np_pos_j, &np_smls,
+                         &np_surf_den_val, &npart_i, &npart_j, &kdim,
+                         &trunc_qdim, &zdim, &threshold, &force_loop,
+                         &min_count, &nthreads))
     return NULL;
 
   tic("compute_column_density");
@@ -593,6 +641,12 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   if (zdim == 0) {
     PyErr_SetString(PyExc_ValueError,
                     "The truncated kernel dimension must be greater than "
+                    "zero.");
+    return NULL;
+  }
+  if (trunc_qdim == 0) {
+    PyErr_SetString(PyExc_ValueError,
+                    "The truncated kernel q-dimension must be greater than "
                     "zero.");
     return NULL;
   }
@@ -626,7 +680,8 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
 
     /* Use the simple loop over stars and gas. */
     los_loop(pos_i, pos_j, smls, surf_den_val, kernel, truncated_kernel,
-             surf_dens, npart_i, npart_j, kdim, zdim, threshold, nthreads);
+             surf_dens, npart_i, npart_j, kdim, trunc_qdim, zdim, threshold,
+             nthreads);
 
     toc("compute_column_density");
 
@@ -644,7 +699,7 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
 
   /* Calculate the surface densities. */
   los_tree(root, pos_i, kernel, truncated_kernel, surf_dens, npart_i, kdim,
-           zdim, threshold, nthreads);
+           trunc_qdim, zdim, threshold, nthreads);
 
   /* Clean up. */
   cleanup_cell_tree(root);
