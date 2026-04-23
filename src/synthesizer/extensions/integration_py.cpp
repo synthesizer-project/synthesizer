@@ -25,6 +25,10 @@
  */
 static double *trapz_last_axis_serial(double *x, double *y, npy_intp n,
                                       npy_intp num_elements) {
+  if (num_elements == 0) {
+    return (double *)calloc(1, sizeof(double));
+  }
+
   double *integral = (double *)calloc(num_elements, sizeof(double));
   if (integral == NULL) {
     return NULL;
@@ -43,6 +47,10 @@ static double *trapz_last_axis_serial(double *x, double *y, npy_intp n,
 #ifdef WITH_OPENMP
 static double *trapz_last_axis_parallel(double *x, double *y, npy_intp n,
                                         npy_intp num_elements, int nthreads) {
+  if (num_elements == 0) {
+    return (double *)calloc(1, sizeof(double));
+  }
+
   double *integral = (double *)calloc(num_elements, sizeof(double));
   if (integral == NULL) {
     return NULL;
@@ -139,6 +147,10 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
  */
 static double *simps_last_axis_serial(double *x, double *y, npy_intp n,
                                       npy_intp num_elements) {
+  if (num_elements == 0) {
+    return (double *)calloc(1, sizeof(double));
+  }
+
   double *integral = (double *)calloc(num_elements, sizeof(double));
   if (integral == NULL) {
     return NULL;
@@ -157,6 +169,10 @@ static double *simps_last_axis_serial(double *x, double *y, npy_intp n,
 #ifdef WITH_OPENMP
 static double *simps_last_axis_parallel(double *x, double *y, npy_intp n,
                                         npy_intp num_elements, int nthreads) {
+  if (num_elements == 0) {
+    return (double *)calloc(1, sizeof(double));
+  }
+
   double *integral = (double *)calloc(num_elements, sizeof(double));
   if (integral == NULL) {
     return NULL;
@@ -254,6 +270,10 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
 static double *weighted_trapz_last_axis_serial(double *x, double *y, double *w,
                                                npy_intp n,
                                                npy_intp num_elements) {
+  if (num_elements == 0) {
+    return (double *)calloc(1, sizeof(double));
+  }
+
   double *result = (double *)calloc(num_elements, sizeof(double));
   if (result == NULL) {
     return NULL;
@@ -288,6 +308,10 @@ static double *weighted_trapz_last_axis_parallel(double *x, double *y, double *w
                                                  npy_intp n,
                                                  npy_intp num_elements,
                                                  int nthreads) {
+  if (num_elements == 0) {
+    return (double *)calloc(1, sizeof(double));
+  }
+
   double *result = (double *)calloc(num_elements, sizeof(double));
   if (result == NULL) {
     return NULL;
@@ -411,6 +435,10 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
 static double *weighted_simps_last_axis_serial(double *x, double *y, double *w,
                                                npy_intp n,
                                                npy_intp num_elements) {
+  if (num_elements == 0) {
+    return (double *)calloc(1, sizeof(double));
+  }
+
   double *result = (double *)calloc(num_elements, sizeof(double));
   if (result == NULL) {
     return NULL;
@@ -423,7 +451,17 @@ static double *weighted_simps_last_axis_serial(double *x, double *y, double *w,
   double den = 0.0;
   for (npy_intp j = 0; j < (n - 1) / 2; ++j) {
     npy_intp k = 2 * j;
-    den += (x[k + 2] - x[k]) * (w[k] + 4 * w[k + 1] + w[k + 2]) / 6.0;
+    const double h0 = x[k + 1] - x[k];
+    const double h1 = x[k + 2] - x[k + 1];
+
+    if (h0 == 0.0 || h1 == 0.0) {
+      continue;
+    }
+
+    den += (h0 + h1) / 6.0 *
+           ((2.0 - h1 / h0) * w[k] +
+            ((h0 + h1) * (h0 + h1) / (h0 * h1)) * w[k + 1] +
+            (2.0 - h0 / h1) * w[k + 2]);
   }
   if ((n - 1) % 2 != 0) {
     den += 0.5 * (x[n - 1] - x[n - 2]) * (w[n - 1] + w[n - 2]);
@@ -437,10 +475,17 @@ static double *weighted_simps_last_axis_serial(double *x, double *y, double *w,
     double num = 0.0;
     for (npy_intp j = 0; j < (n - 1) / 2; ++j) {
       npy_intp k = 2 * j;
-      num += (x[k + 2] - x[k]) *
-             (y[i * n + k] * w[k] + 4 * y[i * n + k + 1] * w[k + 1] +
-              y[i * n + k + 2] * w[k + 2]) /
-             6.0;
+      const double h0 = x[k + 1] - x[k];
+      const double h1 = x[k + 2] - x[k + 1];
+
+      if (h0 == 0.0 || h1 == 0.0) {
+        continue;
+      }
+
+      num += (h0 + h1) / 6.0 *
+             ((2.0 - h1 / h0) * y[i * n + k] * w[k] +
+              ((h0 + h1) * (h0 + h1) / (h0 * h1)) * y[i * n + k + 1] * w[k + 1] +
+              (2.0 - h0 / h1) * y[i * n + k + 2] * w[k + 2]);
     }
     if ((n - 1) % 2 != 0) {
       num += 0.5 * (x[n - 1] - x[n - 2]) *
@@ -460,6 +505,10 @@ static double *weighted_simps_last_axis_parallel(double *x, double *y, double *w
                                                  npy_intp n,
                                                  npy_intp num_elements,
                                                  int nthreads) {
+  if (num_elements == 0) {
+    return (double *)calloc(1, sizeof(double));
+  }
+
   double *result = (double *)calloc(num_elements, sizeof(double));
   if (result == NULL) {
     return NULL;
@@ -472,7 +521,17 @@ static double *weighted_simps_last_axis_parallel(double *x, double *y, double *w
   double den = 0.0;
   for (npy_intp j = 0; j < (n - 1) / 2; ++j) {
     npy_intp k = 2 * j;
-    den += (x[k + 2] - x[k]) * (w[k] + 4 * w[k + 1] + w[k + 2]) / 6.0;
+    const double h0 = x[k + 1] - x[k];
+    const double h1 = x[k + 2] - x[k + 1];
+
+    if (h0 == 0.0 || h1 == 0.0) {
+      continue;
+    }
+
+    den += (h0 + h1) / 6.0 *
+           ((2.0 - h1 / h0) * w[k] +
+            ((h0 + h1) * (h0 + h1) / (h0 * h1)) * w[k + 1] +
+            (2.0 - h0 / h1) * w[k + 2]);
   }
   if ((n - 1) % 2 != 0) {
     den += 0.5 * (x[n - 1] - x[n - 2]) * (w[n - 1] + w[n - 2]);
@@ -487,10 +546,17 @@ static double *weighted_simps_last_axis_parallel(double *x, double *y, double *w
     double num = 0.0;
     for (npy_intp j = 0; j < (n - 1) / 2; ++j) {
       npy_intp k = 2 * j;
-      num += (x[k + 2] - x[k]) *
-             (y[i * n + k] * w[k] + 4 * y[i * n + k + 1] * w[k + 1] +
-              y[i * n + k + 2] * w[k + 2]) /
-             6.0;
+      const double h0 = x[k + 1] - x[k];
+      const double h1 = x[k + 2] - x[k + 1];
+
+      if (h0 == 0.0 || h1 == 0.0) {
+        continue;
+      }
+
+      num += (h0 + h1) / 6.0 *
+             ((2.0 - h1 / h0) * y[i * n + k] * w[k] +
+              ((h0 + h1) * (h0 + h1) / (h0 * h1)) * y[i * n + k + 1] * w[k + 1] +
+              (2.0 - h0 / h1) * y[i * n + k + 2] * w[k + 2]);
     }
     if ((n - 1) % 2 != 0) {
       num += 0.5 * (x[n - 1] - x[n - 2]) *
