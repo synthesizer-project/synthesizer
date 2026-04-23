@@ -1355,8 +1355,9 @@ class Pipeline:
         either a stellar or black hole components emitting.
 
         Args:
-            kernel (array-like):
-                The gas SPH kernel.
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance used for the
+                LOS gas kernel evaluation.
             kernel_threshold (float):
                 The threshold of the kernel. Default is 1.0.
             kappa (float):
@@ -3174,7 +3175,7 @@ class Pipeline:
                 "Cannot generate smoothed data cubes without a kernel! "
                 "Please pass a kernel to the get_data_cubes_lnu method. "
                 "Example: from synthesizer.kernel_functions import Kernel; "
-                "kernel = Kernel().get_kernel(). Available kernel names: "
+                "kernel = Kernel(). Available kernel names: "
                 "'uniform', 'sph_anarchy', 'gadget_2', 'cubic', 'quintic'. "
                 "Alternatively, use cube_type='hist' for histogram-based "
                 "data cubes."
@@ -3362,7 +3363,7 @@ class Pipeline:
                 "Cannot generate smoothed data cubes without a kernel! "
                 "Please pass a kernel to the get_data_cubes_fnu method. "
                 "Example: from synthesizer.kernel_functions import Kernel; "
-                "kernel = Kernel().get_kernel(). Available kernel names: "
+                "kernel = Kernel(). Available kernel names: "
                 "'uniform', 'sph_anarchy', 'gadget_2', 'cubic', 'quintic'. "
                 "Alternatively, use cube_type='hist' for histogram-based "
                 "data cubes."
