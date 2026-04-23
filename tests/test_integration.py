@@ -40,6 +40,14 @@ def example_data_3d():
     return xs, ys
 
 
+@pytest.fixture
+def example_data_nonuniform_2d():
+    """Fixture for non-uniform 2D example data."""
+    xs = np.geomspace(1e-2, 10.0, 1001)
+    ys = np.tile(np.sin(xs), (8, 1))
+    return xs, ys
+
+
 @pytest.mark.parametrize("threads", [1, 2])
 @pytest.mark.parametrize(
     "example_data", [example_data_1d, example_data_2d, example_data_3d]
@@ -89,6 +97,22 @@ def test_weighted_simpson_integration(example_data, threads, request):
     """Test weighted Simpson integration."""
     xs, ys = request.getfixturevalue(example_data.__name__)
     weights = np.exp(-0.5 * ((xs - xs.mean()) / xs.std()) ** 2)
+
+    expected_num = simpson(y=ys * weights, x=xs, axis=-1)
+    expected_den = simpson(y=weights, x=xs)
+    expected = expected_num / expected_den
+
+    result = weighted_simps_last_axis(xs, ys, weights, threads)
+    np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-8)
+
+
+@pytest.mark.parametrize("threads", [1, 2])
+def test_weighted_simpson_integration_nonuniform_grid(
+    threads, example_data_nonuniform_2d
+):
+    """Weighted Simpson integration should support non-uniform x grids."""
+    xs, ys = example_data_nonuniform_2d
+    weights = 1.0 / (xs + 1.0)
 
     expected_num = simpson(y=ys * weights, x=xs, axis=-1)
     expected_den = simpson(y=weights, x=xs)
