@@ -970,11 +970,10 @@ class Particles:
                 The other particles to compute the column density with.
             attr (str):
                 The attribute to compute the column density of.
-            kernel (array_like, float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+            kernel (Kernel):
+                A ``synthesizer.kernel_functions.Kernel`` instance. This is
+                used to provide both the projected LOS kernel table and the
+                truncated LOS lookup table needed by the C extension.
             mask (bool):
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
@@ -1028,6 +1027,7 @@ class Particles:
         # Set up the kernel inputs to the C function.
         kernel = projected_kernel
         kdim = kernel.size
+        trunc_qdim = truncated_kernel.shape[0]
         zdim = truncated_kernel.shape[1]
 
         # Get particle counts
@@ -1060,6 +1060,7 @@ class Particles:
             npart_i,
             npart_j,
             kdim,
+            trunc_qdim,
             zdim,
             threshold,
             force_loop,

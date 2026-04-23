@@ -227,7 +227,7 @@ class TestLOSColumnDensity:
         col_den = one_star.get_los_column_density(
             empty_gas,
             "masses",
-            np.array([1.0]),
+            self._kernel(),
             mask=mask,
             column_density_attr="sigmalos_mass",
             force_loop=1,

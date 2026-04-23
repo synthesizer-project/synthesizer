@@ -55,8 +55,6 @@ def make_gas():
     )
 
 
-np.random.seed(42)
-
 nstar = 1000
 kernel = Kernel(binsize=128)
 gas = make_gas()
@@ -159,7 +157,18 @@ axes[1].scatter(
     label="Matched stellar samples",
 )
 max_col = max(np.max(col_den_inside), np.max(col_den_behind))
-axes[1].plot([0.0, max_col], [0.0, max_col], "k--", lw=1, label="1:1 line")
+positive_min = min(
+    np.min(col_den_inside[col_den_inside > 0.0]),
+    np.min(col_den_behind[col_den_behind > 0.0]),
+)
+line_floor = min(positive_min, max_col) * 1.0e-3
+axes[1].plot(
+    [line_floor, max_col],
+    [line_floor, max_col],
+    "k--",
+    lw=1,
+    label="1:1 line",
+)
 axes[1].set_xlabel("Fully-behind column density")
 axes[1].set_ylabel("Inside-kernel column density")
 axes[1].legend(loc="upper left")

@@ -7,7 +7,8 @@
  * @brief Integrate one 1D function using composite Simpson's rule.
  *
  * The abscissae are supplied explicitly so this helper can be reused by both
- * generic array integrations and specialised kernel builders.
+ * generic array integrations and specialised kernel builders. The spacing must
+ * be uniform.
  *
  * @param x 1D array of x values.
  * @param y 1D array of y values.

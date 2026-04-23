@@ -313,6 +313,10 @@ PyObject *evaluate_kernel(PyObject *self, PyObject *args) {
     PyErr_SetString(PyExc_ValueError, "radii must be a 1D array.");
     return NULL;
   }
+  if (PyArray_TYPE(np_radii) != NPY_DOUBLE) {
+    PyErr_SetString(PyExc_TypeError, "radii must be float64.");
+    return NULL;
+  }
 
   /* Extract a raw pointer to the float64 radius data. The shared property
    * helper also checks the dtype and contiguity requirements for us. */
