@@ -1010,6 +1010,58 @@ class TestLOSColumnDensity:
         )
 
     @pytest.mark.parametrize(
+        ("label", "star_position", "gas_position", "expect_non_zero"),
+        [
+            (
+                "input wholly in front",
+                (0.0, 0.0, 5.15),
+                (0.45, 0.0, 3.2),
+                True,
+            ),
+            (
+                "input wholly behind",
+                (0.0, 0.0, 1.15),
+                (0.45, 0.0, 3.2),
+                False,
+            ),
+            (
+                "z overlap, source in front",
+                (0.0, 0.0, 3.75),
+                (0.45, 0.0, 3.2),
+                True,
+            ),
+            (
+                "z overlap, source behind",
+                (0.0, 0.0, 2.65),
+                (0.45, 0.0, 3.2),
+                True,
+            ),
+        ],
+        ids=[
+            "wholly-front",
+            "wholly-behind",
+            "overlap-source-front",
+            "overlap-source-behind",
+        ],
+    )
+    def test_uniform_overlap_matches_reference_example_geometries(
+        self,
+        label,
+        star_position,
+        gas_position,
+        expect_non_zero,
+    ):
+        """Match the four overlap geometries used in the example figure."""
+        del label
+        self._assert_uniform_overlap_matches_reference(
+            star_position=star_position,
+            gas_position=gas_position,
+            star_smoothing_length=0.8,
+            gas_smoothing_length=1.0,
+            expect_non_zero=expect_non_zero,
+        )
+
+    @pytest.mark.parametrize(
         "kernel_name",
         ["uniform", "sph_anarchy", "gadget_2", "cubic", "quintic"],
     )

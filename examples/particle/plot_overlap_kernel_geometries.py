@@ -1,13 +1,12 @@
 """
-Smoothed LOS Overlap Geometries
-===============================
+Smoothed LOS Kernel Overlap Geometries
+======================================
 
 This example visualises the source/input geometries handled by the smoothed
-line-of-sight overlap look-up table.
+line-of-sight kernel overlap look-up table.
 
-The key point is that the overlap table does not store four separate code
-paths. Instead it tabulates the kernel-averaged source contribution in terms of
-the normalized pair coordinates
+The key point is that the overlap table tabulates the kernel-averaged source
+contribution in terms of the normalized pair coordinates
 
 - ``q = b / (R_i + R_j)``
 - ``u = (z_i - z_j) / (R_i + R_j)``
