@@ -970,11 +970,10 @@ class Particles:
                 The other particles to compute the column density with.
             attr (str):
                 The attribute to compute the column density of.
-            kernel (array_like, float):
-                A 1D description of the LOS-projected SPH kernel, or a
-                `synthesizer.kernel_functions.Kernel` instance. Values must be
-                in ascending order such that a k element array can be indexed
-                for the value of impact parameter q via kernel[int(k*q)].
+            kernel (Kernel):
+                A ``synthesizer.kernel_functions.Kernel`` instance. This is
+                used to provide both the projected LOS kernel table and the
+                truncated LOS lookup table needed by the C extension.
             mask (bool):
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
@@ -990,11 +989,6 @@ class Particles:
             nthreads (int):
                 The number of threads to use for the calculation.
         """
-        if hasattr(kernel, "get_kernel"):
-            projected_kernel = kernel.get_kernel()
-        else:
-            projected_kernel = kernel
-
         # Ensure we actually have the properties needed
         if self.coordinates is None:
             raise exceptions.InconsistentArguments(
@@ -1014,17 +1008,36 @@ class Particles:
             )
 
         # Set up the kernel inputs to the C function.
-        kernel = np.ascontiguousarray(projected_kernel, dtype=np.float64)
-        kdim = kernel.size
+        if not hasattr(kernel, "get_kernel") or not hasattr(
+            kernel, "get_truncated_los_kernel"
+        ):
+            raise exceptions.InconsistentArguments(
+                "LOS column densities require a Kernel instance so the "
+                "projected and truncated LOS kernel tables are available."
+            )
 
-        # Get particle counts
-        npart_i = self.nparticles
-        npart_j = other_parts.nparticles
+        projected_kernel = np.ascontiguousarray(
+            kernel.get_kernel(), dtype=np.float64
+        )
+        truncated_kernel, _, _ = kernel.get_truncated_los_kernel()
+        truncated_kernel = np.ascontiguousarray(
+            truncated_kernel, dtype=np.float64
+        )
 
         # Set up the inputs from this particle instance.
         pos_i = np.ascontiguousarray(
             self._coordinates[mask, :], dtype=np.float64
         )
+
+        # Set up the kernel inputs to the C function.
+        kernel = projected_kernel
+        kdim = kernel.size
+        trunc_qdim = truncated_kernel.shape[0]
+        zdim = truncated_kernel.shape[1]
+
+        # Get particle counts.
+        npart_i = pos_i.shape[0]
+        npart_j = other_parts.nparticles
 
         # Set up the inputs from the other particle instance.
         pos_j = np.ascontiguousarray(
@@ -1039,6 +1052,7 @@ class Particles:
 
         return (
             kernel,
+            truncated_kernel,
             pos_i,
             pos_j,
             smls,
@@ -1046,6 +1060,8 @@ class Particles:
             npart_i,
             npart_j,
             kdim,
+            trunc_qdim,
+            zdim,
             threshold,
             force_loop,
             min_count,
@@ -1124,10 +1140,6 @@ class Particles:
             udim = u_grid.size
             etadim = eta_grid.size
 
-            # Get particle counts.
-            npart_i = self.nparticles
-            npart_j = other_parts.nparticles
-
             # Set up the inputs from this particle instance.
             pos_i = np.ascontiguousarray(
                 self._coordinates[mask, :], dtype=np.float64
@@ -1135,6 +1147,10 @@ class Particles:
             input_smls = np.ascontiguousarray(
                 self._smoothing_lengths[mask], dtype=np.float64
             )
+
+            # Get particle counts.
+            npart_i = pos_i.shape[0]
+            npart_j = other_parts.nparticles
 
             # Set up the inputs from the other particle instance.
             pos_j = np.ascontiguousarray(
@@ -1193,16 +1209,15 @@ class Particles:
                 The other particles to calculate the column density with.
             density_attr (str):
                 The attribute to use to calculate the column density.
-            kernel (np.ndarray of float):
-                A 1D description of the LOS-projected SPH kernel, or a
-                `synthesizer.kernel_functions.Kernel` instance. Values must be
-                in ascending order such that a k element array can be indexed
-                for the value of impact parameter q via kernel[int(k*q)].
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance. LOS column
+                densities require both the projected kernel table and the
+                truncated LOS kernel table.
             as_points (bool):
                 Whether to treat the input particles in this Particles instance
                 as point-like when evaluating the LOS column density. If False,
-                the input particle kernels must also be accounted for. Default
-                is True.
+                the input particle kernels are accounted for via the overlap
+                kernel table.
             column_density_attr (str):
                 The attribute to store the column density in on the Particles
                 instance. If None, the column density will not be stored. By

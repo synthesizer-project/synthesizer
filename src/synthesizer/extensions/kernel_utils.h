@@ -291,5 +291,4 @@ static inline double get_overlap_kernel_value(
   /* Finally interpolate along the projected-separation direction. */
   return c0 + q_frac * (c1 - c0);
 }
-
 #endif // KERNEL_UTILS_H_
