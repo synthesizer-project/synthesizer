@@ -148,7 +148,7 @@ axes[0].axhline(
     ls=":",
     label="Gas-centre plane",
 )
-axes[0].scatter(
+front_scatter = axes[0].scatter(
     inside_positions[front_mask, 0],
     inside_positions[front_mask, 2],
     s=24,
@@ -157,7 +157,7 @@ axes[0].scatter(
     color="#d62828",
     label="Real stars inside: observer side",
 )
-axes[0].scatter(
+behind_scatter = axes[0].scatter(
     inside_positions[behind_mask, 0],
     inside_positions[behind_mask, 2],
     s=24,
@@ -202,6 +202,11 @@ axes[0].set_aspect("equal")
 axes[0].set_xlabel("x [Mpc]")
 axes[0].set_ylabel("LOS z [Mpc]")
 axes[0].set_title("Real stars and the point-particle approximation")
+axes[0].legend(
+    [front_scatter, behind_scatter],
+    ["Observer side stars", "Far side stars"],
+    loc="upper right",
+)
 
 # Compare the true fractional column to the simplified centre-based point
 # approximation.
