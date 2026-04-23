@@ -256,12 +256,9 @@ static void build_truncated_los_kernel(double *kernel, const double *q_grid,
     /* The cumulative integral is defined to be zero at the first tabulated
      * LOS coordinate. We still evaluate the kernel there so the first
      * trapezoid uses the correct left-hand endpoint value. */
-    {
-      const double radius = sqrt(prev_z * prev_z + q * q);
-      if (radius < 1.0) {
-        prev_value = func(radius);
-      }
-      kernel[iq * zdim] = 0.0;
+    const double radius = sqrt(prev_z * prev_z + q * q);
+    if (radius < 1.0) {
+      prev_value = func(radius);
     }
 
     for (int iz = 1; iz < zdim; iz++) {
