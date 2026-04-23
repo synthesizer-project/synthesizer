@@ -338,7 +338,7 @@ static double calculate_los_recursive(struct cell *c, const double x,
 
   /* Early exit if the projected distance between cells is more than the
    * maximum smoothing length in the cell. */
-  if (c->max_sml_squ < min_projected_dist2(c, x, y)) {
+  if (c->max_sml_squ * (threshold * threshold) < min_projected_dist2(c, x, y)) {
     return 0;
   }
 
@@ -522,6 +522,9 @@ static void los_tree_omp(struct cell *root, const double *pos_i,
       memcpy(&surf_dens[start], surf_dens_thread,
              (end - start) * sizeof(double));
     }
+
+    /* Clean up the thread-local buffer once its results have been copied. */
+    delete[] surf_dens_thread;
   }
 }
 #endif

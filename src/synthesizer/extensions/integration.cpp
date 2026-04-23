@@ -2,7 +2,6 @@
  * Shared C-side integration helpers used by Python extensions.
  *****************************************************************************/
 #include "integration.h"
-#include <math.h>
 
 double trapz_1d(const double *x, const double *y, size_t n) {
   double integral = 0.0;
