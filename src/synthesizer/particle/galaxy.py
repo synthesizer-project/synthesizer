@@ -477,15 +477,15 @@ class Galaxy(BaseGalaxy):
         Args:
             kappa (float):
                 The dust opacity in units of Msun / pc**2.
-            kernel (np.ndarray of float):
-                A 1D description of the LOS-projected SPH kernel, or a
-                `synthesizer.kernel_functions.Kernel` instance. Values must be
-                in ascending order such that a k element array can be indexed
-                for the value of impact parameter q via kernel[int(k*q)].
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance. LOS optical
+                depth calculations require both the projected LOS kernel table
+                and the truncated LOS kernel table.
             as_points (bool):
                 Whether to treat the stellar particles as point-like when
                 evaluating the LOS optical depth. If False, the stellar kernels
-                must also be accounted for. Default is True.
+                are accounted for via the overlap kernel table. Default is
+                True.
             tau_v_attr (str):
                 The attribute to store the tau_v values in the stars object.
                 Defaults to "tau_v".
@@ -576,15 +576,15 @@ class Galaxy(BaseGalaxy):
         Args:
             kappa (float):
                 The dust opacity in units of Msun / pc**2.
-            kernel (np.ndarray of float):
-                A 1D description of the LOS-projected SPH kernel, or a
-                `synthesizer.kernel_functions.Kernel` instance. Values must be
-                in ascending order such that a k element array can be indexed
-                for the value of impact parameter q via kernel[int(k*q)].
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance. LOS optical
+                depth calculations require both the projected LOS kernel table
+                and the truncated LOS kernel table.
             as_points (bool):
                 Whether to treat the black hole particles as point-like when
                 evaluating the LOS optical depth. If False, the black hole
-                kernels must also be accounted for. Default is True.
+                kernels are accounted for via the overlap kernel table.
+                Default is True.
             tau_v_attr (str):
                 The attribute to store the tau_v values in the black_holes
                 object. Defaults to "tau_v".

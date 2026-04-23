@@ -1,5 +1,5 @@
 Imaging
-=======
+========
 
 Synthesizer can be used to generate photometric images or property maps. The underlying engines for these are 
 

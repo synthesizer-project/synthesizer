@@ -4,9 +4,7 @@ import numpy as np
 import pytest
 from unyt import Mpc, Msun, Myr, pc, unyt_array
 
-from synthesizer.exceptions import (
-    InconsistentArguments,
-)
+from synthesizer.exceptions import InconsistentArguments
 from synthesizer.kernel_functions import Kernel
 from synthesizer.particle import Galaxy, Gas, Stars
 from synthesizer.units import unyt_to_ndview
@@ -15,7 +13,6 @@ from synthesizer.units import unyt_to_ndview
 @pytest.fixture
 def one_star():
     """Single star at z=1 Mpc, zero xy."""
-    # Create Stars object with one particle
     star = Stars(
         initial_masses=np.array([1.0]) * Msun,
         ages=np.array([1.0]) * Myr,
@@ -24,7 +21,6 @@ def one_star():
         tau_v=np.array([0.0]),
         coordinates=np.array([[0.0, 0.0, 1.0]]) * Mpc,
     )
-    # Assign dummy arrays needed by LOS
     star.smoothing_lengths = np.array([1.0]) * Mpc
     return star
 
@@ -32,7 +28,7 @@ def one_star():
 @pytest.fixture
 def one_gas_front():
     """Single gas in front of star."""
-    gas = Gas(
+    return Gas(
         masses=np.array([1e6]) * Msun,
         metallicities=np.array([0.01]),
         redshift=0.0,
@@ -40,13 +36,12 @@ def one_gas_front():
         dust_to_metal_ratio=1.0,
         smoothing_lengths=np.array([1.0]) * Mpc,
     )
-    return gas
 
 
 @pytest.fixture
 def one_gas_behind():
     """Single gas behind star: z=2 Mpc."""
-    gas = Gas(
+    return Gas(
         masses=np.array([1e6]) * Msun,
         metallicities=np.array([0.01]),
         redshift=0.0,
@@ -54,23 +49,22 @@ def one_gas_behind():
         dust_to_metal_ratio=1.0,
         smoothing_lengths=np.array([1.0]) * Mpc,
     )
-    return gas
 
 
 class TestLOSColumnDensity:
     """Test the line of sight column density calculations."""
 
     _UNIFORM_W0 = 1.0 / ((4.0 / 3.0) * np.pi)
+    _UNIFORM_PROJECTED_CENTRE = 3.0 / (2.0 * np.pi)
+
+    @staticmethod
+    def _kernel(name="uniform", binsize=32, **kwargs):
+        """Construct a Kernel instance for LOS tests."""
+        return Kernel(name=name, binsize=binsize, **kwargs)
 
     @staticmethod
     def _evaluate_kernel_direct(kernel_name, r):
-        """Evaluate a kernel directly without using lookup tables.
-
-        These expressions mirror the analytic kernel definitions but avoid the
-        projected and overlap lookup-table machinery entirely. They are used to
-        build an independent numerical overlap reference for the smoothed LOS
-        tests.
-        """
+        """Evaluate a kernel directly without using lookup tables."""
         r = np.asarray(r)
         values = np.zeros_like(r, dtype=np.float64)
 
@@ -173,12 +167,7 @@ class TestLOSColumnDensity:
         gas_dust_mass,
         nsample=90,
     ):
-        """Compute a high-resolution reference for the uniform kernel.
-
-        This reference does not use the LOS extension tables. Instead it
-        averages the exact truncated uniform-kernel LOS contribution over a
-        dense grid of sample points inside the input particle kernel.
-        """
+        """Compute a high-resolution reference for the uniform kernel."""
         mids = np.linspace(-1.0 + 1.0 / nsample, 1.0 - 1.0 / nsample, nsample)
         qx, qy, qz = np.meshgrid(mids, mids, mids, indexing="ij")
         mask = qx * qx + qy * qy + qz * qz < 1.0
@@ -223,14 +212,7 @@ class TestLOSColumnDensity:
         nsample=18,
         nz=1025,
     ):
-        """Compute a direct numerical overlap reference.
-
-        This evaluates the smoothed LOS overlap without using any projected or
-        overlap lookup tables. The input-particle average is estimated with a
-        dense kernel-weighted sample of the input support, while the source LOS
-        contribution at each sampled point is integrated numerically along the
-        line of sight.
-        """
+        """Compute a direct numerical overlap reference."""
         mids = np.linspace(-1.0 + 1.0 / nsample, 1.0 - 1.0 / nsample, nsample)
         qx, qy, qz = np.meshgrid(mids, mids, mids, indexing="ij")
         qr = np.sqrt(qx * qx + qy * qy + qz * qz)
@@ -384,40 +366,27 @@ class TestLOSColumnDensity:
             redshift=0.0,
             centre=None,
         )
-        # Simple kernel of length kdim=1
-        kernel = np.array([1.0])
-        kappa = 2.0
-        # Force serial loop by setting force_loop and min_count high
+        kernel = self._kernel()
         tau = gal.get_stellar_los_tau_v(
-            kappa=kappa,
+            kappa=2.0,
             kernel=kernel,
             force_loop=1,
             min_count=10,
         )
-        # For one gas: surf_density = dust_masses/(sml**2) * kernel[0]
-        # dust_masses = mass * metallicity * dust_to_metal_ratio
-        #            = 1e6 Msun * 0.01 * 1.0 = 1e4
-        # sml = 1 Mpc → surf_density = 1e4
-        # τ = kappa * surf_density / (1e6)**2
-        #   = 2.0 * 1e4 / 1e12 = 2e-8
-        expected = np.array([2e-8])
-        assert np.allclose(tau, expected), (
-            f"Expected tau {expected}, got {tau}"
+        expected = np.array(
+            [2.0 * 1e4 * self._UNIFORM_PROJECTED_CENTRE / 1e12]
         )
-        assert np.allclose(one_star.tau_v, expected), (
-            f"Expected star tau_v {expected}, got {one_star.tau_v}"
-        )
+        assert np.allclose(tau, expected)
+        assert np.allclose(one_star.tau_v, expected)
 
     def test_column_density_returns_units_and_stores_attr(
         self, one_star, one_gas_front
     ):
         """LOS column density keeps the correct surface-density units."""
-        kernel = np.array([1.0])
-
         col_den = one_star.get_los_column_density(
             one_gas_front,
             "masses",
-            kernel,
+            self._kernel(),
             column_density_attr="sigmalos_mass",
             force_loop=1,
             min_count=10,
@@ -449,7 +418,7 @@ class TestLOSColumnDensity:
         col_den = empty_stars.get_los_column_density(
             one_gas_front,
             "masses",
-            np.array([1.0]),
+            self._kernel(),
             column_density_attr="sigmalos_mass",
             force_loop=1,
             min_count=10,
@@ -481,7 +450,7 @@ class TestLOSColumnDensity:
         col_den = empty_stars.get_los_column_density(
             one_gas_front,
             "masses",
-            np.array([1.0]),
+            self._kernel(),
             mask=np.array([], dtype=bool),
             column_density_attr="sigmalos_mass",
             force_loop=1,
@@ -505,7 +474,7 @@ class TestLOSColumnDensity:
         col_den = one_star.get_los_column_density(
             empty_gas,
             "masses",
-            np.array([1.0]),
+            self._kernel(),
             column_density_attr="sigmalos_mass",
             force_loop=1,
             min_count=10,
@@ -537,7 +506,7 @@ class TestLOSColumnDensity:
         col_den = one_star.get_los_column_density(
             empty_gas,
             "masses",
-            np.array([1.0]),
+            self._kernel(),
             mask=mask,
             column_density_attr="sigmalos_mass",
             force_loop=1,
@@ -565,7 +534,7 @@ class TestLOSColumnDensity:
             one_star.get_los_column_density(
                 bad_gas,
                 "masses",
-                np.array([1.0]),
+                self._kernel(),
                 force_loop=1,
                 min_count=10,
             )
@@ -588,7 +557,7 @@ class TestLOSColumnDensity:
             one_star.get_los_column_density(
                 bad_gas,
                 "unitless_density",
-                np.array([1.0]),
+                self._kernel(),
                 force_loop=1,
                 min_count=10,
             )
@@ -607,7 +576,7 @@ class TestLOSColumnDensity:
         los_dustsds = one_star.get_los_column_density(
             one_gas_front,
             "dust_masses",
-            np.array([1.0]),
+            self._kernel(),
             force_loop=1,
             min_count=10,
         )
@@ -618,19 +587,22 @@ class TestLOSColumnDensity:
         )
 
         assert los_dustsds.units == expected_units
-        los_dustsds_pc = los_dustsds.copy()
         assert np.allclose(
-            unyt_to_ndview(los_dustsds_pc, Msun / pc**2), [1e-8]
+            unyt_to_ndview(los_dustsds.copy(), Msun / pc**2),
+            [1e-8 * self._UNIFORM_PROJECTED_CENTRE],
         )
 
         tau = gal.get_stellar_los_tau_v(
             kappa=2.0,
-            kernel=np.array([1.0]),
+            kernel=self._kernel(),
             force_loop=1,
             min_count=10,
         )
 
-        assert np.allclose(tau, np.array([2e-8]))
+        assert np.allclose(
+            tau,
+            np.array([2e-8 * self._UNIFORM_PROJECTED_CENTRE]),
+        )
         assert not hasattr(tau, "units")
         assert not hasattr(one_star.tau_v, "units")
 
@@ -639,11 +611,9 @@ class TestLOSColumnDensity:
         gal = Galaxy(
             stars=one_star, gas=one_gas_behind, redshift=0.0, centre=None
         )
-        kernel = np.array([1.0])
-        kappa = 5.0
         tau = gal.get_stellar_los_tau_v(
-            kappa=kappa,
-            kernel=kernel,
+            kappa=5.0,
+            kernel=self._kernel(),
             force_loop=1,
             min_count=10,
         )
@@ -658,7 +628,7 @@ class TestLOSColumnDensity:
             redshift=0.0,
             centre=None,
         )
-        kernel = np.array([1.0])
+        kernel = self._kernel()
 
         tau_default = gal.get_stellar_los_tau_v(
             kappa=2.0,
@@ -675,6 +645,19 @@ class TestLOSColumnDensity:
         )
 
         assert np.allclose(tau_default, tau_explicit)
+
+    def test_column_density_point_los_requires_kernel_object(
+        self, one_star, one_gas_front
+    ):
+        """Point LOS should reject raw projected-kernel arrays."""
+        with pytest.raises(InconsistentArguments, match="Kernel instance"):
+            one_star.get_los_column_density(
+                one_gas_front,
+                "dust_masses",
+                np.array([1.0]),
+                force_loop=1,
+                min_count=10,
+            )
 
     def test_column_density_smoothed_input_changes_result(
         self, one_star, one_gas_front
@@ -719,20 +702,21 @@ class TestLOSColumnDensity:
         )
         kernel = Kernel(name="uniform", binsize=8)
 
-        tau_object = gal.get_stellar_los_tau_v(
+        tau_default = gal.get_stellar_los_tau_v(
             kappa=2.0,
             kernel=kernel,
             force_loop=1,
             min_count=10,
         )
-        tau_array = gal.get_stellar_los_tau_v(
+        tau_explicit = gal.get_stellar_los_tau_v(
             kappa=2.0,
-            kernel=kernel.get_kernel(),
+            kernel=kernel,
+            as_points=True,
             force_loop=1,
             min_count=10,
         )
 
-        assert np.allclose(tau_object, tau_array)
+        assert np.allclose(tau_default, tau_explicit)
 
     def test_column_density_smoothed_input_requires_smoothing_lengths(
         self, one_gas_front
@@ -1030,11 +1014,7 @@ class TestLOSColumnDensity:
         ["uniform", "sph_anarchy", "gadget_2", "cubic", "quintic"],
     )
     def test_direct_overlap_matches_reference_all_kernels(self, kernel_name):
-        """Test the overlap table against a direct reference for all kernels.
-
-        This is the explicit overlap-accuracy check for the current lookup
-        table implementation.
-        """
+        """Test the overlap table against a direct reference."""
         self._assert_direct_overlap_matches_reference(
             kernel_name=kernel_name,
             star_position=(0.0, 0.0, 1.0),
@@ -1066,11 +1046,94 @@ class TestLOSColumnDensity:
             stars=one_star, gas=None, redshift=0.0, centre=None
         )
         with pytest.raises(InconsistentArguments):
-            gal_no_gas.get_stellar_los_tau_v(kappa=1.0, kernel=np.array([1.0]))
+            gal_no_gas.get_stellar_los_tau_v(kappa=1.0, kernel=self._kernel())
+
         gal_no_star = Galaxy(
             stars=None, gas=one_gas_front, redshift=0.0, centre=None
         )
         with pytest.raises(InconsistentArguments):
-            gal_no_star.get_stellar_los_tau_v(
-                kappa=1.0, kernel=np.array([1.0])
-            )
+            gal_no_star.get_stellar_los_tau_v(kappa=1.0, kernel=self._kernel())
+
+    def test_column_density_inside_source_kernel_is_partial(self):
+        """A star inside a foreground gas kernel sees a partial column."""
+        star = Stars(
+            initial_masses=np.array([1.0]) * Msun,
+            ages=np.array([1.0]) * Myr,
+            metallicities=np.array([0.02]),
+            redshift=0.0,
+            tau_v=np.array([0.0]),
+            coordinates=np.array([[0.0, 0.0, 0.5]]) * Mpc,
+        )
+        star.smoothing_lengths = np.array([1.0]) * Mpc
+
+        gas = Gas(
+            masses=np.array([1e6]) * Msun,
+            metallicities=np.array([0.01]),
+            redshift=0.0,
+            coordinates=np.array([[0.0, 0.0, 0.0]]) * Mpc,
+            dust_to_metal_ratio=1.0,
+            smoothing_lengths=np.array([1.0]) * Mpc,
+        )
+
+        full_star = Stars(
+            initial_masses=np.array([1.0]) * Msun,
+            ages=np.array([1.0]) * Myr,
+            metallicities=np.array([0.02]),
+            redshift=0.0,
+            tau_v=np.array([0.0]),
+            coordinates=np.array([[0.0, 0.0, 2.0]]) * Mpc,
+        )
+        full_star.smoothing_lengths = np.array([1.0]) * Mpc
+
+        partial = star.get_los_column_density(
+            gas,
+            "dust_masses",
+            self._kernel(),
+            force_loop=1,
+            min_count=10,
+        )
+        full = full_star.get_los_column_density(
+            gas,
+            "dust_masses",
+            self._kernel(),
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert partial[0] > 0.0
+        assert partial[0] < full[0]
+
+    def test_point_los_respects_truncated_q_and_z_bins(
+        self, one_star, one_gas_front
+    ):
+        """Point LOS should use the dedicated truncated-table dimensions."""
+        coarse = self._kernel(
+            binsize=32,
+            truncated_q_binsize=8,
+            truncated_z_binsize=17,
+        )
+        fine = self._kernel(
+            binsize=32,
+            truncated_q_binsize=64,
+            truncated_z_binsize=257,
+        )
+
+        coarse_tau = one_star.get_los_column_density(
+            one_gas_front,
+            "dust_masses",
+            coarse,
+            force_loop=1,
+            min_count=10,
+        )
+        fine_tau = one_star.get_los_column_density(
+            one_gas_front,
+            "dust_masses",
+            fine,
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert np.all(np.isfinite(coarse_tau))
+        assert np.all(np.isfinite(fine_tau))
+        assert np.all(coarse_tau > 0.0)
+        assert np.all(fine_tau > 0.0)

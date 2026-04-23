@@ -264,9 +264,9 @@ extensions = [
         "synthesizer.extensions.kernel",
         [
             "src/synthesizer/extensions/kernel.cpp",
+            "src/synthesizer/extensions/integration.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
-            "src/synthesizer/extensions/timers.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -391,6 +391,7 @@ extensions = [
         "synthesizer.extensions.integration",
         [
             "src/synthesizer/extensions/integration.cpp",
+            "src/synthesizer/extensions/integration_py.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/cpp_to_python.cpp",
             "src/synthesizer/extensions/part_props.cpp",
