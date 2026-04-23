@@ -94,19 +94,11 @@ full_column_positions = inside_positions.copy()
 full_column_positions[:, 2] = gas_z + approx_offset
 
 stars_inside = make_stars(inside_positions)
-stars_approx = make_stars(approx_positions)
 stars_full = make_stars(full_column_positions)
 
 gal_inside = Galaxy("inside", stars=stars_inside, gas=gas, redshift=0.0)
 
 col_den_inside = stars_inside.get_los_column_density(
-    gas,
-    "dust_masses",
-    kernel,
-    force_loop=1,
-    min_count=10,
-)
-col_den_approx = stars_approx.get_los_column_density(
     gas,
     "dust_masses",
     kernel,
@@ -129,13 +121,8 @@ tau_inside = gal_inside.get_stellar_los_tau_v(
 )
 
 inside_fraction = (col_den_inside / col_den_full).value
-approx_fraction = np.where(front_mask, 0.0, 1.0)
 
 print(f"Median inside-kernel column density: {np.median(col_den_inside):.4e}")
-print(
-    "Median point-approximation column density: "
-    f"{np.median(col_den_approx):.4e}"
-)
 print(f"Median inside-kernel tau_v: {np.median(tau_inside):.4e}")
 print(f"Median true column fraction: {np.median(inside_fraction):.4f}")
 
@@ -242,7 +229,7 @@ axes[1].step(
     color="#264653",
     lw=2.0,
     ls="--",
-    label="Kernel-centred",
+    label="Full column",
 )
 axes[1].set_xlim(-1.05, 1.05)
 axes[1].set_ylim(-0.02, 1.05)
