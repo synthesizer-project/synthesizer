@@ -20,12 +20,12 @@ def simple_UVJ(grid, target_metallicity=0.01):
         grid (Grid): The grid object.
         target_metallicity (float): The metallicity to use for the calculation.
     """
-    iZ = grid.get_nearest_index(target_metallicity, grid.metallicity)
+    iZ = grid.get_nearest_index(target_metallicity, grid.metallicities)
 
     fc = UVJ(new_lam=grid.lam)
     # fc.plot_transmission_curves()
 
-    for ia, log10age in enumerate(grid.log10age):
+    for ia, log10age in enumerate(grid.log10ages):
         sed = grid.get_sed_at_grid_point(
             (ia, iZ)
         )  # creates an SED object from a given grid point
@@ -55,14 +55,14 @@ def UVJ_metallicity(grid):
     fc = UVJ(new_lam=grid.lam)
 
     table = Table()
-    table.meta["metallicities"] = list(grid.metallicity)
-    table["log10ages"] = grid.log10age
+    table.meta["metallicities"] = list(grid.metallicities)
+    table["log10ages"] = grid.log10ages
 
-    for iZ, Z in enumerate(grid.metallicity):
+    for iZ, Z in enumerate(grid.metallicities):
         for f in "UVJ":
-            table[f"{Z}_{f}"] = np.zeros(len(grid.log10age))
+            table[f"{Z}_{f}"] = np.zeros(len(grid.log10ages))
 
-        for ia, log10age in enumerate(grid.log10age):
+        for ia, log10age in enumerate(grid.log10ages):
             sed = grid.get_sed_at_grid_point(
                 (ia, iZ)
             )  # creates an SED object from a given grid point
@@ -86,9 +86,9 @@ def UVJ_metallicity(grid):
         left=0.15, top=0.975, bottom=0.1, right=0.95, wspace=0.0, hspace=0.0
     )
 
-    colors = cmr.take_cmap_colors("cmr.bubblegum", len(grid.metallicity))
+    colors = cmr.take_cmap_colors("cmr.bubblegum", len(grid.metallicities))
 
-    for Z, c in zip(grid.metallicity, colors):
+    for Z, c in zip(grid.metallicities, colors):
         x = table["log10ages"] - 6.0
 
         for i, (f1, f2) in enumerate(["UV", "VJ"]):

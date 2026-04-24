@@ -373,6 +373,7 @@ def pluralize(word: str) -> str:
         "mass": "masses",
         "gas": "gases",
         "axis": "axes",
+        "accretion_rate_eddington": "accretion_rates_eddington",
     }
     if word in special_cases:
         return special_cases[word]
@@ -404,6 +405,7 @@ def depluralize(word: str) -> str:
         "gases": "gas",
         "gas": "gas",  # Already singular
         "axes": "axis",
+        "accretion_rates_eddington": "accretion_rate_eddington",
     }
     if word in special_cases:
         return special_cases[word]
@@ -543,6 +545,29 @@ def ensure_array_c_compatible_double(arr):
         arr = unyt_array(arr, units)
 
     return arr
+
+
+def as_contiguous(array):
+    """Return a contiguous copy of an array-like object.
+
+    This preserves units for `unyt_array` inputs while ensuring the
+    underlying storage is C contiguous.
+
+    Args:
+        array (array-like):
+            The input array.
+
+    Returns:
+        array-like:
+            A contiguous array of the same type where possible.
+    """
+    if array is None:
+        return None
+
+    if isinstance(array, unyt_array):
+        return unyt_array(np.ascontiguousarray(array.value), array.units)
+
+    return np.ascontiguousarray(array)
 
 
 def get_attr_c_compatible_double(obj, attr):

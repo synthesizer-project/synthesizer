@@ -31,9 +31,10 @@ from synthesizer.grid import Grid
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
-from synthesizer.synth_warnings import deprecated, warn
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.util_funcs import combine_arrays
 
 
@@ -120,6 +121,7 @@ class Stars(Particles, StarsComponent):
         softening_length=Mpc,
         centre=Mpc,
     )
+    @timed("ParticleStars.__init__")
     def __init__(
         self,
         initial_masses,
@@ -693,8 +695,8 @@ class Stars(Particles, StarsComponent):
         for i, _pmask in enumerate(np.where(pmask)[0]):
             # Create a parametric Stars object
             stars[i] = Para_Stars(
-                grid.log10age,
-                grid.metallicity,
+                grid.log10ages,
+                grid.metallicities,
                 sf_hist=sfh,
                 metal_dist=self.metallicities[_pmask],
                 initial_mass=self.initial_masses[_pmask],
@@ -711,8 +713,8 @@ class Stars(Particles, StarsComponent):
         # Create index pairs for the SFZH
         index_pairs = np.asarray(
             [
-                [[j, i] for i in np.arange(len(grid.metallicity))]
-                for j in np.arange(len(grid.log10age))
+                [[j, i] for i in np.arange(len(grid.metallicities))]
+                for j in np.arange(len(grid.log10ages))
             ]
         )
 
@@ -723,7 +725,7 @@ class Stars(Particles, StarsComponent):
         new_stars = self.__class__(
             stars.sfzh[stars.sfzh > 0] * Msun,
             10 ** grid.log10ages[grid_indexes[:, 0]] * yr,
-            grid.metallicity[grid_indexes[:, 1]],
+            grid.metallicities[grid_indexes[:, 1]],
             redshift=self.redshift,
             masses=np.zeros(np.sum(stars.sfzh > 0)) * Msun,
         )
@@ -1032,6 +1034,7 @@ class Stars(Particles, StarsComponent):
             np.ascontiguousarray(self.log10ages, dtype=np.float64),
             np.ascontiguousarray(self.log10metallicities, dtype=np.float64),
         ]
+        prop_names = ("log10ages", "log10metallicities")
         part_mass = np.ascontiguousarray(
             self._initial_masses, dtype=np.float64
         )
@@ -1062,8 +1065,10 @@ class Stars(Particles, StarsComponent):
             grid_assignment_method,
             nthreads,
             None,
+            prop_names,
         )
 
+    @timed("ParticleStars.get_sfzh")
     def get_sfzh(
         self,
         log10ages,
@@ -1204,6 +1209,7 @@ class Stars(Particles, StarsComponent):
         part_props = [
             np.ascontiguousarray(self.log10ages, dtype=np.float64),
         ]
+        prop_names = ("log10ages",)
         part_mass = np.ascontiguousarray(
             self._initial_masses, dtype=np.float64
         )
@@ -1234,8 +1240,10 @@ class Stars(Particles, StarsComponent):
             grid_assignment_method,
             nthreads,
             None,
+            prop_names,
         )
 
+    @timed("ParticleStars.get_sfh")
     def get_sfh(self, log10ages, grid_assignment_method="cic", nthreads=0):
         """Generate the SFH of these stars in terms of mass.
 
@@ -1359,6 +1367,7 @@ class Stars(Particles, StarsComponent):
         part_props = [
             np.ascontiguousarray(self.metallicities, dtype=np.float64),
         ]
+        prop_names = ("metallicities",)
         part_mass = np.ascontiguousarray(
             self._initial_masses, dtype=np.float64
         )
@@ -1389,8 +1398,10 @@ class Stars(Particles, StarsComponent):
             grid_assignment_method,
             nthreads,
             None,
+            prop_names,
         )
 
+    @timed("ParticleStars.get_metal_dist")
     def get_metal_dist(
         self,
         metallicities,
@@ -1482,173 +1493,6 @@ class Stars(Particles, StarsComponent):
             plt.show()
 
         return fig, ax
-
-    @deprecated(
-        message="is now just a wrapper "
-        "around get_spectra. It will be removed by v1.0.0."
-    )
-    def get_particle_spectra(
-        self,
-        emission_model,
-        dust_curves=None,
-        tau_v=None,
-        fesc=None,
-        mask=None,
-        verbose=True,
-        **kwargs,
-    ):
-        """Generate stellar spectra as described by the emission model.
-
-        Note: Now deprecated in favour of get_spectra and emission models
-        knowing which spectra should be per particle.
-
-        Args:
-            emission_model (EmissionModel):
-                The emission model to use.
-            dust_curves (dict):
-                An override to the emission model dust curves. Either:
-                    - None, indicating the dust_curves defined on the emission
-                      models should be used.
-                    - A single dust curve to apply to all emission models.
-                    - A dictionary of the form {<label>: <dust_curve instance>}
-                      to use a specific dust curve instance with particular
-                      properties.
-            tau_v (dict):
-                An override to the dust model optical depth. Either:
-                    - None, indicating the tau_v defined on the emission model
-                      should be used.
-                    - A float to use as the optical depth for all models.
-                    - A dictionary of the form {<label>: float(<tau_v>)}
-                      to use a specific optical depth with a particular
-                      model or {<label>: str(<attribute>)} to use an attribute
-                      of the component as the optical depth.
-            fesc (dict):
-                An override to the emission model escape fraction. Either:
-                    - None, indicating the fesc defined on the emission model
-                      should be used.
-                    - A float to use as the escape fraction for all models.
-                    - A dictionary of the form {<label>: float(<fesc>)}
-                      to use a specific escape fraction with a particular
-                      model or {<label>: str(<attribute>)} to use an
-                      attribute of the component as the escape fraction.
-            mask (dict):
-                An override to the emission model mask. Either:
-                    - None, indicating the mask defined on the emission model
-                      should be used.
-                    - A dictionary of the form {<label>: {"attr": attr,
-                      "thresh": thresh, "op": op}} to add a specific mask to
-                      a particular model.
-            verbose (bool):
-                Are we talking?
-            kwargs (dict):
-                Any additional keyword arguments to pass to the generator
-                function.
-
-        Returns:
-            dict: A dictionary of spectra which can be attached to the
-            appropriate spectra attribute of the component
-            (spectra/particle_spectra).
-        """
-        previous_per_part = emission_model.per_particle
-        emission_model.set_per_particle(True)
-        spectra = self.get_spectra(
-            emission_model,
-            dust_curves=dust_curves,
-            tau_v=tau_v,
-            fesc=fesc,
-            mask=mask,
-            verbose=verbose,
-            **kwargs,
-        )
-        emission_model.set_per_particle(previous_per_part)
-        return spectra
-
-    @deprecated(
-        message="is now just a wrapper "
-        "around get_lines. It will be removed by v1.0.0."
-    )
-    def get_particle_lines(
-        self,
-        emission_model,
-        line_ids=None,
-        dust_curves=None,
-        tau_v=None,
-        fesc=None,
-        mask=None,
-        verbose=True,
-        **kwargs,
-    ):
-        """Generate stellar lines as described by the emission model.
-
-        Note: Now deprecated in favour of get_lines and emission models
-        knowing which lines should be per particle.
-
-        Args:
-            emission_model (EmissionModel):
-                The emission model to use.
-            line_ids (list, optional):
-                A list of line_ids. Doublets can be specified as a nested
-                list or using a comma (e.g., 'OIII4363,OIII4959').
-                If None, all available lines from the emission model grid
-                will be returned.
-            dust_curves (dict):
-                An override to the emission model dust curves. Either:
-                    - None, indicating the dust_curves defined on the emission
-                      models should be used.
-                    - A single dust curve to apply to all emission models.
-                    - A dictionary of the form {<label>: <dust_curve instance>}
-                      to use a specific dust curve instance with particular
-                      properties.
-            tau_v (dict):
-                An override to the dust model optical depth. Either:
-                    - None, indicating the tau_v defined on the emission model
-                      should be used.
-                    - A float to use as the optical depth for all models.
-                    - A dictionary of the form {<label>: float(<tau_v>)}
-                      to use a specific optical depth with a particular
-                      model or {<label>: str(<attribute>)} to use an attribute
-                      of the component as the optical depth.
-            fesc (dict):
-                An override to the emission model escape fraction. Either:
-                    - None, indicating the fesc defined on the emission model
-                      should be used.
-                    - A float to use as the escape fraction for all models.
-                    - A dictionary of the form {<label>: float(<fesc>)}
-                      to use a specific escape fraction with a particular
-                      model or {<label>: str(<attribute>)} to use an
-                      attribute of the component as the escape fraction.
-            mask (dict):
-                An override to the emission model mask. Either:
-                    - None, indicating the mask defined on the emission model
-                      should be used.
-                    - A dictionary of the form {<label>: {"attr": attr,
-                      "thresh": thresh, "op": op}} to add a specific mask to
-                      a particular model.
-            verbose (bool):
-                Are we talking?
-            kwargs (dict):
-                Any additional keyword arguments to pass to the generator
-                function.
-
-        Returns:
-            LineCollection:
-                A LineCollection object containing the lines defined by the
-                root model.
-        """
-        previous_per_part = emission_model.per_particle
-        emission_model.set_per_particle(True)
-        lines = self.get_lines(
-            line_ids,
-            emission_model,
-            dust_curves=dust_curves,
-            tau_v=tau_v,
-            fesc=fesc,
-            mask=mask,
-            verbose=verbose,
-            **kwargs,
-        )
-        emission_model.set_per_particle(previous_per_part)
-        return lines
 
 
 @accepts(initial_mass=Msun.in_base("galactic"))

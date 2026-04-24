@@ -2,18 +2,16 @@
 
 <img src="https://raw.githubusercontent.com/synthesizer-project/synthesizer/main/docs/source/img/synthesizer_logo.png" align="right" width="140px"/>
 
-[![workflow](https://github.com/synthesizer-project/synthesizer/actions/workflows/python-app.yml/badge.svg)](https://github.com/synthesizer-project/synthesizer/actions)
+[![workflow](https://github.com/synthesizer-project/synthesizer/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/synthesizer-project/synthesizer/actions)
 [![Documentation Status](https://github.com/synthesizer-project/synthesizer/actions/workflows/static.yml/badge.svg)](https://synthesizer-project.github.io/synthesizer/)
 [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/synthesizer-project/synthesizer/blob/main/docs/CONTRIBUTING.md)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![PyPI version](https://img.shields.io/pypi/v/cosmos-synthesizer.svg)](https://pypi.org/project/cosmos-synthesizer/)
-[![status](https://joss.theoj.org/papers/cc4f37b2d2fec7d1bd48af22c01d78a7/status.svg)](https://joss.theoj.org/papers/cc4f37b2d2fec7d1bd48af22c01d78a7)
-<!--
-This will also display the number of downloads but lets hide for now...
 [![Downloads](https://img.shields.io/pypi/dm/cosmos-synthesizer.svg)](https://pypi.org/project/cosmos-synthesizer/)
--->
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.09436/status.svg)](https://doi.org/10.21105/joss.09436)
+[![DOI](https://zenodo.org/badge/483867728.svg)](https://doi.org/10.5281/zenodo.18910098)
 
 Synthesizer is a Python package for generating synthetic astrophysical observables. It is modular, flexible, extensible and fast.
 
@@ -45,7 +43,7 @@ Please see [here](docs/CONTRIBUTING.md) for contribution guidelines.
 
 ## Citation & Acknowledgement
 
-Please cite **both** of the following papers ([Lovell et al. 2025](https://astro.theoj.org/article/145766-synthesizer-a-software-package-for-synthetic-astronomical-observables), [Roper et al. 2025](https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R/abstract)) if you use Synthesizer in your research:
+Please cite **both** of the following papers ([Lovell et al. 2025](https://astro.theoj.org/article/145766-synthesizer-a-software-package-for-synthetic-astronomical-observables), [Roper et al. 2026](https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R/abstract)) if you use Synthesizer in your research:
 
     @article{Lovell2025Synthesizer,
     	author = {Lovell, Christopher C. and Roper, William J. and Vijayan, Aswin P. and Wilkins, Stephen M. and Newman, Sophie and Seeyave, Louise},
@@ -58,22 +56,17 @@ Please cite **both** of the following papers ([Lovell et al. 2025](https://astro
     	volume = {8},
     }
 
-    @ARTICLE{2025arXiv250615811R,
-       author = {{Roper}, Will J. and {Lovell}, Christopher and {Vijayan}, Aswin and {Wilkins}, Stephen and {Akins}, Hollis and {Berger}, Sabrina and {Sant Fournier}, Connor and {Harvey}, Thomas and {Iyer}, Kartheik and {Leonardi}, Marco and {Newman}, Sophie and {Pautasso}, Borja and {Perry}, Ashley and {Seeyave}, Louise and {Sommovigo}, Laura},
-        title = "{Synthesizer: Synthetic Observables For Modern Astronomy}",
-      journal = {arXiv e-prints},
-     keywords = {Instrumentation and Methods for Astrophysics, Astrophysics of Galaxies},
-         year = 2025,
-        month = jun,
-          eid = {arXiv:2506.15811},
-        pages = {arXiv:2506.15811},
-    archivePrefix = {arXiv},
-           eprint = {2506.15811},
-     primaryClass = {astro-ph.IM},
-           adsurl = {https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R},
-          adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+    @article{Roper2026Synthesizer,
+        author = {Roper, Will J. and Lovell, Christopher C. and Vijayan, Aswin and Wilkins, Stephen and Akins, Hollis and Berger, Sabrina and Sant Fournier, Connor and Harvey, Thomas and Iyer, Kartheik and Leonardi, Marco and Newman, Sophie and Pautasso, Borja and Perry, Ashley and Seeyave, Louise and Sommovigo, Laura and Punyasheel, Paurush and d'Hautefort, Adrien Aufan Stoffels and Rawlings, Alex},
+        journal = {Journal of Open Source Software},
+        doi = {10.21105/joss.09436},
+        year = {2026},
+        publisher = {Open Journals},
+        title = {Synthesizer: Synthetic Observables for Modern Astronomy},
+        volume = {11},
+        number = {119},
+        pages = {9436},
     }
-
 
 ## Licence
 

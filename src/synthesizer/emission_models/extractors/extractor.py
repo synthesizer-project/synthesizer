@@ -29,10 +29,10 @@ from synthesizer.extensions.integrated_spectra import compute_integrated_sed
 from synthesizer.extensions.particle_spectra import (
     compute_particle_seds,
 )
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unyt_to_ndview
 from synthesizer.utils import get_attr_c_compatible_double
+from synthesizer.utils.operation_timers import timed, timer
 
 
 class Extractor(ABC):
@@ -80,6 +80,7 @@ class Extractor(ABC):
             The line wavelengths.
     """
 
+    @timed("Extractor.__init__")
     def __init__(self, grid, extract):
         """Initialize the Extractor object.
 
@@ -90,8 +91,6 @@ class Extractor(ABC):
                 The emission type to extract from the grid.
 
         """
-        start = tic()
-
         # Get the attribute names we will have to extract from the emitter
         self._emitter_attributes = grid._extract_axes
 
@@ -136,8 +135,7 @@ class Extractor(ABC):
         # Finally, attach a pointer to the grid object
         self._grid = grid
 
-        toc("Setting up the Extractor (including grid axis extraction)", start)
-
+    @timed("Extractor.get_emitter_attrs")
     def get_emitter_attrs(self, emitter, model, do_grid_check):
         """Get the attributes from the emitter.
 
@@ -156,8 +154,6 @@ class Extractor(ABC):
             tuple
                 The extracted attributes and the weight variable.
         """
-        start = tic()
-
         # Set up a list to store the extracted attributes
         extracted = []
 
@@ -193,16 +189,22 @@ class Extractor(ABC):
             self.check_emitter_attrs(extracted)
 
         # Also extract the weight variable
-        weight = get_param(self._weight_var, model, None, emitter)
+        if self._weight_var in [None, "None"]:
+            # If no weight variable is provided, use a weight of 1.0
+            if hasattr(emitter, "nparticles"):
+                weight = np.ones(emitter.nparticles)
+            else:
+                weight = 1.0
+        else:
+            weight = get_param(self._weight_var, model, None, emitter)
 
         # Remove the units from the weight if necessary
         if isinstance(weight, (unyt_array, unyt_quantity)):
             weight = weight.ndview
 
-        toc("Preparing particle data for extraction", start)
-
         return tuple(extracted), weight
 
+    @timed("Extractor.check_emitter_attrs")
     def check_emitter_attrs(self, emitter, extracted_attrs):
         """Compute the fraction of emitter attributes outside the grid axes.
 
@@ -215,8 +217,6 @@ class Extractor(ABC):
             extracted_attrs (tuple):
                 The extracted attributes from the emitter.
         """
-        start = tic()
-
         # Loop over the extracted attributes and check if they are outside the
         # grid axes, we'll do this by updating a mask for each attribute
         inside = np.zeros_like(extracted_attrs[0], dtype=bool)
@@ -235,8 +235,6 @@ class Extractor(ABC):
                 f"{frac_outside * 100:.2f}% of the attributes outside"
                 " the grid axes."
             )
-
-        toc("Checking the particle data against the grid axes", start)
 
     @abstractmethod
     def generate_lnu(self, *args, **kwargs):
@@ -259,6 +257,7 @@ class IntegratedParticleExtractor(Extractor):
     to reduce the computation time.
     """
 
+    @timed("IntegratedParticleExtractor.generate_lnu")
     def generate_lnu(
         self,
         emitter,
@@ -295,39 +294,40 @@ class IntegratedParticleExtractor(Extractor):
         Returns:
             Sed: The integrated spectra.
         """
-        start = tic()
+        with timer("IntegratedParticleExtractor.generate_lnu.setup"):
+            # Check we actually have to do the calculation
+            if emitter.nparticles == 0:
+                warn("Found emitter with no particles, returning empty Sed")
+                return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
+            elif mask is not None and np.sum(mask) == 0:
+                warn(
+                    "A mask has filtered out all particles, returning "
+                    "empty Sed"
+                )
+                return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
 
-        # Check we actually have to do the calculation
-        if emitter.nparticles == 0:
-            warn("Found emitter with no particles, returning empty Sed")
-            return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
-        elif mask is not None and np.sum(mask) == 0:
-            warn("A mask has filtered out all particles, returning empty Sed")
-            return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
+            # Get the attributes from the emitter
+            extracted, weight = self.get_emitter_attrs(
+                emitter,
+                model,
+                do_grid_check,
+            )
 
-        # Get the attributes from the emitter
-        extracted, weight = self.get_emitter_attrs(
-            emitter,
-            model,
-            do_grid_check,
-        )
+            # If nthreads is -1 then use all available threads
+            if nthreads == -1:
+                nthreads = os.cpu_count()
 
-        # If nthreads is -1 then use all available threads
-        if nthreads == -1:
-            nthreads = os.cpu_count()
-
-        # Get the grid_weights if they exist and we don't have a mask
-        if mask is None:
-            grid_weights = emitter._grid_weights.get(
-                grid_assignment_method.lower(), {}
-            ).get(self._grid.grid_name, None)
-        else:
-            grid_weights = None
-
-        toc("Setting up integrated lnu calculation", start)
+            # Get the grid_weights if they exist and we don't have a mask
+            if mask is None:
+                grid_weights = emitter._grid_weights.get(
+                    grid_assignment_method.lower(), {}
+                ).get(self._grid.grid_name, None)
+            else:
+                grid_weights = None
 
         # Compute the integrated lnu array (this is attached to an Sed
         # object elsewhere)
+        emitter_attr_names = tuple(self._emitter_attributes)
         spec, grid_weights = compute_integrated_sed(
             self._spectra_grid,
             self._grid_axes,
@@ -342,6 +342,7 @@ class IntegratedParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # If we have no mask then lets store the grid weights in case
@@ -357,6 +358,7 @@ class IntegratedParticleExtractor(Extractor):
 
         return Sed(model.lam, spec * erg / s / Hz)
 
+    @timed("IntegratedParticleExtractor.generate_line")
     def generate_line(
         self,
         emitter,
@@ -390,53 +392,54 @@ class IntegratedParticleExtractor(Extractor):
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
         """
-        start = tic()
+        with timer("IntegratedParticleExtractor.generate_line.setup"):
+            # Check we actually have to do the calculation
+            if emitter.nparticles == 0:
+                warn("Found emitter with no particles, returning empty Line")
+                return LineCollection(
+                    line_ids=self._grid.line_ids,
+                    lam=self._line_lams,
+                    lum=np.zeros(self._grid.nlines) * erg / s,
+                    cont=np.zeros(self._grid.nlines) * erg / s / Hz,
+                )
+            elif mask is not None and np.sum(mask) == 0:
+                warn(
+                    "A mask has filtered out all particles, returning "
+                    "empty Line"
+                )
+                return LineCollection(
+                    line_ids=self._grid.line_ids,
+                    lam=self._line_lams,
+                    lum=np.zeros(self._grid.nlines) * erg / s,
+                    cont=np.zeros(self._grid.nlines) * erg / s / Hz,
+                )
 
-        # Check we actually have to do the calculation
-        if emitter.nparticles == 0:
-            warn("Found emitter with no particles, returning empty Line")
-            return LineCollection(
-                line_ids=self._grid.line_ids,
-                lam=self._line_lams,
-                lum=np.zeros(self._grid.nlines) * erg / s,
-                cont=np.zeros(self._grid.nlines) * erg / s / Hz,
+            # Get the attributes from the emitter
+            extracted, weight = self.get_emitter_attrs(
+                emitter,
+                model,
+                do_grid_check,
             )
-        elif mask is not None and np.sum(mask) == 0:
-            warn("A mask has filtered out all particles, returning empty Line")
-            return LineCollection(
-                line_ids=self._grid.line_ids,
-                lam=self._line_lams,
-                lum=np.zeros(self._grid.nlines) * erg / s,
-                cont=np.zeros(self._grid.nlines) * erg / s / Hz,
-            )
 
-        # Get the attributes from the emitter
-        extracted, weight = self.get_emitter_attrs(
-            emitter,
-            model,
-            do_grid_check,
-        )
+            # If nthreads is -1 then use all available threads
+            if nthreads == -1:
+                nthreads = os.cpu_count()
 
-        # If nthreads is -1 then use all available threads
-        if nthreads == -1:
-            nthreads = os.cpu_count()
+            # Get the grid_weights if they exist and we don't have a mask
+            if mask is None:
+                grid_weights = emitter._grid_weights.get(
+                    grid_assignment_method.lower(), {}
+                ).get(self._grid.grid_name, None)
+            else:
+                grid_weights = None
 
-        # Get the grid_weights if they exist and we don't have a mask
-        if mask is None:
-            grid_weights = emitter._grid_weights.get(
-                grid_assignment_method.lower(), {}
-            ).get(self._grid.grid_name, None)
-        else:
-            grid_weights = None
-
-        # We need to modify the grid dims to account for the difference
-        # in the final axis between the spectra and line grids
-        grid_dims = np.array(self._grid_dims)
-        grid_dims[-1] = self._grid.nlines
-
-        toc("Setting up particle line calculation", start)
+            # We need to modify the grid dims to account for the difference in
+            # the final axis between the spectra and line grids.
+            grid_dims = np.array(self._grid_dims)
+            grid_dims[-1] = self._grid.nlines
 
         # Compute the integrated line lum array
+        emitter_attr_names = tuple(self._emitter_attributes)
         lum, grid_weights = compute_integrated_sed(
             self._line_lum_grid,
             self._grid_axes,
@@ -451,6 +454,7 @@ class IntegratedParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # Compute the integrated continuum array
@@ -468,6 +472,7 @@ class IntegratedParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # If we have no mask then lets store the grid weights in case
@@ -500,6 +505,7 @@ class DopplerShiftedParticleExtractor(Extractor):
     width of the lines is accounted for in the spectra grid.
     """
 
+    @timed("DopplerShiftedParticleExtractor.generate_lnu")
     def generate_lnu(
         self,
         emitter,
@@ -537,44 +543,51 @@ class DopplerShiftedParticleExtractor(Extractor):
             Sed
                 The integrated spectra.
         """
-        start = tic()
+        with timer("DopplerShiftedParticleExtractor.generate_lnu.setup"):
+            # Check we actually have to do the calculation
+            if emitter.nparticles == 0:
+                warn("Found emitter with no particles, returning empty Sed")
+                return Sed(
+                    model.lam,
+                    np.zeros((emitter.nparticles, self._grid_nlam))
+                    * erg
+                    / s
+                    / Hz,
+                )
+            elif mask is not None and np.sum(mask) == 0:
+                warn(
+                    "A mask has filtered out all particles, returning "
+                    "empty Sed"
+                )
+                return Sed(
+                    model.lam,
+                    np.zeros((emitter.nparticles, self._grid_nlam))
+                    * erg
+                    / s
+                    / Hz,
+                )
 
-        # Check we actually have to do the calculation
-        if emitter.nparticles == 0:
-            warn("Found emitter with no particles, returning empty Sed")
-            return Sed(
-                model.lam,
-                np.zeros((emitter.nparticles, self._grid_nlam)) * erg / s / Hz,
+            # Get the attributes from the emitter
+            extracted, weight = self.get_emitter_attrs(
+                emitter,
+                model,
+                do_grid_check,
             )
-        elif mask is not None and np.sum(mask) == 0:
-            warn("A mask has filtered out all particles, returning empty Sed")
-            return Sed(
-                model.lam,
-                np.zeros((emitter.nparticles, self._grid_nlam)) * erg / s / Hz,
-            )
 
-        # Get the attributes from the emitter
-        extracted, weight = self.get_emitter_attrs(
-            emitter,
-            model,
-            do_grid_check,
-        )
+            # Get the emitter velocities
+            if emitter._velocities is None:
+                raise exceptions.InconsistentArguments(
+                    "velocity shifted spectra requested but no "
+                    "star velocities provided."
+                )
+            vel_units = emitter.velocities.units
 
-        # Get the emitter velocities
-        if emitter._velocities is None:
-            raise exceptions.InconsistentArguments(
-                "velocity shifted spectra requested but no "
-                "star velocities provided."
-            )
-        vel_units = emitter.velocities.units
-
-        # If nthreads is -1 then use all available threads
-        if nthreads == -1:
-            nthreads = os.cpu_count()
-
-        toc("Setting up particle lnu (with velocity shift) calculation", start)
+            # If nthreads is -1 then use all available threads
+            if nthreads == -1:
+                nthreads = os.cpu_count()
 
         # Compute the lnu array
+        emitter_attr_names = tuple(self._emitter_attributes)
         spec, integrated_spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
             self._grid._lam,
@@ -591,6 +604,7 @@ class DopplerShiftedParticleExtractor(Extractor):
             c.to(vel_units).ndview,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # Make the Sed objects themselves
@@ -619,6 +633,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
     width of the lines is accounted for in the spectra grid.
     """
 
+    @timed("IntegratedDopplerShiftedParticleExtractor.generate_lnu")
     def generate_lnu(
         self,
         emitter,
@@ -656,41 +671,41 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             Sed
                 The integrated spectra.
         """
-        start = tic()
+        with timer(
+            "IntegratedDopplerShiftedParticleExtractor.generate_lnu.setup"
+        ):
+            # Check we actually have to do the calculation
+            if emitter.nparticles == 0:
+                warn("Found emitter with no particles, returning empty Sed")
+                return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
+            elif mask is not None and np.sum(mask) == 0:
+                warn(
+                    "A mask has filtered out all particles, returning "
+                    "empty Sed"
+                )
+                return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
 
-        # Check we actually have to do the calculation
-        if emitter.nparticles == 0:
-            warn("Found emitter with no particles, returning empty Sed")
-            return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
-        elif mask is not None and np.sum(mask) == 0:
-            warn("A mask has filtered out all particles, returning empty Sed")
-            return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
-
-        # Get the attributes from the emitter
-        extracted, weight = self.get_emitter_attrs(
-            emitter,
-            model,
-            do_grid_check,
-        )
-
-        # Get the emitter velocities
-        if emitter._velocities is None:
-            raise exceptions.InconsistentArguments(
-                "velocity shifted spectra requested but no "
-                "star velocities provided."
+            # Get the attributes from the emitter
+            extracted, weight = self.get_emitter_attrs(
+                emitter,
+                model,
+                do_grid_check,
             )
-        vel_units = emitter.velocities.units
 
-        # If nthreads is -1 then use all available threads
-        if nthreads == -1:
-            nthreads = os.cpu_count()
+            # Get the emitter velocities
+            if emitter._velocities is None:
+                raise exceptions.InconsistentArguments(
+                    "velocity shifted spectra requested but no "
+                    "star velocities provided."
+                )
+            vel_units = emitter.velocities.units
 
-        toc(
-            "Setting up integrated lnu (with velocity shift) calculation",
-            start,
-        )
+            # If nthreads is -1 then use all available threads
+            if nthreads == -1:
+                nthreads = os.cpu_count()
 
         # Compute the lnu array
+        emitter_attr_names = tuple(self._emitter_attributes)
         _, integrated_spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
             self._grid._lam,
@@ -707,6 +722,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             c.to(vel_units).ndview,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         return Sed(model.lam, integrated_spec * erg / s / Hz)
@@ -727,6 +743,7 @@ class ParticleExtractor(Extractor):
     based component.
     """
 
+    @timed("ParticleExtractor.generate_lnu")
     def generate_lnu(
         self,
         emitter,
@@ -764,58 +781,55 @@ class ParticleExtractor(Extractor):
             Sed
                 The integrated spectra.
         """
-        start = tic()
+        with timer("ParticleExtractor.generate_lnu.setup"):
+            # Check we actually have to do the calculation
+            if emitter.nparticles == 0:
+                warn("Found emitter with no particles, returning empty Sed")
+                return (
+                    Sed(
+                        model.lam,
+                        np.zeros((emitter.nparticles, self._grid_nlam))
+                        * erg
+                        / s
+                        / Hz,
+                    ),
+                    Sed(
+                        model.lam,
+                        np.zeros(self._grid_nlam) * erg / s / Hz,
+                    ),
+                )
+            elif mask is not None and np.sum(mask) == 0:
+                warn(
+                    "A mask has filtered out all particles, returning "
+                    "empty Sed"
+                )
+                return (
+                    Sed(
+                        model.lam,
+                        np.zeros((emitter.nparticles, self._grid_nlam))
+                        * erg
+                        / s
+                        / Hz,
+                    ),
+                    Sed(
+                        model.lam,
+                        np.zeros(self._grid_nlam) * erg / s / Hz,
+                    ),
+                )
 
-        # Check we actually have to do the calculation
-        if emitter.nparticles == 0:
-            warn("Found emitter with no particles, returning empty Sed")
-
-            # Return empty Sed objects with the correct shape
-            return (
-                Sed(
-                    model.lam,
-                    np.zeros((emitter.nparticles, self._grid_nlam))
-                    * erg
-                    / s
-                    / Hz,
-                ),
-                Sed(
-                    model.lam,
-                    np.zeros(self._grid_nlam) * erg / s / Hz,
-                ),
+            # Get the attributes from the emitter
+            extracted, weight = self.get_emitter_attrs(
+                emitter,
+                model,
+                do_grid_check,
             )
-        elif mask is not None and np.sum(mask) == 0:
-            warn("A mask has filtered out all particles, returning empty Sed")
 
-            # Return empty Sed objects with the correct shape
-            return (
-                Sed(
-                    model.lam,
-                    np.zeros((emitter.nparticles, self._grid_nlam))
-                    * erg
-                    / s
-                    / Hz,
-                ),
-                Sed(
-                    model.lam,
-                    np.zeros(self._grid_nlam) * erg / s / Hz,
-                ),
-            )
-
-        # Get the attributes from the emitter
-        extracted, weight = self.get_emitter_attrs(
-            emitter,
-            model,
-            do_grid_check,
-        )
-
-        # If nthreads is -1 then use all available threads
-        if nthreads == -1:
-            nthreads = os.cpu_count()
-
-        toc("Setting up particle lnu calculation", start)
+            # If nthreads is -1 then use all available threads
+            if nthreads == -1:
+                nthreads = os.cpu_count()
 
         # Compute the lnu array
+        emitter_attr_names = tuple(self._emitter_attributes)
         spec, integrated_spec = compute_particle_seds(
             self._spectra_grid,
             self._grid_axes,
@@ -829,6 +843,7 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # Make the Sed objects themselves
@@ -841,6 +856,7 @@ class ParticleExtractor(Extractor):
 
         return part_sed, integrated_sed
 
+    @timed("ParticleExtractor.generate_line")
     def generate_line(
         self,
         emitter,
@@ -874,72 +890,73 @@ class ParticleExtractor(Extractor):
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
         """
-        start = tic()
+        with timer("ParticleExtractor.generate_line.setup"):
+            # Check we actually have to do the calculation
+            if emitter.nparticles == 0:
+                warn("Found emitter with no particles, returning empty Line")
+                return (
+                    LineCollection(
+                        line_ids=self._grid.line_ids,
+                        lam=self._line_lams,
+                        lum=np.zeros((emitter.nparticles, self._grid.nlines))
+                        * erg
+                        / s,
+                        cont=np.zeros((emitter.nparticles, self._grid.nlines))
+                        * erg
+                        / s
+                        / Hz,
+                    ),
+                    LineCollection(
+                        line_ids=self._grid.line_ids,
+                        lam=self._line_lams,
+                        lum=np.zeros(self._grid.nlines) * erg / s,
+                        cont=np.zeros(self._grid.nlines) * erg / s / Hz,
+                    ),
+                )
 
-        # Check we actually have to do the calculation
-        if emitter.nparticles == 0:
-            warn("Found emitter with no particles, returning empty Line")
-            return (
-                LineCollection(
-                    line_ids=self._grid.line_ids,
-                    lam=self._line_lams,
-                    lum=np.zeros((emitter.nparticles, self._grid.nlines))
-                    * erg
-                    / s,
-                    cont=np.zeros((emitter.nparticles, self._grid.nlines))
-                    * erg
-                    / s
-                    / Hz,
-                ),
-                LineCollection(
-                    line_ids=self._grid.line_ids,
-                    lam=self._line_lams,
-                    lum=np.zeros(self._grid.nlines) * erg / s,
-                    cont=np.zeros(self._grid.nlines) * erg / s / Hz,
-                ),
+            elif mask is not None and np.sum(mask) == 0:
+                warn(
+                    "A mask has filtered out all particles, returning "
+                    "empty Line"
+                )
+                return (
+                    LineCollection(
+                        line_ids=self._grid.line_ids,
+                        lam=self._line_lams,
+                        lum=np.zeros((emitter.nparticles, self._grid.nlines))
+                        * erg
+                        / s,
+                        cont=np.zeros((emitter.nparticles, self._grid.nlines))
+                        * erg
+                        / s
+                        / Hz,
+                    ),
+                    LineCollection(
+                        line_ids=self._grid.line_ids,
+                        lam=self._line_lams,
+                        lum=np.zeros(self._grid.nlines) * erg / s,
+                        cont=np.zeros(self._grid.nlines) * erg / s / Hz,
+                    ),
+                )
+
+            # Get the attributes from the emitter
+            extracted, weight = self.get_emitter_attrs(
+                emitter,
+                model,
+                do_grid_check,
             )
 
-        elif mask is not None and np.sum(mask) == 0:
-            warn("A mask has filtered out all particles, returning empty Line")
-            return (
-                LineCollection(
-                    line_ids=self._grid.line_ids,
-                    lam=self._line_lams,
-                    lum=np.zeros((emitter.nparticles, self._grid.nlines))
-                    * erg
-                    / s,
-                    cont=np.zeros((emitter.nparticles, self._grid.nlines))
-                    * erg
-                    / s
-                    / Hz,
-                ),
-                LineCollection(
-                    line_ids=self._grid.line_ids,
-                    lam=self._line_lams,
-                    lum=np.zeros(self._grid.nlines) * erg / s,
-                    cont=np.zeros(self._grid.nlines) * erg / s / Hz,
-                ),
-            )
+            # If nthreads is -1 then use all available threads
+            if nthreads == -1:
+                nthreads = os.cpu_count()
 
-        # Get the attributes from the emitter
-        extracted, weight = self.get_emitter_attrs(
-            emitter,
-            model,
-            do_grid_check,
-        )
-
-        # If nthreads is -1 then use all available threads
-        if nthreads == -1:
-            nthreads = os.cpu_count()
-
-        # We need to modify the grid dims to account for the difference
-        # in the final axis between the spectra and line grids
-        grid_dims = np.array(self._grid_dims)
-        grid_dims[-1] = self._grid.nlines
-
-        toc("Setting up particle line calculation", start)
+            # We need to modify the grid dims to account for the difference in
+            # the final axis between the spectra and line grids.
+            grid_dims = np.array(self._grid_dims)
+            grid_dims[-1] = self._grid.nlines
 
         # Compute the integrated line lum array
+        emitter_attr_names = tuple(self._emitter_attributes)
         lum, integrated_lum = compute_particle_seds(
             self._line_lum_grid,
             self._grid_axes,
@@ -953,6 +970,7 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # Compute the integrated continuum array
@@ -969,6 +987,7 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
+            emitter_attr_names,
         )
 
         # Make the LineCollection objects themselves
@@ -997,6 +1016,7 @@ class IntegratedParametricExtractor(Extractor):
     emission.
     """
 
+    @timed("IntegratedParametricExtractor.generate_lnu")
     def generate_lnu(
         self,
         emitter,
@@ -1033,8 +1053,6 @@ class IntegratedParametricExtractor(Extractor):
         Returns:
             Sed: The integrated spectra.
         """
-        start = tic()
-
         # Get a mask for non-zero bins in the SFZH
         mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
 
@@ -1050,8 +1068,6 @@ class IntegratedParametricExtractor(Extractor):
         # Compute the integrated lnu array by multiplying the sfzh by the
         # grid spectra
         spec = np.sum(grid_spectra[mask] * sfzh[mask], axis=0)
-
-        toc("Generating integrated lnu", start)
 
         return Sed(model.lam, spec * erg / s / Hz)
 
@@ -1088,34 +1104,36 @@ class IntegratedParametricExtractor(Extractor):
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
         """
-        start = tic()
+        with timer("IntegratedParametricExtractor.generate_line"):
+            # Get a mask for non-zero bins in the SFZH
+            mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
 
-        # Get a mask for non-zero bins in the SFZH
-        mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
+            # Add an extra dimension to enable later summation
+            sfzh = np.expand_dims(emitter.sfzh, axis=self._grid_naxes)
 
-        # Add an extra dimension to enable later summation
-        sfzh = np.expand_dims(emitter.sfzh, axis=self._grid_naxes)
+            # Get the grid line lunminosities and continua including any lam
+            # mask.
+            if lam_mask is None:
+                grid_line_lums = self._line_lum_grid
+                grid_line_conts = self._line_cont_grid
+            else:
+                grid_line_lums = self._line_lum_grid[..., lam_mask]
+                grid_line_conts = self._line_cont_grid[..., lam_mask]
 
-        # Get the grid line lunminosities and continua including any lam mask
-        if lam_mask is None:
-            grid_line_lums = self._line_lum_grid
-            grid_line_conts = self._line_cont_grid
-        else:
-            grid_line_lums = self._line_lum_grid[..., lam_mask]
-            grid_line_conts = self._line_cont_grid[..., lam_mask]
-
-        # Compute the integrated line array by multiplying the sfzh by
-        # the grids
-        if lam_mask is not None:
-            lum = np.zeros(self._grid.nlines) * erg / s
-            cont = np.zeros(self._grid.nlines) * erg / s / Hz
-            lum[lam_mask] = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0)
-            cont[lam_mask] = np.sum(grid_line_conts[mask] * sfzh[mask], axis=0)
-        else:
-            lum = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0)
-            cont = np.sum(grid_line_conts[mask] * sfzh[mask], axis=0)
-
-        toc("Generating integrated lnu", start)
+            # Compute the integrated line array by multiplying the sfzh by the
+            # grids.
+            if lam_mask is not None:
+                lum = np.zeros(self._grid.nlines) * erg / s
+                cont = np.zeros(self._grid.nlines) * erg / s / Hz
+                lum[lam_mask] = np.sum(
+                    grid_line_lums[mask] * sfzh[mask], axis=0
+                )
+                cont[lam_mask] = np.sum(
+                    grid_line_conts[mask] * sfzh[mask], axis=0
+                )
+            else:
+                lum = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0)
+                cont = np.sum(grid_line_conts[mask] * sfzh[mask], axis=0)
 
         return LineCollection(
             line_ids=self._grid.line_ids,

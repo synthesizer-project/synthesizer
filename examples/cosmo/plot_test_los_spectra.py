@@ -18,6 +18,5 @@ gals = load_CAMELS_IllustrisTNG(
 )
 
 kernel = Kernel()
-kernel.get_kernel()
 
-gals[1].calculate_los_tau_v(kappa=0.3, kernel=kernel.get_kernel())
+gals[1].get_stellar_los_tau_v(kappa=0.3, kernel=kernel)

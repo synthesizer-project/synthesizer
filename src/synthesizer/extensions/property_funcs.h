@@ -23,22 +23,25 @@
  *
  * @param np_arr: The numpy array to access.
  * @param ind: The index to access.
+ * @param array_name: A descriptive name for the array, used in errors.
  * @return The double value at the specified index.
  */
-static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind) {
+static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind,
+                                   const char *array_name) {
+  const char *name = array_name == NULL ? "array" : array_name;
+
   if (PyArray_TYPE(np_arr) != NPY_FLOAT64) {
-    PyErr_SetString(PyExc_TypeError,
-                    "[get_double_at]: Array must be of type float64.");
+    PyErr_Format(PyExc_TypeError,
+                 "[get_double_at]: Array '%s' must be of type float64.",
+                 name);
     return 0.0;
   }
 
   if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
-    char error_msg[256];
-    snprintf(error_msg, sizeof(error_msg),
-             "[get_double_at]: Index (%ld) out of bounds. Valid range is [0, "
-             "%ld).",
-             ind, PyArray_SIZE(np_arr));
-    PyErr_SetString(PyExc_IndexError, error_msg);
+    PyErr_Format(PyExc_IndexError,
+                 "[get_double_at]: Index (%ld) out of bounds for array '%s'. "
+                 "Valid range is [0, %ld).",
+                 ind, name, PyArray_SIZE(np_arr));
     return 0.0;
   }
 
@@ -46,9 +49,10 @@ static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind) {
     const double *data_ptr = static_cast<const double *>(PyArray_DATA(np_arr));
     return data_ptr[ind];
   } else {
-    PyErr_SetString(
-        PyExc_ValueError,
-        "[get_double_at]: Array must be contiguous to use get_double_at.");
+    PyErr_Format(PyExc_ValueError,
+                 "[get_double_at]: Array '%s' must be contiguous to use "
+                 "get_double_at.",
+                 name);
     return 0.0;
   }
 }
@@ -62,22 +66,24 @@ static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind) {
  *
  * @param np_arr: The numpy array to access.
  * @param ind: The index to access.
+ * @param array_name: A descriptive name for the array, used in errors.
  * @return The integer value at the specified index.
  */
-static inline int get_int_at(PyArrayObject *np_arr, npy_intp ind) {
+static inline int get_int_at(PyArrayObject *np_arr, npy_intp ind,
+                             const char *array_name) {
+  const char *name = array_name == NULL ? "array" : array_name;
+
   if (PyArray_TYPE(np_arr) != NPY_INT32) {
-    PyErr_SetString(PyExc_TypeError,
-                    "[get_int_at]: Array must be of type int32.");
+    PyErr_Format(PyExc_TypeError,
+                 "[get_int_at]: Array '%s' must be of type int32.", name);
     return 0;
   }
 
   if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
-    char error_msg[256];
-    snprintf(error_msg, sizeof(error_msg),
-             "[get_int_at]: Index (%ld) out of bounds. Valid range is [0, "
-             "%ld).",
-             ind, PyArray_SIZE(np_arr));
-    PyErr_SetString(PyExc_IndexError, error_msg);
+    PyErr_Format(PyExc_IndexError,
+                 "[get_int_at]: Index (%ld) out of bounds for array '%s'. "
+                 "Valid range is [0, %ld).",
+                 ind, name, PyArray_SIZE(np_arr));
     return 0;
   }
 
@@ -85,9 +91,10 @@ static inline int get_int_at(PyArrayObject *np_arr, npy_intp ind) {
     const int *data_ptr = static_cast<const int *>(PyArray_DATA(np_arr));
     return data_ptr[ind];
   } else {
-    PyErr_SetString(
-        PyExc_ValueError,
-        "[get_int_at]: Array must be contiguous to use get_int_at.");
+    PyErr_Format(PyExc_ValueError,
+                 "[get_int_at]: Array '%s' must be contiguous to use "
+                 "get_int_at.",
+                 name);
     return 0;
   }
 }
@@ -101,22 +108,24 @@ static inline int get_int_at(PyArrayObject *np_arr, npy_intp ind) {
  *
  * @param np_arr: The numpy array to access.
  * @param ind: The index to access.
+ * @param array_name: A descriptive name for the array, used in errors.
  * @return The boolean value at the specified index.
  */
-static inline npy_bool get_bool_at(PyArrayObject *np_arr, npy_intp ind) {
+static inline npy_bool get_bool_at(PyArrayObject *np_arr, npy_intp ind,
+                                   const char *array_name) {
+  const char *name = array_name == NULL ? "array" : array_name;
+
   if (PyArray_TYPE(np_arr) != NPY_BOOL) {
-    PyErr_SetString(PyExc_TypeError,
-                    "[get_bool_at]: Array must be of type bool.");
+    PyErr_Format(PyExc_TypeError,
+                 "[get_bool_at]: Array '%s' must be of type bool.", name);
     return false;
   }
 
   if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
-    char error_msg[256];
-    snprintf(error_msg, sizeof(error_msg),
-             "[get_bool_at]: Index (%ld) out of bounds. Valid range is [0, "
-             "%ld).",
-             ind, PyArray_SIZE(np_arr));
-    PyErr_SetString(PyExc_IndexError, error_msg);
+    PyErr_Format(PyExc_IndexError,
+                 "[get_bool_at]: Index (%ld) out of bounds for array '%s'. "
+                 "Valid range is [0, %ld).",
+                 ind, name, PyArray_SIZE(np_arr));
     return false;
   }
 
@@ -125,9 +134,10 @@ static inline npy_bool get_bool_at(PyArrayObject *np_arr, npy_intp ind) {
         static_cast<const npy_bool *>(PyArray_DATA(np_arr));
     return data_ptr[ind];
   } else {
-    PyErr_SetString(
-        PyExc_ValueError,
-        "[get_bool_at]: Array must be contiguous to use get_bool_at.");
+    PyErr_Format(PyExc_ValueError,
+                 "[get_bool_at]: Array '%s' must be contiguous to use "
+                 "get_bool_at.",
+                 name);
     return false;
   }
 }
@@ -136,6 +146,7 @@ static inline npy_bool get_bool_at(PyArrayObject *np_arr, npy_intp ind) {
 double *extract_data_double(PyArrayObject *np_arr, const char *name);
 int *extract_data_int(PyArrayObject *np_arr, const char *name);
 npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name);
+const npy_int64 *extract_index_array(PyArrayObject *np_arr, const char *name);
 double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
 
 #endif // PROPERTY_FUNCS_H_

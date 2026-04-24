@@ -232,8 +232,8 @@ def _load_SCSAM_parametric_galaxy(
             Are we talking?
     """
     # This the grid that we want to interpolate to
-    new_age = 10**grid.log10age  # yr
-    new_Z = np.log10(grid.metallicity)  # log10Z
+    new_age = 10**grid.log10ages  # yr
+    new_Z = np.log10(grid.metallicities)  # log10Z
 
     # This is the old grid, to be interpolated
     old_age = np.array(age_lst) * 10**9  # yr
@@ -275,8 +275,8 @@ def _load_SCSAM_parametric_galaxy(
 
     # Create Binned SFZH object
     stars = ParametricStars(
-        log10ages=grid.log10age,
-        metallicities=grid.metallicity,
+        log10ages=grid.log10ages,
+        metallicities=grid.metallicities,
         sfzh=new_SFH,
     )
 

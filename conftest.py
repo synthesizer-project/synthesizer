@@ -360,13 +360,19 @@ def unit_emission_stars():
         * kpc,
         current_masses=np.ones(3) * Msun,
     )
+    fake_filters = FilterCollection(
+        tophat_dict={
+            "fake": {"lam_eff": 1500 * angstrom, "lam_fwhm": 200 * angstrom}
+        },
+        new_lam=np.linspace(1000, 2000, 200) * angstrom,
+    )
     stars.particle_photo_lnu["FAKE"] = PhotometryCollection(
-        filters=None,
-        fake=np.ones(3) * erg / s / Hz,
+        filters=fake_filters,
+        photometry=np.ones((1, 3)) * erg / s / Hz,
     )
     stars.particle_photo_fnu["FAKE"] = PhotometryCollection(
-        filters=None,
-        fake=np.ones(3) * erg / s / cm**2 / Hz,
+        filters=fake_filters,
+        photometry=np.ones((1, 3)) * erg / s / cm**2 / Hz,
     )
     return stars
 
@@ -429,8 +435,8 @@ def single_star_particle():
 def single_star_parametric(test_grid):
     """Return a parametric Stars object with a single star."""
     return ParametricStars(
-        test_grid.log10age,
-        test_grid.metallicity,
+        test_grid.log10ages,
+        test_grid.metallicities,
         sf_hist=1e7 * yr,
         metal_dist=0.01,
         initial_mass=1 * Msun,

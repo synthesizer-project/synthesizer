@@ -27,6 +27,7 @@ from synthesizer.pipeline.pipeline_utils import (
     unify_dict_structure_across_ranks,
 )
 from synthesizer.synth_warnings import warn
+from synthesizer.utils.operation_timers import timed
 
 
 class PipelineIO:
@@ -54,6 +55,7 @@ class PipelineIO:
     else:
         PARALLEL = False
 
+    @timed("PipelineIO.__init__")
     def __init__(
         self,
         filepath,
@@ -93,8 +95,9 @@ class PipelineIO:
                 "Cannot use parallel_io option."
             )
 
-        # Flags for behavior
-        self.is_parallel = comm is not None
+        # Treat a communicator of size 1 as a serial run so single-rank jobs do
+        # not create synthetic per-rank filenames such as ``_0``.
+        self.is_parallel = comm is not None and self.size > 1
         self.is_root = self.rank == 0
         self.is_collective = self.is_parallel and self.PARALLEL and parallel_io
 
@@ -227,7 +230,13 @@ class PipelineIO:
         # Report how blazingly fast we are
         self._print(f"{message} took {elapsed:.3f} {units}.")
 
-    def create_file_with_metadata(self, instruments, emission_model):
+    @timed("PipelineIO.create_file_with_metadata")
+    def create_file_with_metadata(
+        self,
+        instruments,
+        emission_model,
+        include_lines=False,
+    ):
         """Write metadata to the HDF5 file.
 
         This writes useful metadata to the root group of the HDF5 file and
@@ -236,6 +245,8 @@ class PipelineIO:
         Args:
             instruments (dict): A dictionary of instrument objects.
             emission_model (dict): A dictionary of emission model objects.
+            include_lines (bool): Whether to create the root-level line
+                metadata group.
         """
         start = time.perf_counter()
 
@@ -255,9 +266,11 @@ class PipelineIO:
                 hdf.attrs["synthesizer_version"] = __version__
 
                 # Create groups for the instruments, emission model, and
-                # galaxies
+                # galaxies.
                 inst_group = hdf.create_group("Instruments")
                 model_group = hdf.create_group("EmissionModel")
+                if include_lines:
+                    hdf.create_group("Lines")
                 hdf.create_group("Galaxies")  # we'll use this in a mo
 
                 # Write out the instruments
@@ -410,6 +423,7 @@ class PipelineIO:
 
         return paths
 
+    @timed("PipelineIO.write_data")
     def write_data(self, data, key, indexes=None, root=0):
         """Write data using the appropriate method based on the environment.
 
@@ -430,6 +444,16 @@ class PipelineIO:
             if data is None or len(data) == 0:
                 return
 
+            # Root-level metadata should only be written once, even when using
+            # MPI or collective I/O.
+            if self.is_parallel and indexes is None:
+                if self.rank != root:
+                    return
+
+                self.write_datasets_recursive(data, key)
+                self._took(start, f"Writing {key} (and subgroups)")
+                return
+
             # Use the appropriate write method
             if self.is_collective:
                 # For collective I/O we need to create the datasets first, then
@@ -448,6 +472,7 @@ class PipelineIO:
         except Exception as e:
             self._print(f"Failed to write {key} - {e}")
 
+    @timed("PipelineIO.combine_rank_files")
     def combine_rank_files(self):
         """Combine the rank files into a single file.
 
@@ -470,9 +495,6 @@ class PipelineIO:
 
             # Loop over the items in the source group
             for k, v in src.items():
-                if k in ["Instruments", "EmissionModel"]:
-                    continue
-
                 # If we found a group we need to recurse and create the group
                 # in the destination file if it doesn't exist. We also need to
                 # copy the attributes.
@@ -537,36 +559,29 @@ class PipelineIO:
                     temp_path.replace("<rank>", str(rank)),
                     "r",
                 ) as rank_hdf:
-                    # We only the metadata groups once
+                    # Copy root metadata once and only combine Galaxies
                     if rank == 0:
-                        # Copy the instruments over (no slice needed)
-                        hdf.create_group("Instruments")
-                        _recursive_copy(
-                            rank_hdf["Instruments"],
-                            hdf["Instruments"],
-                            slice=None,
-                        )
+                        for attr in rank_hdf.attrs:
+                            hdf.attrs[attr] = rank_hdf.attrs[attr]
 
-                        # Copy the emission model over (no slice needed)
-                        hdf.create_group("EmissionModel")
-                        _recursive_copy(
-                            rank_hdf["EmissionModel"],
-                            hdf["EmissionModel"],
-                            slice=None,
-                        )
+                        for key, value in rank_hdf.items():
+                            if key == "Galaxies":
+                                hdf.create_group("Galaxies")
+                                continue
+                            hdf.copy(value, key)
 
-                    # Copy the contents of the rank file to the output file
                     _recursive_copy(
-                        rank_hdf,
-                        hdf,
+                        rank_hdf["Galaxies"],
+                        hdf["Galaxies"],
                         slice=slice(starts[rank], ends[rank]),
                     )
 
-                # Delete the rank file
-                os.remove(temp_path.replace("<rank>", str(rank)))
+        for rank in range(self.size):
+            os.remove(temp_path.replace("<rank>", str(rank)))
 
         self._took(start, "Combining files")
 
+    @timed("PipelineIO.combine_rank_files_virtual")
     def combine_rank_files_virtual(self):
         """Combine the rank files into a single virtual file.
 
@@ -601,8 +616,6 @@ class PipelineIO:
 
             def gather_datasets(group, group_path="/"):
                 for k, v in group.items():
-                    if k in ["Instruments", "EmissionModel"]:
-                        continue
                     current_path = f"{group_path}{k}"
                     if isinstance(v, h5py.Group):
                         gather_datasets(v, current_path + "/")
@@ -612,27 +625,30 @@ class PipelineIO:
                             (current_path, v.shape, v.dtype, dict(v.attrs))
                         )
 
-            gather_datasets(f0)
-
             # Gather group structure (to replicate in the virtual file)
             groups_info = []
 
             def gather_groups(group, group_path="/"):
                 for k, v in group.items():
-                    if k in ["Instruments", "EmissionModel"]:
-                        continue
                     current_path = f"{group_path}{k}"
                     if isinstance(v, h5py.Group):
                         groups_info.append((current_path, dict(v.attrs)))
                         gather_groups(v, current_path + "/")
 
-            gather_groups(f0)
+            gather_datasets(f0["Galaxies"], "/Galaxies/")
+            gather_groups(f0["Galaxies"], "/Galaxies/")
 
             # Create the virtual file
             with h5py.File(new_path, "w") as hdf:
-                for meta_group in ["Instruments", "EmissionModel"]:
-                    if meta_group in f0:
-                        hdf.copy(f0[meta_group], meta_group)
+                for attr in f0.attrs:
+                    hdf.attrs[attr] = f0.attrs[attr]
+
+                for key, value in f0.items():
+                    if key == "Galaxies":
+                        continue
+                    hdf.copy(value, key)
+
+                hdf.create_group("Galaxies")
 
                 # Create empty group structure
                 for gpath, gattrs in groups_info:
@@ -650,6 +666,7 @@ class PipelineIO:
                         src_file = temp_path.replace("<rank>", str(rank))
                         with h5py.File(src_file, "r") as rank_f:
                             src_dset = rank_f[dpath]
+                            src_shape = src_dset.shape
                             local_size = src_dset.shape[0]
 
                         # Ensure the local size is as expected
@@ -657,13 +674,39 @@ class PipelineIO:
                         if local_size != expected_size:
                             end_i = start_i + local_size
 
+                        target_shape = (end_i - start_i,) + shape[1:]
+
+                        if (
+                            len(src_shape) != len(shape)
+                            or src_shape[1:] != shape[1:]
+                        ):
+                            raise ValueError(
+                                "Cannot create virtual dataset mapping for "
+                                f"{dpath!r}: rank {rank} dataset in "
+                                f"{src_file!r} "
+                                f"has shape {src_shape}, but rank 0 defined "
+                                f"shape {shape}. Non-leading dimensions must "
+                                "match across rank files."
+                            )
+
                         # Create a virtual source for this rank
                         vsource = h5py.VirtualSource(
                             src_file, dpath, shape=(local_size,) + shape[1:]
                         )
 
                         # Map the portion of the layout to this source slice
-                        layout[start_i:end_i, ...] = vsource[...]
+                        try:
+                            layout[start_i:end_i, ...] = vsource[...]
+                        except ValueError as exc:
+                            raise ValueError(
+                                "Failed to map rank dataset into virtual "
+                                f"dataset for {dpath!r}. Rank {rank}, source "
+                                f"file {src_file!r}, source shape "
+                                f"{src_shape}, virtual slice "
+                                f"[{start_i}:{end_i}] with target "
+                                f"shape {target_shape}, final virtual shape "
+                                f"{final_shape}. Original error: {exc}"
+                            ) from exc
 
                     # Create the virtual dataset in the final file
                     vds = hdf.create_virtual_dataset(dpath, layout)

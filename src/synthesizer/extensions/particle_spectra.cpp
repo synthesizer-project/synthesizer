@@ -25,6 +25,9 @@
 #include "property_funcs.h"
 #include "reductions.h"
 #include "timers.h"
+#ifdef ATOMIC_TIMING
+#include "timers_init.h"
+#endif
 #include "weights.h"
 
 /**
@@ -280,7 +283,7 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
   /* First get the grid indices and fractions for all particles. */
   get_particle_indices_and_fracs(grid_props, parts, nthreads);
 
-  double start_time = tic();
+  tic("spectra_loop_cic");
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -303,7 +306,7 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
   spectra_loop_cic_serial(grid_props, parts, part_spectra);
 
 #endif
-  toc("Cloud in Cell particle spectra loop", start_time);
+  toc("spectra_loop_cic");
 }
 
 /**
@@ -464,7 +467,7 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
   /* First get the grid indices for all particles. */
   get_particle_indices(grid_props, parts, nthreads);
 
-  double start_time = tic();
+  tic("spectra_loop_ngp");
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -487,7 +490,7 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
   spectra_loop_ngp_serial(grid_props, parts, part_spectra);
 
 #endif
-  toc("Nearest Grid Point particle spectra loop", start_time);
+  toc("spectra_loop_ngp");
 }
 
 /**
@@ -508,7 +511,7 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
  * @param c: speed of light
  */
 PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
-  double start_time = tic();
+  tic("compute_particle_seds");
 
   /* We don't need the self argument but it has to be there. Tell the
    * compiler we don't care. */
@@ -516,28 +519,32 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
+  PyObject *prop_names = NULL;
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_part_mass, *np_ndims;
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiisiOO", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
-                        &nlam, &method, &nthreads, &np_mask, &np_lam_mask)) {
+  if (!PyArg_ParseTuple(args, "OOOOOiiisiOO|O", &np_grid_spectra,
+                        &grid_tuple, &part_tuple, &np_part_mass, &np_ndims,
+                        &ndim, &npart, &nlam, &method, &nthreads, &np_mask,
+                        &np_lam_mask, &prop_names)) {
     return NULL;
   }
 
   /* Extract the grid struct. */
   GridProps *grid_props = new GridProps(np_grid_spectra, grid_tuple,
-                                        /*np_lam*/ nullptr, np_lam_mask, nlam);
+                                        /*np_lam*/ nullptr, np_lam_mask, nlam,
+                                        /*np_grid_weights*/ nullptr,
+                                        prop_names);
   RETURN_IF_PYERR();
 
   /* Create the object that holds the particle properties. */
   Particles *part_props = new Particles(np_part_mass, /*np_velocities*/ NULL,
-                                        np_mask, part_tuple, npart);
+                                        np_mask, part_tuple, prop_names, npart);
   RETURN_IF_PYERR();
 
-  double out_tic = tic();
+  tic("compute_particle_seds.setup_output_arrays");
 
   /* Define the output dimensions. */
   npy_intp np_int_dims[1] = {nlam};
@@ -551,7 +558,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
       (PyArrayObject *)PyArray_ZEROS(2, np_part_dims, NPY_DOUBLE, 0);
   double *part_spectra = static_cast<double *>(PyArray_DATA(np_part_spectra));
 
-  toc("Setting up output arrays", out_tic);
+  toc("compute_particle_seds.setup_output_arrays");
 
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
@@ -576,7 +583,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* Construct the output tuple. */
   PyObject *out_tuple = Py_BuildValue("NN", np_part_spectra, np_spectra);
 
-  toc("Computing particle and integrated lnus", start_time);
+  toc("compute_particle_seds");
 
   return out_tuple;
 }
@@ -602,9 +609,18 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_particle_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
+  if (m == NULL)
+    return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    Py_DECREF(m);
     return NULL;
   }
+#ifdef ATOMIC_TIMING
+  if (import_toc_capsule() < 0) {
+    Py_DECREF(m);
+    return NULL;
+  }
+#endif
   return m;
-};
+}

@@ -37,12 +37,13 @@
  */
 GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
                      PyArrayObject *np_lam, PyArrayObject *np_lam_mask,
-                     const int nlam, PyArrayObject *np_grid_weights)
+                     const int nlam, PyArrayObject *np_grid_weights,
+                     PyObject *axis_names_tuple)
     : nlam(nlam), np_spectra_(np_spectra), axes_tuple_(axes_tuple),
       np_lam_(np_lam), np_lam_mask_(np_lam_mask),
       np_grid_weights_(np_grid_weights) {
 
-  double start_time = tic();
+  tic("GridProps.__init__");
 
   /* The number of dimensions is the length of the axis tuple. */
   ndim = PyTuple_Size(axes_tuple);
@@ -75,6 +76,25 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
       return;
     }
     dims[idim] = PyArray_DIM(np_axis_arr, 0);
+
+    axis_names_[idim].clear();
+    if (axis_names_tuple != NULL && PySequence_Check(axis_names_tuple) &&
+        !PyUnicode_Check(axis_names_tuple)) {
+      PyObject *name_obj = PySequence_GetItem(axis_names_tuple, idim);
+      if (name_obj != NULL) {
+        if (PyUnicode_Check(name_obj)) {
+          const char *name = PyUnicode_AsUTF8(name_obj);
+          if (name != NULL) {
+            axis_names_[idim] = name;
+          } else {
+            PyErr_Clear();
+          }
+        }
+        Py_DECREF(name_obj);
+      } else {
+        PyErr_Clear();
+      }
+    }
   }
 
   /* Calculate the size of the grid. */
@@ -92,11 +112,13 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
   /* Flag whether we need to populate the grid weights */
   if (has_grid_weights()) {
     need_grid_weights_ = false;
+    owns_grid_weights_ = false;
   } else {
     need_grid_weights_ = true;
+    owns_grid_weights_ = false;
   }
 
-  toc("Constructing C++ grid properties", start_time);
+  toc("GridProps.__init__");
 }
 
 /**
@@ -211,7 +233,7 @@ double GridProps::get_spectra_at(int grid_ind, int ilam) const {
   int spectra_index = ravel_spectra_index(unraveled_ind, ilam);
 
   /* Return the value at the spectra index. */
-  return get_double_at(np_spectra_, spectra_index);
+  return get_double_at(np_spectra_, spectra_index, "spectra");
 }
 
 /**
@@ -273,6 +295,20 @@ std::array<double *, MAX_GRID_NDIM> GridProps::get_all_axes() const {
  * @return The value at the specified index in the axis.
  */
 double GridProps::get_axis_at(int idim, int ind) const {
+  char fallback_name[64];
+  fallback_name[0] = '\0';
+
+  if (idim >= 0 && idim < ndim && !axis_names_[idim].empty()) {
+    snprintf(fallback_name, sizeof(fallback_name), "%s",
+             axis_names_[idim].c_str());
+  }
+
+  if (fallback_name[0] == '\0') {
+    snprintf(fallback_name, sizeof(fallback_name), "axis %d", idim);
+  }
+
+  const char *array_name = fallback_name;
+
   if (idim < 0 || idim >= ndim) {
     PyErr_SetString(PyExc_IndexError,
                     "[GridProps::get_axis_at]: Axis index out of bounds.");
@@ -287,7 +323,7 @@ double GridProps::get_axis_at(int idim, int ind) const {
     return -1.0;
   }
 
-  return get_double_at(np_axis_arr, ind);
+  return get_double_at(np_axis_arr, ind, array_name);
 }
 
 /**
@@ -328,6 +364,7 @@ double *GridProps::get_grid_weights() {
 
   /* Flag that we need to populate the grid weights. */
   need_grid_weights_ = true;
+  owns_grid_weights_ = true;
 
   return grid_weights_;
 }
@@ -345,6 +382,13 @@ PyArrayObject *GridProps::get_np_grid_weights() const {
     return NULL;
   }
 
+  /* Py_BuildValue("N") steals a reference. If the weights were provided by
+   * Python we only have a borrowed reference, so we must incref first. If we
+   * allocated them ourselves with PyArray_ZEROS, np_grid_weights_ already owns
+   * a new reference and must be returned as-is. */
+  if (!owns_grid_weights_) {
+    Py_INCREF(reinterpret_cast<PyObject *>(np_grid_weights_));
+  }
   return np_grid_weights_;
 }
 
@@ -382,7 +426,7 @@ bool GridProps::lam_is_masked(int ind) const {
     return false;
   }
 
-  return !get_bool_at(np_lam_mask_, ind);
+  return !get_bool_at(np_lam_mask_, ind, "wavelength mask");
 }
 
 /**
