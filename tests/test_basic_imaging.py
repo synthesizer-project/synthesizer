@@ -378,66 +378,113 @@ class TestCorrelatedNoiseCore:
 
 
 class TestImageCorrelatedNoise:
-    """Tests for Image.apply_correlated_noise."""
+    """Tests for Image.apply_correlated_noise (instrument-based API)."""
+
+    @pytest.fixture
+    def noise_source(self):
+        """A plain 2D array serving as the observed noise template."""
+        return np.random.default_rng(7).normal(size=(32, 32))
+
+    @pytest.fixture
+    def instrument(self, noise_source):
+        """Instrument with a single noise map keyed by filter code."""
+        from synthesizer.instruments import Instrument
+
+        return Instrument(
+            label="test_inst",
+            noise_maps={"F150W": noise_source},
+        )
 
     @pytest.fixture
     def base_image(self):
-        """An Image whose pixel data is a simple Gaussian blob."""
+        """An Image with a randomly-filled pixel array."""
         rng = np.random.default_rng(42)
         arr = rng.normal(size=(32, 32))
         img = Image(resolution=0.1 * kpc, fov=3.2 * kpc)
         img.arr = arr
         return img
 
-    @pytest.fixture
-    def noise_source(self):
-        """A plain 2D array that serves as the observed noise template."""
-        return np.random.default_rng(7).normal(size=(32, 32))
-
-    def test_returns_image_instance(self, base_image, noise_source):
+    def test_returns_image_instance(self, base_image, instrument):
         """apply_correlated_noise returns an Image object."""
-        result = base_image.apply_correlated_noise(noise_source)
+        result = base_image.apply_correlated_noise(instrument, "F150W")
         assert isinstance(result, Image)
 
-    def test_output_differs_from_input(self, base_image, noise_source):
+    def test_output_differs_from_input(self, base_image, instrument):
         """The returned image array differs from the original array."""
         original = base_image.arr.copy()
-        result = base_image.apply_correlated_noise(noise_source)
+        result = base_image.apply_correlated_noise(instrument, "F150W")
         assert not np.array_equal(result.arr, original)
 
-    def test_noise_arr_is_set(self, base_image, noise_source):
+    def test_noise_arr_is_set(self, base_image, instrument):
         """noise_arr attribute is populated on the returned image."""
-        result = base_image.apply_correlated_noise(noise_source)
+        result = base_image.apply_correlated_noise(instrument, "F150W")
         assert result.noise_arr is not None
         assert result.noise_arr.shape == base_image.arr.shape
 
-    def test_weight_map_is_set(self, base_image, noise_source):
+    def test_weight_map_is_set(self, base_image, instrument):
         """weight_map attribute is a positive scalar on the returned image."""
-        result = base_image.apply_correlated_noise(noise_source)
+        result = base_image.apply_correlated_noise(instrument, "F150W")
         assert result.weight_map is not None
         assert result.weight_map > 0
 
-    def test_output_preserves_shape(self, base_image, noise_source):
+    def test_output_preserves_shape(self, base_image, instrument):
         """Returned image has the same pixel dimensions as the input."""
-        result = base_image.apply_correlated_noise(noise_source)
+        result = base_image.apply_correlated_noise(instrument, "F150W")
         assert result.arr.shape == base_image.arr.shape
 
-    def test_subtract_mean_option(self, base_image, noise_source):
+    def test_subtract_mean_option(self, base_image, instrument):
         """subtract_mean=True runs without error and returns an Image."""
         result = base_image.apply_correlated_noise(
-            noise_source, subtract_mean=True
+            instrument, "F150W", subtract_mean=True
         )
         assert isinstance(result, Image)
 
-    def test_no_periodicity_correction_option(self, base_image, noise_source):
-        """correct_periodicity=False runs without error, returning an Image."""
+    def test_no_periodicity_correction_option(self, base_image, instrument):
+        """correct_periodicity=False runs without error and returns Image."""
         result = base_image.apply_correlated_noise(
-            noise_source, correct_periodicity=False
+            instrument, "F150W", correct_periodicity=False
         )
         assert isinstance(result, Image)
 
     def test_noise_source_different_shape(self, base_image):
-        """Noise template with a different shape from the image is accepted."""
+        """Noise template with a larger shape than the image is accepted."""
+        from synthesizer.instruments import Instrument
+
         noise_source_big = np.random.default_rng(5).normal(size=(64, 64))
-        result = base_image.apply_correlated_noise(noise_source_big)
+        inst = Instrument(
+            label="test_inst_big",
+            noise_maps={"F150W": noise_source_big},
+        )
+        result = base_image.apply_correlated_noise(inst, "F150W")
         assert result.arr.shape == base_image.arr.shape
+
+    def test_cf_is_cached_after_first_call(self, base_image, instrument):
+        """The CF is cached on the instrument after the first call."""
+        base_image.apply_correlated_noise(instrument, "F150W")
+        cache_key = ("F150W", False, True)
+        assert cache_key in instrument._correlated_noise_cf_cache
+
+    def test_cache_reused_on_second_call(self, base_image, instrument):
+        """A second call for the same filter hits the cache (no recompute)."""
+        base_image.apply_correlated_noise(instrument, "F150W")
+        cf_first = instrument._correlated_noise_cf_cache[
+            ("F150W", False, True)
+        ]
+        base_image.apply_correlated_noise(instrument, "F150W")
+        cf_second = instrument._correlated_noise_cf_cache[
+            ("F150W", False, True)
+        ]
+        assert cf_first is cf_second  # identical object — cache was reused
+
+    def test_missing_filter_raises(self, base_image, instrument):
+        """Requesting an absent filter raises InconsistentArguments."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            base_image.apply_correlated_noise(instrument, "NONEXISTENT")
+
+    def test_no_noise_maps_raises(self, base_image):
+        """An instrument without noise_maps raises MissingArgument."""
+        from synthesizer.instruments import Instrument
+
+        inst = Instrument(label="no_noise")
+        with pytest.raises(exceptions.MissingArgument):
+            base_image.apply_correlated_noise(inst, "F150W")

@@ -166,6 +166,12 @@ class Instrument:
         # resolved spectroscopy)
         self.noise_maps = noise_maps
 
+        # Cache for correlation functions derived from noise_maps, keyed by
+        # (filter_code, subtract_mean, correct_periodicity).  Populated lazily
+        # by get_correlated_noise_cf() so the expensive FFT step is only paid
+        # once per filter per set of options.
+        self._correlated_noise_cf_cache = {}
+
         self._validate()
 
     def _validate(self):
@@ -472,6 +478,7 @@ class Instrument:
         instance.snrs = snrs
         instance.psfs = psfs
         instance.noise_maps = noise_maps
+        instance._correlated_noise_cf_cache = {}
 
         instance._validate()
 
@@ -698,6 +705,82 @@ class Instrument:
             and obj_to_hashable(self.resolution)
             == obj_to_hashable(other.resolution)
         )
+
+    def get_correlated_noise_cf(
+        self,
+        filter_code,
+        subtract_mean=False,
+        correct_periodicity=True,
+    ):
+        """Return the correlation function for a filter's noise map.
+
+        The correlation function (CF) characterises the spatial noise
+        correlations present in the instrument's noise map for the given
+        filter.  The first call for a given ``(filter_code, subtract_mean,
+        correct_periodicity)`` combination computes and caches the CF; all
+        subsequent calls return the cached value at negligible cost.
+
+        Args:
+            filter_code (str):
+                Key into ``self.noise_maps`` identifying the observed noise
+                template to use.
+            subtract_mean (bool):
+                If True the DC component of the power spectrum is zeroed
+                before estimating the CF, removing any mean offset.
+                Default is False.
+            correct_periodicity (bool):
+                If True a periodicity-dilution correction is applied to the
+                CF. Default is True.
+
+        Returns:
+            np.ndarray:
+                A 2D float array (same shape as the noise map) holding the
+                unrolled CF (DFT convention, origin at [0, 0]).
+
+        Raises:
+            MissingArgument:
+                If ``noise_maps`` has not been set on this Instrument.
+            InconsistentArguments:
+                If ``noise_maps`` is not a dict or ``filter_code`` is not
+                found in it.
+        """
+        from synthesizer.imaging.image_generators import (
+            _estimate_correlated_noise_cf,
+        )
+
+        if self.noise_maps is None:
+            raise exceptions.MissingArgument(
+                "No noise maps are set on this Instrument. "
+                "Provide noise_maps when constructing the Instrument."
+            )
+        if not isinstance(self.noise_maps, dict):
+            raise exceptions.InconsistentArguments(
+                "noise_maps must be a dict keyed by filter code for "
+                "correlated noise generation."
+            )
+        if filter_code not in self.noise_maps:
+            raise exceptions.InconsistentArguments(
+                f"No noise map found for filter '{filter_code}'. "
+                f"Available filters: {list(self.noise_maps.keys())}"
+            )
+
+        cache_key = (filter_code, subtract_mean, correct_periodicity)
+        if cache_key not in self._correlated_noise_cf_cache:
+            template = self.noise_maps[filter_code]
+            arr = (
+                template.value
+                if isinstance(template, unyt_array)
+                else template
+            )
+            self._correlated_noise_cf_cache[cache_key] = (
+                _estimate_correlated_noise_cf(
+                    arr,
+                    subtract_mean=subtract_mean,
+                    correct_periodicity=correct_periodicity,
+                )
+            )
+
+        return self._correlated_noise_cf_cache[cache_key]
 
     def add_filters(self, filters, psfs=None, noise_maps=None):
         """Add filters to the Instrument.

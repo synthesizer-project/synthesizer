@@ -25,6 +25,7 @@ import numpy as np
 from unyt import kpc
 
 from synthesizer.imaging.image import Image
+from synthesizer.instruments import Instrument
 
 # %%
 # Create a mock galaxy image
@@ -66,16 +67,30 @@ noise_template = np.real(np.fft.ifft2(np.fft.fft2(white_noise) * kernel_fft))
 noise_template *= 0.05 / noise_template.std()
 
 # %%
+# Register the noise map on an Instrument
+# ----------------------------------------
+# The noise template is stored on an ``Instrument`` object keyed by filter
+# code.  When ``apply_correlated_noise`` is called, the instrument computes
+# the correlation function (CF) once and caches it — subsequent calls for
+# the same filter (e.g. across many images in a collection) skip the
+# expensive FFT step entirely.
+
+instrument = Instrument(
+    label="MockScope",
+    noise_maps={"F150W": noise_template},
+)
+
+# %%
 # Apply correlated noise
 # ----------------------
-# ``apply_correlated_noise`` estimates the correlation structure from
-# ``noise_template`` via its power spectrum and generates a new noise
-# realisation with the same statistical properties, which is then added
-# to the image.
+# ``apply_correlated_noise`` fetches the cached CF from the instrument,
+# draws a noise realisation whose spatial statistics match the template,
+# and adds it to the image.
 
 noisy_img = img.apply_correlated_noise(
-    observed_noise_arr=noise_template,
-    subtract_mean=False,  # remove any DC offset in the noise template
+    instrument,
+    "F150W",
+    subtract_mean=False,
     correct_periodicity=True,
 )
 

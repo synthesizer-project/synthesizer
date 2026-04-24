@@ -1797,6 +1797,157 @@ def _generate_noise_from_rootps_standalone(
     return noise_real_space
 
 
+def _estimate_correlated_noise_cf(
+    source_arr: np.ndarray,
+    subtract_mean: bool = False,
+    correct_periodicity: bool = True,
+) -> np.ndarray:
+    """Estimate the correlation function (CF) of a 2D noise array.
+
+    Computes an unrolled correlation function (DFT convention, origin at
+    [0, 0]) from the power spectrum of the source array. The result is
+    intended to be cached and later consumed by ``_generate_correlated_noise``
+    to produce noise realisations for images of arbitrary shape.
+
+    This function is deliberately separated from noise generation so that the
+    expensive FFT step can be computed once (e.g. per instrument filter) and
+    reused across many images.
+
+    Args:
+        source_arr (np.ndarray):
+            A 2D float array of observed noise (e.g. a blank-sky cutout).
+            Must already have units stripped before calling.
+        subtract_mean (bool):
+            If True the DC component of the power spectrum is zeroed, which
+            effectively removes the mean offset from the noise model.
+        correct_periodicity (bool):
+            If True a correction factor is applied to compensate for the
+            assumption of periodicity in the DFT.
+
+    Returns:
+        np.ndarray:
+            A 2D array of the same shape as ``source_arr`` holding the
+            unrolled CF with the origin at [0, 0].
+    """
+    if source_arr.ndim != 2:
+        raise ValueError("source_arr must be a 2D numpy array.")
+
+    source_shape = source_arr.shape
+
+    ft_array = np.fft.rfft2(source_arr)
+    ps_array = np.abs(ft_array) ** 2
+    ps_array /= np.prod(source_shape)
+
+    if subtract_mean:
+        ps_array[0, 0] = 0.0
+
+    cf_array = np.fft.irfft2(ps_array, s=source_shape)
+
+    if correct_periodicity:
+        correction = _cf_periodicity_dilution_correction_standalone(
+            source_shape
+        )
+        cf_array *= correction
+
+    return cf_array
+
+
+def _generate_correlated_noise(
+    cf_source: np.ndarray,
+    target_shape: tuple,
+    rng_seed: int = None,
+) -> np.ndarray:
+    """Generate a correlated noise realisation for a given target shape.
+
+    Uses a pre-computed correlation function (CF) — typically returned by
+    ``_estimate_correlated_noise_cf`` and cached at the call site — to
+    produce a noise field whose spatial statistics match those of the
+    original noise template.  The CF is resampled to the target pixel
+    dimensions before noise generation.
+
+    Args:
+        cf_source (np.ndarray):
+            The unrolled 2D correlation function (DFT convention, origin at
+            [0, 0]) previously returned by ``_estimate_correlated_noise_cf``.
+        target_shape (tuple of int):
+            The ``(ny, nx)`` pixel dimensions of the desired noise field.
+        rng_seed (int, optional):
+            Seed for the random number generator.  Pass the same seed to
+            reproduce an identical noise realisation.
+
+    Returns:
+        np.ndarray:
+            A 2D float array of shape ``target_shape`` containing the
+            generated correlated noise field.
+
+    Raises:
+        InconsistentArguments:
+            If the source CF is too small to contribute any pixels to the
+            target CF grid.
+    """
+    rng = np.random.default_rng(rng_seed)
+    source_shape = cf_source.shape
+
+    if source_shape[0] < target_shape[0] or source_shape[1] < target_shape[1]:
+        warn(
+            "Source noise map is smaller than the target image, which may"
+            " result in truncation of the noise model."
+        )
+
+    # Roll source CF so that the peak (variance, at [0,0]) moves to the centre
+    cf_source_rolled = np.roll(
+        cf_source,
+        shift=(source_shape[0] // 2, source_shape[1] // 2),
+        axis=(0, 1),
+    )
+
+    # Copy the central region of the source CF into an array of target_shape
+    cf_target_rolled = np.zeros(target_shape, dtype=float)
+
+    src_cy, src_cx = source_shape[0] // 2, source_shape[1] // 2
+    trg_cy, trg_cx = target_shape[0] // 2, target_shape[1] // 2
+
+    y_start_src = max(0, src_cy - trg_cy)
+    y_end_src = min(source_shape[0], src_cy + (target_shape[0] - trg_cy))
+    x_start_src = max(0, src_cx - trg_cx)
+    x_end_src = min(source_shape[1], src_cx + (target_shape[1] - trg_cx))
+
+    y_start_trg = max(0, trg_cy - src_cy)
+    y_end_trg = min(target_shape[0], trg_cy + (source_shape[0] - src_cy))
+    x_start_trg = max(0, trg_cx - src_cx)
+    x_end_trg = min(target_shape[1], trg_cx + (source_shape[1] - src_cx))
+
+    dy = min(y_end_src - y_start_src, y_end_trg - y_start_trg)
+    dx = min(x_end_src - x_start_src, x_end_trg - x_start_trg)
+
+    if dy <= 0 or dx <= 0:
+        raise exceptions.InconsistentArguments(
+            "Source CF is too small to contribute to the target CF. "
+            "Ensure the source noise map is large enough to model noise "
+            "for the target image."
+        )
+
+    cf_target_rolled[
+        y_start_trg : y_start_trg + dy, x_start_trg : x_start_trg + dx
+    ] = cf_source_rolled[
+        y_start_src : y_start_src + dy, x_start_src : x_start_src + dx
+    ]
+
+    # Unroll back to DFT convention (origin at [0, 0])
+    cf_on_target_grid_unrolled = np.roll(
+        cf_target_rolled,
+        shift=(-(target_shape[0] // 2), -(target_shape[1] // 2)),
+        axis=(0, 1),
+    )
+
+    ps_target_fft = np.fft.rfft2(cf_on_target_grid_unrolled)
+    rootps_target = np.sqrt(np.abs(ps_target_fft))
+
+    return _generate_noise_from_rootps_standalone(
+        rng, target_shape, rootps_target
+    )
+
+
 def _model_and_apply_correlated_noise(
     source_image_arr: np.ndarray,
     target_image_arr: np.ndarray,
@@ -1804,153 +1955,38 @@ def _model_and_apply_correlated_noise(
     correct_periodicity: bool = True,
     rng_seed: int = None,
 ) -> np.ndarray:
-    """Models correlated noise from a source image and applies it to a target.
+    """Model correlated noise from a source image and apply it to a target.
 
-    The noise model, represented by its Correlation Function (CF), is derived
-    from the `source_image_arr`. This CF is then used to generate a noise field
-    with similar statistical properties, which is subsequently added to the
-    `target_image_arr`.
-
-    This function assumes that the pixel scales of the source and target images
-    are comparable, or that the CF is intended to be interpreted in pixels.
-    If the images possess different physical pixel scales, appropriate
-    pre-processing (e.g., resampling) might be necessary before using
-    this function for physically accurate noise transfer.
+    This is a convenience wrapper around ``_estimate_correlated_noise_cf``
+    and ``_generate_correlated_noise``.  Prefer calling those two functions
+    directly when the correlation function should be cached across multiple
+    calls (e.g. when applying the same noise model to many images).
 
     Args:
-        source_image_arr: A 2D NumPy array. This image is used to model the
-                        correlated noise characteristics.
-        target_image_arr: A 2D NumPy array. Correlated noise
-                        will be added to this image.
-        subtract_mean: If True, the mean of the `source_image_arr`
-                        is effectively removed before Power Spectrum estimation
-                        by setting the DC component (PS[0,0]) of the
-                        Power Spectrum to zero.
-        correct_periodicity: If True, a correction factor is applied to the
-                        estimated Correlation Function. This factor
-                        aims to compensate for the inherent assumption of
-                        periodicity in Discrete Fourier Transforms.
-        rng_seed: An optional integer seed for the random number generator.
-                        Providing a seed ensures reproducible noise generation.
+        source_image_arr (np.ndarray):
+            A 2D array used to model the correlated noise characteristics.
+        target_image_arr (np.ndarray):
+            A 2D array to which the generated correlated noise is added.
+        subtract_mean (bool):
+            If True the DC component of the power spectrum is zeroed before
+            estimating the CF. Default is False.
+        correct_periodicity (bool):
+            If True a correction factor is applied to compensate for the
+            assumption of periodicity in the DFT. Default is True.
+        rng_seed (int, optional):
+            Seed for the random number generator for reproducibility.
 
     Returns:
-        A new 2D NumPy array, which is the `target_image_arr` with the
-        synthesized correlated noise added to it.
+        np.ndarray:
+            ``target_image_arr`` with the synthesised correlated noise added.
     """
     if source_image_arr.ndim != 2 or target_image_arr.ndim != 2:
         raise ValueError("Input images must be 2D numpy arrays.")
 
-    rng = np.random.default_rng(rng_seed)
-    source_shape = source_image_arr.shape
-
-    # --- Part 1: Model Noise (Correlation Function) from source_image_arr ---
-    # Calculate Fourier Transform of the source image
-    ft_array = np.fft.rfft2(source_image_arr)
-
-    # Power Spectrum (PS) of the source image
-    ps_array_source = np.abs(ft_array) ** 2
-
-    # Normalize PS: Ensures iFFT(PS) results in a CF
-    # where CF[0,0] is the variance.
-    ps_array_source /= np.prod(source_shape)
-
-    if subtract_mean:
-        ps_array_source[0, 0] = 0.0  # Zero out DC component of PS
-
-    # Estimate Correlation Function (CF) from the normalized PS
-    # cf_array_prelim is unrolled (origin at [0,0] for DFT purposes)
-    cf_array_prelim = np.fft.irfft2(ps_array_source, s=source_shape)
-
-    if correct_periodicity:
-        correction = _cf_periodicity_dilution_correction_standalone(
-            source_shape
-        )
-        cf_array_prelim *= correction
-
-    # cf_array_prelim now holds the noise model (unrolled CF).
-    # cf_array_prelim[0,0] approximates the variance of the source noise.
-
-    # --- Part 2: Prepare CF for target_image_arr dimensions ---
-    target_shape = target_image_arr.shape
-
-    # "Draw" cf_array_prelim onto an array of target_shape.
-    # This involves rolling the source CF to center its peak, then
-    # cropping or padding it to match target dimensions (centers aligned),
-    # and finally unrolling it for FFT.
-
-    # raise a warning if the source CF is smaller than the target shape, since
-    # this means we are effectively truncating the noise model and may not
-    # be capturing all the correlations present in the source noise.
-    if source_shape[0] < target_shape[0] or source_shape[1] < target_shape[1]:
-        warn(
-            "Source array is smaller than the target shape, which may"
-            " result in truncation of the noise model."
-        )
-
-    # Roll source CF so that the peak (variance, originally at [0,0])
-    # is at the center
-    cf_source_rolled = np.roll(
-        cf_array_prelim,
-        shift=(source_shape[0] // 2, source_shape[1] // 2),
-        axis=(0, 1),
+    cf = _estimate_correlated_noise_cf(
+        source_image_arr,
+        subtract_mean=subtract_mean,
+        correct_periodicity=correct_periodicity,
     )
-
-    # Create a rolled CF for the target shape by copying the
-    # central part of cf_source_rolled
-    cf_target_rolled = np.zeros(target_shape, dtype=float)
-
-    src_cy, src_cx = source_shape[0] // 2, source_shape[1] // 2
-    trg_cy, trg_cx = target_shape[0] // 2, target_shape[1] // 2
-
-    # Define copy regions to place the center of
-    #  source_cf onto the center of target_cf
-    # Source region to copy from:
-    y_start_src = max(0, src_cy - trg_cy)
-    y_end_src = min(source_shape[0], src_cy + (target_shape[0] - trg_cy))
-    x_start_src = max(0, src_cx - trg_cx)
-    x_end_src = min(source_shape[1], src_cx + (target_shape[1] - trg_cx))
-
-    # Target region to copy to:
-    y_start_trg = max(0, trg_cy - src_cy)
-    y_end_trg = min(target_shape[0], trg_cy + (source_shape[0] - src_cy))
-    x_start_trg = max(0, trg_cx - src_cx)
-    x_end_trg = min(target_shape[1], trg_cx + (source_shape[1] - src_cx))
-
-    # Ensure the lengths of the regions to be copied match
-    dy = min(y_end_src - y_start_src, y_end_trg - y_start_trg)
-    dx = min(x_end_src - x_start_src, x_end_trg - x_start_trg)
-
-    if dy > 0 and dx > 0:
-        cf_target_rolled[
-            y_start_trg : y_start_trg + dy, x_start_trg : x_start_trg + dx
-        ] = cf_source_rolled[
-            y_start_src : y_start_src + dy, x_start_src : x_start_src + dx
-        ]
-    else:
-        raise exceptions.InconsistentArguments(
-            "Source CF is too small to contribute to the target CF. "
-            "Ensure the source image is large enough to model noise"
-            " for the target image."
-        )
-
-    # Unroll cf_target_rolled to place the origin at [0,0] for DFT
-    # This array represents the CF sampled on the target grid.
-    cf_on_target_grid_unrolled = np.roll(
-        cf_target_rolled,
-        shift=(-(target_shape[0] // 2), -(target_shape[1] // 2)),
-        axis=(0, 1),
-    )
-
-    # Calculate Power Spectrum for this target-shaped CF.
-    # This ps_target_fft is unnormalized (direct output of rfft2).
-    ps_target_fft = np.fft.rfft2(cf_on_target_grid_unrolled)
-    rootps_target = np.sqrt(np.abs(ps_target_fft))  # Magnitudes for sqrt
-
-    # --- Part 3: Generate noise and apply it to the target image ---
-    generated_noise = _generate_noise_from_rootps_standalone(
-        rng, target_shape, rootps_target
-    )
-
-    # Add the generated noise to the original target image
-    output_image_arr = target_image_arr + generated_noise
-    return output_image_arr
+    noise = _generate_correlated_noise(cf, target_image_arr.shape, rng_seed)
+    return target_image_arr + noise

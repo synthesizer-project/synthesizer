@@ -711,51 +711,66 @@ class ImageCollection(ImagingBase):
             imgs=noisy_imgs,
         )
 
-    def apply_correlated_noise(self, noise_templates):
-        """Apply noise with the same correlation as a given noise template.
+    def apply_correlated_noise(
+        self,
+        instrument,
+        subtract_mean=False,
+        correct_periodicity=True,
+    ):
+        """Apply correlated noise to every image using an instrument noise map.
 
-        This method derives the noise power spectrum from a given image,
-        generates a noise array with the same power spectrum, and adds this to
-        the image. This method is ideal for matching the noise properties of
-        an existing image, but can be used in any case where you have a
-        noise field you want to match.
+        The correlation structure for each filter is derived from the noise
+        map stored on the instrument under that filter's code.  The
+        correlation function (CF) is computed once per filter and cached on
+        the instrument, so this call is cheap even when applied to large
+        collections.
 
         Args:
-            noise_templates (dict):
-                A dictionary containing the noise template for each image
-                within the ImageCollection. The key of each noise template
-                must be the filter_code of the image it should be applied to.
+            instrument (Instrument):
+                The instrument whose ``noise_maps`` dict provides an observed
+                noise template for each filter in this collection.  A noise
+                map must exist for every filter code present in the collection.
+            subtract_mean (bool):
+                If True the DC component of the power spectrum is zeroed
+                before estimating the CF, removing any mean offset.
+                Default is False.
+            correct_periodicity (bool):
+                If True a correction factor is applied to compensate for the
+                assumption of periodicity in the DFT. Default is True.
 
         Returns:
-            ImageCollection
-                A new image collection containing the images with
-                correlated noise applied.
+            ImageCollection:
+                A new ImageCollection containing the images with correlated
+                noise applied.
 
         Raises:
-            InconsistentArguments
-                If a noise template for an image is missing an error is raised.
+            MissingArgument:
+                If the instrument has no ``noise_maps``.
+            InconsistentArguments:
+                If a noise map for any filter in the collection is missing
+                from ``instrument.noise_maps``.
         """
-        # Check we have a valid set of noise templates
-        if not isinstance(noise_templates, dict):
-            raise exceptions.InconsistentArguments(
-                "noise_templates must be a dictionary with a"
-                " noise template for each image"
+        if instrument.noise_maps is None:
+            raise exceptions.MissingArgument(
+                "No noise maps are set on the instrument. "
+                "Provide noise_maps when constructing the Instrument."
             )
-        missing_templates = [
-            f for f in self.filter_codes if f not in noise_templates
+        missing = [
+            f for f in self.filter_codes if f not in instrument.noise_maps
         ]
-        if len(missing_templates) > 0:
+        if missing:
             raise exceptions.InconsistentArguments(
-                "Missing a noise template for the following filters:"
-                f" {missing_templates}"
+                "Missing a noise map on the instrument for the following "
+                f"filters: {missing}"
             )
 
-        # Loop over each image getting the noisy version
         noisy_imgs = {}
-        for f in noise_templates:
-            # Apply the correlated noise to this image
+        for f in self.filter_codes:
             noisy_imgs[f] = self.imgs[f].apply_correlated_noise(
-                noise_templates[f]
+                instrument,
+                f,
+                subtract_mean=subtract_mean,
+                correct_periodicity=correct_periodicity,
             )
 
         return ImageCollection(
