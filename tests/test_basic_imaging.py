@@ -20,6 +20,11 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
+from synthesizer.imaging.image_generators import (
+    _cf_periodicity_dilution_correction_standalone,
+    _generate_noise_from_rootps_standalone,
+    _model_and_apply_correlated_noise,
+)
 
 
 class DummyImaging(ImagingBase):
@@ -274,3 +279,165 @@ class TestImageBasics:
         )
         assert np.array_equal(img.arr, data.value)
         assert img.units == data.units
+
+
+class TestCorrelatedNoiseCore:
+    """Tests for the internal correlated noise generation functions."""
+
+    def test_cf_periodicity_correction_shape(self):
+        """Correction factor array has the same shape as the input."""
+        shape = (32, 48)
+        correction = _cf_periodicity_dilution_correction_standalone(shape)
+        assert correction.shape == shape
+
+    def test_cf_periodicity_correction_positive(self):
+        """All correction factor values are positive."""
+        correction = _cf_periodicity_dilution_correction_standalone((16, 16))
+        assert np.all(correction > 0)
+
+    def test_cf_periodicity_correction_dc_is_one(self):
+        """DC component (index [0,0]) of the correction equals 1.0."""
+        correction = _cf_periodicity_dilution_correction_standalone((20, 20))
+        assert np.isclose(correction[0, 0], 1.0)
+
+    def test_generate_noise_shape(self):
+        """Generated noise field has the shape passed to the function."""
+        rng = np.random.default_rng(0)
+        shape = (30, 40)
+        rootps = np.ones((shape[0], shape[1] // 2 + 1), dtype=complex)
+        noise = _generate_noise_from_rootps_standalone(rng, shape, rootps)
+        assert noise.shape == shape
+
+    def test_generate_noise_is_real(self):
+        """Generated noise field is a real-valued array."""
+        rng = np.random.default_rng(0)
+        shape = (16, 16)
+        rootps = np.ones((shape[0], shape[1] // 2 + 1), dtype=complex)
+        noise = _generate_noise_from_rootps_standalone(rng, shape, rootps)
+        assert np.isrealobj(noise)
+
+    def test_model_apply_output_target_shape(self):
+        """Output array has the same shape as the target image."""
+        rng = np.random.default_rng(1)
+        source = rng.normal(size=(20, 20))
+        target = np.zeros((30, 30))
+        result = _model_and_apply_correlated_noise(source, target, rng_seed=1)
+        assert result.shape == target.shape
+
+    def test_model_apply_reproducible_with_seed(self):
+        """Identical seeds produce identical noise realisations."""
+        source = np.random.default_rng(99).normal(size=(24, 24))
+        target = np.zeros((24, 24))
+        out1 = _model_and_apply_correlated_noise(source, target, rng_seed=7)
+        out2 = _model_and_apply_correlated_noise(source, target, rng_seed=7)
+        assert np.array_equal(out1, out2)
+
+    def test_model_apply_different_seeds_differ(self):
+        """Different seeds produce different noise realisations."""
+        source = np.random.default_rng(99).normal(size=(24, 24))
+        target = np.zeros((24, 24))
+        out1 = _model_and_apply_correlated_noise(source, target, rng_seed=1)
+        out2 = _model_and_apply_correlated_noise(source, target, rng_seed=2)
+        assert not np.array_equal(out1, out2)
+
+    def test_model_apply_subtract_mean_runs(self):
+        """subtract_mean=True completes without error."""
+        source = np.random.default_rng(0).normal(size=(16, 16))
+        target = np.zeros((16, 16))
+        result = _model_and_apply_correlated_noise(
+            source, target, subtract_mean=True, rng_seed=0
+        )
+        assert result.shape == target.shape
+
+    def test_model_apply_no_periodicity_correction(self):
+        """correct_periodicity=False completes without error."""
+        source = np.random.default_rng(0).normal(size=(16, 16))
+        target = np.zeros((16, 16))
+        result = _model_and_apply_correlated_noise(
+            source, target, correct_periodicity=False, rng_seed=0
+        )
+        assert result.shape == target.shape
+
+    def test_model_apply_source_target_different_shapes(self):
+        """Source and target images may have different pixel dimensions."""
+        source = np.random.default_rng(0).normal(size=(40, 40))
+        target = np.zeros((20, 20))
+        result = _model_and_apply_correlated_noise(source, target, rng_seed=0)
+        assert result.shape == (20, 20)
+
+    def test_model_apply_non2d_raises(self):
+        """Non-2D inputs raise a ValueError."""
+        with pytest.raises(ValueError):
+            _model_and_apply_correlated_noise(
+                np.ones((4, 4, 4)), np.zeros((4, 4))
+            )
+        with pytest.raises(ValueError):
+            _model_and_apply_correlated_noise(
+                np.ones((4, 4)), np.zeros((4, 4, 4))
+            )
+
+
+class TestImageCorrelatedNoise:
+    """Tests for Image.apply_correlated_noise."""
+
+    @pytest.fixture
+    def base_image(self):
+        """An Image whose pixel data is a simple Gaussian blob."""
+        rng = np.random.default_rng(42)
+        arr = rng.normal(size=(32, 32))
+        img = Image(resolution=0.1 * kpc, fov=3.2 * kpc)
+        img.arr = arr
+        return img
+
+    @pytest.fixture
+    def noise_source(self):
+        """A plain 2D array that serves as the observed noise template."""
+        return np.random.default_rng(7).normal(size=(32, 32))
+
+    def test_returns_image_instance(self, base_image, noise_source):
+        """apply_correlated_noise returns an Image object."""
+        result = base_image.apply_correlated_noise(noise_source)
+        assert isinstance(result, Image)
+
+    def test_output_differs_from_input(self, base_image, noise_source):
+        """The returned image array differs from the original array."""
+        original = base_image.arr.copy()
+        result = base_image.apply_correlated_noise(noise_source)
+        assert not np.array_equal(result.arr, original)
+
+    def test_noise_arr_is_set(self, base_image, noise_source):
+        """noise_arr attribute is populated on the returned image."""
+        result = base_image.apply_correlated_noise(noise_source)
+        assert result.noise_arr is not None
+        assert result.noise_arr.shape == base_image.arr.shape
+
+    def test_weight_map_is_set(self, base_image, noise_source):
+        """weight_map attribute is a positive scalar on the returned image."""
+        result = base_image.apply_correlated_noise(noise_source)
+        assert result.weight_map is not None
+        assert result.weight_map > 0
+
+    def test_output_preserves_shape(self, base_image, noise_source):
+        """Returned image has the same pixel dimensions as the input."""
+        result = base_image.apply_correlated_noise(noise_source)
+        assert result.arr.shape == base_image.arr.shape
+
+    def test_subtract_mean_option(self, base_image, noise_source):
+        """subtract_mean=True runs without error and returns an Image."""
+        result = base_image.apply_correlated_noise(
+            noise_source, subtract_mean=True
+        )
+        assert isinstance(result, Image)
+
+    def test_no_periodicity_correction_option(self, base_image, noise_source):
+        """correct_periodicity=False runs without error, returning an Image."""
+        result = base_image.apply_correlated_noise(
+            noise_source, correct_periodicity=False
+        )
+        assert isinstance(result, Image)
+
+    def test_noise_source_different_shape(self, base_image):
+        """Noise template with a different shape from the image is accepted."""
+        noise_source_big = np.random.default_rng(5).normal(size=(64, 64))
+        result = base_image.apply_correlated_noise(noise_source_big)
+        assert result.arr.shape == base_image.arr.shape
