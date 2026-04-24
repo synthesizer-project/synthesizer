@@ -29,6 +29,7 @@ from synthesizer.imaging.image_generators import (
     _generate_image_parametric_smoothed,
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,
+    _model_and_apply_correlated_noise,
 )
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
@@ -607,6 +608,51 @@ class Image(ImagingBase):
             noise_std *= units
 
         return self.apply_noise_from_std(noise_std)
+
+    def apply_correlated_noise(
+        self,
+        observed_noise_arr=None,
+        subtract_mean=False,
+        correct_periodicity=True,
+    ):
+        """Apply correlated noise to the image.
+
+        This applies correlated noise to the image by convolving a noise
+        field with a kernel. If an observed noise array is passed this is used
+        to generate the correlated noise kernel
+
+        Args:
+            observed_noise_arr (np.ndarray, unyt_quantity):
+                An observed noise array to use instead of generating a new
+                noise field. Should be in image units if the image has units.
+            subtract_mean (bool):
+                Whether to subtract the mean from the observed noise array
+                before generating the correlated noise kernel. Default is
+                False.
+            correct_periodicity (bool):
+                Whether to correct for periodicity in the DFT when generating
+                the correlated noise kernel. Default is True.
+
+        Returns:
+            Image
+                The image including the correlated noise.
+        """
+        targer_arr = np.zeros(self.arr.shape)
+
+        if isinstance(observed_noise_arr, unyt_array):
+            # Convert units to match the image if necessary
+            if self.units is not None:
+                observed_noise_arr = observed_noise_arr.to(self.units)
+
+        noise_arr = _model_and_apply_correlated_noise(
+            source_image_arr=observed_noise_arr,
+            target_image_arr=targer_arr,
+            subtract_mean=subtract_mean,
+            correct_periodicity=correct_periodicity,
+        )
+
+        # Apply the correlated noise array
+        return self.apply_noise_array(noise_arr)
 
     def plot_img(
         self,
