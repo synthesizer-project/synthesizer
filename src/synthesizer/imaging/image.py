@@ -634,29 +634,40 @@ class Image(ImagingBase):
                 Whether to correct for periodicity in the DFT when generating
                 the correlated noise kernel. Default is True.
             rng_seed (int):
-                A seed for the random number generator used to generate the noise.
-                Default is None, which means the random number generator will
-                be seeded randomly.
+                A seed for the random number generator used to generate
+                the noise. Default is None, which means the random number
+                generator will be seeded randomly.
 
         Returns:
             Image
                 The image including the correlated noise.
         """
-        targer_arr = np.zeros(self.arr.shape)
-
+        target_arr = np.zeros(self.arr.shape)
+        # If units are involved, convert to the image's units and work in raw
+        # ndarray space so the FFT/power-spectrum core can operate on plain
+        # 2D arrays.
+        src_units = None
         if isinstance(observed_noise_arr, unyt_array):
-            # Convert units to match the image if necessary
             if self.units is not None:
                 observed_noise_arr = observed_noise_arr.to(self.units)
-
+            src_units = observed_noise_arr.units
+            source_arr = observed_noise_arr.value
+        else:
+            if self.units is not None:
+                raise exceptions.InconsistentArguments(
+                    "If the Image has units then observed_noise_arr must be "
+                    f"passed with units (image.units = {self.units})."
+                )
+            source_arr = observed_noise_arr
         noise_arr = _model_and_apply_correlated_noise(
-            source_image_arr=observed_noise_arr,
-            target_image_arr=targer_arr,
+            source_image_arr=source_arr,
+            target_image_arr=target_arr,
             subtract_mean=subtract_mean,
             correct_periodicity=correct_periodicity,
             rng_seed=rng_seed,
         )
-
+        if src_units is not None:
+            noise_arr = noise_arr * src_units
         # Apply the correlated noise array
         return self.apply_noise_array(noise_arr)
 

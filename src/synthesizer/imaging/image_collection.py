@@ -739,7 +739,7 @@ class ImageCollection(ImagingBase):
         if not isinstance(noise_templates, dict):
             raise exceptions.InconsistentArguments(
                 "noise_templates must be a dictionary with a"
-                "noise template for each image"
+                " noise template for each image"
             )
         missing_templates = [
             f for f in self.filter_codes if f not in noise_templates
@@ -747,7 +747,7 @@ class ImageCollection(ImagingBase):
         if len(missing_templates) > 0:
             raise exceptions.InconsistentArguments(
                 "Missing a noise template for the following filters:"
-                f"{missing_templates}"
+                f" {missing_templates}"
             )
 
         # Loop over each image getting the noisy version

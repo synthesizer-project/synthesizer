@@ -1828,8 +1828,8 @@ def _model_and_apply_correlated_noise(
                         Power Spectrum to zero.
         correct_periodicity: If True, a correction factor is applied to the
                         estimated Correlation Function. This factor
-                        aims tocompensate for the inherent assumption of
-                         periodicity in Discrete Fourier Transforms.
+                        aims to compensate for the inherent assumption of
+                        periodicity in Discrete Fourier Transforms.
         rng_seed: An optional integer seed for the random number generator.
                         Providing a seed ensures reproducible noise generation.
 
@@ -1878,6 +1878,15 @@ def _model_and_apply_correlated_noise(
     # cropping or padding it to match target dimensions (centers aligned),
     # and finally unrolling it for FFT.
 
+    # raise a warning if the source CF is smaller than the target shape, since
+    # this means we are effectively truncating the noise model and may not
+    # be capturing all the correlations present in the source noise.
+    if source_shape[0] < target_shape[0] or source_shape[1] < target_shape[1]:
+        warn(
+            "Source array is smaller than the target shape, which may"
+            " result in truncation of the noise model."
+        )
+
     # Roll source CF so that the peak (variance, originally at [0,0])
     # is at the center
     cf_source_rolled = np.roll(
@@ -1917,6 +1926,12 @@ def _model_and_apply_correlated_noise(
         ] = cf_source_rolled[
             y_start_src : y_start_src + dy, x_start_src : x_start_src + dx
         ]
+    else:
+        raise exceptions.InconsistentArguments(
+            "Source CF is too small to contribute to the target CF. "
+            "Ensure the source image is large enough to model noise"
+            " for the target image."
+        )
 
     # Unroll cf_target_rolled to place the origin at [0,0] for DFT
     # This array represents the CF sampled on the target grid.

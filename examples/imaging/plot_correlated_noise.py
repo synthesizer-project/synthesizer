@@ -31,7 +31,7 @@ from synthesizer.imaging.image import Image
 # --------------------------
 # We use a simple 2D Gaussian as a stand-in for a galaxy light profile.
 
-npix = 64
+npix = 128
 resolution = 0.1 * kpc
 fov = npix * resolution
 
@@ -56,14 +56,14 @@ rng = np.random.default_rng(0)
 white_noise = rng.normal(size=(npix, npix))
 
 # Gaussian smoothing kernel in Fourier space (correlation length ~ 3 px)
-corr_length_pix = 3.0
+corr_length_pix = 2.0
 freq = np.fft.fftfreq(npix)
 fx, fy = np.meshgrid(freq, freq)
 kernel_fft = np.exp(-2 * np.pi**2 * corr_length_pix**2 * (fx**2 + fy**2))
 
 noise_template = np.real(np.fft.ifft2(np.fft.fft2(white_noise) * kernel_fft))
 # Normalise so the standard deviation is comparable to the galaxy signal
-noise_template *= 0.2 / noise_template.std()
+noise_template *= 0.05 / noise_template.std()
 
 # %%
 # Apply correlated noise
@@ -75,7 +75,7 @@ noise_template *= 0.2 / noise_template.std()
 
 noisy_img = img.apply_correlated_noise(
     observed_noise_arr=noise_template,
-    subtract_mean=True,  # remove any DC offset in the noise template
+    subtract_mean=False,  # remove any DC offset in the noise template
     correct_periodicity=True,
 )
 
@@ -111,6 +111,7 @@ axes[3].set_title("Noisy image (output)")
 axes[3].axis("off")
 
 fig.tight_layout()
+plt.savefig("galaxy_with_correlated_noise.png", dpi=300)
 plt.show()
 plt.close(fig)
 
@@ -139,14 +140,21 @@ def radial_power_spectrum(arr):
 
 freq_tmpl, ps_tmpl = radial_power_spectrum(noise_template)
 freq_gen, ps_gen = radial_power_spectrum(noisy_img.noise_arr)
+# compare a white noise field as well
+random_noise = rng.normal(size=(npix, npix))
+freq_rand, ps_rand = radial_power_spectrum(random_noise)
 
 fig, ax = plt.subplots(figsize=(6, 4))
 ax.loglog(freq_tmpl, ps_tmpl, label="Noise template", lw=2)
+ax.set_ylim(1e-4, 1e6)
 ax.loglog(freq_gen, ps_gen, label="Generated noise", lw=2, ls="--")
+ax.loglog(freq_rand, ps_rand, label="Random noise", lw=2, ls=":")
 ax.set_xlabel("Spatial frequency (pixels$^{-1}$)")
 ax.set_ylabel("Power")
 ax.set_title("Radial power spectrum comparison")
+# show limit
 ax.legend()
 fig.tight_layout()
 plt.show()
+plt.savefig("correlated_noise_power_spectrum.png", dpi=300)
 plt.close(fig)
