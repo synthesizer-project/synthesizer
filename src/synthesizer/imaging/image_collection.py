@@ -711,6 +711,59 @@ class ImageCollection(ImagingBase):
             imgs=noisy_imgs,
         )
 
+    def apply_correlated_noise(self, noise_templates):
+        """Apply noise with the same correlation as a given noise template.
+
+        This method derives the noise power spectrum from a given image,
+        generates a noise array with the same power spectrum, and adds this to
+        the image. This method is ideal for matching the noise properties of
+        an existing image, but can be used in any case where you have a
+        noise field you want to match.
+
+        Args:
+            noise_templates (dict):
+                A dictionary containing the noise template for each image
+                within the ImageCollection. The key of each noise template
+                must be the filter_code of the image it should be applied to.
+
+        Returns:
+            ImageCollection
+                A new image collection containing the images with
+                correlated noise applied.
+
+        Raises:
+            InconsistentArguments
+                If a noise template for an image is missing an error is raised.
+        """
+        # Check we have a valid set of noise templates
+        if not isinstance(noise_templates, dict):
+            raise exceptions.InconsistentArguments(
+                "noise_templates must be a dictionary with a"
+                "noise template for each image"
+            )
+        missing_templates = [
+            f for f in self.filter_codes if f not in noise_templates
+        ]
+        if len(missing_templates) > 0:
+            raise exceptions.InconsistentArguments(
+                "Missing a noise template for the following filters:"
+                f"{missing_templates}"
+            )
+
+        # Loop over each image getting the noisy version
+        noisy_imgs = {}
+        for f in noise_templates:
+            # Apply the correlated noise to this image
+            noisy_imgs[f] = self.imgs[f].apply_correlated_noise(
+                noise_templates[f]
+            )
+
+        return ImageCollection(
+            resolution=self.resolution,
+            fov=self.fov,
+            imgs=noisy_imgs,
+        )
+
     def plot_images(
         self,
         show=False,
