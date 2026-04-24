@@ -611,9 +611,10 @@ class Image(ImagingBase):
 
     def apply_correlated_noise(
         self,
-        observed_noise_arr=None,
+        observed_noise_arr,
         subtract_mean=False,
         correct_periodicity=True,
+        rng_seed=None,
     ):
         """Apply correlated noise to the image.
 
@@ -623,8 +624,8 @@ class Image(ImagingBase):
 
         Args:
             observed_noise_arr (np.ndarray, unyt_quantity):
-                An observed noise array to use instead of generating a new
-                noise field. Should be in image units if the image has units.
+                An observed noise array to use.
+                Should be in image units if the image has units.
             subtract_mean (bool):
                 Whether to subtract the mean from the observed noise array
                 before generating the correlated noise kernel. Default is
@@ -632,6 +633,10 @@ class Image(ImagingBase):
             correct_periodicity (bool):
                 Whether to correct for periodicity in the DFT when generating
                 the correlated noise kernel. Default is True.
+            rng_seed (int):
+                A seed for the random number generator used to generate the noise.
+                Default is None, which means the random number generator will
+                be seeded randomly.
 
         Returns:
             Image
@@ -649,6 +654,7 @@ class Image(ImagingBase):
             target_image_arr=targer_arr,
             subtract_mean=subtract_mean,
             correct_periodicity=correct_periodicity,
+            rng_seed=rng_seed,
         )
 
         # Apply the correlated noise array
