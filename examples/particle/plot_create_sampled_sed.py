@@ -35,7 +35,7 @@ metallicities = 10 ** np.arange(-5.0, -1.5, 0.1)
 Z_p = {"metallicity": 0.01}
 metal_dist = ZDist.DeltaConstant(**Z_p)
 
-sfh_p = {"duration": 100 * Myr}
+sfh_p = {"max_age": 100 * Myr}
 sfh = SFH.Constant(**sfh_p)  # constant star formation
 sfzh = ParametricStars(
     log10ages,

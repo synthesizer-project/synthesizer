@@ -20,18 +20,18 @@ import copy
 
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import Mpc, Msun, Myr, rad, unyt_quantity
+from unyt import Mpc, Msun, Myr, pc, rad, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging import Image, SpectralCube
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
-from synthesizer.synth_warnings import deprecated, warn
-from synthesizer.units import accepts
+from synthesizer.synth_warnings import warn
+from synthesizer.units import accepts, unyt_to_ndview
 from synthesizer.utils.geometry import get_rotation_matrix
+from synthesizer.utils.operation_timers import timed
 
 
 class Galaxy(BaseGalaxy):
@@ -61,6 +61,7 @@ class Galaxy(BaseGalaxy):
     """
 
     @accepts(centre=Mpc)
+    @timed("Galaxy.__init__")
     def __init__(
         self,
         name="particle galaxy",
@@ -143,16 +144,8 @@ class Galaxy(BaseGalaxy):
                 )
             else:
                 self.stellar_mass_weighted_age = None
-                warn(
-                    "Ages of stars not provided, "
-                    "setting stellar_mass_weighted_age to `None`"
-                )
         else:
             self.stellar_mass_weighted_age = None
-            warn(
-                "Current mass of stars not provided, "
-                "setting stellar_mass_weighted_age to `None`"
-            )
 
     def calculate_integrated_gas_properties(self):
         """Calculate integrated gas properties."""
@@ -167,10 +160,6 @@ class Galaxy(BaseGalaxy):
             )
         else:
             self.mass_weighted_gas_metallicity = None
-            warn(
-                "Mass of gas particles not provided, "
-                "setting mass_weighted_gas_metallicity to `None`"
-            )
 
         if self.gas.star_forming is not None:
             mask = self.gas.star_forming
@@ -190,10 +179,90 @@ class Galaxy(BaseGalaxy):
         else:
             self.sf_gas_mass = None
             self.sf_gas_metallicity = None
-            warn(
-                "Star forming gas particle mask not provided, "
-                "setting sf_gas_mass and sf_gas_metallicity to `None`"
+
+    @timed("Galaxy.split")
+    def split(self, max_npart):
+        """Split a particle galaxy into child galaxies.
+
+        Child galaxies are split only on the stellar component. Gas and black
+        hole components are attached in full to the first child so operations
+        that need the non-stellar components still see the complete data.
+        Only source particle data are propagated to the children; additive
+        outputs are recomputed per child and combined back onto the parent.
+
+        Args:
+            max_npart (int):
+                The maximum number of stellar particles permitted in each child
+                galaxy.
+
+        Returns:
+            list:
+                A list of child particle galaxies for chunked pipeline
+                processing.
+        """
+        if max_npart is None:
+            return [self]
+
+        if max_npart <= 0:
+            raise exceptions.InconsistentArguments(
+                "max_npart must be a positive integer."
             )
+
+        if self.stars is None or self.stars.nparticles <= max_npart:
+            return [self]
+
+        children = []
+        for ichild, stars in enumerate(self.stars.split(max_npart)):
+            child = copy.copy(self)
+            child.name = f"{self.name}_child_{ichild}"
+
+            # Child galaxies must start with fresh additive output
+            # containers so chunk results are accumulated explicitly later on.
+            child.spectra = {}
+            child.lines = {}
+            child.photo_lnu = {}
+            child.photo_fnu = {}
+            child.spectroscopy = {}
+            child.images_lnu = {}
+            child.images_fnu = {}
+            child.images_psf_lnu = {}
+            child.images_psf_fnu = {}
+            child.images_noise_lnu = {}
+            child.images_noise_fnu = {}
+            child.data_cubes_lnu = {}
+            child.data_cubes_fnu = {}
+
+            # Split the stellar component into views, but keep the full gas and
+            # black hole components on the first child only.
+            child.stars = stars
+            child.gas = (
+                self.gas if ichild == 0 and self.gas is not None else None
+            )
+            child.black_holes = (
+                self.black_holes
+                if ichild == 0 and self.black_holes is not None
+                else None
+            )
+
+            # Recompute simple integrated properties on each child so any later
+            # pipeline operations see consistent summary quantities.
+            if child.stars is not None:
+                child.calculate_integrated_stellar_properties()
+            else:
+                child.stellar_mass = None
+                child.stellar_mass_weighted_age = None
+
+            if child.gas is not None:
+                child.calculate_integrated_gas_properties()
+            else:
+                child.gas_mass = None
+                child.mass_weighted_gas_metallicity = None
+                child.sf_gas_mass = None
+                child.sf_gas_metallicity = None
+
+            children.append(child)
+
+        return children
 
     @accepts(initial_masses=Msun.in_base("galactic"), ages=Myr)
     def load_stars(
@@ -382,6 +451,7 @@ class Galaxy(BaseGalaxy):
             # Nothing to do here... YET
             pass
 
+    @timed("Galaxy.get_stellar_los_tau_v")
     def get_stellar_los_tau_v(
         self,
         kappa,
@@ -406,11 +476,10 @@ class Galaxy(BaseGalaxy):
         Args:
             kappa (float):
                 The dust opacity in units of Msun / pc**2.
-            kernel (np.ndarray of float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance. LOS optical
+                depth calculations require both the projected LOS kernel table
+                and the truncated LOS kernel table.
             tau_v_attr (str):
                 The attribute to store the tau_v values in the stars object.
                 Defaults to "tau_v".
@@ -433,8 +502,6 @@ class Galaxy(BaseGalaxy):
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
-        start = tic()
-
         # Ensure we have stars and gas
         if self.stars is None:
             raise exceptions.InconsistentArguments(
@@ -461,10 +528,8 @@ class Galaxy(BaseGalaxy):
             nthreads=nthreads,
         )  # Msun / Mpc**2
 
-        los_dustsds /= (1e6) ** 2  # Msun / pc**2
-
         # Finalise the calculation
-        tau_v = kappa * los_dustsds
+        tau_v = kappa * unyt_to_ndview(los_dustsds, Msun / pc**2)
 
         # Apply the mask if provided
         if mask is not None:
@@ -476,10 +541,9 @@ class Galaxy(BaseGalaxy):
         # Store the result in self.stars
         setattr(self.stars, tau_v_attr, tau_vs)
 
-        toc("Calculating stellar LOS tau_v", start)
-
         return tau_v
 
+    @timed("Galaxy.get_black_hole_los_tau_v")
     def get_black_hole_los_tau_v(
         self,
         kappa,
@@ -504,11 +568,10 @@ class Galaxy(BaseGalaxy):
         Args:
             kappa (float):
                 The dust opacity in units of Msun / pc**2.
-            kernel (np.ndarray of float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance. LOS optical
+                depth calculations require both the projected LOS kernel table
+                and the truncated LOS kernel table.
             tau_v_attr (str):
                 The attribute to store the tau_v values in the black_holes
                 object. Defaults to "tau_v".
@@ -532,8 +595,6 @@ class Galaxy(BaseGalaxy):
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
-        start = tic()
-
         # Ensure we have black holes and gas
         if self.black_holes is None:
             raise exceptions.InconsistentArguments(
@@ -560,10 +621,8 @@ class Galaxy(BaseGalaxy):
             nthreads=nthreads,
         )
 
-        los_dustsds /= (1e6) ** 2  # Msun / pc**2
-
         # Finalise the calculation
-        tau_v = kappa * los_dustsds
+        tau_v = kappa * unyt_to_ndview(los_dustsds, Msun / pc**2)
 
         # Apply the mask if provided
         if mask is not None:
@@ -574,107 +633,6 @@ class Galaxy(BaseGalaxy):
 
         # Store the result in self.black_holes
         setattr(self.black_holes, "tau_v", tau_vs)
-
-        toc("Calculating black hole LOS tau_v", start)
-
-        return tau_v
-
-    @deprecated()
-    def calculate_los_tau_v(
-        self,
-        kappa,
-        kernel,
-        tau_v_attr="tau_v",
-        mask=None,
-        threshold=1,
-        force_loop=0,
-        min_count=100,
-        nthreads=1,
-    ):
-        """Calculate the LOS optical depth for each star particle.
-
-        This will calculate the optical depth for each star particle based on
-        the gas particle distribution. The stars are considered to interact
-        with a gas particle if gas_z > star_z and the star postion is within
-        the SPH kernel of the gas particle.
-
-        Note: the resulting tau_vs will be associated to the stars object at
-        self.stars.tau_v.
-
-        Args:
-            kappa (float):
-                The dust opacity in units of Msun / pc**2.
-            kernel (np.ndarray of float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
-            tau_v_attr (str):
-                The attribute to store the tau_v values in the stars object.
-                Defaults to "tau_v".
-            mask (bool):
-                A mask to be applied to the stars. Surface densities will only
-                be computed and returned for stars with True in the mask.
-            threshold (float):
-                The threshold above which the SPH kernel is 0. This is normally
-                at a value of the impact parameter of q = r / h = 1.
-            force_loop (bool):
-                By default (False) the C function will only loop over nearby
-                gas particles to search for contributions to the LOS surface
-                density. This forces the loop over *all* gas particles.
-            min_count (int):
-                The minimum number of particles in a leaf cell of the tree
-                used to search for gas particles. Can be used to tune the
-                performance of the tree search in extreme cases. If there are
-                fewer particles in a leaf cell than this value, the search
-                will be performed with a brute force loop.
-            nthreads (int):
-                The number of threads to use in the tree search. Default is 1.
-        """
-        start = tic()
-
-        # Ensure we have stars and gas
-        if self.stars is None:
-            raise exceptions.InconsistentArguments(
-                "No Stars object has been provided! We can't calculate line "
-                "of sight dust attenuation without a Stars object containing "
-                "the stellar particles!"
-            )
-        if self.gas is None:
-            raise exceptions.InconsistentArguments(
-                "No Gas object has been provided! We can't calculate line of "
-                "sight dust attenuation without a Gas object containing the "
-                "dust!"
-            )
-
-        # Compute the dust surface densities
-        los_dustsds = self.stars.get_los_column_density(
-            self.gas,
-            "dust_masses",
-            kernel,
-            mask=mask,
-            threshold=threshold,
-            force_loop=force_loop,
-            min_count=min_count,
-            nthreads=nthreads,
-        )  # Msun / Mpc**2
-
-        los_dustsds /= (1e6) ** 2  # Msun / pc**2
-
-        # Finalise the calculation
-        tau_v = kappa * los_dustsds
-
-        # Apply the mask if provided
-        if mask is not None:
-            tau_vs = np.zeros(self.stars.nparticles)
-            tau_vs[mask] = tau_v
-        else:
-            tau_vs = tau_v
-
-        # Store the result in self.stars
-        setattr(self.stars, tau_v_attr, tau_vs)
-
-        toc("Calculating LOS tau_v", start)
 
         return tau_v
 
@@ -1450,6 +1408,7 @@ class Galaxy(BaseGalaxy):
 
         return img
 
+    @timed("Galaxy.get_data_cube")
     def get_data_cube(
         self,
         resolution,
@@ -1511,8 +1470,6 @@ class Galaxy(BaseGalaxy):
                 The spectral data cube object containing the derived
                 data cube.
         """
-        start = tic()
-
         # Make sure we have an image to make
         if stellar_spectra is None and blackhole_spectra is None:
             raise exceptions.InconsistentArguments(
@@ -1632,13 +1589,154 @@ class Galaxy(BaseGalaxy):
 
         # Return the images, combining if there are multiple components
         if stellar_spectra is not None and blackhole_spectra is not None:
-            toc("Computing stellar and blackhole spectral data cubes", start)
             return stellar_cube + blackhole_cube
         elif stellar_spectra is not None:
-            toc("Computing stellar spectral data cube", start)
             return stellar_cube
-        toc("Computing blackhole spectral data cube", start)
         return blackhole_cube
+
+    def get_projected_angular_coordinates(self, cosmo, los_dists=None):
+        """Get projected angular coordinates for all attached components.
+
+        This is the galaxy-level wrapper around the per-component
+        ``Particles.get_projected_angular_coordinates`` method. It iterates
+        over every component (stars, gas, black_holes) that is attached to
+        this galaxy and returns their projected angular coordinates in a
+        single dictionary.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the angular
+                diameter distance.
+            los_dists (dict, optional):
+                A dictionary of pre-computed line-of-sight distance arrays
+                keyed by component name (``"stars"``, ``"gas"``,
+                ``"black_holes"``).  When provided for a given component
+                the cosmology-based calculation is skipped for that
+                component.  If ``None`` (default) all distances are
+                computed internally.
+
+        Returns:
+            dict: A dictionary mapping component names to their projected
+                angular coordinate arrays (each an ``(N, 3)`` array in
+                radians with the z-column zeroed).
+        """
+        if los_dists is None:
+            los_dists = {}
+
+        results = {}
+        for name in ("stars", "gas", "black_holes"):
+            component = getattr(self, name, None)
+            if component is None:
+                continue
+            results[name] = component.get_projected_angular_coordinates(
+                cosmo=cosmo,
+                los_dists=los_dists.get(name),
+            )
+        return results
+
+    def get_projected_angular_smoothing_lengths(self, cosmo, los_dists=None):
+        """Get projected angular smoothing lengths for all components.
+
+        This is the galaxy-level wrapper around the per-component
+        ``Particles.get_projected_angular_smoothing_lengths`` method. It
+        iterates over every component (stars, gas, black_holes) that is
+        attached to this galaxy and returns their projected angular
+        smoothing lengths in a single dictionary.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the angular
+                diameter distance.
+            los_dists (dict, optional):
+                A dictionary of pre-computed line-of-sight distance arrays
+                keyed by component name (``"stars"``, ``"gas"``,
+                ``"black_holes"``).  When provided for a given component
+                the cosmology-based calculation is skipped for that
+                component.  If ``None`` (default) all distances are
+                computed internally.
+
+        Returns:
+            dict: A dictionary mapping component names to their projected
+                angular smoothing length arrays (each an ``(N,)`` array in
+                radians).
+        """
+        if los_dists is None:
+            los_dists = {}
+
+        results = {}
+        for name in ("stars", "gas", "black_holes"):
+            component = getattr(self, name, None)
+            if component is None:
+                continue
+            results[name] = component.get_projected_angular_smoothing_lengths(
+                cosmo=cosmo,
+                los_dists=los_dists.get(name),
+            )
+        return results
+
+    def get_projected_angular_imaging_props(self, cosmo):
+        """Get projected angular imaging properties for all components.
+
+        This is a galaxy-level convenience method that mirrors the
+        per-component ``Particles.get_projected_angular_imaging_props``.
+        It pre-computes the per-particle line-of-sight distances for each
+        attached component exactly once and then passes them into both
+        ``get_projected_angular_coordinates`` and
+        ``get_projected_angular_smoothing_lengths``, avoiding redundant
+        angular diameter distance calculations.
+
+        The angular diameter distance is the same for every component
+        (determined solely by the galaxy redshift) but each component has
+        its own particle z-offsets, so the full ``los_dists`` array is
+        built per component.
+
+        Args:
+            cosmo (astropy.cosmology):
+                The cosmology object from which to derive the angular
+                diameter distance.
+
+        Returns:
+            dict: A dictionary mapping each attached component name
+                (``"stars"``, ``"gas"``, ``"black_holes"``) to a tuple of
+                ``(projected_angular_coords, projected_angular_smls)``.
+        """
+        # The angular diameter distance is shared — it depends only on the
+        # galaxy redshift
+        ang_diam_dist = self.get_angular_diameter_distance(cosmo)
+
+        # Pre-compute per-component los_dists so we only pay for one
+        # angular diameter distance call total
+        los_dists = {}
+        for name in ("stars", "gas", "black_holes"):
+            component = getattr(self, name, None)
+            if component is None:
+                continue
+
+            # Combine the angular diameter distance with the particle
+            # z-offsets to get the full line-of-sight distances
+            cent_coords = component.centered_coordinates
+            dists = ang_diam_dist + cent_coords[:, 2]
+
+            # At redshift 0 shift so the closest particle sits at 10 pc
+            if self.redshift == 0.0:
+                z_min = np.min(cent_coords[:, 2])
+                dists += np.abs(z_min) + 10 * pc
+
+            los_dists[name] = dists
+
+        # Delegate to the two galaxy-level wrappers, passing pre-computed
+        # distances to avoid any repeat work
+        coords = self.get_projected_angular_coordinates(
+            cosmo=cosmo,
+            los_dists=los_dists,
+        )
+        smls = self.get_projected_angular_smoothing_lengths(
+            cosmo=cosmo,
+            los_dists=los_dists,
+        )
+
+        # Combine into per-component tuples
+        return {name: (coords[name], smls[name]) for name in coords}
 
     @accepts(phi=rad, theta=rad)
     def rotate_particles(

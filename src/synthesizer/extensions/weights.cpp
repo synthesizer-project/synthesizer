@@ -1,6 +1,11 @@
 /******************************************************************************
  * A C module containing all the weights functions common to all particle
  * spectra extensions.
+ *
+ * NOTE: This file serves a dual role. It is both a standalone extension
+ * module (PyInit_weights) AND compiled as a source file into
+ * integrated_spectra, particle_spectra, doppler_particle_spectra, and sfzh.
+ * When compiled into another extension, PyInit_weights is dead code.
  *****************************************************************************/
 /* C includes */
 #include <array>
@@ -18,6 +23,9 @@
 #include "cpp_to_python.h"
 #include "index_utils.h"
 #include "timers.h"
+#ifdef ATOMIC_TIMING
+#include "timers_init.h"
+#endif
 #include "weights.h"
 
 /* Optional openmp include. */
@@ -238,7 +246,7 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
 void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
                      void *out, const int nthreads) {
 
-  double start_time = tic();
+  tic("weight_loop_cic");
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -261,7 +269,7 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
   weight_loop_cic_serial(grid_props, parts, out);
 
 #endif
-  toc("Cloud in Cell weight loop", start_time);
+  toc("weight_loop_cic");
 }
 
 /**
@@ -408,7 +416,7 @@ static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
 void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
                      void *out, const int nthreads) {
 
-  double start_time = tic();
+  tic("weight_loop_ngp");
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -431,7 +439,7 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
   weight_loop_ngp_serial(grid_props, parts, out);
 
 #endif
-  toc("Nearest Grid Point weight loop", start_time);
+  toc("weight_loop_ngp");
 }
 
 /**
@@ -446,8 +454,8 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
  */
 PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
 
-  double start_time = tic();
-  double setup_start = tic();
+  tic("compute_grid_weights");
+  tic("compute_grid_weights.extract_python_data");
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -455,24 +463,27 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
 
   int ndim, npart, nthreads;
   PyObject *grid_tuple, *part_tuple;
+  PyObject *prop_names = NULL;
   PyArrayObject *np_part_mass, *np_ndims;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOiisi", &grid_tuple, &part_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOiisi|O", &grid_tuple, &part_tuple,
                         &np_part_mass, &np_ndims, &ndim, &npart, &method,
-                        &nthreads))
+                        &nthreads, &prop_names))
     return nullptr;
 
   /* Extract the grid struct. */
   GridProps *grid_props =
       new GridProps(/*np_grid_spectra*/ nullptr, grid_tuple,
-                    /*np_lam*/ nullptr, /*np_lam_mask*/ nullptr, 1);
+                    /*np_lam*/ nullptr, /*np_lam_mask*/ nullptr, 1,
+                    /*np_grid_weights*/ NULL, prop_names);
 
   RETURN_IF_PYERR();
 
   /* Create the object that holds the particle properties. */
-  Particles *part_props = new Particles(np_part_mass, /*np_velocities*/ nullptr,
-                                        /*np_mask*/ nullptr, part_tuple, npart);
+  Particles *part_props =
+      new Particles(np_part_mass, /*np_velocities*/ nullptr,
+                    /*np_mask*/ nullptr, part_tuple, prop_names, npart);
 
   RETURN_IF_PYERR();
 
@@ -486,7 +497,7 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
     return nullptr;
   }
 
-  toc("Extracting Python data", setup_start);
+  toc("compute_grid_weights.extract_python_data");
 
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
@@ -523,7 +534,7 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
   delete part_props;
   delete grid_props;
 
-  toc("Computing SFZH", start_time);
+  toc("compute_grid_weights");
 
   return Py_BuildValue("N", out_weights);
 }
@@ -549,9 +560,18 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_weights(void) {
   PyObject *m = PyModule_Create(&moduledef);
+  if (m == NULL)
+    return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    Py_DECREF(m);
     return NULL;
   }
+#ifdef ATOMIC_TIMING
+  if (import_toc_capsule() < 0) {
+    Py_DECREF(m);
+    return NULL;
+  }
+#endif
   return m;
 }

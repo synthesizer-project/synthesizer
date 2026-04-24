@@ -1,24 +1,689 @@
 """A submodule with helpers for writing out Synthesizer pipeline results."""
 
+import copy
 import inspect
 import sys
 from collections import defaultdict
 from collections.abc import Mapping
 from functools import lru_cache
+from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Unit, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emissions import Sed
+from synthesizer.emissions.line import LineCollection
+from synthesizer.imaging import Image, SpectralCube
+from synthesizer.imaging.image_collection import ImageCollection
 from synthesizer.instruments import InstrumentCollection
+from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
+from synthesizer.utils.operation_timers import timed
 
 # Special model label for operations that are not tied to a specific model.
 # This can be used for operations such as SFZH / SFH with no relation to
 # an emission model.
 NO_MODEL_LABEL = "no_model_label"
+
+
+@timed("clear_pipeline_outputs")
+def clear_pipeline_outputs(gal):
+    """Clear additive pipeline outputs from a galaxy and components.
+
+    Args:
+        gal:
+            The galaxy whose additive pipeline outputs should be reset.
+
+    Returns:
+        None
+    """
+    # Clear the galaxy and any attached components
+    for obj in (gal, gal.stars, gal.gas, gal.black_holes):
+        if obj is None:
+            continue
+
+        # Clear out all the emission containers and caches
+        for attr, value in (
+            ("spectra", {}),
+            ("lines", {}),
+            ("photo_lnu", {}),
+            ("photo_fnu", {}),
+            ("spectroscopy", {}),
+            ("images_lnu", {}),
+            ("images_fnu", {}),
+            ("images_psf_lnu", {}),
+            ("images_psf_fnu", {}),
+            ("images_noise_lnu", {}),
+            ("images_noise_fnu", {}),
+            ("particle_spectra", {}),
+            ("particle_lines", {}),
+            ("particle_photo_lnu", {}),
+            ("particle_photo_fnu", {}),
+            ("particle_spectroscopy", {}),
+            ("data_cubes_lnu", {}),
+            ("data_cubes_fnu", {}),
+            ("model_param_cache", {}),
+            ("_grid_weights", {"cic": {}, "ngp": {}}),
+            ("sfh", None),
+            ("sfzh", None),
+        ):
+            if hasattr(obj, attr):
+                setattr(obj, attr, value)
+
+
+@timed("accumulate_pipeline_results_from_child")
+def accumulate_pipeline_results_from_child(parent, *children):
+    """Accumulate additive pipeline outputs from child galaxies.
+
+    Args:
+        parent:
+            The parent galaxy receiving accumulated outputs.
+        *children:
+            Child galaxies whose additive pipeline outputs should be combined
+            onto the parent.
+
+    Returns:
+        object:
+            The parent galaxy after accumulation.
+    """
+
+    def combine(current, other):
+        # Recursively combine any additive pipeline outputs, preserving nested
+        # dictionary structure and using object-specific addition where needed.
+        if other is None:
+            return current
+        if current is None:
+            return other
+
+        # Handle the dictionary recursive case
+        if isinstance(current, dict):
+            combined = copy.deepcopy(current)
+            for key, value in other.items():
+                combined[key] = combine(combined.get(key), value)
+            return combined
+
+        # Use overloaded object addition if possible.
+        if isinstance(
+            current,
+            (
+                Sed,
+                LineCollection,
+                Image,
+                ImageCollection,
+                SpectralCube,
+                PhotometryCollection,
+            ),
+        ):
+            return current + other
+
+        return current + other
+
+    for child in children:
+        # First combine any additive outputs stored directly on the galaxy.
+        for attr in (
+            "spectra",
+            "lines",
+            "photo_lnu",
+            "photo_fnu",
+            "spectroscopy",
+            "images_lnu",
+            "images_fnu",
+            "images_psf_lnu",
+            "images_psf_fnu",
+            "images_noise_lnu",
+            "images_noise_fnu",
+            "data_cubes_lnu",
+            "data_cubes_fnu",
+        ):
+            if hasattr(child, attr):
+                setattr(
+                    parent,
+                    attr,
+                    combine(
+                        getattr(parent, attr, None),
+                        getattr(child, attr),
+                    ),
+                )
+
+        # Then combine additive component-level outputs, but skip shared
+        # components that were intentionally attached directly to the child.
+        for name in ("stars", "gas", "black_holes"):
+            parent_component = getattr(parent, name, None)
+            child_component = getattr(child, name, None)
+            if parent_component is None or child_component is None:
+                continue
+            if child_component is parent_component:
+                continue
+
+            for attr in (
+                "spectra",
+                "lines",
+                "photo_lnu",
+                "photo_fnu",
+                "spectroscopy",
+                "images_lnu",
+                "images_fnu",
+                "images_psf_lnu",
+                "images_psf_fnu",
+                "images_noise_lnu",
+                "images_noise_fnu",
+                "sfh",
+                "sfzh",
+            ):
+                if hasattr(child_component, attr):
+                    setattr(
+                        parent_component,
+                        attr,
+                        combine(
+                            getattr(parent_component, attr, None),
+                            getattr(child_component, attr),
+                        ),
+                    )
+
+    return parent
+
+
+def get_atomic_timing_snapshot():
+    """Return the current atomic timing snapshot for this process.
+
+    Args:
+        None
+
+    Returns:
+        dict:
+            A dictionary keyed by operation name containing cumulative timing
+            information with ``seconds``, ``count``, and ``source`` entries.
+    """
+    # Import the timer wrapper lazily to avoid unnecessary import cost in code
+    # paths that never analyse timings.
+    from synthesizer.utils.operation_timers import OperationTimers
+
+    # Convert the OperationTimers interface into a plain dictionary that is
+    # easier to gather, merge, serialise, and plot.
+    timers = OperationTimers()
+    timing_data = {}
+    for operation in timers.keys():
+        cumulative_time, call_count, source = timers[operation]
+        timing_data[operation] = {
+            "seconds": cumulative_time,
+            "count": call_count,
+            "source": source,
+        }
+
+    return timing_data
+
+
+def combine_atomic_timing_snapshots(
+    comm, using_mpi, rank, timing_data, total_elapsed
+):
+    """Combine timing snapshots across ranks when running under MPI.
+
+    Args:
+        comm:
+            The MPI communicator associated with the Pipeline.
+        using_mpi (bool):
+            Whether the Pipeline is currently running under MPI.
+        rank (int):
+            The rank of the current process.
+        timing_data (dict):
+            The local timing snapshot for this rank.
+        total_elapsed (float):
+            The wall-clock time elapsed on this rank since Pipeline
+            instantiation.
+
+    Returns:
+        tuple:
+            A pair ``(timing_data, total_elapsed)``. On non-MPI runs this is
+            just the input data. On MPI runs rank 0 receives the aggregated
+            timings and summed elapsed time, while all other ranks receive
+            ``(None, None)``.
+    """
+    # In the non-MPI case there is nothing to merge, so return the local
+    # timing snapshot unchanged.
+    if not using_mpi:
+        return timing_data, total_elapsed
+
+    # Gather both the detailed timings and the total elapsed time from every
+    # rank so rank 0 can produce a combined report.
+    gathered_timings = comm.gather(timing_data, root=0)
+    gathered_elapsed = comm.gather(total_elapsed, root=0)
+
+    # Non-root ranks do not write timing outputs, so they can return early.
+    if rank != 0:
+        return None, None
+
+    # Merge operation timings rank-by-rank, summing both cumulative time and
+    # invocation count for matching operation names.
+    combined = {}
+    for rank_timings in gathered_timings:
+        for operation, data in rank_timings.items():
+            if operation not in combined:
+                combined[operation] = {
+                    "seconds": 0.0,
+                    "count": 0,
+                    "source": data["source"],
+                }
+
+            combined[operation]["seconds"] += data["seconds"]
+            combined[operation]["count"] += data["count"]
+
+            if combined[operation]["source"] != data["source"]:
+                combined[operation]["source"] = "Mixed"
+
+    # Sum the per-rank elapsed times so the overhead contribution is measured
+    # in the same rank-seconds units as the atomic timing totals.
+    return combined, sum(gathered_elapsed)
+
+
+def build_timing_analysis_rows(timing_data, total_elapsed):
+    """Build sorted timing rows including overhead and total entries.
+
+    Args:
+        timing_data (dict):
+            A timing dictionary keyed by operation name with ``seconds``,
+            ``count``, and ``source`` entries for each operation.
+        total_elapsed (float):
+            The total elapsed wall-clock time represented by the analysis.
+
+    Returns:
+        list:
+            A list of row dictionaries sorted by descending operation time,
+            with trailing ``Overhead`` and ``Total`` summary rows appended.
+    """
+    # Account for any elapsed time that is not represented in the atomic timer
+    # totals so the report shows both timed and overhead fractions explicitly.
+    timed_elapsed = sum(data["seconds"] for data in timing_data.values())
+    untimed_elapsed = max(total_elapsed - timed_elapsed, 0.0)
+
+    # Build one row per timed operation, including its contribution as a
+    # percentage of the total elapsed time.
+    rows = []
+    for operation, data in timing_data.items():
+        fraction = (
+            data["seconds"] / total_elapsed * 100.0
+            if total_elapsed > 0.0
+            else 0.0
+        )
+        rows.append(
+            {
+                "operation": operation,
+                "seconds": data["seconds"],
+                "fraction_percent": fraction,
+                "count": data["count"],
+                "source": data["source"],
+            }
+        )
+
+    # Present the operations in descending order of time spent so the most
+    # important contributors are shown first in both tables and plots.
+    rows.sort(key=lambda row: row["seconds"], reverse=True)
+
+    # Append explicit summary rows so the overhead contribution and total are
+    # available to both the terminal table and the written CSV file.
+    rows.append(
+        {
+            "operation": "Overhead",
+            "seconds": untimed_elapsed,
+            "fraction_percent": (
+                untimed_elapsed / total_elapsed * 100.0
+                if total_elapsed > 0.0
+                else 0.0
+            ),
+            "count": None,
+            "source": "N/A",
+        }
+    )
+    rows.append(
+        {
+            "operation": "Total",
+            "seconds": total_elapsed,
+            "fraction_percent": 100.0 if total_elapsed > 0.0 else 0.0,
+            "count": None,
+            "source": "N/A",
+        }
+    )
+
+    return rows
+
+
+def print_timing_analysis_table(rows, print_func=print):
+    """Print a timing analysis table to stdout.
+
+    Args:
+        rows (list):
+            The timing rows produced by ``build_timing_analysis_rows``.
+        print_func (callable):
+            The function used to emit each formatted line. This defaults to the
+            built-in ``print`` but can be replaced with ``Pipeline._print`` to
+            match the standard pipeline logging style.
+
+    Returns:
+        None
+    """
+    # Filter the printed table to operations that contribute at least 0.01% of
+    # the total elapsed time so the displayed precision matches the fraction
+    # column. Always keep the synthetic summary rows.
+    filtered_rows = []
+    for row in rows:
+        if row["operation"] in ("Overhead", "Total"):
+            filtered_rows.append(row)
+            continue
+
+        if row["fraction_percent"] >= 0.01:
+            filtered_rows.append(row)
+
+    # Pre-format the row values so the final column widths reflect the exact
+    # strings that will be printed rather than just the raw underlying values.
+    formatted_rows = []
+    for row in filtered_rows:
+        # Show sub-centisecond timings in scientific notation so tiny but still
+        # visible entries are distinguishable in the printed table.
+        if 0.0 < row["seconds"] < 0.01:
+            seconds_str = f"{row['seconds']:.2e}"
+        else:
+            seconds_str = f"{row['seconds']:.2f}"
+
+        formatted_rows.append(
+            {
+                "operation": row["operation"],
+                "seconds": seconds_str,
+                "fraction_percent": f"{row['fraction_percent']:.2f}",
+                "count": "-" if row["count"] is None else str(row["count"]),
+                "source": row["source"],
+            }
+        )
+
+    # Compute column widths from the fully formatted data so every column is
+    # wide enough for both its header and its largest row value.
+    operation_width = max(
+        len("Operation"), *(len(r["operation"]) for r in formatted_rows)
+    )
+    time_width = max(
+        len("Time (s)"), *(len(r["seconds"]) for r in formatted_rows)
+    )
+    frac_width = max(
+        len("Fraction (%)"),
+        *(len(r["fraction_percent"]) for r in formatted_rows),
+    )
+    count_width = max(len("Count"), *(len(r["count"]) for r in formatted_rows))
+    source_width = max(
+        len("Source"), *(len(r["source"]) for r in formatted_rows)
+    )
+
+    # Construct a single divider string that can be reused for the header,
+    # body separator, and closing line.
+    divider = (
+        "+"
+        + "-" * (operation_width + 2)
+        + "+"
+        + "-" * (time_width + 2)
+        + "+"
+        + "-" * (frac_width + 2)
+        + "+"
+        + "-" * (count_width + 2)
+        + "+"
+        + "-" * (source_width + 2)
+        + "+"
+    )
+
+    # Print the table header with the derived column widths.
+    print_func(divider)
+    print_func(
+        "| "
+        + f"{'Operation':<{operation_width}}"
+        + " | "
+        + f"{'Time (s)':>{time_width}}"
+        + " | "
+        + f"{'Fraction (%)':>{frac_width}}"
+        + " | "
+        + f"{'Count':>{count_width}}"
+        + " | "
+        + f"{'Source':<{source_width}}"
+        + " |"
+    )
+    print_func(divider)
+
+    # Print each timing row, converting missing counts on summary rows into a
+    # simple placeholder for readability.
+    for row in formatted_rows:
+        print_func(
+            "| "
+            + f"{row['operation']:<{operation_width}}"
+            + " | "
+            + f"{row['seconds']:>{time_width}}"
+            + " | "
+            + f"{row['fraction_percent']:>{frac_width}}"
+            + " | "
+            + f"{row['count']:>{count_width}}"
+            + " | "
+            + f"{row['source']:<{source_width}}"
+            + " |"
+        )
+
+    print_func(divider)
+
+
+def write_timing_analysis_summary(rows, outdir):
+    """Write the timing analysis summary CSV.
+
+    Args:
+        rows (list):
+            The timing rows produced by ``build_timing_analysis_rows``.
+        outdir (str or Path):
+            The directory where the timing summary CSV should be written.
+
+    Returns:
+        None
+    """
+    # Normalise the output path so callers can pass either strings or Path
+    # objects.
+    outdir = Path(outdir)
+    summary_path = outdir / "timing_summary.csv"
+
+    # Write a compact CSV summary that can be inspected manually or reused by
+    # other analysis scripts later.
+    with open(summary_path, "w") as handle:
+        handle.write("operation,seconds,fraction_percent,count,source\n")
+        for row in rows:
+            count = "" if row["count"] is None else row["count"]
+            handle.write(
+                f"{row['operation']},{row['seconds']:.12f},"
+                f"{row['fraction_percent']:.6f},{count},{row['source']}\n"
+            )
+
+
+def plot_timing_analysis(rows, outdir):
+    """Write timing analysis plots to disk.
+
+    Args:
+        rows (list):
+            The timing rows produced by ``build_timing_analysis_rows``.
+        outdir (str or Path):
+            The directory where the timing plots should be written.
+
+    Returns:
+        None
+    """
+    # Normalise the output path and drop the synthetic total row, since that
+    # row is only useful in the textual summary.
+    outdir = Path(outdir)
+    plot_rows = [row for row in rows if row["operation"] != "Total"]
+    nonzero_rows = [row for row in plot_rows if row["seconds"] > 0.0]
+
+    # Build the pie chart from non-zero rows only so the chart focuses on the
+    # operations that actually contributed measurable time.
+    if nonzero_rows:
+        total_seconds = sum(row["seconds"] for row in nonzero_rows)
+        pie_rows = []
+        other_seconds = 0.0
+
+        # Group the smallest contributions into a single slice so the pie chart
+        # stays readable without a forest of overlapping labels.
+        for row in nonzero_rows:
+            fraction_percent = (
+                row["seconds"] / total_seconds * 100.0
+                if total_seconds > 0.0
+                else 0.0
+            )
+            if fraction_percent < 1.0:
+                other_seconds += row["seconds"]
+            else:
+                pie_rows.append(row)
+
+        if other_seconds > 0.0:
+            pie_rows.append(
+                {
+                    "operation": "Other <1%",
+                    "seconds": other_seconds,
+                    "source": "N/A",
+                }
+            )
+
+        # Use a categorical palette for the visible wedges while reserving
+        # neutral colours for the synthetic overhead and grouped slices.
+        palette = plt.cm.tab20(np.linspace(0, 1, max(len(pie_rows), 1)))
+        colors = []
+        palette_index = 0
+        for row in pie_rows:
+            if row["operation"] == "Overhead":
+                colors.append("#7f7f7f")
+            elif row["operation"] == "Other <1%":
+                colors.append("#bab0ac")
+            else:
+                colors.append(palette[palette_index])
+                palette_index += 1
+
+        # Save the main pie chart showing the fractional timing breakdown.
+        fig, ax = plt.subplots(figsize=(9, 6))
+        wedges, _ = ax.pie(
+            [row["seconds"] for row in pie_rows],
+            labels=None,
+            startangle=90,
+            counterclock=False,
+            colors=colors,
+        )
+
+        # Put the operation names in a legend instead of directly on the pie
+        # wedges so the figure stays readable when several slices are present.
+        legend_labels = []
+        for row in pie_rows:
+            fraction_percent = (
+                row["seconds"] / total_seconds * 100.0
+                if total_seconds > 0.0
+                else 0.0
+            )
+            legend_labels.append(
+                f"{row['operation']} ({fraction_percent:.1f}%)"
+            )
+        ax.legend(
+            wedges,
+            legend_labels,
+            loc="center left",
+            bbox_to_anchor=(1.02, 0.5),
+            frameon=False,
+        )
+        fig.tight_layout()
+        fig.savefig(
+            outdir / "timing_pie.png",
+            dpi=200,
+            bbox_inches="tight",
+            pad_inches=0.1,
+        )
+        plt.close(fig)
+    else:
+        # Fall back to a simple placeholder figure when there is no timing data
+        # to visualise yet.
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.text(
+            0.5,
+            0.5,
+            "No timing data available",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        ax.axis("off")
+        fig.tight_layout()
+        fig.savefig(outdir / "timing_pie.png", dpi=200)
+        plt.close(fig)
+
+    # Restrict the bar chart to the same >1% contributions used in the pie
+    # chart so both plots focus on the materially important timing costs.
+    bar_rows = []
+    if nonzero_rows:
+        total_seconds = sum(row["seconds"] for row in nonzero_rows)
+        for row in plot_rows:
+            fraction_percent = (
+                row["seconds"] / total_seconds * 100.0
+                if total_seconds > 0.0
+                else 0.0
+            )
+            if fraction_percent >= 1.0:
+                bar_rows.append(row)
+
+    # Build the bar chart from the filtered rows so absolute timings are
+    # available alongside the fractional pie chart view.
+    fig, ax = plt.subplots(figsize=(10, max(4, 0.45 * max(len(bar_rows), 1))))
+    y_positions = np.arange(len(bar_rows))
+    bar_colors = []
+
+    # Colour the bar chart by timing source while keeping overhead visually
+    # distinct from both Python and C timings.
+    for row in bar_rows:
+        if row["operation"] == "Overhead":
+            bar_colors.append("#7f7f7f")
+        elif row["source"] == "C":
+            bar_colors.append("#4c72b0")
+        elif row["source"] == "Python":
+            bar_colors.append("#dd8452")
+        else:
+            bar_colors.append("#937860")
+
+    # Save the horizontal bar chart ordered consistently with the input rows.
+    ax.barh(
+        y_positions,
+        [row["seconds"] for row in bar_rows],
+        color=bar_colors,
+    )
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels([row["operation"] for row in bar_rows])
+    ax.invert_yaxis()
+    ax.set_xlabel("Time (seconds)")
+    ax.grid(axis="x", alpha=0.3)
+
+    # Add a legend explaining the meaning of the bar colours so the source of
+    # each timing contribution is clear without inspecting the code.
+    legend_entries = []
+    legend_labels = []
+    seen_labels = set()
+    for row, color in zip(bar_rows, bar_colors):
+        if row["operation"] == "Overhead":
+            label = "Overhead"
+        elif row["source"] == "C":
+            label = "C++"
+        elif row["source"] == "Python":
+            label = "Python"
+        else:
+            label = row["source"]
+
+        if label in seen_labels:
+            continue
+
+        seen_labels.add(label)
+        legend_entries.append(
+            plt.Rectangle((0, 0), 1, 1, facecolor=color, edgecolor="none")
+        )
+        legend_labels.append(label)
+
+    if legend_entries:
+        ax.legend(legend_entries, legend_labels, loc="lower right")
+
+    fig.tight_layout()
+    fig.savefig(outdir / "timing_bar.png", dpi=200)
+    plt.close(fig)
 
 
 def discover_attr_paths_recursive(obj, prefix="", output_set=None):
@@ -273,6 +938,58 @@ def combine_list_of_dicts(dicts):
         return merged
 
     return recursive_merge(dicts)
+
+
+def sum_dicts_recursive(dicts):
+    """Sum a list of nested dictionaries with additive leaves.
+
+    Args:
+        dicts (list):
+            A list of dictionaries or additive leaf values.
+
+    Returns:
+        dict or object:
+            The recursively summed dictionary or leaf value.
+    """
+    values = [value for value in dicts if value is not None]
+    if len(values) == 0:
+        return {}
+
+    if not isinstance(values[0], dict):
+        total = values[0]
+        for value in values[1:]:
+            total = total + value
+        return total
+
+    summed = {}
+    keys = set()
+    for value in values:
+        keys.update(value.keys())
+
+    for key in keys:
+        summed[key] = sum_dicts_recursive(
+            [value[key] for value in values if key in value]
+        )
+
+    return summed
+
+
+def sanitise_hdf5_key_part(value):
+    """Return a HDF5-safe string fragment for generated labels."""
+    return (
+        str(value).replace(".", "p").replace("/", "_per_").replace("\\", "_")
+    )
+
+
+def divide_dicts_recursive(data, divisors):
+    """Divide nested dictionary leaves by matching nested divisors."""
+    if isinstance(data, dict):
+        return {
+            key: divide_dicts_recursive(data[key], divisors[key])
+            for key in data
+            if key in divisors
+        }
+    return data / divisors
 
 
 def unify_dict_structure_across_ranks(data, comm, root=0):

@@ -18,8 +18,6 @@ Example usage:
 """
 
 import inspect
-import io
-import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -27,7 +25,6 @@ from scipy.integrate import cumulative_trapezoid as cumtrapz
 from unyt import Gyr, unyt_array, yr
 
 from synthesizer import exceptions
-from synthesizer.synth_warnings import warn
 from synthesizer.utils.stats import weighted_mean, weighted_median
 
 # Define a list of the available parametrisations
@@ -331,7 +328,7 @@ class Constant(Common):
             The age below which the star formation history is truncated.
     """
 
-    def __init__(self, max_age=100 * yr, min_age=0 * yr, duration=None):
+    def __init__(self, max_age=100 * yr, min_age=0 * yr):
         """Initialise the parent and this parametrisation of the SFH.
 
         Args:
@@ -340,19 +337,7 @@ class Constant(Common):
                 If min_age = 0 then this is the duration of star formation.
             min_age (unyt_quantity):
                 The age below which the star formation history is truncated.
-            duration (unyt_quantity):
-                The duration of the star formation history. This is deprecated
-                in favour of max_age.
-
         """
-        if duration is not None:
-            warn(
-                "The use of duration is deprecated in favour of max_age",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            max_age = duration
-
         # Initialise the parent
         Common.__init__(
             self, name="Constant", min_age=min_age, max_age=max_age
@@ -961,22 +946,15 @@ class DenseBasis(Common):
                 maximum age of SFH grid
         """
         # Attempt to import dense_basis, if missing they need to
-        # install the optional dependency
+        # install from our fork (for now)
         try:
-            # This import is in quarantine because it insists on printing
-            # "Starting dense_basis" to the console on import! It can stay here
-            # until a PR is raised to fix this.
-            original_stdout = sys.stdout
-            sys.stdout = io.StringIO()
             import dense_basis as db
-
-            sys.stdout = original_stdout
-        except ImportError:
+        except ImportError as e:
             raise exceptions.UnmetDependency(
-                "dense_basis not found. Please install Synthesizer with "
-                " dense_basis support by running `pip install "
-                ".[dense_basis]`"
-            )
+                "dense_basis not found. Please install dense_basis from our "
+                'fork via this command: pip install "git+https://github.'
+                'com/WillJRoper/dense_basis.git"'
+            ) from e
 
         # Convert the dense basis tuple arguments to sfh in mass fraction units
         tempsfh, temptime = db.tuple_to_sfh(

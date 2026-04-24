@@ -23,9 +23,9 @@ from unyt import Msun, cm, deg, erg, km, kpc, s, yr
 from synthesizer import exceptions
 from synthesizer.components.blackhole import BlackholesComponent
 from synthesizer.emission_models.utils import get_param
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.parametric.morphology import PointSource
 from synthesizer.units import accepts
+from synthesizer.utils.operation_timers import timed
 
 
 class BlackHole(BlackholesComponent):
@@ -158,6 +158,7 @@ class BlackHole(BlackholesComponent):
         # Initialise morphology using the in-built point-source class
         self.morphology = PointSource(offset=offset)
 
+    @timed("BlackHole.get_mask")
     def get_mask(
         self,
         attr,
@@ -189,10 +190,12 @@ class BlackHole(BlackholesComponent):
             mask (np.ndarray):
                 The mask array.
         """
-        start = tic()
-
         # Get the attribute
         attr = get_param(attr, attr_override_obj, None, self)
+
+        # Resolve a string threshold as an attribute alias on the emitter
+        if isinstance(thresh, str):
+            thresh = get_param(thresh, attr_override_obj, None, self)
 
         # Apply the operator
         if op == ">":
@@ -216,8 +219,6 @@ class BlackHole(BlackholesComponent):
         # Combine with the existing mask
         if mask is not None:
             new_mask = np.logical_and(new_mask, mask)
-
-        toc("Generating parametric mask", start)
 
         return new_mask
 

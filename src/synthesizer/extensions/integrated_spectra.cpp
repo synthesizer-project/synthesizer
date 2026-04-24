@@ -22,6 +22,9 @@
 #include "part_props.h"
 #include "property_funcs.h"
 #include "timers.h"
+#ifdef ATOMIC_TIMING
+#include "timers_init.h"
+#endif
 #include "weights.h"
 
 /**
@@ -153,7 +156,7 @@ static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
  */
 static PyArrayObject *get_spectra(GridProps *grid_props, int nthreads) {
 
-  double reduction_start = tic();
+  tic("get_spectra");
 #ifdef WITH_OPENMP
   /* Do we have multiple threads to do the reduction on to the spectra? */
   PyArrayObject *np_spectra;
@@ -167,7 +170,7 @@ static PyArrayObject *get_spectra(GridProps *grid_props, int nthreads) {
   PyArrayObject *np_spectra = get_spectra_serial(grid_props);
 #endif
 
-  toc("Compute integrated spectra from weights", reduction_start);
+  toc("get_spectra");
 
   return np_spectra;
 }
@@ -188,7 +191,7 @@ static PyArrayObject *get_spectra(GridProps *grid_props, int nthreads) {
  */
 PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
-  double start_time = tic();
+  tic("compute_integrated_sed");
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -196,25 +199,28 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
+  PyObject *prop_names = NULL;
   PyArrayObject *np_grid_spectra, *np_grid_weights;
   PyArrayObject *np_part_mass, *np_ndims;
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOO", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
-                        &nlam, &method, &nthreads, &np_grid_weights, &np_mask,
-                        &np_lam_mask))
+  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOO|O", &np_grid_spectra,
+                        &grid_tuple, &part_tuple, &np_part_mass, &np_ndims,
+                        &ndim, &npart, &nlam, &method, &nthreads,
+                        &np_grid_weights, &np_mask, &np_lam_mask,
+                        &prop_names))
     return NULL;
 
   /* Extract the grid struct. */
   GridProps *grid_props = new GridProps(np_grid_spectra, grid_tuple,
-                                        /*np_lam*/ NULL, np_lam_mask, nlam);
+                                        /*np_lam*/ NULL, np_lam_mask, nlam,
+                                        np_grid_weights, prop_names);
   RETURN_IF_PYERR();
 
   /* Create the object that holds the particle properties. */
   Particles *part_props = new Particles(np_part_mass, /*np_velocities*/ NULL,
-                                        np_mask, part_tuple, npart);
+                                        np_mask, part_tuple, prop_names, npart);
   RETURN_IF_PYERR();
 
   /* Get existing grid weights or allocate new ones. */
@@ -252,7 +258,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   delete grid_props;
   delete part_props;
 
-  toc("Compute integrated SED", start_time);
+  toc("compute_integrated_sed");
 
   return Py_BuildValue("NN", np_spectra, np_grid_weights);
 }
@@ -277,9 +283,18 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_integrated_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
+  if (m == NULL)
+    return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    Py_DECREF(m);
     return NULL;
   }
+#ifdef ATOMIC_TIMING
+  if (import_toc_capsule() < 0) {
+    Py_DECREF(m);
+    return NULL;
+  }
+#endif
   return m;
 }

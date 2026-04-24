@@ -41,8 +41,9 @@ from synthesizer.data.initialise import get_grids_dir
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import depluralize, pluralize
 from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.util_funcs import as_contiguous
 
 
 class Grid:
@@ -102,6 +103,7 @@ class Grid:
     line_lams = Quantity("wavelength")
 
     @accepts(new_lam=angstrom)
+    @timed("Grid.__init__")
     def __init__(
         self,
         grid_name,
@@ -157,7 +159,7 @@ class Grid:
         self._ignore_lines = ignore_lines
 
         # Set up spectra and lines dictionaries (if we don't read them they'll
-        # just stay as empty dicts)
+        # just stay as empty dicts).
         self.lam = None
         self.spectra = {}
         self.line_lams = None
@@ -190,9 +192,9 @@ class Grid:
             # Save the spectra keys as available emissions
             self.available_spectra_emissions = list(self.spectra.keys())
 
-            # Prepare the wavelength axis (if new_lam and lam_lims are
-            # all None, this will do nothing, leaving the grid's wavelength
-            # array as it is in the HDF5 file)
+            # Prepare the wavelength axis (if new_lam and lam_lims are all
+            # None, this will do nothing, leaving the grid's wavelength array
+            # as it is in the HDF5 file).
             self._prepare_lam_axis(new_lam, lam_lims)
 
         # Read in lines but only if the grid has been reprocessed
@@ -209,6 +211,40 @@ class Grid:
                 + self.available_spectra_emissions
             )
         )
+
+    def _ensure_axis_data_contiguous(self):
+        """Ensure stored axis arrays are contiguous."""
+        for axis_name in self.axes:
+            self._axes_values[axis_name] = as_contiguous(
+                self._axes_values[axis_name]
+            )
+
+        for axis_name in self._extract_axes:
+            self._extract_axes_values[axis_name] = as_contiguous(
+                self._extract_axes_values[axis_name]
+            )
+
+    def _ensure_spectra_data_contiguous(self):
+        """Ensure stored spectra arrays and wavelengths are contiguous."""
+        if self.lam is not None:
+            self.lam = as_contiguous(self.lam)
+
+        for spectra_id in self.spectra:
+            self.spectra[spectra_id] = as_contiguous(self.spectra[spectra_id])
+
+    def _ensure_line_data_contiguous(self):
+        """Ensure stored line arrays and wavelengths are contiguous."""
+        if self.line_lams is not None:
+            self.line_lams = as_contiguous(self.line_lams)
+
+        for spectra_id in self.line_lums:
+            self.line_lums[spectra_id] = as_contiguous(
+                self.line_lums[spectra_id]
+            )
+        for spectra_id in self.line_conts:
+            self.line_conts[spectra_id] = as_contiguous(
+                self.line_conts[spectra_id]
+            )
 
     @property
     def available_spectra(self):
@@ -270,8 +306,7 @@ class Grid:
         """Return an attribute handling arbitrary axis names.
 
         This method allows for the dynamic extraction of axes with units,
-        either logged or not or using singular or plural axis names (to handle
-        legacy naming conventions).
+        either logged or not.
         """
         # First up, do we just have the attribute and it isn't an axis?
         if name in self.__dict__:
@@ -283,132 +318,17 @@ class Grid:
                 f"'{type(self).__name__}' object has no attribute '{name}'"
             )
 
-        # Now, do some silly pluralisation checks to handle old naming
-        # conventions. We do this now so everything works, we can grumble
-        # about it later
-        plural_name = pluralize(name)
-        singular_name = depluralize(name)
-
-        # Another old convention was allowing for logged axes to be stored in
-        # the grid file (this is no longer allowed)
-        if name[0] != "_":
-            log_name = f"log10{name}"
-            log_plural_name = f"log10{plural_name}"
-            log_singular_name = f"log10{singular_name}"
-        else:
-            log_name = f"_log10{name[1:]}"
-            log_plural_name = f"_log10{plural_name[1:]}"
-            log_singular_name = f"_log10{singular_name[1:]}"
-
-        # If we have the axis name, return the axis with units (handling all
-        # the silly pluralisation and logging conventions)
+        # If we have the axis name, return the axis with units.
         if name in self.axes:
             return unyt_array(self._axes_values[name], self._axes_units[name])
-        elif plural_name in self.axes:
-            return unyt_array(
-                self._axes_values[plural_name], self._axes_units[plural_name]
-            )
-        elif singular_name in self.axes:
-            warn(
-                "The use of singular axis names is deprecated. Update "
-                "your grid file."
-            )
-            return unyt_array(
-                self._axes_values[singular_name],
-                self._axes_units[singular_name],
-            )
-        elif log_name in self.axes:
-            warn(
-                "The use of logged axis names is deprecated. Update "
-                "your grid file."
-            )
-            return unyt_array(
-                10 ** self._axes_values[log_name], self._axes_units[log_name]
-            )
-        elif log_plural_name in self.axes:
-            warn(
-                "The use of logged axis names is deprecated. Update "
-                "your grid file."
-            )
-            return unyt_array(
-                10 ** self._axes_values[log_plural_name],
-                self._axes_units[log_plural_name],
-            )
-        elif log_singular_name in self.axes:
-            warn(
-                "The use of logged axis names is deprecated. Update "
-                "your grid file."
-            )
-            return unyt_array(
-                10 ** self._axes_values[log_singular_name],
-                self._axes_units[log_singular_name],
-            )
 
-        # It might be a Quantity style unitless request? (handling all
-        # the silly pluralisation and logging conventions)
+        # It might be a Quantity style unitless request.
         elif name[1:] in self.axes:
             return self._axes_values[name[1:]]
-        elif plural_name[1:] in self.axes:
-            return self._axes_values[plural_name[1:]]
-        elif singular_name[1:] in self.axes:
-            warn(
-                "The use of singular axis names is deprecated. Update "
-                "your grid file."
-            )
-            return self._axes_values[singular_name[1:]]
-        elif log_name[1:] in self.axes:
-            warn(
-                "The use of logged axis names is deprecated. Update "
-                "your grid file."
-            )
-            return 10 ** self._axes_values[log_name[1:]]
-        elif log_plural_name[1:] in self.axes:
-            warn(
-                "The use of logged axis names is deprecated. Update "
-                "your grid file."
-            )
-            return 10 ** self._axes_values[log_plural_name[1:]]
-        elif log_singular_name[1:] in self.axes:
-            warn(
-                "The use of logged axis names is deprecated. Update "
-                "your grid file."
-            )
-            return 10 ** self._axes_values[log_singular_name[1:]]
 
-        # Are we doing a log10 request? (handling all the silly pluralisation)
+        # Are we doing a log10 request?
         elif name[:5] == "log10" and name[5:] in self.axes:
             return np.log10(self._axes_values[name[5:]])
-        elif plural_name[:5] == "log10" and plural_name[5:] in self.axes:
-            return np.log10(self._axes_values[plural_name[5:]])
-        elif singular_name[:5] == "log10" and singular_name[5:] in self.axes:
-            warn(
-                "The use of singular axis names is deprecated. Update "
-                "your grid file."
-            )
-            return np.log10(self._axes_values[singular_name[5:]])
-        elif log_name[:5] == "log10" and log_name[5:] in self.axes:
-            warn(
-                "The use of logged axis names is deprecated. Update "
-                "your grid file."
-            )
-            return self._axes_values[log_name[5:]]
-        elif (
-            log_plural_name[:5] == "log10" and log_plural_name[5:] in self.axes
-        ):
-            warn(
-                "The use of logged axis names is deprecated. Update "
-                "your grid file."
-            )
-            return self._axes_values[log_plural_name[5:]]
-        elif (
-            log_singular_name[:5] == "log10"
-            and log_singular_name[5:] in self.axes
-        ):
-            warn(
-                "The use of logged axis names is deprecated. Update "
-                "your grid file."
-            )
-            return self._axes_values[log_singular_name[5:]]
 
         # If we get here, we don't have the attribute
         raise AttributeError(
@@ -469,14 +389,6 @@ class Grid:
                         "log10_specific_ionising_luminosity"
                     ][ion][:]
 
-            # Old name for backwards compatibility (DEPRECATED)
-            if "log10Q" in hf.keys():
-                self.log10_specific_ionising_lum = {}
-                for ion in hf["log10Q"].keys():
-                    self.log10_specific_ionising_lum[ion] = hf["log10Q"][ion][
-                        :
-                    ]
-
     @property
     def stellar_fraction(self):
         """Get the stellar fraction from the HDF5 file.
@@ -519,11 +431,24 @@ class Grid:
                 spectra will be read.
         """
         with h5py.File(self.grid_filename, "r") as hf:
+            # Most of the time the key will be "spectra" but for dust
+            # attenuation curve grids the key is "extinction_curves"
+            if "spectra" in hf.keys():
+                spectra_key = "spectra"
+            elif "extinction_curves" in hf.keys():
+                spectra_key = "extinction_curves"
+            else:
+                raise exceptions.GridError(
+                    "No spectra found in the grid file. Either pass "
+                    "`ignore_spectra=True` or load a grid containing "
+                    "spectra."
+                )
+
             # Are we reading everything?
             if spectra_to_read is None:
-                spectra_to_read = self._get_spectra_ids_from_file()
+                spectra_to_read = self._get_spectra_ids_from_file(spectra_key)
             elif isinstance(spectra_to_read, list):
-                all_spectra = self._get_spectra_ids_from_file()
+                all_spectra = self._get_spectra_ids_from_file(spectra_key)
 
                 # Check the requested spectra are available
                 missing_spectra = set(spectra_to_read) - set(all_spectra)
@@ -539,12 +464,16 @@ class Grid:
                     "containing a subset of spectra to read."
                 )
 
-            # Read the wavelengths
-            self.lam = hf["spectra/wavelength"][:]
+            # Read the wavelengths and attach the units stored on the file.
+            lams = hf[spectra_key + "/wavelength"][:]
+            lam_units = hf[spectra_key + "/wavelength"].attrs.get("Units")
+            if lam_units is None:
+                lam_units = angstrom
+            self.lam = unyt_array(lams, lam_units).to(angstrom)
 
             # Get all our spectra
             for spectra_id in spectra_to_read:
-                self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
+                self.spectra[spectra_id] = hf[spectra_key][spectra_id][:]
 
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
@@ -554,6 +483,8 @@ class Grid:
             self.spectra["nebular_continuum"] = (
                 self.spectra["nebular"] - self.spectra["linecont"]
             )
+
+        self._ensure_spectra_data_contiguous()
 
     def _get_lines_grid(self):
         """Get the lines grid from the HDF5 file."""
@@ -697,24 +628,7 @@ class Grid:
                         lum_units,
                     )
 
-            # Ensure the line luminosities and continuums are contiguous
-            for spectra in self.line_lums.keys():
-                lum_units = self.line_lums[spectra].units
-                cont_units = self.line_conts[spectra].units
-                self.line_lums[spectra] = (
-                    np.ascontiguousarray(
-                        self.line_lums[spectra],
-                        dtype=np.float64,
-                    )
-                    * lum_units
-                )
-                self.line_conts[spectra] = (
-                    np.ascontiguousarray(
-                        self.line_conts[spectra],
-                        dtype=np.float64,
-                    )
-                    * cont_units
-                )
+            self._ensure_line_data_contiguous()
 
     def _prepare_lam_axis(
         self,
@@ -827,15 +741,20 @@ class Grid:
         """Return the line IDs."""
         return self.available_lines
 
-    def _get_spectra_ids_from_file(self):
+    def _get_spectra_ids_from_file(self, spectra_key="spectra"):
         """Get a list of the spectra available in a grid file.
+
+        Args:
+            spectra_key (str):
+                The key in the HDF5 file under which the spectra are stored.
+                Defaults to "spectra".
 
         Returns:
             list:
                 List of available spectra
         """
         with h5py.File(self.grid_filename, "r") as hf:
-            spectra_keys = list(hf["spectra"].keys())
+            spectra_keys = list(hf[spectra_key].keys())
 
         # Clean up the available spectra list
         spectra_keys.remove("wavelength")
@@ -867,6 +786,7 @@ class Grid:
         return lines, lams
 
     @accepts(new_lam=angstrom)
+    @timed("Grid.interp_spectra")
     def interp_spectra(self, new_lam, loop_grid=False):
         """Interpolates the spectra grid onto the provided wavelength grid.
 
@@ -916,9 +836,46 @@ class Grid:
         # Update wavelength array
         self.lam = new_lam
 
+        self._ensure_spectra_data_contiguous()
+
         # Remove any lines outside the new wavelength range
         if self.lines_available:
             self._remove_lines_outside_lam()
+
+    @accepts(lam=angstrom)
+    @timed("Grid.get_spectra_at_lam")
+    def get_spectra_at_lam(self, lam):
+        """Return spectra evaluated at a single wavelength.
+
+        Args:
+            lam (unyt_quantity/unyt_array):
+                The wavelength at which to evaluate the grid spectra.
+
+        Returns:
+            dict:
+                A dictionary mapping spectra ids to arrays with the same grid
+                shape as the source spectra, but with the wavelength axis
+                removed.
+        """
+        lam = np.atleast_1d(lam.to(angstrom))
+        if lam.size != 1:
+            raise exceptions.InconsistentArguments(
+                "get_spectra_at_lam expects exactly one wavelength."
+            )
+
+        spectra_at_lam = {}
+        for spectra_type in self.available_spectra_emissions:
+            interp = interp1d(
+                self._lam,
+                self.spectra[spectra_type],
+                axis=-1,
+                kind="linear",
+                bounds_error=False,
+                fill_value=0.0,
+            )
+            spectra_at_lam[spectra_type] = interp(lam.value)
+
+        return spectra_at_lam
 
     def __str__(self):
         """Return a string representation of the particle object.
@@ -1007,7 +964,10 @@ class Grid:
                     ..., lines_to_keep
                 ]
 
+            self._ensure_line_data_contiguous()
+
     @accepts(lam_min=angstrom, lam_max=angstrom)
+    @timed("Grid.reduce_rest_frame_range")
     def reduce_rest_frame_range(self, lam_min, lam_max, inplace=False):
         """Limit the wavelength range of the grid.
 
@@ -1050,6 +1010,8 @@ class Grid:
             grid.spectra[spectra_id] = grid.spectra[spectra_id][
                 ..., min_index:max_index
             ]
+
+        grid._ensure_spectra_data_contiguous()
 
         # Remove lines outside the new wavelength range
         if grid.lines_available:
@@ -1109,6 +1071,8 @@ class Grid:
             grid.spectra[spectra_id] = grid.spectra[spectra_id][
                 ..., min_index:max_index
             ]
+
+        grid._ensure_spectra_data_contiguous()
 
         # Remove lines outside the new wavelength range
         if grid.lines_available:
@@ -1176,6 +1140,8 @@ class Grid:
         grid.lam = grid.lam[lam_mask]
         for spectra_id in grid.available_spectra_emissions:
             grid.spectra[spectra_id] = grid.spectra[spectra_id][..., lam_mask]
+
+        grid._ensure_spectra_data_contiguous()
 
         # Remove lines outside the new wavelength range this will leave lines
         # that don't lie within non-zero transmission regions of the filters
@@ -1252,6 +1218,8 @@ class Grid:
         for spectra_id in grid.available_spectra_emissions:
             grid.spectra[spectra_id] = grid.spectra[spectra_id][..., lam_mask]
 
+        grid._ensure_spectra_data_contiguous()
+
         # Remove lines outside the new wavelength range this will leave lines
         # that don't lie within non-zero transmission regions of the filters
         # but we can at least get rid of ones fully outside the range.
@@ -1263,6 +1231,7 @@ class Grid:
             return grid
 
     @accepts(lam=angstrom)
+    @timed("Grid.reduce_rest_frame_lam")
     def reduce_rest_frame_lam(self, lam, inplace=False):
         """Limit the wavelength range of the grid to the range of a new lam.
 
@@ -1328,40 +1297,22 @@ class Grid:
 
     def _where_axis(self, axis_name):
         """Return the dimension index of a given axis name."""
-        # Which axis is this? Handle the various cases
-        ind = 0
-        while ind < len(self.axes):
-            if self.axes[ind] == axis_name:
-                break
-            elif self.axes[ind] == pluralize(axis_name):
-                break
-            elif self.axes[ind] == depluralize(axis_name):
-                break
-            elif self.axes[ind] == f"log10{axis_name}":
-                break
-            elif self.axes[ind] == f"log10{pluralize(axis_name)}":
-                break
-            elif self.axes[ind] == f"log10{depluralize(axis_name)}":
-                break
-            elif self._extract_axes[ind] == axis_name:
-                break
-            elif self._extract_axes[ind] == pluralize(axis_name):
-                break
-            elif self._extract_axes[ind] == depluralize(axis_name):
-                break
-            elif self._extract_axes[ind] == f"log10{axis_name}":
-                break
-            elif self._extract_axes[ind] == f"log10{pluralize(axis_name)}":
-                break
-            elif self._extract_axes[ind] == f"log10{depluralize(axis_name)}":
-                break
-            ind += 1
-        else:
-            raise exceptions.InconsistentArguments(
-                f"Axis {axis_name} not found in grid. Available axes: "
-                f"{self.axes} or {self._extract_axes}"
-            )
-        return ind
+        candidate_names = [axis_name]
+        if axis_name == "metallicity":
+            candidate_names.append("metallicities")
+        elif axis_name == "metallicities":
+            candidate_names.append("metallicity")
+
+        for candidate in candidate_names:
+            if candidate in self.axes:
+                return self.axes.index(candidate)
+            if candidate in self._extract_axes:
+                return self._extract_axes.index(candidate)
+
+        raise exceptions.InconsistentArguments(
+            f"Axis {axis_name} not found in grid. Available axes: "
+            f"{self.axes} or {self._extract_axes}"
+        )
 
     def _have_axis(self, axis_name):
         """Check if the grid has a given axis name."""
@@ -1443,6 +1394,8 @@ class Grid:
             grid._extract_axes_values[_extract_axis_name][low_index:high_index]
         )
 
+        grid._ensure_axis_data_contiguous()
+
         # Limit all the spectra arrays
         for spectra_id in grid.available_spectra_emissions:
             grid.spectra[spectra_id] = np.take(
@@ -1450,6 +1403,8 @@ class Grid:
                 indices=range(low_index, high_index),
                 axis=axis_index,
             )
+
+        grid._ensure_spectra_data_contiguous()
 
         # Limit all the line luminosity and continuum arrays
         for spectra_id in grid.available_line_emissions:
@@ -1463,6 +1418,8 @@ class Grid:
                 indices=range(low_index, high_index),
                 axis=axis_index,
             )
+
+        grid._ensure_line_data_contiguous()
 
         # Return the grid if not inplace
         if not inplace:
@@ -1514,63 +1471,57 @@ class Grid:
             tuple
                 A tuple of integers specifying the closest grid point.
         """
+        # Normalize accepted aliases first
+        normalized_kwargs = {}
+        valid_axis_keys = set(self.axes)
+        valid_axis_keys.update(f"log10{axis}" for axis in self.axes)
+
+        alias_pairs = {
+            "metallicity": "metallicities",
+            "metallicities": "metallicity",
+            "log10metallicity": "log10metallicities",
+            "log10metallicities": "log10metallicity",
+        }
+
+        for key, value in kwargs.items():
+            normalized_key = key
+            if normalized_key not in valid_axis_keys:
+                alias_key = alias_pairs.get(normalized_key)
+                if alias_key in valid_axis_keys:
+                    normalized_key = alias_key
+
+            if normalized_key in normalized_kwargs:
+                raise TypeError(
+                    f"Multiple values provided for axis '{normalized_key}'."
+                )
+            normalized_kwargs[normalized_key] = value
+
         # Create a list we will return
         indices = []
 
         # Loop over axes and get the nearest index for each
         for axis in self.axes:
-            # Get plural, singular and log10 versions of the axis name
-            plural_axis = pluralize(axis)
-            singular_axis = depluralize(axis)
             log10_axis = f"log10{axis}"
-            log10_plural_axis = f"log10{plural_axis}"
-            log10_singular_axis = f"log10{singular_axis}"
-            if axis in kwargs:
+            if axis in normalized_kwargs:
                 indices.append(
                     self.get_nearest_index(
-                        kwargs.pop(axis), getattr(self, axis)
+                        normalized_kwargs.pop(axis), getattr(self, axis)
                     )
                 )
-            elif plural_axis in kwargs:
+            elif log10_axis in normalized_kwargs:
                 indices.append(
                     self.get_nearest_index(
-                        kwargs.pop(plural_axis), getattr(self, plural_axis)
-                    )
-                )
-            elif singular_axis in kwargs:
-                indices.append(
-                    self.get_nearest_index(
-                        kwargs.pop(singular_axis), getattr(self, singular_axis)
-                    )
-                )
-            elif log10_axis in kwargs:
-                indices.append(
-                    self.get_nearest_index(
-                        kwargs.pop(log10_axis), getattr(self, axis)
-                    )
-                )
-            elif log10_plural_axis in kwargs:
-                indices.append(
-                    self.get_nearest_index(
-                        kwargs.pop(log10_plural_axis),
-                        getattr(self, plural_axis),
-                    )
-                )
-            elif log10_singular_axis in kwargs:
-                indices.append(
-                    self.get_nearest_index(
-                        kwargs.pop(log10_singular_axis),
-                        getattr(self, singular_axis),
+                        normalized_kwargs.pop(log10_axis),
+                        getattr(self, log10_axis),
                     )
                 )
             else:
                 indices.append(slice(None))
 
-        # Warn the user is any kwargs weren't a grid axis
-        if len(kwargs) > 0:
-            warn(
-                "The following axes are not on the grid:"
-                f" {list(kwargs.keys())}"
+        # Error if any kwargs weren't valid grid axes
+        if len(normalized_kwargs) > 0:
+            raise TypeError(
+                f"Invalid grid axis name(s): {list(normalized_kwargs.keys())}"
             )
 
         return tuple(indices)
@@ -1600,6 +1551,9 @@ class Grid:
             self.line_conts[spectra_id] = marginalize_function(
                 self.line_conts[spectra_id], axis=axis_index
             )
+
+        self._ensure_spectra_data_contiguous()
+        self._ensure_line_data_contiguous()
 
     def _collapse_grid_interpolate(self, axis, value, pre_interp_function):
         """Collapse the grid by interpolating to the specified value.
@@ -1695,6 +1649,9 @@ class Grid:
                 axis=0,
             )
 
+        self._ensure_spectra_data_contiguous()
+        self._ensure_line_data_contiguous()
+
     def _collapse_grid_nearest(self, axis, value):
         """Collapse the grid by extracting the nearest value of the axis.
 
@@ -1739,6 +1696,9 @@ class Grid:
                 np.argmin(np.abs(axis_values - value)),
                 axis=axis_index,
             )
+
+        self._ensure_spectra_data_contiguous()
+        self._ensure_line_data_contiguous()
 
     def collapse(
         self,
@@ -1826,16 +1786,8 @@ class Grid:
         grid._extract_axes_values.pop(extract_axis_name)
         if hasattr(grid, axis_name):
             delattr(grid, axis_name)
-        if hasattr(grid, pluralize(axis_name)):
-            delattr(grid, pluralize(axis_name))
-        if hasattr(grid, depluralize(axis_name)):
-            delattr(grid, depluralize(axis_name))
         if hasattr(grid, f"log10{axis_name}"):
             delattr(grid, f"log10{axis_name}")
-        if hasattr(grid, f"log10{pluralize(axis_name)}"):
-            delattr(grid, f"log10{pluralize(axis_name)}")
-        if hasattr(grid, f"log10{depluralize(axis_name)}"):
-            delattr(grid, f"log10{depluralize(axis_name)}")
         grid.naxes -= 1
 
         # Return the grid if not inplace
@@ -2109,14 +2061,14 @@ class Grid:
         cax = fig.add_axes([left, bottom + height + 0.01, width, 0.05])
 
         # Create an index array
-        y = np.arange(len(self.metallicity))
+        y = np.arange(len(self.metallicities))
 
         # Select grid for specific ion
         log10_specific_ionising_lum = self.log10_specific_ionising_lum[ion]
 
         # Truncate grid if max age provided
         if max_log10age is not None:
-            ia_max = self.get_nearest_index(max_log10age, self.log10age)
+            ia_max = self.get_nearest_index(max_log10age, self.log10ages)
             log10_specific_ionising_lum = log10_specific_ionising_lum[
                 :ia_max, :
             ]
@@ -2141,8 +2093,8 @@ class Grid:
             log10_specific_ionising_lum.T,
             origin="lower",
             extent=[
-                self.log10age[0],
-                self.log10age[ia_max],
+                self.log10ages[0],
+                self.log10ages[ia_max],
                 y[0] - 0.5,
                 y[-1] + 0.5,
             ],
@@ -2167,7 +2119,7 @@ class Grid:
         cax.set_yticks([])
 
         # Set custom tick marks
-        ax.set_yticks(y, self.metallicity.to_value())
+        ax.set_yticks(y, self.metallicities.to_value())
         ax.minorticks_off()
 
         # Set labels
@@ -2263,10 +2215,10 @@ class Grid:
         img = ax.imshow(
             spectra[:, :, 0],
             extent=[
-                self.log10age.min(),
-                self.log10age.max(),
-                self.metallicity.min(),
-                self.metallicity.max(),
+                self.log10ages.min(),
+                self.log10ages.max(),
+                self.metallicities.min(),
+                self.metallicities.max(),
             ],
             origin="lower",
             animated=True,

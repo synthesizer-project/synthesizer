@@ -30,12 +30,14 @@ from synthesizer._version import __version__
 # Import things we want at the top level
 from synthesizer.emissions.line import LineCollection
 from synthesizer.emissions.sed import Sed
+from synthesizer.extensions.atomic_timing_check import check_atomic_timing
 from synthesizer.extensions.openmp_check import check_openmp
 from synthesizer.galaxy import galaxy
 from synthesizer.galaxy import galaxy as Galaxy  # add a convenient alias
 from synthesizer.grid import Grid
 from synthesizer.instruments import filters
 from synthesizer.utils import art, integrate, plt, stats, util_funcs
+from synthesizer.utils.operation_timers import timed
 
 # Define the __all__ variable to control what is imported with
 # 'from synthesizer import *'
@@ -50,6 +52,8 @@ __all__ = [
     "galaxy",
     "Galaxy",
     "check_openmp",
+    "check_atomic_timing",
+    "timed",
     "filters",
     "LineCollection",
     "__version__",

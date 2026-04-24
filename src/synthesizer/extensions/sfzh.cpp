@@ -22,6 +22,9 @@
 #include "part_props.h"
 #include "property_funcs.h"
 #include "timers.h"
+#ifdef ATOMIC_TIMING
+#include "timers_init.h"
+#endif
 #include "weights.h"
 
 /**
@@ -40,7 +43,7 @@
  */
 PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
-  double start_time = tic();
+  tic("compute_sfzh");
 
   /* We don't need the self argument but it has to be there. Tell the compiler
    * we don't care. */
@@ -48,23 +51,25 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
   int ndim, npart, nthreads;
   PyObject *grid_tuple, *part_tuple;
+  PyObject *prop_names = NULL;
   PyArrayObject *np_part_mass, *np_ndims;
   PyArrayObject *np_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOiisiO", &grid_tuple, &part_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOiisiO|O", &grid_tuple, &part_tuple,
                         &np_part_mass, &np_ndims, &ndim, &npart, &method,
-                        &nthreads, &np_mask))
+                        &nthreads, &np_mask, &prop_names))
     return NULL;
 
   /* Extract the grid struct. */
   GridProps *grid_props =
       new GridProps(/*np_grid_spectra*/ nullptr, grid_tuple,
-                    /*np_lam*/ nullptr, /*np_lam_mask*/ nullptr, 1);
+                    /*np_lam*/ nullptr, /*np_lam_mask*/ nullptr, 1,
+                    /*np_grid_weights*/ NULL, prop_names);
   RETURN_IF_PYERR();
 
   Particles *parts = new Particles(np_part_mass, /*np_velocities*/ NULL,
-                                   np_mask, part_tuple, npart);
+                                   np_mask, part_tuple, prop_names, npart);
   RETURN_IF_PYERR();
 
   /* Get the grid weights we'll work on. */
@@ -90,7 +95,7 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   delete parts;
   delete grid_props;
 
-  toc("Computing SFZH", start_time);
+  toc("compute_sfzh");
 
   return Py_BuildValue("N", np_sfzh);
 }
@@ -116,9 +121,18 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_sfzh(void) {
   PyObject *m = PyModule_Create(&moduledef);
+  if (m == NULL)
+    return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    Py_DECREF(m);
     return NULL;
   }
+#ifdef ATOMIC_TIMING
+  if (import_toc_capsule() < 0) {
+    Py_DECREF(m);
+    return NULL;
+  }
+#endif
   return m;
 }

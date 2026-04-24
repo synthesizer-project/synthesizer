@@ -6,19 +6,20 @@ directly instantiated.
 """
 
 import copy
+import inspect
 
 import numpy as np
 from numpy.random import multivariate_normal
-from unyt import Mpc, Msun, km, pc, rad, s
+from unyt import Mpc, Msun, km, pc, rad, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
-from synthesizer.synth_warnings import deprecation, warn
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
 from synthesizer.utils.geometry import get_rotation_matrix
+from synthesizer.utils.operation_timers import timed
 
 
 class Particles:
@@ -158,34 +159,6 @@ class Particles:
         self.name = name
 
     @property
-    def particle_photo_fluxes(self):
-        """Get the particle photometry fluxes.
-
-        Returns:
-            dict
-                The photometry fluxes.
-        """
-        deprecation(
-            "The `particle_photo_fluxes` attribute is deprecated. Use "
-            "`particle_photo_fnu` instead. Will be removed in v1.0.0"
-        )
-        return self.particle_photo_fnu
-
-    @property
-    def particle_photo_luminosities(self):
-        """Get the photometry luminosities.
-
-        Returns:
-            dict
-                The photometry luminosities.
-        """
-        deprecation(
-            "The `particle_photo_luminosities` attribute is deprecated. Use "
-            "`particle_photo_lnu` instead. Will be removed in v1.0.0"
-        )
-        return self.particle_photo_lnu
-
-    @property
     def centered_coordinates(self):
         """Returns the coordinates centred on the geometric mean."""
         if self.centre is None:
@@ -243,8 +216,7 @@ class Particles:
             ang_diam_dist = self.get_angular_diameter_distance(cosmo)
 
             # Combine the angular diameter distance with the line of sight
-            # distance
-            # (along the z-axis)
+            # distance (along the z-axis)
             los_dists = ang_diam_dist + cent_coords[:, 2]
 
             # If we are at redshift 0.0 then we need to shift things to
@@ -353,6 +325,122 @@ class Particles:
         )
 
         return projected_smoothing_lengths * rad
+
+    def split(self, max_npart):
+        """Split a particle component into chunks.
+
+        Args:
+            max_npart (int):
+                The maximum number of particles permitted in each child
+                component.
+
+        Returns:
+            list:
+                A list of child particle components containing views of the
+                parent particle data.
+        """
+        if max_npart is None:
+            return [self]
+
+        if max_npart <= 0:
+            raise exceptions.InconsistentArguments(
+                "max_npart must be a positive integer."
+            )
+
+        children = []
+        start = 0
+        nparticles = self.nparticles
+
+        # Introspect the child constructor so we can rebuild children from
+        # sliced constructor inputs rather than copying the parent object.
+        signature = inspect.signature(self.__class__.__init__)
+        constructor_params = {
+            name: param
+            for name, param in signature.parameters.items()
+            if name != "self"
+        }
+
+        while start < self.nparticles:
+            stop = min(start + max_npart, self.nparticles)
+            part_slice = slice(start, stop)
+            kwargs = {}
+
+            # First collect any attributes that map directly onto explicit
+            # constructor arguments, slicing particle-shaped arrays to views.
+            for name, param in constructor_params.items():
+                if param.kind == inspect.Parameter.VAR_KEYWORD:
+                    continue
+
+                if not hasattr(self, name):
+                    continue
+
+                value = getattr(self, name)
+                if hasattr(value, "shape") and value.shape != ():
+                    if value.shape[0] == nparticles:
+                        kwargs[name] = value[part_slice]
+                    else:
+                        kwargs[name] = value
+                else:
+                    kwargs[name] = value
+
+            # Then pass through any extra keyword-style attributes that should
+            # survive the split, again slicing particle-shaped arrays to views
+            # and skipping transient pipeline outputs/caches.
+            for key, value in self.__dict__.items():
+                if (
+                    key.startswith("_")
+                    or key in kwargs
+                    or key in constructor_params
+                    or key
+                    in {
+                        "nparticles",
+                        "nstars",
+                        "nbh",
+                        "component_type",
+                        "log10ages",
+                        "log10metallicities",
+                        "spectra",
+                        "lines",
+                        "photo_lnu",
+                        "photo_fnu",
+                        "spectroscopy",
+                        "images_lnu",
+                        "images_fnu",
+                        "images_psf_lnu",
+                        "images_psf_fnu",
+                        "images_noise_lnu",
+                        "images_noise_fnu",
+                        "particle_spectra",
+                        "particle_lines",
+                        "particle_photo_lnu",
+                        "particle_photo_fnu",
+                        "particle_spectroscopy",
+                        "data_cubes_lnu",
+                        "data_cubes_fnu",
+                        "model_param_cache",
+                        "_grid_weights",
+                        "sfh",
+                        "sfzh",
+                    }
+                ):
+                    continue
+
+                if hasattr(value, "shape") and value.shape != ():
+                    if value.shape[0] == nparticles:
+                        kwargs[key] = value[part_slice]
+                    else:
+                        kwargs[key] = value
+                else:
+                    kwargs[key] = value
+
+            # Reconstruct the child from constructor inputs only, ensuring the
+            # split object starts with fresh output containers.
+            child = self.__class__(**kwargs)
+
+            children.append(child)
+            start = stop
+
+        return children
 
     def get_projected_angular_imaging_props(self, cosmo):
         """Get the projected angular imaging properties.
@@ -480,6 +568,7 @@ class Particles:
 
         return self.particle_photo_fnu
 
+    @timed("Particles.get_mask")
     def get_mask(
         self,
         attr,
@@ -511,8 +600,6 @@ class Particles:
             mask (np.ndarray):
                 The mask array.
         """
-        start = tic()
-
         # Get the attribute
         attr_str = attr
         try:
@@ -521,6 +608,17 @@ class Particles:
             raise exceptions.MissingMaskAttribute(
                 f"Masking attribute ({attr_str}) not found on particle object."
             ) from e
+
+        # Resolve a string threshold as an attribute alias on the emitter
+        if isinstance(thresh, str):
+            thresh_str = thresh
+            try:
+                thresh = get_param(thresh_str, attr_override_obj, None, self)
+            except exceptions.MissingAttribute as e:
+                raise exceptions.MissingMaskAttribute(
+                    f"Mask threshold alias ({thresh_str}) not found on "
+                    "particle object."
+                ) from e
 
         # Strip dimensionless units since they are inconsequential
         if hasattr(attr, "units") and attr.units.is_dimensionless:
@@ -573,8 +671,6 @@ class Particles:
         # Combine with the existing mask
         if mask is not None:
             new_mask = np.logical_and(new_mask, mask)
-
-        toc("Generating mask", start)
 
         return new_mask
 
@@ -874,11 +970,10 @@ class Particles:
                 The other particles to compute the column density with.
             attr (str):
                 The attribute to compute the column density of.
-            kernel (array_like, float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+            kernel (Kernel):
+                A ``synthesizer.kernel_functions.Kernel`` instance. This is
+                used to provide both the projected LOS kernel table and the
+                truncated LOS lookup table needed by the C extension.
             mask (bool):
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
@@ -913,8 +1008,27 @@ class Particles:
             )
 
         # Set up the kernel inputs to the C function.
-        kernel = np.ascontiguousarray(kernel, dtype=np.float64)
+        if not hasattr(kernel, "get_kernel") or not hasattr(
+            kernel, "get_truncated_los_kernel"
+        ):
+            raise exceptions.InconsistentArguments(
+                "LOS column densities require a Kernel instance so the "
+                "projected and truncated LOS kernel tables are available."
+            )
+
+        projected_kernel = np.ascontiguousarray(
+            kernel.get_kernel(), dtype=np.float64
+        )
+        truncated_kernel, _, z_grid = kernel.get_truncated_los_kernel()
+        truncated_kernel = np.ascontiguousarray(
+            truncated_kernel, dtype=np.float64
+        )
+
+        # Set up the kernel inputs to the C function.
+        kernel = projected_kernel
         kdim = kernel.size
+        trunc_qdim = truncated_kernel.shape[0]
+        zdim = truncated_kernel.shape[1]
 
         # Get particle counts
         npart_i = self.nparticles
@@ -938,6 +1052,7 @@ class Particles:
 
         return (
             kernel,
+            truncated_kernel,
             pos_i,
             pos_j,
             smls,
@@ -945,12 +1060,15 @@ class Particles:
             npart_i,
             npart_j,
             kdim,
+            trunc_qdim,
+            zdim,
             threshold,
             force_loop,
             min_count,
             nthreads,
         )
 
+    @timed("Particles.get_los_column_density")
     def get_los_column_density(
         self,
         other_parts,
@@ -974,11 +1092,10 @@ class Particles:
                 The other particles to calculate the column density with.
             density_attr (str):
                 The attribute to use to calculate the column density.
-            kernel (np.ndarray of float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance. LOS column
+                densities require both the projected kernel table and the
+                truncated LOS kernel table.
             column_density_attr (str):
                 The attribute to store the column density in on the Particles
                 instance. If None, the column density will not be stored. By
@@ -1006,17 +1123,61 @@ class Particles:
             compute_column_density,
         )
 
-        # If have no particles return 0
-        if self.nparticles == 0:
-            return np.zeros(self.nparticles)
-
-        # If the other particles have no particles return 0
-        if other_parts.nparticles == 0:
-            return np.zeros(self.nparticles)
-
         # If we don't have a mask make a fake one for consistency
         if mask is None:
             mask = np.ones(self.nparticles, dtype=bool)
+        else:
+            mask = np.asarray(mask, dtype=bool)
+
+        if mask.size != self.nparticles:
+            raise exceptions.InconsistentArguments(
+                "The mask must be the same length as the number of "
+                f"particles. Got {mask.size} but expected {self.nparticles}."
+            )
+
+        masked_nparticles = np.count_nonzero(mask)
+
+        # Validate inputs before accessing their units
+        if other_parts.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing coordinates!"
+            )
+
+        density = getattr(other_parts, density_attr, None)
+        if density is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing {density_attr}!"
+            )
+        if not hasattr(density, "units"):
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object attribute {density_attr} must "
+                "have units to compute LOS column densities."
+            )
+
+        # Get the units for the column density from the inputs
+        column_density_units = density.units / other_parts.coordinates.units**2
+
+        # If have no particles return 0
+        if self.nparticles == 0 or masked_nparticles == 0:
+            col_den = unyt_array(
+                np.zeros(masked_nparticles),
+                column_density_units,
+                bypass_validation=True,
+            )
+            if column_density_attr is not None:
+                setattr(self, column_density_attr, col_den)
+            return col_den
+
+        # If the other particles have no particles return 0
+        if other_parts.nparticles == 0:
+            col_den = unyt_array(
+                np.zeros(masked_nparticles),
+                column_density_units,
+                bypass_validation=True,
+            )
+            if column_density_attr is not None:
+                setattr(self, column_density_attr, col_den)
+            return col_den
 
         # Compute the column density
         col_den = compute_column_density(
@@ -1030,6 +1191,13 @@ class Particles:
                 min_count,
                 nthreads,
             )
+        )
+
+        # Associate with the correct units
+        col_den = unyt_array(
+            col_den,
+            column_density_units,
+            bypass_validation=True,
         )
 
         # Set the column density attribute (if requested)

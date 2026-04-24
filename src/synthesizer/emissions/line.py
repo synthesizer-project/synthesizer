@@ -57,11 +57,17 @@ from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emissions import line_ratios
 from synthesizer.emissions.sed import Sed
-from synthesizer.emissions.utils import alias_to_line_id
-from synthesizer.extensions.timers import tic, toc
+from synthesizer.emissions.utils import (
+    alias_to_line_id,
+    get_available_diagram_ids,
+    get_available_ratio_ids,
+    get_line2index,
+    get_line_id_signature,
+)
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.operation_timers import timed
 
 
 class LineCollection:
@@ -117,6 +123,7 @@ class LineCollection:
     vacuum_wavelength = Quantity("wavelength")
 
     @accepts(lam=angstrom, lum=erg / s, cont=erg / s / Hz)
+    @timed("LineCollection.__init__")
     def __init__(self, line_ids, lam, lum, cont, description=None):
         """Initialise the collection of emission lines.
 
@@ -132,8 +139,6 @@ class LineCollection:
             description (str):
                 A optional description of the line collection.
         """
-        start = tic()
-
         # Set the description
         self.description = description
 
@@ -142,7 +147,7 @@ class LineCollection:
         # passed as a string or a list of lines.
         if isinstance(line_ids, str):
             line_ids = [line_ids]
-        self.line_ids = np.array(line_ids, dtype=str)
+        self.line_ids = np.asarray(line_ids, dtype=str)
 
         # How many lines do we have?
         self.nlines = len(self.line_ids)
@@ -167,25 +172,13 @@ class LineCollection:
         self.flux = None
         self.continuum_flux = None
 
-        # So we can do easy look ups in the future we need to make an index
-        # look up table to map line ids to indices and enable dictionary like
-        # look ups
-        self._line2index = {
-            line_id: i for i, line_id in enumerate(self.line_ids)
-        }
-
         # Atrributes to enable looping
         self._current_ind = 0
 
-        # Get which ratios we have available from the lines we contain
-        self.available_ratios = []
-        self._which_ratios()
-
-        # Get which diagrams we have available from the lines we contain
-        self.available_diagrams = []
-        self._which_diagrams()
-
-        toc("Creating LineCollection", start)
+        # Delay all constructor-side metadata work until first access
+        self._line2index = None
+        self._available_ratios = None
+        self._available_diagrams = None
 
     @property
     def id(self):
@@ -246,6 +239,81 @@ class LineCollection:
             for lids in self.line_ids
             for lid in lids.split(",")
         )
+
+    @property
+    def available_ratios(self):
+        """Return ratio ids lazily derived from the available lines.
+
+        Returns:
+            list:
+                The predefined ratio ids available for this collection.
+        """
+        if self._available_ratios is None:
+            # Get the hashable signature for the line ids
+            signature = get_line_id_signature(self.line_ids)
+
+            # Get the available ratio ids for this signature and remember
+            # it for later
+            self._available_ratios = list(get_available_ratio_ids(signature))
+        return self._available_ratios
+
+    @available_ratios.setter
+    def available_ratios(self, value):
+        """Allow explicit override of the cached ratio list.
+
+        Args:
+            value (iterable or None):
+                The ratio ids to cache on the instance, or None to clear the
+                cached value.
+        """
+        self._available_ratios = list(value) if value is not None else None
+
+    @property
+    def available_diagrams(self):
+        """Return diagram ids lazily derived from the available lines.
+
+        Returns:
+            list:
+                The predefined diagram ids available for this collection.
+        """
+        if self._available_diagrams is None:
+            # Get the hashable signature for the line ids
+            signature = get_line_id_signature(self.line_ids)
+
+            # Get the available diagram ids for this signature and remember it
+            # for later
+            self._available_diagrams = list(
+                get_available_diagram_ids(signature)
+            )
+        return self._available_diagrams
+
+    @available_diagrams.setter
+    def available_diagrams(self, value):
+        """Allow explicit override of the cached diagram list.
+
+        Args:
+            value (iterable or None):
+                The diagram ids to cache on the instance, or None to clear the
+                cached value.
+        """
+        self._available_diagrams = list(value) if value is not None else None
+
+    @property
+    def line2index(self):
+        """Return the line-id to index mapping lazily.
+
+        Returns:
+            Mapping:
+                A mapping from each stored line id to its array index.
+        """
+        if self._line2index is None:
+            # Get the hashable signature for the line ids
+            signature = get_line_id_signature(self.line_ids)
+
+            # Get the line2index mapping for this signature and remember it
+            # for later
+            self._line2index = get_line2index(signature)
+        return self._line2index
 
     @property
     def vacuum_wavelengths(self):
@@ -457,12 +525,31 @@ class LineCollection:
                 "LineCollections must contain the same lines to be added"
             )
 
-        return LineCollection(
+        new_line = LineCollection(
             line_ids=self.line_ids,
             lam=self.lam,
             lum=self.luminosity + other.luminosity,
             cont=self.continuum + other.continuum,
         )
+
+        # Preserve observed-frame quantities when both inputs already have
+        # them populated, which is required when chunked pipeline outputs are
+        # recombined after get_flux has been called.
+        if (self.flux is not None) and (other.flux is not None):
+            new_line.flux = self.flux + other.flux
+
+        if (
+            self.continuum_flux is not None
+            and other.continuum_flux is not None
+        ):
+            new_line.continuum_flux = (
+                self.continuum_flux + other.continuum_flux
+            )
+
+        if (self.obslam is not None) and (other.obslam is not None):
+            new_line.obslam = self.obslam
+
+        return new_line
 
     def __getitem__(self, key):
         """Return a subset of lines from the collection.
@@ -569,15 +656,15 @@ class LineCollection:
             new_line = LineCollection(
                 line_ids=[line_id],
                 lam=unyt_array(
-                    [self.lam[self._line2index[line_id]]],
+                    [self.lam[self.line2index[line_id]]],
                     self.lam.units,
                 ),
                 lum=unyt_array(
-                    [self.luminosity[..., self._line2index[line_id]]],
+                    [self.luminosity[..., self.line2index[line_id]]],
                     self.luminosity.units,
                 ),
                 cont=unyt_array(
-                    [self.continuum[..., self._line2index[line_id]]],
+                    [self.continuum[..., self.line2index[line_id]]],
                     self.continuum.units,
                 ),
             )
@@ -585,15 +672,15 @@ class LineCollection:
             # Copy over the flux and observed wavelength if they exist
             if self.flux is not None:
                 new_line.flux = unyt_array(
-                    [self.flux[..., self._line2index[line_id]]],
+                    [self.flux[..., self.line2index[line_id]]],
                     self.flux.units,
                 )
                 new_line.continuum_flux = unyt_array(
-                    [self.continuum_flux[..., self._line2index[line_id]]],
+                    [self.continuum_flux[..., self.line2index[line_id]]],
                     self.continuum_flux.units,
                 )
                 new_line.obslam = unyt_array(
-                    [self.obslam[self._line2index[line_id]]],
+                    [self.obslam[self.line2index[line_id]]],
                     self.obslam.units,
                 )
 
@@ -608,34 +695,34 @@ class LineCollection:
             ]
 
             # Loop over the lines and combine them into a single line
-            new_lam = self.lam[self._line2index[line_ids[0]]]
-            new_lum = self.luminosity[..., self._line2index[line_ids[0]]]
-            new_cont = self.continuum[..., self._line2index[line_ids[0]]]
+            new_lam = self.lam[self.line2index[line_ids[0]]]
+            new_lum = self.luminosity[..., self.line2index[line_ids[0]]]
+            new_cont = self.continuum[..., self.line2index[line_ids[0]]]
             new_flux = (
-                self.flux[..., self._line2index[line_ids[0]]]
+                self.flux[..., self.line2index[line_ids[0]]]
                 if self.flux is not None
                 else None
             )
             new_obs_cont = (
-                self.continuum_flux[..., self._line2index[line_ids[0]]]
+                self.continuum_flux[..., self.line2index[line_ids[0]]]
                 if self.continuum_flux is not None
                 else None
             )
             new_obslam = (
-                self.obslam[self._line2index[line_ids[0]]]
+                self.obslam[self.line2index[line_ids[0]]]
                 if self.obslam is not None
                 else None
             )
             for li in line_ids[1:]:
-                new_lam += self.lam[self._line2index[li]]
-                new_lum += self.luminosity[..., self._line2index[li]]
-                new_cont += self.continuum[..., self._line2index[li]]
+                new_lam += self.lam[self.line2index[li]]
+                new_lum += self.luminosity[..., self.line2index[li]]
+                new_cont += self.continuum[..., self.line2index[li]]
                 if self.flux is not None:
-                    new_flux += self.flux[..., self._line2index[li]]
+                    new_flux += self.flux[..., self.line2index[li]]
                     new_obs_cont += self.continuum_flux[
-                        ..., self._line2index[li]
+                        ..., self.line2index[li]
                     ]
-                    new_obslam += self.obslam[self._line2index[li]]
+                    new_obslam += self.obslam[self.line2index[li]]
 
             # Create the new line (converting the wavelength to the mean of the
             # individual lines)
@@ -796,37 +883,15 @@ class LineCollection:
 
     def _which_ratios(self):
         """Determine the available line ratios for this LineCollection."""
-        # Create list of available line ratios
-        for ratio_id, ratio in line_ratios.ratios.items():
-            # Create a set from the ratio line ids while also unpacking
-            # any comma separated lines
-            ratio_line_ids = set()
-            for lis in ratio:
-                ratio_line_ids.update({li.strip() for li in lis.split(",")})
-
-            # If we have all the lines required for this ratio, add it to the
-            # list of available ratios
-            if ratio_line_ids.issubset(self._individual_line_ids):
-                self.available_ratios.append(ratio_id)
+        signature = get_line_id_signature(self.line_ids)
+        self.available_ratios = get_available_ratio_ids(signature)
+        return self.available_ratios
 
     def _which_diagrams(self):
         """Determine the available line diagrams for this LineCollection."""
-        # Create list of available line diagnostics
-        self.available_diagrams = []
-        for diagram_id, diagram in line_ratios.diagrams.items():
-            # Create a set from the diagram line ids while also unpacking
-            # any comma separated lines
-            diagram_line_ids = set()
-            for ratio in diagram:
-                for lis in ratio:
-                    diagram_line_ids.update(
-                        {li.strip() for li in lis.split(",")}
-                    )
-
-            # If we have all the lines required for this diagram, add it to the
-            # list of available diagrams
-            if set(diagram_line_ids).issubset(self.line_ids):
-                self.available_diagrams.append(diagram_id)
+        signature = get_line_id_signature(self.line_ids)
+        self.available_diagrams = get_available_diagram_ids(signature)
+        return self.available_diagrams
 
     def get_flux0(self):
         """Calculate the rest frame line flux.
@@ -851,6 +916,7 @@ class LineCollection:
 
         return self.flux
 
+    @timed("LineCollection.get_flux")
     def get_flux(self, cosmo, z, igm=None):
         """Calculate the line flux given a redshift and cosmology.
 
@@ -1306,13 +1372,14 @@ class LineCollection:
         return self
 
     def apply_attenuation(
-        self, tau_v, dust_curve, mask=None, **dust_curve_kwargs
+        self, tau_v=None, dust_curve=None, mask=None, **dust_curve_kwargs
     ):
         """Apply attenuation to this LineCollection.
 
         Args:
             tau_v (float/np.ndarray of float):
-                The V-band optical depth for every star particle.
+                The V-band optical depth for every star particle. Optional for
+                attenuation laws that do not require it.
             dust_curve (synthesizer.emission_models.attenuation.*):
                 An instance of one of the dust attenuation models. (defined in
                 synthesizer/emission_models.attenuation.py)
@@ -1329,6 +1396,17 @@ class LineCollection:
                     A new LineCollection object containing the attenuated
                     lines.
         """
+        if dust_curve is None:
+            raise exceptions.MissingArgument("dust_curve must be provided")
+
+        if tau_v is None and "tau_v" in getattr(
+            dust_curve, "_required_params", ()
+        ):
+            raise exceptions.MissingArgument(
+                "tau_v is required by the selected attenuation law: "
+                f"{dust_curve.__class__.__name__}"
+            )
+
         # Ensure the mask is compatible with the spectra
         if mask is not None:
             if self._luminosity.ndim < 1:

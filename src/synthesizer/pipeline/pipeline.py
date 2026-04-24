@@ -29,23 +29,37 @@ Example usage:
 """
 
 import time
+from pathlib import Path
 
 import numpy as np
-from unyt import unyt_array
+from unyt import unyt_array, unyt_quantity
 
-from synthesizer import check_openmp, exceptions
+from synthesizer import check_atomic_timing, check_openmp, exceptions
 from synthesizer.instruments import InstrumentCollection
+from synthesizer.particle import Galaxy as ParticleGalaxy
 from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
     NO_MODEL_LABEL,
     OperationKwargsHandler,
+    accumulate_pipeline_results_from_child,
+    build_timing_analysis_rows,
+    clear_pipeline_outputs,
+    combine_atomic_timing_snapshots,
     combine_list_of_dicts,
     count_and_check_dict_recursive,
+    divide_dicts_recursive,
+    get_atomic_timing_snapshot,
     get_full_memory,
+    plot_timing_analysis,
+    print_timing_analysis_table,
+    sanitise_hdf5_key_part,
+    sum_dicts_recursive,
     validate_noise_unit_compatibility,
+    write_timing_analysis_summary,
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.art import Art
+from synthesizer.utils.operation_timers import timed, timer
 
 
 class Pipeline:
@@ -119,6 +133,7 @@ class Pipeline:
             A list of Galaxy objects that have been loaded.
     """
 
+    @timed("Pipeline.__init__")
     def __init__(
         self,
         emission_model,
@@ -126,6 +141,7 @@ class Pipeline:
         comm=None,
         verbose=1,
         report_memory=False,
+        max_npart=None,
     ):
         """Initialise the Pipeline object.
 
@@ -159,6 +175,17 @@ class Pipeline:
                 can be very EXPENSIVE in terms of time since we recurse through
                 all objects to get the memory usage after processing each
                 galaxy. Default is False.
+            max_npart (int): (Only applicable for particle based galaxies) The
+                maximum number of particles to be processed at one time. Any
+                galaxies above this threshold will be split until each
+                individual "sub-galaxy" obeys the threshold. The subsequent
+                emissions will then be combined at the end. Note that any
+                operations that require the complete particle distribution
+                (e.g. column densities) will be done on the original galaxy
+                prior to splitting.
+                TODO: while gas particles don't carry spectra we only need to
+                consider stars and black holes in this threshold. If we have
+                gas spectra in the future we will need to amend this.
         """
         # Attributes to track timing
         self._start_time = time.perf_counter()
@@ -178,6 +205,13 @@ class Pipeline:
         self.n_galaxies_per_rank = 0  # Only applicable when using MPI
         self.n_galaxies_offset = 0  # Only applicable when using MPI
 
+        # Attach the maximum number of particles we can process at one time.
+        if max_npart is not None and (
+            not isinstance(max_npart, int) or max_npart < 1
+        ):
+            raise ValueError("max_npart must be an int >= 1")
+        self._max_npart = max_npart
+
         # Define the container to hold the galaxies
         self.galaxies = []
 
@@ -185,6 +219,7 @@ class Pipeline:
         # will use (this is only used for book keeping, the kwarg handler
         # deals with where to apply different instruments)
         self.instruments = InstrumentCollection()
+        self._instruments_prepared = False
 
         # How many threads are we using for shared memory parallelism?
         self.nthreads = nthreads
@@ -200,6 +235,8 @@ class Pipeline:
         self._do_los_optical_depths = False
         self._do_lnu_spectra = False
         self._do_fnu_spectra = False
+        self._do_cosmic_lnu = False
+        self._do_cosmic_fnu = False
         self._do_luminosities = False
         self._do_fluxes = False
         self._do_lum_lines = False
@@ -224,6 +261,8 @@ class Pipeline:
         # Define flags for what we will write out
         self._write_lnu_spectra = False
         self._write_fnu_spectra = False
+        self._write_cosmic_lnu = False
+        self._write_cosmic_fnu = False
         self._write_luminosities = False
         self._write_fluxes = False
         self._write_lines = False
@@ -257,6 +296,18 @@ class Pipeline:
         self.sfhs = []
         self.lnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.fnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.cosmic_lnus = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.cosmic_fnus = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self._cosmic_lnu_counts = {
+            "Galaxy": {},
+            "Stars": {},
+            "BlackHole": {},
+        }
+        self._cosmic_fnu_counts = {
+            "Galaxy": {},
+            "Stars": {},
+            "BlackHole": {},
+        }
         self.luminosities = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.line_lums = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
@@ -285,6 +336,8 @@ class Pipeline:
             "SFH": 0.0,
             "Lnu Spectra": 0.0,
             "Fnu Spectra": 0.0,
+            "Cosmic SED Lnu": 0.0,
+            "Cosmic SED Fnu": 0.0,
             "Luminosities": 0.0,
             "Fluxes": 0.0,
             "Emission Line Luminosities": 0.0,
@@ -310,6 +363,8 @@ class Pipeline:
             "SFH": 0,
             "Lnu Spectra": 0,
             "Fnu Spectra": 0,
+            "Cosmic SED Lnu": 0,
+            "Cosmic SED Fnu": 0,
             "Luminosities": 0,
             "Fluxes": 0,
             "Emission Line Luminosities": 0,
@@ -731,6 +786,7 @@ class Pipeline:
 
         self._print_progress_footer()
 
+    @timed("Pipeline._add_progress_row")
     def _add_progress_row(self, gal, igal, start):
         """Print a row for the progress report.
 
@@ -906,6 +962,59 @@ class Pipeline:
             else:
                 self._print(f"Computing {key} took {elapsed:.2f} {units}")
 
+    def analyse_timings(self, outdir):
+        """Analyse accumulated atomic timings and write reports.
+
+        Args:
+            outdir (str or Path):
+                Directory where timing outputs are written.
+
+        Returns:
+            None
+        """
+        # Fail immediately with a clear message if atomic timing support is not
+        # available in the current installation.
+        if not check_atomic_timing():
+            raise RuntimeError(
+                "Atomic timing not available. Recompile with: "
+                "ATOMIC_TIMING=1 pip install -e ."
+            )
+
+        # Snapshot the current rank-local timings and the total elapsed wall
+        # time since Pipeline instantiation.
+        timing_data = get_atomic_timing_snapshot()
+        total_elapsed = time.perf_counter() - self._start_time
+
+        # Merge timings across ranks when running under MPI so rank 0 can write
+        # a single aggregated report.
+        timing_data, total_elapsed = combine_atomic_timing_snapshots(
+            self.comm,
+            self.using_mpi,
+            self.rank,
+            timing_data,
+            total_elapsed,
+        )
+
+        # Non-root ranks participate in the gather but do not print or write
+        # any timing outputs.
+        if self.using_mpi and self.rank != 0:
+            return None
+
+        # Build the human-readable timing rows and ensure the output directory
+        # exists before writing any files.
+        rows = build_timing_analysis_rows(timing_data, total_elapsed)
+        outdir = Path(outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+
+        # Emit the terminal summary using the standard pipeline logger so the
+        # timing report matches the rest of the pipeline output formatting.
+        print_timing_analysis_table(rows, print_func=self._print)
+
+        # Save the CSV summary and plot diagnostics to the requested output
+        # directory.
+        write_timing_analysis_summary(rows, outdir)
+        plot_timing_analysis(rows, outdir)
+
     def report_operations(self):
         """Print the operations that will be performed by the Pipeline.
 
@@ -941,6 +1050,16 @@ class Pipeline:
             "Fnu Spectra".ljust(30)
             + str(self._do_fnu_spectra).rjust(15)
             + str(self._write_fnu_spectra).rjust(15)
+        )
+        self._print(
+            "Cosmic SED Lnu".ljust(30)
+            + str(self._do_cosmic_lnu).rjust(15)
+            + str(self._write_cosmic_lnu).rjust(15)
+        )
+        self._print(
+            "Cosmic SED Fnu".ljust(30)
+            + str(self._do_cosmic_fnu).rjust(15)
+            + str(self._write_cosmic_fnu).rjust(15)
         )
         self._print(
             "Photometric Luminosities".ljust(30)
@@ -1069,6 +1188,7 @@ class Pipeline:
 
         self._print(f"Added analysis function: {result_key}")
 
+    @timed("Pipeline.add_galaxies")
     def add_galaxies(self, galaxies):
         """Add galaxies to the Pipeline.
 
@@ -1082,9 +1202,15 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Check there are actually galaxies...
+        # Check there are actually galaxies... and tell the user
         if len(galaxies) == 0:
-            self._print("No galaxies provided to add to the Pipeline.")
+            if self.using_mpi:
+                self._print(
+                    "No galaxies provided to add to the Pipeline on rank"
+                    f" {self.rank}."
+                )
+            else:
+                self._print("No galaxies provided to add to the Pipeline.")
 
         # Attach the galaxies
         self.galaxies = galaxies
@@ -1131,7 +1257,7 @@ class Pipeline:
     def _add_instruments(self, instruments):
         """Add instruments to the Pipeline.
 
-        This is a helprer used to attach instruments to the pipeline. Note
+        This is a helper used to attach instruments to the pipeline. Note
         that these instruments are only used for book keeping. The machinery
         to apply instruments to the right operation is handled by the
         OperationKwargsHandler (self._operation_kwargs).
@@ -1172,8 +1298,41 @@ class Pipeline:
         # Add the new instruments to the instrument collection
         new_instruments = set(_instruments) - current_instruments
         self.instruments.add_instruments(*new_instruments)
+        if len(new_instruments) > 0:
+            self._instruments_prepared = False
 
         return _instruments
+
+    @timed("Pipeline._prepare_instruments")
+    def _prepare_instruments(self):
+        """Prewarm instrument filters onto the emission-model grid.
+
+        This prepares filters once per pipeline setup so repeated photometry
+        operations can avoid interpolation and reuse precomputed integration
+        weights.
+        """
+        if self._instruments_prepared:
+            return
+
+        # Nothing to do if we have no instruments attached.
+        if len(self.instruments) == 0:
+            self._instruments_prepared = True
+            return
+
+        # If the emission model has no wavelength grid we can only precompute
+        # on each filter's native grid.
+        model_lam = getattr(self.emission_model, "lam", None)
+
+        for inst in self.instruments:
+            if not inst.can_do_photometry:
+                continue
+
+            if model_lam is not None:
+                inst.filters.prepare_for_grid(lam=model_lam)
+            else:
+                inst.filters.prepare_for_grid()
+
+        self._instruments_prepared = True
 
     def get_los_optical_depths(
         self,
@@ -1193,8 +1352,9 @@ class Pipeline:
         either a stellar or black hole components emitting.
 
         Args:
-            kernel (array-like):
-                The gas SPH kernel.
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance used for the
+                LOS gas kernel evaluation.
             kernel_threshold (float):
                 The threshold of the kernel. Default is 1.0.
             kappa (float):
@@ -1217,6 +1377,7 @@ class Pipeline:
         # Flag that we will compute the LOS optical depths
         self._do_los_optical_depths = True
 
+    @timed("Pipeline._get_los_optical_depths")
     def _get_los_optical_depths(self, galaxy):
         """Compute the Line of Sight optical depths for all particles.
 
@@ -1243,7 +1404,7 @@ class Pipeline:
             ):
                 galaxy.get_stellar_los_tau_v(
                     kernel=op_kwargs["kernel"],
-                    kernel_threshold=op_kwargs["kernel_threshold"],
+                    threshold=op_kwargs["kernel_threshold"],
                     kappa=op_kwargs["kappa"],
                     tau_v_attr=op_kwargs["tau_v_attr"],
                     nthreads=self.nthreads,
@@ -1255,7 +1416,7 @@ class Pipeline:
             ):
                 galaxy.get_black_hole_los_tau_v(
                     kernel=op_kwargs["kernel"],
-                    kernel_threshold=op_kwargs["kernel_threshold"],
+                    threshold=op_kwargs["kernel_threshold"],
                     kappa=op_kwargs["kappa"],
                     tau_v_attr=op_kwargs["tau_v_attr"],
                     nthreads=self.nthreads,
@@ -1302,6 +1463,7 @@ class Pipeline:
         # by default)
         self._write_sfzh = write or self._write_sfzh
 
+    @timed("Pipeline._get_sfzh")
     def _get_sfzh(self, galaxy):
         """Compute the SFZH grid for each galaxy.
 
@@ -1311,6 +1473,10 @@ class Pipeline:
         Args:
             galaxy (Galaxy):
                 The galaxy to compute the SFZH grid for.
+
+        Returns:
+            array-like:
+                The computed or cached SFZH grid.
         """
         start = time.perf_counter()
 
@@ -1320,32 +1486,31 @@ class Pipeline:
         # Get the SFZH, skip any without stars.
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfzh", None) is not None:
-            self.sfzhs.append(galaxy.sfzh)
-            return
+            return galaxy.sfzh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfzh(
                 log10ages=op_kwargs["log10ages"],
                 metallicities=op_kwargs["metallicities"],
                 nthreads=self.nthreads,
             )
+            galaxy.sfzh = galaxy.stars.sfzh
         else:
             # No stars, no SFZH, store a zeroed grid
-            self.sfzhs.append(
-                np.zeros(
-                    (
-                        len(op_kwargs["log10ages"]),
-                        len(op_kwargs["metallicities"]),
-                    )
+            galaxy.sfzh = np.zeros(
+                (
+                    len(op_kwargs["log10ages"]),
+                    len(op_kwargs["metallicities"]),
                 )
             )
-
-            return
+            return galaxy.sfzh
 
         # Count the number of SFZH grids we have generated
         self._op_counts["SFZH"] += 1
 
         # Record the time taken
         self._op_timing["SFZH"] += time.perf_counter() - start
+
+        return galaxy.sfzh
 
     def get_sfh(self, log10ages, write=True):
         """Flag that the Pipeline should compute the binned SFH.
@@ -1376,12 +1541,17 @@ class Pipeline:
         # by default)
         self._write_sfh = write or self._write_sfh
 
+    @timed("Pipeline._get_sfh")
     def _get_sfh(self, galaxy):
         """Compute the binned SFH for each galaxy.
 
         Args:
             galaxy (Galaxy):
                 The galaxy to compute the SFH for.
+
+        Returns:
+            array-like:
+                The computed or cached SFH grid.
         """
         start = time.perf_counter()
 
@@ -1391,24 +1561,25 @@ class Pipeline:
         # Get the SFH, skip any without stars.
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfh", None) is not None:
-            self.sfhs.append(galaxy.sfh)
-            return
+            return galaxy.sfh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfh(
                 log10ages=op_kwargs["log10ages"],
                 nthreads=self.nthreads,
             )
+            galaxy.sfh = galaxy.stars.sfh
         else:
             # No stars, no SFH, store a zeroed grid
-            self.sfhs.append(np.zeros(len(op_kwargs["log10ages"])))
-
-            return
+            galaxy.sfh = np.zeros(len(op_kwargs["log10ages"]))
+            return galaxy.sfh
 
         # Count the number of SFH grids we have generated
         self._op_counts["SFH"] += 1
 
         # Record the time taken
         self._op_timing["SFH"] += time.perf_counter() - start
+
+        return galaxy.sfh
 
     def get_spectra(self, write=True):
         """Flag that the Pipeline should compute the rest frame spectra.
@@ -1439,6 +1610,7 @@ class Pipeline:
         # Spectra has no kwargs so we don't need to store anything in
         # the handler (self._operation_kwargs)
 
+    @timed("Pipeline._get_spectra")
     def _get_spectra(self, galaxy):
         """Generate the spectra for the galaxies based on the EmissionModel.
 
@@ -1505,6 +1677,7 @@ class Pipeline:
         # write or not write
         self.get_spectra(write=False)
 
+    @timed("Pipeline._get_observed_spectra")
     def _get_observed_spectra(self, galaxy):
         """Compute the observed spectra for each galaxy.
 
@@ -1540,6 +1713,445 @@ class Pipeline:
 
         # Record the time taken
         self._op_timing["Fnu Spectra"] += time.perf_counter() - start
+
+    def get_cosmic_sed(
+        self,
+        gal_attr=None,
+        lower_bound=None,
+        upper_bound=None,
+        label=None,
+        average=False,
+        volume=None,
+        write=True,
+    ):
+        """Flag that the Pipeline should compute the cosmic SED.
+
+        This will signal the Pipeline to sum the spectra into a single
+        cosmic SED when the run method is called.
+
+        The cosmic SED can be computed for a subset of galaxies based on a
+        particular galaxy/star/black hole/gas property. By default it will be
+        computed for all galaxies.
+
+        Calling this method multiple times with different property bounds will
+        compute a cosmic SED for each set of bounds, allowing for comparisons
+        between different subsets of the galaxy population.
+
+        Args:
+            gal_attr (str):
+                The name of a galaxy attribute to use as a filter for the
+                cosmic SED. This should be a singular value that can be
+                compared to the lower_bound and upper_bound, i.e.
+                lower < gal_attr < upper. If None, the cosmic SED will include
+                a contribution from all galaxies. Default is None.
+            lower_bound (float/unyt_quantity):
+                The lower bound to apply to the filter attribute. If None,
+                no lower bound will be applied. Default is None.
+            upper_bound (float/unyt_quantity):
+                The upper bound to apply to the filter attribute. If None,
+                no upper bound will be applied. Default is None.
+            label (str):
+                An optional label for this cosmic SED in the outputs. If not
+                provided and no bounds are provided the label will be "All".
+                If bounds are provided but no label is provided the label will
+                be "{lower_bound}<{gal_attr}<{upper_bound}". Default is None.
+            average (bool):
+                Whether to return the average cosmic SED rather than the sum.
+                Default is False.
+            volume (unyt_quantity):
+                An optional volume used to normalise each contribution during
+                accumulation. Default is None.
+            write (bool):
+                Whether to write out the cosmic SED. Default is True.
+        """
+        # If either bound is provided we need an emitter attribute to apply
+        # the filter to
+        if (
+            lower_bound is not None or upper_bound is not None
+        ) and gal_attr is None:
+            raise exceptions.InconsistentArguments(
+                "If either lower_bound or upper_bound is provided, gal_attr "
+                "must be provided to apply the filter to."
+            )
+
+        if (
+            lower_bound is not None
+            and upper_bound is not None
+            and lower_bound > upper_bound
+        ):
+            raise exceptions.InconsistentArguments(
+                "lower_bound cannot be greater than upper_bound."
+            )
+
+        # Volume normalisation needs a unit-carrying quantity so the cosmic
+        # SED keeps physically meaningful units.
+        if volume is not None and not isinstance(volume, unyt_quantity):
+            raise exceptions.InconsistentArguments(
+                "volume must be a unyt_quantity with units if provided."
+            )
+
+        if volume is not None and volume <= 0 * volume.units:
+            raise exceptions.InconsistentArguments(
+                "volume must be greater than 0 if provided."
+            )
+
+        # Store the arguments for the operation
+        self._operation_kwargs.add(
+            NO_MODEL_LABEL,
+            "get_cosmic_sed",
+            gal_attr=gal_attr,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            label=label,
+            average=average,
+            volume=volume,
+        )
+
+        # Flag that we will compute the cosmic SED
+        self._do_cosmic_lnu = True
+
+        # Flag that we will want to write out the cosmic SED (calling the
+        # get_cosmic_sed method is considered the intent to write it out by
+        # default)
+        self._write_cosmic_lnu = write or self._write_cosmic_lnu
+
+        # To compute the cosmic SED we need to ensure the spectra are computed
+        # first. Note that this is safe if the user has already called
+        # get_spectra, it will just leave the flag as True and respect the
+        # original intent to write or not write the spectra.
+        self.get_spectra(write=False)
+
+    @timed("Pipeline._get_cosmic_sed")
+    def _get_cosmic_sed(self, galaxy):
+        """Compute the cosmic SED for a galaxy.
+
+        This is a helper function that computes the contribution of a single
+        galaxy to the cosmic SED. The contributions from all galaxies will be
+        summed together to get the final cosmic SED.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to compute the cosmic SED contribution for.
+        """
+        start = time.perf_counter()
+
+        for _, op_kwargs in self._operation_kwargs["get_cosmic_sed"]:
+            # Volume normalisation is applied per contribution so the final MPI
+            # reduction can remain a simple additive sum.
+            volume = op_kwargs["volume"]
+
+            # Set up the filter based on the provided kwargs
+            if op_kwargs["gal_attr"] is not None:
+                # Get the value of the attribute to apply the filter to
+                gal_value = getattr(galaxy, op_kwargs["gal_attr"], None)
+
+                # If the galaxy doesn't have the attribute throw an error, we
+                # can't proceed
+                if gal_value is None:
+                    raise exceptions.PipelineNotReady(
+                        "Galaxy does not have attribute "
+                        f"{op_kwargs['gal_attr']} "
+                        "to apply the cosmic SED filter: "
+                        f"{op_kwargs['lower_bound']} < "
+                        f"{op_kwargs['gal_attr']} < "
+                        f"{op_kwargs['upper_bound']}"
+                    )
+
+                # If we are outside the bounds we have nothing to contribute
+                if (
+                    op_kwargs["lower_bound"] is not None
+                    and gal_value < op_kwargs["lower_bound"]
+                ):
+                    continue
+                if (
+                    op_kwargs["upper_bound"] is not None
+                    and gal_value > op_kwargs["upper_bound"]
+                ):
+                    continue
+
+            # Get the label for this contribution to the cosmic SED
+            label = op_kwargs["label"]
+            if label is None:
+                # We have no label, make one
+                if op_kwargs["gal_attr"] is None:
+                    label = "All"
+                else:
+                    lower = (
+                        op_kwargs["lower_bound"]
+                        if op_kwargs["lower_bound"] is not None
+                        else "-inf"
+                    )
+                    upper = (
+                        op_kwargs["upper_bound"]
+                        if op_kwargs["upper_bound"] is not None
+                        else "inf"
+                    )
+                    label = sanitise_hdf5_key_part(
+                        f"{lower} < {op_kwargs['gal_attr']} < {upper}"
+                    )
+            else:
+                label = sanitise_hdf5_key_part(label)
+
+            # Loop over the spectra on the galaxy and all its components and
+            # sum them into the cosmic SED dictionary on the pipeline with the
+            # label as the key. When averaging is requested we also keep a
+            # parallel count dictionary so the final mean can be computed after
+            # all ranks have been combined.
+            for model_label, sed in galaxy.spectra.items():
+                cosmic_sed = self.cosmic_lnus["Galaxy"].setdefault(label, {})
+                cosmic_counts = self._cosmic_lnu_counts["Galaxy"].setdefault(
+                    label, {}
+                )
+                contribution = sed.lnu if volume is None else sed.lnu / volume
+                cosmic_sed.setdefault(model_label, 0 * contribution)
+                cosmic_counts.setdefault(model_label, 0)
+                cosmic_sed[model_label] += contribution
+                cosmic_counts[model_label] += 1
+            if galaxy.stars is not None:
+                for model_label, sed in galaxy.stars.spectra.items():
+                    cosmic_sed = self.cosmic_lnus["Stars"].setdefault(
+                        label, {}
+                    )
+                    cosmic_counts = self._cosmic_lnu_counts[
+                        "Stars"
+                    ].setdefault(label, {})
+                    contribution = (
+                        sed.lnu if volume is None else sed.lnu / volume
+                    )
+                    cosmic_sed.setdefault(model_label, 0 * contribution)
+                    cosmic_counts.setdefault(model_label, 0)
+                    cosmic_sed[model_label] += contribution
+                    cosmic_counts[model_label] += 1
+            if galaxy.black_holes is not None:
+                for model_label, sed in galaxy.black_holes.spectra.items():
+                    cosmic_sed = self.cosmic_lnus["BlackHole"].setdefault(
+                        label, {}
+                    )
+                    cosmic_counts = self._cosmic_lnu_counts[
+                        "BlackHole"
+                    ].setdefault(label, {})
+                    contribution = (
+                        sed.lnu if volume is None else sed.lnu / volume
+                    )
+                    cosmic_sed.setdefault(model_label, 0 * contribution)
+                    cosmic_counts.setdefault(model_label, 0)
+                    cosmic_sed[model_label] += contribution
+                    cosmic_counts[model_label] += 1
+            if galaxy.gas is not None:
+                pass  # TODO: At the moment gas can't contribute
+
+        # Count the number of cosmic SED contributions
+        self._op_counts["Cosmic SED Lnu"] += 1
+
+        # Record the time taken
+        self._op_timing["Cosmic SED Lnu"] += time.perf_counter() - start
+
+    def get_observed_cosmic_sed(
+        self,
+        cosmo,
+        igm=None,
+        gal_attr=None,
+        lower_bound=None,
+        upper_bound=None,
+        label=None,
+        average=False,
+        volume=None,
+        write=True,
+    ):
+        """Flag that the Pipeline should compute the observed cosmic SED.
+
+        This will signal the Pipeline to sum the observed spectra into a
+        single observer-frame cosmic SED when the run method is called.
+
+        Args:
+            cosmo (astropy.cosmology.Cosmology):
+                The cosmology to use for the observed spectra.
+            igm (IGMBase):
+                The IGM model to use for the attenuation of the spectra.
+            gal_attr (str):
+                The name of a galaxy attribute to use as a filter for the
+                cosmic SED.
+            lower_bound (float/unyt_quantity):
+                The lower bound to apply to the filter attribute.
+            upper_bound (float/unyt_quantity):
+                The upper bound to apply to the filter attribute.
+            label (str):
+                An optional label for this cosmic SED in the outputs.
+            average (bool):
+                Whether to return the average observed cosmic SED rather than
+                the sum. Default is False.
+            volume (unyt_quantity):
+                An optional volume used to normalise each contribution during
+                accumulation. Default is None.
+            write (bool):
+                Whether to write out the observed cosmic SED. Default is True.
+        """
+        # If either bound is provided we need an emitter attribute to apply
+        # the filter to
+        if (
+            lower_bound is not None or upper_bound is not None
+        ) and gal_attr is None:
+            raise exceptions.InconsistentArguments(
+                "If either lower_bound or upper_bound is provided, gal_attr "
+                "must be provided to apply the filter to."
+            )
+
+        if (
+            lower_bound is not None
+            and upper_bound is not None
+            and lower_bound > upper_bound
+        ):
+            raise exceptions.InconsistentArguments(
+                "lower_bound cannot be greater than upper_bound."
+            )
+
+        # As for the rest-frame path, volume normalisation must be unit-aware
+        # so observer-frame cosmic SEDs carry the correct dimensions.
+        if volume is not None and not isinstance(volume, unyt_quantity):
+            raise exceptions.InconsistentArguments(
+                "volume must be a unyt_quantity with units if provided."
+            )
+
+        if volume is not None and volume <= 0 * volume.units:
+            raise exceptions.InconsistentArguments(
+                "volume must be greater than 0 if provided."
+            )
+
+        # Store the arguments for the operation
+        self._operation_kwargs.add(
+            NO_MODEL_LABEL,
+            "get_observed_cosmic_sed",
+            cosmo=cosmo,
+            igm=igm,
+            gal_attr=gal_attr,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            label=label,
+            average=average,
+            volume=volume,
+        )
+
+        # Flag that we will compute the observed cosmic SED
+        self._do_cosmic_fnu = True
+
+        # Flag that we will want to write out the observed cosmic SED
+        self._write_cosmic_fnu = write or self._write_cosmic_fnu
+
+        # To compute the observed cosmic SED we need the observed spectra.
+        self.get_observed_spectra(cosmo=cosmo, igm=igm, write=False)
+
+    @timed("Pipeline._get_observed_cosmic_sed")
+    def _get_observed_cosmic_sed(self, galaxy):
+        """Compute the observed cosmic SED contribution for a galaxy.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to compute the observed cosmic SED contribution for.
+        """
+        start = time.perf_counter()
+
+        for _, op_kwargs in self._operation_kwargs["get_observed_cosmic_sed"]:
+            # Apply the same per-contribution volume normalisation in the
+            # observer frame as the rest-frame path.
+            volume = op_kwargs["volume"]
+
+            # Set up the filter based on the provided kwargs
+            if op_kwargs["gal_attr"] is not None:
+                gal_value = getattr(galaxy, op_kwargs["gal_attr"], None)
+
+                if gal_value is None:
+                    raise exceptions.PipelineNotReady(
+                        f"Galaxy does not have attribute "
+                        f"{op_kwargs['gal_attr']} "
+                        "to apply the cosmic SED filter: "
+                        f"{op_kwargs['lower_bound']} < "
+                        f"{op_kwargs['gal_attr']} < "
+                        f"{op_kwargs['upper_bound']}"
+                    )
+
+                if (
+                    op_kwargs["lower_bound"] is not None
+                    and gal_value < op_kwargs["lower_bound"]
+                ):
+                    continue
+                if (
+                    op_kwargs["upper_bound"] is not None
+                    and gal_value > op_kwargs["upper_bound"]
+                ):
+                    continue
+
+            label = op_kwargs["label"]
+            if label is None:
+                if op_kwargs["gal_attr"] is None:
+                    label = "All"
+                else:
+                    lower = (
+                        op_kwargs["lower_bound"]
+                        if op_kwargs["lower_bound"] is not None
+                        else "-inf"
+                    )
+                    upper = (
+                        op_kwargs["upper_bound"]
+                        if op_kwargs["upper_bound"] is not None
+                        else "inf"
+                    )
+                    label = sanitise_hdf5_key_part(
+                        f"{lower} < {op_kwargs['gal_attr']} < {upper}"
+                    )
+            else:
+                label = sanitise_hdf5_key_part(label)
+
+            # As for the rest-frame cosmic SED we accumulate both the summed
+            # contribution and, when needed, the number of contributors per
+            # leaf so averages can be formed after MPI reduction.
+            for model_label, sed in galaxy.spectra.items():
+                cosmic_sed = self.cosmic_fnus["Galaxy"].setdefault(label, {})
+                cosmic_counts = self._cosmic_fnu_counts["Galaxy"].setdefault(
+                    label, {}
+                )
+                contribution = sed.fnu if volume is None else sed.fnu / volume
+                cosmic_sed.setdefault(model_label, 0 * contribution)
+                cosmic_counts.setdefault(model_label, 0)
+                cosmic_sed[model_label] += contribution
+                cosmic_counts[model_label] += 1
+            if galaxy.stars is not None:
+                for model_label, sed in galaxy.stars.spectra.items():
+                    cosmic_sed = self.cosmic_fnus["Stars"].setdefault(
+                        label, {}
+                    )
+                    cosmic_counts = self._cosmic_fnu_counts[
+                        "Stars"
+                    ].setdefault(label, {})
+                    contribution = (
+                        sed.fnu if volume is None else sed.fnu / volume
+                    )
+                    cosmic_sed.setdefault(model_label, 0 * contribution)
+                    cosmic_counts.setdefault(model_label, 0)
+                    cosmic_sed[model_label] += contribution
+                    cosmic_counts[model_label] += 1
+            if galaxy.black_holes is not None:
+                for model_label, sed in galaxy.black_holes.spectra.items():
+                    cosmic_sed = self.cosmic_fnus["BlackHole"].setdefault(
+                        label, {}
+                    )
+                    cosmic_counts = self._cosmic_fnu_counts[
+                        "BlackHole"
+                    ].setdefault(label, {})
+                    contribution = (
+                        sed.fnu if volume is None else sed.fnu / volume
+                    )
+                    cosmic_sed.setdefault(model_label, 0 * contribution)
+                    cosmic_counts.setdefault(model_label, 0)
+                    cosmic_sed[model_label] += contribution
+                    cosmic_counts[model_label] += 1
+            if galaxy.gas is not None:
+                pass  # TODO: At the moment gas can't contribute
+
+        # Count the number of observed cosmic SED contributions
+        self._op_counts["Cosmic SED Fnu"] += 1
+
+        # Record the time taken
+        self._op_timing["Cosmic SED Fnu"] += time.perf_counter() - start
 
     def get_photometry_luminosities(
         self,
@@ -1609,6 +2221,7 @@ class Pipeline:
         # write or not write
         self.get_spectra(write=False)
 
+    @timed("Pipeline._get_photometry_luminosities")
     def _get_photometry_luminosities(self, galaxy):
         """Compute the photometric luminosities from the generated spectra.
 
@@ -1726,6 +2339,7 @@ class Pipeline:
         # the original intent to write or not write
         self.get_observed_spectra(cosmo=cosmo, igm=igm, write=False)
 
+    @timed("Pipeline._get_photometry_fluxes")
     def _get_photometry_fluxes(self, galaxy):
         """Compute the photometric fluxes from the generated spectra.
 
@@ -1808,6 +2422,7 @@ class Pipeline:
         # Store the line IDs, we'll write these once later
         self.line_ids = line_ids
 
+    @timed("Pipeline._get_lines")
     def _get_lines(self, galaxy):
         """Generate the emission lines for the galaxies.
 
@@ -1927,6 +2542,7 @@ class Pipeline:
         # write or not write
         self.get_lines(line_ids=line_ids, write=False)
 
+    @timed("Pipeline._get_observed_lines")
     def _get_observed_lines(self, galaxy):
         """Compute the observed emission lines for each galaxy.
 
@@ -2111,6 +2727,7 @@ class Pipeline:
             write=False,
         )
 
+    @timed("Pipeline._get_images_luminosity")
     def _get_images_luminosity(self, galaxy):
         """Compute the luminosity images for the galaxies.
 
@@ -2361,6 +2978,7 @@ class Pipeline:
             write=False,
         )
 
+    @timed("Pipeline._get_images_flux")
     def _get_images_flux(self, galaxy):
         """Compute the flux images for the galaxies.
 
@@ -2554,7 +3172,7 @@ class Pipeline:
                 "Cannot generate smoothed data cubes without a kernel! "
                 "Please pass a kernel to the get_data_cubes_lnu method. "
                 "Example: from synthesizer.kernel_functions import Kernel; "
-                "kernel = Kernel().get_kernel(). Available kernel names: "
+                "kernel = Kernel(). Available kernel names: "
                 "'uniform', 'sph_anarchy', 'gadget_2', 'cubic', 'quintic'. "
                 "Alternatively, use cube_type='hist' for histogram-based "
                 "data cubes."
@@ -2578,6 +3196,7 @@ class Pipeline:
         # respect the original intent to write or not write
         self.get_spectra(write=False)
 
+    @timed("Pipeline._get_data_cubes_lnu")
     def _get_data_cubes_lnu(self, galaxy):
         """Compute the luminosity data cubes for the galaxy.
 
@@ -2741,7 +3360,7 @@ class Pipeline:
                 "Cannot generate smoothed data cubes without a kernel! "
                 "Please pass a kernel to the get_data_cubes_fnu method. "
                 "Example: from synthesizer.kernel_functions import Kernel; "
-                "kernel = Kernel().get_kernel(). Available kernel names: "
+                "kernel = Kernel(). Available kernel names: "
                 "'uniform', 'sph_anarchy', 'gadget_2', 'cubic', 'quintic'. "
                 "Alternatively, use cube_type='hist' for histogram-based "
                 "data cubes."
@@ -2766,6 +3385,7 @@ class Pipeline:
         # respect the original intent to write or not write
         self.get_observed_spectra(write=False, cosmo=cosmo, igm=igm)
 
+    @timed("Pipeline._get_data_cubes_fnu")
     def _get_data_cubes_fnu(self, galaxy):
         """Compute the flux density data cubes for the galaxy.
 
@@ -2895,6 +3515,7 @@ class Pipeline:
         # respect the original intent to write or not write
         self.get_spectra(write=False)
 
+    @timed("Pipeline._get_spectroscopy_lnu")
     def _get_spectroscopy_lnu(self, galaxy):
         """Compute the spectral luminosity density for the galaxy.
 
@@ -3011,6 +3632,7 @@ class Pipeline:
         # respect the original intent to write or not write
         self.get_observed_spectra(write=False, cosmo=cosmo, igm=igm)
 
+    @timed("Pipeline._get_spectroscopy_fnu")
     def _get_spectroscopy_fnu(self, galaxy):
         """Compute the spectral flux density for the galaxy.
 
@@ -3051,6 +3673,7 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Spectroscopy Fnu"] += time.perf_counter() - start
 
+    @timed("Pipeline._run_extra_analysis")
     def _run_extra_analysis(self, galaxy):
         """Call any user provided analysis functions.
 
@@ -3083,7 +3706,8 @@ class Pipeline:
             # Run the analysis function on this galaxy
             try:
                 func_start = time.perf_counter()
-                res = func(galaxy, *args, **kwargs)
+                with timer(f"Pipeline._run_extra_analysis.{key}"):
+                    res = func(galaxy, *args, **kwargs)
 
                 # Count the number of times we have run this function
                 self._op_counts["Extra Analyses"] += 1
@@ -3106,6 +3730,7 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Extra Analyses"] += time.perf_counter() - start
 
+    @timed("Pipeline._unpack_results")
     def _unpack_results(self, galaxy):
         """Unpack the results from the galaxy into the pipeline.
 
@@ -3121,11 +3746,17 @@ class Pipeline:
 
         # Do we need to unpack the SFZH?
         if self._write_sfzh:
-            self.sfzhs.append(galaxy.stars.sfzh)
+            if galaxy.stars is not None:
+                self.sfzhs.append(galaxy.stars.sfzh)
+            else:
+                self.sfzhs.append(galaxy.sfzh)
 
         # Do we need to unpack the SFH?
         if self._write_sfh:
-            self.sfhs.append(galaxy.stars.sfh)
+            if galaxy.stars is not None:
+                self.sfhs.append(galaxy.stars.sfh)
+            else:
+                self.sfhs.append(galaxy.sfh)
 
         # Do we need to unpack the lnu spectra?
         if self._write_lnu_spectra:
@@ -3437,6 +4068,7 @@ class Pipeline:
         # Done!
         self._op_timing["Unpacking results"] += time.perf_counter() - start
 
+    @timed("Pipeline.run")
     def run(self):
         """Run the pipeline.
 
@@ -3469,6 +4101,8 @@ class Pipeline:
             self._do_los_optical_depths,
             self._do_lnu_spectra,
             self._do_fnu_spectra,
+            self._do_cosmic_lnu,
+            self._do_cosmic_fnu,
             self._do_luminosities,
             self._do_fluxes,
             self._do_lum_lines,
@@ -3490,10 +4124,15 @@ class Pipeline:
 
         # Ok we are good to go! Report the last metadata and then get going
         if self.rank == 0:
-            self._report_instruments()
+            with timer("Pipeline.run.report_instruments"):
+                self._report_instruments()
+
+        # Prewarm instruments before processing galaxies.
+        self._prepare_instruments()
 
         # Print the header for the pipeline run to the console
-        self._print_progress_header()
+        with timer("Pipeline.run.print_progress_header"):
+            self._print_progress_header()
 
         # Loop over galaxies and compute what has been requested using get_*
         # signalling methods
@@ -3502,67 +4141,107 @@ class Pipeline:
             start_gal = time.perf_counter()
 
             # Pop the first galaxy from the list
-            gal = self.galaxies.pop(0)
+            with timer("Pipeline.run.pop_galaxy"):
+                gal = self.galaxies.pop(0)
 
             # Are we generating LOS optical depths?
+            # Note that this can only be done on galaxies prior to any
+            # splitting done for memory optimisation
             if self._do_los_optical_depths:
                 self._get_los_optical_depths(gal)
 
-            # Are we generating SFZHs?
-            if self._do_sfzh:
-                self._get_sfzh(gal)
+            # If we have a particle galaxy, see if we need to split it
+            if isinstance(gal, ParticleGalaxy):
+                gals = gal.split(self._max_npart)
+            else:
+                gals = [gal]
 
-            # Are we generating SFHs?
-            if self._do_sfh:
-                self._get_sfh(gal)
+            # If chunking is active, clear any existing additive outputs on the
+            # parent before processing children and accumulating back onto it
+            # just to be sure, in case the galaxy has been used before
+            if len(gals) > 1:
+                clear_pipeline_outputs(gal)
 
-            # Are we generating lnu spectra?
-            if self._do_lnu_spectra:
-                self._get_spectra(gal)
+            # Loop over the split galaxies list (which may just be a list
+            # containing the original gal above)
+            while len(gals) > 0:
+                # Get the next galaxy
+                with timer("Pipeline.run.pop_chunk"):
+                    _gal = gals.pop(0)
 
-            # Are we generating fnu spectra?
-            if self._do_fnu_spectra:
-                self._get_observed_spectra(gal)
+                # Are we generating SFZHs?
+                if self._do_sfzh:
+                    self._get_sfzh(_gal)
 
-            # Are we generating photometric luminosities?
-            if self._do_luminosities:
-                self._get_photometry_luminosities(gal)
+                # Are we generating SFHs?
+                if self._do_sfh:
+                    self._get_sfh(_gal)
 
-            # Are we generating photometric fluxes?
-            if self._do_fluxes:
-                self._get_photometry_fluxes(gal)
+                # Are we generating lnu spectra?
+                if self._do_lnu_spectra:
+                    self._get_spectra(_gal)
 
-            # Are we generating emission lines?
-            if self._do_lum_lines:
-                self._get_lines(gal)
+                # Are we generating fnu spectra?
+                if self._do_fnu_spectra:
+                    self._get_observed_spectra(_gal)
 
-            # Are we generating observed emission lines?
-            if self._do_flux_lines:
-                self._get_observed_lines(gal)
+                # Are we generating photometric luminosities?
+                if self._do_luminosities:
+                    self._get_photometry_luminosities(_gal)
 
-            # Are we generating luminosity images?
-            if self._do_images_lum:
-                self._get_images_luminosity(gal)
+                # Are we generating photometric fluxes?
+                if self._do_fluxes:
+                    self._get_photometry_fluxes(_gal)
 
-            # Are we generating flux images?
-            if self._do_images_flux:
-                self._get_images_flux(gal)
+                # Are we generating emission lines?
+                if self._do_lum_lines:
+                    self._get_lines(_gal)
 
-            # Are we generating luminosity data cubes?
-            if self._do_lnu_data_cubes:
-                self._get_data_cubes_lnu(gal)
+                # Are we generating observed emission lines?
+                if self._do_flux_lines:
+                    self._get_observed_lines(_gal)
 
-            # Are we generating flux data cubes?
-            if self._do_fnu_data_cubes:
-                self._get_data_cubes_fnu(gal)
+                # Are we generating luminosity images?
+                if self._do_images_lum:
+                    self._get_images_luminosity(_gal)
 
-            # Are we generating luminosity spectroscopy?
-            if self._do_spectroscopy_lnu:
-                self._get_spectroscopy_lnu(gal)
+                # Are we generating flux images?
+                if self._do_images_flux:
+                    self._get_images_flux(_gal)
 
-            # Are we generating flux spectroscopy?
-            if self._do_spectroscopy_fnu:
-                self._get_spectroscopy_fnu(gal)
+                # Are we generating luminosity data cubes?
+                if self._do_lnu_data_cubes:
+                    self._get_data_cubes_lnu(_gal)
+
+                # Are we generating flux data cubes?
+                if self._do_fnu_data_cubes:
+                    self._get_data_cubes_fnu(_gal)
+
+                # Are we generating luminosity spectroscopy?
+                if self._do_spectroscopy_lnu:
+                    self._get_spectroscopy_lnu(_gal)
+
+                # Are we generating flux spectroscopy?
+                if self._do_spectroscopy_fnu:
+                    self._get_spectroscopy_fnu(_gal)
+
+                # Child chunk outputs are accumulated back onto the original
+                # parent galaxy once this chunk has been processed.
+                # Combine back onto the original galaxy if necessary
+                if _gal is not gal:
+                    with timer("Pipeline.run.accumulate_child"):
+                        accumulate_pipeline_results_from_child(gal, _gal)
+
+                    with timer("Pipeline.run.cleanup_child"):
+                        del _gal
+
+            # Cosmic SEDs must be measured on the fully accumulated parent
+            # galaxy so any split-galaxy filtering uses integrated properties.
+            if self._do_cosmic_lnu:
+                self._get_cosmic_sed(gal)
+
+            if self._do_cosmic_fnu:
+                self._get_observed_cosmic_sed(gal)
 
             # Run any extra analysis functions
             self._run_extra_analysis(gal)
@@ -3575,13 +4254,22 @@ class Pipeline:
             igal += 1
 
             # Now we can remove the galaxy to free up memory
-            del gal
+            with timer("Pipeline.run.cleanup_galaxy"):
+                del gal
 
         # print the footer for the pipeline run to the console
-        self._print_progress_footer()
+        with timer("Pipeline.run.print_progress_footer"):
+            self._print_progress_footer()
+
+        # Synchronise ranks before reporting timings so waiting time is
+        # measured separately from the report aggregation and printing.
+        if self.using_mpi:
+            with timer("Pipeline.run.synchronisation"):
+                self.comm.Barrier()
 
         # We're done! Report the time taken
-        self._report_total_timings()
+        with timer("Pipeline.run.report_total_timings"):
+            self._report_total_timings()
 
         # Clean up the outputs
         self._clean_outputs()
@@ -3589,6 +4277,7 @@ class Pipeline:
         # Flag that we have run the pipeline
         self._analysis_complete = True
 
+    @timed("Pipeline._clean_outputs")
     def _clean_outputs(self):
         """Clean up the lists attached to the pipeline.
 
@@ -3615,6 +4304,120 @@ class Pipeline:
             self.fnu_spectra["Stars"][spec_type] = unyt_array(spec)
         for spec_type, spec in self.fnu_spectra["BlackHole"].items():
             self.fnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
+
+        # Cosmic SEDs are global products rather than per-galaxy arrays, so in
+        # MPI mode we first gather and sum them onto rank 0. If averaging was
+        # requested we do the same for the parallel contributor counts so the
+        # final division is performed on the globally summed result.
+        if self.using_mpi:
+            cosmic_lnus = self.comm.gather(self.cosmic_lnus, root=0)
+            cosmic_fnus = self.comm.gather(self.cosmic_fnus, root=0)
+            cosmic_lnu_counts = self.comm.gather(
+                self._cosmic_lnu_counts, root=0
+            )
+            cosmic_fnu_counts = self.comm.gather(
+                self._cosmic_fnu_counts, root=0
+            )
+            if self.rank == 0:
+                self.cosmic_lnus = sum_dicts_recursive(cosmic_lnus)
+                self.cosmic_fnus = sum_dicts_recursive(cosmic_fnus)
+                self._cosmic_lnu_counts = sum_dicts_recursive(
+                    cosmic_lnu_counts
+                )
+                self._cosmic_fnu_counts = sum_dicts_recursive(
+                    cosmic_fnu_counts
+                )
+
+        # Convert any requested summed cosmic SEDs into averages once all
+        # contributions have been combined locally or across MPI ranks.
+        averaged = set()
+        for _, op_kwargs in self._operation_kwargs["get_cosmic_sed"]:
+            if op_kwargs["average"]:
+                label = op_kwargs["label"]
+                if label is None:
+                    if op_kwargs["gal_attr"] is None:
+                        label = "All"
+                    else:
+                        lower = (
+                            op_kwargs["lower_bound"]
+                            if op_kwargs["lower_bound"] is not None
+                            else "-inf"
+                        )
+                        upper = (
+                            op_kwargs["upper_bound"]
+                            if op_kwargs["upper_bound"] is not None
+                            else "inf"
+                        )
+                        label = sanitise_hdf5_key_part(
+                            f"{lower} < {op_kwargs['gal_attr']} < {upper}"
+                        )
+                else:
+                    label = sanitise_hdf5_key_part(label)
+
+                for component in self.cosmic_lnus:
+                    if (
+                        label in self.cosmic_lnus[component]
+                        and (component, label) not in averaged
+                    ):
+                        self.cosmic_lnus[component][label] = (
+                            divide_dicts_recursive(
+                                self.cosmic_lnus[component][label],
+                                self._cosmic_lnu_counts[component][label],
+                            )
+                        )
+                        averaged.add((component, label))
+
+        # Observer-frame cosmic SEDs follow the same post-reduction averaging
+        # path as the rest-frame version.
+        averaged = set()
+        for _, op_kwargs in self._operation_kwargs["get_observed_cosmic_sed"]:
+            if op_kwargs["average"]:
+                label = op_kwargs["label"]
+                if label is None:
+                    if op_kwargs["gal_attr"] is None:
+                        label = "All"
+                    else:
+                        lower = (
+                            op_kwargs["lower_bound"]
+                            if op_kwargs["lower_bound"] is not None
+                            else "-inf"
+                        )
+                        upper = (
+                            op_kwargs["upper_bound"]
+                            if op_kwargs["upper_bound"] is not None
+                            else "inf"
+                        )
+                        label = sanitise_hdf5_key_part(
+                            f"{lower} < {op_kwargs['gal_attr']} < {upper}"
+                        )
+                else:
+                    label = sanitise_hdf5_key_part(label)
+
+                for component in self.cosmic_fnus:
+                    if (
+                        label in self.cosmic_fnus[component]
+                        and (component, label) not in averaged
+                    ):
+                        self.cosmic_fnus[component][label] = (
+                            divide_dicts_recursive(
+                                self.cosmic_fnus[component][label],
+                                self._cosmic_fnu_counts[component][label],
+                            )
+                        )
+                        averaged.add((component, label))
+
+        for component in self.cosmic_lnus:
+            for label, spectra in self.cosmic_lnus[component].items():
+                for spec_type, spec in spectra.items():
+                    self.cosmic_lnus[component][label][spec_type] = unyt_array(
+                        spec
+                    )
+        for component in self.cosmic_fnus:
+            for label, spectra in self.cosmic_fnus[component].items():
+                for spec_type, spec in spectra.items():
+                    self.cosmic_fnus[component][label][spec_type] = unyt_array(
+                        spec
+                    )
 
         # Convert the lists of luminosities to unyt arrays
         for spec_type, phot in self.luminosities["Galaxy"].items():
@@ -3815,6 +4618,7 @@ class Pipeline:
 
         self._took(start, "Cleaning outputs")
 
+    @timed("Pipeline.write")
     def write(self, outpath, verbose=None):
         """Write what we have produced to a HDF5 file.
 
@@ -3853,7 +4657,9 @@ class Pipeline:
 
         # Write out the metadata
         self.io_helper.create_file_with_metadata(
-            self.instruments, self.emission_model
+            self.instruments,
+            self.emission_model,
+            include_lines=self._write_lines or self._write_flux_lines,
         )
 
         # In MPI land we need to collect together the galaxy counts on each
@@ -3903,6 +4709,36 @@ class Pipeline:
                 self.fnu_spectra["BlackHole"],
                 "Galaxies/BlackHoles/Photometry/SpectralFluxDensities",
                 galaxy_indices,
+            )
+
+        # Write cosmic spectral luminosity densities
+        if self._write_cosmic_lnu:
+            self.io_helper.write_data(
+                self.cosmic_lnus["Galaxy"],
+                "CosmicSED/Galaxy/SpectralLuminosityDensities",
+            )
+            self.io_helper.write_data(
+                self.cosmic_lnus["Stars"],
+                "CosmicSED/Stars/SpectralLuminosityDensities",
+            )
+            self.io_helper.write_data(
+                self.cosmic_lnus["BlackHole"],
+                "CosmicSED/BlackHoles/SpectralLuminosityDensities",
+            )
+
+        # Write cosmic spectral flux densities
+        if self._write_cosmic_fnu:
+            self.io_helper.write_data(
+                self.cosmic_fnus["Galaxy"],
+                "CosmicSED/Galaxy/SpectralFluxDensities",
+            )
+            self.io_helper.write_data(
+                self.cosmic_fnus["Stars"],
+                "CosmicSED/Stars/SpectralFluxDensities",
+            )
+            self.io_helper.write_data(
+                self.cosmic_fnus["BlackHole"],
+                "CosmicSED/BlackHoles/SpectralFluxDensities",
             )
 
         # Write photometric luminosities
@@ -3974,14 +4810,14 @@ class Pipeline:
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_ids,
-                "Galaxies/Lines/IDs",
-                galaxy_indices,
+                self.line_ids if self.rank == 0 else None,
+                "Lines/IDs",
+                root=0,
             )
             self.io_helper.write_data(
-                self.line_lams,
-                "Galaxies/Lines/Wavelengths",
-                galaxy_indices,
+                self.line_lams if self.rank == 0 else None,
+                "Lines/Wavelengths",
+                root=0,
             )
 
         # Write observed emission line fluxes
@@ -4232,7 +5068,9 @@ class Pipeline:
 
             for rank, count in enumerate(counts):
                 # Calculate the length of the bar based on the relative size
-                bar_length = int((count / max_count) * 50)
+                bar_length = (
+                    int((count / max_count) * 50) if max_count > 0 else 0
+                )
 
                 # Create the bar and append the list length in brackets
                 bar = "#" * bar_length
