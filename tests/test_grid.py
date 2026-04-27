@@ -40,6 +40,29 @@ class TestGridInitialization:
         assert len(test_grid.axes) == test_grid.naxes
         assert test_grid.has_spectra or test_grid.has_lines
 
+    def test_string_none_weight_var_is_normalised(self, tmp_path, test_grid):
+        """Test WeightVariable='None' is normalised on read."""
+        from pathlib import Path
+
+        import h5py
+
+        grid_path = Path(tmp_path) / "normalised_none_weight_grid.hdf5"
+
+        with (
+            h5py.File(test_grid.grid_filename, "r") as src,
+            h5py.File(grid_path, "w") as dst,
+        ):
+            for key, value in src.attrs.items():
+                dst.attrs[key] = value
+            dst.attrs["WeightVariable"] = "None"
+
+            for key in src.keys():
+                src.copy(key, dst)
+
+        grid = Grid(grid_path.name, grid_dir=grid_path.parent)
+
+        assert grid._weight_var is None
+
     def test_grid_shape_properties(self, test_grid):
         """Test Grid shape and dimension properties."""
         shape = test_grid.shape
