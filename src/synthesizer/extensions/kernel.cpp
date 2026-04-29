@@ -123,11 +123,6 @@ static inline double quintic(const double r) {
 
 typedef double (*kernel_func)(double);
 
-/* Use a fixed even number of sub-intervals for Simpson integration so the
- * projected LOS kernel builder is deterministic and easy to compare against
- * the Python quad-based reference in tests. */
-static const int PROJECTED_KERNEL_SIMPSON_STEPS = 256;
-
 /**
  * @brief Map a public kernel name onto the corresponding analytic function.
  *
@@ -164,18 +159,20 @@ static kernel_func get_kernel_function(const char *name) {
  *
  *     2 * integral_0^sqrt(1 - q^2) W(sqrt(z^2 + q^2)) dz
  *
- * using the shared composite Simpson helper from ``integration.cpp`` on a
- * fixed tabulated LOS grid. The fixed rule keeps the extension simple and fast
- * while still producing a stable value that can be checked against the
- * existing ``scipy.integrate.quad`` reference in the unit tests.
+ * using the composite trapezoidal rule on a fixed tabulated LOS grid. This
+ * matches the integration method used by the truncated LOS table builder and
+ * produces a stable value that can be checked against the Python reference in
+ * the unit tests.
  *
  * @param q The dimensionless impact parameter.
  * @param func The analytic kernel function to evaluate.
+ * @param nsteps The number of trapezoidal integration steps.
  *
  * @return The projected LOS kernel value at ``q``.
  */
 static inline double integrate_projected_kernel(const double q,
-                                                kernel_func func) {
+                                                kernel_func func,
+                                                const int nsteps) {
   if (q < 0.0 || q >= 1.0) {
     return 0.0;
   }
@@ -185,29 +182,27 @@ static inline double integrate_projected_kernel(const double q,
     return 0.0;
   }
 
-  double z_values[PROJECTED_KERNEL_SIMPSON_STEPS + 1];
-  double integrand[PROJECTED_KERNEL_SIMPSON_STEPS + 1];
-  const double dz = zmax / PROJECTED_KERNEL_SIMPSON_STEPS;
+  const double dz = zmax / nsteps;
 
-  for (int iz = 0; iz <= PROJECTED_KERNEL_SIMPSON_STEPS; iz++) {
+  double z_values[nsteps + 1];
+  double integrand[nsteps + 1];
+
+  for (int iz = 0; iz <= nsteps; iz++) {
     const double z = dz * iz;
     z_values[iz] = z;
     double radius = sqrt(z * z + q * q);
 
-    /* The projected LOS integral is unchanged by the value at the single
-     * endpoint z=zmax, but fixed-grid Simpson integration samples that point
-     * explicitly. Nudge the final sample infinitesimally inside the compact
-     * support so kernels with a hard edge, such as the uniform kernel, do not
-     * pick up an artificial zero-valued endpoint. */
-    if (iz == PROJECTED_KERNEL_SIMPSON_STEPS && radius >= 1.0) {
+    /* Nudge the final sample infinitesimally inside the compact support so
+     * kernels with a hard edge do not pick up an artificial zero-valued
+     * endpoint. */
+    if (iz == nsteps && radius >= 1.0) {
       radius = nextafter(1.0, 0.0);
     }
 
     integrand[iz] = func(radius);
   }
 
-  return 2.0 * simps_1d(z_values, integrand,
-                        PROJECTED_KERNEL_SIMPSON_STEPS + 1);
+  return 2.0 * trapz_1d(z_values, integrand, nsteps + 1);
 }
 
 /**
@@ -221,16 +216,18 @@ static inline double integrate_projected_kernel(const double q,
  * @param q_grid The projected-separation lookup grid.
  * @param qdim The number of projected-separation bins.
  * @param func The analytic kernel function to evaluate.
+ * @param nsteps The number of trapezoidal integration steps per q bin.
  */
 static void build_projected_kernel(double *kernel, const double *q_grid,
-                                   const int qdim, kernel_func func) {
+                                   const int qdim, kernel_func func,
+                                   const int nsteps) {
 #ifdef WITH_OPENMP
 #pragma omp parallel for schedule(static)
 #endif
   for (int iq = 0; iq < qdim; iq++) {
     /* Each q bin is independent, so we can tabulate the projected kernel with
      * a simple embarrassingly-parallel loop. */
-    kernel[iq] = integrate_projected_kernel(q_grid[iq], func);
+    kernel[iq] = integrate_projected_kernel(q_grid[iq], func, nsteps);
   }
 }
 
@@ -464,12 +461,13 @@ PyObject *evaluate_kernel(PyObject *self, PyObject *args) {
 /**
  * @brief Python wrapper for projected LOS kernel-table construction.
  *
- * Python prepares the projected-separation lookup grid and this wrapper fills
- * the corresponding full LOS kernel table using the shared C++ kernel
- * evaluator.
+ * Python prepares the projected-separation lookup grid and integration
+ * resolution, while this wrapper selects the analytic kernel and returns the
+ * filled projected table as a dense NumPy array.
  *
  * @param self The module instance (unused).
- * @param args Python arguments containing the q-grid and kernel name.
+ * @param args Python arguments containing the q-grid, kernel name, and the
+ *        number of integration steps.
  *
  * @return A 1D float64 NumPy array with the projected LOS kernel values.
  */
@@ -479,9 +477,10 @@ PyObject *compute_projected_kernel(PyObject *self, PyObject *args) {
 
   PyArrayObject *np_q_grid;
   const char *kernel_name;
+  int nsteps;
 
-  if (!PyArg_ParseTuple(args, "O!s", &PyArray_Type, &np_q_grid,
-                        &kernel_name)) {
+  if (!PyArg_ParseTuple(args, "O!si", &PyArray_Type, &np_q_grid,
+                        &kernel_name, &nsteps)) {
     return NULL;
   }
 
@@ -513,7 +512,7 @@ PyObject *compute_projected_kernel(PyObject *self, PyObject *args) {
   }
   double *kernel = static_cast<double *>(PyArray_DATA(np_kernel));
 
-  build_projected_kernel(kernel, q_grid, qdim, func);
+  build_projected_kernel(kernel, q_grid, qdim, func, nsteps);
 
   return Py_BuildValue("N", np_kernel);
 }

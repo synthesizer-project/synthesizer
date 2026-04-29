@@ -135,6 +135,7 @@ class Kernel:
         overlap_eta_min=0.1,
         overlap_eta_max=10.0,
         overlap_build_ndim=16,
+        projected_integration_steps=256,
     ):
         """Initialize the kernel class.
 
@@ -169,6 +170,9 @@ class Kernel:
             overlap_build_ndim (int):
                 The number of midpoint samples per Cartesian dimension used to
                 build the smoothed-input overlap kernel table.
+            projected_integration_steps (int):
+                The number of trapezoidal integration steps used to build the
+                projected LOS kernel table.
         """
         # What kernel to use
         self.name = name
@@ -191,6 +195,7 @@ class Kernel:
         self.overlap_eta_min = overlap_eta_min
         self.overlap_eta_max = overlap_eta_max
         self.overlap_build_ndim = overlap_build_ndim
+        self.projected_integration_steps = projected_integration_steps
 
         # Make sure we have valid look up table parameters
         if self.truncated_q_binsize <= 0:
@@ -210,6 +215,10 @@ class Kernel:
         if self.overlap_eta_min >= self.overlap_eta_max:
             raise ValueError(
                 "overlap_eta_min must be less than overlap_eta_max"
+            )
+        if self.projected_integration_steps <= 0:
+            raise ValueError(
+                "projected_integration_steps must be greater than 0"
             )
 
         # Set the kernel function based on the provided name
@@ -287,6 +296,7 @@ class Kernel:
         kernel = compute_projected_kernel(
             np.ascontiguousarray(bins, dtype=np.float64),
             self.name,
+            self.projected_integration_steps,
         )
 
         # Cache it.
