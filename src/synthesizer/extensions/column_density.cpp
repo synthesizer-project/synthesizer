@@ -17,7 +17,7 @@
 
 /* Local includes. */
 #include "cpp_to_python.h"
-#include "kernel_utils.h"
+#include "kernel_extensions/kernel_utils.h"
 #include "octree.h"
 #include "property_funcs.h"
 #include "timers.h"
