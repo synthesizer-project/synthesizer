@@ -82,8 +82,8 @@ static inline void get_uniform_interp_index(const double value,
     return;
   }
 
-  const double scaled =
-      (value - min_value) * (static_cast<double>(dim - 1) / (max_value - min_value));
+  const double scaled = (value - min_value) * (static_cast<double>(dim - 1) /
+                                               (max_value - min_value));
   index = static_cast<int>(scaled);
   frac = scaled - index;
 }
@@ -232,10 +232,11 @@ static inline double get_truncated_kernel_value(const double *kernel,
  *
  * @return The interpolated overlap-kernel value.
  */
-static inline double get_overlap_kernel_value(
-    const double *kernel, const double *q_grid, const double *u_grid,
-    const double *eta_grid, const int qdim, const int udim, const int etadim,
-    const double q, const double u, const double eta) {
+static inline double
+get_overlap_kernel_value(const double *kernel, const double *q_grid,
+                         const double *u_grid, const double *eta_grid,
+                         const int qdim, const int udim, const int etadim,
+                         const double q, const double u, const double eta) {
 
   /* Outside the projected or LOS support there is no contribution. */
   if (q < 0.0 || q >= 1.0 || u <= -1.0) {

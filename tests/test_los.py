@@ -1189,3 +1189,81 @@ class TestLOSColumnDensity:
         assert np.all(np.isfinite(fine_tau))
         assert np.all(coarse_tau > 0.0)
         assert np.all(fine_tau > 0.0)
+
+    def test_overlap_kernel_respects_configurable_grid_parameters(self):
+        """Overlap-kernel grids should follow per-instance settings."""
+        kernel = self._kernel(
+            binsize=32,
+            overlap_q_binsize=7,
+            overlap_u_binsize=9,
+            overlap_eta_binsize=5,
+            overlap_eta_min=0.25,
+            overlap_eta_max=4.0,
+            overlap_build_ndim=6,
+        )
+
+        overlap_kernel, q_grid, u_grid, eta_grid = kernel.get_overlap_kernel()
+
+        assert kernel.overlap_q_binsize == 7
+        assert kernel.overlap_u_binsize == 9
+        assert kernel.overlap_eta_binsize == 5
+        assert kernel.overlap_eta_min == 0.25
+        assert kernel.overlap_eta_max == 4.0
+        assert kernel.overlap_build_ndim == 6
+
+        assert overlap_kernel.shape == (8, 10, 6)
+        assert q_grid.shape == (8,)
+        assert u_grid.shape == (10,)
+        assert eta_grid.shape == (6,)
+        assert np.isclose(q_grid[0], 0.0)
+        assert np.isclose(q_grid[-1], 1.0)
+        assert np.isclose(u_grid[0], -1.0)
+        assert np.isclose(u_grid[-1], 1.0)
+        assert np.isclose(eta_grid[0], 0.25)
+        assert np.isclose(eta_grid[-1], 4.0)
+
+    def test_smoothed_los_respects_overlap_table_parameters(
+        self, one_star, one_gas_front
+    ):
+        """Smoothed LOS should use the overlap-table settings on Kernel."""
+        coarse = self._kernel(
+            binsize=32,
+            overlap_q_binsize=4,
+            overlap_u_binsize=6,
+            overlap_eta_binsize=3,
+            overlap_eta_min=0.5,
+            overlap_eta_max=2.0,
+            overlap_build_ndim=4,
+        )
+        fine = self._kernel(
+            binsize=32,
+            overlap_q_binsize=24,
+            overlap_u_binsize=40,
+            overlap_eta_binsize=12,
+            overlap_eta_min=0.125,
+            overlap_eta_max=8.0,
+            overlap_build_ndim=14,
+        )
+
+        coarse_tau = one_star.get_los_column_density(
+            one_gas_front,
+            "dust_masses",
+            coarse,
+            as_points=False,
+            force_loop=1,
+            min_count=10,
+        )
+        fine_tau = one_star.get_los_column_density(
+            one_gas_front,
+            "dust_masses",
+            fine,
+            as_points=False,
+            force_loop=1,
+            min_count=10,
+        )
+
+        assert np.all(np.isfinite(coarse_tau))
+        assert np.all(np.isfinite(fine_tau))
+        assert np.all(coarse_tau > 0.0)
+        assert np.all(fine_tau > 0.0)
+        assert not np.allclose(coarse_tau, fine_tau, rtol=1e-3, atol=0.0)
