@@ -228,6 +228,8 @@ static void build_projected_kernel(double *kernel, const double *q_grid,
 #pragma omp parallel for schedule(static)
 #endif
   for (int iq = 0; iq < qdim; iq++) {
+    /* Each q bin is independent, so we can tabulate the projected kernel with
+     * a simple embarrassingly-parallel loop. */
     kernel[iq] = integrate_projected_kernel(q_grid[iq], func);
   }
 }
@@ -275,6 +277,8 @@ static void build_truncated_los_kernel(double *kernel, const double *q_grid,
         value = func(radius);
       }
 
+      /* Walk along the LOS grid once and accumulate the cumulative foreground
+       * contribution directly into the output table. */
       cumulative += 0.5 * (prev_value + value) * (z - prev_z);
       kernel[iq * zdim + iz] = cumulative;
 
@@ -304,6 +308,11 @@ static void build_truncated_los_kernel(double *kernel, const double *q_grid,
  * integration boundary by `u * (1 + eta)`. The truncated LOS table is then
  * queried once per sampled point and the result is averaged with the sampled
  * input-kernel weights.
+ *
+ * The sampled points are expressed in units of the input smoothing length,
+ * whereas the truncated LOS table is expressed in units of the source
+ * smoothing length. Scaling the sampled coordinates by `eta = h_i / h_j`
+ * performs that change of units before the truncated lookup is evaluated.
  *
  * @param overlap_kernel The output overlap table stored as `(q, u, eta)` in
  *        row-major order.
@@ -337,23 +346,37 @@ static void build_overlap_kernel_table(
 #endif
   for (int ieta = 0; ieta < etadim; ieta++) {
     const double eta = eta_grid[ieta];
+
+    /* In source-kernel units the input support radius is `eta` and the source
+     * support radius is `1`, so the sum of support radii is `1 + eta`. */
     const double support_sum = 1.0 + eta;
 
     for (int iq = 0; iq < qdim; iq++) {
+      /* By construction the source centre lies on the x axis, so the q-grid
+       * only needs to move the source in x. */
       const double source_x = q_grid[iq] * support_sum;
 
       for (int iu = 0; iu < udim; iu++) {
+        /* The u-grid shifts the input sample points relative to the source
+         * centre along the LOS, again in units of the summed support radii. */
         const double z_shift = u_grid[iu] * support_sum;
         double weighted_sum = 0.0;
 
         for (int is = 0; is < nsample; is++) {
+          /* Rescale the sampled input-kernel point from input-kernel units to
+           * source-kernel units before comparing it to the source geometry. */
           const double input_x = eta * sample_x[is];
           const double input_y = eta * sample_y[is];
           const double input_z = eta * sample_z[is];
 
+          /* The source centre is placed on the x axis, so the y separation is
+           * just the sampled input y coordinate in this frame. */
           const double dx = input_x - source_x;
           const double dy = input_y;
           const double projected_q = sqrt(dx * dx + dy * dy);
+
+          /* Shift the sampled input point along the LOS and use that as the
+           * truncation coordinate into the source-kernel cumulative table. */
           const double z_trunc = input_z + z_shift;
 
           const double value = get_truncated_kernel_value(
@@ -362,6 +385,8 @@ static void build_overlap_kernel_table(
           weighted_sum += sample_weights[is] * value;
         }
 
+        /* Normalise by the sampled input-kernel weight so the overlap table is
+         * a kernel-weighted average rather than an unnormalised sum. */
         overlap_kernel[(iq * udim + iu) * etadim + ieta] =
             weighted_sum / weight_sum;
       }
@@ -401,6 +426,8 @@ PyObject *evaluate_kernel(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* The helper expects a contiguous float64 buffer and returns a borrowed data
+   * pointer owned by the NumPy array object. */
   const double *radii = extract_data_double(np_radii, "radii");
   if (radii == NULL) {
     return NULL;
@@ -412,6 +439,8 @@ PyObject *evaluate_kernel(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Allocate the result array on the Python side and fill it in place from
+   * the shared analytic kernel implementation. */
   const int ndim = static_cast<int>(PyArray_DIM(np_radii, 0));
   npy_intp dims[1] = {ndim};
   PyArrayObject *np_values =
@@ -461,6 +490,8 @@ PyObject *compute_projected_kernel(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* The q-grid is prepared in Python so the public Kernel class controls the
+   * tabulation resolution, while this wrapper only handles numeric filling. */
   const double *q_grid = extract_data_double(np_q_grid, "q_grid");
   if (q_grid == NULL) {
     return NULL;
@@ -522,6 +553,8 @@ PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Reuse the same analytic kernel dispatch as the projected table so the 1D
+   * and truncated 2D builders stay numerically consistent. */
   kernel_func func = get_kernel_function(kernel_name);
   if (func == NULL) {
     PyErr_SetString(PyExc_ValueError, "Kernel name not defined");
@@ -600,6 +633,10 @@ PyObject *compute_overlap_kernel(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* The truncated q/z coordinate arrays are currently passed through from
+   * Python for interface symmetry and possible future validation, but the
+   * overlap builder only needs their dimensions because interpolation into the
+   * truncated table uses the known normalised support range directly. */
   (void)trunc_q;
   (void)trunc_z;
 
@@ -613,6 +650,8 @@ PyObject *compute_overlap_kernel(PyObject *self, PyObject *args) {
   double *overlap_kernel =
       static_cast<double *>(PyArray_DATA(np_overlap_kernel));
 
+  /* Precompute the total sampled input-kernel weight once so each table cell
+   * can convert its weighted sum into a proper kernel-weighted average. */
   double weight_sum = 0.0;
   for (int is = 0; is < nsample; is++) {
     weight_sum += sample_weights[is];
