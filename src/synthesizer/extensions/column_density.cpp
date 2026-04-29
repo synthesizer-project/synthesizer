@@ -675,6 +675,10 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   npy_intp np_dims[1] = {npart_i};
   PyArrayObject *np_surf_dens =
       (PyArrayObject *)PyArray_ZEROS(1, np_dims, NPY_DOUBLE, 0);
+  if (np_surf_dens == NULL) {
+    PyErr_NoMemory();
+    return NULL;
+  }
   double *surf_dens = static_cast<double *>(PyArray_DATA(np_surf_dens));
 
   /* No point constructing cells if there isn't enough gas to construct a tree
@@ -1278,6 +1282,10 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
   npy_intp np_dims[1] = {npart_i};
   PyArrayObject *np_surf_dens =
       (PyArrayObject *)PyArray_ZEROS(1, np_dims, NPY_DOUBLE, 0);
+  if (np_surf_dens == NULL) {
+    PyErr_NoMemory();
+    return NULL;
+  }
   double *surf_dens = static_cast<double *>(PyArray_DATA(np_surf_dens));
 
   /* No point constructing a source tree if there are too few source particles
@@ -1302,7 +1310,7 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
   tic("Constructing smoothed LOS source tree");
   int ncells = 1;
   int maxdepth = MAX_DEPTH;
-  struct cell *root = new struct cell[1];
+  struct cell *root = new struct cell;
 
   /* Construct the source-particle cell tree. */
   construct_cell_tree(pos_j, smls, surf_den_val, npart_j, root, ncells,

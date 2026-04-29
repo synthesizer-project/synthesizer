@@ -107,11 +107,16 @@ PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  const int qdim = static_cast<int>(PyArray_DIM(np_q_grid, 0));
+const int qdim = static_cast<int>(PyArray_DIM(np_q_grid, 0));
   const int zdim = static_cast<int>(PyArray_DIM(np_z_grid, 0));
+  if (qdim == 0) {
+    PyErr_SetString(PyExc_ValueError,
+                  "q_grid must contain at least one element.");
+    return NULL;
+  }
   if (zdim == 0) {
     PyErr_SetString(PyExc_ValueError,
-                    "z_grid must contain at least one element.");
+                  "z_grid must contain at least one element.");
     return NULL;
   }
 
