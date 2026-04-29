@@ -198,6 +198,8 @@ class Kernel:
         self.projected_integration_steps = projected_integration_steps
 
         # Make sure we have valid look up table parameters
+        if self.binsize <= 0:
+            raise ValueError("binsize must be greater than 0")
         if self.truncated_q_binsize <= 0:
             raise ValueError("truncated_q_binsize must be greater than 0")
         if self.truncated_z_binsize <= 0:

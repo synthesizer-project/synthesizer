@@ -9,6 +9,8 @@
 #include "kernels.h"
 #include "kernel_functions.h"
 
+#include <vector>
+
 /**
  * @brief Integrate the projected LOS kernel at one impact parameter.
  *
@@ -41,8 +43,8 @@ static inline double integrate_projected_kernel(const double q,
 
   const double dz = zmax / nsteps;
 
-  double z_values[nsteps + 1];
-  double integrand[nsteps + 1];
+  std::vector<double> z_values(nsteps + 1);
+  std::vector<double> integrand(nsteps + 1);
 
   for (int iz = 0; iz <= nsteps; iz++) {
     const double z = dz * iz;
@@ -59,7 +61,7 @@ static inline double integrate_projected_kernel(const double q,
     integrand[iz] = func(radius);
   }
 
-  return 2.0 * trapz_1d(z_values, integrand, nsteps + 1);
+  return 2.0 * trapz_1d(z_values.data(), integrand.data(), nsteps + 1);
 }
 
 /**
@@ -111,6 +113,12 @@ PyObject *compute_projected_kernel(PyObject *self, PyObject *args) {
 
   if (!PyArg_ParseTuple(args, "O!si", &PyArray_Type, &np_q_grid,
                         &kernel_name, &nsteps)) {
+    return NULL;
+  }
+
+  if (nsteps <= 0) {
+    PyErr_SetString(PyExc_ValueError,
+                  "nsteps must be a positive integer.");
     return NULL;
   }
 

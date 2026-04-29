@@ -1107,9 +1107,67 @@ class Particles:
             nthreads (int):
                 The number of threads to use for the calculation.
         """
+        if self.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                f"{self.name} object is missing coordinates!"
+            )
         if self.smoothing_lengths is None:
             raise exceptions.InconsistentArguments(
                 f"{self.name} object is missing smoothing lengths!"
+            )
+        if other_parts.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing coordinates!"
+            )
+        if other_parts.smoothing_lengths is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing smoothing lengths!"
+            )
+        if getattr(other_parts, attr, None) is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing {attr}!"
+            )
+
+        if self._coordinates.ndim != 2 or self._coordinates.shape[1] != 3:
+            raise exceptions.InconsistentArguments(
+                f"{self.name} coordinates must have shape (N, 3)!"
+            )
+        if (
+            other_parts._coordinates.ndim != 2
+            or other_parts._coordinates.shape[1] != 3
+        ):
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} coordinates must have shape (N, 3)!"
+            )
+        if self._coordinates.shape[0] != self._smoothing_lengths.shape[0]:
+            raise exceptions.InconsistentArguments(
+                f"{self.name} coordinates and smoothing lengths "
+                "must have matching lengths!"
+            )
+        if (
+            other_parts._coordinates.shape[0]
+            != other_parts._smoothing_lengths.shape[0]
+        ):
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} coordinates and smoothing lengths "
+                "must have matching lengths!"
+            )
+        if (
+            other_parts._coordinates.shape[0]
+            != getattr(other_parts, attr).shape[0]
+        ):
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} coordinates and {attr} must have "
+                "matching lengths!"
+            )
+
+        if (
+            self._coordinates[mask, :].shape[0]
+            != self._smoothing_lengths[mask].shape[0]
+        ):
+            raise exceptions.InconsistentArguments(
+                f"{self.name} masked coordinates and smoothing lengths "
+                "must have matching lengths!"
             )
 
         # Smoothed LOS calculations require the overlap kernel table rather
