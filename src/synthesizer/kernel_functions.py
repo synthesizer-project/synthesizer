@@ -243,10 +243,6 @@ class Kernel:
         bins = np.append(bins, 1.0)
         return bins
 
-    def _get_z_bins(self):
-        """Get the dimensionless LOS truncation bins for the 2D lookup."""
-        return np.linspace(-1.0, 1.0, self.truncated_z_binsize + 1)
-
     def W_dz(self, z, b):
         """Calculate the kernel density function W(r) as a function of z.
 
@@ -262,6 +258,78 @@ class Kernel:
     def _integral_func(self, impact_parameter):
         """Calculate W(r) as a function of z for a given impact parameter."""
         return lambda z: self.W_dz(z, impact_parameter)
+
+    @timed("Kernel.get_kernel")
+    def get_kernel(self):
+        """Compute the projected LOS kernel table.
+
+        This is the full LOS integral through the source kernel at each
+        support-normalised impact parameter.
+
+        Returns:
+            np.ndarray: The projected kernel values for each impact parameter.
+        """
+        if self._projected_kernel is not None:
+            return self._projected_kernel.copy()
+
+        bins = self._get_bins()
+        kernel = compute_projected_kernel(
+            np.ascontiguousarray(bins, dtype=np.float64),
+            self.name,
+        )
+
+        self._projected_kernel = kernel
+
+        return kernel.copy()
+
+    @timed("Kernel.create_kernel")
+    def create_kernel(self):
+        """Save the computed projected kernel for easy look-up as .npz file."""
+        kernel = self.get_kernel()
+        header = np.array([{"kernel": self.name, "bins": self.binsize}])
+        np.savez(
+            f"kernel_{self.name}.npz",
+            header=header,
+            kernel=kernel,
+        )
+
+        print(header)
+
+        return kernel
+
+    def _get_z_bins(self):
+        """Get the dimensionless LOS truncation bins for the 2D lookup."""
+        return np.linspace(-1.0, 1.0, self.truncated_z_binsize + 1)
+
+    @timed("Kernel.get_truncated_los_kernel")
+    def get_truncated_los_kernel(self):
+        """Compute the truncated LOS kernel lookup table.
+
+        This helper tabulates the cumulative LOS integral of the kernel as a
+        function of impact parameter and support-normalised LOS truncation
+        coordinate.
+
+        Returns:
+            tuple:
+                A tuple containing the truncated kernel table and the radial
+                and LOS-coordinate grids that index it.
+        """
+        if self._truncated_los_kernel is not None:
+            bins = self._get_bins(self.truncated_q_binsize)
+            z_bins = self._get_z_bins()
+            return self._truncated_los_kernel.copy(), bins, z_bins
+
+        bins = self._get_bins(self.truncated_q_binsize)
+        z_bins = self._get_z_bins()
+        kernel = compute_truncated_los_kernel(
+            np.ascontiguousarray(bins, dtype=np.float64),
+            np.ascontiguousarray(z_bins, dtype=np.float64),
+            self.name,
+        )
+
+        self._truncated_los_kernel = kernel
+
+        return self._truncated_los_kernel.copy(), bins, z_bins
 
     def _get_overlap_sample_points(self):
         """Get the sampled points used to build the overlap kernel.
@@ -330,59 +398,6 @@ class Kernel:
 
         return kernel, q_grid, u_grid, eta_grid
 
-    @timed("Kernel.get_kernel")
-    def get_kernel(self):
-        """Compute the projected LOS kernel table.
-
-        This is the full LOS integral through the source kernel at each
-        support-normalised impact parameter.
-
-        Returns:
-            np.ndarray: The projected kernel values for each impact parameter.
-        """
-        if self._projected_kernel is not None:
-            return self._projected_kernel.copy()
-
-        bins = self._get_bins()
-        kernel = compute_projected_kernel(
-            np.ascontiguousarray(bins, dtype=np.float64),
-            self.name,
-        )
-
-        self._projected_kernel = kernel
-
-        return kernel.copy()
-
-    @timed("Kernel.get_truncated_los_kernel")
-    def get_truncated_los_kernel(self):
-        """Compute the truncated LOS kernel lookup table.
-
-        This helper tabulates the cumulative LOS integral of the kernel as a
-        function of impact parameter and support-normalised LOS truncation
-        coordinate.
-
-        Returns:
-            tuple:
-                A tuple containing the truncated kernel table and the radial
-                and LOS-coordinate grids that index it.
-        """
-        if self._truncated_los_kernel is not None:
-            bins = self._get_bins(self.truncated_q_binsize)
-            z_bins = self._get_z_bins()
-            return self._truncated_los_kernel.copy(), bins, z_bins
-
-        bins = self._get_bins(self.truncated_q_binsize)
-        z_bins = self._get_z_bins()
-        kernel = compute_truncated_los_kernel(
-            np.ascontiguousarray(bins, dtype=np.float64),
-            np.ascontiguousarray(z_bins, dtype=np.float64),
-            self.name,
-        )
-
-        self._truncated_los_kernel = kernel
-
-        return self._truncated_los_kernel.copy(), bins, z_bins
-
     @timed("Kernel.get_overlap_kernel")
     def get_overlap_kernel(self, nthreads=1):
         """Compute the overlap kernel lookup table.
@@ -413,21 +428,6 @@ class Kernel:
             self._overlap_u.copy(),
             self._overlap_eta.copy(),
         )
-
-    @timed("Kernel.create_kernel")
-    def create_kernel(self):
-        """Save the computed projected kernel for easy look-up as .npz file."""
-        kernel = self.get_kernel()
-        header = np.array([{"kernel": self.name, "bins": self.binsize}])
-        np.savez(
-            f"kernel_{self.name}.npz",
-            header=header,
-            kernel=kernel,
-        )
-
-        print(header)
-
-        return kernel
 
 
 def uniform(r):
