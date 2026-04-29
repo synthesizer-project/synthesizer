@@ -170,12 +170,21 @@ class Kernel:
                 The number of midpoint samples per Cartesian dimension used to
                 build the smoothed-input overlap kernel table.
         """
+        # What kernel to use
         self.name = name
+
+        # The resolution parameter for the 1D projected kernel lookup table
         self.binsize = binsize
+
+        # The resolution parameters for the 2D truncated LOS kernel
+        # lookup table
         self.truncated_q_binsize = (
             binsize if truncated_q_binsize is None else truncated_q_binsize
         )
         self.truncated_z_binsize = truncated_z_binsize
+
+        # The resolution parameters for the 3D smoothed-input overlap kernel
+        # lookup table
         self.overlap_q_binsize = overlap_q_binsize
         self.overlap_u_binsize = overlap_u_binsize
         self.overlap_eta_binsize = overlap_eta_binsize
@@ -269,18 +278,21 @@ class Kernel:
         Returns:
             np.ndarray: The projected kernel values for each impact parameter.
         """
+        # Return the cached kernel if it has already been computed.
         if self._projected_kernel is not None:
-            return self._projected_kernel.copy()
+            return self._projected_kernel
 
+        # Get the dimensionless impact-parameter bins and set up the output.
         bins = self._get_bins()
         kernel = compute_projected_kernel(
             np.ascontiguousarray(bins, dtype=np.float64),
             self.name,
         )
 
+        # Cache it.
         self._projected_kernel = kernel
 
-        return kernel.copy()
+        return kernel
 
     @timed("Kernel.create_kernel")
     def create_kernel(self):
@@ -307,18 +319,23 @@ class Kernel:
 
         This helper tabulates the cumulative LOS integral of the kernel as a
         function of impact parameter and support-normalised LOS truncation
-        coordinate.
+        coordinate. It is used when an input particle lies inside a source
+        kernel and therefore only sees part of the source along the line of
+        sight.
 
         Returns:
             tuple:
                 A tuple containing the truncated kernel table and the radial
                 and LOS-coordinate grids that index it.
         """
+        # Return the cached kernel if it has already been computed.
         if self._truncated_los_kernel is not None:
             bins = self._get_bins(self.truncated_q_binsize)
             z_bins = self._get_z_bins()
-            return self._truncated_los_kernel.copy(), bins, z_bins
+            return self._truncated_los_kernel, bins, z_bins
 
+        # Get the projected-separation and LOS-coordinate bins and set up the
+        # output.
         bins = self._get_bins(self.truncated_q_binsize)
         z_bins = self._get_z_bins()
         kernel = compute_truncated_los_kernel(
@@ -327,9 +344,10 @@ class Kernel:
             self.name,
         )
 
+        # Cache it.
         self._truncated_los_kernel = kernel
 
-        return self._truncated_los_kernel.copy(), bins, z_bins
+        return self._truncated_los_kernel, bins, z_bins
 
     def _get_overlap_sample_points(self):
         """Get the sampled points used to build the overlap kernel.
@@ -406,14 +424,16 @@ class Kernel:
             tuple:
                 The overlap kernel table together with its q, u, and eta grids.
         """
+        # Return the cached kernel if it has already been computed.
         if self._overlap_kernel is not None:
             return (
-                self._overlap_kernel.copy(),
-                self._overlap_q.copy(),
-                self._overlap_u.copy(),
-                self._overlap_eta.copy(),
+                self._overlap_kernel,
+                self._overlap_q,
+                self._overlap_u,
+                self._overlap_eta,
             )
 
+        # Build the overlap table and cache the result.
         kernel, q_grid, u_grid, eta_grid = self._build_overlap_kernel(
             nthreads=nthreads
         )
@@ -423,10 +443,10 @@ class Kernel:
         self._overlap_eta = eta_grid
 
         return (
-            self._overlap_kernel.copy(),
-            self._overlap_q.copy(),
-            self._overlap_u.copy(),
-            self._overlap_eta.copy(),
+            self._overlap_kernel,
+            self._overlap_q,
+            self._overlap_u,
+            self._overlap_eta,
         )
 
 
