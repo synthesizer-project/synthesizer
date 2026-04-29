@@ -22,14 +22,6 @@ from synthesizer.extensions.kernel import (
 )
 from synthesizer.utils.operation_timers import timed, timer
 
-# Define the default overlap-kernel grid dimensions and bounds.
-OVERLAP_Q_BINS = 64
-OVERLAP_U_BINS = 128
-OVERLAP_ETA_BINS = 48
-OVERLAP_ETA_MIN = 0.1
-OVERLAP_ETA_MAX = 10.0
-OVERLAP_BUILD_NDIM = 16
-
 
 def _call_kernel_function(kernel_name, r):
     """Evaluate a named kernel via the shared C++ implementation.
@@ -57,32 +49,78 @@ def _call_kernel_function(kernel_name, r):
 class Kernel:
     """A class describing a SPH kernel integrated along the line-of-sight.
 
-    The line of sight distance through a "source" particle's kernel (i.e.
-    the sight line traced through an arbitrary point in an SPH kernel) is,
-        l = 2*sqrt(h^2 - b^2),
-    where h and b are the smoothing length and the impact parameter
-    respectively. This needs to be weighted along with the kernel density
-    function W(r), to calculate the LOS density. The integrated LOS density is,
-        D = 2 * integral(W(r)dz) from 0 to sqrt(h^2-b^2),
-    where r = sqrt(z^2 + b^2), W(r) is in units of h^-3 and is a function of
-    r and h. The parameters that enter this integral are normalized in terms
-    of the smoothing length, so we can create a generic look-up table for
-    arbitrary source particles including every impact parameter along the
-    line-of-sight. Hence we substitute z = z/h and b = b/h.
+    This class packages three related lookup tables used by the LOS machinery.
 
-    This implies
-        D = h^-2 * 2 * integral(W(r) dz) for z = 0 to sqrt(1.0 - b^2).
-    The division by h^2 is to be done separately for each particle along the
-    line-of-sight.
+    1. The projected LOS kernel for point-like input particles.
+    2. The truncated LOS kernel for cases where the input lies inside the
+       source kernel and only part of the source contributes in front of the
+       input particle.
+    3. The overlap kernel for cases where the input particle itself has a
+       finite smoothing length and its own kernel must be averaged over.
 
-    In the case where the input particle lies inside the source kernel, the
-    LOS integral must be truncated at the input particle's LOS coordinate. This
-    is handled by a separate look-up table that tabulates the cumulative LOS
-    integral as a function of impact parameter and support-normalized LOS
-    coordinate. The truncation coordinate is
+    For a source particle with smoothing length h, a sight line passing the
+    source at impact parameter b intersects the source support over a chord of
+    length
+
+        l = 2 * sqrt(h^2 - b^2),
+
+    provided b < h. To convert this geometric path length into a LOS column
+    density we must weight the path by the SPH kernel W(r), where
+
+        r = sqrt(z^2 + b^2).
+
+    The full projected contribution of the source kernel is therefore
+
+        D(b, h) = 2 * integral W(r) dz,
+
+    with the integral running from z = 0 to z = sqrt(h^2 - b^2). Here W(r)
+    has units of h^-3, so the LOS integral has units of h^-2 as required for a
+    surface density kernel.
+
+    The key simplification is that the LOS integral can be written in terms of
+    support-normalized coordinates. If we define
+
+        q = b / h,
+        z_hat = z / h,
+
+    then r / h = sqrt(z_hat^2 + q^2), and the projected kernel becomes
+
+        D(q, h) = h^-2 * 2 * integral W_hat(sqrt(z_hat^2 + q^2)) dz_hat,
+
+    where the integral now runs from z_hat = 0 to z_hat = sqrt(1 - q^2), and
+    W_hat denotes the dimensionless kernel shape. The factor of h^-2 is applied
+    separately when evaluating each particle pair, while the dimensionless part
+    of the integral can be tabulated once as a 1D function of q. That is the
+    projected LOS kernel returned by `get_kernel()`.
+
+    When the input particle lies inside the source kernel, not all of the LOS
+    chord contributes: only the part of the source kernel in front of the input
+    particle should be counted. In that case the LOS integral must be truncated
+    at the input particle's LOS coordinate. We tabulate this cumulative
+    foreground contribution as a 2D function of projected separation and
+    support-normalized truncation coordinate,
+
         z_trunc = (z_input - z_source) / h,
+
     where z_input and z_source are the LOS coordinates of the input and source
-    particles respectively.
+    particles. This truncated table is returned by
+    `get_truncated_los_kernel()`.
+
+    Finally, if the input particle is not treated as point-like, then the LOS
+    signal seen by that particle must itself be averaged over the input
+    particle's kernel support. The smoothed-input overlap table does exactly
+    that: for each point sampled inside the input kernel, it evaluates the
+    truncated source-kernel contribution and then averages those values using
+    the input-kernel weights. The overlap table is indexed by three
+    dimensionless quantities,
+
+        q = b / (R_input + R_source),
+        u = (z_input - z_source) / (R_input + R_source),
+        eta = h_input / h_source,
+
+    where R_input and R_source are the support radii of the input and source
+    kernels. This table is returned by `get_overlap_kernel()` and is the lookup
+    used by the smoothed-input LOS path.
     """
 
     def __init__(
@@ -91,6 +129,12 @@ class Kernel:
         binsize=10000,
         truncated_q_binsize=None,
         truncated_z_binsize=1000,
+        overlap_q_binsize=64,
+        overlap_u_binsize=128,
+        overlap_eta_binsize=48,
+        overlap_eta_min=0.1,
+        overlap_eta_max=10.0,
+        overlap_build_ndim=16,
     ):
         """Initialize the kernel class.
 
@@ -107,6 +151,24 @@ class Kernel:
             truncated_z_binsize (int):
                 The number of bins to use along the LOS truncation axis of the
                 truncated LOS kernel table.
+            overlap_q_binsize (int):
+                The number of bins to use along the projected-separation axis
+                of the smoothed-input overlap kernel table.
+            overlap_u_binsize (int):
+                The number of bins to use along the LOS-offset axis of the
+                smoothed-input overlap kernel table.
+            overlap_eta_binsize (int):
+                The number of bins to use along the smoothing-length-ratio axis
+                of the smoothed-input overlap kernel table.
+            overlap_eta_min (float):
+                The lower bound of the smoothing-length-ratio axis of the
+                smoothed-input overlap kernel table.
+            overlap_eta_max (float):
+                The upper bound of the smoothing-length-ratio axis of the
+                smoothed-input overlap kernel table.
+            overlap_build_ndim (int):
+                The number of midpoint samples per Cartesian dimension used to
+                build the smoothed-input overlap kernel table.
         """
         self.name = name
         self.binsize = binsize
@@ -114,8 +176,34 @@ class Kernel:
             binsize if truncated_q_binsize is None else truncated_q_binsize
         )
         self.truncated_z_binsize = truncated_z_binsize
+        self.overlap_q_binsize = overlap_q_binsize
+        self.overlap_u_binsize = overlap_u_binsize
+        self.overlap_eta_binsize = overlap_eta_binsize
+        self.overlap_eta_min = overlap_eta_min
+        self.overlap_eta_max = overlap_eta_max
+        self.overlap_build_ndim = overlap_build_ndim
 
-        # Set the kernel function based on the provided name.
+        # Make sure we have valid look up table parameters
+        if self.truncated_q_binsize <= 0:
+            raise ValueError("truncated_q_binsize must be greater than 0")
+        if self.truncated_z_binsize <= 0:
+            raise ValueError("truncated_z_binsize must be greater than 0")
+        if self.overlap_q_binsize <= 0:
+            raise ValueError("overlap_q_binsize must be greater than 0")
+        if self.overlap_u_binsize <= 0:
+            raise ValueError("overlap_u_binsize must be greater than 0")
+        if self.overlap_eta_binsize <= 0:
+            raise ValueError("overlap_eta_binsize must be greater than 0")
+        if self.overlap_build_ndim <= 0:
+            raise ValueError("overlap_build_ndim must be greater than 0")
+        if self.overlap_eta_min <= 0.0:
+            raise ValueError("overlap_eta_min must be greater than 0")
+        if self.overlap_eta_min >= self.overlap_eta_max:
+            raise ValueError(
+                "overlap_eta_min must be less than overlap_eta_max"
+            )
+
+        # Set the kernel function based on the provided name
         if name == "uniform":
             self.f = uniform
         elif name == "sph_anarchy":
@@ -132,7 +220,6 @@ class Kernel:
         # Cache the LOS kernel tables once they have been built.
         self._projected_kernel = None
         self._truncated_los_kernel = None
-        self._radial_kernel = None
         self._overlap_kernel = None
         self._overlap_q = None
         self._overlap_u = None
@@ -176,29 +263,6 @@ class Kernel:
         """Calculate W(r) as a function of z for a given impact parameter."""
         return lambda z: self.W_dz(z, impact_parameter)
 
-    def _get_radial_kernel(self):
-        """Compute the private 3D radial kernel lookup table.
-
-        This helper is used internally when constructing the overlap kernel.
-
-        Returns:
-            np.ndarray: The 3D radial kernel values for each dimensionless
-                radius bin.
-        """
-        if self._radial_kernel is not None:
-            return self._radial_kernel.copy()
-
-        with timer("Kernel._get_radial_kernel"):
-            bins = self._get_bins()
-            kernel = np.ascontiguousarray(
-                self.f(bins),
-                dtype=np.float64,
-            )
-
-            self._radial_kernel = kernel
-
-        return self._radial_kernel.copy()
-
     def _get_overlap_sample_points(self):
         """Get the sampled points used to build the overlap kernel.
 
@@ -209,9 +273,9 @@ class Kernel:
         """
         with timer("Kernel._get_overlap_sample_points"):
             mids = np.linspace(
-                -1.0 + 1.0 / OVERLAP_BUILD_NDIM,
-                1.0 - 1.0 / OVERLAP_BUILD_NDIM,
-                OVERLAP_BUILD_NDIM,
+                -1.0 + 1.0 / self.overlap_build_ndim,
+                1.0 - 1.0 / self.overlap_build_ndim,
+                self.overlap_build_ndim,
             )
             qx, qy, qz = np.meshgrid(mids, mids, mids, indexing="ij")
             qr2 = qx * qx + qy * qy + qz * qz
@@ -221,10 +285,7 @@ class Kernel:
             qy = qy[mask]
             qz = qz[mask]
             qr = np.sqrt(qr2[mask])
-
-            radial_kernel = self._get_radial_kernel()
-            bins = self._get_bins()
-            weights = np.interp(qr, bins, radial_kernel)
+            weights = np.ascontiguousarray(self.f(qr), dtype=np.float64)
 
         return qx, qy, qz, weights
 
@@ -236,10 +297,12 @@ class Kernel:
             tuple:
                 The overlap kernel table together with its q, u, and eta grids.
         """
-        q_grid = np.linspace(0.0, 1.0, OVERLAP_Q_BINS + 1)
-        u_grid = np.linspace(-1.0, 1.0, OVERLAP_U_BINS + 1)
+        q_grid = np.linspace(0.0, 1.0, self.overlap_q_binsize + 1)
+        u_grid = np.linspace(-1.0, 1.0, self.overlap_u_binsize + 1)
         eta_grid = np.geomspace(
-            OVERLAP_ETA_MIN, OVERLAP_ETA_MAX, OVERLAP_ETA_BINS + 1
+            self.overlap_eta_min,
+            self.overlap_eta_max,
+            self.overlap_eta_binsize + 1,
         )
 
         qx, qy, qz, weights = self._get_overlap_sample_points()
