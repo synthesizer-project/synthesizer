@@ -20,7 +20,7 @@ from synthesizer.extensions.kernel import (
     compute_truncated_los_kernel,
     evaluate_kernel,
 )
-from synthesizer.utils.operation_timers import timed, timer
+from synthesizer.utils.operation_timers import timed
 
 
 def _call_kernel_function(kernel_name, r):
@@ -349,6 +349,7 @@ class Kernel:
 
         return self._truncated_los_kernel, bins, z_bins
 
+    @timed("Kernel._get_overlap_sample_points")
     def _get_overlap_sample_points(self):
         """Get the sampled points used to build the overlap kernel.
 
@@ -357,21 +358,26 @@ class Kernel:
                 The x, y, z sample coordinates inside the unit support sphere
                 and their radial-kernel weights.
         """
-        with timer("Kernel._get_overlap_sample_points"):
-            mids = np.linspace(
-                -1.0 + 1.0 / self.overlap_build_ndim,
-                1.0 - 1.0 / self.overlap_build_ndim,
-                self.overlap_build_ndim,
-            )
-            qx, qy, qz = np.meshgrid(mids, mids, mids, indexing="ij")
-            qr2 = qx * qx + qy * qy + qz * qz
-            mask = qr2 < 1.0
+        # Sample points at the midpoints of a regular Cartesian grid spanning
+        # the unit sphere, then mask out points outside the sphere.
+        mids = np.linspace(
+            -1.0 + 1.0 / self.overlap_build_ndim,
+            1.0 - 1.0 / self.overlap_build_ndim,
+            self.overlap_build_ndim,
+        )
+        qx, qy, qz = np.meshgrid(mids, mids, mids, indexing="ij")
+        qr2 = qx * qx + qy * qy + qz * qz
+        mask = qr2 < 1.0
 
-            qx = qx[mask]
-            qy = qy[mask]
-            qz = qz[mask]
-            qr = np.sqrt(qr2[mask])
-            weights = np.ascontiguousarray(self.f(qr), dtype=np.float64)
+        # Apply the spherical mask
+        qx = qx[mask]
+        qy = qy[mask]
+        qz = qz[mask]
+        qr = np.sqrt(qr2[mask])
+
+        # Compute the kernel weights at the sampled points based on their
+        # radial coordinates
+        weights = np.ascontiguousarray(self.f(qr), dtype=np.float64)
 
         return qx, qy, qz, weights
 
@@ -383,6 +389,7 @@ class Kernel:
             tuple:
                 The overlap kernel table together with its q, u, and eta grids.
         """
+        # Get the q, u, and eta grids that index the overlap kernel table
         q_grid = np.linspace(0.0, 1.0, self.overlap_q_binsize + 1)
         u_grid = np.linspace(-1.0, 1.0, self.overlap_u_binsize + 1)
         eta_grid = np.geomspace(
@@ -391,9 +398,16 @@ class Kernel:
             self.overlap_eta_binsize + 1,
         )
 
+        # Convert the grids into sample points inside the unit sphere and get
+        # the kernel weights at those points
         qx, qy, qz, weights = self._get_overlap_sample_points()
+
+        # Get the truncated LOS kernel table, we need this to evaluate the
+        # truncated LOS contribution at each sample point inside the input
+        # kernel when building the overlap table
         truncated_kernel, trunc_q, trunc_z = self.get_truncated_los_kernel()
 
+        # Build the overlap kernel
         kernel = compute_overlap_kernel(
             np.ascontiguousarray(q_grid, dtype=np.float64),
             np.ascontiguousarray(u_grid, dtype=np.float64),
