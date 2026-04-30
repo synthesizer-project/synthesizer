@@ -744,7 +744,7 @@ class Instrument:
                 If ``noise_maps`` is not a dict or ``filter_code`` is not
                 found in it.
         """
-        from synthesizer.imaging.image_generators import (
+        from synthesizer.instruments.photometric_noise import (
             _estimate_correlated_noise_cf,
         )
 
@@ -781,6 +781,130 @@ class Instrument:
             )
 
         return self._correlated_noise_cf_cache[cache_key]
+
+    def apply_noise(
+        self,
+        image,
+        filter_code,
+        subtract_mean=False,
+        correct_periodicity=True,
+        rng_seed=None,
+        aperture_radius=None,
+    ):
+        """Apply noise to a single image using the instrument's noise model.
+
+        Dispatches automatically to the appropriate noise mode based on what
+        is configured on the instrument:
+
+        - ``noise_maps`` dict present → correlated noise modelled from the
+          observed noise template for ``filter_code``.
+        - ``snrs`` + ``depth`` set → white noise scaled from the instrument's
+          depth and signal-to-noise ratio.
+
+        Args:
+            image (Image):
+                The image to apply noise to.
+            filter_code (str):
+                The filter code identifying which noise template or SNR entry
+                to use.
+            subtract_mean (bool):
+                Passed to the correlated-noise path: if True the DC component
+                of the power spectrum is zeroed. Default is False.
+            correct_periodicity (bool):
+                Passed to the correlated-noise path: if True a
+                periodicity-dilution correction is applied. Default is True.
+            rng_seed (int, optional):
+                Seed for the random number generator (correlated noise only).
+            aperture_radius (unyt_quantity, optional):
+                Aperture radius for the SNR/depth noise path.  If None a
+                point-source depth is assumed.
+
+        Returns:
+            Image:
+                A new Image with noise added.  ``noise_arr`` and
+                ``weight_map`` are set on the returned object.
+
+        Raises:
+            MissingArgument:
+                If the instrument has no noise configuration.
+        """
+        if self.noise_maps is not None and isinstance(self.noise_maps, dict):
+            return image.apply_correlated_noise(
+                self,
+                filter_code,
+                subtract_mean=subtract_mean,
+                correct_periodicity=correct_periodicity,
+                rng_seed=rng_seed,
+            )
+        elif self.snrs is not None and self.depth is not None:
+            snr = (
+                self.snrs[filter_code]
+                if isinstance(self.snrs, dict)
+                else self.snrs
+            )
+            depth = (
+                self.depth[filter_code]
+                if isinstance(self.depth, dict)
+                else self.depth
+            )
+            return image.apply_noise_from_snr(
+                snr=snr, depth=depth, aperture_radius=aperture_radius
+            )
+        else:
+            raise exceptions.MissingArgument(
+                "The instrument has no noise configuration. Set either "
+                "noise_maps or snrs and depth before calling apply_noise."
+            )
+
+    def apply_noises(
+        self,
+        image_collection,
+        subtract_mean=False,
+        correct_periodicity=True,
+        rng_seed=None,
+        aperture_radius=None,
+    ):
+        """Apply noise to every image in a collection.
+
+        Calls :meth:`apply_noise` for each filter in the collection.  The
+        correlation function (when using ``noise_maps``) is cached on the
+        instrument, so the expensive FFT step runs at most once per filter
+        regardless of how many images share the same instrument.
+
+        Args:
+            image_collection (ImageCollection):
+                The collection to apply noise to.
+            subtract_mean (bool):
+                Passed to the correlated-noise path. Default is False.
+            correct_periodicity (bool):
+                Passed to the correlated-noise path. Default is True.
+            rng_seed (int, optional):
+                Seed for the random number generator (correlated noise only).
+            aperture_radius (unyt_quantity, optional):
+                Aperture radius for the SNR/depth noise path.
+
+        Returns:
+            ImageCollection:
+                A new ImageCollection with noise applied to each image.
+        """
+        from synthesizer.imaging.image_collection import ImageCollection
+
+        noisy_imgs = {}
+        for f in image_collection.filter_codes:
+            noisy_imgs[f] = self.apply_noise(
+                image_collection.imgs[f],
+                f,
+                subtract_mean=subtract_mean,
+                correct_periodicity=correct_periodicity,
+                rng_seed=rng_seed,
+                aperture_radius=aperture_radius,
+            )
+
+        return ImageCollection(
+            resolution=image_collection.resolution,
+            fov=image_collection.fov,
+            imgs=noisy_imgs,
+        )
 
     def add_filters(self, filters, psfs=None, noise_maps=None):
         """Add filters to the Instrument.
