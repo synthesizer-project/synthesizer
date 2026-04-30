@@ -26,10 +26,12 @@ from unyt import arcsecond, kpc, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image_generators import (
-    _generate_correlated_noise,
     _generate_image_parametric_smoothed,
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,
+)
+from synthesizer.instruments.photometric_noise import (
+    _generate_correlated_noise,
 )
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter

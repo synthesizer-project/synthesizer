@@ -20,7 +20,7 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
-from synthesizer.imaging.image_generators import (
+from synthesizer.instruments.photometric_noise import (
     _cf_periodicity_dilution_correction_standalone,
     _generate_noise_from_rootps_standalone,
     _model_and_apply_correlated_noise,
