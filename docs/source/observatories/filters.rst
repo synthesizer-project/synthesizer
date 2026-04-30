@@ -1,5 +1,5 @@
 Filters
-=======
+========
 
 Photometric filters in Synthesizer are defined using two dedicated objects:
 

@@ -19,7 +19,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
 from synthesizer.utils.geometry import get_rotation_matrix
-from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.operation_timers import timed, timer
 
 
 class Particles:
@@ -1019,9 +1019,14 @@ class Particles:
         projected_kernel = np.ascontiguousarray(
             kernel.get_kernel(), dtype=np.float64
         )
-        truncated_kernel, _, z_grid = kernel.get_truncated_los_kernel()
+        truncated_kernel, _, _ = kernel.get_truncated_los_kernel()
         truncated_kernel = np.ascontiguousarray(
             truncated_kernel, dtype=np.float64
+        )
+
+        # Set up the inputs from this particle instance.
+        pos_i = np.ascontiguousarray(
+            self._coordinates[mask, :], dtype=np.float64
         )
 
         # Set up the kernel inputs to the C function.
@@ -1030,14 +1035,9 @@ class Particles:
         trunc_qdim = truncated_kernel.shape[0]
         zdim = truncated_kernel.shape[1]
 
-        # Get particle counts
-        npart_i = self.nparticles
+        # Get particle counts.
+        npart_i = pos_i.shape[0]
         npart_j = other_parts.nparticles
-
-        # Set up the inputs from this particle instance.
-        pos_i = np.ascontiguousarray(
-            self._coordinates[mask, :], dtype=np.float64
-        )
 
         # Set up the inputs from the other particle instance.
         pos_j = np.ascontiguousarray(
@@ -1068,12 +1068,187 @@ class Particles:
             nthreads,
         )
 
+    def _prepare_smoothed_los_args(
+        self,
+        other_parts,
+        attr,
+        kernel,
+        mask,
+        threshold,
+        force_loop,
+        min_count,
+        nthreads,
+    ):
+        """Prepare the arguments for smoothed LOS column density computation.
+
+        Args:
+            other_parts (Particles):
+                The other particles to compute the column density with.
+            attr (str):
+                The attribute to compute the column density of.
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance. Smoothed LOS
+                calculations require the overlap table returned by
+                `Kernel.get_overlap_kernel()`, so raw projected-kernel arrays
+                are not accepted on this path.
+            mask (bool):
+                A mask to be applied to the stars. Surface densities will only
+                be computed and returned for stars with True in the mask.
+            threshold (float):
+                The threshold above which the SPH kernel is 0. This sets the
+                effective support radius used when mapping particle pairs onto
+                the overlap table at runtime.
+            force_loop (bool):
+                Whether to force the use of a simple loop rather than the tree.
+            min_count (int):
+                The minimum number of particles allowed in a leaf cell when
+                using the tree. This can be used for tuning the tree
+                performance.
+            nthreads (int):
+                The number of threads to use for the calculation.
+        """
+        if self.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                f"{self.name} object is missing coordinates!"
+            )
+        if self.smoothing_lengths is None:
+            raise exceptions.InconsistentArguments(
+                f"{self.name} object is missing smoothing lengths!"
+            )
+        if other_parts.coordinates is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing coordinates!"
+            )
+        if other_parts.smoothing_lengths is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing smoothing lengths!"
+            )
+        if getattr(other_parts, attr, None) is None:
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} object is missing {attr}!"
+            )
+
+        if self._coordinates.ndim != 2 or self._coordinates.shape[1] != 3:
+            raise exceptions.InconsistentArguments(
+                f"{self.name} coordinates must have shape (N, 3)!"
+            )
+        if (
+            other_parts._coordinates.ndim != 2
+            or other_parts._coordinates.shape[1] != 3
+        ):
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} coordinates must have shape (N, 3)!"
+            )
+        if self._coordinates.shape[0] != self._smoothing_lengths.shape[0]:
+            raise exceptions.InconsistentArguments(
+                f"{self.name} coordinates and smoothing lengths "
+                "must have matching lengths!"
+            )
+        if (
+            other_parts._coordinates.shape[0]
+            != other_parts._smoothing_lengths.shape[0]
+        ):
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} coordinates and smoothing lengths "
+                "must have matching lengths!"
+            )
+        if (
+            other_parts._coordinates.shape[0]
+            != getattr(other_parts, attr).shape[0]
+        ):
+            raise exceptions.InconsistentArguments(
+                f"{other_parts.name} coordinates and {attr} must have "
+                "matching lengths!"
+            )
+
+        if (
+            self._coordinates[mask, :].shape[0]
+            != self._smoothing_lengths[mask].shape[0]
+        ):
+            raise exceptions.InconsistentArguments(
+                f"{self.name} masked coordinates and smoothing lengths "
+                "must have matching lengths!"
+            )
+
+        # Smoothed LOS calculations require the overlap kernel table rather
+        # than the point-particle projected kernel used by the LOS machinery.
+        if not hasattr(kernel, "get_overlap_kernel"):
+            raise exceptions.InconsistentArguments(
+                "LOS column densities with kernel-smoothed input particles "
+                "require a Kernel instance so the overlap kernel table is "
+                "available."
+            )
+
+        with timer("Particles._prepare_smoothed_los_args.get_overlap_kernel"):
+            overlap_kernel, q_grid, u_grid, eta_grid = (
+                kernel.get_overlap_kernel(nthreads=nthreads)
+            )
+
+        # Set up the overlap-kernel inputs to the C function. The extension
+        # uses the tabulated coordinate arrays explicitly for trilinear
+        # lookup.
+        with timer("Particles._prepare_smoothed_los_args.pack_arguments"):
+            overlap_kernel = np.ascontiguousarray(
+                overlap_kernel, dtype=np.float64
+            )
+            q_grid = np.ascontiguousarray(q_grid, dtype=np.float64)
+            u_grid = np.ascontiguousarray(u_grid, dtype=np.float64)
+            eta_grid = np.ascontiguousarray(eta_grid, dtype=np.float64)
+            qdim = q_grid.size
+            udim = u_grid.size
+            etadim = eta_grid.size
+
+            # Set up the inputs from this particle instance.
+            pos_i = np.ascontiguousarray(
+                self._coordinates[mask, :], dtype=np.float64
+            )
+            input_smls = np.ascontiguousarray(
+                self._smoothing_lengths[mask], dtype=np.float64
+            )
+
+            # Get particle counts.
+            npart_i = pos_i.shape[0]
+            npart_j = other_parts.nparticles
+
+            # Set up the inputs from the other particle instance.
+            pos_j = np.ascontiguousarray(
+                other_parts._coordinates, dtype=np.float64
+            )
+            smls = np.ascontiguousarray(
+                other_parts._smoothing_lengths, dtype=np.float64
+            )
+            surf_den_vals = np.ascontiguousarray(
+                getattr(other_parts, attr), dtype=np.float64
+            )
+
+        return (
+            overlap_kernel,
+            q_grid,
+            u_grid,
+            eta_grid,
+            pos_i,
+            input_smls,
+            pos_j,
+            smls,
+            surf_den_vals,
+            npart_i,
+            npart_j,
+            qdim,
+            udim,
+            etadim,
+            threshold,
+            force_loop,
+            min_count,
+            nthreads,
+        )
+
     @timed("Particles.get_los_column_density")
     def get_los_column_density(
         self,
         other_parts,
         density_attr,
         kernel,
+        as_points=True,
         column_density_attr=None,
         mask=None,
         threshold=1,
@@ -1096,6 +1271,11 @@ class Particles:
                 A `synthesizer.kernel_functions.Kernel` instance. LOS column
                 densities require both the projected kernel table and the
                 truncated LOS kernel table.
+            as_points (bool):
+                Whether to treat the input particles in this Particles instance
+                as point-like when evaluating the LOS column density. If False,
+                the input particle kernels are accounted for via the overlap
+                kernel table.
             column_density_attr (str):
                 The attribute to store the column density in on the Particles
                 instance. If None, the column density will not be stored. By
@@ -1121,6 +1301,7 @@ class Particles:
         """
         from synthesizer.extensions.column_density import (
             compute_column_density,
+            compute_column_density_smoothed,
         )
 
         # If we don't have a mask make a fake one for consistency
@@ -1179,19 +1360,36 @@ class Particles:
                 setattr(self, column_density_attr, col_den)
             return col_den
 
-        # Compute the column density
-        col_den = compute_column_density(
-            *self._prepare_los_args(
-                other_parts,
-                density_attr,
-                kernel,
-                mask,
-                threshold,
-                force_loop,
-                min_count,
-                nthreads,
+        # Compute the column density. Smoothed input particles use a dedicated
+        # extension path based on the overlap kernel table.
+        if as_points:
+            col_den = compute_column_density(
+                *self._prepare_los_args(
+                    other_parts,
+                    density_attr,
+                    kernel,
+                    mask,
+                    threshold,
+                    force_loop,
+                    min_count,
+                    nthreads,
+                )
             )
-        )
+        else:
+            with timer("Particles.get_los_column_density.prepare_smoothed"):
+                smoothed_args = self._prepare_smoothed_los_args(
+                    other_parts,
+                    density_attr,
+                    kernel,
+                    mask,
+                    threshold,
+                    force_loop,
+                    min_count,
+                    nthreads,
+                )
+
+            with timer("Particles.get_los_column_density.compute_smoothed"):
+                col_den = compute_column_density_smoothed(*smoothed_args)
 
         # Associate with the correct units
         col_den = unyt_array(
