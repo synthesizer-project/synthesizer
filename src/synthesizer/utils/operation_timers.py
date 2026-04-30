@@ -106,6 +106,169 @@ def timed(operation_name=None):
     return decorator
 
 
+def build_timing_analysis_rows(timing_data, total_elapsed):
+    """Build sorted timing rows including overhead and total entries.
+
+    Args:
+        timing_data (dict):
+            A timing dictionary keyed by operation name with ``seconds``,
+            ``count``, and ``source`` entries for each operation.
+        total_elapsed (float):
+            The total elapsed wall-clock time represented by the analysis.
+
+    Returns:
+        list:
+            A list of row dictionaries sorted by descending operation time,
+            with trailing ``Overhead`` and ``Total`` summary rows appended.
+    """
+    timed_elapsed = sum(data["seconds"] for data in timing_data.values())
+    untimed_elapsed = max(total_elapsed - timed_elapsed, 0.0)
+
+    rows = []
+    for operation, data in timing_data.items():
+        fraction = (
+            data["seconds"] / total_elapsed * 100.0
+            if total_elapsed > 0.0
+            else 0.0
+        )
+        rows.append(
+            {
+                "operation": operation,
+                "seconds": data["seconds"],
+                "fraction_percent": fraction,
+                "count": data["count"],
+                "source": data["source"],
+            }
+        )
+
+    rows.sort(key=lambda row: row["seconds"], reverse=True)
+    rows.append(
+        {
+            "operation": "Overhead",
+            "seconds": untimed_elapsed,
+            "fraction_percent": (
+                untimed_elapsed / total_elapsed * 100.0
+                if total_elapsed > 0.0
+                else 0.0
+            ),
+            "count": None,
+            "source": "N/A",
+        }
+    )
+    rows.append(
+        {
+            "operation": "Total",
+            "seconds": total_elapsed,
+            "fraction_percent": 100.0 if total_elapsed > 0.0 else 0.0,
+            "count": None,
+            "source": "N/A",
+        }
+    )
+
+    return rows
+
+
+def print_timing_analysis_table(rows, print_func=print):
+    """Print a timing analysis table to stdout.
+
+    Args:
+        rows (list):
+            The timing rows produced by ``build_timing_analysis_rows``.
+        print_func (callable):
+            The function used to emit each formatted line.
+
+    Returns:
+        None
+    """
+    filtered_rows = []
+    for row in rows:
+        if row["operation"] in ("Overhead", "Total"):
+            filtered_rows.append(row)
+            continue
+
+        if row["fraction_percent"] >= 0.01:
+            filtered_rows.append(row)
+
+    formatted_rows = []
+    for row in filtered_rows:
+        if 0.0 < row["seconds"] < 0.01:
+            seconds_str = f"{row['seconds']:.2e}"
+        else:
+            seconds_str = f"{row['seconds']:.2f}"
+
+        formatted_rows.append(
+            {
+                "operation": row["operation"],
+                "seconds": seconds_str,
+                "fraction_percent": f"{row['fraction_percent']:.2f}",
+                "count": "-" if row["count"] is None else str(row["count"]),
+                "source": row["source"],
+            }
+        )
+
+    operation_width = max(
+        len("Operation"), *(len(r["operation"]) for r in formatted_rows)
+    )
+    time_width = max(
+        len("Time (s)"), *(len(r["seconds"]) for r in formatted_rows)
+    )
+    frac_width = max(
+        len("Fraction (%)"),
+        *(len(r["fraction_percent"]) for r in formatted_rows),
+    )
+    count_width = max(len("Count"), *(len(r["count"]) for r in formatted_rows))
+    source_width = max(
+        len("Source"), *(len(r["source"]) for r in formatted_rows)
+    )
+
+    divider = (
+        "+"
+        + "-" * (operation_width + 2)
+        + "+"
+        + "-" * (time_width + 2)
+        + "+"
+        + "-" * (frac_width + 2)
+        + "+"
+        + "-" * (count_width + 2)
+        + "+"
+        + "-" * (source_width + 2)
+        + "+"
+    )
+
+    print_func(divider)
+    print_func(
+        "| "
+        + f"{'Operation':<{operation_width}}"
+        + " | "
+        + f"{'Time (s)':>{time_width}}"
+        + " | "
+        + f"{'Fraction (%)':>{frac_width}}"
+        + " | "
+        + f"{'Count':>{count_width}}"
+        + " | "
+        + f"{'Source':<{source_width}}"
+        + " |"
+    )
+    print_func(divider)
+
+    for row in formatted_rows:
+        print_func(
+            "| "
+            + f"{row['operation']:<{operation_width}}"
+            + " | "
+            + f"{row['seconds']:>{time_width}}"
+            + " | "
+            + f"{row['fraction_percent']:>{frac_width}}"
+            + " | "
+            + f"{row['count']:>{count_width}}"
+            + " | "
+            + f"{row['source']:<{source_width}}"
+            + " |"
+        )
+
+    print_func(divider)
+
+
 class OperationTimers:
     """Dictionary-like interface to accumulated operation timings.
 
@@ -128,7 +291,73 @@ class OperationTimers:
         Total: 0.00035s over 3 calls
         >>> print(timers.get_source('Creating Sed'))
         'Python'
+        >>> OperationTimers.print_table()
     """
+
+    @classmethod
+    def snapshot(cls):
+        """Return the accumulated timings as a plain dictionary.
+
+        Returns:
+            dict:
+                A dictionary keyed by operation name containing ``seconds``,
+                ``count``, and ``source`` entries for each accumulated timing.
+        """
+        timers = cls()
+        timing_data = {}
+        for operation in timers.keys():
+            cumulative_time, call_count, source = timers[operation]
+            timing_data[operation] = {
+                "seconds": cumulative_time,
+                "count": call_count,
+                "source": source,
+            }
+
+        return timing_data
+
+    @classmethod
+    def build_rows(cls, total_elapsed=None):
+        """Build sorted timing rows matching the pipeline timing report.
+
+        Args:
+            total_elapsed (float, optional):
+                The total elapsed wall-clock time represented by the timings.
+                If omitted, the sum of all accumulated timed operations is
+                used, which yields a zero-overhead summary.
+
+        Returns:
+            list:
+                The timing rows produced by
+                :func:`build_timing_analysis_rows`.
+        """
+        timing_data = cls.snapshot()
+        if total_elapsed is None:
+            total_elapsed = sum(
+                data["seconds"] for data in timing_data.values()
+            )
+
+        return build_timing_analysis_rows(timing_data, total_elapsed)
+
+    @classmethod
+    def print_table(cls, total_elapsed=None, print_func=print):
+        """Print a pipeline-style timing breakdown table.
+
+        Args:
+            total_elapsed (float, optional):
+                The total elapsed wall-clock time represented by the timings.
+                If omitted, the sum of all accumulated timed operations is
+                used, so the printed table shows no overhead row contribution.
+            print_func (callable):
+                The function used to emit the table lines. Defaults to
+                :func:`print`.
+
+        Returns:
+            list:
+                The rows that were printed.
+        """
+        rows = cls.build_rows(total_elapsed=total_elapsed)
+        print_timing_analysis_table(rows, print_func=print_func)
+        return rows
 
     def reset(self):
         """Clear all accumulated timings.
