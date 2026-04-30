@@ -18,6 +18,7 @@ import yaml
 from platformdirs import user_data_dir
 
 from synthesizer import exceptions
+from synthesizer._version import __version__
 
 # ASCII art mirror of the galaxy logo (cannot import directly)
 galaxy = (
@@ -418,8 +419,14 @@ class SynthesizerInitializer:
         elif default_units_needs_update():
             self._copy_units()
 
-    def report(self) -> None:
-        """Print a report of the initialisation."""
+    def report(self, initialising: bool = False) -> None:
+        """Print a report of the initialisation or configuration.
+
+        Args:
+            initialising (bool):
+                Whether this report is being printed as part of an actual
+                initialisation run.
+        """
         # ANSI escape codes for styling
         yellow = "\033[93m"
         green = "\033[92m"
@@ -469,8 +476,12 @@ class SynthesizerInitializer:
         galaxy_lines = galaxy.splitlines()
         centered = "\n".join(line.center(100) for line in galaxy_lines)
 
-        # Print the initialisation header with centered galaxy art
-        print(f"{yellow}Synthesizer initialising...{reset}\n\n{centered}\n")
+        # Print the report header with centered galaxy art.
+        if initialising:
+            print(f"{yellow}Synthesizer initialising...{reset}")
+
+        print(f"\n{centered}\n")
+        print(f"  {cyan}Version: {__version__}{reset}\n")
 
         # Print the status of directories and files
         print("  Initialised Synthesizer directories:")
@@ -503,7 +514,8 @@ class SynthesizerInitializer:
                 print(f"    {magenta}export {var}='{default}'{reset}")
         print()
 
-        print(f"{green}Synthesizer initialisation complete!{reset}\n")
+        if initialising:
+            print(f"{green}Synthesizer initialisation complete!{reset}\n")
 
 
 def synth_initialise(verbose=True) -> None:
@@ -544,7 +556,7 @@ def synth_initialise(verbose=True) -> None:
     # what is necessary
     initializer = SynthesizerInitializer()
     initializer.initialize()
-    initializer.report()
+    initializer.report(initialising=True)
 
 
 def synth_report_config() -> None:
