@@ -1,14 +1,19 @@
 """Test suite for the UnifiedAGN emission model."""
 
+from pathlib import Path
+
+import h5py
 import numpy as np
 import pytest
 from unyt import K, Mpc, Msun, deg, yr
 
 from synthesizer.emission_models.agn.unified_agn import UnifiedAGN
+from synthesizer.emission_models.base_model import BlackHoleEmissionModel
 from synthesizer.emission_models.generators.dust.greybody import Greybody
 from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
 from synthesizer.emission_models.utils import get_param
 from synthesizer.exceptions import InconsistentParameter
+from synthesizer.grid import Grid
 from synthesizer.particle.blackholes import BlackHoles
 
 
@@ -55,6 +60,57 @@ def make_unified_agn(
 def get_intrinsic_model(model):
     """Return the intrinsic UnifiedAGN model carrying transmission branches."""
     return model if hasattr(model, "disc_escaped") else model.intrinsic
+
+
+def make_no_weight_bh_grid(tmp_path: Path):
+    """Write a minimal BH-compatible grid with WeightVariable='None'."""
+    grid_path = tmp_path / "bh_no_weight_grid.hdf5"
+
+    with h5py.File(grid_path, "w") as hdf:
+        hdf.attrs["axes"] = np.array(
+            ["mass", "accretion_rate"],
+            dtype=object,
+        )
+        hdf.attrs["WeightVariable"] = "None"
+
+        axes = hdf.create_group("axes")
+
+        mass = axes.create_dataset(
+            "mass",
+            data=np.array([1.0e6, 2.0e6, 3.0e6]),
+        )
+        mass.attrs["Units"] = "Msun"
+        mass.attrs["log_on_read"] = False
+
+        accretion_rate = axes.create_dataset(
+            "accretion_rate",
+            data=np.array([0.5, 1.0, 2.0]),
+        )
+        accretion_rate.attrs["Units"] = "Msun/yr"
+        accretion_rate.attrs["log_on_read"] = False
+
+        spectra = hdf.create_group("spectra")
+        wavelength = spectra.create_dataset(
+            "wavelength",
+            data=np.array([1000.0, 1500.0, 2000.0]),
+        )
+        wavelength.attrs["Units"] = "angstrom"
+
+        spectra.create_dataset("incident", data=np.ones((3, 3, 3)))
+        spectra.create_dataset(
+            "transmitted",
+            data=np.full((3, 3, 3), 0.5),
+        )
+        spectra.create_dataset(
+            "nebular",
+            data=np.full((3, 3, 3), 0.25),
+        )
+        spectra.create_dataset(
+            "nebular_continuum",
+            data=np.full((3, 3, 3), 0.1),
+        )
+
+    return Grid(grid_path.name, grid_dir=grid_path.parent, ignore_lines=True)
 
 
 class TestUnifiedAGN:
@@ -307,3 +363,30 @@ class TestUnifiedAGN:
         """Test invalid transmission options are rejected."""
         with pytest.raises(InconsistentParameter):
             make_unified_agn(test_grid, disc_transmission="definitely_wrong")
+
+    def test_spectra_generation_with_string_none_weight_var(
+        self,
+        tmp_path,
+    ):
+        """BH extraction should work when grid metadata stores 'None'."""
+        no_weight_grid = make_no_weight_bh_grid(tmp_path)
+        black_holes = make_black_holes(
+            covering_fraction_blr=np.array([0.2, 0.3]),
+            covering_fraction_nlr=np.array([0.1, 0.4]),
+        )
+        model = BlackHoleEmissionModel(
+            grid=no_weight_grid,
+            label="disc_incident_isotropic",
+            extract="incident",
+            cosine_inclination=0.5,
+            hydrogen_density="hydrogen_density_blr",
+            ionisation_parameter="ionisation_parameter_blr",
+        )
+
+        assert no_weight_grid._weight_var is None
+
+        spectra = black_holes.get_spectra(model)
+
+        assert spectra is not None
+        assert model.label in black_holes.spectra
+        assert black_holes.spectra[model.label].shape[-1] == len(model.lam)
