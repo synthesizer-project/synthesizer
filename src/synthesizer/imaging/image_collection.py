@@ -711,6 +711,74 @@ class ImageCollection(ImagingBase):
             imgs=noisy_imgs,
         )
 
+    def apply_correlated_noise(
+        self,
+        instrument,
+        subtract_mean=False,
+        correct_periodicity=True,
+    ):
+        """Apply correlated noise to every image using an instrument noise map.
+
+        The correlation structure for each filter is derived from the noise
+        map stored on the instrument under that filter's code.  The
+        correlation function (CF) is computed once per filter and cached on
+        the instrument, so this call is cheap even when applied to large
+        collections.
+
+        Args:
+            instrument (Instrument):
+                The instrument whose ``noise_maps`` dict provides an observed
+                noise template for each filter in this collection.  A noise
+                map must exist for every filter code present in the collection.
+            subtract_mean (bool):
+                If True the DC component of the power spectrum is zeroed
+                before estimating the CF, removing any mean offset.
+                Default is False.
+            correct_periodicity (bool):
+                If True a correction factor is applied to compensate for the
+                assumption of periodicity in the DFT. Default is True.
+
+        Returns:
+            ImageCollection:
+                A new ImageCollection containing the images with correlated
+                noise applied.
+
+        Raises:
+            MissingArgument:
+                If the instrument has no ``noise_maps``.
+            InconsistentArguments:
+                If a noise map for any filter in the collection is missing
+                from ``instrument.noise_maps``.
+        """
+        if instrument.noise_maps is None:
+            raise exceptions.MissingArgument(
+                "No noise maps are set on the instrument. "
+                "Provide noise_maps when constructing the Instrument."
+            )
+        missing = [
+            f for f in self.filter_codes if f not in instrument.noise_maps
+        ]
+        if missing:
+            raise exceptions.InconsistentArguments(
+                "Missing a noise map on the instrument for the following "
+                f"filters: {missing}"
+            )
+
+        noisy_imgs = {}
+        for f in self.filter_codes:
+            noisy_imgs[f] = self.imgs[f].apply_correlated_noise(
+                instrument,
+                f,
+                subtract_mean=subtract_mean,
+                correct_periodicity=correct_periodicity,
+            )
+
+        return ImageCollection(
+            resolution=self.resolution,
+            fov=self.fov,
+            imgs=noisy_imgs,
+        )
+
     def plot_images(
         self,
         show=False,
