@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from unyt import Hz, angstrom, c, erg, s
+from unyt import Hz, angstrom, c, erg, nJy, s
 
 from synthesizer import exceptions
 from synthesizer.instruments import FilterCollection
@@ -48,6 +48,37 @@ def test_photometry_collection_requires_units_on_input_array():
             filters,
             photometry=arr,
         )
+
+
+def test_photometry_collection_preserves_units_on_input_array():
+    """Constructor should preserve units on input array."""
+    lam = np.linspace(1000, 5000, 500) * angstrom
+    filters = _make_filters(lam)
+
+    arr = np.array([[1.0, 0.5], [2.0, 1.5], [3.0, 2.5]]) * erg / s / Hz
+    pc = PhotometryCollection(
+        filters,
+        photometry=arr,
+    )
+
+    assert pc.photometry is not None
+    assert pc.photo_lnu is not None
+    assert pc.photo_fnu is None
+
+    assert pc.photometry.units.same_dimensions_as(erg / s / Hz)
+    assert pc.photo_lnu.units.same_dimensions_as(erg / s / Hz)
+
+    arr = np.array([[1.0, 0.5], [2.0, 1.5], [3.0, 2.5]]) * nJy
+    pc = PhotometryCollection(
+        filters,
+        photometry=arr,
+    )
+
+    assert pc.photometry is not None
+    assert pc.photo_lnu is None
+    assert pc.photo_fnu is not None
+    assert pc.photometry.units.same_dimensions_as(nJy)
+    assert pc.photo_fnu.units.same_dimensions_as(nJy)
 
 
 def test_photometry_collection_select_preserves_lookup():
