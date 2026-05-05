@@ -42,7 +42,6 @@ from synthesizer.pipeline.pipeline_utils import (
     NO_MODEL_LABEL,
     OperationKwargsHandler,
     accumulate_pipeline_results_from_child,
-    build_timing_analysis_rows,
     clear_pipeline_outputs,
     combine_atomic_timing_snapshots,
     combine_list_of_dicts,
@@ -51,7 +50,6 @@ from synthesizer.pipeline.pipeline_utils import (
     get_atomic_timing_snapshot,
     get_full_memory,
     plot_timing_analysis,
-    print_timing_analysis_table,
     sanitise_hdf5_key_part,
     sum_dicts_recursive,
     validate_noise_unit_compatibility,
@@ -59,7 +57,12 @@ from synthesizer.pipeline.pipeline_utils import (
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.art import Art
-from synthesizer.utils.operation_timers import timed, timer
+from synthesizer.utils.operation_timers import (
+    build_timing_analysis_rows,
+    print_timing_analysis_table,
+    timed,
+    timer,
+)
 
 
 class Pipeline:
