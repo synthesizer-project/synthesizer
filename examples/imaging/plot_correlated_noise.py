@@ -169,6 +169,6 @@ ax.set_title("Radial power spectrum comparison")
 # show limit
 ax.legend()
 fig.tight_layout()
-plt.show()
 plt.savefig("correlated_noise_power_spectrum.png", dpi=300)
+plt.show()
 plt.close(fig)

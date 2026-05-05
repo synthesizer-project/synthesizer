@@ -715,6 +715,7 @@ class ImageCollection(ImagingBase):
         self,
         instrument,
         correct_periodicity=True,
+        rng_seed=None,
         inplace=False,
     ):
         """Apply correlated noise modelled from instrument noise maps.
@@ -733,6 +734,9 @@ class ImageCollection(ImagingBase):
             correct_periodicity (bool):
                 If True a correction factor is applied to compensate for the
                 assumption of periodicity in the DFT. Default is True.
+            rng_seed (int, optional):
+                Seed for the random number generator. Providing the same seed
+                reproduces an identical noise realisation.
             inplace (bool):
                 If True, update the images in this collection in place and
                 return this collection. Otherwise return a new collection.
@@ -778,6 +782,7 @@ class ImageCollection(ImagingBase):
                 instrument,
                 f,
                 correct_periodicity=correct_periodicity,
+                rng_seed=rng_seed,
                 inplace=inplace,
             )
 

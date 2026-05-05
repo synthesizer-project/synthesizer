@@ -606,3 +606,24 @@ class TestImageCollectionCorrelatedNoise:
 
         with pytest.raises(exceptions.InconsistentArguments):
             image_collection.apply_correlated_noise(inst)
+
+    def test_rng_seed_is_forwarded(self, image_collection, instrument):
+        """Providing the same rng_seed reproduces the same collection noise."""
+        out1 = image_collection.apply_correlated_noise(instrument, rng_seed=11)
+        out2 = image_collection.apply_correlated_noise(instrument, rng_seed=11)
+
+        for f in image_collection.filter_codes:
+            assert np.array_equal(
+                out1.imgs[f].noise_arr, out2.imgs[f].noise_arr
+            )
+
+    def test_instrument_apply_noises_uses_independent_filter_noise(
+        self, image_collection, instrument
+    ):
+        """apply_noises should not reuse the same random stream per filter."""
+        result = instrument.apply_noises(image_collection, rng_seed=7)
+
+        assert not np.array_equal(
+            result.imgs["F090W"].noise_arr,
+            result.imgs["F150W"].noise_arr,
+        )

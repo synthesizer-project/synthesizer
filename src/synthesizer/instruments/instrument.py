@@ -27,6 +27,7 @@ Example usage:
 """
 
 import h5py
+import numpy as np
 from unyt import angstrom, arcsecond, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
@@ -377,7 +378,6 @@ class Instrument:
         """
         # Check we have a compatible noise definition
         have_noise = self.noise_maps is not None
-        have_noise |= self.noise_source_maps is not None
         have_noise |= self.snrs is not None and self.depth is not None
 
         return self.can_do_spectroscopy and have_noise
@@ -421,7 +421,6 @@ class Instrument:
         """
         # Check we have a compatible noise definition
         have_noise = self.noise_maps is not None
-        have_noise |= self.noise_source_maps is not None
         have_noise |= self.snrs is not None and self.depth is not None
 
         return self.can_do_resolved_spectroscopy and have_noise
@@ -963,13 +962,20 @@ class Instrument:
         """
         from synthesizer.imaging.image_collection import ImageCollection
 
+        rng = np.random.default_rng(rng_seed)
+
         noisy_imgs = {}
         for f in image_collection.filter_codes:
+            filter_rng_seed = (
+                None
+                if rng_seed is None
+                else int(rng.integers(0, np.iinfo(np.uint32).max))
+            )
             noisy_imgs[f] = self.apply_noise(
                 image_collection.imgs[f],
                 f,
                 correct_periodicity=correct_periodicity,
-                rng_seed=rng_seed,
+                rng_seed=filter_rng_seed,
                 aperture_radius=aperture_radius,
             )
 
@@ -1003,9 +1009,6 @@ class Instrument:
                 Correlated-noise source maps for the new filters.
                 Default is None.
         """
-        # Combine the filters together
-        self.filters += filters
-
         # Ensure we have an entry for each filter code in the PSF and noise
         # dictionaries.
         if psfs is not None and set(psfs.keys()) != set(filters.filter_codes):
@@ -1028,6 +1031,31 @@ class Instrument:
                 f"{set(filters.filter_codes) - set(noise_source_maps.keys())}"
             )
 
+        # Validate that any new noise payload would not create an invalid mixed
+        # noise configuration before mutating the instrument.
+        if self.snrs is not None and noise_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set depths and SNRs at the same time as noise maps"
+            )
+        if self.snrs is not None and noise_source_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set depths and SNRs at the same time as "
+                "noise source maps"
+            )
+        if noise_maps is not None and self.noise_source_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set fixed noise maps and correlated noise source "
+                "maps at the same time"
+            )
+        if noise_source_maps is not None and self.noise_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set fixed noise maps and correlated noise source "
+                "maps at the same time"
+            )
+
+        # Combine the filters together only after validation succeeds.
+        self.filters += filters
+
         # If PSFs are provided, add them to the psfs
         if psfs is not None:
             self.psfs.update(psfs)
@@ -1045,11 +1073,5 @@ class Instrument:
             if self.noise_source_maps is None:
                 self.noise_source_maps = {}
             self.noise_source_maps.update(noise_source_maps)
-            if self.correlated_noise_models is None:
-                self.correlated_noise_models = {}
-            self.correlated_noise_models.update(
-                {
-                    filter_code: CorrelatedNoiseModel(noise_map)
-                    for filter_code, noise_map in noise_source_maps.items()
-                }
-            )
+
+        self._validate()
