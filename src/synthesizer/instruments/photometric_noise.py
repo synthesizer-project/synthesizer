@@ -356,7 +356,6 @@ class CorrelatedNoiseModel:
     def apply_noise(
         self,
         image,
-        subtract_mean: bool = False,
         correct_periodicity: bool = True,
         rng_seed: int = None,
         inplace: bool = False,
@@ -369,8 +368,6 @@ class CorrelatedNoiseModel:
         Args:
             image (Image):
                 The image to which the correlated noise should be added.
-            subtract_mean (bool):
-                If True the DC component is removed when estimating the CF.
             correct_periodicity (bool):
                 If True the DFT periodicity correction is applied.
             rng_seed (int, optional):
@@ -391,7 +388,7 @@ class CorrelatedNoiseModel:
         # grid from the cached source statistics.
         noise_arr = self.generate_noise_array(
             image.arr.shape,
-            subtract_mean=subtract_mean,
+            subtract_mean=True,
             correct_periodicity=correct_periodicity,
             rng_seed=rng_seed,
         )

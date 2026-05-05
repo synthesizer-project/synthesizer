@@ -353,7 +353,7 @@ class TestCorrelatedNoiseCore:
         assert not np.array_equal(out1, out2)
 
     def test_model_apply_subtract_mean_runs(self):
-        """subtract_mean=True completes without error."""
+        """Low-level model generation supports explicit mean subtraction."""
         source = np.random.default_rng(0).normal(size=(16, 16))
         model = CorrelatedNoiseModel(source)
         result = model.generate_noise_array(
@@ -465,12 +465,15 @@ class TestImageCorrelatedNoise:
         result = base_image.apply_correlated_noise(instrument, "F150W")
         assert result.arr.shape == base_image.arr.shape
 
-    def test_subtract_mean_option(self, base_image, instrument):
-        """subtract_mean=True runs without error and returns an Image."""
-        result = base_image.apply_correlated_noise(
-            instrument, "F150W", subtract_mean=True
-        )
+    def test_apply_correlated_noise_uses_zero_mean_model(
+        self, base_image, instrument
+    ):
+        """Public correlated-noise application always uses zero-mean noise."""
+        result = base_image.apply_correlated_noise(instrument, "F150W")
         assert isinstance(result, Image)
+        model = instrument.get_correlated_noise_model("F150W")
+        assert (True, True) in model._cf_cache
+        assert (False, True) not in model._cf_cache
 
     def test_no_periodicity_correction_option(self, base_image, instrument):
         """correct_periodicity=False runs without error and returns Image."""
