@@ -1,6 +1,7 @@
 from synthesizer.instruments.filters import UVJ, Filter, FilterCollection
 from synthesizer.instruments.instrument import Instrument
 from synthesizer.instruments.instrument_collection import InstrumentCollection
+from synthesizer.instruments import photometric_noise
 from synthesizer.instruments import premade as _premade
 
 # Re-export premade instruments explicitly

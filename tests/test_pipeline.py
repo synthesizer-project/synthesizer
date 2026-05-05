@@ -1348,6 +1348,78 @@ class TestValidateNoiseUnitCompatibility:
         # Should not raise
         validate_noise_unit_compatibility([inst], "erg/s/Hz")
 
+    def test_validate_with_dict_noise_source_maps(
+        self, nircam_instrument_no_psf
+    ):
+        """Test validation with dictionary noise_source_maps values."""
+        from unyt import Unit
+
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        inst = Instrument(
+            label="test_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=1.0 * kpc,
+            noise_source_maps={
+                "JWST/NIRCam.F090W": np.random.randn(10, 10)
+                * Unit("erg/s/Hz"),
+                "JWST/NIRCam.F150W": np.random.randn(10, 10)
+                * Unit("erg/s/Hz"),
+            },
+        )
+
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_noise_source_maps_wrong_units_luminosity(
+        self, nircam_instrument_no_psf
+    ):
+        """Wrong source-map units raise for luminosity validation."""
+        from unyt import nJy
+
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        inst = Instrument(
+            label="test_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=1.0 * kpc,
+            noise_source_maps={
+                "JWST/NIRCam.F090W": np.random.randn(10, 10) * nJy,
+            },
+        )
+
+        with pytest.raises(exceptions.InconsistentArguments, match="erg"):
+            validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_noise_source_maps_wrong_units_flux(
+        self, nircam_instrument_no_psf
+    ):
+        """Wrong source-map units raise for flux validation."""
+        from unyt import Unit
+
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        inst = Instrument(
+            label="test_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=1.0 * kpc,
+            noise_source_maps={
+                "JWST/NIRCam.F090W": np.random.randn(10, 10)
+                * Unit("erg/s/Hz"),
+            },
+        )
+
+        with pytest.raises(exceptions.InconsistentArguments, match="nJy"):
+            validate_noise_unit_compatibility([inst], "nJy")
+
     def test_validate_apparent_magnitude_depth_scalar(self):
         """Test validation passes with apparent magnitude depth (float)."""
         from synthesizer.instruments import Instrument
