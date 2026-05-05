@@ -717,19 +717,19 @@ class ImageCollection(ImagingBase):
         correct_periodicity=True,
         inplace=False,
     ):
-        """Apply correlated noise to every image using an instrument noise map.
+        """Apply correlated noise modelled from instrument noise maps.
 
-        The correlation structure for each filter is derived from the
-        correlated-noise model stored on the instrument under that filter's
-        code. Each model caches its correlation function, so this call is
-        cheap even when applied to large collections.
+        This requires an instrument with a correlated noise model for each
+        filter in the collection. The noise template defined by each of these
+        models will then be used to generate a new noise array with the same
+        spatial correlations as the template, which is then added to the
+        images.
 
         Args:
             instrument (Instrument):
-                The instrument whose ``noise_source_maps`` dict provides an
-                observed noise template for each filter in this collection.
-                A source map must exist for every filter code present in the
-                collection.
+                The instrument whose correlated-noise models provide the
+                observed noise templates used to model the spatial
+                correlations.
             correct_periodicity (bool):
                 If True a correction factor is applied to compensate for the
                 assumption of periodicity in the DFT. Default is True.
@@ -746,16 +746,19 @@ class ImageCollection(ImagingBase):
 
         Raises:
             MissingArgument:
-                If the instrument has no correlated-noise source maps.
+                If the instrument has no correlated-noise models.
             InconsistentArguments:
                 If a correlated-noise model for any filter in the collection
                 is missing from the instrument.
         """
+        # Ensure the instrument has correlated-noise models to use
         if instrument.correlated_noise_models is None:
             raise exceptions.MissingArgument(
                 "No correlated noise models are set on the instrument. "
                 "Provide noise_source_maps when constructing the Instrument."
             )
+
+        # Ensure the instrument has a model for every filter in the collection
         missing = [
             f
             for f in self.filter_codes
@@ -767,6 +770,8 @@ class ImageCollection(ImagingBase):
                 f"following filters: {missing}"
             )
 
+        # Generate and apply a new noise array to each image using the
+        # appropriate filter-specific noise model
         noisy_imgs = {}
         for f in self.filter_codes:
             noisy_imgs[f] = self.imgs[f].apply_correlated_noise(
@@ -776,10 +781,12 @@ class ImageCollection(ImagingBase):
                 inplace=inplace,
             )
 
+        # If inplace, update this collection
         if inplace:
             self.imgs = noisy_imgs
             return self
 
+        # Otherwise return a new image collection with the noise applied
         return ImageCollection(
             resolution=self.resolution,
             fov=self.fov,

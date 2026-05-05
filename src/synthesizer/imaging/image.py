@@ -618,11 +618,10 @@ class Image(ImagingBase):
     ):
         """Apply correlated noise modelled from an instrument noise map.
 
-        The correlation structure is derived from the correlated-noise model
-        stored on the instrument for the given filter. That model caches the
-        expensive correlation-function estimate so that when many images share
-        the same instrument (e.g. inside an ImageCollection) the costly FFT
-        step runs only once per filter and set of modelling options.
+        This requires an instrument with a correlated noise model for the
+        requested filter. The noise template defined by this model will then
+        be used to generate a new noise array with the same spatial
+        correlations as the template, which is then added to the image.
 
         Args:
             instrument (Instrument):
@@ -655,8 +654,10 @@ class Image(ImagingBase):
             InconsistentArguments:
                 If the noise model is dimensionless but the image has units.
         """
+        # Get the noise model for the requested filter
         noise_model = instrument.get_correlated_noise_model(filter_code)
 
+        # Undo it and return the new image (or this image if inplace)
         return noise_model.apply_noise(
             self,
             correct_periodicity=correct_periodicity,
