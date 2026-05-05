@@ -14,7 +14,6 @@ from synthesizer.emissions import Sed
 from synthesizer.extensions.timers import reset_timings, tic, toc
 from synthesizer.pipeline.pipeline import Pipeline
 from synthesizer.pipeline.pipeline_utils import (
-    build_timing_analysis_rows,
     cached_split,
     combine_list_of_dicts,
     count_and_check_dict_recursive,
@@ -26,6 +25,7 @@ from synthesizer.pipeline.pipeline_utils import (
     unify_dict_structure_across_ranks,
 )
 from synthesizer.units import Quantity
+from synthesizer.utils.operation_timers import build_timing_analysis_rows
 
 
 @pytest.fixture
