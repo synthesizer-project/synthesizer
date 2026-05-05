@@ -420,12 +420,12 @@ class TestImageCorrelatedNoise:
 
     @pytest.fixture
     def instrument(self, noise_source):
-        """Instrument with a single noise map keyed by filter code."""
+        """Instrument with a single correlated-noise source map."""
         from synthesizer.instruments import Instrument
 
         return Instrument(
             label="test_inst",
-            noise_maps={"F150W": noise_source},
+            noise_source_maps={"F150W": noise_source},
         )
 
     @pytest.fixture
@@ -486,7 +486,7 @@ class TestImageCorrelatedNoise:
         noise_source_big = np.random.default_rng(5).normal(size=(64, 64))
         inst = Instrument(
             label="test_inst_big",
-            noise_maps={"F150W": noise_source_big},
+            noise_source_maps={"F150W": noise_source_big},
         )
         result = base_image.apply_correlated_noise(inst, "F150W")
         assert result.arr.shape == base_image.arr.shape
@@ -529,10 +529,40 @@ class TestImageCorrelatedNoise:
         with pytest.raises(exceptions.InconsistentArguments):
             base_image.apply_correlated_noise(instrument, "NONEXISTENT")
 
-    def test_no_noise_maps_raises(self, base_image):
-        """An instrument without noise_maps raises MissingArgument."""
+    def test_no_noise_source_maps_raises(self, base_image):
+        """An instrument without source maps raises MissingArgument."""
         from synthesizer.instruments import Instrument
 
         inst = Instrument(label="no_noise")
         with pytest.raises(exceptions.MissingArgument):
             base_image.apply_correlated_noise(inst, "F150W")
+
+    def test_fixed_noise_maps_are_not_correlated_models(self, base_image):
+        """Fixed noise arrays do not satisfy the correlated-noise API."""
+        from synthesizer.instruments import Instrument
+
+        fixed_noise = np.ones((32, 32))
+        inst = Instrument(
+            label="fixed_noise",
+            noise_maps={"F150W": fixed_noise},
+        )
+
+        with pytest.raises(exceptions.MissingArgument):
+            base_image.apply_correlated_noise(inst, "F150W")
+
+    def test_instrument_apply_noise_uses_fixed_noise_maps_directly(
+        self, base_image
+    ):
+        """Instrument.apply_noise applies fixed arrays without modelling."""
+        from synthesizer.instruments import Instrument
+
+        fixed_noise = np.arange(32 * 32, dtype=float).reshape(32, 32)
+        inst = Instrument(
+            label="fixed_noise",
+            noise_maps={"F150W": fixed_noise},
+        )
+
+        result = inst.apply_noise(base_image, "F150W")
+
+        assert np.array_equal(result.noise_arr, fixed_noise)
+        assert np.array_equal(result.arr, base_image.arr + fixed_noise)
