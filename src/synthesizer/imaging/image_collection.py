@@ -727,9 +727,10 @@ class ImageCollection(ImagingBase):
 
         Args:
             instrument (Instrument):
-                The instrument whose ``noise_maps`` dict provides an observed
-                noise template for each filter in this collection.  A noise
-                map must exist for every filter code present in the collection.
+                The instrument whose ``noise_source_maps`` dict provides an
+                observed noise template for each filter in this collection.
+                A source map must exist for every filter code present in the
+                collection.
             subtract_mean (bool):
                 If True the DC component of the power spectrum is zeroed
                 before estimating the CF, removing any mean offset.
@@ -750,7 +751,7 @@ class ImageCollection(ImagingBase):
 
         Raises:
             MissingArgument:
-                If the instrument has no ``noise_maps``.
+                If the instrument has no correlated-noise source maps.
             InconsistentArguments:
                 If a correlated-noise model for any filter in the collection
                 is missing from the instrument.
@@ -758,7 +759,7 @@ class ImageCollection(ImagingBase):
         if instrument.correlated_noise_models is None:
             raise exceptions.MissingArgument(
                 "No correlated noise models are set on the instrument. "
-                "Provide noise_maps when constructing the Instrument."
+                "Provide noise_source_maps when constructing the Instrument."
             )
         missing = [
             f

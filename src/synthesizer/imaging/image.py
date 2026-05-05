@@ -30,7 +30,6 @@ from synthesizer.imaging.image_generators import (
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,
 )
-from synthesizer.instruments.photometric_noise import CorrelatedNoiseModel
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
@@ -662,11 +661,6 @@ class Image(ImagingBase):
                 If the noise model is dimensionless but the image has units.
         """
         noise_model = instrument.get_correlated_noise_model(filter_code)
-        if not isinstance(noise_model, CorrelatedNoiseModel):
-            raise exceptions.InconsistentArguments(
-                f"Correlated noise model for filter '{filter_code}' is not "
-                "a CorrelatedNoiseModel instance."
-            )
 
         return noise_model.apply_noise(
             self,

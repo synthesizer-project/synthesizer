@@ -1250,6 +1250,36 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
                         f"{type(inst.noise_maps)} in instrument {inst.label}."
                     )
 
+            # Check correlated-noise source-map units if using correlated
+            # imaging noise.
+            if inst.noise_source_maps is not None:
+                if isinstance(inst.noise_source_maps, dict):
+                    for filt, noise_map in inst.noise_source_maps.items():
+                        if isinstance(noise_map, unyt_array):
+                            if not unit_is_compatible(
+                                noise_map, expected_unit
+                            ):
+                                raise exceptions.InconsistentArguments(
+                                    f"Noise source map units must be "
+                                    f"compatible with {expected_unit}. Got "
+                                    f"{noise_map.units} for filter {filt} "
+                                    f"in instrument {inst.label}. Are you "
+                                    "using a rest-frame or observed-frame "
+                                    "instrument with the wrong image type?"
+                                )
+                        else:
+                            raise exceptions.InconsistentArguments(
+                                "Noise source map must be a unyt_array with "
+                                f"units. Got {type(noise_map)} for filter "
+                                f"{filt} in instrument {inst.label}."
+                            )
+                else:
+                    raise exceptions.InconsistentArguments(
+                        "noise_source_maps must be a dict of unyt_array "
+                        f"objects. Got {type(inst.noise_source_maps)} in "
+                        f"instrument {inst.label}."
+                    )
+
 
 class OperationKwargs:
     """A container class holding the kwargs needed by any pipeline operation.
