@@ -67,17 +67,17 @@ noise_template = np.real(np.fft.ifft2(np.fft.fft2(white_noise) * kernel_fft))
 noise_template *= 0.05 / noise_template.std()
 
 # %%
-# Register the noise map on an Instrument
-# ----------------------------------------
+# Register the noise source map on an Instrument
+# ----------------------------------------------
 # The noise template is stored on an ``Instrument`` object keyed by filter
-# code.  When ``apply_correlated_noise`` is called, the instrument computes
-# the correlation function (CF) once and caches it — subsequent calls for
-# the same filter (e.g. across many images in a collection) skip the
-# expensive FFT step entirely.
+# code under ``noise_source_maps``. When ``apply_correlated_noise`` is
+# called, the instrument computes the correlation function (CF) once and
+# caches it. Subsequent calls for the same filter (e.g. across many images in
+# a collection) skip the expensive FFT step entirely.
 
 instrument = Instrument(
     label="MockScope",
-    noise_maps={"F150W": noise_template},
+    noise_source_maps={"F150W": noise_template},
 )
 
 # %%
@@ -90,7 +90,6 @@ instrument = Instrument(
 noisy_img = img.apply_correlated_noise(
     instrument,
     "F150W",
-    subtract_mean=False,
     correct_periodicity=True,
 )
 
