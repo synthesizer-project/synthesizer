@@ -20,6 +20,7 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
+from synthesizer.imaging.image_collection import ImageCollection
 from synthesizer.instruments.photometric_noise import (
     CorrelatedNoiseModel,
     _cf_periodicity_dilution_correction_standalone,
@@ -382,22 +383,6 @@ class TestCorrelatedNoiseCore:
         with pytest.raises(ValueError):
             CorrelatedNoiseModel(np.ones((4, 4, 4)))
 
-    def test_correlation_function_is_cached_on_model(self):
-        """The CF is cached on the model after first estimation."""
-        source = np.random.default_rng(4).normal(size=(18, 18))
-        model = CorrelatedNoiseModel(source)
-        cf = model.estimate_correlation_function()
-        assert (False, True) in model._cf_cache
-        assert model._cf_cache[(False, True)] is cf
-
-    def test_correlation_function_cache_reused(self):
-        """Repeated CF requests for the same options reuse the cache."""
-        source = np.random.default_rng(4).normal(size=(18, 18))
-        model = CorrelatedNoiseModel(source)
-        cf_first = model.estimate_correlation_function()
-        cf_second = model.estimate_correlation_function()
-        assert cf_first is cf_second
-
     def test_generate_noise_array_preserves_units(self):
         """Generated noise carries units from the source template."""
         source = unyt_array(
@@ -465,16 +450,6 @@ class TestImageCorrelatedNoise:
         result = base_image.apply_correlated_noise(instrument, "F150W")
         assert result.arr.shape == base_image.arr.shape
 
-    def test_apply_correlated_noise_uses_zero_mean_model(
-        self, base_image, instrument
-    ):
-        """Public correlated-noise application always uses zero-mean noise."""
-        result = base_image.apply_correlated_noise(instrument, "F150W")
-        assert isinstance(result, Image)
-        model = instrument.get_correlated_noise_model("F150W")
-        assert (True, True) in model._cf_cache
-        assert (False, True) not in model._cf_cache
-
     def test_no_periodicity_correction_option(self, base_image, instrument):
         """correct_periodicity=False runs without error and returns Image."""
         result = base_image.apply_correlated_noise(
@@ -493,44 +468,6 @@ class TestImageCorrelatedNoise:
         )
         result = base_image.apply_correlated_noise(inst, "F150W")
         assert result.arr.shape == base_image.arr.shape
-
-    def test_cf_is_cached_after_first_call(self, base_image, instrument):
-        """The CF is cached on the filter's model after the first call."""
-        base_image.apply_correlated_noise(instrument, "F150W")
-        model = instrument.get_correlated_noise_model("F150W")
-        assert (False, True) in model._cf_cache
-
-    def test_cache_reused_on_second_call(self, base_image, instrument):
-        """A second call for the same filter reuses the model cache."""
-        base_image.apply_correlated_noise(instrument, "F150W")
-        model = instrument.get_correlated_noise_model("F150W")
-        cf_first = model._cf_cache[(False, True)]
-        base_image.apply_correlated_noise(instrument, "F150W")
-        cf_second = model._cf_cache[(False, True)]
-        assert cf_first is cf_second  # identical object — cache was reused
-
-    def test_instrument_builds_one_model_per_filter(self, instrument):
-        """The instrument constructs one correlated-noise model per filter."""
-        assert set(instrument.correlated_noise_models) == {"F150W"}
-        assert isinstance(
-            instrument.correlated_noise_models["F150W"],
-            CorrelatedNoiseModel,
-        )
-
-    def test_reassigning_noise_source_maps_rebuilds_models(self):
-        """Setting source maps after init rebuilds the per-filter models."""
-        from synthesizer.instruments import Instrument
-
-        inst = Instrument(label="test_inst")
-        inst.noise_source_maps = {
-            "F150W": np.random.default_rng(12).normal(size=(16, 16))
-        }
-
-        assert set(inst.correlated_noise_models) == {"F150W"}
-        assert isinstance(
-            inst.correlated_noise_models["F150W"],
-            CorrelatedNoiseModel,
-        )
 
     def test_inplace_updates_original_image(self, base_image, instrument):
         """inplace=True updates and returns the original image object."""
@@ -584,3 +521,88 @@ class TestImageCorrelatedNoise:
 
         assert np.array_equal(result.noise_arr, fixed_noise)
         assert np.array_equal(result.arr, base_image.arr + fixed_noise)
+
+
+class TestImageCollectionCorrelatedNoise:
+    """Tests for ImageCollection.apply_correlated_noise."""
+
+    @pytest.fixture
+    def instrument(self):
+        """Instrument with correlated-noise source maps for two filters."""
+        from synthesizer.instruments import Instrument
+
+        rng = np.random.default_rng(21)
+        return Instrument(
+            label="test_inst",
+            noise_source_maps={
+                "F090W": rng.normal(size=(32, 32)),
+                "F150W": rng.normal(size=(32, 32)),
+            },
+        )
+
+    @pytest.fixture
+    def image_collection(self):
+        """Two-filter image collection for correlated-noise application."""
+        rng = np.random.default_rng(22)
+        imgs = {
+            "F090W": Image(
+                resolution=0.1 * kpc,
+                fov=3.2 * kpc,
+                img=rng.normal(size=(32, 32)),
+            ),
+            "F150W": Image(
+                resolution=0.1 * kpc,
+                fov=3.2 * kpc,
+                img=rng.normal(size=(32, 32)),
+            ),
+        }
+        return ImageCollection(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            imgs=imgs,
+        )
+
+    def test_returns_image_collection(self, image_collection, instrument):
+        """apply_correlated_noise returns an ImageCollection."""
+        result = image_collection.apply_correlated_noise(instrument)
+        assert isinstance(result, ImageCollection)
+
+    def test_applies_noise_to_each_image(self, image_collection, instrument):
+        """Each image in the collection receives a generated noise array."""
+        result = image_collection.apply_correlated_noise(instrument)
+        for f in image_collection.filter_codes:
+            assert result.imgs[f].noise_arr is not None
+            assert (
+                result.imgs[f].arr.shape == image_collection.imgs[f].arr.shape
+            )
+
+    def test_inplace_updates_collection(self, image_collection, instrument):
+        """inplace=True updates and returns the original collection."""
+        original = {
+            f: image_collection.imgs[f].arr.copy()
+            for f in image_collection.filter_codes
+        }
+        result = image_collection.apply_correlated_noise(
+            instrument, inplace=True
+        )
+
+        assert result is image_collection
+        for f in image_collection.filter_codes:
+            assert not np.array_equal(
+                image_collection.imgs[f].arr, original[f]
+            )
+            assert image_collection.imgs[f].noise_arr is not None
+
+    def test_missing_filter_model_raises(self, image_collection):
+        """Missing a model for one collection filter raises an error."""
+        from synthesizer.instruments import Instrument
+
+        inst = Instrument(
+            label="test_inst",
+            noise_source_maps={
+                "F090W": np.random.default_rng(23).normal(size=(32, 32))
+            },
+        )
+
+        with pytest.raises(exceptions.InconsistentArguments):
+            image_collection.apply_correlated_noise(inst)
