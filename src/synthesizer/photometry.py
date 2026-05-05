@@ -80,7 +80,8 @@ class PhotometryCollection:
                 f"{len(self.filter_codes)})."
             )
 
-        is_flux = photometry.units == self.__class__.__dict__["photo_fnu"].unit
+        fnu_unit = self.__class__.__dict__["photo_fnu"].unit
+        is_flux = photometry.units.same_dimensions_as(fnu_unit)
 
         # Keep raw ndarray storage and rely on Quantity descriptors for
         # units.
