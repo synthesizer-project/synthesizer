@@ -1072,6 +1072,10 @@ class Component(ABC):
                         instrument.noise_maps,
                     )
                 )
+            elif instrument.noise_source_maps is not None:
+                self.images_noise_lnu[instrument.label][key] = (
+                    imgs.apply_correlated_noise(instrument)
+                )
             elif instrument.snrs is not None:
                 self.images_noise_lnu[instrument.label][key] = (
                     imgs.apply_noise_from_snrs(
@@ -1149,6 +1153,10 @@ class Component(ABC):
                     imgs.apply_noise_arrays(
                         instrument.noise_maps,
                     )
+                )
+            elif instrument.noise_source_maps is not None:
+                self.images_noise_fnu[instrument.label][key] = (
+                    imgs.apply_correlated_noise(instrument)
                 )
             elif instrument.snrs is not None:
                 self.images_noise_fnu[instrument.label][key] = (

@@ -608,6 +608,63 @@ class Image(ImagingBase):
 
         return self.apply_noise_from_std(noise_std)
 
+    def apply_correlated_noise(
+        self,
+        instrument,
+        filter_code,
+        correct_periodicity=True,
+        rng_seed=None,
+        inplace=False,
+    ):
+        """Apply correlated noise modelled from an instrument noise map.
+
+        This requires an instrument with a correlated noise model for the
+        requested filter. The noise template defined by this model will then
+        be used to generate a new noise array with the same spatial
+        correlations as the template, which is then added to the image.
+
+        Args:
+            instrument (Instrument):
+                The instrument whose correlated-noise model for
+                ``filter_code`` provides the observed noise template used to
+                model the spatial correlations.
+            filter_code (str):
+                The key identifying the noise model to use.
+            correct_periodicity (bool):
+                If True a correction factor is applied to compensate for the
+                assumption of periodicity in the DFT. Default is True.
+            rng_seed (int, optional):
+                Seed for the random number generator.  Providing the same
+                seed reproduces an identical noise realisation.
+            inplace (bool):
+                If True, update this image in place and return it. Otherwise
+                return a new Image. Default is False.
+
+        Returns:
+            Image:
+                A new Image with the correlated noise added.  The
+                ``noise_arr`` and ``weight_map`` attributes are populated on
+                the returned object unless ``inplace=True``, in which case the
+                current image is updated and returned.
+
+        Raises:
+            MissingArgument:
+                If the instrument has no correlated-noise model for the
+                requested filter.
+            InconsistentArguments:
+                If the noise model is dimensionless but the image has units.
+        """
+        # Get the noise model for the requested filter
+        noise_model = instrument.get_correlated_noise_model(filter_code)
+
+        # Undo it and return the new image (or this image if inplace)
+        return noise_model.apply_noise(
+            self,
+            correct_periodicity=correct_periodicity,
+            rng_seed=rng_seed,
+            inplace=inplace,
+        )
+
     def plot_img(
         self,
         show=False,
