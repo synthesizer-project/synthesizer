@@ -514,6 +514,21 @@ class TestImageCorrelatedNoise:
             CorrelatedNoiseModel,
         )
 
+    def test_reassigning_noise_source_maps_rebuilds_models(self):
+        """Setting source maps after init rebuilds the per-filter models."""
+        from synthesizer.instruments import Instrument
+
+        inst = Instrument(label="test_inst")
+        inst.noise_source_maps = {
+            "F150W": np.random.default_rng(12).normal(size=(16, 16))
+        }
+
+        assert set(inst.correlated_noise_models) == {"F150W"}
+        assert isinstance(
+            inst.correlated_noise_models["F150W"],
+            CorrelatedNoiseModel,
+        )
+
     def test_inplace_updates_original_image(self, base_image, instrument):
         """inplace=True updates and returns the original image object."""
         original = base_image.arr.copy()

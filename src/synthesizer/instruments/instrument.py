@@ -184,13 +184,9 @@ class Instrument:
 
         # Set the source maps used to build correlated-noise models for
         # imaging. These are separate from ``noise_maps``, which represent
-        # fixed noise arrays to be applied directly.
+        # fixed noise arrays to be applied directly. The property setter keeps
+        # the per-filter models in sync with the currently assigned templates.
         self.noise_source_maps = noise_source_maps
-
-        # Correlated noise models derived from imaging noise maps. One model is
-        # stored per filter and each model owns its own cache of derived
-        # statistical quantities.
-        self.correlated_noise_models = self._build_correlated_noise_models()
 
         self._validate()
 
@@ -221,6 +217,33 @@ class Instrument:
             filter_code: CorrelatedNoiseModel(noise_map)
             for filter_code, noise_map in self.noise_source_maps.items()
         }
+
+    @property
+    def noise_source_maps(self):
+        """Return the correlated-noise source maps.
+
+        Returns:
+            dict or None:
+                The dictionary of per-filter correlated-noise source maps, or
+                None if no correlated-noise templates are configured.
+        """
+        return self._noise_source_maps
+
+    @noise_source_maps.setter
+    def noise_source_maps(self, value):
+        """Set correlated-noise source maps and rebuild their models.
+
+        Args:
+            value (dict or None):
+                Dictionary of per-filter correlated-noise source maps, or None
+                to remove the current correlated-noise configuration.
+        """
+        self._noise_source_maps = value
+
+        # Keep the models in lockstep with the source templates so callers can
+        # update ``instrument.noise_source_maps`` after construction without
+        # manually rebuilding any caches.
+        self.correlated_noise_models = self._build_correlated_noise_models()
 
     def _validate(self):
         """Validate the Instrument object."""
@@ -558,9 +581,6 @@ class Instrument:
         instance.psfs = psfs
         instance.noise_maps = noise_maps
         instance.noise_source_maps = noise_source_maps
-        instance.correlated_noise_models = (
-            instance._build_correlated_noise_models()
-        )
 
         instance._validate()
 
