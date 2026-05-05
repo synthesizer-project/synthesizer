@@ -716,14 +716,14 @@ class ImageCollection(ImagingBase):
         instrument,
         subtract_mean=False,
         correct_periodicity=True,
+        inplace=False,
     ):
         """Apply correlated noise to every image using an instrument noise map.
 
-        The correlation structure for each filter is derived from the noise
-        map stored on the instrument under that filter's code.  The
-        correlation function (CF) is computed once per filter and cached on
-        the instrument, so this call is cheap even when applied to large
-        collections.
+        The correlation structure for each filter is derived from the
+        correlated-noise model stored on the instrument under that filter's
+        code. Each model caches its correlation function, so this call is
+        cheap even when applied to large collections.
 
         Args:
             instrument (Instrument):
@@ -737,31 +737,38 @@ class ImageCollection(ImagingBase):
             correct_periodicity (bool):
                 If True a correction factor is applied to compensate for the
                 assumption of periodicity in the DFT. Default is True.
+            inplace (bool):
+                If True, update the images in this collection in place and
+                return this collection. Otherwise return a new collection.
+                Default is False.
 
         Returns:
             ImageCollection:
                 A new ImageCollection containing the images with correlated
-                noise applied.
+                noise applied unless ``inplace=True``, in which case this
+                collection is updated and returned.
 
         Raises:
             MissingArgument:
                 If the instrument has no ``noise_maps``.
             InconsistentArguments:
-                If a noise map for any filter in the collection is missing
-                from ``instrument.noise_maps``.
+                If a correlated-noise model for any filter in the collection
+                is missing from the instrument.
         """
-        if instrument.noise_maps is None:
+        if instrument.correlated_noise_models is None:
             raise exceptions.MissingArgument(
-                "No noise maps are set on the instrument. "
+                "No correlated noise models are set on the instrument. "
                 "Provide noise_maps when constructing the Instrument."
             )
         missing = [
-            f for f in self.filter_codes if f not in instrument.noise_maps
+            f
+            for f in self.filter_codes
+            if f not in instrument.correlated_noise_models
         ]
         if missing:
             raise exceptions.InconsistentArguments(
-                "Missing a noise map on the instrument for the following "
-                f"filters: {missing}"
+                "Missing a correlated noise model on the instrument for the "
+                f"following filters: {missing}"
             )
 
         noisy_imgs = {}
@@ -771,7 +778,12 @@ class ImageCollection(ImagingBase):
                 f,
                 subtract_mean=subtract_mean,
                 correct_periodicity=correct_periodicity,
+                inplace=inplace,
             )
+
+        if inplace:
+            self.imgs = noisy_imgs
+            return self
 
         return ImageCollection(
             resolution=self.resolution,

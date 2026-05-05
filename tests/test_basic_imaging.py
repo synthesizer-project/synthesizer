@@ -21,9 +21,9 @@ from synthesizer import exceptions
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
 from synthesizer.instruments.photometric_noise import (
+    CorrelatedNoiseModel,
     _cf_periodicity_dilution_correction_standalone,
     _generate_noise_from_rootps_standalone,
-    _model_and_apply_correlated_noise,
 )
 
 
@@ -282,7 +282,18 @@ class TestImageBasics:
 
 
 class TestCorrelatedNoiseCore:
-    """Tests for the internal correlated noise generation functions."""
+    """Tests for the correlated-noise modelling helpers."""
+
+    def test_model_initialisation_stores_source(self):
+        """The model retains the original source noise map."""
+        source = np.random.default_rng(3).normal(size=(10, 12))
+        model = CorrelatedNoiseModel(source)
+        assert model.source_noise_map is source
+
+    def test_model_non2d_source_raises(self):
+        """A non-2D source noise map raises a ValueError."""
+        with pytest.raises(ValueError):
+            CorrelatedNoiseModel(np.ones((4, 4, 4)))
 
     def test_cf_periodicity_correction_shape(self):
         """Correction factor array has the same shape as the input."""
@@ -321,60 +332,82 @@ class TestCorrelatedNoiseCore:
         rng = np.random.default_rng(1)
         source = rng.normal(size=(20, 20))
         target = np.zeros((30, 30))
-        result = _model_and_apply_correlated_noise(source, target, rng_seed=1)
-        assert result.shape == target.shape
+        model = CorrelatedNoiseModel(source)
+        noise = model.generate_noise_array(target.shape, rng_seed=1)
+        assert (target + noise).shape == target.shape
 
     def test_model_apply_reproducible_with_seed(self):
         """Identical seeds produce identical noise realisations."""
         source = np.random.default_rng(99).normal(size=(24, 24))
-        target = np.zeros((24, 24))
-        out1 = _model_and_apply_correlated_noise(source, target, rng_seed=7)
-        out2 = _model_and_apply_correlated_noise(source, target, rng_seed=7)
+        model = CorrelatedNoiseModel(source)
+        out1 = model.generate_noise_array((24, 24), rng_seed=7)
+        out2 = model.generate_noise_array((24, 24), rng_seed=7)
         assert np.array_equal(out1, out2)
 
     def test_model_apply_different_seeds_differ(self):
         """Different seeds produce different noise realisations."""
         source = np.random.default_rng(99).normal(size=(24, 24))
-        target = np.zeros((24, 24))
-        out1 = _model_and_apply_correlated_noise(source, target, rng_seed=1)
-        out2 = _model_and_apply_correlated_noise(source, target, rng_seed=2)
+        model = CorrelatedNoiseModel(source)
+        out1 = model.generate_noise_array((24, 24), rng_seed=1)
+        out2 = model.generate_noise_array((24, 24), rng_seed=2)
         assert not np.array_equal(out1, out2)
 
     def test_model_apply_subtract_mean_runs(self):
         """subtract_mean=True completes without error."""
         source = np.random.default_rng(0).normal(size=(16, 16))
-        target = np.zeros((16, 16))
-        result = _model_and_apply_correlated_noise(
-            source, target, subtract_mean=True, rng_seed=0
+        model = CorrelatedNoiseModel(source)
+        result = model.generate_noise_array(
+            (16, 16), subtract_mean=True, rng_seed=0
         )
-        assert result.shape == target.shape
+        assert result.shape == (16, 16)
 
     def test_model_apply_no_periodicity_correction(self):
         """correct_periodicity=False completes without error."""
         source = np.random.default_rng(0).normal(size=(16, 16))
-        target = np.zeros((16, 16))
-        result = _model_and_apply_correlated_noise(
-            source, target, correct_periodicity=False, rng_seed=0
+        model = CorrelatedNoiseModel(source)
+        result = model.generate_noise_array(
+            (16, 16), correct_periodicity=False, rng_seed=0
         )
-        assert result.shape == target.shape
+        assert result.shape == (16, 16)
 
     def test_model_apply_source_target_different_shapes(self):
         """Source and target images may have different pixel dimensions."""
         source = np.random.default_rng(0).normal(size=(40, 40))
-        target = np.zeros((20, 20))
-        result = _model_and_apply_correlated_noise(source, target, rng_seed=0)
+        model = CorrelatedNoiseModel(source)
+        result = model.generate_noise_array((20, 20), rng_seed=0)
         assert result.shape == (20, 20)
 
     def test_model_apply_non2d_raises(self):
         """Non-2D inputs raise a ValueError."""
         with pytest.raises(ValueError):
-            _model_and_apply_correlated_noise(
-                np.ones((4, 4, 4)), np.zeros((4, 4))
-            )
-        with pytest.raises(ValueError):
-            _model_and_apply_correlated_noise(
-                np.ones((4, 4)), np.zeros((4, 4, 4))
-            )
+            CorrelatedNoiseModel(np.ones((4, 4, 4)))
+
+    def test_correlation_function_is_cached_on_model(self):
+        """The CF is cached on the model after first estimation."""
+        source = np.random.default_rng(4).normal(size=(18, 18))
+        model = CorrelatedNoiseModel(source)
+        cf = model.estimate_correlation_function()
+        assert (False, True) in model._cf_cache
+        assert model._cf_cache[(False, True)] is cf
+
+    def test_correlation_function_cache_reused(self):
+        """Repeated CF requests for the same options reuse the cache."""
+        source = np.random.default_rng(4).normal(size=(18, 18))
+        model = CorrelatedNoiseModel(source)
+        cf_first = model.estimate_correlation_function()
+        cf_second = model.estimate_correlation_function()
+        assert cf_first is cf_second
+
+    def test_generate_noise_array_preserves_units(self):
+        """Generated noise carries units from the source template."""
+        source = unyt_array(
+            np.random.default_rng(4).normal(size=(18, 18)), erg / s / Hz
+        )
+        model = CorrelatedNoiseModel(source)
+        noise = model.generate_noise_array((12, 12), rng_seed=0)
+        assert isinstance(noise, unyt_array)
+        assert noise.units == source.units
+        assert noise.shape == (12, 12)
 
 
 class TestImageCorrelatedNoise:
@@ -459,22 +492,37 @@ class TestImageCorrelatedNoise:
         assert result.arr.shape == base_image.arr.shape
 
     def test_cf_is_cached_after_first_call(self, base_image, instrument):
-        """The CF is cached on the instrument after the first call."""
+        """The CF is cached on the filter's model after the first call."""
         base_image.apply_correlated_noise(instrument, "F150W")
-        cache_key = ("F150W", False, True)
-        assert cache_key in instrument._correlated_noise_cf_cache
+        model = instrument.get_correlated_noise_model("F150W")
+        assert (False, True) in model._cf_cache
 
     def test_cache_reused_on_second_call(self, base_image, instrument):
-        """A second call for the same filter hits the cache (no recompute)."""
+        """A second call for the same filter reuses the model cache."""
         base_image.apply_correlated_noise(instrument, "F150W")
-        cf_first = instrument._correlated_noise_cf_cache[
-            ("F150W", False, True)
-        ]
+        model = instrument.get_correlated_noise_model("F150W")
+        cf_first = model._cf_cache[(False, True)]
         base_image.apply_correlated_noise(instrument, "F150W")
-        cf_second = instrument._correlated_noise_cf_cache[
-            ("F150W", False, True)
-        ]
+        cf_second = model._cf_cache[(False, True)]
         assert cf_first is cf_second  # identical object — cache was reused
+
+    def test_instrument_builds_one_model_per_filter(self, instrument):
+        """The instrument constructs one correlated-noise model per filter."""
+        assert set(instrument.correlated_noise_models) == {"F150W"}
+        assert isinstance(
+            instrument.correlated_noise_models["F150W"],
+            CorrelatedNoiseModel,
+        )
+
+    def test_inplace_updates_original_image(self, base_image, instrument):
+        """inplace=True updates and returns the original image object."""
+        original = base_image.arr.copy()
+        result = base_image.apply_correlated_noise(
+            instrument, "F150W", inplace=True
+        )
+        assert result is base_image
+        assert not np.array_equal(base_image.arr, original)
+        assert base_image.noise_arr is not None
 
     def test_missing_filter_raises(self, base_image, instrument):
         """Requesting an absent filter raises InconsistentArguments."""
