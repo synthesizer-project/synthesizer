@@ -30,6 +30,7 @@ from unyt import angstrom, arcsecond, kpc, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.instruments.instrument_collection import InstrumentCollection
+from synthesizer.instruments.photometric_noise import CorrelatedNoiseModel
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.util_funcs import obj_to_hashable
@@ -166,13 +167,37 @@ class Instrument:
         # resolved spectroscopy)
         self.noise_maps = noise_maps
 
-        # Cache for correlation functions derived from noise_maps, keyed by
-        # (filter_code, subtract_mean, correct_periodicity).  Populated lazily
-        # by get_correlated_noise_cf() so the expensive FFT step is only paid
-        # once per filter per set of options.
-        self._correlated_noise_cf_cache = {}
+        # Correlated noise models derived from imaging noise maps. One model is
+        # stored per filter and each model owns its own cache of derived
+        # statistical quantities.
+        self.correlated_noise_models = self._build_correlated_noise_models()
 
         self._validate()
+
+    def _build_correlated_noise_models(self):
+        """Build per-filter correlated noise models from imaging noise maps.
+
+        Returns:
+            dict or None:
+                A dictionary mapping filter codes to correlated-noise models,
+                or None when the instrument is not configured for imaging
+                correlated noise.
+
+        Raises:
+            InconsistentArguments:
+                If ``noise_maps`` is neither a dictionary nor None when
+                correlated imaging noise is requested.
+        """
+        if self.noise_maps is None:
+            return None
+
+        if not isinstance(self.noise_maps, dict):
+            return None
+
+        return {
+            filter_code: CorrelatedNoiseModel(noise_map)
+            for filter_code, noise_map in self.noise_maps.items()
+        }
 
     def _validate(self):
         """Validate the Instrument object."""
@@ -478,7 +503,9 @@ class Instrument:
         instance.snrs = snrs
         instance.psfs = psfs
         instance.noise_maps = noise_maps
-        instance._correlated_noise_cf_cache = {}
+        instance.correlated_noise_models = (
+            instance._build_correlated_noise_models()
+        )
 
         instance._validate()
 
@@ -706,81 +733,39 @@ class Instrument:
             == obj_to_hashable(other.resolution)
         )
 
-    def get_correlated_noise_cf(
-        self,
-        filter_code,
-        subtract_mean=False,
-        correct_periodicity=True,
-    ):
-        """Return the correlation function for a filter's noise map.
-
-        The correlation function (CF) characterises the spatial noise
-        correlations present in the instrument's noise map for the given
-        filter.  The first call for a given ``(filter_code, subtract_mean,
-        correct_periodicity)`` combination computes and caches the CF; all
-        subsequent calls return the cached value at negligible cost.
+    def get_correlated_noise_model(self, filter_code):
+        """Return the correlated-noise model for a given filter.
 
         Args:
             filter_code (str):
-                Key into ``self.noise_maps`` identifying the observed noise
-                template to use.
-            subtract_mean (bool):
-                If True the DC component of the power spectrum is zeroed
-                before estimating the CF, removing any mean offset.
-                Default is False.
-            correct_periodicity (bool):
-                If True a periodicity-dilution correction is applied to the
-                CF. Default is True.
+                Key into ``self.correlated_noise_models`` identifying the
+                model to use.
 
         Returns:
-            np.ndarray:
-                A 2D float array (same shape as the noise map) holding the
-                unrolled CF (DFT convention, origin at [0, 0]).
+            CorrelatedNoiseModel:
+                The correlated-noise model associated with ``filter_code``.
 
         Raises:
             MissingArgument:
-                If ``noise_maps`` has not been set on this Instrument.
+                If no correlated-noise models are configured on the
+                instrument.
             InconsistentArguments:
-                If ``noise_maps`` is not a dict or ``filter_code`` is not
-                found in it.
+                If ``filter_code`` is not present in the configured models.
         """
-        from synthesizer.instruments.photometric_noise import (
-            _estimate_correlated_noise_cf,
-        )
-
-        if self.noise_maps is None:
+        if self.correlated_noise_models is None:
             raise exceptions.MissingArgument(
-                "No noise maps are set on this Instrument. "
+                "No correlated noise models are set on this Instrument. "
                 "Provide noise_maps when constructing the Instrument."
             )
-        if not isinstance(self.noise_maps, dict):
+
+        if filter_code not in self.correlated_noise_models:
             raise exceptions.InconsistentArguments(
-                "noise_maps must be a dict keyed by filter code for "
-                "correlated noise generation."
-            )
-        if filter_code not in self.noise_maps:
-            raise exceptions.InconsistentArguments(
-                f"No noise map found for filter '{filter_code}'. "
-                f"Available filters: {list(self.noise_maps.keys())}"
+                "No correlated noise model found for filter "
+                f"'{filter_code}'. Available filters: "
+                f"{list(self.correlated_noise_models.keys())}"
             )
 
-        cache_key = (filter_code, subtract_mean, correct_periodicity)
-        if cache_key not in self._correlated_noise_cf_cache:
-            template = self.noise_maps[filter_code]
-            arr = (
-                template.value
-                if isinstance(template, unyt_array)
-                else template
-            )
-            self._correlated_noise_cf_cache[cache_key] = (
-                _estimate_correlated_noise_cf(
-                    arr,
-                    subtract_mean=subtract_mean,
-                    correct_periodicity=correct_periodicity,
-                )
-            )
-
-        return self._correlated_noise_cf_cache[cache_key]
+        return self.correlated_noise_models[filter_code]
 
     def apply_noise(
         self,
@@ -828,7 +813,7 @@ class Instrument:
             MissingArgument:
                 If the instrument has no noise configuration.
         """
-        if self.noise_maps is not None and isinstance(self.noise_maps, dict):
+        if self.correlated_noise_models is not None:
             return image.apply_correlated_noise(
                 self,
                 filter_code,
@@ -946,3 +931,11 @@ class Instrument:
         # If noise maps are provided, add them to the noise noise_maps
         if noise_maps is not None:
             self.noise_maps.update(noise_maps)
+            if self.correlated_noise_models is None:
+                self.correlated_noise_models = {}
+            self.correlated_noise_models.update(
+                {
+                    filter_code: CorrelatedNoiseModel(noise_map)
+                    for filter_code, noise_map in noise_maps.items()
+                }
+            )

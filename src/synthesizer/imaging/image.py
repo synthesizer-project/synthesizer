@@ -30,9 +30,7 @@ from synthesizer.imaging.image_generators import (
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,
 )
-from synthesizer.instruments.photometric_noise import (
-    _generate_correlated_noise,
-)
+from synthesizer.instruments.photometric_noise import CorrelatedNoiseModel
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
@@ -618,22 +616,23 @@ class Image(ImagingBase):
         subtract_mean=False,
         correct_periodicity=True,
         rng_seed=None,
+        inplace=False,
     ):
         """Apply correlated noise modelled from an instrument noise map.
 
-        The correlation structure is derived from the noise map stored on the
-        instrument for the given filter.  That computation is cached on the
-        instrument so that when many images share the same instrument (e.g.
-        inside an ImageCollection) the expensive FFT step runs only once per
-        filter, not once per image.
+        The correlation structure is derived from the correlated-noise model
+        stored on the instrument for the given filter. That model caches the
+        expensive correlation-function estimate so that when many images share
+        the same instrument (e.g. inside an ImageCollection) the costly FFT
+        step runs only once per filter and set of modelling options.
 
         Args:
             instrument (Instrument):
-                The instrument whose ``noise_maps[filter_code]`` provides the
-                observed noise template used to model the spatial correlations.
+                The instrument whose correlated-noise model for
+                ``filter_code`` provides the observed noise template used to
+                model the spatial correlations.
             filter_code (str):
-                The key into ``instrument.noise_maps`` that identifies the
-                noise template to use.
+                The key identifying the noise model to use.
             subtract_mean (bool):
                 If True the DC component of the power spectrum is zeroed
                 before estimating the CF, removing any mean offset from the
@@ -644,43 +643,38 @@ class Image(ImagingBase):
             rng_seed (int, optional):
                 Seed for the random number generator.  Providing the same
                 seed reproduces an identical noise realisation.
+            inplace (bool):
+                If True, update this image in place and return it. Otherwise
+                return a new Image. Default is False.
 
         Returns:
             Image:
                 A new Image with the correlated noise added.  The
                 ``noise_arr`` and ``weight_map`` attributes are populated on
-                the returned object.
+                the returned object unless ``inplace=True``, in which case the
+                current image is updated and returned.
 
         Raises:
             MissingArgument:
-                If the instrument has no ``noise_maps``.
+                If the instrument has no correlated-noise model for the
+                requested filter.
             InconsistentArguments:
-                If ``filter_code`` is absent from ``instrument.noise_maps``,
-                or if the noise map is dimensionless but the image has units.
+                If the noise model is dimensionless but the image has units.
         """
-        # Get (or compute and cache) the correlation function from the
-        # instrument.  Subsequent calls for the same filter are free.
-        cf = instrument.get_correlated_noise_cf(
-            filter_code,
-            subtract_mean=subtract_mean,
-            correct_periodicity=correct_periodicity,
-        )
-
-        # Generate a noise realisation matching this image's pixel dimensions
-        noise_arr = _generate_correlated_noise(cf, self.arr.shape, rng_seed)
-
-        # Reattach units from the noise template so apply_noise_array is happy
-        template = instrument.noise_maps[filter_code]
-        if isinstance(template, unyt_array):
-            noise_arr = unyt_array(noise_arr, template.units)
-        elif self.units is not None:
+        noise_model = instrument.get_correlated_noise_model(filter_code)
+        if not isinstance(noise_model, CorrelatedNoiseModel):
             raise exceptions.InconsistentArguments(
-                "The image has units but the noise map on the instrument is "
-                "dimensionless. Provide a noise map with units compatible "
-                f"with the image units ({self.units})."
+                f"Correlated noise model for filter '{filter_code}' is not "
+                "a CorrelatedNoiseModel instance."
             )
 
-        return self.apply_noise_array(noise_arr)
+        return noise_model.apply_noise(
+            self,
+            subtract_mean=subtract_mean,
+            correct_periodicity=correct_periodicity,
+            rng_seed=rng_seed,
+            inplace=inplace,
+        )
 
     def plot_img(
         self,
