@@ -612,7 +612,6 @@ class Image(ImagingBase):
         self,
         instrument,
         filter_code,
-        subtract_mean=False,
         correct_periodicity=True,
         rng_seed=None,
         inplace=False,
@@ -632,10 +631,6 @@ class Image(ImagingBase):
                 model the spatial correlations.
             filter_code (str):
                 The key identifying the noise model to use.
-            subtract_mean (bool):
-                If True the DC component of the power spectrum is zeroed
-                before estimating the CF, removing any mean offset from the
-                noise model. Default is False.
             correct_periodicity (bool):
                 If True a correction factor is applied to compensate for the
                 assumption of periodicity in the DFT. Default is True.
@@ -664,7 +659,6 @@ class Image(ImagingBase):
 
         return noise_model.apply_noise(
             self,
-            subtract_mean=subtract_mean,
             correct_periodicity=correct_periodicity,
             rng_seed=rng_seed,
             inplace=inplace,

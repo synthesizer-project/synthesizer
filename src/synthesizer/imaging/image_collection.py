@@ -714,7 +714,6 @@ class ImageCollection(ImagingBase):
     def apply_correlated_noise(
         self,
         instrument,
-        subtract_mean=False,
         correct_periodicity=True,
         inplace=False,
     ):
@@ -731,10 +730,6 @@ class ImageCollection(ImagingBase):
                 observed noise template for each filter in this collection.
                 A source map must exist for every filter code present in the
                 collection.
-            subtract_mean (bool):
-                If True the DC component of the power spectrum is zeroed
-                before estimating the CF, removing any mean offset.
-                Default is False.
             correct_periodicity (bool):
                 If True a correction factor is applied to compensate for the
                 assumption of periodicity in the DFT. Default is True.
@@ -777,7 +772,6 @@ class ImageCollection(ImagingBase):
             noisy_imgs[f] = self.imgs[f].apply_correlated_noise(
                 instrument,
                 f,
-                subtract_mean=subtract_mean,
                 correct_periodicity=correct_periodicity,
                 inplace=inplace,
             )

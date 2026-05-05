@@ -858,7 +858,6 @@ class Instrument:
         self,
         image,
         filter_code,
-        subtract_mean=False,
         correct_periodicity=True,
         rng_seed=None,
         aperture_radius=None,
@@ -880,9 +879,6 @@ class Instrument:
             filter_code (str):
                 The filter code identifying which noise array, source map, or
                 SNR entry to use.
-            subtract_mean (bool):
-                Passed to the correlated-noise path: if True the DC component
-                of the power spectrum is zeroed. Default is False.
             correct_periodicity (bool):
                 Passed to the correlated-noise path: if True a
                 periodicity-dilution correction is applied. Default is True.
@@ -912,7 +908,6 @@ class Instrument:
             return image.apply_correlated_noise(
                 self,
                 filter_code,
-                subtract_mean=subtract_mean,
                 correct_periodicity=correct_periodicity,
                 rng_seed=rng_seed,
             )
@@ -940,7 +935,6 @@ class Instrument:
     def apply_noises(
         self,
         image_collection,
-        subtract_mean=False,
         correct_periodicity=True,
         rng_seed=None,
         aperture_radius=None,
@@ -956,8 +950,6 @@ class Instrument:
         Args:
             image_collection (ImageCollection):
                 The collection to apply noise to.
-            subtract_mean (bool):
-                Passed to the correlated-noise path. Default is False.
             correct_periodicity (bool):
                 Passed to the correlated-noise path. Default is True.
             rng_seed (int, optional):
@@ -976,7 +968,6 @@ class Instrument:
             noisy_imgs[f] = self.apply_noise(
                 image_collection.imgs[f],
                 f,
-                subtract_mean=subtract_mean,
                 correct_periodicity=correct_periodicity,
                 rng_seed=rng_seed,
                 aperture_radius=aperture_radius,
