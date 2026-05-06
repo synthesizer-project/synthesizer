@@ -1,5 +1,13 @@
 from synthesizer.instruments.filters import UVJ, Filter, FilterCollection
+from synthesizer.instruments.instrument_base import InstrumentBase
+from synthesizer.instruments.generic_instrument import GenericInstrument
 from synthesizer.instruments.instrument import Instrument
+from synthesizer.instruments.photometric_instrument import PhotometricInstrument
+from synthesizer.instruments.photometric_imager import PhotometricImager
+from synthesizer.instruments.spectroscopic_instrument import (
+    SpectroscopicInstrument,
+)
+from synthesizer.instruments.integrated_field_unit import IntegratedFieldUnit
 from synthesizer.instruments.instrument_collection import InstrumentCollection
 from synthesizer.instruments import photometric_noise
 from synthesizer.instruments import premade as _premade
@@ -15,6 +23,12 @@ from synthesizer.instruments.utils import (
 
 __all__ = [
     "Instrument",
+    "InstrumentBase",
+    "GenericInstrument",
+    "PhotometricInstrument",
+    "PhotometricImager",
+    "SpectroscopicInstrument",
+    "IntegratedFieldUnit",
     "InstrumentCollection",
     "UVJ",
     "Filter",

@@ -134,12 +134,12 @@ class InstrumentCollection:
                 The instruments to add to the collection.
         """
         # Have to import here to avoid circular imports
-        from synthesizer.instruments import Instrument
+        from synthesizer.instruments.instrument_base import InstrumentBase
 
         # Iterate over the instruments to add
         for instrument in instruments:
             # Ensure the object is an Instrument
-            if not isinstance(instrument, Instrument):
+            if not isinstance(instrument, InstrumentBase):
                 raise exceptions.InconsistentArguments(
                     f"Object {type(instrument)} is not an Instrument."
                 )
@@ -268,10 +268,10 @@ class InstrumentCollection:
                 The combined InstrumentCollection.
         """
         # Have to import here to avoid circular imports
-        from synthesizer.instruments import Instrument
+        from synthesizer.instruments.instrument_base import InstrumentBase
 
         # Ensure other is an InstrumentCollection or Instrument
-        if not isinstance(other, (InstrumentCollection, Instrument)):
+        if not isinstance(other, (InstrumentCollection, InstrumentBase)):
             raise exceptions.InconsistentAddition(
                 f"Cannot combine InstrumentCollection with {type(other)}."
             )
