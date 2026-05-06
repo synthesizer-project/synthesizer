@@ -22,6 +22,7 @@ from synthesizer.particle.particles import Particles
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.util_funcs import combine_arrays
 
 
@@ -91,6 +92,7 @@ class Gas(Particles, Component):
         dust_masses=Msun.in_base("galactic"),
         centre=Mpc,
     )
+    @timed("Gas.__init__")
     def __init__(
         self,
         masses,

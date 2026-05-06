@@ -20,9 +20,30 @@ from unyt import (
 
 from synthesizer.conversions import standard_to_vacuum
 from synthesizer.emission_models.attenuation import PowerLaw
+from synthesizer.emission_models.transformers.dust_attenuation import (
+    AttenuationLaw,
+)
 from synthesizer.emissions import LineCollection
 from synthesizer.emissions.line_ratios import ratios
 from synthesizer.emissions.utils import O2, O3, Hb, O3b, O3r
+
+
+class NoTauDustCurve(AttenuationLaw):
+    """Simple attenuation law that does not require tau_v."""
+
+    def __init__(self, transmission=0.5):
+        """Initialise the fixed-transmission test dust curve."""
+        AttenuationLaw.__init__(
+            self,
+            description="test attenuation law without tau_v",
+            required_params=(),
+            require_tau_v=False,
+        )
+        self.transmission = transmission
+
+    def get_transmission(self, tau_v=None, lam=None, **dust_curve_kwargs):
+        """Return a constant transmission independent of tau_v."""
+        return np.full(np.atleast_1d(lam).shape, self.transmission)
 
 
 class TestLineCollectionInitialization:
@@ -254,6 +275,28 @@ class TestLineCollectionOperations:
         with pytest.raises(Exception):
             lines + other_lines
 
+    def test_addition_preserves_observed_fluxes(self, simple_line_collection):
+        """Observed-frame quantities should survive line addition."""
+        lines = simple_line_collection
+        other_lines = LineCollection(
+            line_ids=lines.line_ids,
+            lam=lines.lam,
+            lum=lines.luminosity,
+            cont=lines.continuum,
+        )
+
+        lines.get_flux0()
+        other_lines.get_flux0()
+
+        sum_lines = lines + other_lines
+
+        assert np.allclose(sum_lines.flux.value, 2.0 * lines.flux.value)
+        assert np.allclose(
+            sum_lines.continuum_flux.value,
+            2.0 * lines.continuum_flux.value,
+        )
+        assert np.allclose(sum_lines.obslam.value, lines.obslam.value)
+
     def test_multiplication(self, simple_line_collection):
         """Test multiplying line collections."""
         lines = simple_line_collection
@@ -333,6 +376,28 @@ class TestLineCollectionFlux:
 
 class TestLineRatiosAndDiagrams:
     """Test line ratio and diagram functionality."""
+
+    def test_ratio_and_diagram_metadata_is_lazy(self, line_ratio_collection):
+        """Ratio and diagram discovery should be deferred until needed."""
+        lines = line_ratio_collection
+
+        assert lines._line2index is None
+        assert lines._available_ratios is None
+        assert lines._available_diagrams is None
+
+        line2index = lines.line2index
+        ratios = lines.available_ratios
+        diagrams = lines.available_diagrams
+
+        assert line2index[lines.line_ids[0]] == 0
+        assert isinstance(ratios, list)
+        assert isinstance(diagrams, list)
+        assert lines._line2index is line2index
+        assert lines._available_ratios is ratios
+        assert lines._available_diagrams is diagrams
+
+        with pytest.raises(TypeError):
+            line2index[lines.line_ids[0]] = 99
 
     def test_available_ratios(self, line_ratio_collection):
         """Test that available ratios are correctly identified."""
@@ -458,6 +523,22 @@ class TestLineCollectionManipulation:
 
         # Attenuated lines should have lower luminosity
         assert np.all(attenuated_lines.luminosity < lines.luminosity)
+
+    def test_apply_attenuation_without_tau_v(self, simple_line_collection):
+        """Test attenuation with a law that does not require tau_v."""
+        lines = simple_line_collection
+        dust_curve = NoTauDustCurve(transmission=0.25)
+
+        attenuated_lines = lines.apply_attenuation(dust_curve=dust_curve)
+
+        assert np.allclose(
+            attenuated_lines.luminosity,
+            lines.luminosity * 0.25,
+        )
+        assert np.allclose(
+            attenuated_lines.continuum,
+            lines.continuum * 0.25,
+        )
 
     def test_get_blended_lines(self, line_ratio_collection):
         """Test blending lines based on wavelength bins."""

@@ -1,5 +1,7 @@
 """Tests for the pipeline module."""
 
+import copy
+import time
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -7,8 +9,9 @@ import pytest
 from astropy.cosmology import Planck18 as cosmo
 from unyt import Mpc, kpc, unyt_array
 
-from synthesizer import exceptions
+from synthesizer import check_atomic_timing, exceptions
 from synthesizer.emissions import Sed
+from synthesizer.extensions.timers import reset_timings, tic, toc
 from synthesizer.pipeline.pipeline import Pipeline
 from synthesizer.pipeline.pipeline_utils import (
     cached_split,
@@ -22,6 +25,7 @@ from synthesizer.pipeline.pipeline_utils import (
     unify_dict_structure_across_ranks,
 )
 from synthesizer.units import Quantity
+from synthesizer.utils.operation_timers import build_timing_analysis_rows
 
 
 @pytest.fixture
@@ -416,6 +420,86 @@ class TestPipelineInit:
         assert pipeline.emission_model is nebular_emission_model
         assert pipeline.nthreads == 1  # Default value
 
+    def test_init_pipeline_invalid_max_npart(self, nebular_emission_model):
+        """Test invalid max_npart values are rejected."""
+        with pytest.raises(ValueError, match="max_npart must be an int >= 1"):
+            Pipeline(emission_model=nebular_emission_model, max_npart=0)
+
+
+class TestPipelineTimingAnalysis:
+    """Tests for Pipeline atomic timing analysis."""
+
+    def setup_method(self):
+        """Reset global atomic timings before each test."""
+        reset_timings()
+
+    @pytest.mark.skipif(
+        not check_atomic_timing(),
+        reason=(
+            "ATOMIC_TIMING not enabled. Recompile with: "
+            "ATOMIC_TIMING=1 pip install -e ."
+        ),
+    )
+    def test_analyse_timings_writes_outputs(
+        self,
+        nebular_emission_model,
+        tmp_path,
+        capsys,
+    ):
+        """Analysis should write plots and summaries with overhead time."""
+        pipeline = Pipeline(
+            emission_model=nebular_emission_model,
+            verbose=1,
+        )
+
+        time.sleep(0.002)
+        tic("Test timing analysis op")
+        time.sleep(0.002)
+        toc("Test timing analysis op")
+
+        pipeline.analyse_timings(tmp_path)
+
+        assert (tmp_path / "timing_summary.csv").exists()
+        assert (tmp_path / "timing_bar.png").exists()
+        assert (tmp_path / "timing_pie.png").exists()
+
+        summary = (tmp_path / "timing_summary.csv").read_text()
+        assert "operation,seconds,fraction_percent,count,source" in summary
+        assert "Test timing analysis op" in summary
+        assert "Overhead" in summary
+        assert "Total" in summary
+
+        stdout = capsys.readouterr().out
+        assert "Test timing analysis op" in stdout
+        assert "Overhead" in stdout
+        assert "Total" in stdout
+
+    def test_build_timing_analysis_rows_adds_overhead_and_total(self):
+        """Row builder should append Overhead and Total entries."""
+        rows = build_timing_analysis_rows(
+            {
+                "Operation A": {
+                    "seconds": 2.0,
+                    "count": 2,
+                    "source": "C",
+                },
+                "Operation B": {
+                    "seconds": 1.0,
+                    "count": 1,
+                    "source": "Python",
+                },
+            },
+            total_elapsed=4.5,
+        )
+
+        assert rows[0]["operation"] == "Operation A"
+        assert rows[1]["operation"] == "Operation B"
+        assert rows[-2]["operation"] == "Overhead"
+        assert rows[-1]["operation"] == "Total"
+        assert rows[-2]["seconds"] == pytest.approx(1.5)
+        assert rows[-1]["seconds"] == pytest.approx(4.5)
+        assert rows[-1]["fraction_percent"] == pytest.approx(100.0)
+
 
 class TestPipelineNotReady:
     """Test that the Pipeline behaves as expected when things are missing."""
@@ -580,6 +664,34 @@ class TestPipelineOperations:
             count_and_check_dict_recursive(pipeline_with_galaxies.lnu_spectra)
             > 0
         ), "No spectra were calculated"
+
+    def test_get_cosmic_sed_rejects_inverted_bounds(
+        self, pipeline_with_galaxies
+    ):
+        """Cosmic SED signalling should reject inverted bounds."""
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="lower_bound cannot be greater than upper_bound",
+        ):
+            pipeline_with_galaxies.get_cosmic_sed(
+                gal_attr="stellar_mass",
+                lower_bound=2,
+                upper_bound=1,
+            )
+
+    def test_get_observed_cosmic_sed_rejects_non_positive_volume(
+        self,
+        pipeline_with_galaxies,
+    ):
+        """Observed cosmic SED signalling should require positive volume."""
+        with pytest.raises(
+            exceptions.InconsistentArguments,
+            match="volume must be greater than 0 if provided",
+        ):
+            pipeline_with_galaxies.get_observed_cosmic_sed(
+                cosmo=cosmo,
+                volume=0 * Mpc**3,
+            )
 
     def test_run_pipeline_fnu_spectra(
         self,
@@ -1235,6 +1347,78 @@ class TestValidateNoiseUnitCompatibility:
 
         # Should not raise
         validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_with_dict_noise_source_maps(
+        self, nircam_instrument_no_psf
+    ):
+        """Test validation with dictionary noise_source_maps values."""
+        from unyt import Unit
+
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        inst = Instrument(
+            label="test_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=1.0 * kpc,
+            noise_source_maps={
+                "JWST/NIRCam.F090W": np.random.randn(10, 10)
+                * Unit("erg/s/Hz"),
+                "JWST/NIRCam.F150W": np.random.randn(10, 10)
+                * Unit("erg/s/Hz"),
+            },
+        )
+
+        validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_noise_source_maps_wrong_units_luminosity(
+        self, nircam_instrument_no_psf
+    ):
+        """Wrong source-map units raise for luminosity validation."""
+        from unyt import nJy
+
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        inst = Instrument(
+            label="test_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=1.0 * kpc,
+            noise_source_maps={
+                "JWST/NIRCam.F090W": np.random.randn(10, 10) * nJy,
+            },
+        )
+
+        with pytest.raises(exceptions.InconsistentArguments, match="erg"):
+            validate_noise_unit_compatibility([inst], "erg/s/Hz")
+
+    def test_validate_noise_source_maps_wrong_units_flux(
+        self, nircam_instrument_no_psf
+    ):
+        """Wrong source-map units raise for flux validation."""
+        from unyt import Unit
+
+        from synthesizer.instruments import Instrument
+        from synthesizer.pipeline.pipeline_utils import (
+            validate_noise_unit_compatibility,
+        )
+
+        inst = Instrument(
+            label="test_inst",
+            filters=nircam_instrument_no_psf.filters,
+            resolution=1.0 * kpc,
+            noise_source_maps={
+                "JWST/NIRCam.F090W": np.random.randn(10, 10)
+                * Unit("erg/s/Hz"),
+            },
+        )
+
+        with pytest.raises(exceptions.InconsistentArguments, match="nJy"):
+            validate_noise_unit_compatibility([inst], "nJy")
 
     def test_validate_apparent_magnitude_depth_scalar(self):
         """Test validation passes with apparent magnitude depth (float)."""
@@ -2101,3 +2285,381 @@ class TestPipelineUtilsFunctions:
         # Should not raise - float depths are valid for both types
         validate_noise_unit_compatibility([inst], Unit("erg/s/Hz"))
         validate_noise_unit_compatibility([inst], Unit("nJy"))
+
+
+def _assert_nested_allclose(lhs, rhs, rtol=1e-8, atol=0.0):
+    """Recursively compare nested pipeline outputs."""
+    if isinstance(lhs, dict):
+        assert set(lhs) == set(rhs)
+        for key in lhs:
+            _assert_nested_allclose(lhs[key], rhs[key], rtol=rtol, atol=atol)
+        return
+
+    if isinstance(lhs, (list, tuple)):
+        assert len(lhs) == len(rhs)
+        for left_item, right_item in zip(lhs, rhs):
+            _assert_nested_allclose(
+                left_item, right_item, rtol=rtol, atol=atol
+            )
+        return
+
+    if hasattr(lhs, "sfzh") and hasattr(rhs, "sfzh"):
+        np.testing.assert_allclose(lhs.sfzh, rhs.sfzh, rtol=rtol, atol=atol)
+        np.testing.assert_allclose(
+            lhs.log10ages, rhs.log10ages, rtol=rtol, atol=atol
+        )
+        np.testing.assert_allclose(
+            lhs.metallicities, rhs.metallicities, rtol=rtol, atol=atol
+        )
+        return
+
+    if hasattr(lhs, "units") and hasattr(rhs, "units"):
+        assert str(lhs.units) == str(rhs.units)
+        if getattr(getattr(lhs, "value", None), "dtype", None) is np.dtype(
+            object
+        ):
+            assert len(lhs.value) == len(rhs.value)
+            for left_item, right_item in zip(lhs.value, rhs.value):
+                _assert_nested_allclose(
+                    left_item, right_item, rtol=rtol, atol=atol
+                )
+            return
+        np.testing.assert_allclose(lhs.value, rhs.value, rtol=rtol, atol=atol)
+        return
+
+    if isinstance(lhs, np.ndarray):
+        np.testing.assert_allclose(lhs, rhs, rtol=rtol, atol=atol)
+        return
+
+    np.testing.assert_allclose(lhs, rhs, rtol=rtol, atol=atol)
+
+
+class TestGalaxySplitting:
+    """Regression tests for pipeline chunking and child accumulation."""
+
+    @staticmethod
+    def _total_particles(galaxy):
+        """Count all particles attached to a galaxy."""
+        return sum(
+            getattr(component, "nparticles", 0)
+            for component in (
+                galaxy.stars,
+                galaxy.gas,
+                galaxy.black_holes,
+            )
+            if component is not None
+        )
+
+    @staticmethod
+    def _make_pipeline(emission_model, galaxies, max_npart=None):
+        """Construct a pipeline for the supplied galaxies."""
+        pipeline = Pipeline(
+            emission_model=emission_model,
+            nthreads=1,
+            verbose=0,
+            max_npart=max_npart,
+        )
+        pipeline.add_galaxies(galaxies)
+        return pipeline
+
+    def test_split_matches_unsplit_integrated_outputs(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+        test_grid,
+    ):
+        """Integrated additive pipeline outputs should be chunk-invariant."""
+        unsplit_galaxy = copy.deepcopy(random_particle_galaxy)
+        split_galaxy = copy.deepcopy(random_particle_galaxy)
+        split_threshold = max(2, split_galaxy.stars.nparticles // 4)
+        unsplit_galaxy.calculate_integrated_stellar_properties()
+        split_galaxy.calculate_integrated_stellar_properties()
+
+        split_children = split_galaxy.split(split_threshold)
+        assert len(split_children) > 1
+
+        unsplit_galaxy._cosmic_filter_test = 2.0
+        split_galaxy._cosmic_filter_test = 2.0
+        for child in split_children:
+            child._cosmic_filter_test = 1.0
+
+        lower_bound = 1.5
+
+        unsplit_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            [unsplit_galaxy],
+        )
+        split_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            [split_galaxy],
+            max_npart=split_threshold,
+        )
+
+        for pipeline in (unsplit_pipeline, split_pipeline):
+            pipeline.get_spectra()
+            pipeline.get_observed_spectra(cosmo=cosmo)
+            pipeline.get_cosmic_sed(
+                gal_attr="_cosmic_filter_test",
+                lower_bound=lower_bound,
+            )
+            pipeline.get_observed_cosmic_sed(
+                cosmo=cosmo,
+                gal_attr="_cosmic_filter_test",
+                lower_bound=lower_bound,
+            )
+            pipeline.get_sfzh(
+                log10ages=test_grid.log10ages,
+                metallicities=test_grid.metallicities,
+            )
+            pipeline.get_sfh(log10ages=test_grid.log10ages)
+            pipeline.run()
+
+        assert any(unsplit_pipeline.cosmic_lnus.values())
+        assert any(unsplit_pipeline.cosmic_fnus.values())
+        assert any(split_pipeline.cosmic_lnus.values())
+        assert any(split_pipeline.cosmic_fnus.values())
+
+        for attr in (
+            "lnu_spectra",
+            "fnu_spectra",
+            "cosmic_lnus",
+            "cosmic_fnus",
+            "sfzhs",
+            "sfhs",
+        ):
+            _assert_nested_allclose(
+                getattr(unsplit_pipeline, attr),
+                getattr(split_pipeline, attr),
+            )
+
+    def test_cosmic_sed_average_and_volume(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+    ):
+        """Average and volume-normalised cosmic SEDs should match sums."""
+        galaxies_sum = [
+            copy.deepcopy(random_particle_galaxy),
+            copy.deepcopy(random_particle_galaxy),
+        ]
+        galaxies_avg = [copy.deepcopy(gal) for gal in galaxies_sum]
+
+        sum_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            galaxies_sum,
+        )
+        avg_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            galaxies_avg,
+        )
+
+        n_contributors = len(galaxies_sum)
+        volume = 2 * Mpc**3
+
+        sum_pipeline.get_cosmic_sed(label="sum")
+        sum_pipeline.get_observed_cosmic_sed(cosmo=cosmo, label="sum")
+        sum_pipeline.run()
+
+        avg_pipeline.get_cosmic_sed(
+            label="avg",
+            average=True,
+            volume=volume,
+        )
+        avg_pipeline.get_observed_cosmic_sed(
+            cosmo=cosmo,
+            label="avg",
+            average=True,
+            volume=volume,
+        )
+        avg_pipeline.run()
+
+        assert any(sum_pipeline.cosmic_lnus.values())
+        assert any(sum_pipeline.cosmic_fnus.values())
+        assert any(avg_pipeline.cosmic_lnus.values())
+        assert any(avg_pipeline.cosmic_fnus.values())
+
+        for component in sum_pipeline.cosmic_lnus:
+            if "sum" not in sum_pipeline.cosmic_lnus[component]:
+                continue
+            assert "avg" in avg_pipeline.cosmic_lnus[component]
+            for model_label, spec in sum_pipeline.cosmic_lnus[component][
+                "sum"
+            ].items():
+                expected = spec / n_contributors / volume
+                _assert_nested_allclose(
+                    avg_pipeline.cosmic_lnus[component]["avg"][model_label],
+                    expected,
+                )
+
+        for component in sum_pipeline.cosmic_fnus:
+            if "sum" not in sum_pipeline.cosmic_fnus[component]:
+                continue
+            assert "avg" in avg_pipeline.cosmic_fnus[component]
+            for model_label, spec in sum_pipeline.cosmic_fnus[component][
+                "sum"
+            ].items():
+                expected = spec / n_contributors / volume
+                _assert_nested_allclose(
+                    avg_pipeline.cosmic_fnus[component]["avg"][model_label],
+                    expected,
+                )
+
+    def test_cosmic_sed_duplicate_average_requests_share_label(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+    ):
+        """Duplicate average requests with one label should not re-average."""
+        galaxies_sum = [
+            copy.deepcopy(random_particle_galaxy),
+            copy.deepcopy(random_particle_galaxy),
+        ]
+        galaxies_avg = [copy.deepcopy(gal) for gal in galaxies_sum]
+
+        sum_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            galaxies_sum,
+        )
+        avg_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            galaxies_avg,
+        )
+
+        n_contributors = len(galaxies_sum)
+
+        sum_pipeline.get_cosmic_sed(label="sum")
+        sum_pipeline.get_observed_cosmic_sed(cosmo=cosmo, label="sum")
+        sum_pipeline.run()
+
+        avg_pipeline.get_cosmic_sed(label="dup", average=True)
+        avg_pipeline.get_cosmic_sed(label="dup", average=True)
+        avg_pipeline.get_observed_cosmic_sed(
+            cosmo=cosmo,
+            label="dup",
+            average=True,
+        )
+        avg_pipeline.get_observed_cosmic_sed(
+            cosmo=cosmo,
+            label="dup",
+            average=True,
+        )
+        avg_pipeline.run()
+
+        for component in sum_pipeline.cosmic_lnus:
+            if "sum" not in sum_pipeline.cosmic_lnus[component]:
+                continue
+            assert "dup" in avg_pipeline.cosmic_lnus[component]
+            for model_label, spec in sum_pipeline.cosmic_lnus[component][
+                "sum"
+            ].items():
+                expected = spec / n_contributors
+                _assert_nested_allclose(
+                    avg_pipeline.cosmic_lnus[component]["dup"][model_label],
+                    expected,
+                )
+
+        for component in sum_pipeline.cosmic_fnus:
+            if "sum" not in sum_pipeline.cosmic_fnus[component]:
+                continue
+            assert "dup" in avg_pipeline.cosmic_fnus[component]
+            for model_label, spec in sum_pipeline.cosmic_fnus[component][
+                "sum"
+            ].items():
+                expected = spec / n_contributors
+                _assert_nested_allclose(
+                    avg_pipeline.cosmic_fnus[component]["dup"][model_label],
+                    expected,
+                )
+
+    def test_split_matches_unsplit_resolved_outputs(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+        nircam_instrument_no_psf,
+        kernel,
+    ):
+        """Resolved additive outputs should be unchanged by chunking."""
+        unsplit_galaxy = copy.deepcopy(random_particle_galaxy)
+        split_galaxy = copy.deepcopy(random_particle_galaxy)
+        split_threshold = max(2, split_galaxy.stars.nparticles // 4)
+
+        assert len(split_galaxy.split(split_threshold)) > 1
+
+        unsplit_model = copy.deepcopy(nebular_emission_model)
+        split_model = copy.deepcopy(nebular_emission_model)
+        unsplit_model.set_per_particle(True)
+        split_model.set_per_particle(True)
+
+        unsplit_pipeline = self._make_pipeline(unsplit_model, [unsplit_galaxy])
+        split_pipeline = self._make_pipeline(
+            split_model,
+            [split_galaxy],
+            max_npart=split_threshold,
+        )
+
+        for pipeline in (unsplit_pipeline, split_pipeline):
+            pipeline.get_images_luminosity(
+                nircam_instrument_no_psf,
+                fov=100 * Mpc,
+                kernel=kernel,
+            )
+            pipeline.get_images_flux(
+                nircam_instrument_no_psf,
+                fov=100 * Mpc,
+                kernel=kernel,
+                cosmo=cosmo,
+            )
+            pipeline.run()
+
+        _assert_nested_allclose(
+            unsplit_pipeline.images_lum,
+            split_pipeline.images_lum,
+            rtol=3e-6,
+        )
+        _assert_nested_allclose(
+            unsplit_pipeline.images_flux,
+            split_pipeline.images_flux,
+            rtol=3e-6,
+        )
+
+    def test_split_matches_unsplit_for_multiple_galaxies(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+        test_grid,
+    ):
+        """Packing multiple split galaxies should match the unsplit case."""
+        unsplit_galaxies = [
+            copy.deepcopy(random_particle_galaxy) for _ in range(3)
+        ]
+        split_galaxies = [
+            copy.deepcopy(random_particle_galaxy) for _ in range(3)
+        ]
+        split_threshold = max(2, split_galaxies[0].stars.nparticles // 4)
+
+        assert len(split_galaxies[0].split(split_threshold)) > 1
+
+        unsplit_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            unsplit_galaxies,
+        )
+        split_pipeline = self._make_pipeline(
+            copy.deepcopy(nebular_emission_model),
+            split_galaxies,
+            max_npart=split_threshold,
+        )
+
+        for pipeline in (unsplit_pipeline, split_pipeline):
+            pipeline.get_spectra()
+            pipeline.get_sfzh(
+                log10ages=test_grid.log10ages,
+                metallicities=test_grid.metallicities,
+            )
+            pipeline.get_sfh(log10ages=test_grid.log10ages)
+            pipeline.run()
+
+        for attr in ("lnu_spectra", "sfzhs", "sfhs"):
+            _assert_nested_allclose(
+                getattr(unsplit_pipeline, attr),
+                getattr(split_pipeline, attr),
+            )

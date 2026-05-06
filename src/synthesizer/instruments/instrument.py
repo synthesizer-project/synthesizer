@@ -4,7 +4,8 @@ This module contains the `Instrument` class, which is used to define
 observational instruments for use in the Synthesizer package. The
 `Instrument` class contains everything needed to define a telescope or
 spectrograph, including the filters, resolution, wavelength array, depth,
-depth aperture radius, signal-to-noise ratios, PSFs and noise_maps.
+depth aperture radius, signal-to-noise ratios, PSFs, fixed noise_maps and
+correlated-noise source maps.
 
 `Instrument` objects can define instruments to be used for synthetic:
     - Photometry (with or without noise)
@@ -19,17 +20,20 @@ Example usage:
         filters=FilterCollection(...),
         resolution=0.1 * kpc,
         noise_maps={...},
+        noise_source_maps={...},
         psfs={...},
         )
     print(instrument)
 """
 
 import h5py
+import numpy as np
 from unyt import angstrom, arcsecond, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.instruments.instrument_collection import InstrumentCollection
+from synthesizer.instruments.photometric_noise import CorrelatedNoiseModel
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.util_funcs import obj_to_hashable
@@ -40,7 +44,8 @@ class Instrument:
 
     This class contains everything needed to define a telescope or
     spectrograph, including the filters, resolution, wavelength array,
-    depth, depth aperture radius, signal-to-noise ratios, PSFs and noise_maps.
+    depth, depth aperture radius, signal-to-noise ratios, PSFs, fixed noise
+    arrays and correlated-noise source maps.
 
     `Instrument` objects can define instruments to be used for synthetic:
         - Photometry (with or without noise)
@@ -66,7 +71,9 @@ class Instrument:
         psfs (unyt_array):
             The PSFs of the Instrument.
         noise_maps (unyt_array):
-            The noise maps of the Instrument.
+            Fixed noise arrays to apply directly.
+        noise_source_maps (unyt_array):
+            Source maps used to build correlated-noise models.
     """
 
     # Define quantities
@@ -84,6 +91,7 @@ class Instrument:
         snrs=None,
         psfs=None,
         noise_maps=None,
+        noise_source_maps=None,
     ):
         """Initialize an Instrument object.
 
@@ -119,11 +127,20 @@ class Instrument:
                 resolved spectroscopy this should be an array.
                 Default is None.
             noise_maps (dict/unyt_array, optional):
-                The noise maps of the Instrument (must have units). Can be:
+                Fixed noise arrays for the Instrument (must have units). Can
+                be:
                 - unyt_array: noise as a function of wavelength (spectroscopy)
-                - dict: mapping of filter names to noise maps (imaging)
+                - dict: mapping of filter names to fixed noise arrays
+                  (imaging)
+                These arrays are applied directly when noise is requested.
                 Units must be compatible with the image type (flux or
                 luminosity). Default is None.
+            noise_source_maps (dict, optional):
+                Source maps used to model correlated imaging noise. These must
+                be provided as a dict mapping filter names to 2D source noise
+                arrays, with units compatible with the image type. Fresh noise
+                realisations are generated from these templates each time
+                correlated noise is applied. Default is None.
         """
         # Set the label of the Instrument
         self.label = label
@@ -166,7 +183,68 @@ class Instrument:
         # resolved spectroscopy)
         self.noise_maps = noise_maps
 
+        # Set the source maps used to build correlated-noise models for
+        # imaging. These are separate from ``noise_maps``, which represent
+        # fixed noise arrays to be applied directly. The property setter keeps
+        # the per-filter models in sync with the currently assigned templates.
+        self.noise_source_maps = noise_source_maps
+
         self._validate()
+
+    def _build_correlated_noise_models(self):
+        """Build per-filter correlated noise models from source maps.
+
+        Returns:
+            dict or None:
+                A dictionary mapping filter codes to correlated-noise models,
+                or None when the instrument is not configured for imaging
+                correlated noise.
+
+        Raises:
+            InconsistentArguments:
+                If ``noise_source_maps`` is neither a dictionary nor None when
+                correlated imaging noise is requested.
+        """
+        if self.noise_source_maps is None:
+            return None
+
+        if not isinstance(self.noise_source_maps, dict):
+            raise exceptions.InconsistentArguments(
+                "noise_source_maps must be a dict keyed by filter code for "
+                "correlated noise generation."
+            )
+
+        return {
+            filter_code: CorrelatedNoiseModel(noise_map)
+            for filter_code, noise_map in self.noise_source_maps.items()
+        }
+
+    @property
+    def noise_source_maps(self):
+        """Return the correlated-noise source maps.
+
+        Returns:
+            dict or None:
+                The dictionary of per-filter correlated-noise source maps, or
+                None if no correlated-noise templates are configured.
+        """
+        return self._noise_source_maps
+
+    @noise_source_maps.setter
+    def noise_source_maps(self, value):
+        """Set correlated-noise source maps and rebuild their models.
+
+        Args:
+            value (dict or None):
+                Dictionary of per-filter correlated-noise source maps, or None
+                to remove the current correlated-noise configuration.
+        """
+        self._noise_source_maps = value
+
+        # Keep the models in lockstep with the source templates so callers can
+        # update ``instrument.noise_source_maps`` after construction without
+        # manually rebuilding any caches.
+        self.correlated_noise_models = self._build_correlated_noise_models()
 
     def _validate(self):
         """Validate the Instrument object."""
@@ -182,12 +260,26 @@ class Instrument:
                 "If you set a SNR you must also set the depth"
             )
 
-        # Make sure we don't have both a SNR and a noise map (only one
-        # can be used at a time)
+        # Make sure we don't have both a SNR and a direct/fixed noise map.
+        # Only one noise definition can be active at a time.
         if self.snrs is not None and self.noise_maps is not None:
             raise exceptions.MissingArgument(
                 "You cannot set depths and SNRs at the same time as "
                 " noise maps"
+            )
+
+        # Correlated-noise source maps are an alternative noise definition in
+        # the same way as fixed arrays or SNR/depth.
+        if self.snrs is not None and self.noise_source_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set depths and SNRs at the same time as "
+                "noise source maps"
+            )
+
+        if self.noise_maps is not None and self.noise_source_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set fixed noise maps and correlated noise source "
+                "maps at the same time"
             )
 
     @property
@@ -254,6 +346,7 @@ class Instrument:
         """
         # Check we have a compatible noise definition
         have_noise = self.noise_maps is not None
+        have_noise |= self.noise_source_maps is not None
         have_noise |= self.snrs is not None and self.depth is not None
 
         return self.can_do_imaging and have_noise
@@ -440,6 +533,18 @@ class Instrument:
         else:
             noise_maps = None
 
+        # Unpack the correlated-noise source maps. These are only defined for
+        # imaging and are stored separately from fixed noise arrays.
+        if "NoiseSourceMaps" in group and isinstance(
+            group["NoiseSourceMaps"], h5py.Group
+        ):
+            noise_source_maps = {
+                key: unyt_array(value[...], value.attrs["units"])
+                for key, value in group["NoiseSourceMaps"].items()
+            }
+        else:
+            noise_source_maps = None
+
         # Overrise any of the attributes with the kwargs if they are present
         # in the kwargs
         if "filters" in kwargs:
@@ -458,6 +563,8 @@ class Instrument:
             psfs = kwargs["psfs"]
         if "noise_maps" in kwargs:
             noise_maps = kwargs["noise_maps"]
+        if "noise_source_maps" in kwargs:
+            noise_source_maps = kwargs["noise_source_maps"]
 
         # Create a new instance of the Instrument class
         instance = cls.__new__(cls)
@@ -472,6 +579,7 @@ class Instrument:
         instance.snrs = snrs
         instance.psfs = psfs
         instance.noise_maps = noise_maps
+        instance.noise_source_maps = noise_source_maps
 
         instance._validate()
 
@@ -569,6 +677,14 @@ class Instrument:
                 )
                 ds.attrs["units"] = str(self.noise_maps.units)
 
+        if self.noise_source_maps is not None:
+            noise_source_group = group.create_group("NoiseSourceMaps")
+            for key, value in self.noise_source_maps.items():
+                ds = noise_source_group.create_dataset(
+                    key, data=value.value, dtype=float
+                )
+                ds.attrs["units"] = str(value.units)
+
     def __str__(self):
         """Return a string representation of the Instrument.
 
@@ -641,6 +757,7 @@ class Instrument:
         snrs_hash = obj_to_hashable(self.snrs)
         psfs_hash = obj_to_hashable(self.psfs)
         noise_maps_hash = obj_to_hashable(self.noise_maps)
+        noise_source_maps_hash = obj_to_hashable(self.noise_source_maps)
         resolution_hash = obj_to_hashable(self.resolution)
 
         # Define the hash based on the label and properties of the object
@@ -655,6 +772,7 @@ class Instrument:
                 snrs_hash,
                 psfs_hash,
                 noise_maps_hash,
+                noise_source_maps_hash,
             )
         )
 
@@ -695,16 +813,190 @@ class Instrument:
             and obj_to_hashable(self.psfs) == obj_to_hashable(other.psfs)
             and obj_to_hashable(self.noise_maps)
             == obj_to_hashable(other.noise_maps)
+            and obj_to_hashable(self.noise_source_maps)
+            == obj_to_hashable(other.noise_source_maps)
             and obj_to_hashable(self.resolution)
             == obj_to_hashable(other.resolution)
         )
 
-    def add_filters(self, filters, psfs=None, noise_maps=None):
+    def get_correlated_noise_model(self, filter_code):
+        """Return the correlated-noise model for a given filter.
+
+        Args:
+            filter_code (str):
+                Key into ``self.correlated_noise_models`` identifying the
+                model to use.
+
+        Returns:
+            CorrelatedNoiseModel:
+                The correlated-noise model associated with ``filter_code``.
+
+        Raises:
+            MissingArgument:
+                If no correlated-noise models are configured on the
+                instrument.
+            InconsistentArguments:
+                If ``filter_code`` is not present in the configured models.
+        """
+        if self.correlated_noise_models is None:
+            raise exceptions.MissingArgument(
+                "No correlated noise models are set on this Instrument. "
+                "Provide noise_source_maps when constructing the Instrument."
+            )
+
+        if filter_code not in self.correlated_noise_models:
+            raise exceptions.InconsistentArguments(
+                "No correlated noise model found for filter "
+                f"'{filter_code}'. Available filters: "
+                f"{list(self.correlated_noise_models.keys())}"
+            )
+
+        return self.correlated_noise_models[filter_code]
+
+    def apply_noise(
+        self,
+        image,
+        filter_code,
+        correct_periodicity=True,
+        rng_seed=None,
+        aperture_radius=None,
+    ):
+        """Apply noise to a single image using the instrument's noise model.
+
+        Dispatches automatically to the appropriate noise mode based on what
+        is configured on the instrument:
+
+        - ``noise_maps`` present → apply the stored fixed noise array.
+        - ``noise_source_maps`` dict present → correlated noise modelled from
+          the observed template for ``filter_code``.
+        - ``snrs`` + ``depth`` set → white noise scaled from the instrument's
+          depth and signal-to-noise ratio.
+
+        Args:
+            image (Image):
+                The image to apply noise to.
+            filter_code (str):
+                The filter code identifying which noise array, source map, or
+                SNR entry to use.
+            correct_periodicity (bool):
+                Passed to the correlated-noise path: if True a
+                periodicity-dilution correction is applied. Default is True.
+            rng_seed (int, optional):
+                Seed for the random number generator (correlated noise only).
+            aperture_radius (unyt_quantity, optional):
+                Aperture radius for the SNR/depth noise path.  If None a
+                point-source depth is assumed.
+
+        Returns:
+            Image:
+                A new Image with noise added.  ``noise_arr`` and
+                ``weight_map`` are set on the returned object.
+
+        Raises:
+            MissingArgument:
+                If the instrument has no noise configuration.
+        """
+        if self.noise_maps is not None:
+            noise_arr = (
+                self.noise_maps[filter_code]
+                if isinstance(self.noise_maps, dict)
+                else self.noise_maps
+            )
+            return image.apply_noise_array(noise_arr)
+        elif self.correlated_noise_models is not None:
+            return image.apply_correlated_noise(
+                self,
+                filter_code,
+                correct_periodicity=correct_periodicity,
+                rng_seed=rng_seed,
+            )
+        elif self.snrs is not None and self.depth is not None:
+            snr = (
+                self.snrs[filter_code]
+                if isinstance(self.snrs, dict)
+                else self.snrs
+            )
+            depth = (
+                self.depth[filter_code]
+                if isinstance(self.depth, dict)
+                else self.depth
+            )
+            return image.apply_noise_from_snr(
+                snr=snr, depth=depth, aperture_radius=aperture_radius
+            )
+        else:
+            raise exceptions.MissingArgument(
+                "The instrument has no noise configuration. Set either "
+                "noise_maps, noise_source_maps, or snrs and depth before "
+                "calling apply_noise."
+            )
+
+    def apply_noises(
+        self,
+        image_collection,
+        correct_periodicity=True,
+        rng_seed=None,
+        aperture_radius=None,
+    ):
+        """Apply noise to every image in a collection.
+
+        Calls :meth:`apply_noise` for each filter in the collection. When
+        correlated-noise source maps are used, the expensive correlation-
+        function estimation is cached on the per-filter model so the FFT step
+        runs at most once per filter regardless of how many images share the
+        same instrument.
+
+        Args:
+            image_collection (ImageCollection):
+                The collection to apply noise to.
+            correct_periodicity (bool):
+                Passed to the correlated-noise path. Default is True.
+            rng_seed (int, optional):
+                Seed for the random number generator (correlated noise only).
+            aperture_radius (unyt_quantity, optional):
+                Aperture radius for the SNR/depth noise path.
+
+        Returns:
+            ImageCollection:
+                A new ImageCollection with noise applied to each image.
+        """
+        from synthesizer.imaging.image_collection import ImageCollection
+
+        rng = np.random.default_rng(rng_seed)
+
+        noisy_imgs = {}
+        for f in image_collection.filter_codes:
+            filter_rng_seed = (
+                None
+                if rng_seed is None
+                else int(rng.integers(0, np.iinfo(np.uint32).max))
+            )
+            noisy_imgs[f] = self.apply_noise(
+                image_collection.imgs[f],
+                f,
+                correct_periodicity=correct_periodicity,
+                rng_seed=filter_rng_seed,
+                aperture_radius=aperture_radius,
+            )
+
+        return ImageCollection(
+            resolution=image_collection.resolution,
+            fov=image_collection.fov,
+            imgs=noisy_imgs,
+        )
+
+    def add_filters(
+        self,
+        filters,
+        psfs=None,
+        noise_maps=None,
+        noise_source_maps=None,
+    ):
         """Add filters to the Instrument.
 
-        If PSFs or noise maps are provided, an entry for each new filter
-        must be provided in a dict passed to the psfs or noise_maps
-        arguments.
+        If PSFs, fixed noise arrays, or correlated-noise source maps are
+        provided, an entry for each new filter must be provided in the
+        corresponding dictionary.
 
         Args:
             filters (FilterCollection):
@@ -712,13 +1004,13 @@ class Instrument:
             psfs (dict, optional):
                 The PSFs for the new filters. Default is None.
             noise_maps (dict, optional):
-                The noise maps for the new filters. Default is None.
+                Fixed noise arrays for the new filters. Default is None.
+            noise_source_maps (dict, optional):
+                Correlated-noise source maps for the new filters.
+                Default is None.
         """
-        # Combine the filters together
-        self.filters += filters
-
-        # Ensure we have an entry for each filter code in the psfs and
-        # noise_maps
+        # Ensure we have an entry for each filter code in the PSF and noise
+        # dictionaries.
         if psfs is not None and set(psfs.keys()) != set(filters.filter_codes):
             raise exceptions.InconsistentAddition(
                 "PSFs missing for filters: "
@@ -731,11 +1023,55 @@ class Instrument:
                 "Noise maps missing for filters: "
                 f"{set(filters.filter_codes) - set(noise_maps.keys())}"
             )
+        if noise_source_maps is not None and set(
+            noise_source_maps.keys()
+        ) != set(filters.filter_codes):
+            raise exceptions.InconsistentAddition(
+                "Noise source maps missing for filters: "
+                f"{set(filters.filter_codes) - set(noise_source_maps.keys())}"
+            )
+
+        # Validate that any new noise payload would not create an invalid mixed
+        # noise configuration before mutating the instrument.
+        if self.snrs is not None and noise_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set depths and SNRs at the same time as noise maps"
+            )
+        if self.snrs is not None and noise_source_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set depths and SNRs at the same time as "
+                "noise source maps"
+            )
+        if noise_maps is not None and self.noise_source_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set fixed noise maps and correlated noise source "
+                "maps at the same time"
+            )
+        if noise_source_maps is not None and self.noise_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set fixed noise maps and correlated noise source "
+                "maps at the same time"
+            )
+
+        # Combine the filters together only after validation succeeds.
+        self.filters += filters
 
         # If PSFs are provided, add them to the psfs
         if psfs is not None:
             self.psfs.update(psfs)
 
-        # If noise maps are provided, add them to the noise noise_maps
+        # If fixed noise arrays are provided, add them to the
+        # direct-application noise maps.
         if noise_maps is not None:
+            if self.noise_maps is None:
+                self.noise_maps = {}
             self.noise_maps.update(noise_maps)
+
+        # If correlated-noise source maps are provided, add them and build the
+        # matching per-filter models.
+        if noise_source_maps is not None:
+            if self.noise_source_maps is None:
+                self.noise_source_maps = {}
+            self.noise_source_maps.update(noise_source_maps)
+
+        self._validate()

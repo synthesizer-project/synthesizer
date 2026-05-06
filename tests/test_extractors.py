@@ -161,6 +161,7 @@ def test_integrated_particle_generate_lnu(
     assert args[1] is extractor._grid_axes  # grid_axes
     assert args[2] == ("mock_extracted",)  # extracted
     assert args[3] == "mock_weight"  # weight
+    assert args[-1] == tuple(extractor._emitter_attributes)
 
     # Ensure the output sed is "integrated" (has ndim == 1)
     assert result.lnu.ndim == 1, f"Expected 1D lnu, got {result.lnu.ndim}"
