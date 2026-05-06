@@ -4,19 +4,19 @@ Creating Grids
 Advanced users can create their own `synthesizer grids <../grids/grids>`_. These can be intrinsic grids of stellar emission, generated from stellar population synthesis models, or grids post-processed through photoionisation codes such as `cloudy <https://trac.nublado.org>`_.
 
 The code for creating custom grids is contained in a separate repository, `grid-generation <https://github.com/synthesizer-project/grid-generation>`_.
-You will need a working installation of synthesizer for these scripts to work, as well as other dependencies for specific codes (e.g. CLOUDY, python-FSPS). 
+You will need a working installation of synthesizer for these scripts to work, as well as other dependencies for specific codes (e.g. CLOUDY, python-FSPS, RELAGN). 
 
 Grids should follow the naming convention where possible, see :ref:`grid-naming`.
 
 Please see `Abundances <../abundances.ipynb>`_ for details on how to modify the chemical abundance pattern of gas, stars and dust using the `abundances`` object, and use this when running `cloudy`.
 
 
-Running your own SPS grids 
+Running your own grids 
 --------------------------
 
 Here we will show how to create an incident grid using synthesizer. These incident grids are often used as inputs to photoionisation codes like Cloudy, but are also useful in their own right for understanding the intrinsic properties of stellar populations.
 
-Firstly, choose the grid you want to create, e.g. BC03, maraston05, or FSPS, and find the corresponding python script to install it within the `grid-generation` repository.
+Firstly, choose the grid you want to create, e.g. BC03, maraston05, FSPS, or RELAGN and find the corresponding python script to install it within the `grid-generation` repository.
 To create the grid, you need to specify where you want to place the raw data files from the model (`input_dir`), and where you would like the grid file to be created (`grid_dir`), e.g.
 
 .. code-block:: bash
@@ -37,6 +37,12 @@ After creating a grid, there is also the option of creating a grid of a reduced 
  
 
 where here the maximum age was set to :math:`10^7` years.
+
+To create the RELAGN (or AGNSED or QSOSED) grid, the `RELAGN` package and its dependencies need to be installed; details of how to do this can be found `here <https://github.com/scotthgn/RELAGN.git>`_. The axes parameters are fed through a configuration file, and example files can be found within  `synthesizer_grids/incident/blackholes/params`. You can modify this to change the axes parameters, and the script will read in the new parameter file to create the grid. To create the the grid,
+
+.. code-block:: bash
+
+   python install_relagn.py --input_dir /home/dir/data/synthesizer_data/input_files --grid_dir /home/dir/data/synthesizer_data/grids --config_file params/relagn.yaml
 
 Running a grid through Cloudy
 -----------------------------
