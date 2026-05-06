@@ -1,16 +1,12 @@
-
-Pre-Computed Grids
-==================
-
-Synthesizer was built on the ethos of being **flexible**.
-With this in mind, we have generated a variety of grids for different SPS models, initial mass functions (IMFs), and photoionisation modelling assumptions.
+SPS Grids
+=========
 
 .. _grid-naming:
 
 Grid naming
 -----------
 
-The naming of grids broadly follows this specification::
+The naming of SPS grids broadly follows this specification::
 
     {sps_model}-{sps_version}-{sps_variant}_{imf_type}-{mass_boundaries}-{slopes}_{photoionisation_code}-{photoionisation_code_version}-{photoionisation_parameters} 
 
@@ -19,8 +15,6 @@ Though some of these (such as ``stellar_library``, ``slopes``, ``photoionisation
     bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01 
 
 specifies that the grid is constructed using v2.2.1 of the `Binary Population and Spectral Synthesis <https://bpass.auckland.ac.nz/>`_ (BPASS) SPS model for the binary (bin) variant. This grid assumes the Chabrier (2003) IMF between 0.1 and 300 Msol. Photoionisation modelling is performed using v23.01 of the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code assuming our `default assumptions <https://github.com/synthesizer-project/grid-generation/blob/main/src/synthesizer_grids/cloudy/params/c23.01-sps.yaml>`_. Certain SPS models also use multiple stellar spectral libraries, which we bring under sps_variant as well.
-In addition to the naming, all grid files contain a complete summary of their model and photoionisation properties in attributes.
-
 
 Initial Mass Function
 ---------------------
@@ -52,7 +46,7 @@ All the photoionisation modelling in synthesizer currently uses the `cloudy <htt
 Common variants
 ---------------
 
-* `resolution:0.1` outputs the spectra at 10x higher resolution than the `cloudy` default. Useful for looking at various absorption line indices. 
+* `resolution:0.1` outputs the spectra at 10x higher resolution than the `cloudy` default. Useful for looking at various absorption line indices and comparison to high-resolution spectra. Usually suffixed to the grid name with `_0.1res` (e.g. `bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps_0.1res.hdf5`). 
 * `ionisation_parameter:X` assumes a fixed ionisation parameter `X` for the incident spectra.
 
 
@@ -63,10 +57,11 @@ Most SPS grids are two-dimensional, with the dimensions being `log10(age)` and `
 By default, certain models (e.g., parametric stars) aren't set up to handle higher dimensionality, though this may change in a future version. 
 For now, we provide the functionality to handle these grids by "collapsing" over the additional axes. 
 More details on this are provided in the `grids_modify <grids_modify>`_ notebook.
+
 Grid list
 ~~~~~~~~~
 
-Below are examples of the pre-computed grids available in the `Box <https://sussex.app.box.com/v/SynthesizerProductionGrids>`_.
+Below are examples of the pre-computed grids available:
 
 .. collapse:: Bruzual & Charlot (2003, BC03)
 
@@ -153,14 +148,3 @@ Below are examples of the pre-computed grids available in the `Box <https://suss
         - maraston13_kroupa-0.1,100
         - maraston24-Tenc_0.00_kroupa-0.1,100
         - maraston24-Tenc40_kroupa-0.1,100_cloudy-c23.01-sps
-
-
-
-Creating your own grids
-~~~~~~~~~~~~~~~~~~~~~~~
-
-For advanced users, Synthesizer contains scripts for creating your own grids from popular SPS codes, and running these through CLOUDY.
-We provide scripts for doing this in the `grid-generation` repository.
-Details are provided `here <../advanced/creating_grids>`_.
-You will need a working installation of Synthesizer for these scripts to work, as well as other dependencies for specific codes (e.g. `CLOUDY`, `python-FSPS`).
-Please reach out to us if you have questions about the pre-computed grids or grid creation.
