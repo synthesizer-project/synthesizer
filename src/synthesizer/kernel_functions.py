@@ -12,8 +12,10 @@ Available kernels include:
     - quintic
 """
 
+import h5py
 import numpy as np
 
+from synthesizer._version import __version__
 from synthesizer.extensions.kernel import (
     compute_overlap_kernel,
     compute_projected_kernel,
@@ -122,6 +124,8 @@ class Kernel:
     kernels. This table is returned by `get_overlap_kernel()` and is the lookup
     used by the smoothed-input LOS path.
     """
+
+    _HDF5_FORMAT_VERSION = 1
 
     def __init__(
         self,
@@ -307,19 +311,139 @@ class Kernel:
         return kernel
 
     @timed("Kernel.create_kernel")
-    def create_kernel(self):
-        """Save the computed projected kernel for easy look-up as .npz file."""
-        kernel = self.get_kernel()
-        header = np.array([{"kernel": self.name, "bins": self.binsize}])
-        np.savez(
-            f"kernel_{self.name}.npz",
-            header=header,
-            kernel=kernel,
+    def create_kernel(self, filepath=None, nthreads=1):
+        """Build and save the kernel lookup tables to an HDF5 file.
+
+        Args:
+            filepath (str, optional):
+                The path to the HDF5 file to write. If omitted this defaults to
+                ``kernel_<name>.hdf5``.
+            nthreads (int):
+                The number of threads to use when building the overlap table if
+                it has not already been cached.
+
+        Returns:
+            np.ndarray:
+                The projected LOS kernel table.
+        """
+        # Create the filepath if it was not provided
+        if filepath is None:
+            filepath = f"kernel_{self.name}.hdf5"
+
+        # Write metadata to the Header and then save the kernel tables using
+        # the HDF5 writer
+        with h5py.File(filepath, "w") as hdf:
+            header = hdf.create_group("Header")
+            header.attrs["synthesizer_version"] = __version__
+            header.attrs["type"] = "Kernel"
+            header.attrs["format"] = "kernel_lookup"
+            header.attrs["format_version"] = self._HDF5_FORMAT_VERSION
+
+            self.to_hdf5(hdf.create_group("Kernel"), nthreads=nthreads)
+
+        return self.get_kernel()
+
+    def to_hdf5(self, group, nthreads=1):
+        """Save the kernel lookup tables and metadata to an HDF5 group.
+
+        Args:
+            group (h5py.Group):
+                The group in which to save the kernel tables.
+            nthreads (int):
+                The number of threads to use when building the overlap table if
+                it has not already been cached.
+        """
+        projected_kernel = self.get_kernel()
+        projected_bins = self._get_bins()
+
+        truncated_kernel, truncated_q, truncated_z = (
+            self.get_truncated_los_kernel()
+        )
+        overlap_kernel, overlap_q, overlap_u, overlap_eta = (
+            self.get_overlap_kernel(nthreads=nthreads)
         )
 
-        print(header)
+        group.attrs["name"] = self.name
+        group.attrs["binsize"] = self.binsize
+        group.attrs["truncated_q_binsize"] = self.truncated_q_binsize
+        group.attrs["truncated_z_binsize"] = self.truncated_z_binsize
+        group.attrs["overlap_q_binsize"] = self.overlap_q_binsize
+        group.attrs["overlap_u_binsize"] = self.overlap_u_binsize
+        group.attrs["overlap_eta_binsize"] = self.overlap_eta_binsize
+        group.attrs["overlap_eta_min"] = self.overlap_eta_min
+        group.attrs["overlap_eta_max"] = self.overlap_eta_max
+        group.attrs["overlap_build_ndim"] = self.overlap_build_ndim
+        group.attrs["projected_integration_steps"] = (
+            self.projected_integration_steps
+        )
+        group.attrs["format_version"] = self._HDF5_FORMAT_VERSION
 
-        return kernel
+        datasets = {
+            "projected_kernel": projected_kernel,
+            "projected_bins": projected_bins,
+            "truncated_kernel": truncated_kernel,
+            "truncated_q": truncated_q,
+            "truncated_z": truncated_z,
+            "overlap_kernel": overlap_kernel,
+            "overlap_q": overlap_q,
+            "overlap_u": overlap_u,
+            "overlap_eta": overlap_eta,
+        }
+        for dataset_name, data in datasets.items():
+            group.create_dataset(dataset_name, data=data, dtype=np.float64)
+
+    @classmethod
+    def _from_hdf5(cls, group):
+        """Create a Kernel from an HDF5 group.
+
+        Args:
+            group (h5py.Group):
+                The group containing a serialized kernel.
+
+        Returns:
+            Kernel:
+                The Kernel restored from the HDF5 group.
+        """
+        instance = cls(
+            name=group.attrs["name"],
+            binsize=int(group.attrs["binsize"]),
+            truncated_q_binsize=int(group.attrs["truncated_q_binsize"]),
+            truncated_z_binsize=int(group.attrs["truncated_z_binsize"]),
+            overlap_q_binsize=int(group.attrs["overlap_q_binsize"]),
+            overlap_u_binsize=int(group.attrs["overlap_u_binsize"]),
+            overlap_eta_binsize=int(group.attrs["overlap_eta_binsize"]),
+            overlap_eta_min=float(group.attrs["overlap_eta_min"]),
+            overlap_eta_max=float(group.attrs["overlap_eta_max"]),
+            overlap_build_ndim=int(group.attrs["overlap_build_ndim"]),
+            projected_integration_steps=int(
+                group.attrs["projected_integration_steps"]
+            ),
+        )
+
+        instance._projected_kernel = group["projected_kernel"][...]
+        instance._truncated_los_kernel = group["truncated_kernel"][...]
+        instance._overlap_kernel = group["overlap_kernel"][...]
+        instance._overlap_q = group["overlap_q"][...]
+        instance._overlap_u = group["overlap_u"][...]
+        instance._overlap_eta = group["overlap_eta"][...]
+
+        return instance
+
+    @classmethod
+    def load(cls, filepath):
+        """Load a Kernel from an HDF5 file.
+
+        Args:
+            filepath (str):
+                The path to the HDF5 file containing the serialized kernel.
+
+        Returns:
+            Kernel:
+                The reloaded Kernel instance.
+        """
+        with h5py.File(filepath, "r") as hdf:
+            group = hdf["Kernel"] if "Kernel" in hdf else hdf
+            return cls._from_hdf5(group)
 
     def _get_z_bins(self):
         """Get the dimensionless LOS truncation bins for the 2D lookup."""
