@@ -22,7 +22,7 @@ Photoionisation modelling
 All the photoionisation modelling in synthesizer currently uses the `cloudy <https://gitlab.nublado.org/cloudy/cloudy>`_ photoionisation code. It can simulate a range of gas and ionisation conditions, with specific geometries. Similar to the SPS grids, our default AGN grids make certain choices to restrict the range of assumptions. For both the broad line region (BLR) and narrow line region (NLR) grids, we specify the geometry to be `plane-parallel` (this was `spherical` for SPS grids). For the NLR, we assume that the cloud is ionisation-bound and hence case-B recombination holds, and we choose the hydrogen densities in the range: :math:`10^{2} \leq n_{\rm H} \leq 10^{6}`. For the BLR, we assume the cloud is density-bound, and we choose the hydrogen column densities in the range :math:`10^{21} \leq N_{\rm H}/{\rm cm}^{2} \leq 10^{26}` with hydrogen densities: :math:`10^{8} \leq n_{\rm H}/{\rm cm}^{3} \leq 10^{12}`. We remind the user that when creating their own grids, some of these parameter space runs can be computationally expensive, especially for the BLR grids, and so it is worth considering carefully the parameter space to run over.
 By default we do not include any dust grains in the BLR photoionisation modelling.
 
-The photonisation modelling parameters are included in the grid file attributes, and the pre-computed grids are available at `Box <https://sussex.box.com/v/SynthesizerGrids>`_, for the AGN models without any photoionisation modelling under `incident` and for our default photoionisation assumptions under `photoionised`.
+The photonisation modelling parameters are included in the grid file attributes. Pre-computed grids are available at `Box <https://sussex.box.com/v/SynthesizerGrids>`_; AGN models without any photoionisation modelling are stored under `incident`, and for our default photoionisation assumptions under `photoionised`.
 
 Common variants
 ---------------
@@ -34,7 +34,7 @@ Common variants
 Grid list
 ~~~~~~~~~
 
-Currently we only have grids for the `RELAGN`, `AGNSED` and `QSOSED` model, but we plan to add more AGN grids (such as `cloudy` in-built model, `Feltre et al. 2016 <https://ui.adsabs.harvard.edu/abs/2016MNRAS.456.3354F/>`_) in the future. Below are examples of the pre-computed grids available:
+Currently we only have grids for the `RELAGN`, `AGNSED` and `QSOSED` model, but we plan to add more AGN grids (such as the `cloudy` in-built model, `Feltre et al. 2016 <https://ui.adsabs.harvard.edu/abs/2016MNRAS.456.3354F/>`_) in the future. Below are examples of the pre-computed grids available:
 
 .. collapse:: RELAGN
 
