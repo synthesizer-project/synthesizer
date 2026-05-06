@@ -1343,6 +1343,7 @@ class Pipeline:
         kernel_threshold=1.0,
         kappa=0.0795,
         tau_v_attr="tau_v",
+        as_points=True,
     ):
         """Flag that the Pipeline should compute the LOS optical depths.
 
@@ -1366,6 +1367,10 @@ class Pipeline:
             tau_v_attr (str):
                 The name of the attribute to store the V-band optical depth.
                 Default is "tau_v".
+            as_points (bool):
+                Whether to treat the input particles as point-like when
+                evaluating LOS optical depths. If False, the input particle
+                kernels must also be accounted for. Default is True.
         """
         # Store the arguments for the operation
         self._operation_kwargs.add(
@@ -1375,6 +1380,7 @@ class Pipeline:
             kernel_threshold=kernel_threshold,
             kappa=kappa,
             tau_v_attr=tau_v_attr,
+            as_points=as_points,
         )
 
         # Flag that we will compute the LOS optical depths
@@ -1410,6 +1416,7 @@ class Pipeline:
                     threshold=op_kwargs["kernel_threshold"],
                     kappa=op_kwargs["kappa"],
                     tau_v_attr=op_kwargs["tau_v_attr"],
+                    as_points=op_kwargs["as_points"],
                     nthreads=self.nthreads,
                 )
             if (
@@ -1422,6 +1429,7 @@ class Pipeline:
                     threshold=op_kwargs["kernel_threshold"],
                     kappa=op_kwargs["kappa"],
                     tau_v_attr=op_kwargs["tau_v_attr"],
+                    as_points=op_kwargs["as_points"],
                     nthreads=self.nthreads,
                 )
 

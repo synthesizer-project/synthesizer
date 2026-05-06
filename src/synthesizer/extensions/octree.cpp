@@ -354,7 +354,7 @@ void cleanup_cell_tree(struct cell *c) {
   }
 
   if (c->depth == 0) {
-    delete[] c;
+    delete c;
   }
 }
 
