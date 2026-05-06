@@ -42,6 +42,8 @@ from synthesizer.emissions import LineCollection, Sed
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
+from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.util_funcs import as_contiguous
 
 
 class Grid:
@@ -101,6 +103,7 @@ class Grid:
     line_lams = Quantity("wavelength")
 
     @accepts(new_lam=angstrom)
+    @timed("Grid.__init__")
     def __init__(
         self,
         grid_name,
@@ -156,7 +159,7 @@ class Grid:
         self._ignore_lines = ignore_lines
 
         # Set up spectra and lines dictionaries (if we don't read them they'll
-        # just stay as empty dicts)
+        # just stay as empty dicts).
         self.lam = None
         self.spectra = {}
         self.line_lams = None
@@ -189,9 +192,9 @@ class Grid:
             # Save the spectra keys as available emissions
             self.available_spectra_emissions = list(self.spectra.keys())
 
-            # Prepare the wavelength axis (if new_lam and lam_lims are
-            # all None, this will do nothing, leaving the grid's wavelength
-            # array as it is in the HDF5 file)
+            # Prepare the wavelength axis (if new_lam and lam_lims are all
+            # None, this will do nothing, leaving the grid's wavelength array
+            # as it is in the HDF5 file).
             self._prepare_lam_axis(new_lam, lam_lims)
 
         # Read in lines but only if the grid has been reprocessed
@@ -208,6 +211,40 @@ class Grid:
                 + self.available_spectra_emissions
             )
         )
+
+    def _ensure_axis_data_contiguous(self):
+        """Ensure stored axis arrays are contiguous."""
+        for axis_name in self.axes:
+            self._axes_values[axis_name] = as_contiguous(
+                self._axes_values[axis_name]
+            )
+
+        for axis_name in self._extract_axes:
+            self._extract_axes_values[axis_name] = as_contiguous(
+                self._extract_axes_values[axis_name]
+            )
+
+    def _ensure_spectra_data_contiguous(self):
+        """Ensure stored spectra arrays and wavelengths are contiguous."""
+        if self.lam is not None:
+            self.lam = as_contiguous(self.lam)
+
+        for spectra_id in self.spectra:
+            self.spectra[spectra_id] = as_contiguous(self.spectra[spectra_id])
+
+    def _ensure_line_data_contiguous(self):
+        """Ensure stored line arrays and wavelengths are contiguous."""
+        if self.line_lams is not None:
+            self.line_lams = as_contiguous(self.line_lams)
+
+        for spectra_id in self.line_lums:
+            self.line_lums[spectra_id] = as_contiguous(
+                self.line_lums[spectra_id]
+            )
+        for spectra_id in self.line_conts:
+            self.line_conts[spectra_id] = as_contiguous(
+                self.line_conts[spectra_id]
+            )
 
     @property
     def available_spectra(self):
@@ -251,6 +288,8 @@ class Grid:
             # What component variable do we need to weight by for the
             # emission in the grid?
             self._weight_var = hf.attrs.get("WeightVariable")
+            if self._weight_var == "None":
+                self._weight_var = None
 
             # Loop over the Model metadata stored in the Model group
             # and store it in the Grid object
@@ -394,11 +433,24 @@ class Grid:
                 spectra will be read.
         """
         with h5py.File(self.grid_filename, "r") as hf:
+            # Most of the time the key will be "spectra" but for dust
+            # attenuation curve grids the key is "extinction_curves"
+            if "spectra" in hf.keys():
+                spectra_key = "spectra"
+            elif "extinction_curves" in hf.keys():
+                spectra_key = "extinction_curves"
+            else:
+                raise exceptions.GridError(
+                    "No spectra found in the grid file. Either pass "
+                    "`ignore_spectra=True` or load a grid containing "
+                    "spectra."
+                )
+
             # Are we reading everything?
             if spectra_to_read is None:
-                spectra_to_read = self._get_spectra_ids_from_file()
+                spectra_to_read = self._get_spectra_ids_from_file(spectra_key)
             elif isinstance(spectra_to_read, list):
-                all_spectra = self._get_spectra_ids_from_file()
+                all_spectra = self._get_spectra_ids_from_file(spectra_key)
 
                 # Check the requested spectra are available
                 missing_spectra = set(spectra_to_read) - set(all_spectra)
@@ -414,12 +466,16 @@ class Grid:
                     "containing a subset of spectra to read."
                 )
 
-            # Read the wavelengths
-            self.lam = hf["spectra/wavelength"][:]
+            # Read the wavelengths and attach the units stored on the file.
+            lams = hf[spectra_key + "/wavelength"][:]
+            lam_units = hf[spectra_key + "/wavelength"].attrs.get("Units")
+            if lam_units is None:
+                lam_units = angstrom
+            self.lam = unyt_array(lams, lam_units).to(angstrom)
 
             # Get all our spectra
             for spectra_id in spectra_to_read:
-                self.spectra[spectra_id] = hf["spectra"][spectra_id][:]
+                self.spectra[spectra_id] = hf[spectra_key][spectra_id][:]
 
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
@@ -429,6 +485,8 @@ class Grid:
             self.spectra["nebular_continuum"] = (
                 self.spectra["nebular"] - self.spectra["linecont"]
             )
+
+        self._ensure_spectra_data_contiguous()
 
     def _get_lines_grid(self):
         """Get the lines grid from the HDF5 file."""
@@ -572,24 +630,7 @@ class Grid:
                         lum_units,
                     )
 
-            # Ensure the line luminosities and continuums are contiguous
-            for spectra in self.line_lums.keys():
-                lum_units = self.line_lums[spectra].units
-                cont_units = self.line_conts[spectra].units
-                self.line_lums[spectra] = (
-                    np.ascontiguousarray(
-                        self.line_lums[spectra],
-                        dtype=np.float64,
-                    )
-                    * lum_units
-                )
-                self.line_conts[spectra] = (
-                    np.ascontiguousarray(
-                        self.line_conts[spectra],
-                        dtype=np.float64,
-                    )
-                    * cont_units
-                )
+            self._ensure_line_data_contiguous()
 
     def _prepare_lam_axis(
         self,
@@ -702,15 +743,20 @@ class Grid:
         """Return the line IDs."""
         return self.available_lines
 
-    def _get_spectra_ids_from_file(self):
+    def _get_spectra_ids_from_file(self, spectra_key="spectra"):
         """Get a list of the spectra available in a grid file.
+
+        Args:
+            spectra_key (str):
+                The key in the HDF5 file under which the spectra are stored.
+                Defaults to "spectra".
 
         Returns:
             list:
                 List of available spectra
         """
         with h5py.File(self.grid_filename, "r") as hf:
-            spectra_keys = list(hf["spectra"].keys())
+            spectra_keys = list(hf[spectra_key].keys())
 
         # Clean up the available spectra list
         spectra_keys.remove("wavelength")
@@ -742,6 +788,7 @@ class Grid:
         return lines, lams
 
     @accepts(new_lam=angstrom)
+    @timed("Grid.interp_spectra")
     def interp_spectra(self, new_lam, loop_grid=False):
         """Interpolates the spectra grid onto the provided wavelength grid.
 
@@ -791,9 +838,46 @@ class Grid:
         # Update wavelength array
         self.lam = new_lam
 
+        self._ensure_spectra_data_contiguous()
+
         # Remove any lines outside the new wavelength range
         if self.lines_available:
             self._remove_lines_outside_lam()
+
+    @accepts(lam=angstrom)
+    @timed("Grid.get_spectra_at_lam")
+    def get_spectra_at_lam(self, lam):
+        """Return spectra evaluated at a single wavelength.
+
+        Args:
+            lam (unyt_quantity/unyt_array):
+                The wavelength at which to evaluate the grid spectra.
+
+        Returns:
+            dict:
+                A dictionary mapping spectra ids to arrays with the same grid
+                shape as the source spectra, but with the wavelength axis
+                removed.
+        """
+        lam = np.atleast_1d(lam.to(angstrom))
+        if lam.size != 1:
+            raise exceptions.InconsistentArguments(
+                "get_spectra_at_lam expects exactly one wavelength."
+            )
+
+        spectra_at_lam = {}
+        for spectra_type in self.available_spectra_emissions:
+            interp = interp1d(
+                self._lam,
+                self.spectra[spectra_type],
+                axis=-1,
+                kind="linear",
+                bounds_error=False,
+                fill_value=0.0,
+            )
+            spectra_at_lam[spectra_type] = interp(lam.value)
+
+        return spectra_at_lam
 
     def __str__(self):
         """Return a string representation of the particle object.
@@ -882,7 +966,10 @@ class Grid:
                     ..., lines_to_keep
                 ]
 
+            self._ensure_line_data_contiguous()
+
     @accepts(lam_min=angstrom, lam_max=angstrom)
+    @timed("Grid.reduce_rest_frame_range")
     def reduce_rest_frame_range(self, lam_min, lam_max, inplace=False):
         """Limit the wavelength range of the grid.
 
@@ -925,6 +1012,8 @@ class Grid:
             grid.spectra[spectra_id] = grid.spectra[spectra_id][
                 ..., min_index:max_index
             ]
+
+        grid._ensure_spectra_data_contiguous()
 
         # Remove lines outside the new wavelength range
         if grid.lines_available:
@@ -984,6 +1073,8 @@ class Grid:
             grid.spectra[spectra_id] = grid.spectra[spectra_id][
                 ..., min_index:max_index
             ]
+
+        grid._ensure_spectra_data_contiguous()
 
         # Remove lines outside the new wavelength range
         if grid.lines_available:
@@ -1051,6 +1142,8 @@ class Grid:
         grid.lam = grid.lam[lam_mask]
         for spectra_id in grid.available_spectra_emissions:
             grid.spectra[spectra_id] = grid.spectra[spectra_id][..., lam_mask]
+
+        grid._ensure_spectra_data_contiguous()
 
         # Remove lines outside the new wavelength range this will leave lines
         # that don't lie within non-zero transmission regions of the filters
@@ -1127,6 +1220,8 @@ class Grid:
         for spectra_id in grid.available_spectra_emissions:
             grid.spectra[spectra_id] = grid.spectra[spectra_id][..., lam_mask]
 
+        grid._ensure_spectra_data_contiguous()
+
         # Remove lines outside the new wavelength range this will leave lines
         # that don't lie within non-zero transmission regions of the filters
         # but we can at least get rid of ones fully outside the range.
@@ -1138,6 +1233,7 @@ class Grid:
             return grid
 
     @accepts(lam=angstrom)
+    @timed("Grid.reduce_rest_frame_lam")
     def reduce_rest_frame_lam(self, lam, inplace=False):
         """Limit the wavelength range of the grid to the range of a new lam.
 
@@ -1300,6 +1396,8 @@ class Grid:
             grid._extract_axes_values[_extract_axis_name][low_index:high_index]
         )
 
+        grid._ensure_axis_data_contiguous()
+
         # Limit all the spectra arrays
         for spectra_id in grid.available_spectra_emissions:
             grid.spectra[spectra_id] = np.take(
@@ -1307,6 +1405,8 @@ class Grid:
                 indices=range(low_index, high_index),
                 axis=axis_index,
             )
+
+        grid._ensure_spectra_data_contiguous()
 
         # Limit all the line luminosity and continuum arrays
         for spectra_id in grid.available_line_emissions:
@@ -1320,6 +1420,8 @@ class Grid:
                 indices=range(low_index, high_index),
                 axis=axis_index,
             )
+
+        grid._ensure_line_data_contiguous()
 
         # Return the grid if not inplace
         if not inplace:
@@ -1452,6 +1554,9 @@ class Grid:
                 self.line_conts[spectra_id], axis=axis_index
             )
 
+        self._ensure_spectra_data_contiguous()
+        self._ensure_line_data_contiguous()
+
     def _collapse_grid_interpolate(self, axis, value, pre_interp_function):
         """Collapse the grid by interpolating to the specified value.
 
@@ -1546,6 +1651,9 @@ class Grid:
                 axis=0,
             )
 
+        self._ensure_spectra_data_contiguous()
+        self._ensure_line_data_contiguous()
+
     def _collapse_grid_nearest(self, axis, value):
         """Collapse the grid by extracting the nearest value of the axis.
 
@@ -1590,6 +1698,9 @@ class Grid:
                 np.argmin(np.abs(axis_values - value)),
                 axis=axis_index,
             )
+
+        self._ensure_spectra_data_contiguous()
+        self._ensure_line_data_contiguous()
 
     def collapse(
         self,

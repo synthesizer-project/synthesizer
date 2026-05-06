@@ -50,7 +50,6 @@ import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_generators import (
@@ -59,6 +58,7 @@ from synthesizer.imaging.image_generators import (
     _generate_images_particle_smoothed,
 )
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.operation_timers import timed
 
 
 class ImageCollection(ImagingBase):
@@ -82,6 +82,7 @@ class ImageCollection(ImagingBase):
             The RGB image array.
     """
 
+    @timed("ImageCollection.__init__")
     def __init__(
         self,
         resolution,
@@ -104,7 +105,6 @@ class ImageCollection(ImagingBase):
             imgs (dict):
                 A dictionary of images to be turned into a collection.
         """
-        tic("Creating ImageCollection")
         # Instantiate the base class holding the geometry
         ImagingBase.__init__(self, resolution, fov)
 
@@ -130,8 +130,6 @@ class ImageCollection(ImagingBase):
             for f, img in imgs.items():
                 self.imgs[f] = img
                 self.filter_codes.append(f)
-
-        toc("Creating ImageCollection")
 
     @property
     def shape(self):
@@ -707,6 +705,93 @@ class ImageCollection(ImagingBase):
                 snr=snrs[f], depth=depths[f], aperture_radius=aperture_radius
             )
 
+        return ImageCollection(
+            resolution=self.resolution,
+            fov=self.fov,
+            imgs=noisy_imgs,
+        )
+
+    def apply_correlated_noise(
+        self,
+        instrument,
+        correct_periodicity=True,
+        rng_seed=None,
+        inplace=False,
+    ):
+        """Apply correlated noise modelled from instrument noise maps.
+
+        This requires an instrument with a correlated noise model for each
+        filter in the collection. The noise template defined by each of these
+        models will then be used to generate a new noise array with the same
+        spatial correlations as the template, which is then added to the
+        images.
+
+        Args:
+            instrument (Instrument):
+                The instrument whose correlated-noise models provide the
+                observed noise templates used to model the spatial
+                correlations.
+            correct_periodicity (bool):
+                If True a correction factor is applied to compensate for the
+                assumption of periodicity in the DFT. Default is True.
+            rng_seed (int, optional):
+                Seed for the random number generator. Providing the same seed
+                reproduces an identical noise realisation.
+            inplace (bool):
+                If True, update the images in this collection in place and
+                return this collection. Otherwise return a new collection.
+                Default is False.
+
+        Returns:
+            ImageCollection:
+                A new ImageCollection containing the images with correlated
+                noise applied unless ``inplace=True``, in which case this
+                collection is updated and returned.
+
+        Raises:
+            MissingArgument:
+                If the instrument has no correlated-noise models.
+            InconsistentArguments:
+                If a correlated-noise model for any filter in the collection
+                is missing from the instrument.
+        """
+        # Ensure the instrument has correlated-noise models to use
+        if instrument.correlated_noise_models is None:
+            raise exceptions.MissingArgument(
+                "No correlated noise models are set on the instrument. "
+                "Provide noise_source_maps when constructing the Instrument."
+            )
+
+        # Ensure the instrument has a model for every filter in the collection
+        missing = [
+            f
+            for f in self.filter_codes
+            if f not in instrument.correlated_noise_models
+        ]
+        if missing:
+            raise exceptions.InconsistentArguments(
+                "Missing a correlated noise model on the instrument for the "
+                f"following filters: {missing}"
+            )
+
+        # Generate and apply a new noise array to each image using the
+        # appropriate filter-specific noise model
+        noisy_imgs = {}
+        for f in self.filter_codes:
+            noisy_imgs[f] = self.imgs[f].apply_correlated_noise(
+                instrument,
+                f,
+                correct_periodicity=correct_periodicity,
+                rng_seed=rng_seed,
+                inplace=inplace,
+            )
+
+        # If inplace, update this collection
+        if inplace:
+            self.imgs = noisy_imgs
+            return self
+
+        # Otherwise return a new image collection with the noise applied
         return ImageCollection(
             resolution=self.resolution,
             fov=self.fov,

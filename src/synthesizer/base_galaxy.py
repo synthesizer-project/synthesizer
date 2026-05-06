@@ -21,6 +21,7 @@ from synthesizer.imaging.image_generators import (
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.operation_timers import timed
 
 
 class BaseGalaxy:
@@ -63,6 +64,7 @@ class BaseGalaxy:
     """
 
     @accepts(centre=Mpc)
+    @timed("BaseGalaxy.__init__")
     def __init__(self, stars, gas, black_holes, redshift, centre, **kwargs):
         """Instantiate the base Galaxy class.
 
@@ -1993,6 +1995,10 @@ class BaseGalaxy:
                         instrument.noise_maps,
                     )
                 )
+            elif instrument.noise_source_maps is not None:
+                self.images_noise_lnu[instrument.label][key] = (
+                    imgs.apply_correlated_noise(instrument)
+                )
             elif instrument.snrs is not None:
                 self.images_noise_lnu[instrument.label][key] = (
                     imgs.apply_noise_from_snrs(
@@ -2089,6 +2095,10 @@ class BaseGalaxy:
                     imgs.apply_noise_arrays(
                         instrument.noise_maps,
                     )
+                )
+            elif instrument.noise_source_maps is not None:
+                self.images_noise_fnu[instrument.label][key] = (
+                    imgs.apply_correlated_noise(instrument)
                 )
             elif instrument.snrs is not None:
                 self.images_noise_fnu[instrument.label][key] = (

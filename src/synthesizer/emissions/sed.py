@@ -13,6 +13,7 @@ Example usage:
     sed.get_photo_fnu(filters, nthreads=4)
 """
 
+import os
 import re
 
 import matplotlib.pyplot as plt
@@ -42,12 +43,13 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
-from synthesizer.extensions.timers import tic, toc
+from synthesizer.extensions.reductions import reduce_particle_spectra
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
+from synthesizer.utils.operation_timers import timed
 
 
 class Sed:
@@ -89,6 +91,7 @@ class Sed:
     obslam = Quantity("wavelength")
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
+    @timed("Sed.__init__")
     def __init__(self, lam, lnu=None, description=None):
         """Initialise a new spectral energy distribution object.
 
@@ -102,8 +105,6 @@ class Sed:
             description (str):
                 An optional descriptive string defining the Sed.
         """
-        tic("Creating Sed")
-
         # Set the description
         self.description = description
 
@@ -132,20 +133,21 @@ class Sed:
         self.photo_lnu = None
         self.photo_fnu = None
 
-        toc("Creating Sed")
-
+    @timed("Sed.sum")
     def sum(self):
         """Sum the SED over all dimensions.
 
         For multidimensional `sed`'s, sum the luminosity to provide a 1D
         integrated SED.
 
+        TODO: Replace this NumPy-based implementation with a generic C++
+        reduction backend that can handle the full range of supported Sed
+        shapes.
+
         Returns:
             sed (object, Sed):
                 Summed 1D SED.
         """
-        tic("Summing Sed")
-
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
             # Define the axes to sum over to give only the final axis
@@ -164,8 +166,6 @@ class Sed:
                 new_sed.obsnu = self.obsnu
                 new_sed.obslam = self.obslam
                 new_sed.redshift = self.redshift
-
-            toc("Summing Sed")
 
             return new_sed
         else:
@@ -731,6 +731,7 @@ class Sed:
         """
         return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
 
+    @timed("Sed.measure_bolometric_luminosity")
     def measure_bolometric_luminosity(
         self,
         integration_method="trapz",
@@ -758,8 +759,6 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        tic("Calculating bolometric luminosity")
-
         # Calculate the bolometric luminosity
         # NOTE: the integration is done "backwards" when integrating over
         # frequency. It's faster to just multiply by -1 than to reverse the
@@ -770,8 +769,6 @@ class Sed:
             nthreads=nthreads,
             method=integration_method,
         )
-        toc("Calculating bolometric luminosity")
-
         return integral * self.lnu.units * self.nu.units
 
     @accepts(window=angstrom)
@@ -1128,6 +1125,7 @@ class Sed:
 
         return self.fnu
 
+    @timed("Sed.get_fnu")
     def get_fnu(self, cosmo, z, igm=None):
         """Calculate the observed frame spectral energy distribution.
 
@@ -1181,6 +1179,7 @@ class Sed:
 
         return self.fnu
 
+    @timed("Sed.get_photo_lnu")
     def get_photo_lnu(
         self, filters, verbose=True, nthreads=1, integration_method="trapz"
     ):
@@ -1202,10 +1201,6 @@ class Sed:
             (PhotometryCollection):
                 Rest-frame broadband luminosities.
         """
-        tic("Getting Photometry (Lnu)")
-
-        tic("Applying Filters (Lnu)")
-
         # Apply all filters in one batched integration call.
         bb_lums = filters.apply_filters(
             self._lnu,
@@ -1213,10 +1208,8 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Applying Filters (Lnu)")
 
         # Create the photometry collection and store it in the object
-        tic("Stacking Photometry (Lnu)")
         self.photo_lnu = PhotometryCollection(
             filters,
             photometry=unyt_array(
@@ -1225,12 +1218,10 @@ class Sed:
                 bypass_validation=True,
             ),
         )
-        toc("Stacking Photometry (Lnu)")
-
-        toc("Getting Photometry (Lnu)")
 
         return self.photo_lnu
 
+    @timed("Sed.get_photo_fnu")
     def get_photo_fnu(
         self, filters, verbose=True, nthreads=1, integration_method="trapz"
     ):
@@ -1252,8 +1243,6 @@ class Sed:
             (PhotometryCollection):
                 Fluxes in each filter in filters.
         """
-        tic("Getting Photometry (Fnu)")
-
         # Ensure fluxes actually exist
         if (self.obslam is None) | (self.fnu is None):
             raise ValueError(
@@ -1264,8 +1253,6 @@ class Sed:
                 )
             )
 
-        tic("Applying Filters (Fnu)")
-
         # Apply all filters in one batched integration call.
         bb_fluxes = filters.apply_filters(
             self._fnu,
@@ -1273,10 +1260,8 @@ class Sed:
             nthreads=nthreads,
             integration_method=integration_method,
         )
-        toc("Applying Filters (Fnu)")
 
         # Create the photometry collection and store it in the object
-        tic("Stacking Photometry (Fnu)")
         self.photo_fnu = PhotometryCollection(
             filters,
             photometry=unyt_array(
@@ -1285,9 +1270,6 @@ class Sed:
                 bypass_validation=True,
             ),
         )
-        toc("Stacking Photometry (Fnu)")
-
-        toc("Getting Photometry (Fnu)")
 
         return self.photo_fnu
 
@@ -1399,6 +1381,7 @@ class Sed:
 
         return index
 
+    @timed("Sed.get_resampled_sed")
     def get_resampled_sed(self, resample_factor=None, new_lam=None):
         """Resample the spectra onto a new set of wavelength points.
 
@@ -1422,8 +1405,6 @@ class Sed:
                 Either resample factor or new_lam must be supplied. If neither
                 or both are passed an error is raised.
         """
-        tic("Resampling Sed")
-
         # Ensure we have what we need
         if resample_factor is None and new_lam is None:
             raise exceptions.InconsistentArguments(
@@ -1475,8 +1456,6 @@ class Sed:
         sed._obslam = np.nan_to_num(sed._obslam)
         sed._obsnu = np.nan_to_num(sed._obsnu)
 
-        toc("Resampling Sed")
-
         return sed
 
     def apply_instrument_lams(self, instrument, nthreads=1):
@@ -1508,8 +1487,8 @@ class Sed:
 
     def apply_attenuation(
         self,
-        tau_v,
-        dust_curve,
+        tau_v=None,
+        dust_curve=None,
         mask=None,
         **dust_curve_kwargs,
     ):
@@ -1517,7 +1496,8 @@ class Sed:
 
         Args:
             tau_v (float/np.ndarray of float):
-                The V-band optical depth for every star particle.
+                The V-band optical depth for every star particle. Optional for
+                attenuation laws that do not require it.
             dust_curve (synthesizer.emission_models.attenuation.*):
                 An instance of one of the dust attenuation models. (defined in
                 synthesizer/emission_models.attenuation.py)
@@ -1534,6 +1514,17 @@ class Sed:
                 A new Sed containing the rest frame spectra of self attenuated
                 by the transmission defined from tau_v and the dust curve.
         """
+        if dust_curve is None:
+            raise exceptions.MissingArgument("dust_curve must be provided")
+
+        if tau_v is None and "tau_v" in getattr(
+            dust_curve, "_required_params", ()
+        ):
+            raise exceptions.MissingArgument(
+                "tau_v is required by the selected attenuation law: "
+                f"{dust_curve.__class__.__name__}"
+            )
+
         # Ensure the mask is compatible with the spectra
         if mask is not None:
             if self._lnu.ndim < 2:
@@ -2479,3 +2470,47 @@ def plot_spectra_as_rainbow(
     ax.imshow(im, aspect="auto", extent=(lam_min, lam_max, 0, 1))
 
     return fig, ax
+
+
+def integrate_particle_sed(sed, nthreads=1):
+    """Integrate a per-particle Sed to an integrated Sed using C++.
+
+    This helper is intended for Sed objects whose luminosity array has shape
+    ``(nparticle, nlam)``. It uses the specialised C++ particle spectra
+    reduction kernel rather than the generic NumPy-based ``Sed.sum`` method.
+
+    Args:
+        sed (Sed):
+            The per-particle Sed to reduce.
+        nthreads (int):
+            The number of threads to use in the C++ reduction. If ``-1`` then
+            all available CPU cores will be used.
+
+    Returns:
+        Sed:
+            A new integrated Sed with the same wavelength grid and units as the
+            input Sed.
+
+    Raises:
+        InconsistentArguments:
+            If the input Sed does not contain a two-dimensional luminosity
+            array with particle spectra on the leading axis.
+    """
+    # Resolve the automatic thread-count request to a concrete integer before
+    # dispatching into the C++ extension.
+    if nthreads == -1:
+        nthreads = os.cpu_count() or 1
+
+    # Validate that the Sed matches the specialised particle spectra layout
+    # expected by the reduction extension.
+    if sed._lnu.ndim != 2:
+        raise exceptions.InconsistentArguments(
+            "integrate_particle_sed expects a Sed with a 2D lnu array of "
+            "shape "
+            f"(nparticle, nlam), got {sed._lnu.shape}."
+        )
+
+    # Reduce the per-particle spectra in C++ and rebuild a unit-aware Sed on
+    # the original wavelength grid.
+    reduced_lnu = reduce_particle_spectra(sed._lnu, nthreads)
+    return Sed(sed.lam, reduced_lnu * sed.lnu.units)

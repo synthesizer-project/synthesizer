@@ -22,6 +22,7 @@ from synthesizer.data.initialise import (
     instrument_cache_exists,
     synth_clear_data,
     synth_initialise,
+    synth_report_config,
 )
 
 
@@ -289,9 +290,9 @@ class TestInitializerMethods:
             p.mkdir(parents=True, exist_ok=True)
         init.report()
         out = capsys.readouterr().out
-        assert "Synthesizer initialising" in out
+        assert "Version:" in out
         assert "Initialised Synthesizer directories" in out
-        assert "Synthesizer initialisation complete" in out
+        assert "Synthesizer initialising" not in out
 
 
 class TestUnitsFileHandling:
@@ -511,7 +512,33 @@ class TestTopLevelFlows:
         synth_initialise()
         out = capsys.readouterr().out
         assert "Synthesizer initialising" in out
+        assert "Version:" in out
         assert (tmp_path / "base").exists()
+
+    def test_synth_report_config_does_not_claim_initialising(
+        self, monkeypatch, tmp_path, capsys
+    ):
+        """Test synth_report_config prints config details without init text."""
+        monkeypatch.setenv("SYNTHESIZER_DIR", str(tmp_path / "base"))
+        monkeypatch.setenv(
+            "SYNTHESIZER_DATA_DIR", str(tmp_path / "base" / "data")
+        )
+        monkeypatch.setenv(
+            "SYNTHESIZER_GRID_DIR", str(tmp_path / "base" / "grids")
+        )
+        monkeypatch.setenv(
+            "SYNTHESIZER_TEST_DATA_DIR",
+            str(tmp_path / "base" / "data" / "test"),
+        )
+        monkeypatch.setenv(
+            "SYNTHESIZER_INSTRUMENT_CACHE", str(tmp_path / "base" / "inst")
+        )
+
+        synth_report_config()
+
+        out = capsys.readouterr().out
+        assert "Synthesizer initialising" not in out
+        assert "Version:" in out
 
     def test_synth_clear_data_removes_all(self, monkeypatch, tmp_path):
         """Test synth_clear_data removes all Synthesizer dirs."""

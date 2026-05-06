@@ -1,0 +1,131 @@
+{
+  "@context": "https://raw.githubusercontent.com/codemeta/codemeta/master/codemeta.jsonld",
+  "@type": "Code",
+  "author": [
+    {
+      "@id": "https://orcid.org/0000-0002-3257-8806",
+      "@type": "Person",
+      "email": "w.roper@sussex.ac.uk",
+      "name": "Will J. Roper",
+      "affiliation": "Astronomy Centre, University of Sussex, Falmer, Brighton BN1 9QH, UK"
+    },
+    {
+      "@id": "https://orcid.org/0000-0001-7964-5933",
+      "@type": "Person",
+      "name": "Christopher C. Lovell",
+      "affiliation": [
+        "Kavli Institute for Cosmology, University of Cambridge, Madingley Road, Cambridge CB3 0HA, UK",
+        "Institute of Astronomy, University of Cambridge, Madingley Road, Cambridge CB3 0HA, UK"
+      ]
+    },
+    {
+      "@id": "https://orcid.org/0000-0002-1905-4194",
+      "@type": "Person",
+      "name": "Aswin Vijayan",
+      "affiliation": "Astronomy Centre, University of Sussex, Falmer, Brighton BN1 9QH, UK"
+    },
+    {
+      "@id": "https://orcid.org/0000-0003-3903-6935",
+      "@type": "Person",
+      "name": "Stephen Wilkins",
+      "affiliation": "Astronomy Centre, University of Sussex, Falmer, Brighton BN1 9QH, UK"
+    },
+    {
+      "@id": "https://orcid.org/0000-0003-3596-8794",
+      "@type": "Person",
+      "name": "Hollis Akins",
+      "affiliation": "Department of Astronomy, The University of Texas at Austin, Austin, TX 78712, USA"
+    },
+    {
+      "@id": "https://orcid.org/0000-0002-4064-7883",
+      "@type": "Person",
+      "name": "Sabrina Berger",
+      "affiliation": "School of Physics, University of Melbourne, Parkville, VIC 3010, Australia"
+    },
+    {
+      "@id": "https://orcid.org/0009-0004-0771-4476",
+      "@type": "Person",
+      "name": "Connor Sant Fournier",
+      "affiliation": "Institute of Space Sciences and Astronomy, University of Malta, Msida MSD 2080, Malta"
+    },
+    {
+      "@id": "https://orcid.org/0000-0002-4130-636X",
+      "@type": "Person",
+      "name": "Thomas Harvey",
+      "affiliation": "Jodrell Bank Centre for Astrophysics, University of Manchester, Oxford Road, Manchester M13 9PL, UK"
+    },
+    {
+      "@id": "https://orcid.org/0000-0001-9298-3523",
+      "@type": "Person",
+      "name": "Kartheik Iyer",
+      "affiliation": "Columbia Astrophysics Laboratory, Columbia University, 550 West 120th Street, New York, NY 10027, USA"
+    },
+    {
+      "@id": "https://orcid.org/0009-0008-3592-7830",
+      "@type": "Person",
+      "name": "Marco Leonardi",
+      "affiliation": "Leiden Observatory, Leiden University, PO Box 9513, NL-2300 RA Leiden, The Netherlands"
+    },
+    {
+      "@id": "https://orcid.org/0009-0001-3422-3048",
+      "@type": "Person",
+      "name": "Sophie Newman",
+      "affiliation": "Institute of Cosmology and Gravitation, University of Portsmouth, Burnaby Road, Portsmouth, PO1 3FX, UK"
+    },
+    {
+      "@id": "https://orcid.org/0009-0003-1839-591X",
+      "@type": "Person",
+      "name": "Borja Pautasso",
+      "affiliation": "Astronomy Centre, University of Sussex, Falmer, Brighton BN1 9QH, UK"
+    },
+    {
+      "@id": "https://orcid.org/0009-0001-0739-6162",
+      "@type": "Person",
+      "name": "Ashley Perry",
+      "affiliation": "Astronomy Centre, University of Sussex, Falmer, Brighton BN1 9QH, UK"
+    },
+    {
+      "@id": "https://orcid.org/0000-0002-7020-3079",
+      "@type": "Person",
+      "name": "Louise Seeyave",
+      "affiliation": "Astronomy Centre, University of Sussex, Falmer, Brighton BN1 9QH, UK"
+    },
+    {
+      "@id": "https://orcid.org/0000-0002-2906-2200",
+      "@type": "Person",
+      "name": "Laura Sommovigo",
+      "affiliation": "Columbia Astrophysics Laboratory, Columbia University, 550 West 120th Street, New York, NY 10027, USA"
+    },
+    {
+      "@id": "https://orcid.org/0009-0006-0037-1014",
+      "@type": "Person",
+      "name": "Paurush Punyasheel",
+      "affiliation": "Centre for Astrophysics Research, Department of Physics, Astronomy and Mathematics, University of Hertfordshire, College Lane, Hatfield AL10 9AB, UK"
+    },
+    {
+      "@id": "https://orcid.org/0009-0003-9019-1380",
+      "@type": "Person",
+      "name": "Adrien Aufan Stoffels d'Hautefort",
+      "affiliation": "Astronomy Centre, University of Sussex, Falmer, Brighton BN1 9QH, UK"
+    },
+    {
+      "@id": "https://orcid.org/0000-0003-1807-6321",
+      "@type": "Person",
+      "name": "Alex Rawlings",
+      "affiliation": [
+        "Max-Planck-Institut fur Astrophysik, Karl-Schwarzschild-Strasse 1, D-85748 Garching, Germany",
+        "Department of Physics, Gustaf Hallstromin katu 2, FI-00014, University of Helsinki, Finland"
+      ]
+    }
+  ],
+  "identifier": "",
+  "codeRepository": "https://github.com/synthesizer-project/synthesizer",
+  "datePublished": "2025-05-15",
+  "dateModified": "2025-05-15",
+  "dateCreated": "2025-05-15",
+  "description": "Synthesizer - a code for creating synthetic astrophysical observables",
+  "keywords": "astronomy, astrophysics, forward modelling, simulations",
+  "license": "GPL v3.0",
+  "title": "Synthesizer",
+  "version": "v0.9.2"
+}

@@ -24,7 +24,6 @@ from scipy.ndimage import zoom
 from unyt import arcsecond, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image_generators import (
     _generate_image_parametric_smoothed,
@@ -33,6 +32,7 @@ from synthesizer.imaging.image_generators import (
 )
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
+from synthesizer.utils.operation_timers import timed
 
 
 class Image(ImagingBase):
@@ -62,6 +62,7 @@ class Image(ImagingBase):
             The weight map derived from the noise array.
     """
 
+    @timed("Image.__init__")
     def __init__(
         self,
         resolution,
@@ -81,8 +82,6 @@ class Image(ImagingBase):
                 to an image instance. Mostly used internally when methods
                 make a new image instance for self.
         """
-        tic("Creating Image")
-
         # Instantiate the base class holding the geometry
         ImagingBase.__init__(self, resolution, fov)
 
@@ -100,8 +99,6 @@ class Image(ImagingBase):
         # Set up the noise array and weight map
         self.noise_arr = None
         self.weight_map = None
-
-        toc("Creating Image")
 
     @property
     def img(self):
@@ -610,6 +607,63 @@ class Image(ImagingBase):
             noise_std *= units
 
         return self.apply_noise_from_std(noise_std)
+
+    def apply_correlated_noise(
+        self,
+        instrument,
+        filter_code,
+        correct_periodicity=True,
+        rng_seed=None,
+        inplace=False,
+    ):
+        """Apply correlated noise modelled from an instrument noise map.
+
+        This requires an instrument with a correlated noise model for the
+        requested filter. The noise template defined by this model will then
+        be used to generate a new noise array with the same spatial
+        correlations as the template, which is then added to the image.
+
+        Args:
+            instrument (Instrument):
+                The instrument whose correlated-noise model for
+                ``filter_code`` provides the observed noise template used to
+                model the spatial correlations.
+            filter_code (str):
+                The key identifying the noise model to use.
+            correct_periodicity (bool):
+                If True a correction factor is applied to compensate for the
+                assumption of periodicity in the DFT. Default is True.
+            rng_seed (int, optional):
+                Seed for the random number generator.  Providing the same
+                seed reproduces an identical noise realisation.
+            inplace (bool):
+                If True, update this image in place and return it. Otherwise
+                return a new Image. Default is False.
+
+        Returns:
+            Image:
+                A new Image with the correlated noise added.  The
+                ``noise_arr`` and ``weight_map`` attributes are populated on
+                the returned object unless ``inplace=True``, in which case the
+                current image is updated and returned.
+
+        Raises:
+            MissingArgument:
+                If the instrument has no correlated-noise model for the
+                requested filter.
+            InconsistentArguments:
+                If the noise model is dimensionless but the image has units.
+        """
+        # Get the noise model for the requested filter
+        noise_model = instrument.get_correlated_noise_model(filter_code)
+
+        # Undo it and return the new image (or this image if inplace)
+        return noise_model.apply_noise(
+            self,
+            correct_periodicity=correct_periodicity,
+            rng_seed=rng_seed,
+            inplace=inplace,
+        )
 
     def plot_img(
         self,

@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from unyt import Hz, angstrom, c, erg, s
+from unyt import Hz, angstrom, c, erg, nJy, s
 
 from synthesizer import exceptions
 from synthesizer.instruments import FilterCollection
@@ -50,6 +50,37 @@ def test_photometry_collection_requires_units_on_input_array():
         )
 
 
+def test_photometry_collection_preserves_units_on_input_array():
+    """Constructor should preserve units on input array."""
+    lam = np.linspace(1000, 5000, 500) * angstrom
+    filters = _make_filters(lam)
+
+    arr = np.array([[1.0, 0.5], [2.0, 1.5], [3.0, 2.5]]) * erg / s / Hz
+    pc = PhotometryCollection(
+        filters,
+        photometry=arr,
+    )
+
+    assert pc.photometry is not None
+    assert pc.photo_lnu is not None
+    assert pc.photo_fnu is None
+
+    assert pc.photometry.units.same_dimensions_as(erg / s / Hz)
+    assert pc.photo_lnu.units.same_dimensions_as(erg / s / Hz)
+
+    arr = np.array([[1.0, 0.5], [2.0, 1.5], [3.0, 2.5]]) * nJy
+    pc = PhotometryCollection(
+        filters,
+        photometry=arr,
+    )
+
+    assert pc.photometry is not None
+    assert pc.photo_lnu is None
+    assert pc.photo_fnu is not None
+    assert pc.photometry.units.same_dimensions_as(nJy)
+    assert pc.photo_fnu.units.same_dimensions_as(nJy)
+
+
 def test_photometry_collection_select_preserves_lookup():
     """Selecting filters should keep correct array-backed lookup."""
     lam = np.linspace(1000, 5000, 500) * angstrom
@@ -73,6 +104,71 @@ def test_photometry_collection_select_preserves_lookup():
     assert sub.filter_codes == ["f2", "f3"]
     np.testing.assert_allclose(sub["f2"].value, pc["f2"].value)
     np.testing.assert_allclose(sub["f3"].value, pc["f3"].value)
+
+
+def test_photometry_collection_addition():
+    """Photometry collections with matching filters should add."""
+    lam = np.linspace(1000, 5000, 500) * angstrom
+    filters = _make_filters(lam)
+
+    first = PhotometryCollection(
+        filters,
+        photometry=np.array([1.0, 2.0, 3.0]) * erg / s / Hz,
+    )
+    second = PhotometryCollection(
+        filters,
+        photometry=np.array([0.5, 1.5, 2.5]) * erg / s / Hz,
+    )
+
+    total = first + second
+
+    assert total.filter_codes == ["f1", "f2", "f3"]
+    np.testing.assert_allclose(total.photometry.value, [1.5, 3.5, 5.5])
+
+
+def test_photometry_collection_addition_requires_matching_filters():
+    """Photometry collections with different filters should not add."""
+    lam = np.linspace(1000, 5000, 500) * angstrom
+    filters = _make_filters(lam)
+    other_filters = FilterCollection(
+        tophat_dict={
+            "f1": {"lam_eff": 2000 * angstrom, "lam_fwhm": 400 * angstrom},
+            "f4": {"lam_eff": 3200 * angstrom, "lam_fwhm": 500 * angstrom},
+            "f5": {"lam_eff": 4200 * angstrom, "lam_fwhm": 600 * angstrom},
+        },
+        new_lam=lam,
+    )
+
+    first = PhotometryCollection(
+        filters,
+        photometry=np.array([1.0, 2.0, 3.0]) * erg / s / Hz,
+    )
+    second = PhotometryCollection(
+        other_filters,
+        photometry=np.array([0.5, 1.5, 2.5]) * erg / s / Hz,
+    )
+
+    with pytest.raises(exceptions.InconsistentAddition):
+        _ = first + second
+
+
+def test_photometry_collection_sum():
+    """Photometry collections should support Python sum()."""
+    lam = np.linspace(1000, 5000, 500) * angstrom
+    filters = _make_filters(lam)
+
+    first = PhotometryCollection(
+        filters,
+        photometry=np.array([1.0, 2.0, 3.0]) * erg / s / Hz,
+    )
+    second = PhotometryCollection(
+        filters,
+        photometry=np.array([0.5, 1.5, 2.5]) * erg / s / Hz,
+    )
+
+    total = sum([first, second])
+
+    np.testing.assert_allclose(total.photometry.value, [1.5, 3.5, 5.5])
 
 
 class TestPhotometryThreading:

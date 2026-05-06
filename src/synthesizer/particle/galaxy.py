@@ -24,14 +24,14 @@ from unyt import Mpc, Msun, Myr, pc, rad, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
-from synthesizer.extensions.timers import tic, toc
 from synthesizer.imaging import Image, SpectralCube
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
 from synthesizer.synth_warnings import warn
-from synthesizer.units import accepts
+from synthesizer.units import accepts, unyt_to_ndview
 from synthesizer.utils.geometry import get_rotation_matrix
+from synthesizer.utils.operation_timers import timed
 
 
 class Galaxy(BaseGalaxy):
@@ -61,6 +61,7 @@ class Galaxy(BaseGalaxy):
     """
 
     @accepts(centre=Mpc)
+    @timed("Galaxy.__init__")
     def __init__(
         self,
         name="particle galaxy",
@@ -178,6 +179,90 @@ class Galaxy(BaseGalaxy):
         else:
             self.sf_gas_mass = None
             self.sf_gas_metallicity = None
+
+    @timed("Galaxy.split")
+    def split(self, max_npart):
+        """Split a particle galaxy into child galaxies.
+
+        Child galaxies are split only on the stellar component. Gas and black
+        hole components are attached in full to the first child so operations
+        that need the non-stellar components still see the complete data.
+        Only source particle data are propagated to the children; additive
+        outputs are recomputed per child and combined back onto the parent.
+
+        Args:
+            max_npart (int):
+                The maximum number of stellar particles permitted in each child
+                galaxy.
+
+        Returns:
+            list:
+                A list of child particle galaxies for chunked pipeline
+                processing.
+        """
+        if max_npart is None:
+            return [self]
+
+        if max_npart <= 0:
+            raise exceptions.InconsistentArguments(
+                "max_npart must be a positive integer."
+            )
+
+        if self.stars is None or self.stars.nparticles <= max_npart:
+            return [self]
+
+        children = []
+        for ichild, stars in enumerate(self.stars.split(max_npart)):
+            child = copy.copy(self)
+            child.name = f"{self.name}_child_{ichild}"
+
+            # Child galaxies must start with fresh additive output
+            # containers so chunk results are accumulated explicitly later on.
+            child.spectra = {}
+            child.lines = {}
+            child.photo_lnu = {}
+            child.photo_fnu = {}
+            child.spectroscopy = {}
+            child.images_lnu = {}
+            child.images_fnu = {}
+            child.images_psf_lnu = {}
+            child.images_psf_fnu = {}
+            child.images_noise_lnu = {}
+            child.images_noise_fnu = {}
+            child.data_cubes_lnu = {}
+            child.data_cubes_fnu = {}
+
+            # Split the stellar component into views, but keep the full gas and
+            # black hole components on the first child only.
+            child.stars = stars
+            child.gas = (
+                self.gas if ichild == 0 and self.gas is not None else None
+            )
+            child.black_holes = (
+                self.black_holes
+                if ichild == 0 and self.black_holes is not None
+                else None
+            )
+
+            # Recompute simple integrated properties on each child so any later
+            # pipeline operations see consistent summary quantities.
+            if child.stars is not None:
+                child.calculate_integrated_stellar_properties()
+            else:
+                child.stellar_mass = None
+                child.stellar_mass_weighted_age = None
+
+            if child.gas is not None:
+                child.calculate_integrated_gas_properties()
+            else:
+                child.gas_mass = None
+                child.mass_weighted_gas_metallicity = None
+                child.sf_gas_mass = None
+                child.sf_gas_metallicity = None
+
+            children.append(child)
+
+        return children
 
     @accepts(initial_masses=Msun.in_base("galactic"), ages=Myr)
     def load_stars(
@@ -366,6 +451,7 @@ class Galaxy(BaseGalaxy):
             # Nothing to do here... YET
             pass
 
+    @timed("Galaxy.get_stellar_los_tau_v")
     def get_stellar_los_tau_v(
         self,
         kappa,
@@ -390,11 +476,10 @@ class Galaxy(BaseGalaxy):
         Args:
             kappa (float):
                 The dust opacity in units of Msun / pc**2.
-            kernel (np.ndarray of float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance. LOS optical
+                depth calculations require both the projected LOS kernel table
+                and the truncated LOS kernel table.
             tau_v_attr (str):
                 The attribute to store the tau_v values in the stars object.
                 Defaults to "tau_v".
@@ -417,8 +502,6 @@ class Galaxy(BaseGalaxy):
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
-        tic("Calculating LOS tau_v")
-
         # Ensure we have stars and gas
         if self.stars is None:
             raise exceptions.InconsistentArguments(
@@ -445,10 +528,8 @@ class Galaxy(BaseGalaxy):
             nthreads=nthreads,
         )  # Msun / Mpc**2
 
-        los_dustsds /= (1e6) ** 2  # Msun / pc**2
-
         # Finalise the calculation
-        tau_v = kappa * los_dustsds
+        tau_v = kappa * unyt_to_ndview(los_dustsds, Msun / pc**2)
 
         # Apply the mask if provided
         if mask is not None:
@@ -460,10 +541,9 @@ class Galaxy(BaseGalaxy):
         # Store the result in self.stars
         setattr(self.stars, tau_v_attr, tau_vs)
 
-        toc("Calculating LOS tau_v")
-
         return tau_v
 
+    @timed("Galaxy.get_black_hole_los_tau_v")
     def get_black_hole_los_tau_v(
         self,
         kappa,
@@ -488,11 +568,10 @@ class Galaxy(BaseGalaxy):
         Args:
             kappa (float):
                 The dust opacity in units of Msun / pc**2.
-            kernel (np.ndarray of float):
-                A 1D description of the SPH kernel. Values must be in ascending
-                order such that a k element array can be indexed for the value
-                of impact parameter q via kernel[int(k*q)]. Note, this can be
-                an arbitrary kernel.
+            kernel (Kernel):
+                A `synthesizer.kernel_functions.Kernel` instance. LOS optical
+                depth calculations require both the projected LOS kernel table
+                and the truncated LOS kernel table.
             tau_v_attr (str):
                 The attribute to store the tau_v values in the black_holes
                 object. Defaults to "tau_v".
@@ -516,8 +595,6 @@ class Galaxy(BaseGalaxy):
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
         """
-        tic("Calculating LOS tau_v")
-
         # Ensure we have black holes and gas
         if self.black_holes is None:
             raise exceptions.InconsistentArguments(
@@ -544,10 +621,8 @@ class Galaxy(BaseGalaxy):
             nthreads=nthreads,
         )
 
-        los_dustsds /= (1e6) ** 2  # Msun / pc**2
-
         # Finalise the calculation
-        tau_v = kappa * los_dustsds
+        tau_v = kappa * unyt_to_ndview(los_dustsds, Msun / pc**2)
 
         # Apply the mask if provided
         if mask is not None:
@@ -558,8 +633,6 @@ class Galaxy(BaseGalaxy):
 
         # Store the result in self.black_holes
         setattr(self.black_holes, "tau_v", tau_vs)
-
-        toc("Calculating LOS tau_v")
 
         return tau_v
 
@@ -1335,6 +1408,7 @@ class Galaxy(BaseGalaxy):
 
         return img
 
+    @timed("Galaxy.get_data_cube")
     def get_data_cube(
         self,
         resolution,
@@ -1396,8 +1470,6 @@ class Galaxy(BaseGalaxy):
                 The spectral data cube object containing the derived
                 data cube.
         """
-        tic("Computing spectral data cubes")
-
         # Make sure we have an image to make
         if stellar_spectra is None and blackhole_spectra is None:
             raise exceptions.InconsistentArguments(
@@ -1517,12 +1589,9 @@ class Galaxy(BaseGalaxy):
 
         # Return the images, combining if there are multiple components
         if stellar_spectra is not None and blackhole_spectra is not None:
-            toc("Computing spectral data cubes")
             return stellar_cube + blackhole_cube
         elif stellar_spectra is not None:
-            toc("Computing spectral data cubes")
             return stellar_cube
-        toc("Computing spectral data cubes")
         return blackhole_cube
 
     def get_projected_angular_coordinates(self, cosmo, los_dists=None):
