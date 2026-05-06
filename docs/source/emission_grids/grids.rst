@@ -13,9 +13,8 @@ There is a low-resolution test grid available via the ``synthesizer-download`` c
 .. toctree::
    :maxdepth: 1
 
-   pre-computed_grids
+   precomputed_grids/pre-computed_grids
    grids_example
    grids_modify
    grids_lines
-
-
+   create_grids
