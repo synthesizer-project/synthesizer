@@ -85,7 +85,7 @@ class PhotometryCollection:
 
         # Keep raw ndarray storage and rely on Quantity descriptors for
         # units.
-        self._photometry_data = photometry.ndview
+        self._photometry_data = photometry.to_value(fnu_unit)
 
         if is_flux:
             self.photo_fnu = self._photometry_data
