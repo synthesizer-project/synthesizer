@@ -628,7 +628,10 @@ class Instrument:
                 depth_group = group.create_group("Depth")
                 for key, value in self.depth.items():
                     raw = value.value if hasattr(value, "value") else value
-                    units = str(value.units) if hasattr(value, "units") else "dimensionless"
+                    units = (
+                        str(value.units) if hasattr(value, "units") 
+                        else "dimensionless"
+                    )
                     ds = depth_group.create_dataset(
                         key, data=raw, dtype=float
                     )
@@ -644,7 +647,10 @@ class Instrument:
                 snrs_group = group.create_group("SNRs")
                 for key, value in self.snrs.items():
                     raw = value.value if hasattr(value, "value") else value
-                    units = str(value.units) if hasattr(value, "units") else "dimensionless"
+                    units = (
+                        str(value.units) if hasattr(value, "units") 
+                        else "dimensionless"
+                    )
                     ds = snrs_group.create_dataset(
                         key, data=raw, dtype=float
                     )
