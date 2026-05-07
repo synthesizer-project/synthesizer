@@ -83,14 +83,13 @@ class PhotometryCollection:
         fnu_unit = self.__class__.__dict__["photo_fnu"].unit
         is_flux = photometry.units.same_dimensions_as(fnu_unit)
 
-        # Keep raw ndarray storage and rely on Quantity descriptors for
-        # units.
-        self._photometry_data = photometry.to_value(fnu_unit)
-
         if is_flux:
+            self._photometry_data = photometry.to_value(fnu_unit)
             self.photo_fnu = self._photometry_data
             self.photo_lnu = None
         else:
+            lnu_unit = self.__class__.__dict__["photo_lnu"].unit
+            self._photometry_data = photometry.to_value(lnu_unit)
             self.photo_lnu = self._photometry_data
             self.photo_fnu = None
 
