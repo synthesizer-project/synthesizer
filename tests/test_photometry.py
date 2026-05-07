@@ -68,6 +68,11 @@ def test_photometry_collection_preserves_units_on_input_array():
     assert pc.photometry.units.same_dimensions_as(erg / s / Hz)
     assert pc.photo_lnu.units.same_dimensions_as(erg / s / Hz)
 
+    assert np.allclose(
+        pc.photometry.to(erg / s / Hz).value,
+        arr.to(erg / s / Hz).value,
+    )
+
     arr = np.array([[1.0, 0.5], [2.0, 1.5], [3.0, 2.5]]) * nJy
     pc = PhotometryCollection(
         filters,
@@ -79,6 +84,11 @@ def test_photometry_collection_preserves_units_on_input_array():
     assert pc.photo_fnu is not None
     assert pc.photometry.units.same_dimensions_as(nJy)
     assert pc.photo_fnu.units.same_dimensions_as(nJy)
+
+    assert np.allclose(
+        pc.photometry.to(nJy).value,
+        arr.to(nJy).value,
+    )
 
 
 def test_photometry_collection_select_preserves_lookup():
