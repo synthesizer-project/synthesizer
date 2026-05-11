@@ -1,4 +1,11 @@
-"""Shared abstract base class for observational instruments."""
+"""Shared abstract base class for observational instruments.
+
+This module defines the `InstrumentBase` abstract base class, which serves as
+the common interface for all instrument implementations in Synthesizer. It
+not only templates some required properties and methods but also provides
+default implementations for capability flags which can (and should) be
+overridden by concrete subclasses to indicate their supported observing modes.
+"""
 
 from abc import ABC, abstractmethod
 
@@ -13,12 +20,10 @@ class InstrumentBase(ABC):
 
     Capability flags are declared explicitly here. When a new instrument
     capability is introduced, it should be added to this interface and then
-    overridden by the relevant concrete instrument classes.
-
-    Concrete subclasses are responsible for owning the state and behaviour
-    specific to their observing mode. `InstrumentBase` only provides the
-    common identity, comparison, collection-composition, and capability
-    interface shared across the hierarchy.
+    overridden by the relevant child instrument classes. For instance,
+    the PhotometricImager class overrides the `can_do_imaging` property
+    to return True, while introducing properties to detect the attributes
+    required for PSF and noisy imaging.
     """
 
     def __init__(self, label):

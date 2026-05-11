@@ -4,10 +4,10 @@ import inspect
 
 import h5py
 import numpy as np
-from unyt import arcsecond, kpc
+from unyt import arcsecond, kpc, unyt_array
 
 from synthesizer import exceptions
-from synthesizer.instruments.instrument import unpack_instrument_payload
+from synthesizer.instruments.filters import FilterCollection
 from synthesizer.instruments.instrument_base import _hashable_state
 from synthesizer.instruments.photometric_instrument import (
     PhotometricInstrument,
@@ -253,7 +253,89 @@ class PhotometricImager(PhotometricInstrument):
 
     @classmethod
     def _from_hdf5(cls, group, **kwargs):
-        payload = unpack_instrument_payload(group, **kwargs)
+        filters = FilterCollection._from_hdf5(group["Filters"])
+        resolution = unyt_array(
+            group["Resolution"][...], group["Resolution"].attrs["units"]
+        )
+
+        if "Depth" in group and isinstance(group["Depth"], h5py.Group):
+            depth = {
+                key: unyt_array(value[...], value.attrs["units"])
+                for key, value in group["Depth"].items()
+            }
+        elif "Depth" in group:
+            depth = unyt_array(
+                group["Depth"][...], group["Depth"].attrs["units"]
+            )
+        else:
+            depth = None
+
+        if "DepthApertureRadius" in group:
+            depth_app_radius = unyt_array(
+                group["DepthApertureRadius"][...],
+                group["DepthApertureRadius"].attrs["units"],
+            )
+        else:
+            depth_app_radius = None
+
+        if "SNRs" in group and isinstance(group["SNRs"], h5py.Group):
+            snrs = {
+                key: unyt_array(value[...], value.attrs["units"])
+                for key, value in group["SNRs"].items()
+            }
+        elif "SNRs" in group:
+            snrs = unyt_array(group["SNRs"][...], group["SNRs"].attrs["units"])
+        else:
+            snrs = None
+
+        if "PSFs" in group and isinstance(group["PSFs"], h5py.Group):
+            psfs = {}
+            for key in group["PSFs"]:
+                if isinstance(group["PSFs"][key], h5py.Group):
+                    for subkey in group["PSFs"][key]:
+                        psfs[f"{key}/{subkey}"] = unyt_array(
+                            group["PSFs"][key][subkey][...],
+                            group["PSFs"][key][subkey].attrs["units"],
+                        )
+                else:
+                    psfs[key] = unyt_array(
+                        group["PSFs"][key][...],
+                        group["PSFs"][key].attrs["units"],
+                    )
+        else:
+            psfs = None
+
+        if "NoiseMaps" in group and isinstance(group["NoiseMaps"], h5py.Group):
+            noise_maps = {
+                key: unyt_array(value[...], value.attrs["units"])
+                for key, value in group["NoiseMaps"].items()
+            }
+        else:
+            noise_maps = None
+
+        if "NoiseSourceMaps" in group and isinstance(
+            group["NoiseSourceMaps"], h5py.Group
+        ):
+            noise_source_maps = {
+                key: unyt_array(value[...], value.attrs["units"])
+                for key, value in group["NoiseSourceMaps"].items()
+            }
+        else:
+            noise_source_maps = None
+
+        payload = {
+            "label": group.attrs["label"],
+            "filters": filters,
+            "resolution": resolution,
+            "depth": depth,
+            "depth_app_radius": depth_app_radius,
+            "snrs": snrs,
+            "psfs": psfs,
+            "noise_maps": noise_maps,
+            "noise_source_maps": noise_source_maps,
+        }
+        payload.update(kwargs)
+
         init_params = inspect.signature(cls.__init__).parameters
 
         if "filters" not in init_params or "resolution" not in init_params:

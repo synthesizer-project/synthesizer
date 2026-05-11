@@ -1,9 +1,10 @@
 """Specialised photometric instrument."""
 
 import h5py
+from unyt import unyt_array
 
 from synthesizer import exceptions
-from synthesizer.instruments.instrument import unpack_instrument_payload
+from synthesizer.instruments.filters import FilterCollection
 from synthesizer.instruments.instrument_base import (
     InstrumentBase,
     _hashable_state,
@@ -196,7 +197,47 @@ class PhotometricInstrument(InstrumentBase):
 
     @classmethod
     def _from_hdf5(cls, group, **kwargs):
-        payload = unpack_instrument_payload(group, **kwargs)
+        filters = FilterCollection._from_hdf5(group["Filters"])
+
+        if "Depth" in group and isinstance(group["Depth"], h5py.Group):
+            depth = {
+                key: unyt_array(value[...], value.attrs["units"])
+                for key, value in group["Depth"].items()
+            }
+        elif "Depth" in group:
+            depth = unyt_array(
+                group["Depth"][...], group["Depth"].attrs["units"]
+            )
+        else:
+            depth = None
+
+        if "DepthApertureRadius" in group:
+            depth_app_radius = unyt_array(
+                group["DepthApertureRadius"][...],
+                group["DepthApertureRadius"].attrs["units"],
+            )
+        else:
+            depth_app_radius = None
+
+        if "SNRs" in group and isinstance(group["SNRs"], h5py.Group):
+            snrs = {
+                key: unyt_array(value[...], value.attrs["units"])
+                for key, value in group["SNRs"].items()
+            }
+        elif "SNRs" in group:
+            snrs = unyt_array(group["SNRs"][...], group["SNRs"].attrs["units"])
+        else:
+            snrs = None
+
+        payload = {
+            "label": group.attrs["label"],
+            "filters": filters,
+            "depth": depth,
+            "depth_app_radius": depth_app_radius,
+            "snrs": snrs,
+        }
+        payload.update(kwargs)
+
         return cls(
             label=payload["label"],
             filters=payload["filters"],
