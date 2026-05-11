@@ -16,17 +16,49 @@ from synthesizer import exceptions
 
 
 class Instrument:
-    """Backwards-compatible instrument factory.
+    """Factory for constructing specialised instrument classes.
 
-    This class is a convenience API rather than part of the concrete
-    instrument hierarchy. In normal use `Instrument(...)` returns one of the
-    concrete specialised instrument classes.
+    This class is a convenience API. `Instrument(...)` will return one of the
+    specialsed instrument subclasses based on the supplied arguments. Note
+    that malformed argument combinations are rejected explicitly.
+
+    The `Instrument` factory must be passed keyword arguments only, and the
+    arguments must be passed explicitly (i.e.
+    `Instrument(label='my_instrument', ...)` to help ensure that the argument
+    parsing is robust. If a positional argument is passed, a clear error
+    message is raised to guide the user to the correct usage.
     """
 
     def __new__(cls, *args, **kwargs):
-        """Dispatch construction to the appropriate concrete instrument."""
+        """Return the correct specialised Instrument.
+
+        Args:
+            *args: Positional arguments are not accepted by the `Instrument`
+                factory. If any are passed, a clear error message is raised to
+                guide the user to the correct usage.
+            **kwargs: Keyword arguments which are used to determine the correct
+                specialised instrument type to return. The supported arguments
+                are:
+                    - label (str)
+                    - filters (list of str)
+                    - resolution (unyt quantity)
+                    - lam (unyt quantity)
+                    - depth (float)
+                    - depth_app_radius (unyt quantity)
+                    - snrs (dict of str: float)
+                    - psfs (dict of str: PSFModel)
+                    - noise_maps (dict of str: np.ndarray)
+                    - noise_source_maps (dict of str: np.ndarray)
+        """
         if cls is not Instrument:
             return super().__new__(cls)
+
+        if args:
+            raise exceptions.InconsistentArguments(
+                "Instrument(...) only accepts keyword arguments. "
+                "Pass values explicitly, for example "
+                "Instrument(label='my_instrument', ...)."
+            )
 
         label = kwargs.get("label", None)
         filters = kwargs.get("filters", None)
@@ -38,36 +70,6 @@ class Instrument:
         psfs = kwargs.get("psfs", None)
         noise_maps = kwargs.get("noise_maps", None)
         noise_source_maps = kwargs.get("noise_source_maps", None)
-
-        if args:
-            values = [
-                label,
-                filters,
-                resolution,
-                lam,
-                depth,
-                depth_app_radius,
-                snrs,
-                psfs,
-                noise_maps,
-                noise_source_maps,
-            ]
-            for index, value in enumerate(args):
-                if index >= len(values):
-                    break
-                values[index] = value
-            (
-                label,
-                filters,
-                resolution,
-                lam,
-                depth,
-                depth_app_radius,
-                snrs,
-                psfs,
-                noise_maps,
-                noise_source_maps,
-            ) = values
 
         present = sorted(
             key

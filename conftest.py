@@ -639,7 +639,7 @@ def nircam_filters(lam):
 @pytest.fixture
 def uvj_instrument(filters_UVJ):
     """Return a UVJ instrument object."""
-    return Instrument("UVJ", filters=filters_UVJ)
+    return Instrument(label="UVJ", filters=filters_UVJ)
 
 
 @pytest.fixture
@@ -651,7 +651,7 @@ def nircam_instrument(nircam_filters):
         signal.windows.gaussian(100, 3),
     )
     return Instrument(
-        "JWST",
+        label="JWST",
         filters=nircam_filters,
         resolution=1 * Mpc,
         psfs={f: psf for f in nircam_filters.filter_codes},
@@ -662,7 +662,7 @@ def nircam_instrument(nircam_filters):
 def nircam_instrument_no_psf(nircam_filters):
     """Return a NIRCAM instrument object without PSF."""
     return Instrument(
-        "JWST",
+        label="JWST",
         filters=nircam_filters,
         resolution=1 * Mpc,
     )
@@ -671,13 +671,15 @@ def nircam_instrument_no_psf(nircam_filters):
 @pytest.fixture
 def spectroscopy_instrument(test_grid):
     """Return a generic spectroscopy instrument object."""
-    return Instrument("GenericSpec", lam=test_grid.lam)
+    return Instrument(label="GenericSpec", lam=test_grid.lam)
 
 
 @pytest.fixture
 def spatial_spec_instrument(test_grid):
     """Return a generic spatial spectroscopy instrument object."""
-    return Instrument("GenericIFU", lam=test_grid.lam, resolution=1 * Mpc)
+    return Instrument(
+        label="GenericIFU", lam=test_grid.lam, resolution=1 * Mpc
+    )
 
 
 @pytest.fixture
