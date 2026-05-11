@@ -14,7 +14,7 @@ import numpy as np
 from unyt import Hz, cm, erg, s
 
 from synthesizer import exceptions
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, unyt_to_ndview
 from synthesizer.utils.operation_timers import timed
 
 
@@ -83,14 +83,13 @@ class PhotometryCollection:
         fnu_unit = self.__class__.__dict__["photo_fnu"].unit
         is_flux = photometry.units.same_dimensions_as(fnu_unit)
 
-        # Keep raw ndarray storage and rely on Quantity descriptors for
-        # units.
-        self._photometry_data = photometry.ndview
-
         if is_flux:
+            self._photometry_data = unyt_to_ndview(photometry, fnu_unit)
             self.photo_fnu = self._photometry_data
             self.photo_lnu = None
         else:
+            lnu_unit = self.__class__.__dict__["photo_lnu"].unit
+            self._photometry_data = unyt_to_ndview(photometry, lnu_unit)
             self.photo_lnu = self._photometry_data
             self.photo_fnu = None
 

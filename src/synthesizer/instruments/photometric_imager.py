@@ -50,8 +50,18 @@ class PhotometricImager(PhotometricInstrument):
         self.psfs = psfs
         self.noise_maps = noise_maps
         self.noise_source_maps = noise_source_maps
-        self.correlated_noise_models = self._build_correlated_noise_models()
         self._validate()
+
+    @property
+    def noise_source_maps(self):
+        """Return the configured correlated-noise source maps."""
+        return self._noise_source_maps
+
+    @noise_source_maps.setter
+    def noise_source_maps(self, value):
+        """Set source maps and keep correlated-noise models in sync."""
+        self._noise_source_maps = value
+        self.correlated_noise_models = self._build_correlated_noise_models()
 
     @property
     def instrument_type(self):

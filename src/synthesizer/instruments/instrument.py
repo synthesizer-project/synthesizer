@@ -4,9 +4,8 @@
 instrument type based on the supplied arguments. Configurations that do not
 map cleanly onto one of these concrete classes are rejected explicitly.
 
-Use of the `Instrument` factory is optional, and users can (and are encouraged
-to) construct the specific instrument type directly if they know which
-configuration they need.
+Use of the `Instrument` factory is optional, and users can construct the
+specific instrument type directly if they know which configuration they need.
 
 The `Instrument` is maintained for backwards compatibility with the original
 implementation of instruments and may one day be deprecated and removed.
@@ -18,38 +17,13 @@ from synthesizer import exceptions
 class Instrument:
     """Factory for constructing specialised instrument classes.
 
-    This class is a convenience API. `Instrument(...)` will return one of the
-    specialsed instrument subclasses based on the supplied arguments. Note
-    that malformed argument combinations are rejected explicitly.
-
-    The `Instrument` factory must be passed keyword arguments only, and the
-    arguments must be passed explicitly (i.e.
-    `Instrument(label='my_instrument', ...)` to help ensure that the argument
-    parsing is robust. If a positional argument is passed, a clear error
-    message is raised to guide the user to the correct usage.
+    This class is a convenience API. `Instrument(...)` returns one of the
+    specialised instrument subclasses based on the supplied arguments.
+    Malformed argument combinations are rejected explicitly.
     """
 
     def __new__(cls, *args, **kwargs):
-        """Return the correct specialised Instrument.
-
-        Args:
-            *args: Positional arguments are not accepted by the `Instrument`
-                factory. If any are passed, a clear error message is raised to
-                guide the user to the correct usage.
-            **kwargs: Keyword arguments which are used to determine the correct
-                specialised instrument type to return. The supported arguments
-                are:
-                    - label (str)
-                    - filters (list of str)
-                    - resolution (unyt quantity)
-                    - lam (unyt quantity)
-                    - depth (float)
-                    - depth_app_radius (unyt quantity)
-                    - snrs (dict of str: float)
-                    - psfs (dict of str: PSFModel)
-                    - noise_maps (dict of str: np.ndarray)
-                    - noise_source_maps (dict of str: np.ndarray)
-        """
+        """Return the correct specialised instrument."""
         if cls is not Instrument:
             return super().__new__(cls)
 
@@ -133,10 +107,11 @@ class Instrument:
                 f"cases. Received arguments: {present}"
             )
 
-        return target_cls(*args, **kwargs)
+        return target_cls(**kwargs)
 
     @classmethod
     def _from_hdf5(cls, group, **kwargs):
+        """Dispatch HDF5 loading to the appropriate specialised class."""
         from synthesizer.instruments.integrated_field_unit import (
             IntegratedFieldUnit,
         )
