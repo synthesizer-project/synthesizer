@@ -1,9 +1,9 @@
 """Specialised photometric instrument."""
 
+import h5py
+
 from synthesizer import exceptions
-from synthesizer.instruments.generic_instrument import (
-    unpack_instrument_payload,
-)
+from synthesizer.instruments.instrument import unpack_instrument_payload
 from synthesizer.instruments.instrument_base import (
     InstrumentBase,
     _hashable_state,
@@ -11,7 +11,13 @@ from synthesizer.instruments.instrument_base import (
 
 
 class PhotometricInstrument(InstrumentBase):
-    """Concrete instrument for photometric-only configurations."""
+    """Concrete instrument for photometric-only configurations.
+
+    A `PhotometricInstrument` owns a `FilterCollection` and the optional depth
+    / signal-to-noise configuration needed for noisy photometry. It does not
+    assume any spatial resolution or imaging-specific state such as PSFs or
+    pixel-space noise maps.
+    """
 
     def __init__(
         self,
@@ -181,6 +187,12 @@ class PhotometricInstrument(InstrumentBase):
                     "SNRs", data=self.snrs.value, dtype=float
                 )
                 ds.attrs["units"] = "dimensionless"
+
+    @classmethod
+    def load(cls, filepath, **kwargs):
+        """Load a photometric instrument from an HDF5 file."""
+        with h5py.File(filepath, "r") as hdf:
+            return cls._from_hdf5(hdf, **kwargs)
 
     @classmethod
     def _from_hdf5(cls, group, **kwargs):

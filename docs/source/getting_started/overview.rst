@@ -89,9 +89,24 @@ Emissions can be converted into observables by applying an ``Instrument`` or ``I
 Observatories & Instruments
 ***************************
 
-To convert an emission into an observable the properties of an observatory must be applied. This is parametrised by the ``Instrument`` object, a flexible container designed to hold the properties of any type of observatory, including photometric imagers, spectrographs, and IFU instruments.
+To convert an emission into an observable the properties of an observatory must
+be applied. Synthesizer now provides a small instrument hierarchy for this.
+The most convenient public entry point remains ``Instrument(...)``, which acts
+as a backwards-compatible factory and dispatches to the appropriate concrete
+type.
 
-While many of the properties are simple values (i.e. a resolution or resolving power), certain instruments require more detailed properties. For example, a photometric imager ``Instrument`` needs a description of the filter transmission curves. These are encapsulated by the ``FilterCollection`` object. These filters can be user defined, using an explicit transmission curve or the limits of a top-hat filter. Synthesizer also provides an interface to the `Spanish Virtual Observatory (SVO) filter database <https://svo2.cab.inta-csic.es/theory/fps/>`_, which allows users to easily use any filter from the database by simply passing a filter name to the ``FilterCollection`` at instantiation.
+The main concrete instrument classes are:
+
+- ``PhotometricInstrument``
+- ``PhotometricImager``
+- ``SpectroscopicInstrument``
+- ``IntegratedFieldUnit``
+
+While many instrument properties are simple values, certain observing modes
+require richer state. For example, a ``PhotometricImager`` needs a
+``FilterCollection`` describing the transmission curves of its filters.
+Synthesizer filters can be user defined, built from top-hat limits, or loaded
+from the `Spanish Virtual Observatory (SVO) filter database <https://svo2.cab.inta-csic.es/theory/fps/>`_.
 
 
 Observables
@@ -99,5 +114,3 @@ Observables
 
 By combining an emission object with an ``Instrument`` or ``InstrumentCollection``, Synthesizer can translate the theoretical emission into an observable accounting for observational effects.
 Observables include spectra (accounting for resolving power and noise, again in ``Sed`` objects), photometry (``PhotometryCollection`` objects), images (``Image`` and ``ImageCollection`` objects), and spectral data cubes (``SpectralDataCube`` objects). Just like emissions, observables are not just containers, they provide a number of methods for manipulating, analysing, and visualising their contents.
-
-

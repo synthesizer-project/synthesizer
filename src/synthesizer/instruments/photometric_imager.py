@@ -1,12 +1,13 @@
 """Specialised photometric imaging instrument."""
 
+import inspect
+
+import h5py
 import numpy as np
 from unyt import arcsecond, kpc
 
 from synthesizer import exceptions
-from synthesizer.instruments.generic_instrument import (
-    unpack_instrument_payload,
-)
+from synthesizer.instruments.instrument import unpack_instrument_payload
 from synthesizer.instruments.instrument_base import _hashable_state
 from synthesizer.instruments.photometric_instrument import (
     PhotometricInstrument,
@@ -16,7 +17,13 @@ from synthesizer.units import accepts
 
 
 class PhotometricImager(PhotometricInstrument):
-    """Concrete instrument for imaging-capable photometric setups."""
+    """Concrete instrument for imaging-capable photometric setups.
+
+    This specialisation extends `PhotometricInstrument` with spatial
+    resolution, optional PSFs, and imaging noise definitions. It is the right
+    concrete type when the instrument is expected to generate or manipulate
+    photometric images rather than integrated photometry alone.
+    """
 
     @accepts(resolution=(kpc, arcsecond))
     def __init__(
@@ -233,8 +240,34 @@ class PhotometricImager(PhotometricInstrument):
                 ds.attrs["units"] = str(value.units)
 
     @classmethod
+    def load(cls, filepath=None, **kwargs):
+        """Load a photometric imager from an HDF5 file."""
+        if filepath is None:
+            filepath = getattr(cls, "_instrument_cache_file", None)
+        if filepath is None:
+            raise exceptions.MissingArgument(
+                f"{cls.__name__}.load requires a filepath."
+            )
+        with h5py.File(filepath, "r") as hdf:
+            return cls._from_hdf5(hdf, **kwargs)
+
+    @classmethod
     def _from_hdf5(cls, group, **kwargs):
         payload = unpack_instrument_payload(group, **kwargs)
+        init_params = inspect.signature(cls.__init__).parameters
+
+        if "filters" not in init_params or "resolution" not in init_params:
+            return cls(
+                label=payload["label"],
+                filter_lams=payload["filters"].lam,
+                depth=payload["depth"],
+                depth_app_radius=payload["depth_app_radius"],
+                snrs=payload["snrs"],
+                psfs=payload["psfs"],
+                noise_maps=payload["noise_maps"],
+                filter_subset=tuple(payload["filters"].filter_codes),
+            )
+
         return cls(
             label=payload["label"],
             filters=payload["filters"],

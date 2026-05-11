@@ -1,11 +1,10 @@
 """Specialised integrated field unit instrument."""
 
+import h5py
 from unyt import arcsecond, kpc
 
 from synthesizer import exceptions
-from synthesizer.instruments.generic_instrument import (
-    unpack_instrument_payload,
-)
+from synthesizer.instruments.instrument import unpack_instrument_payload
 from synthesizer.instruments.instrument_base import _hashable_state
 from synthesizer.instruments.spectroscopic_instrument import (
     SpectroscopicInstrument,
@@ -14,7 +13,12 @@ from synthesizer.units import accepts
 
 
 class IntegratedFieldUnit(SpectroscopicInstrument):
-    """Concrete instrument for resolved spectroscopic configurations."""
+    """Concrete instrument for resolved spectroscopic configurations.
+
+    This specialisation extends `SpectroscopicInstrument` with spatial
+    resolution and optional PSFs for integral-field or other resolved
+    spectroscopic use cases.
+    """
 
     @accepts(resolution=(kpc, arcsecond))
     def __init__(
@@ -86,6 +90,12 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         if self.psfs is not None:
             ds = group.create_dataset("PSFs", data=self.psfs, dtype=float)
             ds.attrs["units"] = "dimensionless"
+
+    @classmethod
+    def load(cls, filepath, **kwargs):
+        """Load an integrated field unit from an HDF5 file."""
+        with h5py.File(filepath, "r") as hdf:
+            return cls._from_hdf5(hdf, **kwargs)
 
     @classmethod
     def _from_hdf5(cls, group, **kwargs):

@@ -67,17 +67,15 @@ def test_instrument_collection_does_not_mutate_existing_filters():
     assert collection.all_filters.filter_codes == ["filter_a", "filter_b"]
 
 
-def test_noise_source_maps_do_not_make_spectrograph_noisy():
-    """Correlated imaging noise should not count as spectroscopy noise."""
-    inst = Instrument(
-        label="spec",
-        lam=np.linspace(1000, 3000, 32) * angstrom,
-        resolution=1 * arcsecond,
-        noise_source_maps={"filter_a": np.ones((8, 8))},
-    )
-
-    assert not inst.can_do_noisy_spectroscopy
-    assert not inst.can_do_noisy_resolved_spectroscopy
+def test_unsupported_mixed_noise_configuration_raises():
+    """Unsupported mixed-mode configurations should fail explicitly."""
+    with pytest.raises(exceptions.InconsistentArguments):
+        Instrument(
+            label="spec",
+            lam=np.linspace(1000, 3000, 32) * angstrom,
+            resolution=1 * arcsecond,
+            noise_source_maps={"filter_a": np.ones((8, 8))},
+        )
 
 
 def test_add_filters_does_not_mutate_on_invalid_noise_payload():

@@ -1,6 +1,22 @@
+"""Instrument interfaces and helpers.
+
+This package exposes two user-facing ways to construct instruments:
+
+- `Instrument`, a backwards-compatible convenience constructor that
+  dispatches to the most appropriate concrete instrument type.
+- Specialised concrete classes such as `PhotometricInstrument`,
+  `PhotometricImager`, `SpectroscopicInstrument`, and
+  `IntegratedFieldUnit`.
+
+The shared abstract interface for all concrete instruments is
+`InstrumentBase`.
+
+`InstrumentCollection` remains the common container for combining one or more
+instrument instances regardless of their concrete type.
+"""
+
 from synthesizer.instruments.filters import UVJ, Filter, FilterCollection
 from synthesizer.instruments.instrument_base import InstrumentBase
-from synthesizer.instruments.generic_instrument import GenericInstrument
 from synthesizer.instruments.instrument import Instrument
 from synthesizer.instruments.photometric_instrument import PhotometricInstrument
 from synthesizer.instruments.photometric_imager import PhotometricImager
@@ -24,7 +40,6 @@ from synthesizer.instruments.utils import (
 __all__ = [
     "Instrument",
     "InstrumentBase",
-    "GenericInstrument",
     "PhotometricInstrument",
     "PhotometricImager",
     "SpectroscopicInstrument",

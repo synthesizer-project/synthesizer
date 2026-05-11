@@ -14,6 +14,11 @@ class InstrumentBase(ABC):
     Capability flags are declared explicitly here. When a new instrument
     capability is introduced, it should be added to this interface and then
     overridden by the relevant concrete instrument classes.
+
+    Concrete subclasses are responsible for owning the state and behaviour
+    specific to their observing mode. `InstrumentBase` only provides the
+    common identity, comparison, collection-composition, and capability
+    interface shared across the hierarchy.
     """
 
     def __init__(self, label):
@@ -73,6 +78,11 @@ class InstrumentBase(ABC):
     @abstractmethod
     def to_hdf5(self, group):
         """Write the instrument to an HDF5 group."""
+
+    @classmethod
+    @abstractmethod
+    def load(cls, *args, **kwargs):
+        """Load an instrument instance according to the class contract."""
 
     @abstractmethod
     def _comparison_state(self):

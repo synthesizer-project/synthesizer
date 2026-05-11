@@ -1,11 +1,10 @@
 """Specialised spectroscopic instrument."""
 
+import h5py
 from unyt import angstrom
 
 from synthesizer import exceptions
-from synthesizer.instruments.generic_instrument import (
-    unpack_instrument_payload,
-)
+from synthesizer.instruments.instrument import unpack_instrument_payload
 from synthesizer.instruments.instrument_base import (
     InstrumentBase,
     _hashable_state,
@@ -14,7 +13,12 @@ from synthesizer.units import Quantity, accepts
 
 
 class SpectroscopicInstrument(InstrumentBase):
-    """Concrete instrument for spectroscopic-only configurations."""
+    """Concrete instrument for spectroscopic-only configurations.
+
+    A `SpectroscopicInstrument` owns a wavelength grid and the optional depth /
+    signal-to-noise configuration needed for noisy spectroscopy. It does not
+    include any spatially resolved state.
+    """
 
     lam = Quantity("wavelength")
 
@@ -132,6 +136,12 @@ class SpectroscopicInstrument(InstrumentBase):
                 "NoiseMaps", data=self.noise_maps.value, dtype=float
             )
             ds.attrs["units"] = str(self.noise_maps.units)
+
+    @classmethod
+    def load(cls, filepath, **kwargs):
+        """Load a spectroscopic instrument from an HDF5 file."""
+        with h5py.File(filepath, "r") as hdf:
+            return cls._from_hdf5(hdf, **kwargs)
 
     @classmethod
     def _from_hdf5(cls, group, **kwargs):
