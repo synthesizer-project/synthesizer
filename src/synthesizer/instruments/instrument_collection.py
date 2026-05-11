@@ -1,40 +1,9 @@
-"""A module defining a container for instruments.
+"""Container for one or more instrument objects.
 
-A InstrumentCollection is a container for Instrument objects. It can be
-treated as a dictionary of instruments, with the label of the instrument
-as the key. It can also be treated as an iterable, allowing for simple
-iteration over the instruments in the collection.
-
-InstrumentCollections can either be created from an existing file or
-initialised as an empty collection to which instruments can be added.
-
-Example usage:
-
-    # Create an empty InstrumentCollection
-    collection = InstrumentCollection()
-
-    # Add an instrument to the collection
-    instrument = Instrument(label="my_instrument", ...)
-    collection.add_instruments(instrument)
-
-    # Add multiple instruments to the collection
-    instrument1 = Instrument(label="instrument1", ...)
-    instrument2 = Instrument(label="instrument2", ...)
-    collection.add_instruments(instrument1, instrument2)
-
-    # Save the collection to a file
-    collection.save_instruments("path/to/file.hdf5")
-
-    # Load the collection from a file
-    collection = InstrumentCollection("path/to/file.hdf5")
-
-    # Iterate over the instruments in the collection
-    for instrument in collection:
-        print(instrument.label)
-
-    # Get an instrument by its label
-    instrument = collection["my_instrument"]
-
+An :class:`InstrumentCollection` behaves like a lightweight labelled registry
+for instrument instances. It supports dictionary-style lookup by instrument
+label, iteration over stored instruments, and HDF5
+serialisation/deserialisation.
 """
 
 from copy import deepcopy
@@ -48,34 +17,27 @@ from synthesizer.utils.ascii_table import TableFormatter
 
 
 class InstrumentCollection:
-    """A container for instruments.
+    """Container for a set of labelled instruments.
 
-    The InstrumentCollection class is a container for Instrument objects.
-    It can be treated as a dictionary of instruments, with the label of the
-    instrument as the key. It can also be treated as an iterable, allowing
-    for simple iteration over the instruments in the collection.
-
-    InstrumentCollections can either be created from an existing file or
-    initialised as an empty collection to which instruments can be added.
+    The collection is primarily used when workflows need to combine multiple
+    instruments while preserving their labels and serialised form.
 
     Attributes:
-        instruments (dict):
-            A dictionary of instruments, with the label of the instrument as
-            the key.
-        instrument_labels (list):
-            A list of the labels of the instruments in the collection.
-        ninstruments (int):
-            The number of instruments in the collection.
+        instruments (dict): Mapping from instrument label to instrument
+            instance.
+        instrument_labels (list): Labels stored in insertion order.
+        ninstruments (int): Number of instruments currently stored.
+        all_filters (FilterCollection or None): Combined filters from all
+            photometric instruments in the collection.
     """
 
     def __init__(self, filepath=None):
-        """Initialise the collection ready to collect together instruments.
+        """Initialise the collection.
 
         Args:
-            filepath (str):
-                A path to a file containing instruments to load, if desired.
-                Otherwise, an empty collection will be created and
-                instruments can be added manually.
+            filepath (str, optional): Path to a file containing instruments to
+                load. If omitted, an empty collection is created and
+                instruments can be added manually afterwards.
         """
         # Create the attributes to later be populated with instruments.
         self.instruments = {}
@@ -98,8 +60,9 @@ class InstrumentCollection:
         """Load instruments from a file.
 
         Args:
-            filepath (str):
-                The path to the file containing the instruments to load.
+            filepath (str): Path to the file containing serialised
+                instruments. Each top-level group in the file, apart from the
+                header group, is interpreted as one serialised instrument.
         """
         # Have to import here to avoid circular imports
         from synthesizer.instruments import Instrument
@@ -130,8 +93,13 @@ class InstrumentCollection:
         """Add instruments to the collection.
 
         Args:
-            *instruments (Instrument):
-                The instruments to add to the collection.
+            *instruments (InstrumentBase): Instruments to add to the
+                collection. Each instrument must have a unique label so it can
+                be stored unambiguously in the collection mapping.
+
+        Raises:
+            InconsistentArguments: If an object is not an instrument or an
+                instrument label is duplicated.
         """
         # Have to import here to avoid circular imports
         from synthesizer.instruments import Instrument
@@ -155,7 +123,8 @@ class InstrumentCollection:
             self.instrument_labels.append(instrument.label)
             self.ninstruments += 1
 
-            # Add the filters to the collection
+            # Keep a combined filter collection for convenience when the member
+            # instruments support photometry
             if instrument.can_do_photometry:
                 if self.all_filters is None:
                     self.all_filters = deepcopy(instrument.filters)
@@ -166,8 +135,9 @@ class InstrumentCollection:
         """Save the instruments in the collection to a file.
 
         Args:
-            filepath (str):
-                The path to the file in which to save the instruments.
+            filepath (str): Path to the file in which to save the instruments.
+                The output file will contain a header group followed by one
+                group per stored instrument.
         """
         # Open the file
         with h5py.File(filepath, "w") as hdf:
@@ -186,28 +156,26 @@ class InstrumentCollection:
                 instrument.to_hdf5(hdf.create_group(label))
 
     def __len__(self):
-        """Return the number of instruments in the collection."""
+        """Return the number of instruments in the collection.
+
+        Returns:
+            int: Number of stored instruments.
+        """
         return len(self.instruments)
 
     def __iter__(self):
-        """Iterate over the instrument colleciton.
+        """Return the collection iterator.
 
-        Overload iteration to allow simple looping over instrument objects,
-        combined with __next__ this enables for f in InstrumentCollection
-        syntax.
+        Returns:
+            InstrumentCollection: Iterator over the stored instruments.
         """
         return self
 
     def __next__(self):
         """Get the next instrument in the collection.
 
-        Overload iteration to allow simple looping over filter objects,
-        combined with __iter__ this enables for f in InstrumentCollection
-        syntax.
-
         Returns:
-            Instrument
-                The next instrument in the collection.
+            InstrumentBase: The next instrument in the collection.
         """
         # Check we haven't finished
         if self._current_ind >= self.ninstruments:
@@ -223,49 +191,47 @@ class InstrumentCollection:
             ]
 
     def __getitem__(self, key):
-        """Get an Instrument by its label.
-
-        Enables the extraction of instrument objects from the
-        InstrumentCollection by getitem syntax (InstrumentCollection[key]
-        rather than InstrumentCollection.instruments[key]).
+        """Get an instrument by its label.
 
         Args:
-            key (str):
-                The label of the desired instrument.
+            key (str): Label of the desired instrument, matching the
+                ``label`` attribute of the stored instrument.
 
         Returns:
-            Instrument
-                The Instrument object stored at self.instruments[key].
+            InstrumentBase: Instrument stored under ``key``.
 
         Raises:
-            KeyError
-                When the instrument does not exist in self.instruments
-                an error is raised.
+            KeyError: If the instrument label is not present.
         """
         return self.instruments[key]
 
     def __str__(self):
-        """Return a string representation of the InstrumentCollection.
+        """Return a string representation of the collection.
 
         Returns:
-            str
-                A string representation of the InstrumentCollection.
+            str: Tabulated representation of the collection contents.
         """
-        # Intialise the table formatter
+        # Intialise the table formatter for a compact summary of the stored
+        # instruments
         formatter = TableFormatter(self)
 
         return formatter.get_table("Instrument Collection")
 
     def __add__(self, other):
-        """Add an Instrument or another InstrumentCollection to this one.
+        """Add an instrument or another collection to this one.
 
         Args:
-            other (InstrumentCollection/Instrument):
-                The InstrumentCollection/Instrument to combine with this one.
+            other (InstrumentCollection or InstrumentBase): Object to combine
+                with this collection. Passing another collection appends all of
+                its instruments, while passing a single instrument adds just
+                that one instrument.
 
         Returns:
-            InstrumentCollection:
-                The combined InstrumentCollection.
+            InstrumentCollection: The updated collection.
+
+        Raises:
+            InconsistentAddition: If ``other`` is not an instrument or another
+                collection.
         """
         # Have to import here to avoid circular imports
         from synthesizer.instruments import Instrument
@@ -290,12 +256,10 @@ class InstrumentCollection:
         """Check if an instrument is in the collection.
 
         Args:
-            key (str):
-                The label of the instrument to check for.
+            key (str): Label of the instrument to check for.
 
         Returns:
-            bool:
-                True if the instrument is in the collection, False otherwise.
+            bool: ``True`` if the instrument is present, otherwise ``False``.
         """
         return key in self.instruments
 
@@ -303,20 +267,18 @@ class InstrumentCollection:
         """Get the items in the InstrumentCollection.
 
         Returns:
-            dict_items
-                The items in the InstrumentCollection.
+            dict_items: Label-instrument pairs stored in the collection. This
+                mirrors the behaviour of ``dict.items()`` on the underlying
+                mapping.
         """
         return self.instruments.items()
 
     def to_set(self):
-        """Return a set containing the Instruments.
-
-        This is a convenience method to allow easy conversion of single
-        Instrument objects into sets for use in functions that expect
-        multiple instruments.
+        """Return a set containing the stored instruments.
 
         Returns:
-            set:
-                A set containing this Instrument.
+            set: Set of instrument instances in the collection. This is a
+                convenience helper for APIs that expect an unordered collection
+                of instruments.
         """
         return {inst for inst in self}

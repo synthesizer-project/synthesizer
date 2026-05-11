@@ -1,15 +1,13 @@
 """Generic Instrument factory entry point.
 
-`Instrument` is a generic factory which will instantiate the correct
-instrument type based on the supplied arguments. Configurations that do not
-map cleanly onto one of these concrete classes are rejected explicitly.
+`Instrument` is a backwards-compatible factory which instantiates the correct
+specialised instrument class based on the supplied arguments. Configurations
+that do not map cleanly onto one of the supported specialised classes are
+rejected explicitly.
 
-Use of the `Instrument` factory is optional, and users can (and are encouraged
-to) construct the specific instrument type directly if they know which
-configuration they need.
-
-The `Instrument` is maintained for backwards compatibility with the original
-implementation of instruments and may one day be deprecated and removed.
+<<<<<<< HEAD
+Use of the `Instrument` factory is optional. Users can construct the specific
+instrument type directly if they already know which configuration they need.
 """
 
 from synthesizer import exceptions
@@ -26,15 +24,12 @@ from synthesizer.instruments.spectroscopic_instrument import (
 class Instrument:
     """Factory for constructing specialised instrument classes.
 
-    This class is a convenience API. `Instrument(...)` will return one of the
-    specialsed instrument subclasses based on the supplied arguments. Note
-    that malformed argument combinations are rejected explicitly.
+    This class is a convenience API. `Instrument(...)` returns one of the
+    specialised instrument subclasses based on the supplied arguments.
+    Malformed argument combinations are rejected explicitly.
 
-    The `Instrument` factory must be passed keyword arguments only, and the
-    arguments must be passed explicitly (i.e.
-    `Instrument(label='my_instrument', ...)` to help ensure that the argument
-    parsing is robust. If a positional argument is passed, a clear error
-    message is raised to guide the user to the correct usage.
+    The factory is not part of the specialised instrument hierarchy;
+    it simply dispatches to the correct specialised class.
     """
 
     def __new__(cls, *args, **kwargs):
@@ -70,15 +65,14 @@ class Instrument:
                     correlated noise.
 
         Returns:
-            InstrumentBase: An instance of a specialised instrument subclass
-                inheriting from `InstrumentBase`, constructed according to
-                the supplied arguments.
+            InstrumentBase: An instance of the specialised instrument class
+                implied by the supplied arguments.
         """
         if cls is not Instrument:
             return super().__new__(cls)
 
-        # Kwargs are safer for the factory, let the user know if they supplied
-        # any positional arguments by mistake
+        # Keyword-only construction keeps the dispatch logic explicit and easy
+        # to reason about.
         if len(args) > 0:
             raise exceptions.InconsistentArguments(
                 "Instrument(...) only accepts keyword arguments. "
@@ -86,7 +80,7 @@ class Instrument:
                 "Instrument(label='my_instrument', ...)."
             )
 
-        # Unpack all the supported arguments
+        # Unpack all supported arguments for dispatch.
         label = kwargs.get("label", None)
         filters = kwargs.get("filters", None)
         resolution = kwargs.get("resolution", None)
@@ -98,7 +92,8 @@ class Instrument:
         noise_maps = kwargs.get("noise_maps", None)
         noise_source_maps = kwargs.get("noise_source_maps", None)
 
-        # Get a list of what we were provided for reporting in error messages.
+        # Build a concise summary for error reporting so unsupported argument
+        # combinations are easier to diagnose.
         present = sorted(
             key
             for key, value in {
@@ -119,26 +114,27 @@ class Instrument:
         # Resolve the correct instrument type based on the supplied arguments
         target_cls = None
 
-        # Photometric imaging case
+        # Photometric imaging case: filters plus a spatial resolution
         if filters is not None and lam is None and resolution is not None:
             target_cls = PhotometricImager
 
-        # Photometric filters case
+        # Integrated photometry case: filters but no spatial resolution
         elif filters is not None and lam is None and resolution is None:
             target_cls = PhotometricInstrument
 
-        # Spectroscopic Integrated Field Unit case
+        # IFU case: a wavelength array together with a spatial resolution
         elif filters is None and lam is not None and resolution is not None:
             target_cls = IntegratedFieldUnit
 
-        # Spectroscopic case
+        # One-dimensional spectroscopy case: wavelength array only
         elif filters is None and lam is not None and resolution is None:
             target_cls = SpectroscopicInstrument
 
         else:
             raise exceptions.InconsistentArguments(
                 "Instrument(...) could not map the supplied arguments to a "
-                "supported concrete instrument type. Construct a specialised "
+                "supported specialised instrument type. Construct a "
+                "specialised "
                 "class directly if you need a configuration outside the "
                 "supported photometric, imaging, spectroscopic, or IFU "
                 f"cases. Received arguments: {present}"
@@ -148,7 +144,18 @@ class Instrument:
 
     @classmethod
     def _from_hdf5(cls, group, **kwargs):
-        """Dispatch HDF5 loading to the appropriate specialised class."""
+        """Dispatch HDF5 loading to the appropriate specialised class.
+
+        Args:
+            group (h5py.Group): Group containing the serialised instrument.
+            **kwargs: Attribute overrides passed through to the concrete
+                loader.
+
+        Returns:
+            InstrumentBase: The deserialised specialised instrument instance.
+        """
+        # The serialised ``instrument_type`` attribute tells us which
+        # specialised class should handle deserialisation
         instrument_type = group.attrs.get("instrument_type")
 
         if instrument_type == "photometric":

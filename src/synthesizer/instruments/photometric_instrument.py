@@ -1,4 +1,9 @@
-"""Specialised photometric instrument."""
+"""Specialised photometric instrument.
+
+This instrument is designed to hold the attributes required for integrated
+photometry. It stores a :class:`FilterCollection` together with optional depth
+and signal-to-noise definitions for noisy photometric measurements.
+"""
 
 import h5py
 from unyt import unyt_array
@@ -12,12 +17,26 @@ from synthesizer.instruments.instrument_base import (
 
 
 class PhotometricInstrument(InstrumentBase):
-    """Concrete instrument for photometric-only configurations.
+    """Photometric instrument class.
 
-    A `PhotometricInstrument` owns a `FilterCollection` and the optional depth
-    / signal-to-noise configuration needed for noisy photometry. It does not
-    assume any spatial resolution or imaging-specific state such as PSFs or
-    pixel-space noise maps.
+    A class containing the attributes and methods required for integrated
+    photometry. It holds the filters defining the instrument transmission
+    curves together with the optional noise information required to generate
+    noisy photometric measurements. It does not include any spatially resolved
+    information such as an image resolution, PSFs, or image-plane noise maps.
+
+    Attributes:
+        filters (FilterCollection): The filters defining the photometric
+            response of the instrument.
+        depth (dict or unyt_quantity, optional): The depth of the instrument,
+            typically in apparent magnitudes. If depths are provided per
+            filter, this should be a dictionary keyed by filter code.
+        depth_app_radius (unyt_quantity, optional): The aperture radius for
+            the depth measurement. If omitted but depths and SNRs are provided,
+            the depth is assumed to be a point-source depth.
+        snrs (dict or unyt_quantity, optional): The signal-to-noise ratios of
+            the instrument. If values are provided per filter, this should be a
+            dictionary keyed by filter code.
     """
 
     def __init__(
@@ -28,7 +47,23 @@ class PhotometricInstrument(InstrumentBase):
         depth_app_radius=None,
         snrs=None,
     ):
-        """Initialise a photometric instrument."""
+        """Initialise a photometric instrument.
+
+        Args:
+            label (str): A label for the instrument.
+            filters (FilterCollection): The filters defining the photometric
+                response of the instrument.
+            depth (dict or unyt_quantity, optional): The depth of the
+                instrument, typically in apparent magnitudes. If depths are
+                provided per filter, this should be a dictionary keyed by
+                filter code.
+            depth_app_radius (unyt_quantity, optional): The aperture radius for
+                the depth measurement. If this is omitted but SNRs and depths
+                are provided, the depth is assumed to be a point-source depth.
+            snrs (dict or unyt_quantity, optional): The signal-to-noise ratios
+                of the instrument. If values are provided per filter, this
+                should be a dictionary keyed by filter code.
+        """
         super().__init__(label)
         self.filters = filters
         self.depth = depth
@@ -47,6 +82,12 @@ class PhotometricInstrument(InstrumentBase):
         return True
 
     def _validate(self):
+        """Validate the instrument attributes.
+
+        Raises:
+            MissingArgument: If required photometric attributes are missing or
+                inconsistent.
+        """
         if self.filters is None:
             raise exceptions.MissingArgument(
                 "PhotometricInstrument requires filters."
@@ -61,6 +102,11 @@ class PhotometricInstrument(InstrumentBase):
             )
 
     def _comparison_state(self):
+        """Return a tuple describing the photometric comparison state.
+
+        Returns:
+            tuple: Hashable representation of the instrument state.
+        """
         return (
             _hashable_state(self.filters.filter_codes),
             _hashable_state(self.depth),
@@ -75,7 +121,19 @@ class PhotometricInstrument(InstrumentBase):
         noise_maps=None,
         noise_source_maps=None,
     ):
-        """Add filters and optional imaging payloads to the instrument."""
+        """Add filters and optional imaging payloads to the instrument.
+
+        Args:
+            filters (FilterCollection): The filters to add to the instrument.
+            psfs (dict, optional): Optional PSFs keyed by filter code. These
+                are only meaningful for imaging-capable subclasses.
+            noise_maps (dict, optional): Optional fixed noise maps keyed by
+                filter code. These are only meaningful for imaging-capable
+                subclasses.
+            noise_source_maps (dict, optional): Optional correlated-noise
+                source maps keyed by filter code. These are only meaningful for
+                imaging-capable subclasses.
+        """
         if psfs is not None and set(psfs.keys()) != set(filters.filter_codes):
             raise exceptions.InconsistentAddition(
                 "PSFs missing for filters: "
@@ -146,7 +204,12 @@ class PhotometricInstrument(InstrumentBase):
         self._validate()
 
     def to_hdf5(self, group):
-        """Write the photometric instrument to an HDF5 group."""
+        """Write the photometric instrument to an HDF5 group.
+
+        Args:
+            group (h5py.Group): Group into which the instrument should be
+                serialised.
+        """
         group.attrs["label"] = self.label
         group.attrs["instrument_type"] = self.instrument_type
 
@@ -191,12 +254,29 @@ class PhotometricInstrument(InstrumentBase):
 
     @classmethod
     def load(cls, filepath, **kwargs):
-        """Load a photometric instrument from an HDF5 file."""
+        """Load a photometric instrument from an HDF5 file.
+
+        Args:
+            filepath (str or PathLike): Path to the HDF5 file.
+            **kwargs: Attribute overrides applied after deserialisation.
+
+        Returns:
+            PhotometricInstrument: The loaded instrument.
+        """
         with h5py.File(filepath, "r") as hdf:
             return cls._from_hdf5(hdf, **kwargs)
 
     @classmethod
     def _from_hdf5(cls, group, **kwargs):
+        """Load a photometric instrument from an HDF5 group.
+
+        Args:
+            group (h5py.Group): Group containing the serialised instrument.
+            **kwargs: Attribute overrides applied after deserialisation.
+
+        Returns:
+            PhotometricInstrument: The loaded instrument.
+        """
         filters = FilterCollection._from_hdf5(group["Filters"])
 
         if "Depth" in group and isinstance(group["Depth"], h5py.Group):
