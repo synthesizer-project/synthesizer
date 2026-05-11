@@ -1,8 +1,9 @@
 """A submodule defining some premade instruments.
 
-This module contains some commonly used instruments which can be imported,
+This module contains a set of commonly used instruments which can be imported,
 instantiated, and used directly. Each premade single-instrument class is a
-specialised `PhotometricImager` with the appropriate properties fixed.
+specialised :class:`PhotometricImager` with the appropriate filters,
+resolution, and cached metadata fixed for that observatory or camera.
 
 The premade instruments are:
     - JWST/NIRCam.Wide
@@ -53,6 +54,8 @@ Example usage:
     # Load a premade instrument from a file with a custom noise array
     jwst_nircam = JWSTNIRCam.load(noise_maps=noise_arrays)
 
+Premade collection factory classes are also provided for observatories with
+multiple related instrument groupings.
 """
 
 import os
@@ -94,7 +97,18 @@ __all__ = [
 
 
 def _subset_dict_for_filters(value, filter_codes):
-    """Return a filter-keyed dictionary restricted to selected filters."""
+    """Return a filter-keyed dictionary restricted to selected filters.
+
+    Args:
+        value (object): Value to subset. If this is not a dictionary it is
+            returned unchanged.
+        filter_codes (iterable): Filter codes to retain in the subsetted
+            dictionary.
+
+    Returns:
+        object: Dictionary restricted to the requested filter codes, or the
+            original value if no dictionary subsetting is required.
+    """
     if not isinstance(value, dict):
         return value
     return {code: value[code] for code in filter_codes if code in value}
@@ -103,7 +117,29 @@ def _subset_dict_for_filters(value, filter_codes):
 def _load_cached_premade_imager(
     cls, filepath=None, filter_subset=(), filter_lams=None, **kwargs
 ):
-    """Load a cached premade imager and apply premade-specific overrides."""
+    """Load a cached premade imager and apply premade-specific overrides.
+
+    This helper is used by premade single-instrument classes which support
+    cached loading from an HDF5 file. The cached instrument is loaded first,
+    then any requested filter subsetting or wavelength-grid overrides are
+    applied before constructing the final premade instrument instance.
+
+    Args:
+        cls (type): Premade instrument class being loaded.
+        filepath (str, optional): Path to the cached instrument file. If not
+            provided, the class-specific cache-file attribute is used.
+        filter_subset (tuple, optional): Optional subset of filter codes to
+            retain in the loaded instrument.
+        filter_lams (unyt_array, optional): Optional wavelength array to which
+            the loaded filters should be resampled.
+        **kwargs: Additional keyword arguments forwarded to
+            :meth:`PhotometricImager._from_hdf5`, such as premade loader
+            overrides supported by the cached instrument machinery.
+
+    Returns:
+        PhotometricImager: Loaded premade instrument with any requested
+            subsetting or filter resampling applied.
+    """
     if filepath is None:
         filepath = getattr(cls, "_instrument_cache_file", None)
     if filepath is None:
@@ -120,32 +156,38 @@ def _load_cached_premade_imager(
 
     inst = PhotometricImager.load.__func__(cls, filepath=filepath, **kwargs)
 
+    filters = inst.filters
     if len(filter_subset) > 0:
-        inst.filters = inst.filters.select(*filter_subset)
-        filter_codes = set(inst.filters.filter_codes)
-        inst.depth = _subset_dict_for_filters(inst.depth, filter_codes)
-        inst.snrs = _subset_dict_for_filters(inst.snrs, filter_codes)
-        inst.psfs = _subset_dict_for_filters(inst.psfs, filter_codes)
-        inst.noise_maps = _subset_dict_for_filters(
-            inst.noise_maps, filter_codes
-        )
-        inst.noise_source_maps = _subset_dict_for_filters(
-            inst.noise_source_maps, filter_codes
-        )
-        inst.correlated_noise_models = inst._build_correlated_noise_models()
+        filters = filters.select(*filter_subset)
 
     if filter_lams is not None:
-        inst.filters.resample_filters(new_lam=filter_lams, verbose=False)
+        filters = FilterCollection(
+            filters=filters.filters, new_lam=filter_lams
+        )
 
-    return inst
+    filter_codes = set(filters.filter_codes)
+
+    return cls(
+        label=inst.label,
+        filter_lams=filters.lam,
+        depth=_subset_dict_for_filters(inst.depth, filter_codes),
+        depth_app_radius=inst.depth_app_radius,
+        snrs=_subset_dict_for_filters(inst.snrs, filter_codes),
+        psfs=_subset_dict_for_filters(inst.psfs, filter_codes),
+        noise_maps=_subset_dict_for_filters(inst.noise_maps, filter_codes),
+        noise_source_maps=_subset_dict_for_filters(
+            inst.noise_source_maps, filter_codes
+        ),
+        filter_subset=tuple(filters.filter_codes),
+    )
 
 
 class PremadeInstrumentCollectionFactory:
     """Base class for factory classes that create instrument collections.
 
     This class provides a common pattern for creating
-    InstrumentCollections that contain multiple related instruments
-    (e.g., GALEX FUV and NUV).
+    :class:`InstrumentCollection` objects that contain multiple related
+    instruments, such as the paired GALEX FUV and NUV configurations.
 
     Child classes should define an `instruments` class attribute as a
     dictionary mapping instrument names to instrument classes. Kwargs
@@ -218,7 +260,7 @@ class JWSTNIRCamWide(PhotometricImager):
     If this class is loaded from a file then it will also include PSFs for each
     filter, derived using WebbPSF (using the defaults arguments).
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -249,7 +291,7 @@ class JWSTNIRCamWide(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the JWST NIRCam Wide instrument.
+        """Initialise the JWST NIRCam Wide instrument.
 
         Args:
             label (str):
@@ -268,15 +310,12 @@ class JWSTNIRCamWide(PhotometricImager):
                 that the depth is a point source depth. Default is None.
             snrs (unyt_array):
                 The signal-to-noise ratios of the instrument. Default is None.
-            psfs (unyt_array):
-                The PSFs of the instrument. If doing imaging this should be a
-                dictionary of PSFs with an entry for each filter. If doing
-                resolved spectroscopy this should be an array. Default is None.
-            noise_maps (unyt_array):
-                The noise maps of the instrument. If doing imaging this should
-                be a dictionary of noise maps with an entry for each filter.
-                If doing resolved spectroscopy this should be an array with
-                noise as a function of wavelength. Default is None.
+            psfs (dict):
+                The PSFs of the instrument. This should be a dictionary of PSFs
+                with an entry for each filter. Default is None.
+            noise_maps (dict):
+                The noise maps of the instrument. This should be a dictionary
+                of noise maps with an entry for each filter. Default is None.
             filter_subset (list/tuple):
                 A list of filters defining a subset of the filters to include
                 in the instrument. This should be a list of strings with the
@@ -337,7 +376,7 @@ class JWSTNIRCamMedium(PhotometricImager):
     If this class is loaded from a file then it will also include PSFs for each
     filter, derived using WebbPSF (using the defaults arguments).
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -372,7 +411,7 @@ class JWSTNIRCamMedium(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the JWST NIRCam Medium instrument.
+        """Initialise the JWST NIRCam Medium instrument.
 
         Args:
             label (str):
@@ -455,7 +494,7 @@ class JWSTNIRCamNarrow(PhotometricImager):
     If this class is loaded from a file then it will also include PSFs for each
     filter, derived using WebbPSF (using the defaults arguments).
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -485,7 +524,7 @@ class JWSTNIRCamNarrow(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the JWST NIRCam Narrow instrument.
+        """Initialise the JWST NIRCam Narrow instrument.
 
         Args:
             label (str):
@@ -588,7 +627,7 @@ class JWSTNIRCam(PhotometricImager):
     If this class is loaded from a file then it will also include PSFs for each
     filter, derived using WebbPSF (using the defaults arguments).
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -638,7 +677,7 @@ class JWSTNIRCam(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the JWST NIRCam instrument.
+        """Initialise the JWST NIRCam instrument.
 
         Args:
             label (str):
@@ -733,7 +772,7 @@ class JWSTMIRI(PhotometricImager):
     If this class is loaded from a file then it will also include PSFs for each
     filter, derived using WebbPSF (using the defaults arguments).
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -769,7 +808,7 @@ class JWSTMIRI(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the JWST MIRI instrument.
+        """Initialise the JWST MIRI instrument.
 
         Args:
             label (str):
@@ -851,7 +890,7 @@ class HSTWFC3UVISWide(PhotometricImager):
         - F814W
         - F850LP
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -888,7 +927,7 @@ class HSTWFC3UVISWide(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the HST WFC3/UVIS Wide instrument.
+        """Initialise the HST WFC3/UVIS Wide instrument.
 
         Args:
             label (str):
@@ -963,7 +1002,7 @@ class HSTWFC3UVISMedium(PhotometricImager):
         - F763M
         - F845M
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -995,7 +1034,7 @@ class HSTWFC3UVISMedium(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the HST WFC3/UVIS Medium instrument.
+        """Initialise the HST WFC3/UVIS Medium instrument.
 
         Args:
             label (str):
@@ -1099,7 +1138,7 @@ class HSTWFC3UVISNarrow(PhotometricImager):
         - FQ924N
         - FQ937N
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1160,11 +1199,11 @@ class HSTWFC3UVISNarrow(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the HST WFC3/UVIS Narrow instrument.
+        """Initialise the HST WFC3/UVIS Narrow instrument.
 
         Args:
             label (str):
-                The label of the instrument. Default is "JWST.MIRI".
+                The label of the instrument. Default is "HST.WFC3.UVIS.Narrow".
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
@@ -1286,7 +1325,7 @@ class HSTWFC3UVIS(PhotometricImager):
         - FQ937N
 
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1369,11 +1408,11 @@ class HSTWFC3UVIS(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the HST WFC3/UVIS instrument.
+        """Initialise the HST WFC3/UVIS instrument.
 
         Args:
             label (str):
-                The label of the instrument. Default is "JWST.MIRI".
+                The label of the instrument. Default is "HST.WFC3.UVIS".
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
@@ -1442,7 +1481,7 @@ class HSTWFC3IRWide(PhotometricImager):
         - F140W
         - F160W
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1470,11 +1509,11 @@ class HSTWFC3IRWide(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the HST WFC3/IR Wide instrument.
+        """Initialise the HST WFC3/IR Wide instrument.
 
         Args:
             label (str):
-                The label of the instrument. Default is "JWST.MIRI".
+                The label of the instrument. Default is "HST.WFC3.IR.Wide".
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
@@ -1542,7 +1581,7 @@ class HSTWFC3IRMedium(PhotometricImager):
         - F139M
         - F153M
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1569,11 +1608,11 @@ class HSTWFC3IRMedium(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the HST WFC3/IR Medium instrument.
+        """Initialise the HST WFC3/IR Medium instrument.
 
         Args:
             label (str):
-                The label of the instrument. Default is "JWST.MIRI".
+                The label of the instrument. Default is "HST.WFC3.IR.Medium".
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
@@ -1643,7 +1682,7 @@ class HSTWFC3IRNarrow(PhotometricImager):
         - F164N
         - F167N
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1672,11 +1711,11 @@ class HSTWFC3IRNarrow(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the HST WFC3/IR Narrow instrument.
+        """Initialise the HST WFC3/IR Narrow instrument.
 
         Args:
             label (str):
-                The label of the instrument. Default is "JWST.MIRI".
+                The label of the instrument. Default is "HST.WFC3.IR.Narrow".
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
@@ -1755,7 +1794,7 @@ class HSTWFC3IR(PhotometricImager):
         - F164N
         - F167N
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1793,11 +1832,11 @@ class HSTWFC3IR(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the HST WFC3/IR instrument.
+        """Initialise the HST WFC3/IR instrument.
 
         Args:
             label (str):
-                The label of the instrument. Default is "JWST.MIRI".
+                The label of the instrument. Default is "HST.WFC3.IR".
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
@@ -1869,7 +1908,7 @@ class HSTACSWFCWide(PhotometricImager):
         - F814W
         - F850LP
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1900,11 +1939,11 @@ class HSTACSWFCWide(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the HST ACS/WFC Wide instrument.
+        """Initialise the HST ACS/WFC Wide instrument.
 
         Args:
             label (str):
-                The label of the instrument. Default is "JWST.MIRI".
+                The label of the instrument. Default is "HST.ACS.WFC.Wide".
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
@@ -1969,7 +2008,7 @@ class HSTACSWFCMedium(PhotometricImager):
     Available filters:
         - F550M
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1993,11 +2032,11 @@ class HSTACSWFCMedium(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the HST ACS/WFC Medium instrument.
+        """Initialise the HST ACS/WFC Medium instrument.
 
         Args:
             label (str):
-                The label of the instrument. Default is "JWST.MIRI".
+                The label of the instrument. Default is "HST.ACS.WFC.Medium".
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
@@ -2064,7 +2103,7 @@ class HSTACSWFCNarrow(PhotometricImager):
         - F658N
         - F660N
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -2090,11 +2129,11 @@ class HSTACSWFCNarrow(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the HST ACS/WFC Narrow instrument.
+        """Initialise the HST ACS/WFC Narrow instrument.
 
         Args:
             label (str):
-                The label of the instrument. Default is "JWST.MIRI".
+                The label of the instrument. Default is "HST.ACS.WFC.Narrow".
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
@@ -2170,7 +2209,7 @@ class HSTACSWFC(PhotometricImager):
         - F814W
         - F850LP
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -2205,11 +2244,11 @@ class HSTACSWFC(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the HST ACS/WFC instrument.
+        """Initialise the HST ACS/WFC instrument.
 
         Args:
             label (str):
-                The label of the instrument. Default is "JWST.MIRI".
+                The label of the instrument. Default is "HST.ACS.WFC".
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
@@ -2276,7 +2315,7 @@ class EuclidNISP(PhotometricImager):
         - J
         - H
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -2302,11 +2341,11 @@ class EuclidNISP(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the Euclid NISP instrument.
+        """Initialise the Euclid NISP instrument.
 
         Args:
             label (str):
-                The label of the instrument. Default is "JWST.MIRI".
+                The label of the instrument. Default is "Euclid.NISP".
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
@@ -2321,15 +2360,12 @@ class EuclidNISP(PhotometricImager):
                 that the depth is a point source depth. Default is None.
             snrs (unyt_array):
                 The signal-to-noise ratios of the instrument. Default is None.
-            psfs (unyt_array):
-                The PSFs of the instrument. If doing imaging this should be a
-                dictionary of PSFs with an entry for each filter. If doing
-                resolved spectroscopy this should be an array. Default is None.
-            noise_maps (unyt_array):
-                The noise maps of the instrument. If doing imaging this should
-                be a dictionary of noise maps with an entry for each filter.
-                If doing resolved spectroscopy this should be an array with
-                noise as a function of wavelength. Default is None.
+            psfs (dict):
+                The PSFs of the instrument. This should be a dictionary of PSFs
+                with an entry for each filter. Default is None.
+            noise_maps (dict):
+                The noise maps of the instrument. This should be a dictionary
+                of noise maps with an entry for each filter. Default is None.
             filter_subset (list/tuple):
                 A list of filters defining a subset of the filters to include
                 in the instrument. This should be a list of strings with the
@@ -2371,7 +2407,7 @@ class EuclidVIS(PhotometricImager):
     Available filters:
         - VIS
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -2395,11 +2431,11 @@ class EuclidVIS(PhotometricImager):
         filter_subset=(),
         **kwargs,
     ):
-        """Initialize the Euclid VIS instrument.
+        """Initialise the Euclid VIS instrument.
 
         Args:
             label (str):
-                The label of the instrument. Default is "JWST.MIRI".
+                The label of the instrument. Default is "Euclid.VIS".
             filter_lams (unyt_array):
                 An optional wavelength array to resample the filter
                 transmission curves to. This should be a unyt array. Default
@@ -2464,7 +2500,7 @@ class GALEXFUV(PhotometricImager):
     Available filters:
         - FUV
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the available filters
@@ -2490,7 +2526,7 @@ class GALEXFUV(PhotometricImager):
         noise_maps=None,
         **kwargs,
     ):
-        """Initialize the GALEX FUV instrument.
+        """Initialise the GALEX FUV instrument.
 
         Args:
             label (str):
@@ -2509,15 +2545,12 @@ class GALEXFUV(PhotometricImager):
                 that the depth is a point source depth. Default is None.
             snrs (unyt_array):
                 The signal-to-noise ratios of the instrument. Default is None.
-            psfs (unyt_array):
-                The PSFs of the instrument. If doing imaging this should be a
-                dictionary of PSFs with an entry for each filter. If doing
-                resolved spectroscopy this should be an array. Default is None.
-            noise_maps (unyt_array):
-                The noise maps of the instrument. If doing imaging this should
-                be a dictionary of noise maps with an entry for each filter.
-                If doing resolved spectroscopy this should be an array with
-                noise as a function of wavelength. Default is None.
+            psfs (dict):
+                The PSFs of the instrument. This should be a dictionary of PSFs
+                with an entry for each filter. Default is None.
+            noise_maps (dict):
+                The noise maps of the instrument. This should be a dictionary
+                of noise maps with an entry for each filter. Default is None.
             **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Since SVO returns effective area rather than transmission curves
@@ -2599,7 +2632,7 @@ class GALEXNUV(PhotometricImager):
     Available filters:
         - NUV
 
-    For further details see the PhotometricImager class.
+    For further details see :class:`PhotometricImager`.
     """
 
     # Define the available filters
@@ -2625,7 +2658,7 @@ class GALEXNUV(PhotometricImager):
         noise_maps=None,
         **kwargs,
     ):
-        """Initialize the GALEX NUV instrument.
+        """Initialise the GALEX NUV instrument.
 
         Args:
             label (str):
@@ -2644,15 +2677,12 @@ class GALEXNUV(PhotometricImager):
                 that the depth is a point source depth. Default is None.
             snrs (unyt_array):
                 The signal-to-noise ratios of the instrument. Default is None.
-            psfs (unyt_array):
-                The PSFs of the instrument. If doing imaging this should be a
-                dictionary of PSFs with an entry for each filter. If doing
-                resolved spectroscopy this should be an array. Default is None.
-            noise_maps (unyt_array):
-                The noise maps of the instrument. If doing imaging this should
-                be a dictionary of noise maps with an entry for each filter.
-                If doing resolved spectroscopy this should be an array with
-                noise as a function of wavelength. Default is None.
+            psfs (dict):
+                The PSFs of the instrument. This should be a dictionary of PSFs
+                with an entry for each filter. Default is None.
+            noise_maps (dict):
+                The noise maps of the instrument. This should be a dictionary
+                of noise maps with an entry for each filter. Default is None.
             **kwargs: Keyword arguments to pass to the Instrument class.
         """
         # Since SVO returns effective area rather than transmission curves for
@@ -2759,7 +2789,7 @@ class GALEX(PremadeInstrumentCollectionFactory):
     GALEXFUV 6 arcsec
     GALEXNUV 8 arcsec
 
-    For further details see the PremadeInstrumentCollectionFactory class.
+    For further details see :class:`PremadeInstrumentCollectionFactory`.
     """
 
     instruments = {
@@ -2785,7 +2815,7 @@ class Euclid(PremadeInstrumentCollectionFactory):
     Euclid.NISP 0.3 arcsec
     Euclid.VIS 0.1 arcsec
 
-    For further details see the PremadeInstrumentCollectionFactory class.
+    For further details see :class:`PremadeInstrumentCollectionFactory`.
     """
 
     instruments = {
@@ -2812,7 +2842,7 @@ class HST(PremadeInstrumentCollectionFactory):
     HST.WFC3.IR 0.13 arcsec
     HST.ACS.WFC 0.05 arcsec
 
-    For further details see the PremadeInstrumentCollectionFactory class.
+    For further details see :class:`PremadeInstrumentCollectionFactory`.
     """
 
     instruments = {
@@ -2840,7 +2870,7 @@ class JWST(PremadeInstrumentCollectionFactory):
     JWST.MIRI 0.11 arcsec
     JWST.NIRSpec N/A (placeholder)
 
-    For further details see the PremadeInstrumentCollectionFactory class.
+    For further details see :class:`PremadeInstrumentCollectionFactory`.
     """
 
     instruments = {
