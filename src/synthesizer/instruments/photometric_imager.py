@@ -7,6 +7,7 @@ import numpy as np
 from unyt import arcsecond, kpc, unyt_array
 
 from synthesizer import exceptions
+from synthesizer.imaging.image_collection import ImageCollection
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.instruments.instrument_base import _hashable_state
 from synthesizer.instruments.photometric_instrument import (
@@ -184,8 +185,6 @@ class PhotometricImager(PhotometricInstrument):
         aperture_radius=None,
     ):
         """Apply the configured imaging noise to an image collection."""
-        from synthesizer.imaging.image_collection import ImageCollection
-
         rng = np.random.default_rng(rng_seed)
         noisy_imgs = {}
         for f in image_collection.filter_codes:
