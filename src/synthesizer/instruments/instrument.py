@@ -12,6 +12,14 @@ implementation of instruments and may one day be deprecated and removed.
 """
 
 from synthesizer import exceptions
+from synthesizer.instruments.integrated_field_unit import IntegratedFieldUnit
+from synthesizer.instruments.photometric_imager import PhotometricImager
+from synthesizer.instruments.photometric_instrument import (
+    PhotometricInstrument,
+)
+from synthesizer.instruments.spectroscopic_instrument import (
+    SpectroscopicInstrument,
+)
 
 
 class Instrument:
@@ -99,42 +107,25 @@ class Instrument:
             if value is not None
         )
 
-        if filters is not None and lam is None:
-            if resolution is not None:
-                from synthesizer.instruments.photometric_imager import (
-                    PhotometricImager,
-                )
+        # Resolve the correct instrument type based on the supplied arguments
+        target_cls = None
 
-                target_cls = PhotometricImager
-            else:
-                from synthesizer.instruments.photometric_instrument import (
-                    PhotometricInstrument,
-                )
+        # Photometric imaging case
+        if filters is not None and lam is None and resolution is not None:
+            target_cls = PhotometricImager
 
-                target_cls = PhotometricInstrument
-        elif lam is not None and filters is None:
-            if noise_source_maps is not None:
-                raise exceptions.InconsistentArguments(
-                    "Instrument(...) could not map the supplied arguments to "
-                    "a supported concrete instrument type. Construct a "
-                    "specialised class directly if you need a configuration "
-                    "outside the supported photometric, imaging, "
-                    "spectroscopic, or IFU cases. Received arguments: "
-                    f"{present}"
-                )
+        # Photometric filters case
+        elif filters is not None and lam is None and resolution is None:
+            target_cls = PhotometricInstrument
 
-            if resolution is not None:
-                from synthesizer.instruments.integrated_field_unit import (
-                    IntegratedFieldUnit,
-                )
+        # Spectroscopic Integrated Field Unit case
+        elif filters is None and lam is not None and resolution is not None:
+            target_cls = IntegratedFieldUnit
 
-                target_cls = IntegratedFieldUnit
-            else:
-                from synthesizer.instruments.spectroscopic_instrument import (
-                    SpectroscopicInstrument,
-                )
+        # Spectroscopic case
+        elif filters is None and lam is not None and resolution is None:
+            target_cls = SpectroscopicInstrument
 
-                target_cls = SpectroscopicInstrument
         else:
             raise exceptions.InconsistentArguments(
                 "Instrument(...) could not map the supplied arguments to a "
@@ -149,19 +140,6 @@ class Instrument:
     @classmethod
     def _from_hdf5(cls, group, **kwargs):
         """Dispatch HDF5 loading to the appropriate specialised class."""
-        from synthesizer.instruments.integrated_field_unit import (
-            IntegratedFieldUnit,
-        )
-        from synthesizer.instruments.photometric_imager import (
-            PhotometricImager,
-        )
-        from synthesizer.instruments.photometric_instrument import (
-            PhotometricInstrument,
-        )
-        from synthesizer.instruments.spectroscopic_instrument import (
-            SpectroscopicInstrument,
-        )
-
         instrument_type = group.attrs.get("instrument_type")
 
         if instrument_type == "photometric":
