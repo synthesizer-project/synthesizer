@@ -1,7 +1,12 @@
-"""Specialised integrated field unit instrument."""
+"""Specialised Integrated Field Unit instrument.
+
+This instrument is designed to hold the attributes required by resolved
+spectroscopy. It extends :class:`SpectroscopicInstrument` with spatial
+resolution, optional PSFs, and noise definitions.
+"""
 
 import h5py
-from unyt import arcsecond, kpc, unyt_array
+from unyt import angstrom, arcsecond, kpc, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.instruments.instrument_base import _hashable_state
@@ -12,26 +17,63 @@ from synthesizer.units import accepts
 
 
 class IntegratedFieldUnit(SpectroscopicInstrument):
-    """Concrete instrument for resolved spectroscopic configurations.
+    """Integrated Field Unit instrument class.
 
-    This specialisation extends `SpectroscopicInstrument` with spatial
-    resolution and optional PSFs for integral-field or other resolved
-    spectroscopic use cases.
+    A class containing the attributes and methods required to produce resolved
+    spectroscopy. It extends :class:`SpectroscopicInstrument` with spatial
+    resolution, optional PSFs, and noise definitions.
+
+    Attributes:
+        resolution (unyt_array): The spatial resolution of the instrument, in
+            kpc or arcseconds.
+        psfs (array): An optional array with spatial point spread functions as
+            a function of wavelength, in dimensionless units. If a 2D array is
+            supplied, every wavelength is assumed to have the same PSF. If
+            a 3D array is supplied, the last axis must be the wavelength axis.
     """
 
-    @accepts(resolution=(kpc, arcsecond))
+    @accepts(
+        resolution=(kpc, arcsecond),
+        lam=angstrom,
+        depth_app_radius=(kpc, arcsecond),
+    )
     def __init__(
         self,
         label,
         lam,
         resolution,
+        psfs=None,
         depth=None,
         depth_app_radius=None,
         snrs=None,
-        psfs=None,
         noise_maps=None,
     ):
-        """Initialise an integrated field unit instrument."""
+        """Initialise an integrated field unit instrument.
+
+        Args:
+            label (str): A label for the instrument.
+            lam (unyt_array): The wavelength array defining the spectral
+                coverage of the instrument.
+            resolution (unyt_array): The spatial resolution of the instrument,
+                in kpc or arcseconds.
+            psfs (array, optional): An optional array with spatial point spread
+                functions as a function of wavelength, in dimensionless units.
+                If a 2D array is supplied, every wavelength is assumed to have
+                the same PSF. If a 3D array is supplied, the last axis must be
+                the wavelength axis.
+            depth (unyt_quantity, optional): The depth of the instrument, in
+                the same units as the image surface brightness.
+            depth_app_radius (unyt_quantity, optional): The aperture radius for
+                the depth measurement, in resolution units.
+            snrs (unyt_quantity, optional): The signal-to-noise ratio of the
+                instrument, in dimensionless units.
+            noise_maps (array, optional): An optional array with noise map as
+                a function of wavelength, in the same units as the image noise.
+                If a 2D array is supplied, every wavelength is assumed to have
+                the same noise map. If a 3D array is supplied, the last axis
+                must be the wavelength axis.
+        """
+        # Initialise the shared spectroscopic instrument first
         super().__init__(
             label=label,
             lam=lam,
@@ -40,8 +82,12 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             snrs=snrs,
             noise_maps=noise_maps,
         )
+
+        # Attach the IFU specific attributes
         self.resolution = resolution
         self.psfs = psfs
+
+        # Ensure we have been handed the correct information
         self._validate()
 
     @property
@@ -65,20 +111,39 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         return self.can_do_noisy_spectroscopy
 
     def _validate(self):
+        """Validate the instrument attributes.
+
+        Raises:
+            MissingArgument: If any required attributes are missing.
+        """
+        # Perform the shared validation first
         super()._validate()
+
+        # Ensure we actually have the resolution... otherwise we are not
+        # really an IFU!
         if self.resolution is None:
             raise exceptions.MissingArgument(
                 "IntegratedFieldUnit requires a resolution."
             )
 
     def _comparison_state(self):
+        """Return a tuple describing the IFU comparison state.
+
+        Returns:
+            tuple: Hashable representation of the instrument state.
+        """
         return super()._comparison_state() + (
             _hashable_state(self.resolution),
             _hashable_state(self.psfs),
         )
 
     def to_hdf5(self, group):
-        """Write the integrated field unit to an HDF5 group."""
+        """Write the integrated field unit to an HDF5 group.
+
+        Args:
+            group (h5py.Group): Group into which the instrument should be
+                serialised.
+        """
         super().to_hdf5(group)
 
         ds = group.create_dataset(
@@ -92,12 +157,29 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
 
     @classmethod
     def load(cls, filepath, **kwargs):
-        """Load an integrated field unit from an HDF5 file."""
+        """Load an integrated field unit from an HDF5 file.
+
+        Args:
+            filepath (str or PathLike): Path to the HDF5 file.
+            **kwargs: Attribute overrides applied after deserialisation.
+
+        Returns:
+            IntegratedFieldUnit: The loaded instrument.
+        """
         with h5py.File(filepath, "r") as hdf:
             return cls._from_hdf5(hdf, **kwargs)
 
     @classmethod
     def _from_hdf5(cls, group, **kwargs):
+        """Load an integrated field unit from an HDF5 group.
+
+        Args:
+            group (h5py.Group): Group containing the serialised instrument.
+            **kwargs: Attribute overrides applied after deserialisation.
+
+        Returns:
+            IntegratedFieldUnit: The loaded instrument.
+        """
         lam = unyt_array(
             group["Wavelength"][...], group["Wavelength"].attrs["units"]
         )

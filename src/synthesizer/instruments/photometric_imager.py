@@ -1,4 +1,9 @@
-"""Specialised photometric imaging instrument."""
+"""Specialised photometric imaging instrument.
+
+This instrument is designed to hold the attributes required by photometric
+imaging. It extends :class:`PhotometricInstrument` with spatial resolution,
+optional PSFs, fixed noise maps, and correlated-noise source maps.
+"""
 
 import inspect
 
@@ -18,12 +23,24 @@ from synthesizer.units import accepts
 
 
 class PhotometricImager(PhotometricInstrument):
-    """Concrete instrument for imaging-capable photometric setups.
+    """Photometric imager instrument class.
 
-    This specialisation extends `PhotometricInstrument` with spatial
-    resolution, optional PSFs, and imaging noise definitions. It is the right
-    concrete type when the instrument is expected to generate or manipulate
-    photometric images rather than integrated photometry alone.
+    A class containing the attributes and methods required to produce
+    photometric images. It extends :class:`PhotometricInstrument` with spatial
+    resolution, optional PSFs, fixed noise maps, and correlated-noise source
+    maps. This is the instrument class to use when a photometric setup must
+    produce resolved images rather than integrated photometry alone.
+
+    Attributes:
+        resolution (unyt_array): The spatial resolution of the instrument, in
+            kpc or arcseconds.
+        psfs (dict, optional): An optional dictionary of point spread
+            functions, with one entry per filter.
+        noise_maps (dict, optional): An optional dictionary of fixed noise maps
+            to apply directly to images, with one entry per filter.
+        noise_source_maps (dict, optional): An optional dictionary of source
+            maps used to generate correlated-noise models, with one entry per
+            filter.
     """
 
     @accepts(resolution=(kpc, arcsecond))
@@ -32,14 +49,40 @@ class PhotometricImager(PhotometricInstrument):
         label,
         filters,
         resolution,
+        psfs=None,
         depth=None,
         depth_app_radius=None,
         snrs=None,
-        psfs=None,
         noise_maps=None,
         noise_source_maps=None,
     ):
-        """Initialise a photometric imager."""
+        """Initialise a photometric imager.
+
+        Args:
+            label (str): A label for the instrument.
+            filters (FilterCollection): The filters defining the photometric
+                response of the instrument.
+            resolution (unyt_array): The spatial resolution of the instrument,
+                in kpc or arcseconds.
+            psfs (dict, optional): An optional dictionary of point spread
+                functions, with one entry per filter.
+            depth (dict or unyt_quantity, optional): The depth of the
+                instrument, typically in apparent magnitudes. If depths are
+                provided per filter, this should be a dictionary keyed by
+                filter code.
+            depth_app_radius (unyt_quantity, optional): The aperture radius for
+                the depth measurement. If this is omitted but SNRs and depths
+                are provided, the depth is assumed to be a point-source depth.
+            snrs (dict or unyt_quantity, optional): The signal-to-noise ratios
+                of the instrument. If values are provided per filter, this
+                should be a dictionary keyed by filter code.
+            noise_maps (dict, optional): An optional dictionary of fixed noise
+                maps to apply directly to images, with one entry per filter.
+            noise_source_maps (dict, optional): An optional dictionary of
+                source maps used to generate correlated-noise models, with one
+                entry per filter.
+        """
+        # Initialise the shared photometric instrument first
         super().__init__(
             label=label,
             filters=filters,
@@ -47,22 +90,16 @@ class PhotometricImager(PhotometricInstrument):
             depth_app_radius=depth_app_radius,
             snrs=snrs,
         )
+
+        # Set the photometric imager-specific attributes
         self.resolution = resolution
         self.psfs = psfs
         self.noise_maps = noise_maps
         self.noise_source_maps = noise_source_maps
-        self._validate()
-
-    @property
-    def noise_source_maps(self):
-        """Return the configured correlated-noise source maps."""
-        return self._noise_source_maps
-
-    @noise_source_maps.setter
-    def noise_source_maps(self, value):
-        """Set source maps and keep correlated-noise models in sync."""
-        self._noise_source_maps = value
         self.correlated_noise_models = self._build_correlated_noise_models()
+
+        # Validate the instrument configuration
+        self._validate()
 
     @property
     def instrument_type(self):
@@ -88,6 +125,12 @@ class PhotometricImager(PhotometricInstrument):
         return have_noise
 
     def _validate(self):
+        """Validate the imager attributes.
+
+        Raises:
+            MissingArgument: If required imaging attributes are missing or an
+                inconsistent noise configuration has been provided.
+        """
         super()._validate()
 
         if self.resolution is None:
@@ -110,6 +153,15 @@ class PhotometricImager(PhotometricInstrument):
             )
 
     def _build_correlated_noise_models(self):
+        """Build per-filter correlated-noise models from source maps.
+
+        Returns:
+            dict or None: Mapping of filter codes to correlated-noise models,
+                or None if no source maps are configured.
+
+        Raises:
+            InconsistentArguments: If ``noise_source_maps`` is not a dict.
+        """
         if self.noise_source_maps is None:
             return None
 
@@ -125,6 +177,11 @@ class PhotometricImager(PhotometricInstrument):
         }
 
     def _comparison_state(self):
+        """Return a tuple describing the imaging comparison state.
+
+        Returns:
+            tuple: Hashable representation of the instrument state.
+        """
         return super()._comparison_state() + (
             _hashable_state(self.resolution),
             _hashable_state(self.psfs),
@@ -133,7 +190,14 @@ class PhotometricImager(PhotometricInstrument):
         )
 
     def get_correlated_noise_model(self, filter_code):
-        """Return the correlated-noise model for a filter."""
+        """Return the correlated-noise model for a filter.
+
+        Args:
+            filter_code (str): Filter code identifying the required model.
+
+        Returns:
+            CorrelatedNoiseModel: The correlated-noise model for the filter.
+        """
         if self.correlated_noise_models is None:
             raise exceptions.MissingArgument(
                 "No correlated noise models are set on this Instrument. "
@@ -157,7 +221,22 @@ class PhotometricImager(PhotometricInstrument):
         rng_seed=None,
         aperture_radius=None,
     ):
-        """Apply the configured imaging noise to one image."""
+        """Apply the configured imaging noise to one image.
+
+        Args:
+            image (Image): Image to which noise should be applied.
+            filter_code (str): Filter code identifying which noise definition
+                to use.
+            correct_periodicity (bool): Whether to apply periodicity
+                correction when generating correlated noise.
+            rng_seed (int, optional): Seed used for stochastic noise
+                generation.
+            aperture_radius (unyt_quantity, optional): Aperture radius used by
+                SNR/depth-based noise generation.
+
+        Returns:
+            Image: New image with noise applied.
+        """
         if self.noise_maps is not None:
             noise_arr = self.noise_maps[filter_code]
             return image.apply_noise_array(noise_arr)
@@ -194,7 +273,21 @@ class PhotometricImager(PhotometricInstrument):
         rng_seed=None,
         aperture_radius=None,
     ):
-        """Apply the configured imaging noise to an image collection."""
+        """Apply the configured imaging noise to an image collection.
+
+        Args:
+            image_collection (ImageCollection): Collection to which noise
+                should be applied.
+            correct_periodicity (bool): Whether to apply periodicity
+                correction when generating correlated noise.
+            rng_seed (int, optional): Seed used for stochastic noise
+                generation.
+            aperture_radius (unyt_quantity, optional): Aperture radius used by
+                SNR/depth-based noise generation.
+
+        Returns:
+            ImageCollection: New image collection with noise applied.
+        """
         rng = np.random.default_rng(rng_seed)
         noisy_imgs = {}
         for f in image_collection.filter_codes:
@@ -218,7 +311,12 @@ class PhotometricImager(PhotometricInstrument):
         )
 
     def to_hdf5(self, group):
-        """Write the photometric imager to an HDF5 group."""
+        """Write the photometric imager to an HDF5 group.
+
+        Args:
+            group (h5py.Group): Group into which the instrument should be
+                serialised.
+        """
         super().to_hdf5(group)
 
         ds = group.create_dataset(
@@ -250,7 +348,16 @@ class PhotometricImager(PhotometricInstrument):
 
     @classmethod
     def load(cls, filepath=None, **kwargs):
-        """Load a photometric imager from an HDF5 file."""
+        """Load a photometric imager from an HDF5 file.
+
+        Args:
+            filepath (str or PathLike, optional): Path to the HDF5 file. If
+                omitted, subclasses may provide a cached default path.
+            **kwargs: Attribute overrides applied after deserialisation.
+
+        Returns:
+            PhotometricImager: The loaded instrument.
+        """
         if filepath is None:
             filepath = getattr(cls, "_instrument_cache_file", None)
         if filepath is None:
@@ -262,6 +369,15 @@ class PhotometricImager(PhotometricInstrument):
 
     @classmethod
     def _from_hdf5(cls, group, **kwargs):
+        """Load a photometric imager from an HDF5 group.
+
+        Args:
+            group (h5py.Group): Group containing the serialised instrument.
+            **kwargs: Attribute overrides applied after deserialisation.
+
+        Returns:
+            PhotometricImager: The loaded instrument.
+        """
         filters = FilterCollection._from_hdf5(group["Filters"])
         resolution = unyt_array(
             group["Resolution"][...], group["Resolution"].attrs["units"]
