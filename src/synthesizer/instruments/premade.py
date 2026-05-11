@@ -1,8 +1,8 @@
 """A submodule defining some premade instruments.
 
 This module contains some commonly used instruments which can be imported,
-instantiated, and used directly. Each premade instrument is a child of the
-Instrument class with the appropriate properties fixed.
+instantiated, and used directly. Each premade single-instrument class is a
+specialised `PhotometricImager` with the appropriate properties fixed.
 
 The premade instruments are:
     - JWST/NIRCam.Wide
@@ -57,13 +57,13 @@ Example usage:
 
 import os
 
-import h5py
 import numpy as np
 from unyt import angstrom, arcsecond
 
 from synthesizer import INSTRUMENT_CACHE_DIR, exceptions
-from synthesizer.instruments import Instrument, InstrumentCollection
+from synthesizer.instruments import InstrumentCollection
 from synthesizer.instruments.filters import Filter, FilterCollection
+from synthesizer.instruments.photometric_imager import PhotometricImager
 
 __all__ = [
     "JWSTNIRCamWide",
@@ -93,187 +93,51 @@ __all__ = [
 ]
 
 
-class PremadeInstrument(Instrument):
-    """A base class for premade instruments.
+def _subset_dict_for_filters(value, filter_codes):
+    """Return a filter-keyed dictionary restricted to selected filters."""
+    if not isinstance(value, dict):
+        return value
+    return {code: value[code] for code in filter_codes if code in value}
 
-    This class is a child of the Instrument class and is used to define
-    premade instruments. It is not intended to be used directly, but
-    rather as a base class for other premade instruments. Essentially,
-    we include this class to reduce common methods and boilerplate code.
 
-    By default this will just include the predefinable properties of the
-    Instrument class. The user can optionally specify their own depth,
-    depth aperture radius, and SNRs, or explicit noise maps to be used.
-    Similarly the user can pass their own PSFs to be used.
-
-    Alternatively, calling the load method will attempt to load the instrument
-    from a file.
-
-        ```python
-        instrument = <premade instrument>.load(**kwargs)
-        ```
-
-    The upside of this is any "heavy attributes" (e.g. PSFs or
-    full noise maps) will automatically be included from the file. This file
-    needs to be downloaded using the download tool:
-
-        ```bash
-        synthesizer-download --instrument <instrument_name>
-        ```
-    Where the instrument name is the name of the class (e.g. JWSTNIRCamWide).
-
-    This will store the downloaded instrument HDF5 file in the
-    instruments_cache directory from which this class can load the instrument.
-    The user is then still free to pass their own depth, depth aperture radius,
-    SNRs, or explicit noise maps to be used.
-
-    This class introduces no extra attributes or methods to the base
-    Instrument class. It is simply a wrapper around the base class to
-    provide a premade instrument with the properties of JWST's NIRCam
-    instrument. For a list of attributes and methods see the Instrument class.
-    """
-
-    @classmethod
-    def load(cls, filter_subset=(), filter_lams=None, **kwargs):
-        """Load the instrument from a file.
-
-        This method will attempt to load the instrument from a file. If the
-        file does not exist, it will raise an error. The user can pass their
-        own depth, depth aperture radius, SNRs, or explicit noise maps to be
-        used.
-
-        Args:
-            filter_subset (list/tuple):
-                A list of filters to include in the instrument. This should
-                be a list of strings with the filter names. If this is not
-                provided, all filters will be included.
-            filter_lams (unyt_array, optional):
-                The wavelength array of the filters (with units). This
-                should be a unyt array with the same length as the number
-                of filters. If this is not provided, the default wavelength
-                array will be used.
-            **kwargs: Keyword arguments to pass to the Instrument class. These
-                include any argument to the Instrument class:
-                    filters (FilterCollection, optional):
-                        The filters of the Instrument. Default is None.
-                    resolution (unyt_quantity, optional):
-                        The resolution of the Instrument (with units). Default
-                        is None.
-                    lam (unyt_array, optional):
-                        The wavelength array of the Instrument (with units).
-                        Default is None.
-                    depth (dict/float, optional):
-                        The depth of the Instrument in apparent mags. If
-                        filters are passed depth must be a dictionaries of
-                        depths with and entry per filter. Default is None.
-                    depth_app_radius (unyt_quantity, optional):
-                        The depth aperture radius of the Instrument (with
-                        units). If this is omitted but SNRs and depths are
-                        provided, it is assumed that the depth is a point
-                        source depth. Default is None.
-                    snrs (unyt_array, optional):
-                        The signal-to-noise ratios of the Instrument.
-                        Default is None.
-                    psfs (unyt_array, optional):
-                        The PSFs of the Instrument. If doing imaging this
-                        should be a dictionary of PSFs with an entry for each
-                        filter. If doing resolved spectroscopy this should be
-                        an array. Default is None.
-                    noise_maps (unyt_array, optional):
-                        The noise maps of the Instrument. If doing imaging
-                        this should be a dictionary of noise maps with an
-                        entry for each filter. If doing resolved spectroscopy
-                        this should be an array with noise as a function of
-                        wavelength. Default is None.
-
-        """
-        # Check if the instrument cache file exists and if not, raise an error
-        # and suggest the user download it
-        if not os.path.exists(cls._instrument_cache_file):
-            raise exceptions.MissingInstrumentFile(
-                f"Instrument cache file {cls._instrument_cache_file} "
-                " does not exist. Please download the instrument using "
-                " synthesizer-download --instrument <instrument_name>"
-            )
-
-        # Load the instrument from the file
-        with h5py.File(cls._instrument_cache_file, "r") as hdf:
-            # Get a new instance of the class
-            inst = cls._from_hdf5(hdf, **kwargs)
-
-        # Get the subset of filters if provided
-        if len(filter_subset) > 0:
-            inst.filters = inst.filters.select(*filter_subset)
-
-        # Do we need to resample the filters?
-        if filter_lams is not None:
-            inst.filters.resample_filters(
-                new_lam=filter_lams,
-                verbose=False,
-            )
-
-        return inst
-
-    def __init__(
-        self,
-        label="",
-        filters=None,
-        resolution=None,
-        lam=None,
-        depth=None,
-        depth_app_radius=None,
-        snrs=None,
-        psfs=None,
-        noise_maps=None,
-        **kwargs,
-    ):
-        """Initialize the PremadeInstrument class.
-
-        Args:
-            label (str):
-                The label of the instrument. Default is "".
-            filters (FilterCollection):
-                The filters of the instrument. Default is None.
-            resolution (unyt_quantity):
-                The resolution of the instrument (with units). Default is None.
-            lam (unyt_array):
-                The wavelength array of the instrument (with units). Default
-                is None.
-            depth (dict/float):
-                The depth of the instrument in apparent mags. If filters are
-                passed depth must be a dictionaries of depths with and entry
-                per filter. Default is None.
-            depth_app_radius (unyt_quantity):
-                The depth aperture radius of the instrument (with units). If
-                this is omitted but SNRs and depths are provided, it is assumed
-                that the depth is a point source depth. Default is None.
-            snrs (unyt_array):
-                The signal-to-noise ratios of the instrument. Default is None.
-            psfs (unyt_array):
-                The PSFs of the instrument. If doing imaging this should be a
-                dictionary of PSFs with an entry for each filter. If doing
-                resolved spectroscopy this should be an array. Default is None.
-            noise_maps (unyt_array):
-                The noise maps of the instrument. If doing imaging this should
-                be a dictionary of noise maps with an entry for each filter.
-                If doing resolved spectroscopy this should be an array with
-                noise as a function of wavelength. Default is None.
-            **kwargs: Keyword arguments to pass to the Instrument class.
-        """
-        # Call the parent constructor
-        Instrument.__init__(
-            self,
-            label=label,
-            filters=filters,
-            resolution=resolution,
-            lam=lam,
-            depth=depth,
-            depth_app_radius=depth_app_radius,
-            snrs=snrs,
-            psfs=psfs,
-            noise_maps=noise_maps,
-            **kwargs,
+def _load_cached_premade_imager(
+    cls, filepath=None, filter_subset=(), filter_lams=None, **kwargs
+):
+    """Load a cached premade imager and apply premade-specific overrides."""
+    if filepath is None:
+        filepath = getattr(cls, "_instrument_cache_file", None)
+    if filepath is None:
+        raise NotImplementedError(
+            f"{cls.__name__} does not support loading from an instrument "
+            "cache file."
         )
+    if not os.path.exists(filepath):
+        raise exceptions.MissingInstrumentFile(
+            f"Instrument cache file {filepath} does not exist. Please "
+            "download the instrument using synthesizer-download --instrument "
+            f"{cls.__name__}"
+        )
+
+    inst = PhotometricImager.load.__func__(cls, filepath=filepath, **kwargs)
+
+    if len(filter_subset) > 0:
+        inst.filters = inst.filters.select(*filter_subset)
+        filter_codes = set(inst.filters.filter_codes)
+        inst.depth = _subset_dict_for_filters(inst.depth, filter_codes)
+        inst.snrs = _subset_dict_for_filters(inst.snrs, filter_codes)
+        inst.psfs = _subset_dict_for_filters(inst.psfs, filter_codes)
+        inst.noise_maps = _subset_dict_for_filters(
+            inst.noise_maps, filter_codes
+        )
+        inst.noise_source_maps = _subset_dict_for_filters(
+            inst.noise_source_maps, filter_codes
+        )
+        inst.correlated_noise_models = inst._build_correlated_noise_models()
+
+    if filter_lams is not None:
+        inst.filters.resample_filters(new_lam=filter_lams, verbose=False)
+
+    return inst
 
 
 class PremadeInstrumentCollectionFactory:
@@ -330,7 +194,7 @@ class PremadeInstrumentCollectionFactory:
         return collection
 
 
-class JWSTNIRCamWide(PremadeInstrument):
+class JWSTNIRCamWide(PhotometricImager):
     """A class containing JWST's NIRCam instrument (Wide).
 
     Default label: "JWST.NIRCam.Wide"
@@ -354,7 +218,7 @@ class JWSTNIRCamWide(PremadeInstrument):
     If this class is loaded from a file then it will also include PSFs for each
     filter, derived using WebbPSF (using the defaults arguments).
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -431,7 +295,7 @@ class JWSTNIRCamWide(PremadeInstrument):
 
         # Call the parent constructor with the appropriate parameters
         # NIRCam
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -445,7 +309,7 @@ class JWSTNIRCamWide(PremadeInstrument):
         )
 
 
-class JWSTNIRCamMedium(PremadeInstrument):
+class JWSTNIRCamMedium(PhotometricImager):
     """A class containing JWST's NIRCam instrument (Medium).
 
     Default label: "JWST.NIRCam.Medium"
@@ -473,7 +337,7 @@ class JWSTNIRCamMedium(PremadeInstrument):
     If this class is loaded from a file then it will also include PSFs for each
     filter, derived using WebbPSF (using the defaults arguments).
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -554,7 +418,7 @@ class JWSTNIRCamMedium(PremadeInstrument):
 
         # Call the parent constructor with the appropriate parameters
         # NIRCam
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -568,7 +432,7 @@ class JWSTNIRCamMedium(PremadeInstrument):
         )
 
 
-class JWSTNIRCamNarrow(PremadeInstrument):
+class JWSTNIRCamNarrow(PhotometricImager):
     """A class containing JWST's NIRCam instrument (Narrow).
 
     Default label: "JWST.NIRCam.Narrow"
@@ -591,7 +455,7 @@ class JWSTNIRCamNarrow(PremadeInstrument):
     If this class is loaded from a file then it will also include PSFs for each
     filter, derived using WebbPSF (using the defaults arguments).
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -667,7 +531,7 @@ class JWSTNIRCamNarrow(PremadeInstrument):
 
         # Call the parent constructor with the appropriate parameters
         # NIRCam
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -681,7 +545,7 @@ class JWSTNIRCamNarrow(PremadeInstrument):
         )
 
 
-class JWSTNIRCam(PremadeInstrument):
+class JWSTNIRCam(PhotometricImager):
     """A class containing JWST's NIRCam instrument.
 
     Default label: "JWST.NIRCam"
@@ -724,7 +588,7 @@ class JWSTNIRCam(PremadeInstrument):
     If this class is loaded from a file then it will also include PSFs for each
     filter, derived using WebbPSF (using the defaults arguments).
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -819,7 +683,7 @@ class JWSTNIRCam(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -833,7 +697,7 @@ class JWSTNIRCam(PremadeInstrument):
         )
 
 
-class JWSTNIRSpec(PremadeInstrument):
+class JWSTNIRSpec(PhotometricImager):
     """A placeholder for JWST's NIRSpec instrument.
 
     This class will be implemented in a future update.
@@ -843,7 +707,7 @@ class JWSTNIRSpec(PremadeInstrument):
     pass
 
 
-class JWSTMIRI(PremadeInstrument):
+class JWSTMIRI(PhotometricImager):
     """A class containing JWST's MIRI instrument.
 
     Default label: "JWST.MIRI"
@@ -869,7 +733,7 @@ class JWSTMIRI(PremadeInstrument):
     If this class is loaded from a file then it will also include PSFs for each
     filter, derived using WebbPSF (using the defaults arguments).
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -950,7 +814,7 @@ class JWSTMIRI(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -964,7 +828,7 @@ class JWSTMIRI(PremadeInstrument):
         )
 
 
-class HSTWFC3UVISWide(PremadeInstrument):
+class HSTWFC3UVISWide(PhotometricImager):
     """A class containing HST's WFC3/UVIS instrument (Wide).
 
     Default label: "HST.WFC3.UVIS.Wide"
@@ -987,7 +851,7 @@ class HSTWFC3UVISWide(PremadeInstrument):
         - F814W
         - F850LP
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1069,7 +933,7 @@ class HSTWFC3UVISWide(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -1083,7 +947,7 @@ class HSTWFC3UVISWide(PremadeInstrument):
         )
 
 
-class HSTWFC3UVISMedium(PremadeInstrument):
+class HSTWFC3UVISMedium(PhotometricImager):
     """A class containing HST's WFC3/UVIS instrument (Medium).
 
     Default label: "HST.WFC3.UVIS.Medium"
@@ -1099,7 +963,7 @@ class HSTWFC3UVISMedium(PremadeInstrument):
         - F763M
         - F845M
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1176,7 +1040,7 @@ class HSTWFC3UVISMedium(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -1190,7 +1054,7 @@ class HSTWFC3UVISMedium(PremadeInstrument):
         )
 
 
-class HSTWFC3UVISNarrow(PremadeInstrument):
+class HSTWFC3UVISNarrow(PhotometricImager):
     """A class containing HST's WFC3/UVIS instrument (Narrow).
 
     Default label: "HST.WFC3.UVIS.Narrow"
@@ -1235,7 +1099,7 @@ class HSTWFC3UVISNarrow(PremadeInstrument):
         - FQ924N
         - FQ937N
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1341,7 +1205,7 @@ class HSTWFC3UVISNarrow(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -1355,7 +1219,7 @@ class HSTWFC3UVISNarrow(PremadeInstrument):
         )
 
 
-class HSTWFC3UVIS(PremadeInstrument):
+class HSTWFC3UVIS(PhotometricImager):
     """A class containing HST's WFC3/UVIS instrument.
 
     Default label: "HST.WFC3.UVIS"
@@ -1422,7 +1286,7 @@ class HSTWFC3UVIS(PremadeInstrument):
         - FQ937N
 
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1550,7 +1414,7 @@ class HSTWFC3UVIS(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -1564,7 +1428,7 @@ class HSTWFC3UVIS(PremadeInstrument):
         )
 
 
-class HSTWFC3IRWide(PremadeInstrument):
+class HSTWFC3IRWide(PhotometricImager):
     """A class containing the properties of HST's WFC3/IR instrument (Wide).
 
     Default label: "HST.WFC3.IR.Wide"
@@ -1578,7 +1442,7 @@ class HSTWFC3IRWide(PremadeInstrument):
         - F140W
         - F160W
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1651,7 +1515,7 @@ class HSTWFC3IRWide(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -1665,7 +1529,7 @@ class HSTWFC3IRWide(PremadeInstrument):
         )
 
 
-class HSTWFC3IRMedium(PremadeInstrument):
+class HSTWFC3IRMedium(PhotometricImager):
     """A class containing the properties of HST's WFC3/IR instrument (Medium).
 
     Default label: "HST.WFC3.IR.Medium"
@@ -1678,7 +1542,7 @@ class HSTWFC3IRMedium(PremadeInstrument):
         - F139M
         - F153M
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1750,7 +1614,7 @@ class HSTWFC3IRMedium(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -1764,7 +1628,7 @@ class HSTWFC3IRMedium(PremadeInstrument):
         )
 
 
-class HSTWFC3IRNarrow(PremadeInstrument):
+class HSTWFC3IRNarrow(PhotometricImager):
     """A class containing the properties of HST's WFC3/IR instrument (Narrow).
 
     Default label: "HST.WFC3.IR.Narrow"
@@ -1779,7 +1643,7 @@ class HSTWFC3IRNarrow(PremadeInstrument):
         - F164N
         - F167N
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1853,7 +1717,7 @@ class HSTWFC3IRNarrow(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -1867,7 +1731,7 @@ class HSTWFC3IRNarrow(PremadeInstrument):
         )
 
 
-class HSTWFC3IR(PremadeInstrument):
+class HSTWFC3IR(PhotometricImager):
     """A class containing the properties of HST's WFC3/IR instrument.
 
     Default label: "HST.WFC3.IR"
@@ -1891,7 +1755,7 @@ class HSTWFC3IR(PremadeInstrument):
         - F164N
         - F167N
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -1974,7 +1838,7 @@ class HSTWFC3IR(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -1988,7 +1852,7 @@ class HSTWFC3IR(PremadeInstrument):
         )
 
 
-class HSTACSWFCWide(PremadeInstrument):
+class HSTACSWFCWide(PhotometricImager):
     """A class containing the properties of HST's ACS/WFC instrument (Wide).
 
     Default label: "HST.ACS.WFC.Wide"
@@ -2005,7 +1869,7 @@ class HSTACSWFCWide(PremadeInstrument):
         - F814W
         - F850LP
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -2081,7 +1945,7 @@ class HSTACSWFCWide(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -2095,7 +1959,7 @@ class HSTACSWFCWide(PremadeInstrument):
         )
 
 
-class HSTACSWFCMedium(PremadeInstrument):
+class HSTACSWFCMedium(PhotometricImager):
     """A class containing the properties of HST's ACS/WFC instrument (Medium).
 
     Default label: "HST.ACS.WFC.Medium"
@@ -2105,7 +1969,7 @@ class HSTACSWFCMedium(PremadeInstrument):
     Available filters:
         - F550M
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -2174,7 +2038,7 @@ class HSTACSWFCMedium(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -2188,7 +2052,7 @@ class HSTACSWFCMedium(PremadeInstrument):
         )
 
 
-class HSTACSWFCNarrow(PremadeInstrument):
+class HSTACSWFCNarrow(PhotometricImager):
     """A class containing the properties of HST's ACS/WFC instrument (Narrow).
 
     Default label: "HST.ACS.WFC.Narrow"
@@ -2200,7 +2064,7 @@ class HSTACSWFCNarrow(PremadeInstrument):
         - F658N
         - F660N
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -2271,7 +2135,7 @@ class HSTACSWFCNarrow(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -2285,7 +2149,7 @@ class HSTACSWFCNarrow(PremadeInstrument):
         )
 
 
-class HSTACSWFC(PremadeInstrument):
+class HSTACSWFC(PhotometricImager):
     """A class containing the properties of HST's ACS/WFC instrument.
 
     Default label: "HST.ACS.WFC"
@@ -2306,7 +2170,7 @@ class HSTACSWFC(PremadeInstrument):
         - F814W
         - F850LP
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -2386,7 +2250,7 @@ class HSTACSWFC(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -2400,7 +2264,7 @@ class HSTACSWFC(PremadeInstrument):
         )
 
 
-class EuclidNISP(PremadeInstrument):
+class EuclidNISP(PhotometricImager):
     """A class containing the properties of Euclid's NISP instrument.
 
     Default label: "Euclid.NISP"
@@ -2412,7 +2276,7 @@ class EuclidNISP(PremadeInstrument):
         - J
         - H
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -2483,7 +2347,7 @@ class EuclidNISP(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -2497,7 +2361,7 @@ class EuclidNISP(PremadeInstrument):
         )
 
 
-class EuclidVIS(PremadeInstrument):
+class EuclidVIS(PhotometricImager):
     """A class containing the properties of Euclid's VIS instrument.
 
     Default label: "Euclid.VIS"
@@ -2507,7 +2371,7 @@ class EuclidVIS(PremadeInstrument):
     Available filters:
         - VIS
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the filepath to the instrument cache file (it will be here
@@ -2576,7 +2440,7 @@ class EuclidVIS(PremadeInstrument):
         )
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -2590,7 +2454,7 @@ class EuclidVIS(PremadeInstrument):
         )
 
 
-class GALEXFUV(PremadeInstrument):
+class GALEXFUV(PhotometricImager):
     """A class containing the properties of the GALEX instrument.
 
     Default label: "GALEXFUV"
@@ -2600,7 +2464,7 @@ class GALEXFUV(PremadeInstrument):
     Available filters:
         - FUV
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the available filters
@@ -2711,7 +2575,7 @@ class GALEXFUV(PremadeInstrument):
             filters.resample_filters(new_lam=filter_lams, verbose=False)
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -2725,7 +2589,7 @@ class GALEXFUV(PremadeInstrument):
         )
 
 
-class GALEXNUV(PremadeInstrument):
+class GALEXNUV(PhotometricImager):
     """A class containing the properties of the GALEX instrument.
 
     Default label: "GALEXNUV"
@@ -2735,7 +2599,7 @@ class GALEXNUV(PremadeInstrument):
     Available filters:
         - NUV
 
-    For further details see the PremadeInstrument class.
+    For further details see the PhotometricImager class.
     """
 
     # Define the available filters
@@ -2864,7 +2728,7 @@ class GALEXNUV(PremadeInstrument):
             filters.resample_filters(new_lam=filter_lams, verbose=False)
 
         # Call the parent constructor with the appropriate parameters
-        PremadeInstrument.__init__(
+        PhotometricImager.__init__(
             self,
             label=label,
             filters=filters,
@@ -2984,3 +2848,27 @@ class JWST(PremadeInstrumentCollectionFactory):
         "miri": JWSTMIRI,
         "nirspec": JWSTNIRSpec,
     }
+
+
+for _cached_premade_class in (
+    JWSTNIRCamWide,
+    JWSTNIRCamMedium,
+    JWSTNIRCamNarrow,
+    JWSTNIRCam,
+    JWSTMIRI,
+    HSTWFC3UVISWide,
+    HSTWFC3UVISMedium,
+    HSTWFC3UVISNarrow,
+    HSTWFC3UVIS,
+    HSTWFC3IRWide,
+    HSTWFC3IRMedium,
+    HSTWFC3IRNarrow,
+    HSTWFC3IR,
+    HSTACSWFCWide,
+    HSTACSWFCMedium,
+    HSTACSWFCNarrow,
+    HSTACSWFC,
+    EuclidNISP,
+    EuclidVIS,
+):
+    _cached_premade_class.load = classmethod(_load_cached_premade_imager)
