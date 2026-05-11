@@ -23,17 +23,52 @@ class Instrument:
     """
 
     def __new__(cls, *args, **kwargs):
-        """Return the correct specialised instrument."""
-        if cls is not Instrument:
-            return super().__new__(cls)
+        """Return the correct specialised instrument.
 
-        if args:
+        Args:
+            *args: Positional arguments are not supported by the factory
+                and will be rejected explicitly. All arguments must be
+                passed as keyword arguments.
+            **kwargs: Keyword arguments which are used to determine the correct
+                specialised instrument type to construct. Supported arguments
+                are:
+                - label (str): A label for the instrument.
+                - filters (list of str): A list of filter names for photometric
+                    instruments.
+                - resolution (float): The spectral resolution for spectroscopic
+                    instruments, or the spatial resolution for imaging
+                    instruments.
+                - lam (float): The central wavelength for spectroscopic
+                    instruments, or the central wavelength for photometric
+                    instruments without filters.
+                - depth (float): The depth of the instrument in magnitudes.
+                - depth_app_radius (float): The aperture radius for the depth
+                    measurement in arcseconds.
+                - snrs (dict): A mapping from filter names to SNR values for
+                    photometric instruments.
+                - psfs (dict): A mapping from filter names to PSF models for
+                    photometric instruments.
+                - noise_maps (dict): A mapping from filter names to noise maps
+                    for photometric instruments.
+                - noise_source_maps (dict): A mapping from filter names to
+                    noise source maps for photometric instruments with
+                    correlated noise.
+
+        Returns:
+            InstrumentBase: An instance of a specialised instrument subclass
+                inheriting from `InstrumentBase`, constructed according to
+                the supplied arguments.
+        """
+        # Kwargs are safer for the factory, let the user know if they supplied
+        # any positional arguments by mistake
+        if len(args) > 0:
             raise exceptions.InconsistentArguments(
                 "Instrument(...) only accepts keyword arguments. "
                 "Pass values explicitly, for example "
                 "Instrument(label='my_instrument', ...)."
             )
 
+        # Unpack all the supported arguments
         label = kwargs.get("label", None)
         filters = kwargs.get("filters", None)
         resolution = kwargs.get("resolution", None)
@@ -45,6 +80,8 @@ class Instrument:
         noise_maps = kwargs.get("noise_maps", None)
         noise_source_maps = kwargs.get("noise_source_maps", None)
 
+        # Get a list of what we were provided for reporting in error messages
+        # if needs be (no point doing )
         present = sorted(
             key
             for key, value in {
