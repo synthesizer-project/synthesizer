@@ -145,6 +145,54 @@ class SpectroscopicInstrument(InstrumentBase):
             _hashable_state(self.noise_maps),
         )
 
+    @timed("SpectroscopicInstrument.apply_lam_array")
+    def apply_lam_array(self, sed, nthreads=1):
+        """Apply the instrument wavelength array to an SED.
+
+        This method is the instrument-owned entry point for applying the
+        spectroscopic wavelength definition to an SED. At present it remains a
+        thin wrapper around the existing SED resampling primitive so the
+        instrument owns the wavelength-application policy while the SED still
+        performs the low-level resampling.
+
+        Args:
+            sed (Sed): Spectral energy distribution to observe.
+            nthreads (int): Number of threads to use in the low-level
+                resampling call.
+
+        Returns:
+            Sed: New SED resampled onto the instrument wavelength grid.
+        """
+        # Delegate the low-level resampling to the existing SED helper while
+        # making the instrument the owner of the wavelength-application entry
+        # point
+        return sed.apply_instrument_lams(self, nthreads=nthreads)
+
+    @timed("SpectroscopicInstrument.apply_noise")
+    def apply_noise(self, spectrum, **kwargs):
+        """Apply spectroscopic noise to an observed spectrum.
+
+        This method is the placeholder instrument-owned entry point for noisy
+        one-dimensional spectroscopy. The public behaviour surface should exist
+        now even though the underlying machinery has not yet been implemented.
+
+        Args:
+            spectrum: Observed spectrum-like object to which noise should be
+                applied.
+            **kwargs: Future keyword arguments for controlling the noise model
+                and its application.
+
+        Raises:
+            UnimplementedFunctionality: Raised because noisy one-dimensional
+                spectroscopy has not yet been implemented on the instrument
+                side.
+        """
+        # The instrument should eventually own spectroscopy-noise application,
+        # but the machinery for that does not exist yet.
+        raise exceptions.UnimplementedFunctionality(
+            "SpectroscopicInstrument.apply_noise is not implemented yet."
+        )
+
     @timed("SpectroscopicInstrument.to_hdf5")
     def to_hdf5(self, group):
         """Write the spectroscopic instrument to an HDF5 group.

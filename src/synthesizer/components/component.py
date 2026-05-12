@@ -937,6 +937,10 @@ class Component(ABC):
 
         return self.images_psf_lnu[instrument.label]
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use component.get_images_flux(...) instead."
+    )
     def apply_psf_to_images_fnu(
         self,
         instrument,
@@ -1166,8 +1170,10 @@ class Component(ABC):
     ):
         """Get spectroscopy for the component based on a specific instrument.
 
-        This will apply the instrument's wavelength array to each
-        spectra stored on the component.
+        This method now acts as an orchestration wrapper around the
+        instrument-owned spectroscopy path. It fetches the relevant SEDs,
+        passes them into the instrument, and stores the returned spectroscopy
+        on the component.
 
         Args:
             instrument (Instrument):
@@ -1195,9 +1201,11 @@ class Component(ABC):
             # Skip labels that don't exist on this component
             if label not in self.spectra:
                 continue
-            self.spectroscopy[instrument.label][label] = self.spectra[
-                label
-            ].apply_instrument_lams(instrument)
+            # Delegate the spectroscopy observation to the instrument so the
+            # component layer only handles routing and output storage
+            self.spectroscopy[instrument.label][label] = (
+                instrument.apply_lam_array(self.spectra[label])
+            )
 
         # If we have particle spectra then do the same for them
         if (
@@ -1217,10 +1225,11 @@ class Component(ABC):
                 # Skip labels that don't exist on this component
                 if label not in self.particle_spectra:
                     continue
+                # Delegate the particle-spectrum observation to the instrument
+                # so the component layer only handles routing and output
+                # storage
                 self.particle_spectroscopy[instrument.label][label] = (
-                    self.particle_spectra[label].apply_instrument_lams(
-                        instrument
-                    )
+                    instrument.apply_lam_array(self.particle_spectra[label])
                 )
 
         # Return the spectroscopy for the component

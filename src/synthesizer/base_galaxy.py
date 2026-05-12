@@ -1837,6 +1837,10 @@ class BaseGalaxy:
 
         return self.images_psf_lnu[instrument.label]
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use galaxy.get_images_flux(...) instead."
+    )
     def apply_psf_to_images_fnu(
         self,
         instrument,
@@ -2130,8 +2134,10 @@ class BaseGalaxy:
     ):
         """Get spectroscopy for the galaxy based on a specific instrument.
 
-        This will apply the instrument's wavelength array to each
-        spectra stored on the galaxy and its components.
+        This method now acts as an orchestration wrapper around the
+        instrument-owned spectroscopy path. It fetches the relevant SEDs,
+        passes them into the instrument, stores the returned spectroscopy, and
+        then repeats the same orchestration for any attached components.
 
         Args:
             instrument (Instrument):
@@ -2173,10 +2179,11 @@ class BaseGalaxy:
             # Skip labels that don't exist on the galaxy
             if label not in self.spectra:
                 continue
-            # Get the spectroscopy
-            self.spectroscopy[instrument.label][label] = self.spectra[
-                label
-            ].apply_instrument_lams(instrument)
+            # Delegate the spectroscopy observation to the instrument so the
+            # galaxy layer only handles routing and output storage
+            self.spectroscopy[instrument.label][label] = (
+                instrument.apply_lam_array(self.spectra[label])
+            )
 
         # Do the stars level spectra
         if self.stars is not None:
