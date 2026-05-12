@@ -27,6 +27,28 @@ from synthesizer.kernel_functions import Kernel
 from synthesizer.photometry import PhotometryCollection
 
 
+def make_test_imager(resolution, filter_codes=("filter_r",)):
+    """Create a minimal photometric imager for imaging tests."""
+    # Import the factory locally so this helper stays test-scoped
+    from synthesizer.instruments import Instrument
+
+    # Build a minimal filter set matching the requested test filter codes
+    filters = FilterCollection(
+        generic_dict={
+            filter_code: np.ones(1000) for filter_code in filter_codes
+        },
+        new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+    )
+
+    # Construct a real photometric imager so tests follow the current factory
+    # contract
+    return Instrument(
+        label="test_inst",
+        filters=filters,
+        resolution=resolution,
+    )
+
+
 class TestImageGeneration:
     """Test image generation methods."""
 
@@ -709,8 +731,6 @@ class TestGalaxyImagingSingleParticle:
     ):
         """Test image generation for a galaxy with one particle."""
         # Define the image properties
-        from synthesizer.instruments import Instrument
-
         resolution = 0.1 * kpc
         fov = 3.0 * kpc
 
@@ -719,11 +739,7 @@ class TestGalaxyImagingSingleParticle:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Create an image for the galaxy using the photometry label
         galaxy_image = one_part_galaxy.get_images_luminosity(
@@ -750,8 +766,6 @@ class TestGalaxyImagingSingleParticle:
         differ.
         """
         # Define the image properties
-        from synthesizer.instruments import Instrument
-
         resolution = 0.1 * kpc
         fov = 3.0 * kpc
 
@@ -760,11 +774,7 @@ class TestGalaxyImagingSingleParticle:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Create histogram image
         hist_image = one_part_galaxy.get_images_luminosity(
@@ -830,8 +840,6 @@ class TestGalaxyImagingSingleParticle:
     def test_orientation(self, one_part_galaxy, incident_emission_model):
         """Test image generation with different orientations."""
         # Define the image properties
-        from synthesizer.instruments import Instrument
-
         resolution = 0.1 * kpc
         fov = 3.0 * kpc
 
@@ -840,11 +848,7 @@ class TestGalaxyImagingSingleParticle:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Get the image
         galaxy_image = one_part_galaxy.get_images_luminosity(
@@ -879,8 +883,6 @@ class TestImagingFluxConservation:
     ):
         """Test flux conservation in histogram imaging."""
         # Define the image properties
-        from synthesizer.instruments import Instrument
-
         resolution = 0.5 * kpc
         fov = 200 * kpc
 
@@ -907,11 +909,7 @@ class TestImagingFluxConservation:
         random_part_stars.centre = np.array([0.0, 0.0, 0.0]) * kpc
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Create histogram image
         hist_image = random_part_stars.get_images_luminosity(
@@ -940,8 +938,6 @@ class TestImagingFluxConservation:
     ):
         """Test flux conservation in smoothed imaging."""
         # Define the image properties
-        from synthesizer.instruments import Instrument
-
         resolution = 0.5 * kpc
         fov = 200 * kpc
 
@@ -970,11 +966,7 @@ class TestImagingFluxConservation:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Create smoothed image
         smoothed_image = random_part_stars.get_images_luminosity(
@@ -1004,8 +996,6 @@ class TestImagingFluxConservation:
     ):
         """Test threaded vs serial smoothed image generation."""
         # Define the image properties
-        from synthesizer.instruments import Instrument
-
         resolution = 0.5 * kpc
         fov = 200 * kpc
 
@@ -1034,11 +1024,7 @@ class TestImagingFluxConservation:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Create smoothed image using threading
         threaded_image = random_part_stars.get_images_luminosity(
@@ -1356,18 +1342,12 @@ class TestComprehensiveImagingCoverage:
         )
 
         # Create image with large pixels relative to smoothing length
-        from synthesizer.instruments import Instrument
-
         resolution = 0.5 * kpc
         fov = 200 * kpc
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         smoothed_image = stars.get_images_luminosity(
             "incident",
@@ -1437,18 +1417,12 @@ class TestComprehensiveImagingCoverage:
         )
 
         # Create image
-        from synthesizer.instruments import Instrument
-
         resolution = 0.5 * kpc
         fov = 200 * kpc
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         smoothed_image = stars.get_images_luminosity(
             "incident",
@@ -1512,13 +1486,7 @@ class TestComprehensiveImagingCoverage:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        from synthesizer.instruments import Instrument
-
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Create smoothed image
         smoothed_image = random_part_stars.get_images_luminosity(
@@ -1706,12 +1674,9 @@ class TestComprehensiveImagingCoverage:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        from synthesizer.instruments import Instrument
-
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
+        instrument = make_test_imager(
+            resolution,
+            filter_codes=("filter_r", "filter_g", "filter_b"),
         )
 
         # Create images for all filters
@@ -1869,13 +1834,7 @@ class TestComprehensiveImagingCoverage:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        from synthesizer.instruments import Instrument
-
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Generate images with different thread counts
         thread_counts = [1, 2, 4, 8]
@@ -1920,7 +1879,6 @@ class TestCombinedModelImaging:
         3. _combine_image_collections can access the cache from components
         4. Images are correctly combined
         """
-        from synthesizer.instruments import Instrument
         from synthesizer.particle.galaxy import Galaxy
 
         # Set up the model
@@ -1949,11 +1907,7 @@ class TestCombinedModelImaging:
         # Create instrument
         resolution = 0.5 * kpc
         fov = 200 * kpc
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
         kernel = Kernel().get_kernel()
 
         # Generate images - this should combine nebular_line and
@@ -2002,8 +1956,6 @@ class TestCombinedModelImaging:
         Components should be able to generate images for their own combined
         models using their own model_param_cache.
         """
-        from synthesizer.instruments import Instrument
-
         nebular_emission_model.set_per_particle(True)
 
         # Generate spectra and photometry on the component directly
@@ -2021,11 +1973,7 @@ class TestCombinedModelImaging:
         # Create instrument
         resolution = 0.5 * kpc
         fov = 200 * kpc
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
         kernel = Kernel().get_kernel()
 
         # Generate images at component level (single label returns

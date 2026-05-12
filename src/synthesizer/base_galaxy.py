@@ -14,10 +14,12 @@ from synthesizer.cosmology import (
 from synthesizer.emission_models.attenuation import Inoue14
 from synthesizer.emissions import Sed, plot_observed_spectra, plot_spectra
 from synthesizer.grid import Grid
-from synthesizer.imaging.image_generators import (
-    _combine_image_collections,
+from synthesizer.imaging.data_cube_generators import (
     _combine_spectral_cubes,
     _prepare_galaxy_data_cube_labels,
+)
+from synthesizer.imaging.image_generators import (
+    _combine_image_collections,
     _prepare_galaxy_image_labels,
 )
 from synthesizer.synth_warnings import deprecated, warn

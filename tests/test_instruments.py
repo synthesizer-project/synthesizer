@@ -113,6 +113,22 @@ class DummyPsfInstrument:
         return marker
 
 
+class DummyImageGenerationInstrument:
+    """Minimal instrument used to inspect delegated image generation calls."""
+
+    def __init__(self, expected_result):
+        """Initialise the image-generation call recorder."""
+        self.label = "inst"
+        self.resolution = 1 * kpc
+        self.calls = []
+        self.expected_result = expected_result
+
+    def generate_images(self, **kwargs):
+        """Record the delegated image-generation call and return a marker."""
+        self.calls.append(kwargs)
+        return self.expected_result
+
+
 def test_galex_filters_are_not_duplicated_in_collection():
     """Ensure the premade GALEX collection keeps one filter per instrument."""
     fuv = GALEXFUV()
@@ -444,6 +460,49 @@ def test_component_spectroscopy_routing_delegates_to_instrument():
         component.particle_spectroscopy["inst"]["stellar"]
         is (instrument.calls[1]["result"])
     )
+
+
+def test_component_image_generation_delegates_to_instrument():
+    """Component image generation should delegate to the instrument."""
+    photometry = object()
+    expected_result = object()
+    component = SimpleNamespace(
+        morphology=SimpleNamespace(),
+        component_type="stellar",
+        redshift=None,
+        model_param_cache={"stellar": {}},
+        photo_lnu={"stellar": photometry},
+        photo_fnu={},
+        particle_photo_lnu={},
+        particle_photo_fnu={},
+        images_lnu={},
+        images_fnu={},
+    )
+    instrument = DummyImageGenerationInstrument(expected_result)
+
+    returned = Component._generate_images(
+        component,
+        "stellar",
+        fov=5 * kpc,
+        instrument=instrument,
+        img_type="smoothed",
+        kernel="kernel",
+        kernel_threshold=2,
+        nthreads=3,
+        cosmo="cosmo",
+        phot_type="lnu",
+    )
+
+    assert instrument.calls[0]["photometry"] is photometry
+    assert instrument.calls[0]["fov"] == 5 * kpc
+    assert instrument.calls[0]["img_type"] == "smoothed"
+    assert instrument.calls[0]["kernel"] == "kernel"
+    assert instrument.calls[0]["kernel_threshold"] == 2
+    assert instrument.calls[0]["nthreads"] == 3
+    assert instrument.calls[0]["emitter"] is component
+    assert instrument.calls[0]["cosmo"] == "cosmo"
+    assert returned is expected_result
+    assert component.images_lnu["inst"]["stellar"] is expected_result
 
 
 def test_integrated_field_unit_generate_data_cube_uses_instrument_logic():
