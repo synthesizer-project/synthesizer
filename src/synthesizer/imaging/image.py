@@ -29,6 +29,7 @@ from synthesizer.imaging.image_generators import (
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,
 )
+from synthesizer.synth_warnings import deprecated
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
@@ -160,6 +161,27 @@ class Image(ImagingBase):
         # messed with the FOV.
         if self.npix[0] != new_shape[0] or self.npix[1] != new_shape[1]:
             self.set_npix(new_shape)
+
+    def downsample(self, factor):
+        """Downsample the image by a factor.
+
+        Useful when returning from a temporarily supersampled image.
+
+        Args:
+            factor (float):
+                The factor by which to resample the image. Values smaller than
+                1 reduce the image resolution.
+
+        Raises:
+            ValueError: If ``factor`` is greater than 1.
+        """
+        # Keep the directional convenience API explicit so callers do not use
+        # the downsampling helper to accidentally supersample images.
+        if factor > 1:
+            raise ValueError("Using downsample method to supersample!")
+
+        # Delegate the actual image resampling to the canonical helper.
+        self.resample(factor)
 
     def __add__(self, other_img):
         """Add 2 Images together.
@@ -329,6 +351,24 @@ class Image(ImagingBase):
             normalisation=normalisation,
         )
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use generate_img_hist(...) instead."
+    )
+    def get_img_hist(
+        self,
+        signal,
+        coordinates,
+        normalisation=None,
+    ):
+        """Deprecated wrapper for generate_img_hist."""
+        # Delegate to the renamed low-level histogram image entry point.
+        return self.generate_img_hist(
+            signal=signal,
+            coordinates=coordinates,
+            normalisation=normalisation,
+        )
+
     def generate_img_smoothed(
         self,
         signal,
@@ -421,6 +461,34 @@ class Image(ImagingBase):
                 f"kernel_threshold={type(kernel_threshold)}, "
                 f"signal={type(signal)})"
             )
+
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use generate_img_smoothed(...) instead."
+    )
+    def get_img_smoothed(
+        self,
+        signal,
+        coordinates=None,
+        smoothing_lengths=None,
+        kernel=None,
+        kernel_threshold=1,
+        density_grid=None,
+        normalisation=None,
+        nthreads=1,
+    ):
+        """Deprecated wrapper for generate_img_smoothed."""
+        # Delegate to the renamed low-level image-generation entry point.
+        return self.generate_img_smoothed(
+            signal=signal,
+            coordinates=coordinates,
+            smoothing_lengths=smoothing_lengths,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            density_grid=density_grid,
+            normalisation=normalisation,
+            nthreads=nthreads,
+        )
 
     def apply_noise_array(self, noise_arr):
         """Apply a noise array.

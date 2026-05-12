@@ -51,6 +51,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         depth_app_radius=None,
         snrs=None,
         noise_maps=None,
+        noise_source_maps=None,
     ):
         """Initialise an integrated field unit instrument.
 
@@ -76,6 +77,9 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 If a 2D array is supplied, every wavelength is assumed to have
                 the same noise map. If a 3D array is supplied, the last axis
                 must be the wavelength axis.
+            noise_source_maps (array, optional): An optional array or mapping
+                carrying source noise templates for future correlated-noise IFU
+                machinery.
         """
         # Initialise the shared spectroscopic instrument first
         super().__init__(
@@ -90,6 +94,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         # Attach the IFU specific attributes
         self.resolution = resolution
         self.psfs = psfs
+        self.noise_source_maps = noise_source_maps
 
         # Ensure we have been handed the correct information
         self._validate()
@@ -109,6 +114,21 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         if self.resolution is None:
             raise exceptions.MissingArgument(
                 "IntegratedFieldUnit requires a resolution."
+            )
+
+        # Correlated-noise source maps are an alternative future noise
+        # definition to depth+SNR pairs.
+        if self.snrs is not None and self.noise_source_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set depths and SNRs at the same time as "
+                "noise source maps"
+            )
+
+        # Fixed noise maps and source-noise templates are mutually exclusive.
+        if self.noise_maps is not None and self.noise_source_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set fixed noise maps and correlated noise source "
+                "maps at the same time"
             )
 
     @property
@@ -141,6 +161,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         return super()._comparison_state() + (
             _hashable_state(self.resolution),
             _hashable_state(self.psfs),
+            _hashable_state(self.noise_source_maps),
         )
 
     @timed("IntegratedFieldUnit.generate_data_cube")
@@ -432,6 +453,22 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             ds = group.create_dataset("PSFs", data=self.psfs, dtype=float)
             ds.attrs["units"] = "dimensionless"
 
+        if self.noise_source_maps is not None:
+            if isinstance(self.noise_source_maps, dict):
+                noise_source_group = group.create_group("NoiseSourceMaps")
+                for key, value in self.noise_source_maps.items():
+                    ds = noise_source_group.create_dataset(
+                        key, data=value.value, dtype=float
+                    )
+                    ds.attrs["units"] = str(value.units)
+            else:
+                ds = group.create_dataset(
+                    "NoiseSourceMaps",
+                    data=self.noise_source_maps.value,
+                    dtype=float,
+                )
+                ds.attrs["units"] = str(self.noise_source_maps.units)
+
     @classmethod
     @timed("IntegratedFieldUnit.load")
     def load(cls, filepath, **kwargs):
@@ -508,6 +545,21 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         else:
             noise_maps = None
 
+        if "NoiseSourceMaps" in group and isinstance(
+            group["NoiseSourceMaps"], h5py.Group
+        ):
+            noise_source_maps = {
+                key: unyt_array(value[...], value.attrs["units"])
+                for key, value in group["NoiseSourceMaps"].items()
+            }
+        elif "NoiseSourceMaps" in group:
+            noise_source_maps = unyt_array(
+                group["NoiseSourceMaps"][...],
+                group["NoiseSourceMaps"].attrs["units"],
+            )
+        else:
+            noise_source_maps = None
+
         payload = {
             "label": group.attrs["label"],
             "lam": lam,
@@ -517,6 +569,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             "snrs": snrs,
             "psfs": psfs,
             "noise_maps": noise_maps,
+            "noise_source_maps": noise_source_maps,
         }
         payload.update(kwargs)
 
@@ -529,4 +582,5 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             snrs=payload["snrs"],
             psfs=payload["psfs"],
             noise_maps=payload["noise_maps"],
+            noise_source_maps=payload["noise_source_maps"],
         )

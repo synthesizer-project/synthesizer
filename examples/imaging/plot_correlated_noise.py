@@ -22,10 +22,10 @@ The workflow is:
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import kpc
+from unyt import angstrom, kpc
 
 from synthesizer.imaging.image import Image
-from synthesizer.instruments import Instrument
+from synthesizer.instruments import FilterCollection, Instrument
 
 # %%
 # Create a mock galaxy image
@@ -75,8 +75,15 @@ noise_template *= 0.05 / noise_template.std()
 # caches it. Subsequent calls for the same filter (e.g. across many images in
 # a collection) skip the expensive FFT step entirely.
 
+filters = FilterCollection(
+    generic_dict={"F150W": np.ones(1000)},
+    new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+)
+
 instrument = Instrument(
     label="MockScope",
+    filters=filters,
+    resolution=resolution,
     noise_source_maps={"F150W": noise_template},
 )
 
