@@ -71,6 +71,30 @@ class PhotometricInstrument(InstrumentBase):
         self.snrs = snrs
         PhotometricInstrument._validate(self)
 
+    def _validate(self):
+        """Validate the instrument attributes.
+
+        Raises:
+            MissingArgument: If any required attributes are missing.
+        """
+        # Ensure we actually have filters defining the instrument
+        if self.filters is None:
+            raise exceptions.MissingArgument(
+                "PhotometricInstrument requires filters."
+            )
+
+        # Depths only make sense when paired with SNR definitions
+        if self.depth is not None and self.snrs is None:
+            raise exceptions.MissingArgument(
+                "If you set a depth you must also set the SNRs"
+            )
+
+        # SNR definitions only make sense when paired with depths
+        if self.snrs is not None and self.depth is None:
+            raise exceptions.MissingArgument(
+                "If you set a SNR you must also set the depth"
+            )
+
     @property
     def instrument_type(self):
         """Return the serialised type tag for this instrument."""
@@ -80,26 +104,6 @@ class PhotometricInstrument(InstrumentBase):
     def can_do_photometry(self):
         """Return whether this instrument supports photometry."""
         return True
-
-    def _validate(self):
-        """Validate the instrument attributes.
-
-        Raises:
-            MissingArgument: If required photometric attributes are missing or
-                inconsistent.
-        """
-        if self.filters is None:
-            raise exceptions.MissingArgument(
-                "PhotometricInstrument requires filters."
-            )
-        if self.depth is not None and self.snrs is None:
-            raise exceptions.MissingArgument(
-                "If you set a depth you must also set the SNRs"
-            )
-        if self.snrs is not None and self.depth is None:
-            raise exceptions.MissingArgument(
-                "If you set a SNR you must also set the depth"
-            )
 
     def _comparison_state(self):
         """Return a tuple describing the photometric comparison state.

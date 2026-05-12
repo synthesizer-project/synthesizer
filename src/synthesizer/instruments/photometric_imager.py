@@ -101,6 +101,39 @@ class PhotometricImager(PhotometricInstrument):
         # Validate the instrument configuration
         self._validate()
 
+    def _validate(self):
+        """Validate the instrument attributes.
+
+        Raises:
+            MissingArgument: If any required attributes are missing.
+        """
+        # Perform the shared validation first
+        super()._validate()
+
+        # Ensure we actually have the image resolution
+        if self.resolution is None:
+            raise exceptions.MissingArgument(
+                "PhotometricImager requires a resolution."
+            )
+
+        # Noise maps are an alternative noise definition to depth+SNR pairs
+        if self.snrs is not None and self.noise_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set depths and SNRs at the same time as noise maps"
+            )
+
+        # Correlated-noise source maps are also an alternative noise definition
+        if self.snrs is not None and self.noise_source_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set depths and SNRs at the same time as "
+                "noise source maps"
+            )
+        if self.noise_maps is not None and self.noise_source_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set fixed noise maps and correlated noise source "
+                "maps at the same time"
+            )
+
     @property
     def instrument_type(self):
         """Return the serialised type tag for this instrument."""
@@ -123,34 +156,6 @@ class PhotometricImager(PhotometricInstrument):
         have_noise |= self.noise_source_maps is not None
         have_noise |= self.snrs is not None and self.depth is not None
         return have_noise
-
-    def _validate(self):
-        """Validate the imager attributes.
-
-        Raises:
-            MissingArgument: If required imaging attributes are missing or an
-                inconsistent noise configuration has been provided.
-        """
-        super()._validate()
-
-        if self.resolution is None:
-            raise exceptions.MissingArgument(
-                "PhotometricImager requires a resolution."
-            )
-        if self.snrs is not None and self.noise_maps is not None:
-            raise exceptions.MissingArgument(
-                "You cannot set depths and SNRs at the same time as noise maps"
-            )
-        if self.snrs is not None and self.noise_source_maps is not None:
-            raise exceptions.MissingArgument(
-                "You cannot set depths and SNRs at the same time as "
-                "noise source maps"
-            )
-        if self.noise_maps is not None and self.noise_source_maps is not None:
-            raise exceptions.MissingArgument(
-                "You cannot set fixed noise maps and correlated noise source "
-                "maps at the same time"
-            )
 
     def _build_correlated_noise_models(self):
         """Build per-filter correlated-noise models from source maps.

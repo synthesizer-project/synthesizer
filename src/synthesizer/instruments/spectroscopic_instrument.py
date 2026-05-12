@@ -80,6 +80,36 @@ class SpectroscopicInstrument(InstrumentBase):
         self.noise_maps = noise_maps
         SpectroscopicInstrument._validate(self)
 
+    def _validate(self):
+        """Validate the instrument attributes.
+
+        Raises:
+            MissingArgument: If any required attributes are missing.
+        """
+        # Ensure we actually have a wavelength array defining the instrument
+        if self.lam is None:
+            raise exceptions.MissingArgument(
+                "SpectroscopicInstrument requires lam."
+            )
+
+        # Depths only make sense when paired with SNR definitions
+        if self.depth is not None and self.snrs is None:
+            raise exceptions.MissingArgument(
+                "If you set a depth you must also set the SNRs"
+            )
+
+        # SNR definitions only make sense when paired with depths
+        if self.snrs is not None and self.depth is None:
+            raise exceptions.MissingArgument(
+                "If you set a SNR you must also set the depth"
+            )
+
+        # Noise maps are an alternative noise definition to depth+SNR pairs
+        if self.snrs is not None and self.noise_maps is not None:
+            raise exceptions.MissingArgument(
+                "You cannot set depths and SNRs at the same time as noise maps"
+            )
+
     @property
     def instrument_type(self):
         """Return the serialised type tag for this instrument."""
@@ -96,30 +126,6 @@ class SpectroscopicInstrument(InstrumentBase):
         have_noise = self.noise_maps is not None
         have_noise |= self.snrs is not None and self.depth is not None
         return have_noise
-
-    def _validate(self):
-        """Validate the spectroscopic attributes.
-
-        Raises:
-            MissingArgument: If required spectroscopic attributes are missing
-                or inconsistent.
-        """
-        if self.lam is None:
-            raise exceptions.MissingArgument(
-                "SpectroscopicInstrument requires lam."
-            )
-        if self.depth is not None and self.snrs is None:
-            raise exceptions.MissingArgument(
-                "If you set a depth you must also set the SNRs"
-            )
-        if self.snrs is not None and self.depth is None:
-            raise exceptions.MissingArgument(
-                "If you set a SNR you must also set the depth"
-            )
-        if self.snrs is not None and self.noise_maps is not None:
-            raise exceptions.MissingArgument(
-                "You cannot set depths and SNRs at the same time as noise maps"
-            )
 
     def _comparison_state(self):
         """Return a tuple describing the spectroscopic comparison state.
