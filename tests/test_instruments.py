@@ -1,11 +1,15 @@
 """Tests for instrument and instrument collection behaviour."""
 
+from types import SimpleNamespace
+
 import h5py
 import numpy as np
 import pytest
 from unyt import angstrom, arcsecond
 
 from synthesizer import exceptions
+from synthesizer.base_galaxy import BaseGalaxy
+from synthesizer.components.component import Component
 from synthesizer.instruments import (
     GALEX,
     FilterCollection,
@@ -17,6 +21,21 @@ from synthesizer.instruments import (
     SpectroscopicInstrument,
 )
 from synthesizer.instruments.premade import GALEXFUV, GALEXNUV
+
+
+class DummyImageCollection:
+    """Minimal image collection used to inspect forwarded noise arguments."""
+
+    def __init__(self):
+        """Initialise the argument-capturing image collection."""
+        self.received_aperture_radius = None
+
+    def apply_noise_from_snrs(self, snrs, depths, aperture_radius):
+        """Capture the aperture radius routed by the caller."""
+        # Record the forwarded aperture radius so the test can verify that the
+        # routing path uses the instrument attribute with the correct name.
+        self.received_aperture_radius = aperture_radius
+        return aperture_radius
 
 
 def test_galex_filters_are_not_duplicated_in_collection():
@@ -111,6 +130,100 @@ def test_add_filters_does_not_mutate_on_invalid_noise_payload():
 def test_photometric_imager_inherits_add_filters_unchanged():
     """Imagers should reuse the photometric add_filters implementation."""
     assert PhotometricImager.add_filters is PhotometricInstrument.add_filters
+
+
+@pytest.mark.parametrize(
+    ("method", "images_attr", "noise_attr"),
+    [
+        (
+            BaseGalaxy.apply_noise_to_images_lnu,
+            "images_lnu",
+            "images_noise_lnu",
+        ),
+        (
+            BaseGalaxy.apply_noise_to_images_fnu,
+            "images_fnu",
+            "images_noise_fnu",
+        ),
+    ],
+)
+def test_base_galaxy_noise_routing_uses_depth_app_radius(
+    method, images_attr, noise_attr
+):
+    """Base-galaxy noise routing should use the instrument depth_app_radius."""
+    aperture_radius = object()
+    image = DummyImageCollection()
+    galaxy = SimpleNamespace(
+        images_lnu={},
+        images_fnu={},
+        images_psf_lnu={},
+        images_psf_fnu={},
+        images_noise_lnu={},
+        images_noise_fnu={},
+        stars=None,
+        black_holes=None,
+    )
+    getattr(galaxy, images_attr)["inst"] = {"stellar": image}
+    instrument = SimpleNamespace(
+        label="inst",
+        noise_maps=None,
+        noise_source_maps=None,
+        snrs=5,
+        depth=10,
+        depth_app_radius=aperture_radius,
+    )
+
+    returned = method(galaxy, instrument, apply_to_psf=False)
+
+    assert image.received_aperture_radius is aperture_radius
+    assert returned["stellar"] is aperture_radius
+    assert getattr(galaxy, noise_attr)["inst"]["stellar"] is aperture_radius
+
+
+@pytest.mark.parametrize(
+    ("method", "images_attr", "noise_attr"),
+    [
+        (
+            Component.apply_noise_to_images_lnu,
+            "images_lnu",
+            "images_noise_lnu",
+        ),
+        (
+            Component.apply_noise_to_images_fnu,
+            "images_fnu",
+            "images_noise_fnu",
+        ),
+    ],
+)
+def test_component_noise_routing_uses_depth_app_radius(
+    method, images_attr, noise_attr
+):
+    """Component noise routing should use the instrument depth_app_radius."""
+    aperture_radius = object()
+    image = DummyImageCollection()
+    component = SimpleNamespace(
+        images_lnu={},
+        images_fnu={},
+        images_psf_lnu={},
+        images_psf_fnu={},
+        images_noise_lnu={},
+        images_noise_fnu={},
+    )
+    getattr(component, images_attr)["inst"] = {"stellar": image}
+    instrument = SimpleNamespace(
+        label="inst",
+        noise_maps=None,
+        noise_source_maps=None,
+        snrs=5,
+        depth=10,
+        depth_app_radius=aperture_radius,
+    )
+
+    returned = method(component, instrument, apply_to_psf=False)
+
+    assert image.received_aperture_radius is aperture_radius
+    assert returned["stellar"] is aperture_radius
+    assert getattr(component, noise_attr)["inst"]["stellar"] is aperture_radius
 
 
 @pytest.mark.parametrize(
