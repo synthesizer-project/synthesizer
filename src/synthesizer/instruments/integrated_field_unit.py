@@ -90,6 +90,22 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         # Ensure we have been handed the correct information
         self._validate()
 
+    def _validate(self):
+        """Validate the instrument attributes.
+
+        Raises:
+            MissingArgument: If any required attributes are missing.
+        """
+        # Perform the shared validation first
+        super()._validate()
+
+        # Ensure we actually have the resolution... otherwise we are not
+        # really an IFU!
+        if self.resolution is None:
+            raise exceptions.MissingArgument(
+                "IntegratedFieldUnit requires a resolution."
+            )
+
     @property
     def instrument_type(self):
         """Return the serialised type tag for this instrument."""
@@ -109,22 +125,6 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
     def can_do_noisy_resolved_spectroscopy(self):
         """Return whether this instrument supports noisy IFU work."""
         return self.can_do_noisy_spectroscopy
-
-    def _validate(self):
-        """Validate the instrument attributes.
-
-        Raises:
-            MissingArgument: If any required attributes are missing.
-        """
-        # Perform the shared validation first
-        super()._validate()
-
-        # Ensure we actually have the resolution... otherwise we are not
-        # really an IFU!
-        if self.resolution is None:
-            raise exceptions.MissingArgument(
-                "IntegratedFieldUnit requires a resolution."
-            )
 
     def _comparison_state(self):
         """Return a tuple describing the IFU comparison state.
