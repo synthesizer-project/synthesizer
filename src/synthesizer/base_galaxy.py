@@ -1739,7 +1739,7 @@ class BaseGalaxy:
 
     @deprecated(
         "is deprecated and will be removed in version 1.3.0. "
-        "Use instrument.apply_psfs(...) instead."
+        "Use galaxy.get_images_luminosity(...) instead."
     )
     def apply_psf_to_images_lnu(
         self,
@@ -1933,6 +1933,10 @@ class BaseGalaxy:
 
         return self.images_psf_fnu[instrument.label]
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use galaxy.get_images_luminosity(...) instead."
+    )
     def apply_noise_to_images_lnu(
         self,
         instrument,
@@ -1940,6 +1944,12 @@ class BaseGalaxy:
         apply_to_psf=True,
     ):
         """Apply instrument noise to this galaxy's and its component's images.
+
+        This method now acts as an orchestration wrapper around the
+        instrument-owned imaging-noise path. It fetches the relevant image
+        collections, passes them into the instrument, stores the returned
+        noisy images, and then repeats the same orchestration for any attached
+        components.
 
         Args:
             instrument (Instrument):
@@ -1979,33 +1989,17 @@ class BaseGalaxy:
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = images[key]
 
-            # Apply the noise using the correct method
-            if instrument.noise_maps is not None:
-                self.images_noise_lnu[instrument.label][key] = (
-                    imgs.apply_noise_arrays(
-                        instrument.noise_maps,
-                    )
+            # Delegate the actual noise application to the instrument so the
+            # galaxy layer only handles routing and output storage
+            self.images_noise_lnu[instrument.label][key] = (
+                instrument.apply_noises(
+                    imgs,
+                    aperture_radius=instrument.depth_app_radius,
                 )
-            elif instrument.noise_source_maps is not None:
-                self.images_noise_lnu[instrument.label][key] = (
-                    imgs.apply_correlated_noise(instrument)
-                )
-            elif instrument.snrs is not None:
-                self.images_noise_lnu[instrument.label][key] = (
-                    imgs.apply_noise_from_snrs(
-                        snrs=instrument.snrs,
-                        depths=instrument.depth,
-                        aperture_radius=instrument.depth_app_radius,
-                    )
-                )
-            else:
-                raise exceptions.InconsistentArguments(
-                    f"Instrument ({instrument.label}) cannot be used "
-                    "for applying noise because no noise attributes are set."
-                )
+            )
 
         # If we have stars, do those
         if self.stars is not None and (
@@ -2034,6 +2028,10 @@ class BaseGalaxy:
 
         return self.images_noise_lnu[instrument.label]
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use galaxy.get_images_flux(...) instead."
+    )
     def apply_noise_to_images_fnu(
         self,
         instrument,
@@ -2041,6 +2039,12 @@ class BaseGalaxy:
         apply_to_psf=True,
     ):
         """Apply instrument noise to this galaxy's and its component's images.
+
+        This method now acts as an orchestration wrapper around the
+        instrument-owned imaging-noise path. It fetches the relevant image
+        collections, passes them into the instrument, stores the returned
+        noisy images, and then repeats the same orchestration for any attached
+        components.
 
         Args:
             instrument (Instrument):
@@ -2080,33 +2084,17 @@ class BaseGalaxy:
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = images[key]
 
-            # Apply the noise using the correct method
-            if instrument.noise_maps is not None:
-                self.images_noise_fnu[instrument.label][key] = (
-                    imgs.apply_noise_arrays(
-                        instrument.noise_maps,
-                    )
+            # Delegate the actual noise application to the instrument so the
+            # galaxy layer only handles routing and output storage
+            self.images_noise_fnu[instrument.label][key] = (
+                instrument.apply_noises(
+                    imgs,
+                    aperture_radius=instrument.depth_app_radius,
                 )
-            elif instrument.noise_source_maps is not None:
-                self.images_noise_fnu[instrument.label][key] = (
-                    imgs.apply_correlated_noise(instrument)
-                )
-            elif instrument.snrs is not None:
-                self.images_noise_fnu[instrument.label][key] = (
-                    imgs.apply_noise_from_snrs(
-                        snrs=instrument.snrs,
-                        depths=instrument.depth,
-                        aperture_radius=instrument.depth_app_radius,
-                    )
-                )
-            else:
-                raise exceptions.InconsistentArguments(
-                    f"Instrument ({instrument.label}) cannot be used "
-                    "for applying noise because no noise attributes are set."
-                )
+            )
 
         # If we have stars, do those
         if self.stars is not None and (

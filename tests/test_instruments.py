@@ -38,6 +38,27 @@ class DummyImageCollection:
         return aperture_radius
 
 
+class DummyNoiseInstrument:
+    """Minimal instrument used to inspect delegated noise application calls."""
+
+    def __init__(self, expected_result):
+        """Initialise the noise-call recording instrument."""
+        self.label = "inst"
+        self.depth_app_radius = object()
+        self.expected_result = expected_result
+        self.calls = []
+
+    def apply_noises(self, image_collection, aperture_radius=None):
+        """Record the delegated noise application call and return a marker."""
+        self.calls.append(
+            {
+                "image_collection": image_collection,
+                "aperture_radius": aperture_radius,
+            }
+        )
+        return self.expected_result
+
+
 class DummyPsfInstrument:
     """Minimal instrument used to inspect delegated PSF application calls."""
 
@@ -172,9 +193,9 @@ def test_photometric_imager_inherits_add_filters_unchanged():
 def test_base_galaxy_noise_routing_uses_depth_app_radius(
     method, images_attr, noise_attr
 ):
-    """Base-galaxy noise routing should use the instrument depth_app_radius."""
-    aperture_radius = object()
-    image = DummyImageCollection()
+    """Base-galaxy noise routing should delegate to the instrument."""
+    image = object()
+    expected_result = object()
     galaxy = SimpleNamespace(
         images_lnu={},
         images_fnu={},
@@ -186,20 +207,16 @@ def test_base_galaxy_noise_routing_uses_depth_app_radius(
         black_holes=None,
     )
     getattr(galaxy, images_attr)["inst"] = {"stellar": image}
-    instrument = SimpleNamespace(
-        label="inst",
-        noise_maps=None,
-        noise_source_maps=None,
-        snrs=5,
-        depth=10,
-        depth_app_radius=aperture_radius,
-    )
+    instrument = DummyNoiseInstrument(expected_result)
 
     returned = method(galaxy, instrument, apply_to_psf=False)
 
-    assert image.received_aperture_radius is aperture_radius
-    assert returned["stellar"] is aperture_radius
-    assert getattr(galaxy, noise_attr)["inst"]["stellar"] is aperture_radius
+    assert instrument.calls[0]["image_collection"] is image
+    assert (
+        instrument.calls[0]["aperture_radius"] is instrument.depth_app_radius
+    )
+    assert returned["stellar"] is expected_result
+    assert getattr(galaxy, noise_attr)["inst"]["stellar"] is expected_result
 
 
 @pytest.mark.parametrize(
@@ -220,9 +237,9 @@ def test_base_galaxy_noise_routing_uses_depth_app_radius(
 def test_component_noise_routing_uses_depth_app_radius(
     method, images_attr, noise_attr
 ):
-    """Component noise routing should use the instrument depth_app_radius."""
-    aperture_radius = object()
-    image = DummyImageCollection()
+    """Component noise routing should delegate to the instrument."""
+    image = object()
+    expected_result = object()
     component = SimpleNamespace(
         images_lnu={},
         images_fnu={},
@@ -232,20 +249,16 @@ def test_component_noise_routing_uses_depth_app_radius(
         images_noise_fnu={},
     )
     getattr(component, images_attr)["inst"] = {"stellar": image}
-    instrument = SimpleNamespace(
-        label="inst",
-        noise_maps=None,
-        noise_source_maps=None,
-        snrs=5,
-        depth=10,
-        depth_app_radius=aperture_radius,
-    )
+    instrument = DummyNoiseInstrument(expected_result)
 
     returned = method(component, instrument, apply_to_psf=False)
 
-    assert image.received_aperture_radius is aperture_radius
-    assert returned["stellar"] is aperture_radius
-    assert getattr(component, noise_attr)["inst"]["stellar"] is aperture_radius
+    assert instrument.calls[0]["image_collection"] is image
+    assert (
+        instrument.calls[0]["aperture_radius"] is instrument.depth_app_radius
+    )
+    assert returned["stellar"] is expected_result
+    assert getattr(component, noise_attr)["inst"]["stellar"] is expected_result
 
 
 @pytest.mark.parametrize(
