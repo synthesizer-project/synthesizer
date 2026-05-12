@@ -14,6 +14,7 @@ from synthesizer.instruments.spectroscopic_instrument import (
     SpectroscopicInstrument,
 )
 from synthesizer.units import accepts
+from synthesizer.utils.operation_timers import timed
 
 
 class IntegratedFieldUnit(SpectroscopicInstrument):
@@ -37,6 +38,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         lam=angstrom,
         depth_app_radius=(kpc, arcsecond),
     )
+    @timed("IntegratedFieldUnit.__init__")
     def __init__(
         self,
         label,
@@ -90,6 +92,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         # Ensure we have been handed the correct information
         self._validate()
 
+    @timed("IntegratedFieldUnit._validate")
     def _validate(self):
         """Validate the instrument attributes.
 
@@ -126,6 +129,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         """Return whether this instrument supports noisy IFU work."""
         return self.can_do_noisy_spectroscopy
 
+    @timed("IntegratedFieldUnit._comparison_state")
     def _comparison_state(self):
         """Return a tuple describing the IFU comparison state.
 
@@ -137,6 +141,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             _hashable_state(self.psfs),
         )
 
+    @timed("IntegratedFieldUnit.to_hdf5")
     def to_hdf5(self, group):
         """Write the integrated field unit to an HDF5 group.
 
@@ -156,6 +161,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             ds.attrs["units"] = "dimensionless"
 
     @classmethod
+    @timed("IntegratedFieldUnit.load")
     def load(cls, filepath, **kwargs):
         """Load an integrated field unit from an HDF5 file.
 
@@ -170,6 +176,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             return cls._from_hdf5(hdf, **kwargs)
 
     @classmethod
+    @timed("IntegratedFieldUnit._from_hdf5")
     def _from_hdf5(cls, group, **kwargs):
         """Load an integrated field unit from an HDF5 group.
 

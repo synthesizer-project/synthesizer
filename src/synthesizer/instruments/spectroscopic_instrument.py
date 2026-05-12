@@ -14,6 +14,7 @@ from synthesizer.instruments.instrument_base import (
     _hashable_state,
 )
 from synthesizer.units import Quantity, accepts
+from synthesizer.utils.operation_timers import timed
 
 
 class SpectroscopicInstrument(InstrumentBase):
@@ -43,6 +44,7 @@ class SpectroscopicInstrument(InstrumentBase):
     lam = Quantity("wavelength")
 
     @accepts(lam=angstrom)
+    @timed("SpectroscopicInstrument.__init__")
     def __init__(
         self,
         label,
@@ -80,6 +82,7 @@ class SpectroscopicInstrument(InstrumentBase):
         self.noise_maps = noise_maps
         SpectroscopicInstrument._validate(self)
 
+    @timed("SpectroscopicInstrument._validate")
     def _validate(self):
         """Validate the instrument attributes.
 
@@ -127,6 +130,7 @@ class SpectroscopicInstrument(InstrumentBase):
         have_noise |= self.snrs is not None and self.depth is not None
         return have_noise
 
+    @timed("SpectroscopicInstrument._comparison_state")
     def _comparison_state(self):
         """Return a tuple describing the spectroscopic comparison state.
 
@@ -141,6 +145,7 @@ class SpectroscopicInstrument(InstrumentBase):
             _hashable_state(self.noise_maps),
         )
 
+    @timed("SpectroscopicInstrument.to_hdf5")
     def to_hdf5(self, group):
         """Write the spectroscopic instrument to an HDF5 group.
 
@@ -199,6 +204,7 @@ class SpectroscopicInstrument(InstrumentBase):
             ds.attrs["units"] = str(self.noise_maps.units)
 
     @classmethod
+    @timed("SpectroscopicInstrument.load")
     def load(cls, filepath, **kwargs):
         """Load a spectroscopic instrument from an HDF5 file.
 
@@ -213,6 +219,7 @@ class SpectroscopicInstrument(InstrumentBase):
             return cls._from_hdf5(hdf, **kwargs)
 
     @classmethod
+    @timed("SpectroscopicInstrument._from_hdf5")
     def _from_hdf5(cls, group, **kwargs):
         """Load a spectroscopic instrument from an HDF5 group.
 

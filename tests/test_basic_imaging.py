@@ -627,3 +627,160 @@ class TestImageCollectionCorrelatedNoise:
             result.imgs["F090W"].noise_arr,
             result.imgs["F150W"].noise_arr,
         )
+
+
+class TestPhotometricImagerPsfApplication:
+    """Tests for instrument-owned PSF application on photometric imagers."""
+
+    @pytest.fixture
+    def instrument(self):
+        """Instrument with PSFs defined for two imaging filters."""
+        from synthesizer.instruments import Instrument
+
+        psf = np.zeros((3, 3), dtype=float)
+        psf[1, 1] = 1.0
+        return Instrument(
+            label="psf_inst",
+            psfs={"F090W": psf, "F150W": psf},
+            resolution=0.1 * kpc,
+        )
+
+    @pytest.fixture
+    def image_collection(self):
+        """Two-filter image collection for instrument-side PSF application."""
+        imgs = {
+            "F090W": Image(
+                resolution=0.1 * kpc,
+                fov=3.2 * kpc,
+                img=np.arange(32 * 32, dtype=float).reshape(32, 32),
+            ),
+            "F150W": Image(
+                resolution=0.1 * kpc,
+                fov=3.2 * kpc,
+                img=np.eye(32, dtype=float),
+            ),
+        }
+        return ImageCollection(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            imgs=imgs,
+        )
+
+    def test_apply_psf_uses_filter_specific_psf(self, instrument):
+        """apply_psf should use the PSF matching the requested filter."""
+        image = Image(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            img=np.arange(32 * 32, dtype=float).reshape(32, 32),
+        )
+
+        result = instrument.apply_psf(image, "F090W")
+
+        assert np.array_equal(result.arr, image.arr)
+
+    def test_apply_psf_returns_new_image_by_default(self, instrument):
+        """apply_psf should return a fresh image by default."""
+        image = Image(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            img=np.arange(32 * 32, dtype=float).reshape(32, 32),
+        )
+
+        result = instrument.apply_psf(image, "F090W")
+
+        assert result is not image
+
+    def test_apply_psf_can_update_image_inplace(self, instrument):
+        """apply_psf should support explicit in-place updates."""
+        image = Image(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            img=np.arange(32 * 32, dtype=float).reshape(32, 32),
+        )
+
+        result = instrument.apply_psf(image, "F090W", inplace=True)
+
+        assert result is image
+
+    def test_apply_psf_raises_without_psf_configuration(self):
+        """apply_psf should fail explicitly when no PSFs are configured."""
+        from synthesizer.instruments import Instrument
+
+        instrument = Instrument(label="no_psf", resolution=0.1 * kpc)
+        image = Image(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            img=np.ones((32, 32), dtype=float),
+        )
+
+        with pytest.raises(exceptions.MissingArgument):
+            instrument.apply_psf(image, "F090W")
+
+    def test_apply_psfs_returns_new_image_collection(
+        self, instrument, image_collection
+    ):
+        """apply_psfs should return a new image collection."""
+        result = instrument.apply_psfs(image_collection)
+
+        assert isinstance(result, ImageCollection)
+        assert result is not image_collection
+        for filter_code in image_collection.filter_codes:
+            assert (
+                result.imgs[filter_code]
+                is not image_collection.imgs[filter_code]
+            )
+
+    def test_apply_psfs_can_update_collection_inplace(
+        self, instrument, image_collection
+    ):
+        """apply_psfs should support explicit in-place updates."""
+        result = instrument.apply_psfs(image_collection, inplace=True)
+
+        assert result is image_collection
+
+    def test_image_container_no_longer_owns_psf_application(self):
+        """Image containers should no longer expose PSF application methods."""
+        image = Image(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            img=np.ones((32, 32), dtype=float),
+        )
+
+        assert not hasattr(image, "apply_psf")
+
+    def test_image_collection_container_no_longer_owns_psf_application(self):
+        """ImageCollection should no longer expose collection PSF methods."""
+        collection = ImageCollection(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            imgs={
+                "F090W": Image(
+                    resolution=0.1 * kpc,
+                    fov=3.2 * kpc,
+                    img=np.ones((32, 32), dtype=float),
+                )
+            },
+        )
+
+        assert not hasattr(collection, "apply_psfs")
+
+    def test_apply_psfs_with_resampling_does_not_mutate_input(
+        self, instrument, image_collection
+    ):
+        """Instrument-side PSF application should not mutate inputs."""
+        original_resolution = image_collection.resolution
+        original_npix = image_collection.npix.copy()
+        original_arrays = {
+            filter_code: image_collection.imgs[filter_code].arr.copy()
+            for filter_code in image_collection.filter_codes
+        }
+
+        instrument.apply_psfs(image_collection, psf_resample_factor=2)
+
+        assert image_collection.resolution == original_resolution
+        assert np.array_equal(image_collection.npix, original_npix)
+        for filter_code in image_collection.filter_codes:
+            assert np.array_equal(
+                image_collection.imgs[filter_code].arr,
+                original_arrays[filter_code],
+            )

@@ -19,7 +19,6 @@ Example Usage:
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize
-from scipy import signal
 from scipy.ndimage import zoom
 from unyt import arcsecond, kpc, unyt_array, unyt_quantity
 
@@ -420,30 +419,6 @@ class Image(ImagingBase):
                 f"kernel_threshold={type(kernel_threshold)}, "
                 f"signal={type(signal)})"
             )
-
-    def apply_psf(self, psf):
-        """Apply a Point Spread Function to this image.
-
-        Args:
-            psf (np.ndarray of float):
-                An array describing the point spread function.
-
-        Returns:
-            Image
-                The image convolved with the psf.
-        """
-        # Perform the convolution
-        convolved_img = signal.fftconvolve(self.arr, psf, mode="same")
-
-        # Include units if we have them
-        if self.units is not None:
-            convolved_img *= self.units
-
-        return Image(
-            resolution=self.resolution,
-            fov=self.fov,
-            img=convolved_img,
-        )
 
     def apply_noise_array(self, noise_arr):
         """Apply a noise array.

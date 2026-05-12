@@ -508,54 +508,6 @@ class ImageCollection(ImagingBase):
                 f"photometry={type(photometry)})"
             )
 
-    def apply_psfs(self, psfs):
-        """Convolve this ImageCollection's images with their PSFs.
-
-        To more accurately apply the PSF we recommend using a super resolution
-        image. This can be done via the supersample method and then
-        downsampling to the native pixel scale after resampling. However, it
-        is more efficient and robust to start at the super resolution initially
-        and then downsample after the fact.
-
-        Args:
-            psfs (dict):
-                A dictionary with a point spread function for each image within
-                the ImageCollection. The key of each PSF must be the
-                filter_code of the image it should be applied to.
-
-        Returns:
-            ImageCollection
-                A new image collection containing the images convolved with a
-                PSF.
-
-        Raises:
-            InconsistentArguments
-                If a dictionary of PSFs is provided that doesn't match the
-                filters an error is raised.
-        """
-        # Check we have a valid set of PSFs
-        if not isinstance(psfs, dict):
-            raise exceptions.InconsistentArguments(
-                "psfs must be a dictionary with a PSF for each image"
-            )
-        missing_psfs = [f for f in self.imgs.keys() if f not in psfs]
-        if len(missing_psfs) > 0:
-            raise exceptions.InconsistentArguments(
-                f"Missing a psf for the following filters: {missing_psfs}"
-            )
-
-        # Loop over each images and perform the convolution
-        psfed_imgs = {}
-        for f in psfs:
-            # Apply the PSF to this image
-            psfed_imgs[f] = self.imgs[f].apply_psf(psfs[f])
-
-        return ImageCollection(
-            resolution=self.resolution,
-            fov=self.fov,
-            imgs=psfed_imgs,
-        )
-
     def apply_noise_arrays(self, noise_arrs):
         """Apply an existing noise array to each image.
 

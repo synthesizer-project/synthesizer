@@ -19,6 +19,7 @@ from synthesizer.instruments.photometric_instrument import (
 from synthesizer.instruments.spectroscopic_instrument import (
     SpectroscopicInstrument,
 )
+from synthesizer.utils.operation_timers import timed
 
 
 class Instrument:
@@ -32,6 +33,7 @@ class Instrument:
     it simply dispatches to the correct specialised class.
     """
 
+    @timed("Instrument.__new__")
     def __new__(cls, *args, **kwargs):
         """Return the correct specialised instrument.
 
@@ -143,6 +145,7 @@ class Instrument:
         return target_cls(*args, **kwargs)
 
     @classmethod
+    @timed("Instrument._from_hdf5")
     def _from_hdf5(cls, group, **kwargs):
         """Dispatch HDF5 loading to the appropriate specialised class.
 
