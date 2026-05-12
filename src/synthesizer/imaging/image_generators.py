@@ -1051,6 +1051,55 @@ def _combine_image_collections(images, label, model_cache):
     return combined_img
 
 
+def _combine_spectral_cubes(cubes, label, model_cache):
+    """Combine multiple spectral cubes into a single spectral cube.
+
+    Args:
+        cubes: Dictionary of existing spectral cubes.
+        label: The label of the combined spectral cube to create.
+        model_cache: The model parameter cache to use for lookup.
+
+    Returns:
+        SpectralCube: The combined spectral cube.
+
+    Raises:
+        MissingModel: If label not found in model_cache.
+        MissingIFU: If any required component cubes are missing.
+    """
+    # Validate label exists in model_cache
+    if label not in model_cache:
+        raise exceptions.MissingModel(
+            f"Label '{label}' not found in model cache."
+        )
+
+    # Validate that the model cache entry contains combine keys
+    if "combine" not in model_cache[label]:
+        raise exceptions.MissingModel(
+            f"Label '{label}' in model cache missing 'combine' key."
+        )
+
+    # Find the cubes we need to combine from the provided model cache
+    combine_keys = model_cache[label]["combine"]
+
+    # Validate all combine_keys exist in cubes
+    missing_keys = [key for key in combine_keys if key not in cubes]
+    if missing_keys:
+        raise exceptions.MissingIFU(
+            f"Cannot combine data cubes for '{label}': missing cubes for "
+            f"{', '.join(missing_keys)}"
+        )
+
+    # Get all the cubes to add
+    combine_cubes = [cubes[key] for key in combine_keys]
+
+    # Combine the cubes
+    combined_cube = deepcopy(combine_cubes[0])
+    for cube in combine_cubes[1:]:
+        combined_cube += cube
+
+    return combined_cube
+
+
 @timed("_generate_ifu_particle_hist")
 def _generate_ifu_particle_hist(
     ifu,
@@ -1595,6 +1644,33 @@ def _prepare_component_image_labels(
     return combine_labels, generate_labels
 
 
+def _prepare_component_data_cube_labels(
+    labels: list[str],
+    model_cache: dict,
+    remove_missing: bool = False,
+) -> tuple[list[str], list[str]]:
+    """Split component data-cube labels into combined and generated labels.
+
+    Args:
+        labels (list of str):
+            The requested data-cube labels.
+        model_cache (dict):
+            The model parameter cache from the component emitter.
+        remove_missing (bool):
+            Whether to remove labels missing from the model cache entirely.
+
+    Returns:
+        tuple of list of str:
+            - combine_labels: Labels that can be combined from others.
+            - generate_labels: Labels that must be generated directly.
+    """
+    return _prepare_component_image_labels(
+        labels,
+        model_cache,
+        remove_missing=remove_missing,
+    )
+
+
 def _prepare_galaxy_image_labels(
     labels: list[str],
     model_cache: dict,
@@ -1673,3 +1749,25 @@ def _prepare_galaxy_image_labels(
                 component_labels_by_emitter[emitter].append(label)
 
     return galaxy_combine_labels, component_labels_by_emitter
+
+
+def _prepare_galaxy_data_cube_labels(
+    labels: list[str],
+    model_cache: dict,
+) -> tuple[list[str], dict[str, list[str]]]:
+    """Prepare galaxy-level data-cube generation by routing to components.
+
+    Args:
+        labels (list of str):
+            The requested data-cube labels.
+        model_cache (dict):
+            The combined model parameter cache from all components and galaxy.
+
+    Returns:
+        tuple:
+            - galaxy_combine_labels (list of str): Labels for galaxy-level
+              combinations.
+            - component_labels_by_emitter (dict): Dict mapping emitter type
+              to list of labels that emitter needs to handle.
+    """
+    return _prepare_galaxy_image_labels(labels, model_cache)

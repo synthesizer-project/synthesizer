@@ -43,12 +43,12 @@ class TestImageGeneration:
         smoothing_lengths = unyt_array(np.full(n_particles, 0.05), kpc)
         return coords, signal, smoothing_lengths
 
-    def test_get_img_hist(self, mock_particles):
+    def test_generate_img_hist(self, mock_particles):
         """Test histogram image generation."""
         coords, signal, _ = mock_particles
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
 
-        img.get_img_hist(signal, coords)
+        img.generate_img_hist(signal, coords)
 
         assert img.arr is not None
         assert np.all(img.shape == (10, 10)), (
@@ -56,13 +56,13 @@ class TestImageGeneration:
         )
         assert np.sum(img.arr) >= 0
 
-    def test_get_img_smoothed(self, mock_particles):
+    def test_generate_img_smoothed(self, mock_particles):
         """Test smoothed image generation."""
         coords, signal, smoothing_lengths = mock_particles
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -199,25 +199,25 @@ class TestImageCollection:
         assert collection.has_cartesian_units
         assert len(collection.imgs) == 0
 
-    def test_get_imgs_hist(self, mock_photometry, mock_coordinates):
+    def test_generate_imgs_hist(self, mock_photometry, mock_coordinates):
         """Test histogram image generation for collection."""
         collection = ImageCollection(resolution=0.1 * kpc, fov=1.0 * kpc)
 
-        collection.get_imgs_hist(mock_photometry, mock_coordinates)
+        collection.generate_imgs_hist(mock_photometry, mock_coordinates)
 
         assert len(collection.imgs) == 3
         for band_name in ["g_band", "r_band", "i_band"]:
             assert band_name in collection.imgs
             assert collection.imgs[band_name].arr is not None
 
-    def test_get_imgs_smoothed(self, mock_photometry, mock_coordinates):
+    def test_generate_imgs_smoothed(self, mock_photometry, mock_coordinates):
         """Test smoothed image generation for collection."""
         collection = ImageCollection(resolution=0.1 * kpc, fov=1.0 * kpc)
         n_particles = len(mock_coordinates)
         smoothing_lengths = unyt_array(np.full(n_particles, 0.05), kpc)
         kernel = Kernel().get_kernel()
 
-        collection.get_imgs_smoothed(
+        collection.generate_imgs_smoothed(
             mock_photometry, mock_coordinates, smoothing_lengths, kernel
         )
 
@@ -229,7 +229,7 @@ class TestImageCollection:
     def test_make_rgb_image(self, mock_photometry, mock_coordinates):
         """Test RGB image creation."""
         collection = ImageCollection(resolution=0.1 * kpc, fov=1.0 * kpc)
-        collection.get_imgs_hist(mock_photometry, mock_coordinates)
+        collection.generate_imgs_hist(mock_photometry, mock_coordinates)
 
         rgb_filters = {
             "R": ("r_band",),
@@ -262,7 +262,7 @@ class TestSpectralCube:
             f"Should have 10 wavelengths but found {len(basic_cube.lam)}"
         )
 
-    def test_get_data_cube_hist(self, basic_cube):
+    def test_generate_data_cube_hist(self, basic_cube):
         """Test data cube generation with histogram method."""
         from synthesizer.emissions.sed import Sed
 
@@ -283,7 +283,7 @@ class TestSpectralCube:
             kpc,
         )
 
-        basic_cube.get_data_cube_hist(sed, coords)
+        basic_cube.generate_data_cube_hist(sed, coords)
 
         assert basic_cube.cube is not None
         assert basic_cube.cube.shape == (5, 5, 10)
@@ -320,7 +320,7 @@ class TestSpectralCube:
 
         # Generate smoothed cube
         kernel = Kernel().get_kernel()
-        cube.get_data_cube_smoothed(
+        cube.generate_data_cube_smoothed(
             sed, coords, smoothing_lengths, kernel=kernel
         )
 
@@ -378,7 +378,7 @@ class TestSpectralCube:
         )  # 50x smaller
 
         kernel = Kernel().get_kernel()
-        cube.get_data_cube_smoothed(
+        cube.generate_data_cube_smoothed(
             sed, coords, smoothing_lengths, kernel=kernel
         )
 
@@ -434,7 +434,7 @@ class TestSpectralCube:
         )  # 3x larger than res
 
         kernel = Kernel().get_kernel()
-        cube.get_data_cube_smoothed(
+        cube.generate_data_cube_smoothed(
             sed, coords, smoothing_lengths, kernel=kernel
         )
 
@@ -482,7 +482,7 @@ class TestSpectralCube:
             cube = SpectralCube(
                 resolution=0.15 * kpc, fov=2.0 * kpc, lam=wavelengths
             )
-            cube.get_data_cube_smoothed(
+            cube.generate_data_cube_smoothed(
                 sed,
                 coords,
                 smoothing_lengths,
@@ -530,7 +530,7 @@ class TestSpectralCube:
         smoothing_lengths = unyt_array([0.3] * n_particles, kpc)
 
         kernel = Kernel().get_kernel()
-        cube.get_data_cube_smoothed(
+        cube.generate_data_cube_smoothed(
             sed, coords, smoothing_lengths, kernel=kernel
         )
 
@@ -582,7 +582,7 @@ class TestImageIntegration:
         collection = ImageCollection(resolution=0.05 * kpc, fov=1.0 * kpc)
 
         # Generate images
-        collection.get_imgs_hist(photometry, coords)
+        collection.generate_imgs_hist(photometry, coords)
 
         # Apply noise to make it realistic
         noise_stds = {
@@ -631,7 +631,7 @@ class TestImageIntegration:
         )
 
         # Generate data cube
-        cube.get_data_cube_hist(sed, coords)
+        cube.generate_data_cube_hist(sed, coords)
 
         # Verify cube structure
         assert cube.cube is not None
@@ -1092,7 +1092,7 @@ class TestPixelOverlapFix:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1129,7 +1129,7 @@ class TestPixelOverlapFix:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1158,7 +1158,7 @@ class TestPixelOverlapFix:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1208,7 +1208,7 @@ class TestPixelOverlapFix:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1238,7 +1238,7 @@ class TestPixelOverlapFix:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1272,7 +1272,7 @@ class TestPixelOverlapFix:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1573,7 +1573,7 @@ class TestComprehensiveImagingCoverage:
         kernel = Kernel().get_kernel()
 
         img = Image(resolution=resolution, fov=fov)
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal=signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1615,7 +1615,7 @@ class TestComprehensiveImagingCoverage:
         kernel = Kernel().get_kernel()
 
         img = Image(resolution=resolution, fov=fov)
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal=signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1653,7 +1653,7 @@ class TestComprehensiveImagingCoverage:
             fov = 10.0 * kpc
 
             img = Image(resolution=resolution, fov=fov)
-            img.get_img_smoothed(
+            img.generate_img_smoothed(
                 signal=signal,
                 coordinates=coords,
                 smoothing_lengths=smoothing_lengths,
@@ -1758,11 +1758,11 @@ class TestComprehensiveImagingCoverage:
 
         # Create histogram image
         hist_img = Image(resolution=resolution, fov=fov)
-        hist_img.get_img_hist(signal=signal, coordinates=coords)
+        hist_img.generate_img_hist(signal=signal, coordinates=coords)
 
         # Create smoothed image
         smooth_img = Image(resolution=resolution, fov=fov)
-        smooth_img.get_img_smoothed(
+        smooth_img.generate_img_smoothed(
             signal=signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1813,7 +1813,7 @@ class TestComprehensiveImagingCoverage:
             signal = unyt_array([signal_value / 2, signal_value / 2], erg / s)
 
             img = Image(resolution=resolution, fov=fov)
-            img.get_img_smoothed(
+            img.generate_img_smoothed(
                 signal=signal,
                 coordinates=coords,
                 smoothing_lengths=smoothing_lengths,
@@ -2030,7 +2030,7 @@ class TestCombinedModelImaging:
 
         # Generate images at component level (single label returns
         # ImageCollection)
-        nebular_img = random_part_stars._get_images(
+        nebular_img = random_part_stars._generate_images(
             "nebular",
             img_type="smoothed",
             instrument=instrument,

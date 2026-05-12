@@ -3233,24 +3233,15 @@ class Pipeline:
             for inst in instruments:
                 # Loop over each label and create a data cube
                 for label in model_label:
-                    # Determine which component this label belongs to
-                    # and call get_data_cube appropriately
-                    cube = galaxy.get_data_cube(
-                        resolution=inst.resolution,
+                    # Mirror the image flow by keeping galaxy methods as the
+                    # public orchestration layer while the IFU owns low-level
+                    # cube construction
+                    galaxy.get_data_cube(
+                        instrument=inst,
                         fov=op_kwargs["fov"],
-                        lam=inst.lam,
+                        label=label,
                         cube_type=op_kwargs.get("cube_type", "smoothed"),
-                        stellar_spectra=label
-                        if label in getattr(galaxy.stars, "spectra", {})
-                        or label
-                        in getattr(galaxy.stars, "particle_spectra", {})
-                        else None,
-                        blackhole_spectra=label
-                        if label in getattr(galaxy.black_holes, "spectra", {})
-                        or label
-                        in getattr(galaxy.black_holes, "particle_spectra", {})
-                        else None,
-                        kernel=op_kwargs.get("kernel"),
+                        kernel=op_kwargs.get("kernel", None),
                         kernel_threshold=op_kwargs.get(
                             "kernel_threshold", 1.0
                         ),
@@ -3259,18 +3250,20 @@ class Pipeline:
                         nthreads=self.nthreads,
                     )
 
-                    # Store the cube (we'll need to add a data_cubes_lnu
-                    # attribute to galaxies)
-                    if not hasattr(galaxy, "data_cubes_lnu"):
-                        galaxy.data_cubes_lnu = {}
-                    # Use instrument label in the key to differentiate
-                    # between data cubes from different instruments
-                    key = f"{label}_{inst.label}"
-                    galaxy.data_cubes_lnu[key] = cube
-
         # Count the number of data cubes we have generated
-        if hasattr(galaxy, "data_cubes_lnu"):
-            self._op_counts["Lnu Data Cubes"] += len(galaxy.data_cubes_lnu)
+        self._op_counts["Lnu Data Cubes"] += count_and_check_dict_recursive(
+            galaxy.data_cubes_lnu
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Lnu Data Cubes"] += (
+                count_and_check_dict_recursive(galaxy.stars.data_cubes_lnu)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Lnu Data Cubes"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.data_cubes_lnu
+                )
+            )
 
         # Record the time taken
         self._op_timing["Lnu Data Cubes"] += time.perf_counter() - start
@@ -3422,24 +3415,15 @@ class Pipeline:
             for inst in instruments:
                 # Loop over each label and create a data cube
                 for label in model_label:
-                    # Determine which component this label belongs to
-                    # and call get_data_cube appropriately
-                    cube = galaxy.get_data_cube(
-                        resolution=inst.resolution,
+                    # Mirror the image flow by keeping galaxy methods as the
+                    # public orchestration layer while the IFU owns low-level
+                    # cube construction
+                    galaxy.get_data_cube(
+                        instrument=inst,
                         fov=op_kwargs["fov"],
-                        lam=inst.lam,
+                        label=label,
                         cube_type=op_kwargs.get("cube_type", "smoothed"),
-                        stellar_spectra=label
-                        if label in getattr(galaxy.stars, "spectra", {})
-                        or label
-                        in getattr(galaxy.stars, "particle_spectra", {})
-                        else None,
-                        blackhole_spectra=label
-                        if label in getattr(galaxy.black_holes, "spectra", {})
-                        or label
-                        in getattr(galaxy.black_holes, "particle_spectra", {})
-                        else None,
-                        kernel=op_kwargs.get("kernel"),
+                        kernel=op_kwargs.get("kernel", None),
                         kernel_threshold=op_kwargs.get(
                             "kernel_threshold", 1.0
                         ),
@@ -3448,17 +3432,20 @@ class Pipeline:
                         nthreads=self.nthreads,
                     )
 
-                    # Store the cube
-                    if not hasattr(galaxy, "data_cubes_fnu"):
-                        galaxy.data_cubes_fnu = {}
-                    # Use instrument label in the key to differentiate
-                    # between data cubes from different instruments
-                    key = f"{label}_{inst.label}"
-                    galaxy.data_cubes_fnu[key] = cube
-
         # Count the number of data cubes we have generated
-        if hasattr(galaxy, "data_cubes_fnu"):
-            self._op_counts["Fnu Data Cubes"] += len(galaxy.data_cubes_fnu)
+        self._op_counts["Fnu Data Cubes"] += count_and_check_dict_recursive(
+            galaxy.data_cubes_fnu
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Fnu Data Cubes"] += (
+                count_and_check_dict_recursive(galaxy.stars.data_cubes_fnu)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Fnu Data Cubes"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.data_cubes_fnu
+                )
+            )
 
         # Record the time taken
         self._op_timing["Fnu Data Cubes"] += time.perf_counter() - start
