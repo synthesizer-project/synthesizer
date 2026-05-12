@@ -59,6 +59,21 @@ class DummyNoiseInstrument:
         return self.expected_result
 
 
+class DummySpectroscopicInstrument:
+    """Minimal instrument used to inspect delegated spectroscopy calls."""
+
+    def __init__(self):
+        """Initialise the spectroscopy-call recording instrument."""
+        self.label = "inst"
+        self.calls = []
+
+    def apply_lam_array(self, sed):
+        """Record the delegated wavelength-application call."""
+        marker = object()
+        self.calls.append({"sed": sed, "result": marker})
+        return marker
+
+
 class DummyPsfInstrument:
     """Minimal instrument used to inspect delegated PSF application calls."""
 
@@ -340,6 +355,77 @@ def test_component_psf_routing_delegates_to_instrument(
     assert (
         getattr(component, psf_attr)["inst"]["stellar"]
         is instrument.calls[0]["result"]
+    )
+
+
+def test_spectroscopic_instrument_apply_lam_array_delegates_to_resampling():
+    """apply_lam_array should use the existing SED resampling primitive."""
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.linspace(1000, 3000, 32) * angstrom,
+    )
+    sed = SimpleNamespace()
+    expected = object()
+    captured = {}
+
+    def fake_apply_instrument_lams(passed_instrument, nthreads=1):
+        captured["instrument"] = passed_instrument
+        captured["nthreads"] = nthreads
+        return expected
+
+    sed.apply_instrument_lams = fake_apply_instrument_lams
+
+    result = instrument.apply_lam_array(sed, nthreads=4)
+
+    assert result is expected
+    assert captured["instrument"] is instrument
+    assert captured["nthreads"] == 4
+
+
+def test_base_galaxy_spectroscopy_routing_delegates_to_instrument():
+    """Base-galaxy spectroscopy should delegate to the instrument."""
+    sed = object()
+    galaxy = SimpleNamespace(
+        spectra={"stellar": sed},
+        spectroscopy={},
+        stars=None,
+        black_holes=None,
+    )
+    instrument = DummySpectroscopicInstrument()
+
+    returned = BaseGalaxy.get_spectroscopy(galaxy, instrument)
+
+    assert instrument.calls[0]["sed"] is sed
+    assert returned["stellar"] is instrument.calls[0]["result"]
+    assert (
+        galaxy.spectroscopy["inst"]["stellar"] is instrument.calls[0]["result"]
+    )
+
+
+def test_component_spectroscopy_routing_delegates_to_instrument():
+    """Component spectroscopy should delegate to the instrument."""
+    sed = object()
+    particle_sed = object()
+    component = SimpleNamespace(
+        spectra={"stellar": sed},
+        spectroscopy={},
+        particle_spectra={"stellar": particle_sed},
+        particle_spectroscopy={},
+    )
+    instrument = DummySpectroscopicInstrument()
+
+    returned = Component.get_spectroscopy(component, instrument)
+
+    assert instrument.calls[0]["sed"] is sed
+    assert instrument.calls[1]["sed"] is particle_sed
+    assert returned["stellar"] is instrument.calls[0]["result"]
+    assert (
+        component.spectroscopy["inst"]["stellar"]
+        is instrument.calls[0]["result"]
+    )
+    assert (
+        component.particle_spectroscopy["inst"]["stellar"]
+        is (instrument.calls[1]["result"])
     )
 
 
