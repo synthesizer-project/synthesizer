@@ -19,11 +19,12 @@ from synthesizer.cosmology import (
     get_luminosity_distance,
 )
 from synthesizer.emissions import plot_spectra
+from synthesizer.imaging.data_cube_generators import (
+    _combine_spectral_cubes,
+    _prepare_component_data_cube_labels,
+)
 from synthesizer.imaging.image_generators import (
     _combine_image_collections,
-    _combine_spectral_cubes,
-    _generate_image_collection_generic,
-    _prepare_component_data_cube_labels,
     _prepare_component_image_labels,
 )
 from synthesizer.synth_warnings import deprecated
@@ -668,8 +669,7 @@ class Component(ABC):
                     f"Available photometry keys: {available_keys}"
                 )
 
-            out_images[label] = _generate_image_collection_generic(
-                instrument=instrument,
+            out_images[label] = instrument.generate_images(
                 photometry=photometry_dict[label],
                 fov=fov,
                 img_type=img_type,

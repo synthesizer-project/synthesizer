@@ -25,6 +25,10 @@ from unyt import Mpc, Msun, Myr, pc, rad, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.imaging import Image
+from synthesizer.imaging.image_generators import (
+    _generate_image_particle_hist,
+    _generate_image_particle_smoothed,
+)
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
@@ -179,6 +183,71 @@ class Galaxy(BaseGalaxy):
         else:
             self.sf_gas_mass = None
             self.sf_gas_metallicity = None
+
+    def _generate_particle_map(
+        self,
+        signal,
+        coordinates,
+        resolution,
+        fov,
+        img_type,
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        smoothing_lengths=None,
+        normalisation=None,
+    ):
+        """Generate one legacy particle map via shared image helpers.
+
+        Args:
+            signal (unyt_array): Per-particle quantity to project.
+            coordinates (unyt_array): Centered particle coordinates.
+            resolution (unyt_quantity): Output pixel resolution.
+            fov (unyt_quantity): Output field of view.
+            img_type (str): Either ``"hist"`` or ``"smoothed"``.
+            kernel (np.ndarray, optional): Kernel for smoothed imaging.
+            kernel_threshold (float): Kernel impact-parameter threshold.
+            nthreads (int): Number of threads for smoothed imaging.
+            smoothing_lengths (unyt_array, optional): Per-particle smoothing
+                lengths used by the smoothed imaging path.
+            normalisation (unyt_array, optional): Optional per-particle
+                normalisation applied before forming a weighted average.
+
+        Returns:
+            Image: Generated map.
+        """
+        # Create the output image container with the requested geometry
+        img = Image(resolution=resolution, fov=fov)
+
+        # Route histogram requests to the histogram image backend
+        if img_type == "hist":
+            # Route histogram maps through the shared particle-image backend
+            return _generate_image_particle_hist(
+                img,
+                signal=signal,
+                coordinates=coordinates,
+                normalisation=normalisation,
+            )
+
+        # Route smoothed requests to the smoothing image backend
+        if img_type == "smoothed":
+            # Route smoothed maps through the shared particle-image backend
+            return _generate_image_particle_smoothed(
+                img,
+                signal=signal,
+                cent_coords=coordinates,
+                smoothing_lengths=smoothing_lengths,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+                normalisation=normalisation,
+            )
+
+        # Reject any unsupported map-generation mode explicitly
+        raise exceptions.UnknownImageType(
+            "Unknown img_type %s. (Options are 'hist' or 'smoothed')"
+            % img_type
+        )
 
     @timed("Galaxy.split")
     def split(self, max_npart):
@@ -839,38 +908,17 @@ class Galaxy(BaseGalaxy):
         Returns:
             Image: The stellar mass image.
         """
-        # Instantiate the Image object.
-        img = Image(
+        return self._generate_particle_map(
+            signal=self.stars.current_masses,
+            coordinates=self.stars.centered_coordinates,
             resolution=resolution,
             fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            smoothing_lengths=self.stars.smoothing_lengths,
         )
-
-        # Make the image, handling incorrect image types
-        if img_type == "hist":
-            # Compute the image
-            img.generate_img_hist(
-                signal=self.stars.current_masses,
-                coordinates=self.stars.centered_coordinates,
-            )
-
-        elif img_type == "smoothed":
-            # Compute image
-            img.generate_img_smoothed(
-                signal=self.stars.current_masses,
-                coordinates=self.stars.centered_coordinates,
-                smoothing_lengths=self.stars.smoothing_lengths,
-                kernel=kernel,
-                kernel_threshold=kernel_threshold,
-                nthreads=nthreads,
-            )
-
-        else:
-            raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or "
-                "'smoothed')" % img_type
-            )
-
-        return img
 
     def get_map_gas_mass(
         self,
@@ -902,38 +950,17 @@ class Galaxy(BaseGalaxy):
         Returns:
             Image: The gas mass image.
         """
-        # Instantiate the Image object.
-        img = Image(
+        return self._generate_particle_map(
+            signal=self.gas.masses,
+            coordinates=self.gas.centered_coordinates,
             resolution=resolution,
             fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            smoothing_lengths=self.gas.smoothing_lengths,
         )
-
-        # Make the image, handling incorrect image types
-        if img_type == "hist":
-            # Compute the image
-            img.generate_img_hist(
-                signal=self.gas.masses,
-                coordinates=self.gas.centered_coordinates,
-            )
-
-        elif img_type == "smoothed":
-            # Compute image
-            img.generate_img_smoothed(
-                signal=self.gas.masses,
-                coordinates=self.gas.centered_coordinates,
-                smoothing_lengths=self.gas.smoothing_lengths,
-                kernel=kernel,
-                kernel_threshold=kernel_threshold,
-                nthreads=nthreads,
-            )
-
-        else:
-            raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or "
-                "'smoothed')" % img_type
-            )
-
-        return img
 
     def get_map_stellar_age(
         self,
@@ -968,40 +995,18 @@ class Galaxy(BaseGalaxy):
         Returns:
             Image: The stellar age image.
         """
-        # Instantiate the Image object.
-        weighted_img = Image(
+        return self._generate_particle_map(
+            signal=self.stars.ages,
+            coordinates=self.stars.centered_coordinates,
             resolution=resolution,
             fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            smoothing_lengths=self.stars.smoothing_lengths,
+            normalisation=self.stars.initial_masses,
         )
-
-        # Make the image, handling incorrect image types
-        if img_type == "hist":
-            # Compute the image
-            weighted_img.generate_img_hist(
-                signal=self.stars.ages,
-                normalisation=self.stars.initial_masses,
-                coordinates=self.stars.centered_coordinates,
-            )
-
-        elif img_type == "smoothed":
-            # Compute image
-            weighted_img.generate_img_smoothed(
-                signal=self.stars.ages,
-                normalisation=self.stars.initial_masses,
-                coordinates=self.stars.centered_coordinates,
-                smoothing_lengths=self.stars.smoothing_lengths,
-                kernel=kernel,
-                kernel_threshold=kernel_threshold,
-                nthreads=nthreads,
-            )
-
-        else:
-            raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or "
-                "'smoothed')" % img_type
-            )
-
-        return weighted_img
 
     def get_map_stellar_metal_mass(
         self,
@@ -1033,38 +1038,17 @@ class Galaxy(BaseGalaxy):
         Returns:
             Image: The stellar metal mass image.
         """
-        # Instantiate the Image object.
-        img = Image(
+        return self._generate_particle_map(
+            signal=self.stars.metallicities * self.stars.masses,
+            coordinates=self.stars.centered_coordinates,
             resolution=resolution,
             fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            smoothing_lengths=self.stars.smoothing_lengths,
         )
-
-        # Make the image, handling incorrect image types
-        if img_type == "hist":
-            # Compute the image
-            img.generate_img_hist(
-                signal=self.stars.metallicities * self.stars.masses,
-                coordinates=self.stars.centered_coordinates,
-            )
-
-        elif img_type == "smoothed":
-            # Compute image
-            img.generate_img_smoothed(
-                signal=self.stars.metallicities * self.stars.masses,
-                coordinates=self.stars.centered_coordinates,
-                smoothing_lengths=self.stars.smoothing_lengths,
-                kernel=kernel,
-                kernel_threshold=kernel_threshold,
-                nthreads=nthreads,
-            )
-
-        else:
-            raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or "
-                "'smoothed')" % img_type
-            )
-
-        return img
 
     def get_map_gas_metal_mass(
         self,
@@ -1098,38 +1082,17 @@ class Galaxy(BaseGalaxy):
         Returns:
             Image: The gas metal mass image.
         """
-        # Instantiate the Image object.
-        img = Image(
+        return self._generate_particle_map(
+            signal=self.gas.metallicities * self.gas.masses,
+            coordinates=self.gas.centered_coordinates,
             resolution=resolution,
             fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            smoothing_lengths=self.gas.smoothing_lengths,
         )
-
-        # Make the image, handling incorrect image types
-        if img_type == "hist":
-            # Compute the image
-            img.generate_img_hist(
-                signal=self.gas.metallicities * self.gas.masses,
-                coordinates=self.gas.centered_coordinates,
-            )
-
-        elif img_type == "smoothed":
-            # Compute image
-            img.generate_img_smoothed(
-                signal=self.gas.metallicities * self.gas.masses,
-                coordinates=self.gas.centered_coordinates,
-                smoothing_lengths=self.gas.smoothing_lengths,
-                kernel=kernel,
-                kernel_threshold=kernel_threshold,
-                nthreads=nthreads,
-            )
-
-        else:
-            raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or "
-                "'smoothed')" % img_type
-            )
-
-        return img
 
     def get_map_stellar_metallicity(
         self,
@@ -1303,33 +1266,17 @@ class Galaxy(BaseGalaxy):
         if self.stars.ages[mask].size == 0:
             warn("The SFR is 0! (there are 0 stars in the age bin)")
 
-        # Instantiate the Image object.
-        img = Image(resolution=resolution, fov=fov)
-
-        # Make the initial mass map, handling incorrect image types
-        if img_type == "hist":
-            # Compute the image
-            img.generate_img_hist(
-                signal=self.stars.initial_masses[mask],
-                coordinates=self.stars.centered_coordinates[mask, :],
-            )
-
-        elif img_type == "smoothed":
-            # Compute image
-            img.generate_img_smoothed(
-                signal=self.stars.initial_masses[mask],
-                coordinates=self.stars.centered_coordinates[mask, :],
-                smoothing_lengths=self.stars.smoothing_lengths[mask],
-                kernel=kernel,
-                kernel_threshold=kernel_threshold,
-                nthreads=nthreads,
-            )
-
-        else:
-            raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or "
-                "'smoothed')" % img_type
-            )
+        img = self._generate_particle_map(
+            signal=self.stars.initial_masses[mask],
+            coordinates=self.stars.centered_coordinates[mask, :],
+            resolution=resolution,
+            fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            smoothing_lengths=self.stars.smoothing_lengths[mask],
+        )
 
         # Convert the initial mass map to SFR
         img.arr /= age_bin.value
@@ -1390,37 +1337,18 @@ class Galaxy(BaseGalaxy):
         if self.stars.ages[mask].size == 0:
             warn("The SFR is 0! (there are 0 stars in the age bin)")
 
-        # Instantiate the Image object.
-        img = Image(resolution=resolution, fov=fov)
-
-        # Make the initial mass map, handling incorrect image types
-        if img_type == "hist":
-            # Compute the image
-            img.generate_img_hist(
-                signal=self.stars.initial_masses[mask],
-                coordinates=self.stars.centered_coordinates[mask, :],
-                normalisation=self.stars.current_masses[mask] / age_bin,
-            )
-
-        elif img_type == "smoothed":
-            # Compute image
-            img.generate_img_smoothed(
-                signal=self.stars.initial_masses[mask],
-                coordinates=self.stars.centered_coordinates[mask, :],
-                smoothing_lengths=self.stars.smoothing_lengths[mask],
-                kernel=kernel,
-                kernel_threshold=kernel_threshold,
-                nthreads=nthreads,
-                normalisation=self.stars.current_masses[mask] / age_bin,
-            )
-
-        else:
-            raise exceptions.UnknownImageType(
-                "Unknown img_type %s. (Options are 'hist' or "
-                "'smoothed')" % img_type
-            )
-
-        return img
+        return self._generate_particle_map(
+            signal=self.stars.initial_masses[mask],
+            coordinates=self.stars.centered_coordinates[mask, :],
+            resolution=resolution,
+            fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            smoothing_lengths=self.stars.smoothing_lengths[mask],
+            normalisation=self.stars.current_masses[mask] / age_bin,
+        )
 
     @timed("Galaxy.get_data_cube")
     def get_data_cube(

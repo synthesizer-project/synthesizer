@@ -15,6 +15,9 @@ from unyt import arcsecond, kpc, unyt_array
 from synthesizer import exceptions
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_collection import ImageCollection
+from synthesizer.imaging.image_generators import (
+    _generate_image_collection_generic,
+)
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.instruments.instrument_base import _hashable_state
 from synthesizer.instruments.photometric_instrument import (
@@ -225,6 +228,50 @@ class PhotometricImager(PhotometricInstrument):
             )
 
         return self.correlated_noise_models[filter_code]
+
+    @timed("PhotometricImager.generate_images")
+    def generate_images(
+        self,
+        photometry,
+        fov,
+        img_type,
+        kernel,
+        kernel_threshold,
+        nthreads,
+        emitter,
+        cosmo,
+    ):
+        """Generate an image collection for one emitter.
+
+        Args:
+            photometry (PhotometryCollection): Photometry to project into the
+                output images.
+            fov (unyt_quantity/tuple, unyt_quantity): Width of the image.
+            img_type (str): The type of image to create.
+            kernel (np.ndarray, optional): Kernel used for smoothed particle
+                imaging.
+            kernel_threshold (float): Kernel impact-parameter threshold.
+            nthreads (int): Number of threads to use for particle smoothing.
+            emitter (Component): Emitter supplying geometry and source data.
+            cosmo (astropy.cosmology.Cosmology, optional): Cosmology used for
+                angular-image coordinate conversions.
+
+        Returns:
+            ImageCollection: The generated image collection.
+        """
+        # Delegate the low-level image construction to the shared generator so
+        # the instrument owns the public imaging entry point
+        return _generate_image_collection_generic(
+            instrument=self,
+            photometry=photometry,
+            fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            emitter=emitter,
+            cosmo=cosmo,
+        )
 
     @timed("PhotometricImager.apply_psf")
     def apply_psf(

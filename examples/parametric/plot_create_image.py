@@ -14,7 +14,6 @@ from unyt import Msun, Myr, kpc
 
 from synthesizer.emission_models import ReprocessedEmission
 from synthesizer.grid import Grid
-from synthesizer.imaging import ImageCollection
 from synthesizer.instruments import UVJ, Instrument
 from synthesizer.parametric import SFH, Stars, ZDist
 from synthesizer.parametric.galaxy import Galaxy
@@ -67,16 +66,16 @@ if __name__ == "__main__":
     npix = 100
     fov = resolution.value * npix * kpc
 
-    # Generate images using the low level image methods
-    img = ImageCollection(
+    # Generate images using the instrument-owned imaging path
+    instrument = Instrument(
+        label="DemoInstrument",
         resolution=resolution,
-        fov=fov,
+        filters=filters,
     )
-
-    # Get the photometric images
-    img.generate_imgs_smoothed(
-        photometry=galaxy.stars.spectra["reprocessed"].photo_lnu,
-        density_grid=morph.get_density_grid(resolution, img.npix),
+    img = galaxy.get_images_luminosity(
+        "reprocessed",
+        fov=fov,
+        instrument=instrument,
     )
 
     # Make and plot an rgb image
@@ -85,16 +84,5 @@ if __name__ == "__main__":
 
     plt.show()
 
-    # We can also do the same with a helper function on the galaxy object
-    # First create an instrument with the desired resolution and filters
-    instrument = Instrument(
-        "DemoInstrument", resolution=resolution, filters=filters
-    )
-    img = galaxy.get_images_luminosity(
-        "reprocessed",
-        fov=fov,
-        instrument=instrument,
-    )
-
-    # and... print an ASCII representation
+    # Print an ASCII representation of one filter image
     img["J"].print_ascii()

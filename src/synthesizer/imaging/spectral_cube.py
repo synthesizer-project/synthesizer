@@ -42,7 +42,7 @@ from unyt import angstrom
 
 from synthesizer import exceptions
 from synthesizer.imaging.base_imaging import ImagingBase
-from synthesizer.imaging.image_generators import (
+from synthesizer.imaging.data_cube_generators import (
     _generate_ifu_parametric_smoothed,
     _generate_ifu_particle_hist,
     _generate_ifu_particle_smoothed,
