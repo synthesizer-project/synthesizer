@@ -24,6 +24,7 @@ from synthesizer.imaging.image_generators import (
     _generate_image_collection_generic,
     _prepare_component_image_labels,
 )
+from synthesizer.synth_warnings import deprecated
 from synthesizer.units import unit_is_compatible
 from synthesizer.utils.ascii_table import TableFormatter
 
@@ -860,6 +861,10 @@ class Component(ABC):
             phot_type="fnu",
         )
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use instrument.apply_psfs(...) instead."
+    )
     def apply_psf_to_images_lnu(
         self,
         instrument,
@@ -867,6 +872,11 @@ class Component(ABC):
         limit_to=None,
     ):
         """Apply instrument PSFs to this component's luminosity images.
+
+        This method now acts as an orchestration wrapper around the
+        instrument-owned PSF application path. It fetches the relevant image
+        collections, passes them into the instrument, and stores the returned
+        PSF-processed images on the component.
 
         Args:
             instrument (Instrument):
@@ -915,23 +925,15 @@ class Component(ABC):
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = self.images_lnu[instrument.label][key]
 
-            # If requested, do the resampling
-            if psf_resample_factor > 1:
-                imgs.supersample(psf_resample_factor)
-
-            # Apply the PSF
-            self.images_psf_lnu[instrument.label][key] = imgs.apply_psfs(
-                instrument.psfs
+            # Delegate the actual PSF application to the instrument so the
+            # component layer only handles routing and output storage
+            self.images_psf_lnu[instrument.label][key] = instrument.apply_psfs(
+                imgs,
+                psf_resample_factor=psf_resample_factor,
             )
-
-            # Undo the resampling (if needed)
-            if psf_resample_factor > 1:
-                self.images_psf_lnu[instrument.label][key].downsample(
-                    1 / psf_resample_factor
-                )
 
         return self.images_psf_lnu[instrument.label]
 
@@ -942,6 +944,11 @@ class Component(ABC):
         limit_to=None,
     ):
         """Apply instrument PSFs to this component's flux images.
+
+        This method now acts as an orchestration wrapper around the
+        instrument-owned PSF application path. It fetches the relevant image
+        collections, passes them into the instrument, and stores the returned
+        PSF-processed images on the component.
 
         Args:
             instrument (Instrument):
@@ -990,23 +997,15 @@ class Component(ABC):
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = self.images_fnu[instrument.label][key]
 
-            # If requested, do the resampling
-            if psf_resample_factor > 1:
-                imgs.supersample(psf_resample_factor)
-
-            # Apply the PSF
-            self.images_psf_fnu[instrument.label][key] = imgs.apply_psfs(
-                instrument.psfs
+            # Delegate the actual PSF application to the instrument so the
+            # component layer only handles routing and output storage
+            self.images_psf_fnu[instrument.label][key] = instrument.apply_psfs(
+                imgs,
+                psf_resample_factor=psf_resample_factor,
             )
-
-            # Undo the resampling (if needed)
-            if psf_resample_factor > 1:
-                self.images_psf_fnu[instrument.label][key].downsample(
-                    1 / psf_resample_factor
-                )
 
         return self.images_psf_fnu[instrument.label]
 
