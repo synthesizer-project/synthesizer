@@ -1380,7 +1380,6 @@ class BaseGalaxy:
                 otherwise a dict of ImageCollections keyed by label.
 
         """
-
         # Convert labels tuple to a list and validate they are strings
         labels = list(labels)
 
@@ -1439,7 +1438,8 @@ class BaseGalaxy:
             )
         )
 
-        # Validate all requested labels were routed to an emitter or a combine step
+        # Validate all requested labels were routed to an emitter or a
+        # combine step.
         routed_labels = set(galaxy_combine_labels)
         for emitter_labels in component_labels_by_emitter.values():
             routed_labels.update(emitter_labels)
@@ -1447,7 +1447,8 @@ class BaseGalaxy:
         if missing:
             raise exceptions.InconsistentArguments(
                 f"The following labels were not found in any emitter: "
-                f"{missing}. Available labels are: {list(combined_cache.keys())}"
+                f"{missing}. Available labels are: "
+                f"{list(combined_cache.keys())}"
             )
 
         # Container for images we will make
@@ -2017,7 +2018,7 @@ class BaseGalaxy:
                     imgs.apply_noise_from_snrs(
                         snrs=instrument.snrs,
                         depths=instrument.depth,
-                        aperture_radius=instrument.depth_aperture_radius,
+                        aperture_radius=instrument.depth_app_radius,
                     )
                 )
             else:
@@ -2118,7 +2119,7 @@ class BaseGalaxy:
                     imgs.apply_noise_from_snrs(
                         snrs=instrument.snrs,
                         depths=instrument.depth,
-                        aperture_radius=instrument.depth_aperture_radius,
+                        aperture_radius=instrument.depth_app_radius,
                     )
                 )
             else:

@@ -1081,7 +1081,7 @@ class Component(ABC):
                     imgs.apply_noise_from_snrs(
                         snrs=instrument.snrs,
                         depths=instrument.depth,
-                        aperture_radius=instrument.depth_aperture_radius,
+                        aperture_radius=instrument.depth_app_radius,
                     )
                 )
             else:
@@ -1163,7 +1163,7 @@ class Component(ABC):
                     imgs.apply_noise_from_snrs(
                         snrs=instrument.snrs,
                         depths=instrument.depth,
-                        aperture_radius=instrument.depth_aperture_radius,
+                        aperture_radius=instrument.depth_app_radius,
                     )
                 )
             else:
