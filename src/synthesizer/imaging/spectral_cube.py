@@ -47,6 +47,7 @@ from synthesizer.imaging.data_cube_generators import (
     _generate_ifu_particle_hist,
     _generate_ifu_particle_smoothed,
 )
+from synthesizer.synth_warnings import deprecated
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
@@ -302,6 +303,26 @@ class SpectralCube(ImagingBase):
             nthreads=nthreads,
         )
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use generate_data_cube_hist(...) instead."
+    )
+    def get_data_cube_hist(
+        self,
+        sed,
+        coordinates=None,
+        quantity="lnu",
+        nthreads=1,
+    ):
+        """Deprecated wrapper for generate_data_cube_hist."""
+        # Delegate to the renamed low-level histogram cube entry point.
+        return self.generate_data_cube_hist(
+            sed=sed,
+            coordinates=coordinates,
+            quantity=quantity,
+            nthreads=nthreads,
+        )
+
     def generate_data_cube_smoothed(
         self,
         sed,
@@ -392,6 +413,34 @@ class SpectralCube(ImagingBase):
                 f"kernel_threshold={type(kernel_threshold)}, "
                 f"sed={type(sed)})"
             )
+
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use generate_data_cube_smoothed(...) instead."
+    )
+    def get_data_cube_smoothed(
+        self,
+        sed,
+        coordinates=None,
+        smoothing_lengths=None,
+        kernel=None,
+        kernel_threshold=1,
+        density_grid=None,
+        quantity="lnu",
+        nthreads=1,
+    ):
+        """Deprecated wrapper for generate_data_cube_smoothed."""
+        # Delegate to the renamed low-level spectral-cube entry point.
+        return self.generate_data_cube_smoothed(
+            sed=sed,
+            coordinates=coordinates,
+            smoothing_lengths=smoothing_lengths,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            density_grid=density_grid,
+            quantity=quantity,
+            nthreads=nthreads,
+        )
 
     def apply_psf(self):
         """Apply a PSF to the data cube.

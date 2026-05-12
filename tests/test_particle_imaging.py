@@ -22,16 +22,13 @@ from unyt import (
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_collection import ImageCollection
 from synthesizer.imaging.spectral_cube import SpectralCube
-from synthesizer.instruments import FilterCollection
+from synthesizer.instruments import FilterCollection, Instrument
 from synthesizer.kernel_functions import Kernel
 from synthesizer.photometry import PhotometryCollection
 
 
-def make_test_imager(resolution, filter_codes=("filter_r",)):
+def make_test_imager(resolution, filter_codes=("filter_r",), **kwargs):
     """Create a minimal photometric imager for imaging tests."""
-    # Import the factory locally so this helper stays test-scoped
-    from synthesizer.instruments import Instrument
-
     # Build a minimal filter set matching the requested test filter codes
     filters = FilterCollection(
         generic_dict={
@@ -43,9 +40,10 @@ def make_test_imager(resolution, filter_codes=("filter_r",)):
     # Construct a real photometric imager so tests follow the current factory
     # contract
     return Instrument(
-        label="test_inst",
+        label=kwargs.pop("label", "test_inst"),
         filters=filters,
         resolution=resolution,
+        **kwargs,
     )
 
 
@@ -78,6 +76,16 @@ class TestImageGeneration:
         )
         assert np.sum(img.arr) >= 0
 
+    def test_get_img_hist_warns_and_delegates(self, mock_particles):
+        """Deprecated histogram image wrapper should warn and generate."""
+        coords, signal, _ = mock_particles
+        img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
+
+        with pytest.warns(FutureWarning, match="generate_img_hist"):
+            img.get_img_hist(signal, coords)
+
+        assert img.arr is not None
+
     def test_generate_img_smoothed(self, mock_particles):
         """Test smoothed image generation."""
         coords, signal, smoothing_lengths = mock_particles
@@ -96,6 +104,22 @@ class TestImageGeneration:
             f"Image shape should be (10, 10) but found {img.shape}"
         )
         assert np.sum(img.arr) >= 0
+
+    def test_get_img_smoothed_warns_and_delegates(self, mock_particles):
+        """Deprecated image wrapper should warn and still generate."""
+        coords, signal, smoothing_lengths = mock_particles
+        img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
+        kernel = Kernel().get_kernel()
+
+        with pytest.warns(FutureWarning, match="generate_img_smoothed"):
+            img.get_img_smoothed(
+                signal,
+                coordinates=coords,
+                smoothing_lengths=smoothing_lengths,
+                kernel=kernel,
+            )
+
+        assert img.arr is not None
 
 
 class TestImageOperations:
@@ -163,9 +187,13 @@ class TestImageOperations:
             "Mean difference should be within expected noise range"
         )
 
-    def test_apply_psf(self, test_image):
-        """Test PSF application."""
-        img = test_image
+    def test_apply_psf(self):
+        """Test instrument-owned PSF application."""
+        # Use a compact central source so edge padding does not dominate the
+        # PSF-convolution behaviour under test.
+        data = np.zeros((10, 10), dtype=float)
+        data[4:6, 4:6] = 20.0
+        img = Image(resolution=0.1 * kpc, fov=1.0 * kpc, img=data)
         original_sum = np.sum(img.arr)
 
         # Create simple PSF kernel
@@ -173,11 +201,19 @@ class TestImageOperations:
         psf = np.ones((psf_size, psf_size))
         psf = psf / np.sum(psf)  # Normalize
 
-        img.apply_psf(psf)
+        # Apply the PSF through a real photometric imager.
+        instrument = make_test_imager(
+            resolution=0.1 * kpc,
+            psfs={"filter_r": psf},
+        )
+        img = instrument.apply_psf(img, "filter_r", inplace=True)
 
         # Total flux should be approximately conserved
         new_sum = np.sum(img.arr)
         assert np.abs(new_sum - original_sum) / original_sum < 0.01
+
+        # The central peak should be broadened by the PSF application.
+        assert img.arr[4, 4] < 20.0
 
 
 class TestImageCollection:
@@ -232,6 +268,17 @@ class TestImageCollection:
             assert band_name in collection.imgs
             assert collection.imgs[band_name].arr is not None
 
+    def test_get_imgs_hist_warns_and_delegates(
+        self, mock_photometry, mock_coordinates
+    ):
+        """Deprecated histogram collection wrapper should warn and generate."""
+        collection = ImageCollection(resolution=0.1 * kpc, fov=1.0 * kpc)
+
+        with pytest.warns(FutureWarning, match="generate_imgs_hist"):
+            collection.get_imgs_hist(mock_photometry, mock_coordinates)
+
+        assert len(collection.imgs) == 3
+
     def test_generate_imgs_smoothed(self, mock_photometry, mock_coordinates):
         """Test smoothed image generation for collection."""
         collection = ImageCollection(resolution=0.1 * kpc, fov=1.0 * kpc)
@@ -247,6 +294,25 @@ class TestImageCollection:
         for band_name in ["g_band", "r_band", "i_band"]:
             assert band_name in collection.imgs
             assert collection.imgs[band_name].arr is not None
+
+    def test_get_imgs_smoothed_warns_and_delegates(
+        self, mock_photometry, mock_coordinates
+    ):
+        """Deprecated collection wrapper should warn and still generate."""
+        collection = ImageCollection(resolution=0.1 * kpc, fov=1.0 * kpc)
+        n_particles = len(mock_coordinates)
+        smoothing_lengths = unyt_array(np.full(n_particles, 0.05), kpc)
+        kernel = Kernel().get_kernel()
+
+        with pytest.warns(FutureWarning, match="generate_imgs_smoothed"):
+            collection.get_imgs_smoothed(
+                mock_photometry,
+                mock_coordinates,
+                smoothing_lengths,
+                kernel,
+            )
+
+        assert len(collection.imgs) == 3
 
     def test_make_rgb_image(self, mock_photometry, mock_coordinates):
         """Test RGB image creation."""
@@ -311,6 +377,22 @@ class TestSpectralCube:
         assert basic_cube.cube.shape == (5, 5, 10)
         assert np.sum(basic_cube.cube) >= 0
 
+    def test_get_data_cube_hist_warns_and_delegates(self, basic_cube):
+        """Deprecated histogram cube wrapper should warn and still generate."""
+        from synthesizer.emissions.sed import Sed
+
+        n_particles = 10
+        spectra_values = np.ones((n_particles, len(basic_cube.lam))) * 1e30
+        sed = Sed(lam=basic_cube.lam, lnu=spectra_values * erg / s / Hz)
+        coords = unyt_array(
+            np.random.uniform(-0.4, 0.4, (n_particles, 3)), kpc
+        )
+
+        with pytest.warns(FutureWarning, match="generate_data_cube_hist"):
+            basic_cube.get_data_cube_hist(sed, coordinates=coords)
+
+        assert basic_cube.cube is not None
+
     def test_spectral_cube_flux_conservation_smoothed(self):
         """Test flux conservation in smoothed spectral cubes.
 
@@ -360,6 +442,36 @@ class TestSpectralCube:
                 f"Wavelength slice {i} flux {slice_flux} != expected "
                 f"{expected_flux_per_wavelength[i]} - FLUX MUST BE CONSERVED!"
             )
+
+    def test_get_data_cube_smoothed_warns_and_delegates(self):
+        """Deprecated cube wrapper should warn and still generate."""
+        from synthesizer.emissions.sed import Sed
+
+        wavelengths = np.linspace(5000, 6000, 5) * angstrom
+        cube = SpectralCube(
+            resolution=0.2 * kpc, fov=2.0 * kpc, lam=wavelengths
+        )
+
+        n_particles = 10
+        spectra_values = np.ones((n_particles, len(wavelengths))) * 1e30
+        sed = Sed(lam=wavelengths, lnu=spectra_values * erg / s / Hz)
+
+        coords = unyt_array(
+            np.random.uniform(-0.8, 0.8, (n_particles, 3)), kpc
+        )
+        coords[:, 2] = 0.0
+        smoothing_lengths = unyt_array([0.3] * n_particles, kpc)
+        kernel = Kernel().get_kernel()
+
+        with pytest.warns(FutureWarning, match="generate_data_cube_smoothed"):
+            cube.get_data_cube_smoothed(
+                sed,
+                coords,
+                smoothing_lengths,
+                kernel=kernel,
+            )
+
+        assert cube.cube is not None
 
     def test_spectral_cube_very_small_smoothing_lengths(self):
         """Test spectral cube with very small smoothing lengths.

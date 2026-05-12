@@ -57,6 +57,7 @@ from synthesizer.imaging.image_generators import (
     _generate_images_particle_hist,
     _generate_images_particle_smoothed,
 )
+from synthesizer.synth_warnings import deprecated
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
 
@@ -168,6 +169,10 @@ class ImageCollection(ImagingBase):
         if factor > 1:
             raise ValueError("Using downsample method to supersample!")
 
+        # Update the collection geometry so metadata stays aligned with the
+        # resampled child images.
+        self._resample_resolution(factor)
+
         # Resample each image
         for f in self.imgs:
             self.imgs[f].resample(factor)
@@ -196,6 +201,10 @@ class ImageCollection(ImagingBase):
         # can't mistakenly resample in unintended ways).
         if factor < 1:
             raise ValueError("Using supersample method to downsample!")
+
+        # Update the collection geometry so metadata stays aligned with the
+        # resampled child images.
+        self._resample_resolution(factor)
 
         # Resample each image
         for f in self.imgs:
@@ -416,6 +425,24 @@ class ImageCollection(ImagingBase):
             normalisations=normalisations,
         )
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use generate_imgs_hist(...) instead."
+    )
+    def get_imgs_hist(
+        self,
+        photometry,
+        coordinates,
+        normalisations=None,
+    ):
+        """Deprecated wrapper for generate_imgs_hist."""
+        # Delegate to the renamed low-level histogram collection entry point.
+        return self.generate_imgs_hist(
+            photometry=photometry,
+            coordinates=coordinates,
+            normalisations=normalisations,
+        )
+
     def generate_imgs_smoothed(
         self,
         photometry,
@@ -507,6 +534,34 @@ class ImageCollection(ImagingBase):
                 f"kernel_threshold={type(kernel_threshold)}, "
                 f"photometry={type(photometry)})"
             )
+
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use generate_imgs_smoothed(...) instead."
+    )
+    def get_imgs_smoothed(
+        self,
+        photometry,
+        coordinates=None,
+        smoothing_lengths=None,
+        kernel=None,
+        kernel_threshold=1,
+        density_grid=None,
+        nthreads=1,
+        normalisations=None,
+    ):
+        """Deprecated wrapper for generate_imgs_smoothed."""
+        # Delegate to the renamed low-level image-collection entry point.
+        return self.generate_imgs_smoothed(
+            photometry=photometry,
+            coordinates=coordinates,
+            smoothing_lengths=smoothing_lengths,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            density_grid=density_grid,
+            nthreads=nthreads,
+            normalisations=normalisations,
+        )
 
     def apply_noise_arrays(self, noise_arrs):
         """Apply an existing noise array to each image.
