@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import h5py
 import numpy as np
 import pytest
-from unyt import angstrom, arcsecond
+from unyt import angstrom, arcsecond, kpc
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
@@ -21,6 +21,8 @@ from synthesizer.instruments import (
     SpectroscopicInstrument,
 )
 from synthesizer.instruments.premade import GALEXFUV, GALEXNUV
+from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 
 
 class DummyImageCollection:
@@ -71,6 +73,21 @@ class DummySpectroscopicInstrument:
         """Record the delegated wavelength-application call."""
         marker = object()
         self.calls.append({"sed": sed, "result": marker})
+        return marker
+
+
+class DummyIfuInstrument:
+    """Minimal IFU used to inspect delegated cube-generation calls."""
+
+    def __init__(self):
+        """Initialise the IFU call recorder."""
+        self.label = "ifu_inst"
+        self.calls = []
+
+    def generate_data_cube(self, **kwargs):
+        """Record the delegated cube-generation call and return a marker."""
+        marker = object()
+        self.calls.append({"kwargs": kwargs, "result": marker})
         return marker
 
 
@@ -427,6 +444,301 @@ def test_component_spectroscopy_routing_delegates_to_instrument():
         component.particle_spectroscopy["inst"]["stellar"]
         is (instrument.calls[1]["result"])
     )
+
+
+def test_integrated_field_unit_generate_data_cube_uses_instrument_logic():
+    """IFU cube generation should be owned by the instrument."""
+    instrument = IntegratedFieldUnit(
+        label="ifu",
+        lam=np.linspace(1000, 3000, 32) * angstrom,
+        resolution=1 * arcsecond,
+    )
+    expected = object()
+    component = SimpleNamespace(
+        morphology=SimpleNamespace(),
+        spectra={"stellar": object()},
+        particle_spectra={},
+    )
+
+    def fake_generate_parametric_component_cube(**kwargs):
+        assert kwargs["component"] is component
+        assert kwargs["sed"] is component.spectra["stellar"]
+        assert kwargs["fov"] == 5 * arcsecond
+        assert np.array_equal(kwargs["lam"], instrument.lam)
+        assert kwargs["quantity"] == "lnu"
+        return expected
+
+    instrument._generate_parametric_component_cube = (
+        fake_generate_parametric_component_cube
+    )
+
+    result = instrument.generate_data_cube(
+        component=component,
+        fov=5 * arcsecond,
+        sed="stellar",
+        cube_type="smoothed",
+        kernel="kernel",
+        kernel_threshold=2,
+        quantity="lnu",
+        nthreads=3,
+        cosmo="cosmo",
+    )
+
+    assert result is expected
+
+
+def test_integrated_field_unit_cube_placeholders_raise():
+    """IFU cube post-processing placeholders should fail explicitly."""
+    instrument = IntegratedFieldUnit(
+        label="ifu",
+        lam=np.linspace(1000, 3000, 32) * angstrom,
+        resolution=1 * arcsecond,
+    )
+
+    with pytest.raises(exceptions.UnimplementedFunctionality):
+        instrument.apply_psf_to_cube(object())
+
+    with pytest.raises(exceptions.UnimplementedFunctionality):
+        instrument.apply_psf(object())
+
+    with pytest.raises(exceptions.UnimplementedFunctionality):
+        instrument.apply_noise_to_cube(object())
+
+    with pytest.raises(exceptions.UnimplementedFunctionality):
+        instrument.apply_noise(object())
+
+
+def test_component_style_cube_routing_can_delegate_to_ifu():
+    """Component cube routing should be expressible via the IFU method."""
+    component = object()
+    instrument = DummyIfuInstrument()
+
+    result = instrument.generate_data_cube(
+        component=component,
+        fov="fov",
+        sed="stellar",
+        cube_type="hist",
+        kernel=None,
+        kernel_threshold=1.0,
+        quantity="fnu",
+        cosmo="cosmo",
+        nthreads=5,
+    )
+
+    assert result is instrument.calls[0]["result"]
+    assert instrument.calls[0]["kwargs"]["component"] is component
+    assert instrument.calls[0]["kwargs"]["fov"] == "fov"
+    assert instrument.calls[0]["kwargs"]["sed"] == "stellar"
+    assert instrument.calls[0]["kwargs"]["cube_type"] == "hist"
+    assert instrument.calls[0]["kwargs"]["kernel"] is None
+    assert instrument.calls[0]["kwargs"]["kernel_threshold"] == 1.0
+    assert instrument.calls[0]["kwargs"]["quantity"] == "fnu"
+    assert instrument.calls[0]["kwargs"]["cosmo"] == "cosmo"
+    assert instrument.calls[0]["kwargs"]["nthreads"] == 5
+
+
+def test_galaxy_style_cube_routing_delegates_to_components():
+    """Galaxy cube orchestration should delegate to component get methods."""
+    stellar_cube = object()
+    blackhole_cube = object()
+
+    class DummyCube:
+        def __init__(self, marker):
+            self.marker = marker
+
+        def __add__(self, other):
+            return (self.marker, other.marker)
+
+    stars = SimpleNamespace(calls=[])
+    black_holes = SimpleNamespace(calls=[])
+    instrument = SimpleNamespace(label="inst", resolution=1 * kpc)
+
+    def stellar_get_data_cube(*args, **kwargs):
+        stars.calls.append({"args": args, "kwargs": kwargs})
+        return DummyCube(stellar_cube)
+
+    def blackhole_get_data_cube(*args, **kwargs):
+        black_holes.calls.append({"args": args, "kwargs": kwargs})
+        return DummyCube(blackhole_cube)
+
+    stars.get_data_cube = stellar_get_data_cube
+    black_holes.get_data_cube = blackhole_get_data_cube
+
+    galaxy = SimpleNamespace(
+        galaxy_type="Particle",
+        redshift=None,
+        model_param_cache={},
+        stars=stars,
+        gas=None,
+        black_holes=black_holes,
+        data_cubes_lnu={},
+        data_cubes_fnu={},
+    )
+
+    result = ParticleGalaxy.get_data_cube(
+        galaxy,
+        fov="fov",
+        instrument=instrument,
+        stellar_spectra="stellar",
+        blackhole_spectra="agn",
+        cube_type="hist",
+        kernel=None,
+        kernel_threshold=1.0,
+        quantity="lnu",
+        nthreads=2,
+        cosmo="cosmo",
+    )
+
+    assert result == (stellar_cube, blackhole_cube)
+    assert stars.calls[0]["args"] == ("stellar",)
+    assert stars.calls[0]["kwargs"]["instrument"] is instrument
+    assert black_holes.calls[0]["args"] == ("agn",)
+    assert black_holes.calls[0]["kwargs"]["instrument"] is instrument
+
+
+def test_parametric_galaxy_cube_routing_delegates_to_components():
+    """Parametric galaxy cube orchestration should delegate to components."""
+    stellar_cube = object()
+
+    class DummyCube:
+        def __init__(self, marker):
+            self.marker = marker
+
+    stars = SimpleNamespace(calls=[])
+    instrument = SimpleNamespace(label="inst", resolution=1 * kpc)
+
+    def stellar_get_data_cube(*args, **kwargs):
+        stars.calls.append({"args": args, "kwargs": kwargs})
+        return DummyCube(stellar_cube)
+
+    stars.get_data_cube = stellar_get_data_cube
+
+    galaxy = SimpleNamespace(
+        galaxy_type="Parametric",
+        redshift=None,
+        model_param_cache={},
+        stars=stars,
+        gas=None,
+        black_holes=None,
+        data_cubes_lnu={},
+        data_cubes_fnu={},
+    )
+
+    result = ParametricGalaxy.get_data_cube(
+        galaxy,
+        fov="fov",
+        instrument=instrument,
+        stellar_spectra="stellar",
+        quantity="lnu",
+    )
+
+    assert result.marker is stellar_cube
+    assert stars.calls[0]["args"] == ("stellar",)
+    assert stars.calls[0]["kwargs"]["instrument"] is instrument
+
+
+def test_component_level_combined_cube_uses_model_cache():
+    """Component cube generation should combine labels already requested."""
+
+    class DummyCube:
+        def __init__(self, marker):
+            self.marker = marker
+
+        def __deepcopy__(self, memo):
+            return DummyCube(self.marker)
+
+        def __iadd__(self, other):
+            self.marker = (self.marker, other.marker)
+            return self
+
+    component = SimpleNamespace(
+        component_type="Stars",
+        spectra={"line": object(), "continuum": object()},
+        particle_spectra={},
+        model_param_cache={
+            "line": {},
+            "continuum": {},
+            "nebular": {"combine": ["line", "continuum"]},
+        },
+        data_cubes_lnu={},
+        data_cubes_fnu={},
+    )
+    instrument = DummyIfuInstrument()
+
+    original_generate = instrument.generate_data_cube
+
+    def generate_data_cube(**kwargs):
+        label = kwargs["sed"]
+        marker = DummyCube(label)
+        instrument.calls.append({"kwargs": kwargs, "result": marker})
+        return marker
+
+    instrument.generate_data_cube = generate_data_cube
+
+    result = Component._generate_data_cubes(
+        component,
+        "line",
+        "continuum",
+        "nebular",
+        fov="fov",
+        instrument=instrument,
+        quantity="lnu",
+    )
+
+    assert result["nebular"].marker == ("line", "continuum")
+    assert set(component.data_cubes_lnu[instrument.label]) == {
+        "line",
+        "continuum",
+        "nebular",
+    }
+    instrument.generate_data_cube = original_generate
+
+
+def test_component_data_cube_only_caches_supported_quantities():
+    """Component cube caching should only attach lnu and fnu families."""
+    component = SimpleNamespace(
+        component_type="Stars",
+        spectra={"stellar": object()},
+        particle_spectra={},
+        data_cubes_lnu={},
+        data_cubes_fnu={},
+    )
+    instrument = DummyIfuInstrument()
+
+    result = Component.get_data_cube(
+        component,
+        "stellar",
+        fov="fov",
+        instrument=instrument,
+        quantity="llam",
+    )
+
+    assert result is instrument.calls[0]["result"]
+    assert component.data_cubes_lnu[instrument.label]["stellar"] is result
+    assert component.data_cubes_fnu == {}
+
+
+def test_parametric_ifu_hist_cube_raises():
+    """Parametric components should reject histogram cube generation."""
+    instrument = IntegratedFieldUnit(
+        label="ifu",
+        lam=np.linspace(1000, 3000, 32) * angstrom,
+        resolution=1 * arcsecond,
+    )
+    component = SimpleNamespace(
+        component_type="Stars",
+        morphology=SimpleNamespace(),
+        spectra={"stellar": object()},
+        particle_spectra={},
+    )
+
+    with pytest.raises(exceptions.InconsistentArguments):
+        instrument.generate_data_cube(
+            component=component,
+            fov=5 * arcsecond,
+            sed="stellar",
+            cube_type="hist",
+        )
 
 
 @pytest.mark.parametrize(

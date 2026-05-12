@@ -105,7 +105,8 @@ class Image(ImagingBase):
         if self.arr is None:
             raise exceptions.MissingImage(
                 "The image array hasn't been generated yet. Please run "
-                "get_img_hist() or get_img_smoothed() before accessing the "
+                "generate_img_hist() or generate_img_smoothed() before "
+                "accessing the "
                 "image."
             )
         return self.arr * self.units if self.units is not None else self.arr
@@ -151,7 +152,8 @@ class Image(ImagingBase):
         else:
             raise exceptions.MissingImage(
                 "The image array hasn't been generated yet. Please run "
-                "get_img_hist() or get_img_smoothed() before resampling."
+                "generate_img_hist() or generate_img_smoothed() before "
+                "resampling."
             )
 
         # Handle the edge case where the conversion between resolutions has
@@ -295,7 +297,7 @@ class Image(ImagingBase):
         new_img.arr *= mult
         return new_img
 
-    def get_img_hist(
+    def generate_img_hist(
         self,
         signal,
         coordinates,
@@ -327,7 +329,7 @@ class Image(ImagingBase):
             normalisation=normalisation,
         )
 
-    def get_img_smoothed(
+    def generate_img_smoothed(
         self,
         signal,
         coordinates=None,

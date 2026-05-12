@@ -13,11 +13,11 @@ Example usage::
         fov=(10, 10) * unyt.arcsec,
     )
 
-    # Get histograms of the particle distribution
-    img_coll.get_imgs_hist(photometry, coordinates)
+    # Generate histograms of the particle distribution
+    img_coll.generate_imgs_hist(photometry, coordinates)
 
-    # Get smoothed images of the particle distribution
-    img_coll.get_imgs_smoothed(
+    # Generate smoothed images of the particle distribution
+    img_coll.generate_imgs_smoothed(
         photometry,
         coordinates,
         smoothing_lengths,
@@ -25,8 +25,8 @@ Example usage::
         kernel_threshold,
     )
 
-    # Get smoothed images of a parametric distribution
-    img_coll.get_imgs_smoothed(
+    # Generate smoothed images of a parametric distribution
+    img_coll.generate_imgs_smoothed(
         photometry,
         density_grid=density_grid,
     )
@@ -385,7 +385,7 @@ class ImageCollection(ImagingBase):
 
         return composite_img
 
-    def get_imgs_hist(
+    def generate_imgs_hist(
         self,
         photometry,
         coordinates,
@@ -416,7 +416,7 @@ class ImageCollection(ImagingBase):
             normalisations=normalisations,
         )
 
-    def get_imgs_smoothed(
+    def generate_imgs_smoothed(
         self,
         photometry,
         coordinates=None,

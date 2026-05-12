@@ -74,7 +74,7 @@ if __name__ == "__main__":
     )
 
     # Get the photometric images
-    img.get_imgs_smoothed(
+    img.generate_imgs_smoothed(
         photometry=galaxy.stars.spectra["reprocessed"].photo_lnu,
         density_grid=morph.get_density_grid(resolution, img.npix),
     )

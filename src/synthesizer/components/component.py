@@ -21,7 +21,9 @@ from synthesizer.cosmology import (
 from synthesizer.emissions import plot_spectra
 from synthesizer.imaging.image_generators import (
     _combine_image_collections,
+    _combine_spectral_cubes,
     _generate_image_collection_generic,
+    _prepare_component_data_cube_labels,
     _prepare_component_image_labels,
 )
 from synthesizer.synth_warnings import deprecated
@@ -98,6 +100,8 @@ class Component(ABC):
         # Define the dictionaries to hold instrument specific spectroscopy
         self.spectroscopy = {}
         self.particle_spectroscopy = {}
+        self.data_cubes_lnu = {}
+        self.data_cubes_fnu = {}
 
         # Attach a default escape fraction
         self.fesc = fesc if fesc is not None else 0.0
@@ -525,7 +529,7 @@ class Component(ABC):
             return self.particle_lines[emission_model.label]
         return self.lines[emission_model.label]
 
-    def _get_images(
+    def _generate_images(
         self,
         *labels,
         fov,
@@ -776,7 +780,7 @@ class Component(ABC):
                 Either a single ImageCollection if only one label is passed,
                 otherwise a dict of ImageCollections keyed by label.
         """
-        return self._get_images(
+        return self._generate_images(
             *labels,
             fov=fov,
             instrument=instrument,
@@ -849,7 +853,7 @@ class Component(ABC):
                 Either a single ImageCollection if only one label is passed,
                 otherwise a dict of ImageCollections keyed by label.
         """
-        return self._get_images(
+        return self._generate_images(
             *labels,
             fov=fov,
             instrument=instrument,
@@ -1234,6 +1238,156 @@ class Component(ABC):
 
         # Return the spectroscopy for the component
         return self.spectroscopy[instrument.label]
+
+    def get_data_cube(
+        self,
+        label,
+        fov,
+        instrument,
+        cube_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        quantity="lnu",
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Get a data cube for one saved spectrum on this component.
+
+        This is the public component-level cube API. It delegates the
+        low-level cube construction to the IFU, stores the generated cube on
+        the component, and returns it.
+
+        Args:
+            label (str): Saved spectrum label to turn into a data cube.
+            fov (unyt_quantity): Width of the requested data cube.
+            instrument (IntegratedFieldUnit): Instrument defining the
+                wavelength sampling and spatial resolution.
+            cube_type (str): Either ``"smoothed"`` or ``"hist"``.
+            kernel (array-like, optional): Kernel used for smoothed particle
+                cubes.
+            kernel_threshold (float): Kernel impact-parameter threshold.
+            quantity (str): Spectral quantity to store in the cube.
+            nthreads (int): Number of threads to use for particle cube
+                generation.
+            cosmo (astropy.cosmology, optional): Cosmology used for mixed-unit
+                conversions.
+
+        Returns:
+            SpectralCube: Generated spectral data cube.
+        """
+        return Component._generate_data_cubes(
+            self,
+            label,
+            fov=fov,
+            instrument=instrument,
+            cube_type=cube_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            quantity=quantity,
+            nthreads=nthreads,
+            cosmo=cosmo,
+        )
+
+    def _generate_data_cubes(
+        self,
+        *labels,
+        fov,
+        instrument,
+        cube_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        quantity="lnu",
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Make SpectralCube objects for one component.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make data cubes for.
+            fov (unyt_quantity):
+                Width of the requested data cube.
+            instrument (IntegratedFieldUnit):
+                Instrument defining the wavelength sampling and spatial
+                resolution.
+            cube_type (str):
+                Either ``"smoothed"`` or ``"hist"``.
+            kernel (array-like, optional):
+                Kernel used for smoothed particle cubes.
+            kernel_threshold (float):
+                Kernel impact-parameter threshold.
+            quantity (str):
+                Spectral quantity to store in the cube.
+            nthreads (int):
+                Number of threads to use for particle cube generation.
+            cosmo (astropy.cosmology, optional):
+                Cosmology used for mixed-unit conversions.
+
+        Returns:
+            SpectralCube/dict:
+                Either a single SpectralCube if only one label is passed,
+                otherwise a dict of SpectralCubes keyed by label.
+        """
+        labels = list(labels)
+        for label in labels:
+            if not isinstance(label, str):
+                raise exceptions.InconsistentArguments(
+                    f"All labels must be strings, got {type(label).__name__}. "
+                    "If passing an EmissionModel, use model.label instead."
+                )
+
+        model_cache = getattr(self, "model_param_cache", {})
+
+        combine_labels, generate_labels = _prepare_component_data_cube_labels(
+            labels,
+            model_cache,
+            remove_missing=False,
+        )
+
+        out_cubes = {}
+        available_spectra = set(self.spectra)
+        if hasattr(self, "particle_spectra"):
+            available_spectra.update(self.particle_spectra)
+
+        for label in generate_labels:
+            if label not in available_spectra:
+                raise exceptions.InconsistentArguments(
+                    f"No saved spectrum with label '{label}' was found on the "
+                    f"{self.component_type} component."
+                )
+
+            out_cubes[label] = instrument.generate_data_cube(
+                component=self,
+                fov=fov,
+                sed=label,
+                cube_type=cube_type,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                quantity=quantity,
+                nthreads=nthreads,
+                cosmo=cosmo,
+            )
+
+        for label in combine_labels:
+            out_cubes[label] = _combine_spectral_cubes(
+                cubes=out_cubes,
+                label=label,
+                model_cache=model_cache,
+            )
+
+        if quantity in {"lnu", "llam", "luminosity"}:
+            self.data_cubes_lnu.setdefault(instrument.label, {})
+            self.data_cubes_lnu[instrument.label].update(out_cubes)
+        elif quantity in {"fnu", "flam", "flux"}:
+            self.data_cubes_fnu.setdefault(instrument.label, {})
+            self.data_cubes_fnu[instrument.label].update(out_cubes)
+
+        if len(out_cubes) == 0:
+            return out_cubes
+
+        if len(labels) == 1:
+            return out_cubes[labels[0]]
+        return out_cubes
 
     def plot_spectra(
         self,

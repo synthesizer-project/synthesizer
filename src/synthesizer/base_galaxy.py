@@ -16,6 +16,8 @@ from synthesizer.emissions import Sed, plot_observed_spectra, plot_spectra
 from synthesizer.grid import Grid
 from synthesizer.imaging.image_generators import (
     _combine_image_collections,
+    _combine_spectral_cubes,
+    _prepare_galaxy_data_cube_labels,
     _prepare_galaxy_image_labels,
 )
 from synthesizer.synth_warnings import deprecated, warn
@@ -110,6 +112,8 @@ class BaseGalaxy:
 
         # Initialise the dictionary to hold instrument specific spectroscopy
         self.spectroscopy = {}
+        self.data_cubes_lnu = {}
+        self.data_cubes_fnu = {}
 
         # Attach the components
         self.stars = stars
@@ -1314,7 +1318,7 @@ class BaseGalaxy:
                 f"({emission_model.emitter})"
             )
 
-    def _get_images(
+    def _generate_images(
         self,
         *labels,
         fov,
@@ -1470,7 +1474,7 @@ class BaseGalaxy:
                 continue
 
             # Generate images for this component
-            component_imgs = component._get_images(
+            component_imgs = component._generate_images(
                 *emitter_labels,
                 img_type=img_type,
                 instrument=instrument,
@@ -1665,7 +1669,7 @@ class BaseGalaxy:
                 otherwise a dict of ImageCollections keyed by label.
 
         """
-        return self._get_images(
+        return self._generate_images(
             *labels,
             fov=fov,
             instrument=instrument,
@@ -1739,7 +1743,7 @@ class BaseGalaxy:
                 otherwise a dict of ImageCollections keyed by label.
 
         """
-        return self._get_images(
+        return self._generate_images(
             *labels,
             fov=fov,
             instrument=instrument,
@@ -1750,6 +1754,195 @@ class BaseGalaxy:
             cosmo=cosmo,
             phot_type="fnu",
         )
+
+    def _generate_data_cubes(
+        self,
+        *labels,
+        fov,
+        instrument,
+        cube_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        quantity="lnu",
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Make SpectralCube objects for a galaxy and attached components.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make data cubes for.
+            fov (unyt_quantity):
+                Width of the requested data cube.
+            instrument (IntegratedFieldUnit):
+                Instrument defining the wavelength sampling and spatial
+                resolution.
+            cube_type (str):
+                Either ``"smoothed"`` or ``"hist"``.
+            kernel (array-like, optional):
+                Kernel used for smoothed particle cubes.
+            kernel_threshold (float):
+                Kernel impact-parameter threshold.
+            quantity (str):
+                Spectral quantity to store in the cube.
+            nthreads (int):
+                Number of threads to use for particle cube generation.
+            cosmo (astropy.cosmology, optional):
+                Cosmology used for mixed-unit conversions.
+
+        Returns:
+            SpectralCube/dict:
+                Either a single SpectralCube if only one label is passed,
+                otherwise a dict of SpectralCubes keyed by label.
+        """
+        labels = list(labels)
+        for label in labels:
+            if not isinstance(label, str):
+                raise exceptions.InconsistentArguments(
+                    f"All labels must be strings, got {type(label).__name__}. "
+                    "If passing an EmissionModel, use model.label instead."
+                )
+
+        if self.galaxy_type == "Parametric" and cube_type == "hist":
+            raise exceptions.InconsistentArguments(
+                "Parametric Galaxies can only produce smoothed data cubes."
+            )
+
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set on a Galaxy when using an angular "
+                    "resolution and FOV."
+                )
+
+        combined_cache = dict(self.model_param_cache)
+        if self.stars is not None and hasattr(self.stars, "model_param_cache"):
+            combined_cache.update(self.stars.model_param_cache)
+        if self.black_holes is not None and hasattr(
+            self.black_holes, "model_param_cache"
+        ):
+            combined_cache.update(self.black_holes.model_param_cache)
+        if self.gas is not None and hasattr(self.gas, "model_param_cache"):
+            combined_cache.update(self.gas.model_param_cache)
+
+        galaxy_combine_labels, component_labels_by_emitter = (
+            _prepare_galaxy_data_cube_labels(labels, combined_cache)
+        )
+
+        # Preserve direct component-label routing when the label exists on
+        # attached components but is not represented in the combined cache.
+        for label in labels:
+            if label in combined_cache:
+                continue
+            if label in getattr(self.stars, "spectra", {}) or label in getattr(
+                self.stars, "particle_spectra", {}
+            ):
+                component_labels_by_emitter.setdefault("stellar", [])
+                if label not in component_labels_by_emitter["stellar"]:
+                    component_labels_by_emitter["stellar"].append(label)
+            if label in getattr(
+                self.black_holes, "spectra", {}
+            ) or label in getattr(self.black_holes, "particle_spectra", {}):
+                component_labels_by_emitter.setdefault("blackhole", [])
+                if label not in component_labels_by_emitter["blackhole"]:
+                    component_labels_by_emitter["blackhole"].append(label)
+
+        out_cubes = {}
+        for emitter, emitter_labels in component_labels_by_emitter.items():
+            component = None
+            if emitter == "stellar" and self.stars is not None:
+                component = self.stars
+            elif emitter == "blackhole" and self.black_holes is not None:
+                component = self.black_holes
+            elif emitter == "gas" and self.gas is not None:
+                component = self.gas
+
+            if component is None:
+                continue
+
+            component_cubes = component._generate_data_cubes(
+                *emitter_labels,
+                fov=fov,
+                instrument=instrument,
+                cube_type=cube_type,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                quantity=quantity,
+                nthreads=nthreads,
+                cosmo=cosmo,
+            )
+
+            if isinstance(component_cubes, dict):
+                out_cubes.update(component_cubes)
+            else:
+                out_cubes[emitter_labels[0]] = component_cubes
+
+        expected_labels = []
+        for emitter_labels in component_labels_by_emitter.values():
+            expected_labels.extend(emitter_labels)
+
+        missing_labels = set(expected_labels) - set(out_cubes.keys())
+        if len(missing_labels) > 0:
+            raise exceptions.MissingIFU(
+                "Cannot generate galaxy data cubes for the following labels "
+                "as the necessary component cubes are missing: "
+                f"{', '.join(missing_labels)}"
+            )
+
+        for label in galaxy_combine_labels:
+            out_cubes[label] = _combine_spectral_cubes(
+                cubes=out_cubes,
+                label=label,
+                model_cache=combined_cache,
+            )
+
+        instrument_name = instrument.label
+        if quantity in {"lnu", "llam", "luminosity"}:
+            galaxy_cubes = self.data_cubes_lnu
+            stellar_cubes = (
+                self.stars.data_cubes_lnu.get(instrument_name, {})
+                if self.stars is not None
+                else {}
+            )
+            blackhole_cubes = (
+                self.black_holes.data_cubes_lnu.get(instrument_name, {})
+                if self.black_holes is not None
+                else {}
+            )
+        elif quantity in {"fnu", "flam", "flux"}:
+            galaxy_cubes = self.data_cubes_fnu
+            stellar_cubes = (
+                self.stars.data_cubes_fnu.get(instrument_name, {})
+                if self.stars is not None
+                else {}
+            )
+            blackhole_cubes = (
+                self.black_holes.data_cubes_fnu.get(instrument_name, {})
+                if self.black_holes is not None
+                else {}
+            )
+        else:
+            return out_cubes[labels[0]] if len(labels) == 1 else out_cubes
+
+        galaxy_cubes.setdefault(instrument_name, {})
+        for label in out_cubes:
+            in_stars = label in stellar_cubes
+            in_bhs = label in blackhole_cubes
+            if not in_stars and not in_bhs:
+                galaxy_cubes[instrument_name][label] = out_cubes[label]
+
+        if len(out_cubes) == 0:
+            return out_cubes
+
+        if len(labels) == 1:
+            return out_cubes[labels[0]]
+        return out_cubes
 
     @deprecated(
         "is deprecated and will be removed in version 1.3.0. "

@@ -29,7 +29,6 @@ from unyt import Mpc
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
-from synthesizer.imaging import SpectralCube
 from synthesizer.units import accepts
 
 
@@ -192,9 +191,9 @@ class Galaxy(BaseGalaxy):
 
     def get_data_cube(
         self,
-        resolution,
         fov,
-        lam,
+        instrument,
+        label=None,
         stellar_spectra=None,
         blackhole_spectra=None,
         quantity="lnu",
@@ -210,13 +209,12 @@ class Galaxy(BaseGalaxy):
         NOTE: Either npix or fov must be defined.
 
         Args:
-            resolution (unyt_quantity of float):
-                The size of a pixel.
-                (Ignoring any supersampling defined by psf_resample_factor)
             fov (unyt_quantity of float):
                 The width of the image in image coordinates.
-            lam (unyt_array, float):
-                The wavelength array to use for the data cube.
+            instrument (IntegratedFieldUnit):
+                The instrument to use for the data cube.
+            label (str):
+                A saved spectrum label to resolve across attached components.
             stellar_spectra (str):
                 The stellar spectra key to make into a data cube.
             blackhole_spectra (str):
@@ -230,55 +228,61 @@ class Galaxy(BaseGalaxy):
                 The spectral data cube object containing the derived
                 data cube.
         """
-        # Make sure we have an image to make
-        if stellar_spectra is None and blackhole_spectra is None:
+        labels = []
+        if label is not None:
+            if stellar_spectra is not None or blackhole_spectra is not None:
+                raise exceptions.InconsistentArguments(
+                    "Pass either label or explicit component labels to "
+                    "get_data_cube, not both."
+                )
+            labels = [label]
+        else:
+            if stellar_spectra is not None:
+                labels.append(stellar_spectra)
+            if (
+                blackhole_spectra is not None
+                and blackhole_spectra not in labels
+            ):
+                labels.append(blackhole_spectra)
+
+        if len(labels) == 0:
             raise exceptions.InconsistentArguments(
                 "At least one spectra type must be provided "
-                "(stellar_spectra or blackhole_spectra)!"
+                "(label, stellar_spectra or blackhole_spectra)!"
                 " What component/s do you want a data cube of?"
             )
 
-        # Make stellar image if requested
-        if stellar_spectra is not None:
-            # Instantiate the Image colection ready to make the image.
-            stellar_cube = SpectralCube(
-                resolution=resolution, fov=fov, lam=lam
-            )
+        if label is None:
+            cubes = []
 
-            # Compute the density grid
-            stellar_density = self.stars.morphology.get_density_grid(
-                resolution, stellar_cube.npix
-            )
+            if stellar_spectra is not None:
+                cubes.append(
+                    self.stars.get_data_cube(
+                        stellar_spectra,
+                        fov=fov,
+                        instrument=instrument,
+                        quantity=quantity,
+                    )
+                )
 
-            # Make the image
-            stellar_cube.get_data_cube_smoothed(
-                sed=self.stars.spectra[stellar_spectra],
-                density_grid=stellar_density,
-                quantity=quantity,
-            )
+            if blackhole_spectra is not None:
+                cubes.append(
+                    self.black_holes.get_data_cube(
+                        blackhole_spectra,
+                        fov=fov,
+                        instrument=instrument,
+                        quantity=quantity,
+                    )
+                )
 
-        # Make blackhole image if requested
-        if blackhole_spectra is not None:
-            # Instantiate the Image colection ready to make the image.
-            blackhole_cube = SpectralCube(
-                resolution=resolution, fov=fov, lam=lam
-            )
+            if len(cubes) == 1:
+                return cubes[0]
+            return cubes[0] + cubes[1]
 
-            # Compute the density grid
-            blackhole_density = self.black_holes.morphology.get_density_grid(
-                resolution, blackhole_cube.npix
-            )
-
-            # Compute the image
-            blackhole_cube.get_data_cube_smoothed(
-                sed=self.black_holes.spectra[blackhole_spectra],
-                density_grid=blackhole_density,
-                quantity=quantity,
-            )
-
-        # Return the images, combining if there are multiple components
-        if stellar_spectra is not None and blackhole_spectra is not None:
-            return stellar_cube + blackhole_cube
-        elif stellar_spectra is not None:
-            return stellar_cube
-        return blackhole_cube
+        return BaseGalaxy._generate_data_cubes(
+            self,
+            *labels,
+            fov=fov,
+            instrument=instrument,
+            quantity=quantity,
+        )

@@ -9,6 +9,8 @@ import h5py
 from unyt import angstrom, arcsecond, kpc, unyt_array
 
 from synthesizer import exceptions
+from synthesizer.imaging import SpectralCube
+from synthesizer.imaging.image_generators import _standardize_imaging_units
 from synthesizer.instruments.instrument_base import _hashable_state
 from synthesizer.instruments.spectroscopic_instrument import (
     SpectroscopicInstrument,
@@ -139,6 +141,276 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         return super()._comparison_state() + (
             _hashable_state(self.resolution),
             _hashable_state(self.psfs),
+        )
+
+    @timed("IntegratedFieldUnit.generate_data_cube")
+    def generate_data_cube(
+        self,
+        component,
+        fov,
+        sed,
+        cube_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        quantity="lnu",
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Generate a resolved-spectroscopy data cube for one saved spectrum.
+
+        This method is the instrument-owned entry point for IFU cube
+        generation. It determines which component owns the requested saved
+        spectrum and then constructs the data cube directly using the relevant
+        low-level cube-generation path.
+
+        Args:
+            component (Component): Component providing the geometry used to
+                construct the data cube.
+            fov (unyt_quantity): Width of the requested data cube.
+            sed (Sed): Saved spectra to turn into a data cube.
+            cube_type (str): Either ``"smoothed"`` or ``"hist"``.
+            kernel (array-like, optional): Kernel used for smoothed particle
+                cubes.
+            kernel_threshold (float): Kernel impact-parameter threshold.
+            quantity (str): Spectral quantity to store in the cube.
+            nthreads (int): Number of threads to use for particle cube
+                generation.
+            cosmo (astropy.cosmology, optional): Cosmology used for mixed-unit
+                conversions.
+
+        Returns:
+            SpectralCube: Generated spectral data cube.
+        """
+        if hasattr(component, "particle_spectra") and sed in getattr(
+            component, "particle_spectra", {}
+        ):
+            sed = component.particle_spectra[sed]
+
+        elif sed in getattr(component, "spectra", {}):
+            sed = component.spectra[sed]
+
+        if hasattr(component, "morphology"):
+            if cube_type != "smoothed":
+                raise exceptions.InconsistentArguments(
+                    f"Parametric {component.component_type} can only produce "
+                    "smoothed data cubes."
+                )
+            return self._generate_parametric_component_cube(
+                component=component,
+                sed=sed,
+                fov=fov,
+                lam=self.lam,
+                quantity=quantity,
+            )
+
+        return self._generate_particle_component_cube(
+            component=component,
+            sed=sed,
+            fov=fov,
+            lam=self.lam,
+            cube_type=cube_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            quantity=quantity,
+            nthreads=nthreads,
+            cosmo=cosmo,
+        )
+
+    @timed("IntegratedFieldUnit._generate_particle_component_cube")
+    def _generate_particle_component_cube(
+        self,
+        component,
+        sed,
+        fov,
+        lam,
+        cube_type="hist",
+        kernel=None,
+        kernel_threshold=1,
+        quantity="lnu",
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Generate a data cube for one particle component.
+
+        Args:
+            component (Particles): The particle component providing positions
+                and, for smoothed cubes, smoothing lengths.
+            sed (Sed): The saved particle spectra to turn into a data cube.
+            fov (unyt_quantity): Width of the requested data cube.
+            lam (unyt_array): Wavelength array defining the cube sampling.
+            cube_type (str): Either ``"smoothed"`` or ``"hist"``.
+            kernel (array-like, optional): Kernel used for smoothed particle
+                cubes.
+            kernel_threshold (float): Kernel impact-parameter threshold.
+            quantity (str): Spectral quantity to store in the cube.
+            nthreads (int): Number of threads to use for particle cube
+                generation.
+            cosmo (astropy.cosmology, optional): Cosmology used for mixed-unit
+                conversions.
+
+        Returns:
+            SpectralCube: Generated spectral data cube for the component.
+        """
+        needs_smoothing = cube_type == "smoothed"
+        resolution, fov, coords, smls = _standardize_imaging_units(
+            resolution=self.resolution,
+            fov=fov,
+            emitter=component,
+            cosmo=cosmo,
+            include_smoothing_lengths=needs_smoothing,
+        )
+
+        cube = SpectralCube(resolution=resolution, fov=fov, lam=lam)
+
+        if cube_type == "hist":
+            cube.generate_data_cube_hist(
+                sed=sed,
+                coordinates=coords,
+                quantity=quantity,
+                nthreads=nthreads,
+            )
+            return cube
+
+        if cube_type == "smoothed":
+            cube.generate_data_cube_smoothed(
+                sed=sed,
+                coordinates=coords,
+                smoothing_lengths=smls,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                quantity=quantity,
+                nthreads=nthreads,
+            )
+            return cube
+
+        raise exceptions.UnknownImageType(
+            "Unknown cube_type %s. (Options are 'hist' or 'smoothed')"
+            % cube_type
+        )
+
+    @timed("IntegratedFieldUnit._generate_parametric_component_cube")
+    def _generate_parametric_component_cube(
+        self,
+        component,
+        sed,
+        fov,
+        lam,
+        quantity="lnu",
+    ):
+        """Generate a data cube for one parametric component.
+
+        Args:
+            component (Component): The parametric component providing the
+                morphology density grid.
+            sed (Sed): The saved spectra to turn into a data cube.
+            fov (unyt_quantity): Width of the requested data cube.
+            lam (unyt_array): Wavelength array defining the cube sampling.
+            quantity (str): Spectral quantity to store in the cube.
+
+        Returns:
+            SpectralCube: Generated spectral data cube for the component.
+        """
+        cube = SpectralCube(resolution=self.resolution, fov=fov, lam=lam)
+        density_grid = component.morphology.get_density_grid(
+            self.resolution, cube.npix
+        )
+        cube.generate_data_cube_smoothed(
+            sed=sed,
+            density_grid=density_grid,
+            quantity=quantity,
+        )
+        return cube
+
+    @timed("IntegratedFieldUnit.apply_psf_to_cube")
+    def apply_psf_to_cube(self, cube, **kwargs):
+        """Apply the IFU PSF to a spectral cube.
+
+        This placeholder makes the intended IFU-owned PSF behaviour explicit
+        even though the underlying cube PSF machinery has not yet been
+        implemented.
+
+        Args:
+            cube (SpectralCube): Spectral cube to which the PSF should be
+                applied.
+            **kwargs: Future keyword arguments for IFU PSF application.
+
+        Raises:
+            UnimplementedFunctionality: Raised because IFU PSF application is
+                not yet implemented.
+        """
+        # The IFU should eventually own cube-side PSF application, but the
+        # required machinery has not yet been implemented.
+        raise exceptions.UnimplementedFunctionality(
+            "IntegratedFieldUnit.apply_psf_to_cube is not implemented yet."
+        )
+
+    @timed("IntegratedFieldUnit.apply_psf")
+    def apply_psf(self, observable, **kwargs):
+        """Apply the IFU PSF to an observable.
+
+        This placeholder makes the intended IFU-owned PSF behaviour explicit
+        even though the underlying resolved-spectroscopy PSF machinery has not
+        yet been implemented.
+
+        Args:
+            observable: Observable to which the IFU PSF should be applied.
+            **kwargs: Future keyword arguments for IFU PSF application.
+
+        Raises:
+            UnimplementedFunctionality: Raised because IFU PSF application is
+                not yet implemented.
+        """
+        # The IFU should eventually own resolved-spectroscopy PSF
+        # application, but the required machinery has not yet been
+        # implemented.
+        raise exceptions.UnimplementedFunctionality(
+            "IntegratedFieldUnit.apply_psf is not implemented yet."
+        )
+
+    @timed("IntegratedFieldUnit.apply_noise_to_cube")
+    def apply_noise_to_cube(self, cube, **kwargs):
+        """Apply IFU noise to a spectral cube.
+
+        This placeholder makes the intended IFU-owned noise behaviour explicit
+        even though the underlying cube-noise machinery has not yet been
+        implemented.
+
+        Args:
+            cube (SpectralCube): Spectral cube to which noise should be
+                applied.
+            **kwargs: Future keyword arguments for IFU noise application.
+
+        Raises:
+            UnimplementedFunctionality: Raised because IFU cube noise
+                application is not yet implemented.
+        """
+        # The IFU should eventually own cube-side noise application, but the
+        # required machinery has not yet been implemented.
+        raise exceptions.UnimplementedFunctionality(
+            "IntegratedFieldUnit.apply_noise_to_cube is not implemented yet."
+        )
+
+    @timed("IntegratedFieldUnit.apply_noise")
+    def apply_noise(self, observable, **kwargs):
+        """Apply IFU noise to an observable.
+
+        This placeholder makes the intended IFU-owned noise behaviour explicit
+        even though the underlying resolved-spectroscopy noise machinery has
+        not yet been implemented.
+
+        Args:
+            observable: Observable to which IFU noise should be applied.
+            **kwargs: Future keyword arguments for IFU noise application.
+
+        Raises:
+            UnimplementedFunctionality: Raised because IFU noise application is
+                not yet implemented.
+        """
+        # The IFU should eventually own resolved-spectroscopy noise
+        # application, but the required machinery has not yet been
+        # implemented.
+        raise exceptions.UnimplementedFunctionality(
+            "IntegratedFieldUnit.apply_noise is not implemented yet."
         )
 
     @timed("IntegratedFieldUnit.to_hdf5")

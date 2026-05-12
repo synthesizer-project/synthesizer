@@ -17,14 +17,14 @@ Example usage::
         fov=1,
     )
 
-    # Get a hist data cube
-    cube.get_data_cube_hist(
+    # Generate a hist data cube
+    cube.generate_data_cube_hist(
         sed=sed,
         coordinates=coordinates,
     )
 
-    # Get a smoothed data cube
-    cube.get_data_cube_smoothed(
+    # Generate a smoothed data cube
+    cube.generate_data_cube_smoothed(
         sed=sed,
         coordinates=coordinates,
         smoothing_lengths=smoothing_lengths,
@@ -139,7 +139,8 @@ class SpectralCube(ImagingBase):
         if self.arr is None:
             raise exceptions.MissingIFU(
                 "The IFU array hasn't been generated yet. Please call "
-                "get_data_cube_hist or get_data_cube_smoothed first."
+                "generate_data_cube_hist or generate_data_cube_smoothed "
+                "first."
             )
         return self.arr * self.units
 
@@ -161,7 +162,8 @@ class SpectralCube(ImagingBase):
         if self.arr is None:
             raise exceptions.MissingIFU(
                 "The IFU array hasn't been generated yet. Please call "
-                "get_data_cube_hist or get_data_cube_smoothed first."
+                "generate_data_cube_hist or generate_data_cube_smoothed "
+                "first."
             )
         return self.arr * self.units
 
@@ -264,7 +266,7 @@ class SpectralCube(ImagingBase):
 
         return new_cube
 
-    def get_data_cube_hist(
+    def generate_data_cube_hist(
         self,
         sed,
         coordinates=None,
@@ -300,7 +302,7 @@ class SpectralCube(ImagingBase):
             nthreads=nthreads,
         )
 
-    def get_data_cube_smoothed(
+    def generate_data_cube_smoothed(
         self,
         sed,
         coordinates=None,
