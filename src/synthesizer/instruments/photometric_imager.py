@@ -9,9 +9,11 @@ import inspect
 
 import h5py
 import numpy as np
+from scipy import signal
 from unyt import arcsecond, kpc, unyt_array
 
 from synthesizer import exceptions
+from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_collection import ImageCollection
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.instruments.instrument_base import _hashable_state
@@ -20,6 +22,7 @@ from synthesizer.instruments.photometric_instrument import (
 )
 from synthesizer.instruments.photometric_noise import CorrelatedNoiseModel
 from synthesizer.units import accepts
+from synthesizer.utils.operation_timers import timed
 
 
 class PhotometricImager(PhotometricInstrument):
@@ -44,6 +47,7 @@ class PhotometricImager(PhotometricInstrument):
     """
 
     @accepts(resolution=(kpc, arcsecond))
+    @timed("PhotometricImager.__init__")
     def __init__(
         self,
         label,
@@ -101,6 +105,7 @@ class PhotometricImager(PhotometricInstrument):
         # Validate the instrument configuration
         self._validate()
 
+    @timed("PhotometricImager._validate")
     def _validate(self):
         """Validate the instrument attributes.
 
@@ -157,6 +162,7 @@ class PhotometricImager(PhotometricInstrument):
         have_noise |= self.snrs is not None and self.depth is not None
         return have_noise
 
+    @timed("PhotometricImager._build_correlated_noise_models")
     def _build_correlated_noise_models(self):
         """Build per-filter correlated-noise models from source maps.
 
@@ -181,6 +187,7 @@ class PhotometricImager(PhotometricInstrument):
             for filter_code, noise_map in self.noise_source_maps.items()
         }
 
+    @timed("PhotometricImager._comparison_state")
     def _comparison_state(self):
         """Return a tuple describing the imaging comparison state.
 
@@ -194,6 +201,7 @@ class PhotometricImager(PhotometricInstrument):
             _hashable_state(self.noise_source_maps),
         )
 
+    @timed("PhotometricImager.get_correlated_noise_model")
     def get_correlated_noise_model(self, filter_code):
         """Return the correlated-noise model for a filter.
 
@@ -218,6 +226,146 @@ class PhotometricImager(PhotometricInstrument):
 
         return self.correlated_noise_models[filter_code]
 
+    @timed("PhotometricImager.apply_psf")
+    def apply_psf(
+        self, image, filter_code, psf_resample_factor=1, inplace=False
+    ):
+        """Apply the configured PSF to one image.
+
+        Args:
+            image (Image): Image to which the PSF should be applied.
+            filter_code (str): Filter code identifying which PSF to use.
+            psf_resample_factor (int): Factor by which to supersample the image
+                before convolution and downsample it afterwards.
+            inplace (bool): If ``True`` update ``image`` directly and return
+                it. Otherwise return a new image.
+
+        Returns:
+            Image: New image with the PSF applied.
+
+        Raises:
+            MissingArgument: If the instrument has no PSFs configured.
+            InconsistentArguments: If no PSF is defined for ``filter_code``.
+                Also raised if ``psf_resample_factor`` is smaller than 1.
+        """
+        # Ensure the instrument actually has PSFs to apply
+        if self.psfs is None:
+            raise exceptions.MissingArgument(
+                "No PSFs are set on this Instrument. Provide psfs when "
+                "constructing the Instrument."
+            )
+
+        # Ensure the requested filter has a PSF definition
+        if filter_code not in self.psfs:
+            raise exceptions.InconsistentArguments(
+                f"No PSF found for filter '{filter_code}'. Available filters: "
+                f"{list(self.psfs.keys())}"
+            )
+
+        # Resampling factors smaller than one do not make sense for this PSF
+        # application path because the image is optionally supersampled first
+        if psf_resample_factor < 1:
+            raise exceptions.InconsistentArguments(
+                "psf_resample_factor must be greater than or equal to 1."
+            )
+
+        # Work on the original image when requested, otherwise create a fresh
+        # container so the instrument owns the post-processing semantics
+        if inplace:
+            working_image = image
+        else:
+            working_image = Image(
+                resolution=image.resolution,
+                fov=image.fov,
+                img=image.img,
+            )
+
+        # If requested, temporarily supersample before the PSF convolution
+        if psf_resample_factor > 1:
+            working_image.resample(psf_resample_factor)
+
+        # Perform the PSF convolution on the instrument side rather than on the
+        # image container so the observation machinery stays instrument-owned
+        convolved_img = signal.fftconvolve(
+            working_image.arr,
+            self.psfs[filter_code],
+            mode="same",
+        )
+
+        # Reapply units if the image carries them
+        if working_image.units is not None:
+            convolved_img *= working_image.units
+
+        # Update the chosen image container with the convolved pixels
+        working_image.img = convolved_img
+
+        # Return to the original resolution if we temporarily supersampled
+        if psf_resample_factor > 1:
+            working_image.downsample(1 / psf_resample_factor)
+
+        return working_image
+
+    @timed("PhotometricImager.apply_psfs")
+    def apply_psfs(
+        self, image_collection, psf_resample_factor=1, inplace=False
+    ):
+        """Apply the configured PSFs to an image collection.
+
+        Args:
+            image_collection (ImageCollection): Collection to which PSFs should
+                be applied.
+            psf_resample_factor (int): Factor by which to supersample the
+                images before convolution and downsample them afterwards.
+            inplace (bool): If ``True`` update ``image_collection`` directly
+                and return it. Otherwise return a new image collection.
+
+        Returns:
+            ImageCollection: New image collection with PSFs applied.
+
+        Raises:
+            InconsistentArguments: If ``psf_resample_factor`` is smaller than
+                1.
+        """
+        # Resampling factors smaller than one do not make sense for this PSF
+        # application path because the images are optionally supersampled first
+        if psf_resample_factor < 1:
+            raise exceptions.InconsistentArguments(
+                "psf_resample_factor must be greater than or equal to 1."
+            )
+
+        # Work on the original collection when requested, otherwise construct a
+        # fresh collection to hold the convolved images.
+        if inplace:
+            working_collection = image_collection
+            target_imgs = working_collection.imgs
+        else:
+            target_imgs = {}
+            for filter_code in image_collection.filter_codes:
+                image = image_collection.imgs[filter_code]
+                target_imgs[filter_code] = Image(
+                    resolution=image.resolution,
+                    fov=image.fov,
+                    img=image.img,
+                )
+            working_collection = ImageCollection(
+                resolution=image_collection.resolution,
+                fov=image_collection.fov,
+                imgs=target_imgs,
+            )
+
+        # Apply the PSF to each image through the single-image helper so the
+        # instrument owns one canonical PSF-convolution path.
+        for filter_code in image_collection.filter_codes:
+            target_imgs[filter_code] = self.apply_psf(
+                target_imgs[filter_code],
+                filter_code,
+                psf_resample_factor=psf_resample_factor,
+                inplace=True,
+            )
+
+        return working_collection
+
+    @timed("PhotometricImager.apply_noise")
     def apply_noise(
         self,
         image,
@@ -242,9 +390,13 @@ class PhotometricImager(PhotometricInstrument):
         Returns:
             Image: New image with noise applied.
         """
+        # Apply a fixed noise array directly if one has been configured
         if self.noise_maps is not None:
             noise_arr = self.noise_maps[filter_code]
             return image.apply_noise_array(noise_arr)
+
+        # Delegate correlated-noise generation to the image primitive while the
+        # instrument remains the owner of the noise-model configuration
         if self.correlated_noise_models is not None:
             return image.apply_correlated_noise(
                 self,
@@ -252,6 +404,9 @@ class PhotometricImager(PhotometricInstrument):
                 correct_periodicity=correct_periodicity,
                 rng_seed=rng_seed,
             )
+
+        # Derive image noise from depth and SNR definitions when that is the
+        # configured photometric noise model
         if self.snrs is not None and self.depth is not None:
             snr = (
                 self.snrs[filter_code]
@@ -271,6 +426,7 @@ class PhotometricImager(PhotometricInstrument):
             "The instrument has no imaging noise configuration."
         )
 
+    @timed("PhotometricImager.apply_noises")
     def apply_noises(
         self,
         image_collection,
@@ -293,14 +449,21 @@ class PhotometricImager(PhotometricInstrument):
         Returns:
             ImageCollection: New image collection with noise applied.
         """
+        # Use one generator to derive per-filter seeds without manually
+        # coupling the actual per-filter noise realisations to call order
         rng = np.random.default_rng(rng_seed)
         noisy_imgs = {}
         for f in image_collection.filter_codes:
+            # Derive a reproducible per-filter seed when the caller supplied a
+            # top-level seed for the collection noise application
             filter_rng_seed = (
                 None
                 if rng_seed is None
                 else int(rng.integers(0, np.iinfo(np.uint32).max))
             )
+
+            # Delegate the per-image noise policy to the single-image helper so
+            # there is one canonical decision path for imaging noise
             noisy_imgs[f] = self.apply_noise(
                 image_collection.imgs[f],
                 f,
@@ -315,6 +478,7 @@ class PhotometricImager(PhotometricInstrument):
             imgs=noisy_imgs,
         )
 
+    @timed("PhotometricImager.to_hdf5")
     def to_hdf5(self, group):
         """Write the photometric imager to an HDF5 group.
 
@@ -352,6 +516,7 @@ class PhotometricImager(PhotometricInstrument):
                 ds.attrs["units"] = str(value.units)
 
     @classmethod
+    @timed("PhotometricImager.load")
     def load(cls, filepath=None, **kwargs):
         """Load a photometric imager from an HDF5 file.
 
@@ -373,6 +538,7 @@ class PhotometricImager(PhotometricInstrument):
             return cls._from_hdf5(hdf, **kwargs)
 
     @classmethod
+    @timed("PhotometricImager._from_hdf5")
     def _from_hdf5(cls, group, **kwargs):
         """Load a photometric imager from an HDF5 group.
 

@@ -14,6 +14,7 @@ from synthesizer.instruments.instrument_base import (
     InstrumentBase,
     _hashable_state,
 )
+from synthesizer.utils.operation_timers import timed
 
 
 class PhotometricInstrument(InstrumentBase):
@@ -39,6 +40,7 @@ class PhotometricInstrument(InstrumentBase):
             dictionary keyed by filter code.
     """
 
+    @timed("PhotometricInstrument.__init__")
     def __init__(
         self,
         label,
@@ -71,6 +73,7 @@ class PhotometricInstrument(InstrumentBase):
         self.snrs = snrs
         PhotometricInstrument._validate(self)
 
+    @timed("PhotometricInstrument._validate")
     def _validate(self):
         """Validate the instrument attributes.
 
@@ -105,6 +108,7 @@ class PhotometricInstrument(InstrumentBase):
         """Return whether this instrument supports photometry."""
         return True
 
+    @timed("PhotometricInstrument._comparison_state")
     def _comparison_state(self):
         """Return a tuple describing the photometric comparison state.
 
@@ -118,6 +122,7 @@ class PhotometricInstrument(InstrumentBase):
             _hashable_state(self.snrs),
         )
 
+    @timed("PhotometricInstrument.add_filters")
     def add_filters(
         self,
         filters,
@@ -207,6 +212,7 @@ class PhotometricInstrument(InstrumentBase):
 
         self._validate()
 
+    @timed("PhotometricInstrument.to_hdf5")
     def to_hdf5(self, group):
         """Write the photometric instrument to an HDF5 group.
 
@@ -265,6 +271,7 @@ class PhotometricInstrument(InstrumentBase):
                 ds.attrs["units"] = "dimensionless"
 
     @classmethod
+    @timed("PhotometricInstrument.load")
     def load(cls, filepath, **kwargs):
         """Load a photometric instrument from an HDF5 file.
 
@@ -279,6 +286,7 @@ class PhotometricInstrument(InstrumentBase):
             return cls._from_hdf5(hdf, **kwargs)
 
     @classmethod
+    @timed("PhotometricInstrument._from_hdf5")
     def _from_hdf5(cls, group, **kwargs):
         """Load a photometric instrument from an HDF5 group.
 
