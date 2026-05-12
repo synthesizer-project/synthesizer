@@ -38,6 +38,28 @@ class DummyImageCollection:
         return aperture_radius
 
 
+class DummyPsfInstrument:
+    """Minimal instrument used to inspect delegated PSF application calls."""
+
+    def __init__(self):
+        """Initialise the PSF-call recording instrument."""
+        self.label = "inst"
+        self.psfs = {"F090W": np.ones((3, 3), dtype=float)}
+        self.calls = []
+
+    def apply_psfs(self, image_collection, psf_resample_factor=1):
+        """Record the delegated PSF application call and return a marker."""
+        marker = object()
+        self.calls.append(
+            {
+                "image_collection": image_collection,
+                "psf_resample_factor": psf_resample_factor,
+                "result": marker,
+            }
+        )
+        return marker
+
+
 def test_galex_filters_are_not_duplicated_in_collection():
     """Ensure the premade GALEX collection keeps one filter per instrument."""
     fuv = GALEXFUV()
@@ -224,6 +246,88 @@ def test_component_noise_routing_uses_depth_app_radius(
     assert image.received_aperture_radius is aperture_radius
     assert returned["stellar"] is aperture_radius
     assert getattr(component, noise_attr)["inst"]["stellar"] is aperture_radius
+
+
+@pytest.mark.parametrize(
+    ("method", "images_attr", "psf_attr"),
+    [
+        (
+            BaseGalaxy.apply_psf_to_images_lnu,
+            "images_lnu",
+            "images_psf_lnu",
+        ),
+        (
+            BaseGalaxy.apply_psf_to_images_fnu,
+            "images_fnu",
+            "images_psf_fnu",
+        ),
+    ],
+)
+def test_base_galaxy_psf_routing_delegates_to_instrument(
+    method, images_attr, psf_attr
+):
+    """Base-galaxy PSF routing should delegate to the instrument."""
+    image_collection = object()
+    galaxy = SimpleNamespace(
+        images_lnu={},
+        images_fnu={},
+        images_psf_lnu={},
+        images_psf_fnu={},
+        stars=None,
+        black_holes=None,
+    )
+    getattr(galaxy, images_attr)["inst"] = {"stellar": image_collection}
+    instrument = DummyPsfInstrument()
+
+    returned = method(galaxy, instrument, psf_resample_factor=3)
+
+    assert instrument.calls[0]["image_collection"] is image_collection
+    assert instrument.calls[0]["psf_resample_factor"] == 3
+    assert returned["stellar"] is instrument.calls[0]["result"]
+    assert (
+        getattr(galaxy, psf_attr)["inst"]["stellar"]
+        is instrument.calls[0]["result"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("method", "images_attr", "psf_attr"),
+    [
+        (
+            Component.apply_psf_to_images_lnu,
+            "images_lnu",
+            "images_psf_lnu",
+        ),
+        (
+            Component.apply_psf_to_images_fnu,
+            "images_fnu",
+            "images_psf_fnu",
+        ),
+    ],
+)
+def test_component_psf_routing_delegates_to_instrument(
+    method, images_attr, psf_attr
+):
+    """Component PSF routing should delegate to the instrument."""
+    image_collection = object()
+    component = SimpleNamespace(
+        images_lnu={},
+        images_fnu={},
+        images_psf_lnu={},
+        images_psf_fnu={},
+    )
+    getattr(component, images_attr)["inst"] = {"stellar": image_collection}
+    instrument = DummyPsfInstrument()
+
+    returned = method(component, instrument, psf_resample_factor=3)
+
+    assert instrument.calls[0]["image_collection"] is image_collection
+    assert instrument.calls[0]["psf_resample_factor"] == 3
+    assert returned["stellar"] is instrument.calls[0]["result"]
+    assert (
+        getattr(component, psf_attr)["inst"]["stellar"]
+        is instrument.calls[0]["result"]
+    )
 
 
 @pytest.mark.parametrize(

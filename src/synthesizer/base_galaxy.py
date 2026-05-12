@@ -18,7 +18,7 @@ from synthesizer.imaging.image_generators import (
     _combine_image_collections,
     _prepare_galaxy_image_labels,
 )
-from synthesizer.synth_warnings import warn
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
@@ -1751,6 +1751,10 @@ class BaseGalaxy:
             phot_type="fnu",
         )
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use instrument.apply_psfs(...) instead."
+    )
     def apply_psf_to_images_lnu(
         self,
         instrument,
@@ -1759,8 +1763,11 @@ class BaseGalaxy:
     ):
         """Apply instrument PSFs to this galaxy's luminosity images.
 
-        This will also apply the PSF to any images attached to the galaxies
-        components, as well as those on the top level galaxy object.
+        This method now acts as an orchestration wrapper around the
+        instrument-owned PSF application path. It fetches the relevant image
+        collections, passes them into the instrument, stores the returned
+        PSF-processed images, and then repeats the same orchestration for any
+        attached components.
 
         Args:
             instrument (Instrument):
@@ -1810,23 +1817,15 @@ class BaseGalaxy:
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = images[key]
 
-            # If requested, do the resampling
-            if psf_resample_factor > 1:
-                imgs.supersample(psf_resample_factor)
-
-            # Apply the PSF
-            self.images_psf_lnu[instrument.label][key] = imgs.apply_psfs(
-                instrument.psfs
+            # Delegate the actual PSF application to the instrument so the
+            # galaxy layer only handles routing and output storage
+            self.images_psf_lnu[instrument.label][key] = instrument.apply_psfs(
+                imgs,
+                psf_resample_factor=psf_resample_factor,
             )
-
-            # Undo the resampling (if needed)
-            if psf_resample_factor > 1:
-                self.images_psf_lnu[instrument.label][key].downsample(
-                    1 / psf_resample_factor
-                )
 
         # If we have stars, do those
         if (
@@ -1860,8 +1859,11 @@ class BaseGalaxy:
     ):
         """Apply instrument PSFs to this galaxy's flux images.
 
-        This will also apply the PSF to any images attached to the galaxies
-        components, as well as those on the top level galaxy object.
+        This method now acts as an orchestration wrapper around the
+        instrument-owned PSF application path. It fetches the relevant image
+        collections, passes them into the instrument, stores the returned
+        PSF-processed images, and then repeats the same orchestration for any
+        attached components.
 
         Args:
             instrument (Instrument):
@@ -1911,23 +1913,15 @@ class BaseGalaxy:
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = images[key]
 
-            # If requested, do the resampling
-            if psf_resample_factor > 1:
-                imgs.supersample(psf_resample_factor)
-
-            # Apply the PSF
-            self.images_psf_fnu[instrument.label][key] = imgs.apply_psfs(
-                instrument.psfs
+            # Delegate the actual PSF application to the instrument so the
+            # galaxy layer only handles routing and output storage
+            self.images_psf_fnu[instrument.label][key] = instrument.apply_psfs(
+                imgs,
+                psf_resample_factor=psf_resample_factor,
             )
-
-            # Undo the resampling (if needed)
-            if psf_resample_factor > 1:
-                self.images_psf_fnu[instrument.label][key].downsample(
-                    1 / psf_resample_factor
-                )
 
         # If we have stars, do those
         if (
