@@ -42,7 +42,7 @@ def make_test_imager(filter_codes=("F150W",), resolution=1.0 * kpc, **kwargs):
     # Construct a real imaging-capable instrument so utility tests do not rely
     # on removed generic factory shapes.
     return Instrument(
-        label=kwargs.pop("label", "test_inst"),
+        kwargs.pop("label", "test_inst"),
         filters=filters,
         resolution=resolution,
         **kwargs,
@@ -1143,7 +1143,7 @@ class TestPipelineNewFeatures:
 
         # Create instrument with wrong units (nJy instead of erg/s/Hz)
         bad_instrument = Instrument(
-            label="bad_inst",
+            "bad_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=nircam_instrument_no_psf.resolution,
             depth={"JWST/NIRCam.F090W": 1.0 * nJy},
@@ -1171,7 +1171,7 @@ class TestPipelineNewFeatures:
 
         # Create instrument with wrong units (erg/s/Hz instead of nJy)
         bad_instrument = Instrument(
-            label="bad_inst",
+            "bad_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=nircam_instrument_no_psf.resolution,
             depth={"JWST/NIRCam.F090W": 1.0 * Unit("erg/s/Hz")},
@@ -1203,7 +1203,7 @@ class TestPipelineNewFeatures:
 
         # Create instrument with wrong units (nJy instead of erg/s/Hz)
         bad_instrument = Instrument(
-            label="bad_inst",
+            "bad_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=nircam_instrument_no_psf.resolution,
             noise_maps={"JWST/NIRCam.F090W": noise_map},
@@ -1233,7 +1233,7 @@ class TestPipelineNewFeatures:
 
         # Create instrument with wrong units (erg/s/Hz instead of nJy)
         bad_instrument = Instrument(
-            label="bad_inst",
+            "bad_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=nircam_instrument_no_psf.resolution,
             noise_maps={"JWST/NIRCam.F090W": noise_map},
@@ -1316,7 +1316,7 @@ class TestValidateNoiseUnitCompatibility:
 
         # Create instrument with dict depth
         inst = Instrument(
-            label="test_inst",
+            "test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
             depth={
@@ -1343,7 +1343,7 @@ class TestValidateNoiseUnitCompatibility:
 
         # Create instrument with dict noise_maps
         inst = Instrument(
-            label="test_inst",
+            "test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
             noise_maps={
@@ -1369,7 +1369,7 @@ class TestValidateNoiseUnitCompatibility:
         )
 
         inst = Instrument(
-            label="test_inst",
+            "test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
             noise_source_maps={
@@ -1394,7 +1394,7 @@ class TestValidateNoiseUnitCompatibility:
         )
 
         inst = Instrument(
-            label="test_inst",
+            "test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
             noise_source_maps={
@@ -1417,7 +1417,7 @@ class TestValidateNoiseUnitCompatibility:
         )
 
         inst = Instrument(
-            label="test_inst",
+            "test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
             noise_source_maps={
@@ -1472,7 +1472,7 @@ class TestValidateNoiseUnitCompatibility:
 
         # Create instrument with apparent magnitude depths
         inst = Instrument(
-            label="test_inst",
+            "test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
             depth={
@@ -1814,7 +1814,7 @@ class TestAngularCoordinates:
 
         # Create instrument with angular resolution
         angular_inst = Instrument(
-            label="JWST_Angular",
+            "JWST_Angular",
             filters=nircam_filters,
             resolution=0.1 * arcsec,  # Angular resolution
         )
@@ -1924,7 +1924,7 @@ class TestAngularCoordinates:
 
         # Create instrument with angular resolution
         angular_inst = Instrument(
-            label="JWST_Angular",
+            "JWST_Angular",
             filters=nircam_filters,
             resolution=0.1 * arcsec,  # Angular resolution
         )
@@ -1959,7 +1959,7 @@ class TestAngularCoordinates:
 
         # Create instrument with angular resolution
         angular_inst = Instrument(
-            label="JWST_Angular",
+            "JWST_Angular",
             filters=nircam_filters,
             resolution=0.1 * arcsec,  # Angular resolution
         )

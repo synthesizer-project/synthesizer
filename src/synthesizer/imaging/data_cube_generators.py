@@ -24,6 +24,7 @@ from synthesizer.imaging.image_generators import (
     _prepare_component_image_labels,
     _prepare_galaxy_image_labels,
     _standardize_imaging_units,
+    _standardize_sph_kernel,
     _validate_centered_coordinates,
 )
 from synthesizer.kernel_functions import Kernel
@@ -184,7 +185,7 @@ def _generate_ifu_particle_hist(
 
         # Get the kernel
         # TODO: We should do away with this and write a histogram backend
-        kernel = Kernel().get_kernel()
+        kernel = _standardize_sph_kernel(Kernel())
 
     # Generate the histogram IFU from the prepared particle inputs
     ifu.arr = make_img(
@@ -234,9 +235,9 @@ def _generate_ifu_particle_smoothed(
         smoothing_lengths (unyt_array of float):
             The smoothing lengths of the particles. These will be
             converted to the image resolution units.
-        kernel (str):
-            The array describing the kernel. This is derived from the
-            kernel_functions module.
+        kernel (np.ndarray or Kernel):
+            The kernel lookup table, or a ``Kernel`` instance to extract it
+            from.
         kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
             below this threshold are included in the image.
@@ -328,6 +329,10 @@ def _generate_ifu_particle_smoothed(
         _coords[:, 0] += fov[0] / 2
         _coords[:, 1] += fov[1] / 2
 
+    # Convert the public kernel input into the lookup array used by the
+    # smoothing backend.
+    kernel_arr = _standardize_sph_kernel(kernel)
+
     # Generate the smoothed IFU from the prepared particle inputs
     ifu.arr = make_img(
         spectra,
@@ -335,13 +340,13 @@ def _generate_ifu_particle_smoothed(
             smoothing_lengths.to_value(spatial_units)
         ),
         ensure_array_c_compatible_double(_coords),
-        kernel,
+        kernel_arr,
         res,
         ifu.npix[0],
         ifu.npix[1],
         cent_coords.shape[0],
         kernel_threshold,
-        kernel.size,
+        kernel_arr.size,
         sed.nlam,
         nthreads,
     )

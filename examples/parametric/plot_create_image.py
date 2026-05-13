@@ -68,7 +68,7 @@ if __name__ == "__main__":
 
     # Generate images using the instrument-owned imaging path
     instrument = Instrument(
-        label="DemoInstrument",
+        "DemoInstrument",
         resolution=resolution,
         filters=filters,
     )

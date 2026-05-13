@@ -43,7 +43,7 @@ def make_test_imager(filter_codes, resolution=0.1 * kpc, **kwargs):
     # Construct a real imaging-capable instrument so tests follow the current
     # factory contract.
     return Instrument(
-        label=kwargs.pop("label", "test_inst"),
+        kwargs.pop("label", "test_inst"),
         filters=filters,
         resolution=resolution,
         **kwargs,

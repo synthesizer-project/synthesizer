@@ -83,13 +83,19 @@ Emissions
 
 Applying an Emission Model to a ``Galaxy`` and/or its components yields ``Sed`` or ``LineCollection`` objects, depending on the method called. These objects provide methods for manipulating, analysing, and visualising their contents, including methods to convert emissions from luminosities to fluxes. For instance, ``Sed`` objects contain a variety of useful methods for accessing the luminosity, flux and wavelength, as well as other more specific properties and derived properties (for example, the strength of the Balmer break), while ``LineCollection`` objects provide methods for accessing the line fluxes, equivalent widths, and combining lines into composite lines (e.g. doublets, triplets, etc.).
 
-Emissions can be converted into observables by applying an ``Instrument`` or ``InstrumentCollection`` object to them.
+Emissions can be converted into observables by applying the appropriate
+specialised instrument class, or an ``InstrumentCollection`` containing several
+of them, to the relevant workflow.
 
 
 Observatories & Instruments
 ***************************
 
-To convert an emission into an observable the properties of an observatory must be applied. This is parametrised by the ``Instrument`` object, a flexible container designed to hold the properties of any type of observatory, including photometric imagers, spectrographs, and IFU instruments.
+To convert an emission into an observable the properties of an observatory must
+be applied. Synthesizer provides a small specialised instrument hierarchy for
+this. In most workflows you should construct the specialised instrument class
+that matches the observing mode, while ``Instrument(...)`` remains available as
+a backwards-compatible convenience factory.
 
 While many of the properties are simple values (i.e. a resolution or resolving power), certain instruments require more detailed properties. For example, a photometric imager ``Instrument`` needs a description of the filter transmission curves. These are encapsulated by the ``FilterCollection`` object. These filters can be user defined, using an explicit transmission curve or the limits of a top-hat filter. Synthesizer also provides an interface to the `Spanish Virtual Observatory (SVO) filter database <https://svo2.cab.inta-csic.es/theory/fps/>`_, which allows users to easily use any filter from the database by simply passing a filter name to the ``FilterCollection`` at instantiation.
 
@@ -97,7 +103,8 @@ While many of the properties are simple values (i.e. a resolution or resolving p
 Observables
 ***********
 
-By combining an emission object with an ``Instrument`` or ``InstrumentCollection``, Synthesizer can translate the theoretical emission into an observable accounting for observational effects.
+By combining an emission object with the relevant specialised instrument class,
+or with an ``InstrumentCollection``, Synthesizer can translate the theoretical
+emission into an observable accounting for observational effects.
 Observables include spectra (accounting for resolving power and noise, again in ``Sed`` objects), photometry (``PhotometryCollection`` objects), images (``Image`` and ``ImageCollection`` objects), and spectral data cubes (``SpectralDataCube`` objects). Just like emissions, observables are not just containers, they provide a number of methods for manipulating, analysing, and visualising their contents.
-
 

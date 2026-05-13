@@ -159,12 +159,12 @@ def test_instrument_collection_does_not_mutate_existing_filters():
     )
 
     first = Instrument(
-        label="first",
+        "first",
         filters=first_filters,
         resolution=1 * arcsecond,
     )
     second = Instrument(
-        label="second",
+        "second",
         filters=second_filters,
         resolution=1 * arcsecond,
     )
@@ -180,7 +180,7 @@ def test_instrument_collection_does_not_mutate_existing_filters():
 def test_ifu_accepts_noise_source_maps_configuration():
     """IFUs should store source-noise templates for future use."""
     instrument = Instrument(
-        label="spec",
+        "spec",
         lam=np.linspace(1000, 3000, 32) * angstrom,
         resolution=1 * arcsecond,
         noise_source_maps={"filter_a": np.ones((8, 8))},
@@ -202,7 +202,7 @@ def test_add_filters_does_not_mutate_on_invalid_noise_payload():
     )
 
     inst = Instrument(
-        label="test",
+        "test",
         filters=base_filters,
         resolution=1 * arcsecond,
         noise_source_maps={"filter_a": np.ones((8, 8))},
@@ -222,6 +222,34 @@ def test_add_filters_does_not_mutate_on_invalid_noise_payload():
 def test_photometric_imager_inherits_add_filters_unchanged():
     """Imagers should reuse the photometric add_filters implementation."""
     assert PhotometricImager.add_filters is PhotometricInstrument.add_filters
+
+
+def test_instrument_factory_accepts_single_positional_label():
+    """Factory should accept one positional argument as the label."""
+    lam = np.linspace(1000, 3000, 32) * angstrom
+    filters = FilterCollection(
+        generic_dict={"filter_a": np.ones(lam.size)},
+        new_lam=lam,
+    )
+
+    inst = Instrument("test", filters=filters, resolution=1 * arcsecond)
+
+    assert inst.label == "test"
+
+
+def test_instrument_factory_rejects_multiple_positional_arguments():
+    """Factory should reject more than one positional argument."""
+    with pytest.raises(exceptions.InconsistentArguments, match="at most one"):
+        Instrument("a", "b")
+
+
+def test_instrument_factory_rejects_duplicate_positional_and_keyword_label():
+    """Factory should reject positional and keyword labels together."""
+    with pytest.raises(
+        exceptions.InconsistentArguments,
+        match="both a positional label and a label keyword",
+    ):
+        Instrument("a", label="b")
 
 
 @pytest.mark.parametrize(

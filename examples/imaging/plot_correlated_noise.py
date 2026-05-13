@@ -81,7 +81,7 @@ filters = FilterCollection(
 )
 
 instrument = Instrument(
-    label="MockScope",
+    "MockScope",
     filters=filters,
     resolution=resolution,
     noise_source_maps={"F150W": noise_template},
