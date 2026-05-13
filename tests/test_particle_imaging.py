@@ -916,6 +916,130 @@ class TestGalaxyImagingSingleParticle:
             "Image array should not be None after generation"
         )
 
+    def test_single_particle_image_applies_instrument_psf(
+        self, one_part_galaxy, incident_emission_model
+    ):
+        """High-level image generation should apply configured PSFs."""
+        resolution = 0.1 * kpc
+        fov = 3.0 * kpc
+
+        incident_emission_model.set_per_particle(True)
+
+        kernel = Kernel().get_kernel()
+
+        raw_instrument = make_test_imager(resolution, label="raw_inst")
+        raw_images = one_part_galaxy.get_images_luminosity(
+            "incident",
+            fov=fov,
+            instrument=raw_instrument,
+            kernel=kernel,
+        )
+
+        psf = np.ones((3, 3), dtype=float)
+        psf /= np.sum(psf)
+        psf_instrument = make_test_imager(
+            resolution,
+            label="psf_inst",
+            psfs={"filter_r": psf},
+        )
+        psf_images = one_part_galaxy.get_images_luminosity(
+            "incident",
+            fov=fov,
+            instrument=psf_instrument,
+            kernel=kernel,
+        )
+
+        assert (
+            psf_images
+            is one_part_galaxy.stars.images_psf_lnu["psf_inst"]["incident"]
+        )
+        assert (
+            one_part_galaxy.stars.images_lnu["psf_inst"]["incident"]
+            is not psf_images
+        )
+        assert not np.allclose(
+            psf_images["filter_r"].arr,
+            raw_images["filter_r"].arr,
+        )
+
+    def test_single_particle_image_applies_instrument_noise(
+        self, one_part_galaxy, incident_emission_model
+    ):
+        """High-level image generation should apply configured noise."""
+        resolution = 0.1 * kpc
+        fov = 3.0 * kpc
+
+        incident_emission_model.set_per_particle(True)
+
+        kernel = Kernel().get_kernel()
+        noise_map = unyt_array(np.ones((30, 30)) * 1e20, erg / s / Hz)
+
+        noise_instrument = make_test_imager(
+            resolution,
+            label="noise_inst",
+            noise_maps={"filter_r": noise_map},
+        )
+        noise_images = one_part_galaxy.get_images_luminosity(
+            "incident",
+            fov=fov,
+            instrument=noise_instrument,
+            kernel=kernel,
+        )
+
+        assert (
+            noise_images
+            is one_part_galaxy.stars.images_noise_lnu["noise_inst"]["incident"]
+        )
+        assert not np.allclose(
+            noise_images["filter_r"].arr,
+            one_part_galaxy.stars.images_lnu["noise_inst"]["incident"][
+                "filter_r"
+            ].arr,
+        )
+
+    def test_single_particle_image_applies_psf_then_noise(
+        self, one_part_galaxy, incident_emission_model
+    ):
+        """High-level image generation should apply PSF then noise."""
+        resolution = 0.1 * kpc
+        fov = 3.0 * kpc
+
+        incident_emission_model.set_per_particle(True)
+
+        kernel = Kernel().get_kernel()
+        psf = np.ones((3, 3), dtype=float)
+        psf /= np.sum(psf)
+        noise_map = unyt_array(np.ones((30, 30)) * 1e20, erg / s / Hz)
+
+        observed_instrument = make_test_imager(
+            resolution,
+            label="observed_inst",
+            psfs={"filter_r": psf},
+            noise_maps={"filter_r": noise_map},
+        )
+        observed_images = one_part_galaxy.get_images_luminosity(
+            "incident",
+            fov=fov,
+            instrument=observed_instrument,
+            kernel=kernel,
+        )
+
+        assert (
+            observed_images
+            is one_part_galaxy.stars.images_noise_lnu["observed_inst"][
+                "incident"
+            ]
+        )
+        assert (
+            "incident" in one_part_galaxy.stars.images_psf_lnu["observed_inst"]
+        )
+        assert not np.allclose(
+            observed_images["filter_r"].arr,
+            one_part_galaxy.stars.images_psf_lnu["observed_inst"]["incident"][
+                "filter_r"
+            ].arr,
+        )
+
     def test_compare_hist_smoothed_single_particle(
         self, one_part_galaxy, incident_emission_model
     ):

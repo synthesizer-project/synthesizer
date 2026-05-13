@@ -50,6 +50,16 @@ class DummyNoiseInstrument:
         self.expected_result = expected_result
         self.calls = []
 
+    @property
+    def can_do_psf_imaging(self):
+        """Return that this dummy instrument cannot apply PSFs."""
+        return False
+
+    @property
+    def can_do_noisy_imaging(self):
+        """Return that this dummy instrument can apply imaging noise."""
+        return True
+
     def apply_noises(self, image_collection, aperture_radius=None):
         """Record the delegated noise application call and return a marker."""
         self.calls.append(
@@ -64,10 +74,16 @@ class DummyNoiseInstrument:
 class DummySpectroscopicInstrument:
     """Minimal instrument used to inspect delegated spectroscopy calls."""
 
-    def __init__(self):
+    def __init__(self, noisy=False):
         """Initialise the spectroscopy-call recording instrument."""
         self.label = "inst"
         self.calls = []
+        self.noisy = noisy
+
+    @property
+    def can_do_noisy_spectroscopy(self):
+        """Return whether this dummy instrument should add noise."""
+        return self.noisy
 
     def apply_lam_array(self, sed):
         """Record the delegated wavelength-application call."""
@@ -75,19 +91,49 @@ class DummySpectroscopicInstrument:
         self.calls.append({"sed": sed, "result": marker})
         return marker
 
+    def apply_noise(self, spectrum):
+        """Record the delegated spectroscopy-noise call."""
+        marker = object()
+        self.calls.append({"spectrum": spectrum, "noise_result": marker})
+        return marker
+
 
 class DummyIfuInstrument:
     """Minimal IFU used to inspect delegated cube-generation calls."""
 
-    def __init__(self):
+    def __init__(self, do_psf=False, do_noise=False):
         """Initialise the IFU call recorder."""
         self.label = "ifu_inst"
         self.calls = []
+        self.do_psf = do_psf
+        self.do_noise = do_noise
+
+    @property
+    def can_do_psf_spectroscopy(self):
+        """Return whether this dummy IFU should apply a PSF."""
+        return self.do_psf
+
+    @property
+    def can_do_noisy_resolved_spectroscopy(self):
+        """Return whether this dummy IFU should apply noise."""
+        return self.do_noise
 
     def generate_data_cube(self, **kwargs):
         """Record the delegated cube-generation call and return a marker."""
         marker = object()
         self.calls.append({"kwargs": kwargs, "result": marker})
+        return marker
+
+    def apply_psf(self, observable):
+        """Record the delegated IFU-PSF call and return a marker."""
+        marker = object()
+        self.calls.append({"psf_input": observable, "psf_result": marker})
+        return marker
+
+    def apply_noise(self, observable):
+        """Record the delegated IFU-noise call and return a marker."""
+        marker = object()
+        self.calls.append({"noise_input": observable, "noise_result": marker})
         return marker
 
 
@@ -99,6 +145,16 @@ class DummyPsfInstrument:
         self.label = "inst"
         self.psfs = {"F090W": np.ones((3, 3), dtype=float)}
         self.calls = []
+
+    @property
+    def can_do_psf_imaging(self):
+        """Return that this dummy instrument can apply PSFs."""
+        return True
+
+    @property
+    def can_do_noisy_imaging(self):
+        """Return that this dummy instrument cannot apply noise."""
+        return False
 
     def apply_psfs(self, image_collection, psf_resample_factor=1):
         """Record the delegated PSF application call and return a marker."""
@@ -122,6 +178,16 @@ class DummyImageGenerationInstrument:
         self.resolution = 1 * kpc
         self.calls = []
         self.expected_result = expected_result
+
+    @property
+    def can_do_psf_imaging(self):
+        """Return that this dummy instrument cannot apply PSFs."""
+        return False
+
+    @property
+    def can_do_noisy_imaging(self):
+        """Return that this dummy instrument cannot apply noise."""
+        return False
 
     def generate_images(self, **kwargs):
         """Record the delegated image-generation call and return a marker."""
@@ -491,6 +557,28 @@ def test_component_spectroscopy_routing_delegates_to_instrument():
     )
 
 
+def test_component_spectroscopy_applies_noise_when_configured():
+    """Component spectroscopy should apply instrument noise when configured."""
+    sed = object()
+    component = SimpleNamespace(
+        spectra={"stellar": sed},
+        spectroscopy={},
+        particle_spectra={},
+        particle_spectroscopy={},
+    )
+    instrument = DummySpectroscopicInstrument(noisy=True)
+
+    returned = Component.get_spectroscopy(component, instrument)
+
+    assert instrument.calls[0]["sed"] is sed
+    assert instrument.calls[1]["spectrum"] is instrument.calls[0]["result"]
+    assert returned["stellar"] is instrument.calls[1]["noise_result"]
+    assert (
+        component.spectroscopy["inst"]["stellar"]
+        is instrument.calls[1]["noise_result"]
+    )
+
+
 def test_component_image_generation_delegates_to_instrument():
     """Component image generation should delegate to the instrument."""
     photometry = object()
@@ -780,6 +868,37 @@ def test_component_level_combined_cube_uses_model_cache():
         "nebular",
     }
     instrument.generate_data_cube = original_generate
+
+
+def test_component_data_cube_applies_ifu_postprocessing_when_configured():
+    """Component cubes should apply IFU PSF/noise when configured."""
+    component = SimpleNamespace(
+        component_type="Stars",
+        spectra={"stellar": object()},
+        particle_spectra={},
+        model_param_cache={},
+        data_cubes_lnu={},
+        data_cubes_fnu={},
+    )
+    instrument = DummyIfuInstrument(do_psf=True, do_noise=True)
+
+    result = Component.get_data_cube(
+        component,
+        "stellar",
+        fov="fov",
+        instrument=instrument,
+        quantity="lnu",
+    )
+
+    assert instrument.calls[1]["psf_input"] is instrument.calls[0]["result"]
+    assert (
+        instrument.calls[2]["noise_input"] is instrument.calls[1]["psf_result"]
+    )
+    assert result is instrument.calls[2]["noise_result"]
+    assert (
+        component.data_cubes_lnu[instrument.label]["stellar"]
+        is instrument.calls[2]["noise_result"]
+    )
 
 
 def test_component_data_cube_only_caches_supported_quantities():

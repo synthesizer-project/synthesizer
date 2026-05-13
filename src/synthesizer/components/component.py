@@ -541,6 +541,7 @@ class Component(ABC):
         nthreads=1,
         cosmo=None,
         phot_type="lnu",
+        postprocess=True,
     ):
         """Make an ImageCollection from component luminosities or fluxes.
 
@@ -590,6 +591,9 @@ class Component(ABC):
             phot_type (str):
                 The type of photometry to use, either 'lnu' for luminosity
                 units or 'fnu' for flux units.
+            postprocess (bool):
+                If True, automatically apply the instrument-defined imaging
+                post-processing after raw image generation.
 
         Returns:
             ImageCollection/dict
@@ -714,10 +718,102 @@ class Component(ABC):
         if len(out_images) == 0:
             return out_images
 
+        # Stop after raw generation when the caller needs unprocessed images
+        # for a higher-level combination step.
+        if not postprocess:
+            if len(labels) == 1:
+                return out_images[labels[0]]
+            return out_images
+
+        # Apply any instrument-defined PSF and noise processing in the
+        # canonical order before returning the observable to the caller.
+        out_images = Component._postprocess_existing_images(
+            self,
+            instrument=instrument,
+            phot_type=phot_type,
+            limit_to=labels,
+        )
+
         # Return either the single image or the dict of images
         if len(labels) == 1:
             return out_images[labels[0]]
         return out_images
+
+    def _postprocess_existing_images(
+        self,
+        instrument,
+        phot_type,
+        limit_to=None,
+    ):
+        """Apply the instrument-defined imaging post-processing to images.
+
+        Args:
+            instrument (Instrument): Instrument defining the observation.
+            phot_type (str): Either ``"lnu"`` or ``"fnu"``.
+            limit_to (list, optional): Specific labels to post-process.
+
+        Returns:
+            dict: Final image collections keyed by label.
+        """
+        # Select the raw and post-processed image stores for this photometry
+        # flavour.
+        if phot_type == "lnu":
+            raw_store = self.images_lnu
+            if not hasattr(self, "images_psf_lnu"):
+                self.images_psf_lnu = {}
+            if not hasattr(self, "images_noise_lnu"):
+                self.images_noise_lnu = {}
+            psf_store = self.images_psf_lnu
+            noise_store = self.images_noise_lnu
+        elif phot_type == "fnu":
+            raw_store = self.images_fnu
+            if not hasattr(self, "images_psf_fnu"):
+                self.images_psf_fnu = {}
+            if not hasattr(self, "images_noise_fnu"):
+                self.images_noise_fnu = {}
+            psf_store = self.images_psf_fnu
+            noise_store = self.images_noise_fnu
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Photometry type {phot_type} not recognised. Must be "
+                "'lnu' or 'fnu'."
+            )
+
+        # Resolve the raw images we are post-processing from the component
+        # storage populated during generation.
+        raw_images = raw_store.get(instrument.label, {})
+        labels = raw_images.keys() if limit_to is None else limit_to
+        final_images = {
+            label: raw_images[label] for label in labels if label in raw_images
+        }
+
+        # Apply PSFs first so any subsequent noise model acts on the observed
+        # PSF-convolved image.
+        if instrument.can_do_psf_imaging:
+            psf_store.setdefault(instrument.label, {})
+            for label, imgs in final_images.items():
+                psf_store[instrument.label][label] = instrument.apply_psfs(
+                    imgs
+                )
+            final_images = {
+                label: psf_store[instrument.label][label]
+                for label in final_images
+            }
+
+        # Apply the configured instrument noise to the latest image state.
+        if instrument.can_do_noisy_imaging:
+            noise_store.setdefault(instrument.label, {})
+            for label, imgs in final_images.items():
+                noise_store[instrument.label][label] = instrument.apply_noises(
+                    imgs,
+                    aperture_radius=instrument.depth_app_radius,
+                )
+            final_images = {
+                label: noise_store[instrument.label][label]
+                for label in final_images
+            }
+
+        return final_images
 
     def get_images_luminosity(
         self,
@@ -1207,9 +1303,10 @@ class Component(ABC):
                 continue
             # Delegate the spectroscopy observation to the instrument so the
             # component layer only handles routing and output storage
-            self.spectroscopy[instrument.label][label] = (
-                instrument.apply_lam_array(self.spectra[label])
-            )
+            spectrum = instrument.apply_lam_array(self.spectra[label])
+            if instrument.can_do_noisy_spectroscopy:
+                spectrum = instrument.apply_noise(spectrum)
+            self.spectroscopy[instrument.label][label] = spectrum
 
         # If we have particle spectra then do the same for them
         if (
@@ -1232,9 +1329,12 @@ class Component(ABC):
                 # Delegate the particle-spectrum observation to the instrument
                 # so the component layer only handles routing and output
                 # storage
-                self.particle_spectroscopy[instrument.label][label] = (
-                    instrument.apply_lam_array(self.particle_spectra[label])
+                spectrum = instrument.apply_lam_array(
+                    self.particle_spectra[label]
                 )
+                if instrument.can_do_noisy_spectroscopy:
+                    spectrum = instrument.apply_noise(spectrum)
+                self.particle_spectroscopy[instrument.label][label] = spectrum
 
         # Return the spectroscopy for the component
         return self.spectroscopy[instrument.label]
@@ -1299,6 +1399,7 @@ class Component(ABC):
         quantity="lnu",
         nthreads=1,
         cosmo=None,
+        postprocess=True,
     ):
         """Make SpectralCube objects for one component.
 
@@ -1322,6 +1423,9 @@ class Component(ABC):
                 Number of threads to use for particle cube generation.
             cosmo (astropy.cosmology, optional):
                 Cosmology used for mixed-unit conversions.
+            postprocess (bool):
+                If True, automatically apply any instrument-defined IFU
+                post-processing after raw cube generation.
 
         Returns:
             SpectralCube/dict:
@@ -1382,12 +1486,79 @@ class Component(ABC):
             self.data_cubes_fnu.setdefault(instrument.label, {})
             self.data_cubes_fnu[instrument.label].update(out_cubes)
 
+        # Stop after raw generation when the caller needs unprocessed cubes for
+        # a higher-level combination step.
+        if postprocess:
+            out_cubes = Component._postprocess_existing_data_cubes(
+                self,
+                instrument=instrument,
+                quantity=quantity,
+                limit_to=labels,
+            )
+
         if len(out_cubes) == 0:
             return out_cubes
 
         if len(labels) == 1:
             return out_cubes[labels[0]]
         return out_cubes
+
+    def _postprocess_existing_data_cubes(
+        self,
+        instrument,
+        quantity,
+        limit_to=None,
+    ):
+        """Apply the instrument-defined IFU post-processing to cubes.
+
+        Args:
+            instrument (IntegratedFieldUnit): Instrument defining the
+                observation.
+            quantity (str): Spectral quantity family for selecting the store.
+            limit_to (list, optional): Specific labels to post-process.
+
+        Returns:
+            dict: Final cubes keyed by label.
+        """
+        # Select the appropriate cube store for this quantity family.
+        if quantity in {"lnu", "llam", "luminosity"}:
+            cube_store = self.data_cubes_lnu
+        elif quantity in {"fnu", "flam", "flux"}:
+            cube_store = self.data_cubes_fnu
+        else:
+            return {}
+
+        # Resolve the raw cubes we are post-processing from the component
+        # storage populated during generation.
+        raw_cubes = cube_store.get(instrument.label, {})
+        labels = raw_cubes.keys() if limit_to is None else limit_to
+        final_cubes = {
+            label: raw_cubes[label] for label in labels if label in raw_cubes
+        }
+
+        # Apply any configured IFU PSF before any configured IFU noise.
+        if instrument.can_do_psf_spectroscopy:
+            for label, cube in final_cubes.items():
+                cube_store[instrument.label][label] = instrument.apply_psf(
+                    cube
+                )
+            final_cubes = {
+                label: cube_store[instrument.label][label]
+                for label in final_cubes
+            }
+
+        # Apply any configured IFU noise to the latest cube state.
+        if getattr(instrument, "can_do_noisy_resolved_spectroscopy", False):
+            for label, cube in final_cubes.items():
+                cube_store[instrument.label][label] = instrument.apply_noise(
+                    cube
+                )
+            final_cubes = {
+                label: cube_store[instrument.label][label]
+                for label in final_cubes
+            }
+
+        return final_cubes
 
     def plot_spectra(
         self,
