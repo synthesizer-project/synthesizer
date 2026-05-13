@@ -2752,10 +2752,6 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # We want to time PSF application and noise application separately
-        psf_time = 0
-        noise_time = 0
-
         # Loop over all the queued operation configurations
         for model_label, op_kwargs in self._operation_kwargs[
             "get_images_luminosity"
@@ -2765,7 +2761,9 @@ class Pipeline:
 
             # Loop over instruments and perform any imaging they define
             for inst in instruments:
-                # Get the basic images for the requested spectra types
+                # Generate the observable defined by the instrument. Any
+                # configured PSF or noise processing is now applied inside the
+                # high-level getter itself.
                 galaxy.get_images_luminosity(
                     *model_label,
                     fov=op_kwargs["fov"],
@@ -2776,26 +2774,6 @@ class Pipeline:
                     instrument=inst,
                     cosmo=op_kwargs["cosmo"],
                 )
-
-                # Apply the PSF if applicable to the instrument
-                if inst.can_do_psf_imaging:
-                    psf_start = time.perf_counter()
-                    galaxy.apply_psf_to_images_lnu(
-                        instrument=inst,
-                        psf_resample_factor=op_kwargs["psf_resample_factor"],
-                        limit_to=model_label,
-                    )
-                    psf_time += time.perf_counter() - psf_start
-
-                # Apply the instrument noise if applicable to the instrument
-                if inst.can_do_noisy_imaging:
-                    noise_start = time.perf_counter()
-                    galaxy.apply_noise_to_images_lnu(
-                        instrument=inst,
-                        limit_to=model_label,
-                        apply_to_psf=inst.can_do_psf_imaging,
-                    )
-                    noise_time += time.perf_counter() - noise_start
 
         # Count the number of images we have generated
         self._op_counts["Luminosity Images"] += count_and_check_dict_recursive(
@@ -2833,11 +2811,7 @@ class Pipeline:
             )
 
         # Record the time taken
-        self._op_timing["Luminosity Images"] += (
-            time.perf_counter() - start - psf_time - noise_time
-        )
-        self._op_timing["Luminosity Images (With PSF)"] += psf_time
-        self._op_timing["Luminosity Images (With Noise)"] += noise_time
+        self._op_timing["Luminosity Images"] += time.perf_counter() - start
 
     def get_images_flux(
         self,
@@ -3003,10 +2977,6 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # We want to time PSF application and noise application separately
-        psf_time = 0
-        noise_time = 0
-
         # Loop over all the queued operation configurations
         for model_label, op_kwargs in self._operation_kwargs[
             "get_images_flux"
@@ -3016,7 +2986,9 @@ class Pipeline:
 
             # Loop over instruments and perform any imaging they define
             for inst in instruments:
-                # Get the basic images for the requested spectra types
+                # Generate the observable defined by the instrument. Any
+                # configured PSF or noise processing is now applied inside the
+                # high-level getter itself.
                 galaxy.get_images_flux(
                     *model_label,
                     fov=op_kwargs["fov"],
@@ -3027,26 +2999,6 @@ class Pipeline:
                     nthreads=self.nthreads,
                     instrument=inst,
                 )
-
-                # Apply the PSF if applicable to the instrument
-                if inst.can_do_psf_imaging:
-                    psf_start = time.perf_counter()
-                    galaxy.apply_psf_to_images_fnu(
-                        instrument=inst,
-                        psf_resample_factor=op_kwargs["psf_resample_factor"],
-                        limit_to=model_label,
-                    )
-                    psf_time += time.perf_counter() - psf_start
-
-                # Apply the instrument noise if applicable to the instrument
-                if inst.can_do_noisy_imaging:
-                    noise_start = time.perf_counter()
-                    galaxy.apply_noise_to_images_fnu(
-                        instrument=inst,
-                        limit_to=model_label,
-                        apply_to_psf=inst.can_do_psf_imaging,
-                    )
-                    noise_time += time.perf_counter() - noise_start
 
         # Count the number of images we have generated
         self._op_counts["Flux Images"] += count_and_check_dict_recursive(
@@ -3084,11 +3036,7 @@ class Pipeline:
             )
 
         # Record the time taken
-        self._op_timing["Flux Images"] += (
-            time.perf_counter() - start - psf_time - noise_time
-        )
-        self._op_timing["Flux Images (With PSF)"] += psf_time
-        self._op_timing["Flux Images (With Noise)"] += noise_time
+        self._op_timing["Flux Images"] += time.perf_counter() - start
 
     def get_data_cubes_lnu(
         self,

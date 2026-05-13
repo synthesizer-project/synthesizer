@@ -1486,6 +1486,7 @@ class BaseGalaxy:
                 fov=fov,
                 cosmo=cosmo,
                 phot_type=phot_type,
+                postprocess=False,
             )
 
             # Component returns a dict if multiple labels, or bare
@@ -1604,10 +1605,124 @@ class BaseGalaxy:
             )
             return {}
 
+        # Apply the instrument-defined observation recipe to component-owned
+        # images after all raw combinations are complete.
+        final_images = dict(out_images)
+
+        # Post-process each component's raw images in place on the component so
+        # the stored caches reflect the same observable returned here.
+        for emitter, emitter_labels in component_labels_by_emitter.items():
+            component = None
+            if emitter == "stellar" and self.stars is not None:
+                component = self.stars
+            elif emitter == "blackhole" and self.black_holes is not None:
+                component = self.black_holes
+            elif emitter == "gas" and self.gas is not None:
+                component = self.gas
+
+            if component is None:
+                continue
+
+            final_images.update(
+                component._postprocess_existing_images(
+                    instrument=instrument,
+                    phot_type=phot_type,
+                    limit_to=emitter_labels,
+                )
+            )
+
+        # Post-process any galaxy-owned combined images after the combination
+        # step so the observation recipe is applied once to the full galaxy.
+        if len(galaxy_combine_labels) > 0:
+            final_images.update(
+                BaseGalaxy._postprocess_existing_images(
+                    self,
+                    instrument=instrument,
+                    phot_type=phot_type,
+                    limit_to=galaxy_combine_labels,
+                )
+            )
+
         # Return either the single image or the dict of images
         if len(labels) == 1:
-            return out_images[labels[0]]
-        return out_images
+            return final_images[labels[0]]
+        return final_images
+
+    def _postprocess_existing_images(
+        self,
+        instrument,
+        phot_type,
+        limit_to=None,
+    ):
+        """Apply the instrument-defined imaging post-processing to images.
+
+        Args:
+            instrument (Instrument): Instrument defining the observation.
+            phot_type (str): Either ``"lnu"`` or ``"fnu"``.
+            limit_to (list, optional): Specific labels to post-process.
+
+        Returns:
+            dict: Final image collections keyed by label.
+        """
+        # Select the raw and post-processed image stores for this photometry
+        # flavour.
+        if phot_type == "lnu":
+            raw_store = self.images_lnu
+            if not hasattr(self, "images_psf_lnu"):
+                self.images_psf_lnu = {}
+            if not hasattr(self, "images_noise_lnu"):
+                self.images_noise_lnu = {}
+            psf_store = self.images_psf_lnu
+            noise_store = self.images_noise_lnu
+        elif phot_type == "fnu":
+            raw_store = self.images_fnu
+            if not hasattr(self, "images_psf_fnu"):
+                self.images_psf_fnu = {}
+            if not hasattr(self, "images_noise_fnu"):
+                self.images_noise_fnu = {}
+            psf_store = self.images_psf_fnu
+            noise_store = self.images_noise_fnu
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Photometry type {phot_type} not recognised. Must be "
+                "'lnu' or 'fnu'."
+            )
+
+        # Resolve the raw images we are post-processing from the galaxy-level
+        # storage populated during generation.
+        raw_images = raw_store.get(instrument.label, {})
+        labels = raw_images.keys() if limit_to is None else limit_to
+        final_images = {
+            label: raw_images[label] for label in labels if label in raw_images
+        }
+
+        # Apply PSFs first so any subsequent noise model acts on the observed
+        # PSF-convolved image.
+        if instrument.can_do_psf_imaging:
+            psf_store.setdefault(instrument.label, {})
+            for label, imgs in final_images.items():
+                psf_store[instrument.label][label] = instrument.apply_psfs(
+                    imgs
+                )
+            final_images = {
+                label: psf_store[instrument.label][label]
+                for label in final_images
+            }
+
+        # Apply the configured instrument noise to the latest image state.
+        if instrument.can_do_noisy_imaging:
+            noise_store.setdefault(instrument.label, {})
+            for label, imgs in final_images.items():
+                noise_store[instrument.label][label] = instrument.apply_noises(
+                    imgs,
+                    aperture_radius=instrument.depth_app_radius,
+                )
+            final_images = {
+                label: noise_store[instrument.label][label]
+                for label in final_images
+            }
+
+        return final_images
 
     def get_images_luminosity(
         self,
@@ -1878,6 +1993,7 @@ class BaseGalaxy:
                 quantity=quantity,
                 nthreads=nthreads,
                 cosmo=cosmo,
+                postprocess=False,
             )
 
             if isinstance(component_cubes, dict):
@@ -1939,12 +2055,105 @@ class BaseGalaxy:
             if not in_stars and not in_bhs:
                 galaxy_cubes[instrument_name][label] = out_cubes[label]
 
+        # Apply the instrument-defined observation recipe to component-owned
+        # cubes after all raw combinations are complete.
+        final_cubes = dict(out_cubes)
+
+        for emitter, emitter_labels in component_labels_by_emitter.items():
+            component = None
+            if emitter == "stellar" and self.stars is not None:
+                component = self.stars
+            elif emitter == "blackhole" and self.black_holes is not None:
+                component = self.black_holes
+            elif emitter == "gas" and self.gas is not None:
+                component = self.gas
+
+            if component is None:
+                continue
+
+            final_cubes.update(
+                component._postprocess_existing_data_cubes(
+                    instrument=instrument,
+                    quantity=quantity,
+                    limit_to=emitter_labels,
+                )
+            )
+
+        # Post-process any galaxy-owned combined cubes after the combination
+        # step so the observation recipe is applied once to the full galaxy.
+        if len(galaxy_combine_labels) > 0:
+            final_cubes.update(
+                BaseGalaxy._postprocess_existing_data_cubes(
+                    self,
+                    instrument=instrument,
+                    quantity=quantity,
+                    limit_to=galaxy_combine_labels,
+                )
+            )
+
         if len(out_cubes) == 0:
             return out_cubes
 
         if len(labels) == 1:
-            return out_cubes[labels[0]]
-        return out_cubes
+            return final_cubes[labels[0]]
+        return final_cubes
+
+    def _postprocess_existing_data_cubes(
+        self,
+        instrument,
+        quantity,
+        limit_to=None,
+    ):
+        """Apply the instrument-defined IFU post-processing to cubes.
+
+        Args:
+            instrument (IntegratedFieldUnit): Instrument defining the
+                observation.
+            quantity (str): Spectral quantity family for selecting the store.
+            limit_to (list, optional): Specific labels to post-process.
+
+        Returns:
+            dict: Final cubes keyed by label.
+        """
+        # Select the appropriate cube store for this quantity family.
+        if quantity in {"lnu", "llam", "luminosity"}:
+            cube_store = self.data_cubes_lnu
+        elif quantity in {"fnu", "flam", "flux"}:
+            cube_store = self.data_cubes_fnu
+        else:
+            return {}
+
+        # Resolve the raw cubes we are post-processing from the galaxy-level
+        # storage populated during generation.
+        raw_cubes = cube_store.get(instrument.label, {})
+        labels = raw_cubes.keys() if limit_to is None else limit_to
+        final_cubes = {
+            label: raw_cubes[label] for label in labels if label in raw_cubes
+        }
+
+        # Apply any configured IFU PSF before any configured IFU noise.
+        if instrument.can_do_psf_spectroscopy:
+            for label, cube in final_cubes.items():
+                cube_store[instrument.label][label] = instrument.apply_psf(
+                    cube
+                )
+            final_cubes = {
+                label: cube_store[instrument.label][label]
+                for label in final_cubes
+            }
+
+        # Apply any configured IFU noise to the latest cube state.
+        if getattr(instrument, "can_do_noisy_resolved_spectroscopy", False):
+            for label, cube in final_cubes.items():
+                cube_store[instrument.label][label] = instrument.apply_noise(
+                    cube
+                )
+            final_cubes = {
+                label: cube_store[instrument.label][label]
+                for label in final_cubes
+            }
+
+        return final_cubes
 
     @deprecated(
         "is deprecated and will be removed in version 1.3.0. "
@@ -2390,9 +2599,10 @@ class BaseGalaxy:
                 continue
             # Delegate the spectroscopy observation to the instrument so the
             # galaxy layer only handles routing and output storage
-            self.spectroscopy[instrument.label][label] = (
-                instrument.apply_lam_array(self.spectra[label])
-            )
+            spectrum = instrument.apply_lam_array(self.spectra[label])
+            if instrument.can_do_noisy_spectroscopy:
+                spectrum = instrument.apply_noise(spectrum)
+            self.spectroscopy[instrument.label][label] = spectrum
 
         # Do the stars level spectra
         if self.stars is not None:
