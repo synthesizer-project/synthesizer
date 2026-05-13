@@ -472,9 +472,9 @@ class ImageCollection(ImagingBase):
             smoothing_lengths (unyt_array, float):
                 The smoothing lengths of the particles. (Only applicable to
                 particle imaging)
-            kernel (str):
-                The array describing the kernel. This is dervied from the
-                kernel_functions module. (Only applicable to particle imaging)
+            kernel (np.ndarray or Kernel):
+                The kernel lookup table, or a ``Kernel`` instance to extract
+                the lookup table from. (Only applicable to particle imaging)
             kernel_threshold (float):
                 The threshold for the kernel. Particles with a kernel value
                 below this threshold are included in the image. (Only

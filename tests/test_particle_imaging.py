@@ -40,7 +40,7 @@ def make_test_imager(resolution, filter_codes=("filter_r",), **kwargs):
     # Construct a real photometric imager so tests follow the current factory
     # contract
     return Instrument(
-        label=kwargs.pop("label", "test_inst"),
+        kwargs.pop("label", "test_inst"),
         filters=filters,
         resolution=resolution,
         **kwargs,
@@ -91,6 +91,25 @@ class TestImageGeneration:
         coords, signal, smoothing_lengths = mock_particles
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
+
+        img.generate_img_smoothed(
+            signal,
+            coordinates=coords,
+            smoothing_lengths=smoothing_lengths,
+            kernel=kernel,
+        )
+
+        assert img.arr is not None
+        assert np.all(img.shape == (10, 10)), (
+            f"Image shape should be (10, 10) but found {img.shape}"
+        )
+        assert np.sum(img.arr) >= 0
+
+    def test_generate_img_smoothed_accepts_kernel_object(self, mock_particles):
+        """Smoothed image generation should accept Kernel objects directly."""
+        coords, signal, smoothing_lengths = mock_particles
+        img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
+        kernel = Kernel()
 
         img.generate_img_smoothed(
             signal,
@@ -470,6 +489,35 @@ class TestSpectralCube:
                 smoothing_lengths,
                 kernel=kernel,
             )
+
+        assert cube.cube is not None
+
+    def test_generate_data_cube_smoothed_accepts_kernel_object(self):
+        """Smoothed cube generation should accept Kernel objects directly."""
+        from synthesizer.emissions.sed import Sed
+
+        wavelengths = np.linspace(5000, 6000, 5) * angstrom
+        cube = SpectralCube(
+            resolution=0.2 * kpc, fov=2.0 * kpc, lam=wavelengths
+        )
+
+        n_particles = 10
+        spectra_values = np.ones((n_particles, len(wavelengths))) * 1e30
+        sed = Sed(lam=wavelengths, lnu=spectra_values * erg / s / Hz)
+
+        coords = unyt_array(
+            np.random.uniform(-0.8, 0.8, (n_particles, 3)), kpc
+        )
+        coords[:, 2] = 0.0
+        smoothing_lengths = unyt_array([0.3] * n_particles, kpc)
+        kernel = Kernel()
+
+        cube.generate_data_cube_smoothed(
+            sed,
+            coords,
+            smoothing_lengths,
+            kernel=kernel,
+        )
 
         assert cube.cube is not None
 
@@ -1096,6 +1144,56 @@ class TestImagingFluxConservation:
         expected_flux = random_part_stars.photo_lnu["incident"]["filter_r"]
 
         # Compare the fluxes
+        assert np.isclose(smoothed_flux, expected_flux, rtol=1e-3), (
+            f"Smoothed flux {smoothed_flux} does not match expected flux "
+            f"{expected_flux} within tolerance"
+        )
+
+    def test_flux_conservation_smoothed_with_kernel_object(
+        self,
+        random_part_stars,
+        incident_emission_model,
+    ):
+        """High-level smoothed imaging should accept Kernel objects."""
+        resolution = 0.5 * kpc
+        fov = 200 * kpc
+
+        incident_emission_model.set_per_particle(True)
+
+        random_part_stars.get_spectra(incident_emission_model)
+        random_part_stars.get_particle_photo_lnu(
+            FilterCollection(
+                generic_dict={
+                    "filter_r": np.ones(1000),
+                },
+                new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+            )
+        )
+        random_part_stars.get_photo_lnu(
+            FilterCollection(
+                generic_dict={
+                    "filter_r": np.ones(1000),
+                },
+                new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+            )
+        )
+
+        random_part_stars.centre = np.array([0.0, 0.0, 0.0]) * kpc
+
+        kernel = Kernel()
+        instrument = make_test_imager(resolution)
+
+        smoothed_image = random_part_stars.get_images_luminosity(
+            "incident",
+            fov=fov,
+            instrument=instrument,
+            img_type="smoothed",
+            kernel=kernel,
+        )["filter_r"]
+
+        smoothed_flux = np.sum(smoothed_image.arr)
+        expected_flux = random_part_stars.photo_lnu["incident"]["filter_r"]
+
         assert np.isclose(smoothed_flux, expected_flux, rtol=1e-3), (
             f"Smoothed flux {smoothed_flux} does not match expected flux "
             f"{expected_flux} within tolerance"

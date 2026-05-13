@@ -53,7 +53,7 @@ def get_instrument_profile(label, filepath, filters=None, resolution=None):
 
     # Create the instrument
     instrument = Instrument(
-        label=label,
+        label,
         filters=filters,
         resolution=resolution,
     )

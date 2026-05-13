@@ -76,12 +76,12 @@ def profile_nparticles(nthreads=1, n_averages=3):
 
     # Create high and low resolution instruments using the cached filters
     inst_low = Instrument(
-        label="low_res",
+        "low_res",
         filters=filters_3,
         resolution=res_low,
     )
     inst_high = Instrument(
-        label="high_res",
+        "high_res",
         filters=filters_3,
         resolution=res_high,
     )

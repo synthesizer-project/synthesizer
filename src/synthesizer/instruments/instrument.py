@@ -37,9 +37,9 @@ class Instrument:
         """Return the correct specialised instrument.
 
         Args:
-            *args: Positional arguments are not supported by the factory
-                and will be rejected explicitly. All arguments must be
-                passed as keyword arguments.
+            *args: Optional positional arguments. At most one positional
+                argument is accepted, and if present it is interpreted as the
+                instrument label.
             **kwargs: Keyword arguments which are used to determine the correct
                 specialised instrument type to construct. Supported arguments
                 are:
@@ -69,14 +69,26 @@ class Instrument:
             InstrumentBase: An instance of the specialised instrument class
                 implied by the supplied arguments.
         """
-        # Keyword-only construction keeps the dispatch logic explicit and easy
-        # to reason about.
-        if len(args) > 0:
+        # Accept a single positional label for backwards compatibility with
+        # existing scripts while keeping all other arguments explicit.
+        if len(args) > 1:
             raise exceptions.InconsistentArguments(
-                "Instrument(...) only accepts keyword arguments. "
-                "Pass values explicitly, for example "
-                "Instrument(label='my_instrument', ...)."
+                "Instrument(...) accepts at most one positional argument, "
+                "which is interpreted as the label. Pass any remaining values "
+                "as keyword arguments, for example "
+                "Instrument('my_instrument', filters=..., resolution=...)."
             )
+
+        # Interpret the optional positional argument as the label and reject
+        # ambiguous cases where both positional and keyword labels are given.
+        if len(args) == 1:
+            if "label" in kwargs:
+                raise exceptions.InconsistentArguments(
+                    "Instrument(...) received both a positional label and a "
+                    "label keyword argument. Please provide the label only "
+                    "once."
+                )
+            kwargs["label"] = args[0]
 
         # Unpack all supported arguments for dispatch.
         label = kwargs.get("label", None)

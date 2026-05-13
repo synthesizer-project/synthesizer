@@ -34,6 +34,26 @@ from synthesizer.utils.operation_timers import timed, timer
 _CENTERING_TOLERANCE = 1e-6
 
 
+def _standardize_sph_kernel(kernel):
+    """Return an SPH kernel lookup array for smoothing backends.
+
+    Args:
+        kernel (np.ndarray or Kernel):
+            Either a raw kernel lookup array or a ``Kernel`` instance.
+
+    Returns:
+        np.ndarray:
+            The contiguous lookup array expected by the C extension.
+    """
+    # Accept Kernel objects at public call sites and extract the lookup table
+    # only when we actually need to call the backend.
+    if hasattr(kernel, "get_kernel"):
+        kernel = kernel.get_kernel()
+
+    # Ensure the backend always receives a contiguous float64 lookup array.
+    return ensure_array_c_compatible_double(kernel)
+
+
 def _validate_centered_coordinates(cent_coords, *, warn_only=False):
     """Ensure coordinates are centred on zero along each axis.
 
@@ -479,9 +499,9 @@ def _generate_image_particle_smoothed(
         smoothing_lengths (unyt_array of float):
             The smoothing lengths of the particles. These will be converted to
             the image resolution units.
-        kernel (str):
-            The array describing the kernel. This is dervied from the
-            kernel_functions module.
+        kernel (np.ndarray or Kernel):
+            The kernel lookup table, or a ``Kernel`` instance to extract it
+            from.
         kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
             below this threshold are included in the image.
@@ -567,18 +587,22 @@ def _generate_image_particle_smoothed(
             signal = signal.copy()
             signal *= normalisation.value
 
+    # Convert the public kernel input into the lookup array used by the
+    # smoothing backend.
+    kernel_arr = _standardize_sph_kernel(kernel)
+
     # Get the (npix_x, npix_y, Nimg) array of images
     imgs_arr = make_img(
         ensure_array_c_compatible_double(signal),
         ensure_array_c_compatible_double(_smoothing_lengths),
         ensure_array_c_compatible_double(_coords),
-        kernel,
+        kernel_arr,
         res,
         img.npix[0],
         img.npix[1],
         cent_coords.shape[0],
         kernel_threshold,
-        kernel.size,
+        kernel_arr.size,
         1,
         nthreads,
     )
@@ -641,9 +665,9 @@ def _generate_images_particle_smoothed(
         labels (list):
             The labels of the signals to use for the images. This must have a
             length equal to the number of images in the collection.
-        kernel (str):
-            The array describing the kernel. This is dervied from the
-            kernel_functions module.
+        kernel (np.ndarray or Kernel):
+            The kernel lookup table, or a ``Kernel`` instance to extract it
+            from.
         kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
             below this threshold are included in the image.
@@ -743,18 +767,22 @@ def _generate_images_particle_smoothed(
         # signals to make the most of cache locality, so we transpose them.
         signals = signals.T
 
+    # Convert the public kernel input into the lookup array used by the
+    # smoothing backend.
+    kernel_arr = _standardize_sph_kernel(kernel)
+
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
         ensure_array_c_compatible_double(signals),
         ensure_array_c_compatible_double(_smoothing_lengths),
         ensure_array_c_compatible_double(_coords),
-        kernel,
+        kernel_arr,
         res,
         imgs.npix[0],
         imgs.npix[1],
         cent_coords.shape[0],
         kernel_threshold,
-        kernel.size,
+        kernel_arr.size,
         signals.shape[1],
         nthreads,
     )

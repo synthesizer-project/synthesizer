@@ -397,8 +397,9 @@ class Image(ImagingBase):
                 The coordinates of the particles. (particle case only)
             smoothing_lengths (unyt_array, float):
                 The smoothing lengths of the particles. (particle case only)
-            kernel (str):
-                The kernel to use for smoothing. (particle case only)
+            kernel (np.ndarray or Kernel):
+                The kernel lookup table, or a ``Kernel`` instance to extract
+                the lookup table from. (particle case only)
             kernel_threshold (float):
                 The threshold for the kernel. (particle case only)
             density_grid (array_like, float):
