@@ -1652,7 +1652,8 @@ class Sed:
                 by the provided velocity dispersion. Only returned if
                 in_place is False.
         """
-        # Ensure the mask is compatible with the spectra
+        # The final axis is wavelength; every leading element is an independent
+        # spectrum that can receive its own velocity dispersion and mask value.
         leading_shape = self._lnu.shape[:-1]
         if mask is not None:
             if self._lnu.ndim < 2:
@@ -1678,6 +1679,8 @@ class Sed:
 
         def broaden_spectrum(lnu, this_sigma_v):
             """Broaden one spectrum by one velocity dispersion."""
+            # The convolution kernel has constant width in velocity, so the
+            # spectrum must be sampled uniformly in log(lambda), not lambda.
             lnu_uniform = spectres(x_uniform, x, lnu, fill=0.0, verbose=False)
 
             # Convert velocity sigma to log-lambda sigma. Delta x = ln(lambda)
@@ -1714,6 +1717,8 @@ class Sed:
         for ind in np.where(flat_mask)[0]:
             flat_lnu[ind] = broaden_spectrum(flat_lnu[ind], flat_sigma_v[ind])
 
+        # Reshape back to the original Sed layout after applying the flattened
+        # per-spectrum operation.
         new_lnu = flat_lnu.reshape(self._lnu.shape) * self.lnu.units
 
         # Return new Sed or modify in place
