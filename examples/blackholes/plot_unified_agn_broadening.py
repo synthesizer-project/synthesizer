@@ -7,6 +7,8 @@ the optional Doppler broadening applied by ``velocity_dispersion_blr`` and
 ``velocity_dispersion_nlr``.
 """
 
+import matplotlib.pyplot as plt
+import numpy as np
 from unyt import Msun, deg, kelvin, km, s, yr
 
 from synthesizer.emission_models import Greybody, UnifiedAGN
@@ -59,13 +61,42 @@ broadened_bh.get_spectra(broadened_model)
 # Plot the final BLR and NLR model outputs. In the broadened model these are
 # transformations of the internal unbroadened_blr/unbroadened_nlr components.
 for component in ("blr", "nlr"):
+    fig, (spectra_ax, residual_ax) = plt.subplots(
+        2,
+        1,
+        figsize=(7, 6),
+        gridspec_kw={"height_ratios": (3, 1), "hspace": 0.05},
+        sharex=True,
+    )
+
+    unbroadened_sed = unbroadened_bh.spectra[component]
+    broadened_sed = broadened_bh.spectra[component]
     plot_spectra(
         spectra={
-            f"Unbroadened {component.upper()}": unbroadened_bh.spectra[
-                component
-            ],
-            f"Broadened {component.upper()}": broadened_bh.spectra[component],
+            f"Unbroadened {component.upper()}": unbroadened_sed,
+            f"Broadened {component.upper()}": broadened_sed,
         },
+        fig=fig,
+        ax=spectra_ax,
         quantity_to_plot="luminosity",
-        show=True,
+        show=False,
     )
+    spectra_ax.loglog()
+    spectra_ax.set_xlabel("")
+
+    # Plot fractional residuals where the unbroadened model is non-zero. The
+    # broadened model conserves integrated luminosity but redistributes it in
+    # wavelength, so the residual panel highlights line-profile changes.
+    ok = unbroadened_sed.luminosity > 0
+    residual = np.zeros_like(unbroadened_sed.luminosity.value)
+    residual[ok] = (
+        broadened_sed.luminosity[ok] / unbroadened_sed.luminosity[ok]
+    ).value - 1.0
+
+    residual_ax.axhline(0.0, color="0.5", lw=1, ls="--")
+    residual_ax.plot(unbroadened_sed.lam, residual, color="k", lw=1)
+    residual_ax.set_xscale("log")
+    residual_ax.set_ylabel("Frac. residual")
+    residual_ax.set_xlabel("Rest-frame wavelength")
+
+    plt.show()
