@@ -82,6 +82,7 @@ for component in ("blr", "nlr"):
         show=False,
     )
     spectra_ax.loglog()
+    spectra_ax.set_xlim(800, None)
     spectra_ax.set_xlabel("")
 
     # Plot the absolute fractional residual where the unbroadened model is
