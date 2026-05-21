@@ -26,8 +26,39 @@ from unyt import (
     s,
 )
 
+from synthesizer import exceptions
 from synthesizer.cosmology import get_luminosity_distance
+from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
+
+_LOCAL_DISTANCE = 10 * pc
+
+
+def _get_arcsec_per_kpc_at_z(cosmo, redshift):
+    """Get arcsec per kpc, using the local 10 pc convention at z=0."""
+    if redshift < 0:
+        raise exceptions.InconsistentArguments(
+            "Cannot convert between spatial and angular distances at "
+            f"negative redshift={redshift}."
+        )
+
+    if redshift == 0:
+        warn(
+            "Angular diameter distance is zero at redshift 0. Using the "
+            "local-object convention of placing the object at 10 pc for "
+            "spatial/angular conversions."
+        )
+        return (kpc / _LOCAL_DISTANCE).to("").value * (180 / np.pi) * 3600
+
+    arcsec_per_kpc = cosmo.arcsec_per_kpc_proper(redshift).value
+    if not np.isfinite(arcsec_per_kpc) or arcsec_per_kpc <= 0:
+        raise exceptions.InconsistentArguments(
+            "Cannot convert between spatial and angular distances at "
+            f"redshift={redshift}. The angular-diameter distance is "
+            "non-finite, so angular image scales are undefined."
+        )
+
+    return arcsec_per_kpc
 
 
 @accepts(flux=erg / s / cm**2)
@@ -558,9 +589,8 @@ def spatial_to_angular_at_z(spatial, cosmo, redshift):
             The converted angular distance in arcseconds.
     """
     # Get the conversion factor
-    arcsec_per_kpc_at_z = (
-        cosmo.arcsec_per_kpc_proper(redshift).value * arcsecond / kpc
-    )
+    arcsec_per_kpc = _get_arcsec_per_kpc_at_z(cosmo, redshift)
+    arcsec_per_kpc_at_z = arcsec_per_kpc * arcsecond / kpc
     return spatial * arcsec_per_kpc_at_z
 
 
@@ -581,7 +611,6 @@ def angular_to_spatial_at_z(angular, cosmo, redshift):
             The converted spatial distance in kpc.
     """
     # Get the conversion factor
-    kpc_per_arcsec_at_z = (
-        1 / cosmo.arcsec_per_kpc_proper(redshift).value * kpc / arcsecond
-    )
+    arcsec_per_kpc = _get_arcsec_per_kpc_at_z(cosmo, redshift)
+    kpc_per_arcsec_at_z = 1 / arcsec_per_kpc * kpc / arcsecond
     return angular * kpc_per_arcsec_at_z
