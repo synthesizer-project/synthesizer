@@ -7,10 +7,10 @@ the optional Doppler broadening applied by ``velocity_dispersion_blr`` and
 ``velocity_dispersion_nlr``.
 """
 
-import matplotlib.pyplot as plt
 from unyt import Msun, deg, kelvin, km, s, yr
 
 from synthesizer.emission_models import Greybody, UnifiedAGN
+from synthesizer.emissions import plot_spectra
 from synthesizer.grid import Grid
 from synthesizer.parametric import BlackHole
 
@@ -58,21 +58,14 @@ broadened_bh.get_spectra(broadened_model)
 
 # Plot the final BLR and NLR model outputs. In the broadened model these are
 # transformations of the internal unbroadened_blr/unbroadened_nlr components.
-fig, axes = plt.subplots(2, 1, sharex=True, figsize=(7, 6))
-for ax, component in zip(axes, ("blr", "nlr")):
-    ax.plot(
-        unbroadened_bh.spectra[component].lam,
-        unbroadened_bh.spectra[component].lnu,
-        label="Unbroadened",
+for component in ("blr", "nlr"):
+    plot_spectra(
+        spectra={
+            f"Unbroadened {component.upper()}": unbroadened_bh.spectra[
+                component
+            ],
+            f"Broadened {component.upper()}": broadened_bh.spectra[component],
+        },
+        quantity_to_plot="luminosity",
+        show=True,
     )
-    ax.plot(
-        broadened_bh.spectra[component].lam,
-        broadened_bh.spectra[component].lnu,
-        label="Broadened",
-    )
-    ax.set_ylabel(f"{component.upper()} $L_\\nu$")
-    ax.legend()
-
-axes[-1].set_xlabel("Rest-frame wavelength")
-fig.tight_layout()
-plt.show()
