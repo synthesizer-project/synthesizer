@@ -1677,20 +1677,14 @@ class Sed:
         half = n_uniform // 2
         kernel_x = (np.arange(n_uniform) - half) * dx
 
-        def broaden_spectrum(lnu, this_sigma_v):
-            """Broaden one spectrum by one velocity dispersion."""
-            # The convolution kernel has constant width in velocity, so the
-            # spectrum must be sampled uniformly in log(lambda), not lambda.
-            lnu_uniform = spectres(x_uniform, x, lnu, fill=0.0, verbose=False)
-
+        def get_kernel(this_sigma_v):
+            """Get the log-lambda broadening kernel."""
             # Convert velocity sigma to log-lambda sigma. Delta x = ln(lambda)
             # gives Delta v = c * Delta x.
             sigma_x = (this_sigma_v / c).to_value("")
             kernel = np.exp(-(kernel_x**2) / (2 * sigma_x**2))
             kernel /= kernel.sum()
-
-            lnu_broad = fftconvolve(lnu_uniform, kernel, mode="same")
-            return spectres(x, x_uniform, lnu_broad, fill=0.0, verbose=False)
+            return kernel
 
         # Flatten all non-wavelength dimensions so array-valued sigma_v can be
         # applied independently to each spectrum.
@@ -1714,12 +1708,50 @@ class Sed:
                 )
             flat_sigma_v = sigma_v.reshape(-1)
 
-        for ind in np.where(flat_mask)[0]:
-            flat_lnu[ind] = broaden_spectrum(flat_lnu[ind], flat_sigma_v[ind])
+        # The convolution kernel has constant width in velocity, so all spectra
+        # are first sampled on the same uniform log(lambda) grid. Do this once
+        # for the whole SED rather than once per spectrum.
+        flat_lnu_uniform = spectres(
+            x_uniform,
+            x,
+            flat_lnu,
+            fill=0.0,
+            verbose=False,
+        )
 
-        # Reshape back to the original Sed layout after applying the flattened
-        # per-spectrum operation.
-        new_lnu = flat_lnu.reshape(self._lnu.shape) * self.lnu.units
+        if getattr(sigma_v, "shape", ()) == ():
+            # A scalar velocity dispersion uses one kernel for every selected
+            # spectrum, so the convolution can also be vectorised.
+            kernel = get_kernel(sigma_v)
+            flat_lnu_uniform[flat_mask] = fftconvolve(
+                flat_lnu_uniform[flat_mask],
+                kernel[np.newaxis, :],
+                axes=-1,
+                mode="same",
+            )
+        else:
+            # Array-valued velocity dispersions need a different kernel per
+            # selected spectrum. The spectra are already on the uniform grid,
+            # so this loop only performs the unavoidable per-spectrum
+            # convolution.
+            for ind in np.where(flat_mask)[0]:
+                flat_lnu_uniform[ind] = fftconvolve(
+                    flat_lnu_uniform[ind],
+                    get_kernel(flat_sigma_v[ind]),
+                    mode="same",
+                )
+
+        # Interpolate every broadened spectrum back to the original wavelength
+        # grid in one call, then restore the original Sed layout.
+        new_flat_lnu = spectres(
+            x,
+            x_uniform,
+            flat_lnu_uniform,
+            fill=0.0,
+            verbose=False,
+        )
+        new_flat_lnu[~flat_mask] = flat_lnu[~flat_mask]
+        new_lnu = new_flat_lnu.reshape(self._lnu.shape) * self.lnu.units
 
         # Return new Sed or modify in place
         if inplace:
