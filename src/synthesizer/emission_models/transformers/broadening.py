@@ -9,6 +9,7 @@ from unyt import amu
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.emissions.sed import Sed
+from synthesizer.utils.operation_timers import timed
 
 
 class DopplerBroadening(Transformer):
@@ -22,7 +23,7 @@ class DopplerBroadening(Transformer):
                 The attribute to extract from the model, emission, or emitter
                 to use as the velocity dispersion.
         """
-        # Attach the required parameters
+        # Attach the required parameter
         self.sigma_v_attr = sigma_v_attr
 
         # Initialize the base class with the required parameters
@@ -32,6 +33,7 @@ class DopplerBroadening(Transformer):
         """Return a string representation of the object."""
         return f"DopplerBroadening(sigma_v_attr={self.sigma_v_attr})"
 
+    @timed("DopplerBroadening._transform")
     def _transform(self, emission, emitter, model, mask, lam_mask):
         """Apply Doppler broadening to the emission.
 
@@ -100,13 +102,19 @@ class ThermalBroadening(Transformer):
             mu (unyt_quantity):
                 The mean molecular weight to use when ``mu_attr`` is not set.
         """
+        # Resolve the required parameters, this will always include the
+        # temperature, but may also include the mean molecular weight if
+        # mu_attr is set
         required_params = (temperature_attr,)
         if mu_attr is not None:
             required_params = (*required_params, mu_attr)
 
+        # Attach the required parameters
         self.temperature_attr = temperature_attr
         self.mu_attr = mu_attr
         self.mu = mu
+
+        # Initialize the base class with the required parameters
         Transformer.__init__(self, required_params=required_params)
 
     def __repr__(self):
@@ -118,6 +126,7 @@ class ThermalBroadening(Transformer):
             f"mu={self.mu})"
         )
 
+    @timed("ThermalBroadening._transform")
     def _transform(self, emission, emitter, model, mask, lam_mask):
         """Apply thermal broadening to the emission.
 
@@ -136,24 +145,32 @@ class ThermalBroadening(Transformer):
         Returns:
             Sed: The broadened emission.
         """
+        # Ensure we have an Sed to work on (this transformation is not defined
+        # for other emission types)
         if not isinstance(emission, Sed):
             raise exceptions.InconsistentArguments(
                 "ThermalBroadening can only be applied to Sed objects."
             )
+
+        # Ensure no wavelength mask is provided, this is unsupported for
+        # broadening transformations as it stands
         if lam_mask is not None:
-            raise exceptions.InconsistentArguments(
+            raise exceptions.UnimplementedFunctionality(
                 "Wavelength masks are not supported for thermal broadening."
             )
 
+        # Get the temperature and mean molecular weight we need
         params = self._extract_params(
             model,
             emission,
             emitter,
             preserve_units=True,
         )
+        # Unpack the temperature and mean molecular weight (if required)
         mu = self.mu if self.mu_attr is None else params[self.mu_attr]
         temperature = params[self.temperature_attr]
 
+        # Apply the thermal broadening to the emission
         return emission.thermally_broaden(
             temperature,
             mu=mu,
