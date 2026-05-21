@@ -11,6 +11,7 @@ from synthesizer.emission_models.transformers import (
     DopplerBroadening,
     ThermalBroadening,
 )
+from synthesizer.emission_models.utils import get_param
 from synthesizer.emissions.sed import Sed
 
 
@@ -76,6 +77,39 @@ def test_doppler_broadening_transformer_uses_fixed_parameter():
     assert broadened.lnu.max() < sed.lnu.max()
 
 
+def test_get_param_preserve_units_keeps_fixed_parameter_units():
+    model = DummyModel(velocity_dispersion=300.0 * km / s)
+
+    default_value = get_param("velocity_dispersion", model, None, None)
+    unit_value = get_param(
+        "velocity_dispersion",
+        model,
+        None,
+        None,
+        preserve_units=True,
+    )
+
+    assert not hasattr(default_value, "units")
+    assert unit_value.units == km / s
+
+
+def test_broadening_transformer_preserves_fixed_parameter_units():
+    model = DummyModel(velocity_dispersion=300.0 * km / s)
+    transformer = DopplerBroadening(
+        sigma_v_attr="velocity_dispersion",
+        apply_units=False,
+    )
+
+    params = transformer._extract_params(
+        model,
+        None,
+        None,
+        preserve_units=True,
+    )
+
+    assert params["velocity_dispersion"].units == km / s
+
+
 def test_thermal_broadening_transformer_uses_fixed_parameters():
     sed = make_line_sed()
     model = DummyModel(temperature=1.0e6 * K, mu=1.0 * amu)
@@ -91,7 +125,7 @@ def test_broadening_transformer_rejects_lam_mask():
     model = DummyModel(sigma_v=300.0 * km / s)
     transformer = DopplerBroadening()
 
-    with pytest.raises(exceptions.InconsistentArguments):
+    with pytest.raises(exceptions.UnimplementedFunctionality):
         transformer._transform(sed, None, model, None, np.ones(sed.lam.size))
 
 
