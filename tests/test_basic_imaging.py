@@ -171,6 +171,11 @@ class TestImagingGeometry:
         with pytest.raises(exceptions.InconsistentArguments, match="exceed"):
             DummyImaging(resolution=1 * kpc, fov=1e12 * kpc)
 
+    def test_subpixel_fov_can_round_to_zero_npix(self):
+        """Test existing sub-pixel FOV rounding behavior is preserved."""
+        img = DummyImaging(resolution=1 * kpc, fov=0.1 * kpc)
+        assert np.array_equal(img.npix, np.array([0, 0], dtype=np.int32))
+
 
 class TestImageCreation:
     """Test suite for Image class instantiation and basic operations."""

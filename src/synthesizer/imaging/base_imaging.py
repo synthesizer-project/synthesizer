@@ -139,9 +139,9 @@ class ImagingBase(ABC):
                 f"{npix} from fov={self.fov} and "
                 f"resolution={self.resolution}."
             )
-        if np.any(npix <= 0):
+        if np.any(npix < 0):
             raise exceptions.InconsistentArguments(
-                "Image pixel counts must be positive. Got npix="
+                "Image pixel counts must be non-negative. Got npix="
                 f"{npix} from fov={self.fov} and "
                 f"resolution={self.resolution}."
             )
@@ -304,9 +304,9 @@ class ImagingBase(ABC):
         """
         # Ensure we have a number of pix per axis
         if isinstance(npix, int):
-            if npix <= 0 or npix > _MAX_NPIX_PER_AXIS:
+            if npix < 0 or npix > _MAX_NPIX_PER_AXIS:
                 raise exceptions.InconsistentArguments(
-                    "npix values must be positive and no larger than "
+                    "npix values must be non-negative and no larger than "
                     f"{_MAX_NPIX_PER_AXIS}. Got {npix}."
                 )
             npix = np.array((npix, npix), dtype=np.int32)
@@ -315,9 +315,9 @@ class ImagingBase(ABC):
                 raise exceptions.InconsistentArguments(
                     "npix must contain exactly two elements (nx, ny)."
                 )
-            if any(n <= 0 or n > _MAX_NPIX_PER_AXIS for n in npix):
+            if any(n < 0 or n > _MAX_NPIX_PER_AXIS for n in npix):
                 raise exceptions.InconsistentArguments(
-                    "npix values must be positive and no larger than "
+                    "npix values must be non-negative and no larger than "
                     f"{_MAX_NPIX_PER_AXIS}. Got {npix}."
                 )
             npix = np.array(npix, dtype=np.int32)
