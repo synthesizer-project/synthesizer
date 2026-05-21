@@ -84,19 +84,21 @@ for component in ("blr", "nlr"):
     spectra_ax.loglog()
     spectra_ax.set_xlabel("")
 
-    # Plot fractional residuals where the unbroadened model is non-zero. The
-    # broadened model conserves integrated luminosity but redistributes it in
-    # wavelength, so the residual panel highlights line-profile changes.
+    # Plot the absolute fractional residual where the unbroadened model is
+    # non-zero. This is positive definite, so it can be shown on a log y-axis.
     ok = unbroadened_sed.luminosity > 0
     residual = np.zeros_like(unbroadened_sed.luminosity.value)
     residual[ok] = (
-        broadened_sed.luminosity[ok] / unbroadened_sed.luminosity[ok]
-    ).value - 1.0
+        np.abs(
+            broadened_sed.luminosity[ok] / unbroadened_sed.luminosity[ok] - 1.0
+        )
+    ).value
+    residual[residual <= 0] = np.nan
 
-    residual_ax.axhline(0.0, color="0.5", lw=1, ls="--")
     residual_ax.plot(unbroadened_sed.lam, residual, color="k", lw=1)
     residual_ax.set_xscale("log")
-    residual_ax.set_ylabel("Frac. residual")
+    residual_ax.set_yscale("log")
+    residual_ax.set_ylabel("Abs. frac. residual")
     residual_ax.set_xlabel("Rest-frame wavelength")
 
     plt.show()
