@@ -93,7 +93,7 @@ static inline double cubic(const double r) {
  */
 static inline double quartic(const double r) {
   const double q = 2.5 * r;
-  const double norm = 875.0 / (3824.0 * M_PI);
+  const double norm = 25.0 / (32.0 * M_PI);
 
   if (q < 0.5) {
     const double a = 2.5 - q;
