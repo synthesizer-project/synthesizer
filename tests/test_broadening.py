@@ -39,6 +39,18 @@ def test_doppler_broaden_accepts_array_sigma_v():
     assert broadened.lnu[1].max() < broadened.lnu[0].max()
 
 
+def test_doppler_broaden_handles_per_particle_spectra():
+    sed = make_line_sed(shape=(3,))
+    sigma_v = np.array([100.0, 300.0, 600.0]) * km / s
+
+    broadened = sed.doppler_broaden(sigma_v)
+
+    assert broadened.lnu.shape == sed.lnu.shape
+    assert broadened.lnu[2].max() < broadened.lnu[1].max()
+    assert broadened.lnu[1].max() < broadened.lnu[0].max()
+    np.testing.assert_allclose(sed.lnu, make_line_sed(shape=(3,)).lnu)
+
+
 def test_doppler_broaden_masks_spectra():
     sed = make_line_sed(shape=(2,))
 
