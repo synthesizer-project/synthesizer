@@ -7,6 +7,7 @@ the optional Doppler broadening applied by ``velocity_dispersion_blr`` and
 ``velocity_dispersion_nlr``.
 """
 
+import matplotlib.pyplot as plt
 from unyt import Msun, deg, kelvin, km, s, yr
 
 from synthesizer.emission_models import Greybody, UnifiedAGN
@@ -71,4 +72,5 @@ for component in ("blr", "nlr"):
     )
     spectra_ax.loglog()
     spectra_ax.set_xlim(800, None)
-    spectra_ax.figure.show()
+
+plt.show()
