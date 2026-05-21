@@ -95,10 +95,7 @@ def test_get_param_preserve_units_keeps_fixed_parameter_units():
 
 def test_broadening_transformer_preserves_fixed_parameter_units():
     model = DummyModel(velocity_dispersion=300.0 * km / s)
-    transformer = DopplerBroadening(
-        sigma_v_attr="velocity_dispersion",
-        apply_units=False,
-    )
+    transformer = DopplerBroadening(sigma_v_attr="velocity_dispersion")
 
     params = transformer._extract_params(
         model,

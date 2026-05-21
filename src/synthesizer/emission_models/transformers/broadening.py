@@ -4,7 +4,7 @@ This module contains classes for applying doppler broadening and thermal
 broadening to spectra.
 """
 
-from unyt import K, amu, km, s
+from unyt import amu
 
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
@@ -14,41 +14,23 @@ from synthesizer.emissions.sed import Sed
 class DopplerBroadening(Transformer):
     """A transformer that applies Doppler broadening to a Sed."""
 
-    def __init__(
-        self,
-        sigma_v_attr="sigma_v",
-        apply_units=True,
-        sigma_v_units=km / s,
-    ):
+    def __init__(self, sigma_v_attr="sigma_v"):
         """Initialise the Doppler broadening transformer.
 
         Args:
             sigma_v_attr (str):
                 The attribute to extract from the model, emission, or emitter
                 to use as the velocity dispersion.
-            apply_units (bool):
-                Whether to apply ``sigma_v_units`` to extracted unitless
-                values. Defaults to True.
-            sigma_v_units (unyt.Unit):
-                The units to apply when the extracted velocity dispersion is
-                unitless.
         """
         # Attach the required parameters
         self.sigma_v_attr = sigma_v_attr
-        self.apply_units = apply_units
-        self.sigma_v_units = sigma_v_units
 
         # Initialize the base class with the required parameters
         Transformer.__init__(self, required_params=(sigma_v_attr,))
 
     def __repr__(self):
         """Return a string representation of the object."""
-        return (
-            "DopplerBroadening("
-            f"sigma_v_attr={self.sigma_v_attr}, "
-            f"apply_units={self.apply_units}, "
-            f"sigma_v_units={self.sigma_v_units})"
-        )
+        return f"DopplerBroadening(sigma_v_attr={self.sigma_v_attr})"
 
     def _transform(self, emission, emitter, model, mask, lam_mask):
         """Apply Doppler broadening to the emission.
@@ -93,11 +75,6 @@ class DopplerBroadening(Transformer):
         # Unpack the velocity dispersion
         sigma_v = params[self.sigma_v_attr]
 
-        # If a plain value was supplied, interpret it in the transformer's
-        # configured velocity units before calling the unit-checked Sed API.
-        if self.apply_units and not hasattr(sigma_v, "units"):
-            sigma_v = sigma_v * self.sigma_v_units
-
         # Apply the Doppler broadening to the emission
         return emission.doppler_broaden(sigma_v, mask=mask)
 
@@ -110,9 +87,6 @@ class ThermalBroadening(Transformer):
         temperature_attr="temperature",
         mu_attr=None,
         mu=1.0 * amu,
-        apply_units=True,
-        temperature_units=K,
-        mu_units=amu,
     ):
         """Initialise the thermal broadening transformer.
 
@@ -125,14 +99,6 @@ class ThermalBroadening(Transformer):
                 emitter to use as the mean molecular weight.
             mu (unyt_quantity):
                 The mean molecular weight to use when ``mu_attr`` is not set.
-            apply_units (bool):
-                Whether to apply ``temperature_units`` and ``mu_units`` to
-                extracted unitless values. Defaults to True.
-            temperature_units (unyt.Unit):
-                The units to apply when the extracted temperature is unitless.
-            mu_units (unyt.Unit):
-                The units to apply when the extracted mean molecular weight is
-                unitless.
         """
         required_params = (temperature_attr,)
         if mu_attr is not None:
@@ -141,9 +107,6 @@ class ThermalBroadening(Transformer):
         self.temperature_attr = temperature_attr
         self.mu_attr = mu_attr
         self.mu = mu
-        self.apply_units = apply_units
-        self.temperature_units = temperature_units
-        self.mu_units = mu_units
         Transformer.__init__(self, required_params=required_params)
 
     def __repr__(self):
@@ -152,10 +115,7 @@ class ThermalBroadening(Transformer):
             "ThermalBroadening("
             f"temperature_attr={self.temperature_attr}, "
             f"mu_attr={self.mu_attr}, "
-            f"mu={self.mu}, "
-            f"apply_units={self.apply_units}, "
-            f"temperature_units={self.temperature_units}, "
-            f"mu_units={self.mu_units})"
+            f"mu={self.mu})"
         )
 
     def _transform(self, emission, emitter, model, mask, lam_mask):
@@ -193,12 +153,6 @@ class ThermalBroadening(Transformer):
         )
         mu = self.mu if self.mu_attr is None else params[self.mu_attr]
         temperature = params[self.temperature_attr]
-        # If plain values were supplied, interpret them in the transformer's
-        # configured units before calling the unit-checked Sed API.
-        if self.apply_units and not hasattr(temperature, "units"):
-            temperature = temperature * self.temperature_units
-        if self.apply_units and not hasattr(mu, "units"):
-            mu = mu * self.mu_units
 
         return emission.thermally_broaden(
             temperature,
