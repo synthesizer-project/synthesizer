@@ -3,17 +3,21 @@ Imaging
 
 Synthesizer can be used to generate photometric images or property maps.
 
-For standard synthetic observations, the main public interface is the
-high-level galaxy and component imaging API used together with a
-``PhotometricImager``. In this workflow you:
+The main public interface to this functionality is the high-level galaxy and
+component imaging API used together with a ``PhotometricImager``. In this
+workflow you:
 
 - generate spectra and photometry
 - construct a ``PhotometricImager``
-- call ``galaxy.get_images_luminosity(...)`` or ``galaxy.get_images_flux(...)``
+- call ``galaxy.get_images_luminosity(...)`` or ``galaxy.get_images_flux(...)`` 
 - optionally apply instrument-owned PSF and noise configuration through that
   same workflow
 
-The lower-level imaging containers are still available for custom workflows:
+(Or simply call the appropriate property map method on a component or galaxy, 
+which will use the same underlying workflow without the emission specific 
+steps.)
+
+These methods will return either an ``Image`` or an ``ImageCollection`` depending on the number of bands requested. The ``Image`` and ``ImageCollection`` classes are the main data containers for imaging data in Synthesizer, and they provide a consistent interface for working with images regardless of how they were generated.
 
 - ``Image`` for individual images
 - ``ImageCollection`` for related multi-band images
@@ -31,8 +35,8 @@ model and smoothed over a ``Morphology`` object.
 Histogram images are simple and fast, only requiring positions and pixel
 values as inputs. However, in the vast majority of cases this method is not
 suitable for realistic, scientifically accurate imaging. When working with
-particles that are representative of a smooth distribution, for example SPH
-particles, the smoothing of the particles must be taken into account.
+particles that are representative of a smooth distribution the smoothing of the
+particles must be taken into account.
 
 In Synthesizer, this is done by combining a ``Kernel`` with the smoothing
 lengths of the particles. This means ``smoothing_lengths`` must be provided for
@@ -41,9 +45,7 @@ each particle in the input data.
 Generating Images 
 -----------------
 
-The documentation below starts with the high-level galaxy workflows for
-particle and parametric imaging. ``property_maps`` then demonstrates the more
-custom, low-level container-oriented interface.
+The pages linked below provide detailed walkthroughs of how to generate images and property maps using Synthesizer, including examples of how to use the various imaging methods and classes.
 
 .. toctree::
    :maxdepth: 2
