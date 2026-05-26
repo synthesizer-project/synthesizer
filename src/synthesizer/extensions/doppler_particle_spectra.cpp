@@ -61,6 +61,7 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
   const int ndim = grid_props->ndim;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
   double *wavelength = grid_props->get_lam();
+  const double *__restrict grid_spectra = grid_props->get_spectra();
   const int ncells = 1 << ndim;
 
   /* Get and cast the number of particles. */
@@ -134,6 +135,8 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
 
       /* Flattened grid index */
       const int grid_i = base_lin + sc.linoff;
+      const double *__restrict cell_spectra =
+          grid_spectra + static_cast<size_t>(grid_i) * nlam;
 
       /* Loop over wavelengths (we can't prepare the unmasked wavelengths
        * like we can in the non-shifted case, since the shifted wavelengths
@@ -141,7 +144,8 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
       for (size_t il = 0; il < nlam; ++il) {
         const int ils = mapped_indices[il];
         /* Skip out-of-bounds or masked */
-        if (ils <= 0 || static_cast<size_t>(ils) >= nlam || grid_props->lam_is_masked(ils)) {
+        if (ils <= 0 || static_cast<size_t>(ils) >= nlam ||
+            grid_props->lam_is_masked(ils)) {
           continue;
         }
 
@@ -151,7 +155,7 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
                               (wavelength[ils] - wavelength[ils - 1]);
 
         /* Base spectra value */
-        const double gs = grid_props->get_spectra_at(grid_i, il) * weight;
+        const double gs = cell_spectra[il] * weight;
 
         /* Distribute into particle & global arrays */
         const size_t base_idx = p * nlam;
@@ -190,6 +194,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
   const int ndim = grid_props->ndim;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
   double *wavelength = grid_props->get_lam();
+  const double *__restrict grid_spectra = grid_props->get_spectra();
   const int ncells = 1 << ndim;
 
   /* Get and cast the number of particles. */
@@ -279,6 +284,8 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
         /* Combined weight */
         const double weight = frac * w_p;
         const int grid_i = base_lin + sc.linoff;
+        const double *__restrict cell_spectra =
+            grid_spectra + static_cast<size_t>(grid_i) * nlam;
 
         /* Loop over wavelengths (we can't prepare the unmasked wavelengths like
          * we can in the non-shifted case, since the shifted wavelengths are
@@ -286,7 +293,8 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
         for (size_t il = 0; il < nlam; ++il) {
           const int ils = mapped_indices[il];
           /* Skip out-of-bounds or masked bins */
-          if (ils <= 0 || static_cast<size_t>(ils) >= nlam || grid_props->lam_is_masked(ils)) {
+          if (ils <= 0 || static_cast<size_t>(ils) >= nlam ||
+              grid_props->lam_is_masked(ils)) {
             continue;
           }
 
@@ -296,7 +304,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
                                 (wavelength[ils] - wavelength[ils - 1]);
 
           /* Base spectra contribution */
-          const double gs = grid_props->get_spectra_at(grid_i, il) * weight;
+          const double gs = cell_spectra[il] * weight;
 
           /* Deposit into the thread's part spectra */
           this_part_spectra[ils - 1] =
@@ -309,6 +317,9 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
       for (size_t il = 0; il < nlam; ++il) {
         local_part_spectra[(p - start_idx) * nlam + il] = this_part_spectra[il];
       }
+
+      /* Reset the local spectra for this particle. */
+      std::fill(this_part_spectra.begin(), this_part_spectra.end(), 0.0);
     }
   }
 }
@@ -377,6 +388,7 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
   /* Unpack the grid properties. */
   size_t nlam = static_cast<size_t>(grid_props->nlam);
   double *wavelength = grid_props->get_lam();
+  const double *__restrict grid_spectra = grid_props->get_spectra();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -409,6 +421,8 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
 
     /* Get the weight's index. */
     const int grid_ind = parts->grid_indices[p];
+    const double *__restrict cell_spectra =
+        grid_spectra + static_cast<size_t>(grid_ind) * nlam;
 
     /* Loop over wavelengths (we can't prepare the unmasked wavelengths
      * like we can in the non-shifted case, since the shifted wavelengths
@@ -437,8 +451,7 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
       }
 
       /* Get the grid spectra value for this wavelength. */
-      double grid_spectra_value =
-          grid_props->get_spectra_at(grid_ind, ilam) * weight;
+      double grid_spectra_value = cell_spectra[ilam] * weight;
 
       /* Add the contribution to the corresponding wavelength element. */
       size_t idx = p * nlam + ilam_shifted;
@@ -466,6 +479,7 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
   /* Unpack the grid properties. */
   size_t nlam = static_cast<size_t>(grid_props->nlam);
   double *wavelength = grid_props->get_lam();
+  const double *__restrict grid_spectra = grid_props->get_spectra();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -519,6 +533,8 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
 
       /* Get the index of the grid cell. */
       const int grid_ind = parts->grid_indices[p];
+      const double *__restrict cell_spectra =
+          grid_spectra + static_cast<size_t>(grid_ind) * nlam;
 
       /* Loop over wavelengths (we can't prepare the unmasked wavelengths
        * like we can in the non-shifted case, since the shifted wavelengths
@@ -547,8 +563,7 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
         }
 
         /* Get the grid spectra value for this wavelength. */
-        double grid_spectra_value =
-            grid_props->get_spectra_at(grid_ind, ilam) * weight;
+        double grid_spectra_value = cell_spectra[ilam] * weight;
 
         /* Deposit into the thread's part spectra */
         this_part_spectra[ilam_shifted - 1] =

@@ -20,6 +20,7 @@ from unyt import kpc
 
 from synthesizer.grid import Grid
 from synthesizer.pipeline import Pipeline
+from synthesizer.utils.operation_timers import OperationTimers
 
 # Add profiling/pipeline to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -78,6 +79,9 @@ def run_pipeline_with_memory(
     sampler = threading.Thread(target=sample_memory, daemon=True)
     sampler.start()
 
+    timers = OperationTimers()
+    timers.reset()
+
     start_time = time.perf_counter()
 
     # Setup - load grid
@@ -87,6 +91,7 @@ def run_pipeline_with_memory(
     galaxies = build_test_galaxies(grid, nparticles, ngalaxies, seed)
     instrument = get_test_instrument(grid)
     kernel = get_test_kernel()
+    image_kernel = kernel.get_kernel()
     model = get_test_emission_model(grid)
 
     # Create Pipeline
@@ -123,7 +128,7 @@ def run_pipeline_with_memory(
     pipeline.get_images_luminosity(
         instrument,
         fov=fov,
-        kernel=kernel,
+        kernel=image_kernel,
         cosmo=cosmo,
         labels="intrinsic",
     )
@@ -141,7 +146,7 @@ def run_pipeline_with_memory(
         pipeline.get_images_flux(
             instrument,
             fov=fov,
-            kernel=kernel,
+            kernel=image_kernel,
             cosmo=cosmo,
             labels="intrinsic",
         )
@@ -245,6 +250,8 @@ def main() -> None:
     min_mb = min(s[1] for s in samples) if samples else 0
 
     print(f"✓ Memory profile saved: {csv_file}")
+    print("Operation timing table:")
+    OperationTimers.print_table(total_elapsed=total_time)
     print(f"  Samples: {len(samples)}")
     print(f"  Peak: {peak_mb:.2f} MB")
     print(f"  Mean: {mean_mb:.2f} MB")

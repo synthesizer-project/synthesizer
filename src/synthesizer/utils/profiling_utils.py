@@ -85,6 +85,7 @@ def _run_single(
     total_time = time.time() - spec_start
 
     print(f"[Total] {total_msg} took: {total_time} s", flush=True)
+    timers.print_table(total_elapsed=total_time)
 
     # Extract timing data from this run
     run_data = {

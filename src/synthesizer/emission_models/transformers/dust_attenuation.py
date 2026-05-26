@@ -1513,7 +1513,7 @@ class DraineLiGrainCurves(AttenuationLaw):
 
             # Call the particle spectra extension directly for this single
             # extraction axis instead of going through generate_lnu.
-            component_alam_by_hydrogen_col, _ = compute_particle_seds(
+            component_alam_by_hydrogen_col = compute_particle_seds(
                 grid.spectra[dataset_key],
                 (grid_dtg_axis,),
                 (dtg_grid_values,),
@@ -1526,6 +1526,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                 1,
                 valid,
                 None,
+                False,
                 (dtg_axis_name,),
             )
 

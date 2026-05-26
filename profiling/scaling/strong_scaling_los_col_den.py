@@ -6,6 +6,7 @@ Usage:
 """
 
 import argparse
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -40,6 +41,8 @@ def los_surface_density_strong_scaling(
     paper_style,
 ):
     """Profile the cpu time usage of the LOS surface density calculation."""
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+
     # Define the grid
     grid_name = "test_grid"
 
@@ -106,7 +109,7 @@ def los_surface_density_strong_scaling(
     galaxy = Galaxy("Galaxy", stars=stars, gas=gas, redshift=1)
 
     # Get the kernel
-    kernel = Kernel().get_kernel()
+    kernel = Kernel()
 
     # Run a single threaded test first to get overt any overhead due to linking
     # the first time the function is called
