@@ -874,24 +874,23 @@ class Combination:
         combine_labels = this_model._combine_labels
 
         with timer("Combination._combine_spectra.initialise_output"):
-            # Create an empty spectra to add to
             if this_model.per_particle:
                 in_spectra = particle_spectra
             else:
                 in_spectra = spectra
 
             template = in_spectra[combine_labels[0]]
-            out_spec = Sed(
-                emission_model.lam,
-                lnu=np.zeros_like(template._lnu) * erg / s / Hz,
-            )
+            template_lnu = template._lnu
+            initial_lnu = np.array(template_lnu, copy=True)
+            np.nan_to_num(initial_lnu, copy=False)
+            out_spec = Sed(emission_model.lam, lnu=initial_lnu * erg / s / Hz)
 
         with timer("Combination._combine_spectra.accumulate"):
             out_lnu = out_spec._lnu
 
-            # Use NumPy masked accumulation directly on the destination array
-            # to avoid allocating temporary indexed copies for each component.
-            for combine_label in combine_labels:
+            # Seed from the first spectrum so subsequent work only processes
+            # the remaining inputs.
+            for combine_label in combine_labels[1:]:
                 combine_lnu = in_spectra[combine_label]._lnu
                 np.add(
                     out_lnu,

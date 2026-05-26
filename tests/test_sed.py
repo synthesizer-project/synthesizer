@@ -56,3 +56,31 @@ def test_get_fnu0_handles_multidimensional_spectra():
     assert fnu.units.same_dimensions_as(nJy)
     np.testing.assert_allclose(sed._obslam, sed._lam)
     np.testing.assert_allclose(sed._obsnu, sed._nu)
+
+
+def test_scale_broadcasts_particle_scaling_without_full_shape_array():
+    """Scaling should broadcast lower-dimensional factors across wavelength."""
+    lam = np.linspace(1000, 2000, 4) * angstrom
+    lnu = np.arange(12, dtype=float).reshape(3, 4) * erg / s / Hz
+    scaling = np.array([1.0, 2.0, 3.0])
+
+    sed = Sed(lam=lam, lnu=lnu)
+    scaled = sed.scale(scaling)
+
+    expected = lnu.value * scaling[:, None]
+    np.testing.assert_allclose(scaled.lnu.value, expected)
+
+
+def test_scale_respects_wavelength_mask_with_broadcast_scaling():
+    """Broadcast scaling should still only affect the selected wavelengths."""
+    lam = np.linspace(1000, 2000, 4) * angstrom
+    lnu = (np.arange(12, dtype=float).reshape(3, 4) + 1.0) * erg / s / Hz
+    scaling = np.array([2.0, 3.0, 4.0])
+    lam_mask = np.array([False, True, False, True])
+
+    sed = Sed(lam=lam, lnu=lnu)
+    scaled = sed.scale(scaling, lam_mask=lam_mask)
+
+    expected = lnu.value.copy()
+    expected[:, lam_mask] *= scaling[:, None]
+    np.testing.assert_allclose(scaled.lnu.value, expected)

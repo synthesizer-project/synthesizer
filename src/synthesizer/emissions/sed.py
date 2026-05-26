@@ -398,13 +398,14 @@ class Sed:
                 scaling = scaling.to(self.lnu.units)
                 scaling = scaling.value
 
-        # Unpack the array's we'll need during scaling
-        lnu = self._lnu.copy()
-        units = self.lnu.units
+        scaling_ndim = getattr(scaling, "ndim", 0)
 
-        # If we have a wavelength mask apply it now
-        if lam_mask is not None:
-            lnu = lnu[..., lam_mask]
+        # Unpack the arrays we'll need during scaling.
+        if lam_mask is None:
+            lnu = np.array(self._lnu, copy=True)
+        else:
+            lnu = np.array(self._lnu[..., lam_mask], copy=True)
+        units = self.lnu.units
 
         # Handle a scalar scaling factor
         if np.isscalar(scaling):
@@ -415,24 +416,19 @@ class Sed:
 
         # Handle a multi-element array scaling factor as long as it matches
         # the shape of the lnu array up to the dimensions of the scaling array
-        elif isinstance(scaling, np.ndarray) and len(scaling.shape) < len(
-            self.shape
-        ):
-            # We need to expand the scaling array to match the lnu array
-            expand_axes = tuple(range(len(scaling.shape), len(self.shape)))
-            new_scaling = np.ones(self.shape) * np.expand_dims(
-                scaling, axis=expand_axes
-            )
+        elif isinstance(scaling, np.ndarray) and scaling_ndim < lnu.ndim:
+            expand_axes = tuple(range(scaling_ndim, lnu.ndim))
+            expanded_scaling = np.expand_dims(scaling, axis=expand_axes)
 
             # Apply the scaling
             if mask is not None:
-                lnu[mask] *= new_scaling[mask]
+                lnu[mask] *= expanded_scaling
             else:
-                lnu *= new_scaling
+                lnu *= expanded_scaling
 
         # If the scaling array is the same shape as the lnu array then we can
         # just multiply them together
-        elif isinstance(scaling, np.ndarray) and scaling.shape == self.shape:
+        elif isinstance(scaling, np.ndarray) and scaling.shape == lnu.shape:
             if mask is not None:
                 lnu[mask] *= scaling[mask]
             else:
