@@ -1116,12 +1116,19 @@ class Sed:
             fnu (ndarray):
                 Spectral flux density calcualted at d=10 pc.
         """
-        # Get the observed wavelength and frequency arrays
-        self.obslam = self._lam
-        self.obsnu = self._nu
+        # Rest-frame fluxes reuse the emitted wavelength and frequency grids.
+        self._obslam = self._lam
+        self._obsnu = self._nu
 
-        # Compute the flux SED and apply unit conversions to get to nJy
-        self.fnu = self.lnu / (4 * np.pi * (10 * pc) ** 2)
+        # Work directly on the raw arrays and fold the unit conversion into a
+        # single scalar factor so large particle spectra avoid repeated unyt
+        # array construction during the actual conversion.
+        flux_unit = self.__class__.__dict__["fnu"].unit
+        lnu_unit = self.__class__.__dict__["lnu"].unit
+        conversion = ((1 * lnu_unit) / (4 * np.pi * (10 * pc) ** 2)).to_value(
+            flux_unit
+        )
+        self._fnu = self._lnu * conversion
 
         return self.fnu
 
@@ -1158,16 +1165,22 @@ class Sed:
         if self.redshift == 0:
             return self.get_fnu0()
 
-        # Get the observed wavelength and frequency arrays
-        self.obslam = self._lam * (1.0 + z)
-        self.obsnu = self._nu / (1.0 + z)
+        # Get the observed wavelength and frequency arrays.
+        self._obslam = self._lam * (1.0 + z)
+        self._obsnu = self._nu / (1.0 + z)
 
         # Compute the luminosity distance
         luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
-        # Finally, compute the flux SED and apply unit conversions to get
-        # to nJy
-        self.fnu = self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
+        # Fold the full unit conversion into a scalar once, then apply it to
+        # the raw spectra array to avoid constructing temporary unyt arrays for
+        # very large particle spectra.
+        flux_unit = self.__class__.__dict__["fnu"].unit
+        lnu_unit = self.__class__.__dict__["lnu"].unit
+        conversion = (
+            (1 * lnu_unit) * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
+        ).to_value(flux_unit)
+        self._fnu = self._lnu * conversion
 
         # If we are applying an IGM model apply it
         if igm is not None:
