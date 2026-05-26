@@ -324,6 +324,8 @@ class PremadeInstrumentCollectionFactory:
             inst_kwargs = kwargs.get(f"{name}_kwargs", {})
             if inst_kwargs is None:
                 inst_kwargs = {}
+            if getattr(inst_cls, "_is_placeholder_premade", False):
+                continue
             instruments_list.append(inst_cls(**inst_kwargs))
 
         collection.add_instruments(*instruments_list)
@@ -841,6 +843,7 @@ class JWSTNIRSpec(PremadeInstrument):
     """
 
     # TODO: Implement NIRSpec class with appropriate filters, resolution, etc.
+    _is_placeholder_premade = True
     pass
 
 

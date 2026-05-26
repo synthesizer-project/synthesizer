@@ -370,6 +370,20 @@ class SpectralCube(ImagingBase):
                 If conflicting particle and parametric arguments are passed
                 or any arguments are missing an error is raised.
         """
+        if density_grid is not None and any(
+            value is not None
+            for value in (
+                coordinates,
+                smoothing_lengths,
+                kernel,
+                kernel_threshold,
+            )
+        ):
+            raise exceptions.InconsistentArguments(
+                "Cannot pass density_grid together with particle cube inputs "
+                "(coordinates, smoothing_lengths, kernel, kernel_threshold)."
+            )
+
         # Call the correct generation function (particle or parametric)
         if density_grid is not None and sed is not None:
             return _generate_ifu_parametric_smoothed(

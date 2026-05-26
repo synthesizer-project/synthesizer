@@ -189,6 +189,22 @@ class PhotometricInstrument(InstrumentBase):
                 "maps at the same time"
             )
 
+        new_filter_codes = set(filters.filter_codes)
+        if isinstance(getattr(self, "depth", None), dict):
+            missing_depths = new_filter_codes - set(self.depth.keys())
+            if len(missing_depths) > 0:
+                raise exceptions.InconsistentAddition(
+                    "Cannot add filters without matching depth entries for: "
+                    f"{missing_depths}"
+                )
+        if isinstance(getattr(self, "snrs", None), dict):
+            missing_snrs = new_filter_codes - set(self.snrs.keys())
+            if len(missing_snrs) > 0:
+                raise exceptions.InconsistentAddition(
+                    "Cannot add filters without matching SNR entries for: "
+                    f"{missing_snrs}"
+                )
+
         self.filters += filters
 
         if psfs is not None:
@@ -235,10 +251,18 @@ class PhotometricInstrument(InstrumentBase):
                     )
                     ds.attrs["units"] = "dimensionless"
             else:
-                ds = group.create_dataset(
-                    "Depth", data=self.depth.value, dtype=float
+                raw = (
+                    self.depth.value
+                    if hasattr(self.depth, "value")
+                    else self.depth
                 )
-                ds.attrs["units"] = "dimensionless"
+                units = (
+                    str(self.depth.units)
+                    if hasattr(self.depth, "units")
+                    else "dimensionless"
+                )
+                ds = group.create_dataset("Depth", data=raw, dtype=float)
+                ds.attrs["units"] = units
 
         if self.depth_app_radius is not None:
             ds = group.create_dataset(
@@ -257,10 +281,18 @@ class PhotometricInstrument(InstrumentBase):
                     )
                     ds.attrs["units"] = "dimensionless"
             else:
-                ds = group.create_dataset(
-                    "SNRs", data=self.snrs.value, dtype=float
+                raw = (
+                    self.snrs.value
+                    if hasattr(self.snrs, "value")
+                    else self.snrs
                 )
-                ds.attrs["units"] = "dimensionless"
+                units = (
+                    str(self.snrs.units)
+                    if hasattr(self.snrs, "units")
+                    else "dimensionless"
+                )
+                ds = group.create_dataset("SNRs", data=raw, dtype=float)
+                ds.attrs["units"] = units
 
     @classmethod
     @timed("PhotometricInstrument.load")
