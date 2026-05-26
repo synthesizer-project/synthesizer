@@ -52,6 +52,16 @@ python profiling/pipeline/validate_results.py \
 
 ### Core Profiling Tools
 
+Before running any profiling scripts on offline compute nodes, create the
+cached profiling instrument on a machine with internet access:
+
+```bash
+python profiling/pipeline/make_profiling_instruments.py
+```
+
+This writes `profiling/pipeline/jwst_pipeline_perf_inst.hdf5`, which the
+profiling scripts load without contacting SVO.
+
 #### `profile_timing.py` - Measure Execution Time
 
 Profile `Pipeline` execution time. Runs setup (grid load, galaxy/instrument build, emission model) + `pipeline.run()` for all operations, then extracts timing data from `pipeline._op_timing`.
