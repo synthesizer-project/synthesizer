@@ -384,6 +384,9 @@ class Stars(StarsComponent):
                 grid_assignment_method="cic",
             ).sfzh
 
+            self.sf_hist = np.sum(self.sfzh, axis=1)
+            self.metal_dist = np.sum(self.sfzh, axis=0)
+
         # Handle the instantaneous SFH case
         elif instant_sf is not None and instant_metallicity is None:
             inst_stars = ParticleStars(
