@@ -97,14 +97,18 @@ class Stars(StarsComponent):
 
     # Define quantities
     initial_mass = Quantity("mass")
+    surviving_mass = Quantity("mass")
 
     @accepts(initial_mass=Msun.in_base("galactic"))
+    @accepts(surviving_mass=Msun.in_base("galactic"))
     @timed("ParametricStars.__init__")
     def __init__(
         self,
         log10ages,
         metallicities,
         initial_mass=None,
+        surviving_mass=None,
+        grid=None,
         morphology=None,
         sfzh=None,
         sf_hist=None,
@@ -133,6 +137,13 @@ class Stars(StarsComponent):
             initial_mass (unyt_quantity/float):
                 The total initial stellar mass. If provided the SFZH grid will
                 be rescaled to obey this total mass.
+            surviving_mass (unyt_quantity/float):
+                The total surviving stellar mass. If provided the SFZH grid
+                will be rescaled to obey this total mass.
+            grid (Grid):
+                A synthesizer Grid object. This is only used to provide
+                stellar_fraction when initialising using a surviving mass, and
+                is ignored if surviving_mass is not provided.
             morphology (morphology.* e.g. Sersic2D):
                 An instance of one of the morphology classes describing the
                 stellar population's morphology. This can be any of the family
@@ -237,6 +248,25 @@ class Stars(StarsComponent):
 
         # Store the total initial stellar mass
         self.initial_mass = initial_mass
+
+        # Store the total surviving stellar mass
+        self.surviving_mass = surviving_mass
+
+        if self.surviving_mass is not None and self.initial_mass is not None:
+            raise exceptions.InconsistentArguments(
+                "Cannot specify both initial_mass and surviving_mass! Please"
+                " specify only one of these or neither."
+            )
+
+        if self.surviving_mass is not None and grid is None:
+            raise exceptions.InconsistentArguments(
+                "If surviving_mass is specified then a Grid object must be "
+                "provided to get the stellar_fraction for rescaling the SFZH!"
+            )
+
+        if self.surviving_mass is not None and grid is not None:
+            # Get the stellar fraction from the grid
+            self.stellar_fraction = grid.stellar_fraction
 
         # If we have been handed an explict SFZH grid we can ignore all the
         # calculation methods
@@ -444,6 +474,13 @@ class Stars(StarsComponent):
 
             # ... and multiply it by the initial mass of stars
             self.sfzh *= self._initial_mass
+        elif self.surviving_mass is not None:
+            self.sfzh /= np.sum(self.sfzh)
+
+            # ... and multiply it by the initial mass of stars
+            self.sfzh *= self._surviving_mass / self.stellar_fraction
+            self.initial_mass = np.sum(self.sfzh) * Msun
+
         else:
             # Otherwise calculate the total initial mass
             self.initial_mass = np.sum(self.sfzh) * Msun
