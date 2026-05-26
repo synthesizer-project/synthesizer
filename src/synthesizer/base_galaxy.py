@@ -1381,7 +1381,6 @@ class BaseGalaxy:
 
         """
 
-
         # Convert labels tuple to a list and validate they are strings
         labels = list(labels)
 
@@ -1391,8 +1390,6 @@ class BaseGalaxy:
                     f"All labels must be strings, got {type(label).__name__}. "
                     "If passing an EmissionModel, use model.label instead."
                 )
-
-
 
         _labels = []
         while len(labels) > 0:
@@ -1434,8 +1431,6 @@ class BaseGalaxy:
         if self.gas is not None and hasattr(self.gas, "model_param_cache"):
             combined_cache.update(self.gas.model_param_cache)
 
-
-
         # Prepare galaxy-level image generation, routing to components
         galaxy_combine_labels, component_labels_by_emitter = (
             _prepare_galaxy_image_labels(
@@ -1443,7 +1438,7 @@ class BaseGalaxy:
                 combined_cache,
             )
         )
-        
+
         # Validate all requested labels were routed to an emitter or a combine step
         routed_labels = set(galaxy_combine_labels)
         for emitter_labels in component_labels_by_emitter.values():
