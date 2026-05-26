@@ -49,6 +49,7 @@ from synthesizer.emissions.utils import (
     get_quantity_view,
 )
 from synthesizer.extensions.reductions import (
+    compute_fnu,
     multiply_array_by_vector_1d,
     reduce_particle_spectra,
     scale_spectra_2d,
@@ -1226,8 +1227,6 @@ class Sed:
             self._obslam = np.empty_like(self._lam)
         if self._obsnu is None or self._obsnu.shape != self._nu.shape:
             self._obsnu = np.empty_like(self._nu)
-        np.multiply(self._lam, one_plus_z, out=self._obslam)
-        np.divide(self._nu, one_plus_z, out=self._obsnu)
 
         # Compute the luminosity distance
         luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
@@ -1241,19 +1240,28 @@ class Sed:
             (1 * lnu_unit) * one_plus_z / (4 * np.pi * luminosity_distance**2)
         ).to_value(flux_unit)
 
-        np.multiply(
+        compute_fnu(
             self._lnu,
+            self._lam,
+            self._nu,
+            one_plus_z,
             conversion,
-            out=ensure_array_buffer(self, "_fnu", self._lnu),
+            ensure_array_buffer(self, "_fnu", self._lnu),
+            self._obslam,
+            self._obsnu,
         )
 
         # If we are applying an IGM model apply it
         if igm is not None:
+            obslam = get_array_quantity_view(
+                self._obslam,
+                self.__class__.__dict__["obslam"].unit,
+            )
             # Support bot class references and instantiated objects
             if callable(igm):
-                self._fnu *= igm().get_transmission(z, self.obslam)
+                self._fnu *= igm().get_transmission(z, obslam)
             else:
-                self._fnu *= igm.get_transmission(z, self.obslam)
+                self._fnu *= igm.get_transmission(z, obslam)
 
         return get_quantity_view(self, "_fnu")
 

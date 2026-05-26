@@ -207,6 +207,187 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
 }
 
 /**
+ * @brief Populate observer-frame wavelength, frequency, and flux arrays.
+ *
+ * Args:
+ *   lnu (np.ndarray):
+ *     Float64 spectra array with wavelength on the last axis.
+ *   lam (np.ndarray):
+ *     One-dimensional emitted wavelength grid.
+ *   nu (np.ndarray):
+ *     One-dimensional emitted frequency grid.
+ *   one_plus_z (float):
+ *     Observer-frame wavelength scaling factor.
+ *   conversion (float):
+ *     Scalar conversion from luminosity density to flux density.
+ *   fnu_out (np.ndarray):
+ *     Preallocated float64 output array matching ``lnu``.
+ *   obslam_out (np.ndarray):
+ *     Preallocated float64 wavelength output array matching ``lam``.
+ *   obsnu_out (np.ndarray):
+ *     Preallocated float64 frequency output array matching ``nu``.
+ *
+ * Returns:
+ *   None:
+ *     The output arrays are populated in place.
+ */
+PyObject *compute_fnu(PyObject *self, PyObject *args) {
+  (void)self;
+
+  PyObject *lnu_obj;
+  PyObject *lam_obj;
+  PyObject *nu_obj;
+  double one_plus_z;
+  double conversion;
+  PyObject *fnu_out_obj;
+  PyObject *obslam_out_obj;
+  PyObject *obsnu_out_obj;
+
+  if (!PyArg_ParseTuple(args, "OOOddOOO", &lnu_obj, &lam_obj, &nu_obj,
+                        &one_plus_z, &conversion, &fnu_out_obj,
+                        &obslam_out_obj, &obsnu_out_obj)) {
+    return NULL;
+  }
+
+  PyArrayObject *np_lnu = (PyArrayObject *)PyArray_FROM_OTF(
+      lnu_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  PyArrayObject *np_lam = (PyArrayObject *)PyArray_FROM_OTF(
+      lam_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  PyArrayObject *np_nu = (PyArrayObject *)PyArray_FROM_OTF(
+      nu_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+
+  if (np_lnu == NULL || np_lam == NULL || np_nu == NULL) {
+    Py_XDECREF(np_lnu);
+    Py_XDECREF(np_lam);
+    Py_XDECREF(np_nu);
+    return NULL;
+  }
+
+  if (!PyArray_Check(fnu_out_obj) || !PyArray_Check(obslam_out_obj) ||
+      !PyArray_Check(obsnu_out_obj)) {
+    Py_DECREF(np_lnu);
+    Py_DECREF(np_lam);
+    Py_DECREF(np_nu);
+    PyErr_SetString(PyExc_TypeError,
+                    "Output buffers must be NumPy arrays.");
+    return NULL;
+  }
+
+  PyArrayObject *np_fnu_out = (PyArrayObject *)fnu_out_obj;
+  PyArrayObject *np_obslam_out = (PyArrayObject *)obslam_out_obj;
+  PyArrayObject *np_obsnu_out = (PyArrayObject *)obsnu_out_obj;
+  Py_INCREF(np_fnu_out);
+  Py_INCREF(np_obslam_out);
+  Py_INCREF(np_obsnu_out);
+
+  if (PyArray_TYPE(np_fnu_out) != NPY_DOUBLE ||
+      PyArray_TYPE(np_obslam_out) != NPY_DOUBLE ||
+      PyArray_TYPE(np_obsnu_out) != NPY_DOUBLE ||
+      !PyArray_ISCARRAY(np_fnu_out) || !PyArray_ISCARRAY(np_obslam_out) ||
+      !PyArray_ISCARRAY(np_obsnu_out)) {
+    Py_DECREF(np_lnu);
+    Py_DECREF(np_lam);
+    Py_DECREF(np_nu);
+    Py_DECREF(np_fnu_out);
+    Py_DECREF(np_obslam_out);
+    Py_DECREF(np_obsnu_out);
+    PyErr_SetString(
+        PyExc_ValueError,
+        "Output buffers must be writable C-contiguous float64 arrays.");
+    return NULL;
+  }
+
+  if (PyArray_NDIM(np_lnu) < 1 || PyArray_NDIM(np_lam) != 1 ||
+      PyArray_NDIM(np_nu) != 1 || PyArray_NDIM(np_obslam_out) != 1 ||
+      PyArray_NDIM(np_obsnu_out) != 1) {
+    Py_DECREF(np_lnu);
+    Py_DECREF(np_lam);
+    Py_DECREF(np_nu);
+    Py_DECREF(np_fnu_out);
+    Py_DECREF(np_obslam_out);
+    Py_DECREF(np_obsnu_out);
+    PyErr_SetString(
+        PyExc_ValueError,
+        "lnu must be at least 1D and lam/nu/output grids must be 1D.");
+    return NULL;
+  }
+
+  const int lnu_ndim = PyArray_NDIM(np_lnu);
+  const npy_intp *lnu_dims = PyArray_DIMS(np_lnu);
+  const npy_intp *fnu_dims = PyArray_DIMS(np_fnu_out);
+  if (PyArray_NDIM(np_fnu_out) != lnu_ndim) {
+    Py_DECREF(np_lnu);
+    Py_DECREF(np_lam);
+    Py_DECREF(np_nu);
+    Py_DECREF(np_fnu_out);
+    Py_DECREF(np_obslam_out);
+    Py_DECREF(np_obsnu_out);
+    PyErr_SetString(PyExc_ValueError,
+                    "fnu_out must have the same ndim as lnu.");
+    return NULL;
+  }
+
+  for (int idim = 0; idim < lnu_ndim; idim++) {
+    if (lnu_dims[idim] != fnu_dims[idim]) {
+      Py_DECREF(np_lnu);
+      Py_DECREF(np_lam);
+      Py_DECREF(np_nu);
+      Py_DECREF(np_fnu_out);
+      Py_DECREF(np_obslam_out);
+      Py_DECREF(np_obsnu_out);
+      PyErr_SetString(PyExc_ValueError,
+                      "fnu_out must match the shape of lnu.");
+      return NULL;
+    }
+  }
+
+  const npy_intp nlam = PyArray_DIMS(np_lam)[0];
+  if (PyArray_DIMS(np_nu)[0] != nlam || lnu_dims[lnu_ndim - 1] != nlam ||
+      PyArray_DIMS(np_obslam_out)[0] != nlam ||
+      PyArray_DIMS(np_obsnu_out)[0] != nlam) {
+    Py_DECREF(np_lnu);
+    Py_DECREF(np_lam);
+    Py_DECREF(np_nu);
+    Py_DECREF(np_fnu_out);
+    Py_DECREF(np_obslam_out);
+    Py_DECREF(np_obsnu_out);
+    PyErr_SetString(PyExc_ValueError,
+                    "lam/nu/output lengths must match the last lnu axis.");
+    return NULL;
+  }
+
+  double *lnu = static_cast<double *>(PyArray_DATA(np_lnu));
+  double *lam = static_cast<double *>(PyArray_DATA(np_lam));
+  double *nu = static_cast<double *>(PyArray_DATA(np_nu));
+  double *fnu_out = static_cast<double *>(PyArray_DATA(np_fnu_out));
+  double *obslam_out = static_cast<double *>(PyArray_DATA(np_obslam_out));
+  double *obsnu_out = static_cast<double *>(PyArray_DATA(np_obsnu_out));
+  const npy_intp nelem = PyArray_SIZE(np_lnu);
+
+  tic("compute_fnu");
+
+  for (npy_intp idx = 0; idx < nelem; idx++) {
+    fnu_out[idx] = lnu[idx] * conversion;
+  }
+
+  for (npy_intp ilam = 0; ilam < nlam; ilam++) {
+    obslam_out[ilam] = lam[ilam] * one_plus_z;
+    obsnu_out[ilam] = nu[ilam] / one_plus_z;
+  }
+
+  toc("compute_fnu");
+
+  Py_DECREF(np_lnu);
+  Py_DECREF(np_lam);
+  Py_DECREF(np_nu);
+  Py_DECREF(np_fnu_out);
+  Py_DECREF(np_obslam_out);
+  Py_DECREF(np_obsnu_out);
+
+  Py_RETURN_NONE;
+}
+
+/**
  * @brief Scale a 2D spectra array by a per-spectrum factor.
  *
  * The common hot-path shape is ``(nspec, nlam)`` scaled by a 1D array of
@@ -660,6 +841,8 @@ static PyMethodDef ReductionMethods[] = {
     {"reduce_particle_spectra", (PyCFunction)reduce_particle_spectra,
      METH_VARARGS,
      "Method for reducing per-particle spectra to an integrated spectrum."},
+    {"compute_fnu", (PyCFunction)compute_fnu, METH_VARARGS,
+     "Populate observer-frame wavelength, frequency, and flux arrays."},
     {"scale_spectra_2d", (PyCFunction)scale_spectra_2d, METH_VARARGS,
      "Scale a 2D spectra array by a 1D per-spectrum factor."},
     {"combine_spectra_list_2d", (PyCFunction)combine_spectra_list_2d,

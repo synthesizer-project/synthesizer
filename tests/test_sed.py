@@ -58,6 +58,34 @@ def test_get_fnu0_handles_multidimensional_spectra():
     np.testing.assert_allclose(sed._obsnu, sed._nu)
 
 
+def test_get_fnu_applies_igm_with_observer_frame_wavelengths():
+    """IGM attenuation should use observer-frame wavelengths once."""
+
+    class DummyIGM:
+        def __init__(self):
+            self.last_z = None
+            self.last_lam_obs = None
+
+        def get_transmission(self, redshift, lam_obs):
+            self.last_z = redshift
+            self.last_lam_obs = lam_obs
+            return np.full(lam_obs.shape, 0.5)
+
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
+    z = 2.0
+
+    sed = Sed(lam=lam, lnu=lnu)
+    baseline = Sed(lam=lam, lnu=lnu).get_fnu(Planck18, z)
+    igm = DummyIGM()
+
+    fnu = sed.get_fnu(Planck18, z, igm=igm)
+
+    assert igm.last_z == z
+    np.testing.assert_allclose(igm.last_lam_obs.value, sed._obslam)
+    np.testing.assert_allclose(fnu.value, 0.5 * baseline.value)
+
+
 def test_scale_broadcasts_particle_scaling_without_full_shape_array():
     """Scaling should broadcast lower-dimensional factors across wavelength."""
     lam = np.linspace(1000, 2000, 4) * angstrom
