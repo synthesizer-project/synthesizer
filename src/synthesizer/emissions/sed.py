@@ -54,7 +54,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
-from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.operation_timers import timed, timer
 
 
 class Sed:
@@ -368,6 +368,7 @@ class Sed:
             return self
         return self.__add__(second_sed)
 
+    @timed("Sed.scale")
     def scale(
         self,
         scaling,
@@ -402,107 +403,120 @@ class Sed:
             Sed
                 A new instance of Sed with scaled lnu.
         """
-        # If we have units make sure they are ok and then strip them
-        if isinstance(scaling, (unyt_array, unyt_quantity)):
-            if self.lnu.units.dimensions != scaling.units.dimensions:
-                raise exceptions.InconsistentMultiplication(
-                    f"Incompatible units {self.lnu.units} and {scaling.units}"
-                )
-            else:
-                scaling = scaling.to(self.lnu.units)
-                scaling = scaling.value
+        with timer("Sed.scale.prepare_inputs"):
+            # If we have units make sure they are ok and then strip them
+            if isinstance(scaling, (unyt_array, unyt_quantity)):
+                if self.lnu.units.dimensions != scaling.units.dimensions:
+                    raise exceptions.InconsistentMultiplication(
+                        "Incompatible units "
+                        f"{self.lnu.units} and {scaling.units}"
+                    )
+                else:
+                    scaling = scaling.to(self.lnu.units)
+                    scaling = scaling.value
 
-        scaling_ndim = getattr(scaling, "ndim", 0)
-        use_fast_2d_scaling = (
-            isinstance(scaling, np.ndarray)
-            and self._lnu.ndim == 2
-            and scaling_ndim == 1
-            and scaling.shape[0] == self._lnu.shape[0]
-            and (mask is None or (getattr(mask, "ndim", 0) == 1))
-            and (lam_mask is None or getattr(lam_mask, "ndim", 0) == 1)
-        )
-
-        # Unpack the arrays we'll need during scaling.
-        if use_fast_2d_scaling:
-            lnu = None
-        elif lam_mask is None:
-            lnu = np.array(self._lnu, copy=True)
-        else:
-            lnu = np.array(self._lnu[..., lam_mask], copy=True)
-        units = self.lnu.units
-
-        # Handle a scalar scaling factor
-        if np.isscalar(scaling):
-            if mask is not None:
-                lnu[mask] *= scaling
-            else:
-                lnu *= scaling
-
-        # Handle a multi-element array scaling factor as long as it matches
-        # the shape of the lnu array up to the dimensions of the scaling array
-        elif use_fast_2d_scaling:
-            lnu = scale_spectra_2d(
-                self._lnu,
-                scaling,
-                mask,
-                lam_mask,
-                nthreads,
+            scaling_ndim = getattr(scaling, "ndim", 0)
+            use_fast_2d_scaling = (
+                isinstance(scaling, np.ndarray)
+                and self._lnu.ndim == 2
+                and scaling_ndim == 1
+                and scaling.shape[0] == self._lnu.shape[0]
+                and (mask is None or (getattr(mask, "ndim", 0) == 1))
+                and (lam_mask is None or getattr(lam_mask, "ndim", 0) == 1)
             )
-        elif isinstance(scaling, np.ndarray) and scaling_ndim < lnu.ndim:
-            expand_axes = tuple(range(scaling_ndim, lnu.ndim))
-            expanded_scaling = np.expand_dims(scaling, axis=expand_axes)
 
-            # Apply the scaling
-            if mask is not None:
-                lnu[mask] *= expanded_scaling
+            # Unpack the arrays we'll need during scaling.
+            if use_fast_2d_scaling:
+                lnu = None
+            elif lam_mask is None:
+                lnu = np.array(self._lnu, copy=True)
             else:
-                lnu *= expanded_scaling
+                lnu = np.array(self._lnu[..., lam_mask], copy=True)
+            units = self.lnu.units
 
-        # If the scaling array is the same shape as the lnu array then we can
-        # just multiply them together
-        elif isinstance(scaling, np.ndarray) and scaling.shape == lnu.shape:
-            if mask is not None:
-                lnu[mask] *= scaling[mask]
+        with timer("Sed.scale.apply_scaling"):
+            # Handle a scalar scaling factor
+            if np.isscalar(scaling):
+                with timer("Sed.scale.scalar"):
+                    if mask is not None:
+                        lnu[mask] *= scaling
+                    else:
+                        lnu *= scaling
+
+            # Handle a multi-element array scaling factor as long as it
+            # matches the lnu array up to the scaling dimensions.
+            elif use_fast_2d_scaling:
+                with timer("Sed.scale.fast_2d_kernel"):
+                    lnu = scale_spectra_2d(
+                        self._lnu,
+                        scaling,
+                        mask,
+                        lam_mask,
+                        nthreads,
+                    )
+            elif isinstance(scaling, np.ndarray) and scaling_ndim < lnu.ndim:
+                with timer("Sed.scale.broadcast_numpy"):
+                    expand_axes = tuple(range(scaling_ndim, lnu.ndim))
+                    expanded_scaling = np.expand_dims(
+                        scaling, axis=expand_axes
+                    )
+
+                    if mask is not None:
+                        lnu[mask] *= expanded_scaling
+                    else:
+                        lnu *= expanded_scaling
+
+            # If the scaling array already matches the lnu shape we can
+            # multiply directly.
+            elif (
+                isinstance(scaling, np.ndarray) and scaling.shape == lnu.shape
+            ):
+                with timer("Sed.scale.same_shape_numpy"):
+                    if mask is not None:
+                        lnu[mask] *= scaling[mask]
+                    else:
+                        lnu *= scaling
+
+            # If the shapes differ entirely, create a new array where each
+            # element of the scaling array is
+            # multipled by the whole lnu array producing a new lnu array of
+            # shape (scaling.shape + lnu.shape)
+            elif isinstance(scaling, np.ndarray):
+                with timer("Sed.scale.expand_new_axis"):
+                    lnu = scaling[..., np.newaxis] * lnu
+
+                    if mask is not None:
+                        raise exceptions.InconsistentMultiplication(
+                            "Masking is not supported for scaling arrays"
+                            " with different shapes"
+                        )
+
+            # Otherwise, we've been handed a bad scaling factor
             else:
-                lnu *= scaling
-
-        # Ok, if we have an array but the shapes don't match then we need to
-        # create a new array where each element of the scaling array is
-        # multipled by the whole lnu array producing a new lnu array of
-        # shape (scaling.shape + lnu.shape)
-        elif isinstance(scaling, np.ndarray):
-            lnu = scaling[..., np.newaxis] * lnu
-
-            # Masks are not supported in this case
-            if mask is not None:
-                raise exceptions.InconsistentMultiplication(
-                    "Masking is not supported for scaling arrays"
-                    " with different shapes"
+                out_str = (
+                    f"Incompatible scaling factor with type {type(scaling)} "
                 )
+                if hasattr(scaling, "shape"):
+                    out_str += (
+                        f"and shape {scaling.shape} (expected {self.shape})"
+                    )
+                else:
+                    out_str += f"and value {scaling}"
+                raise exceptions.InconsistentMultiplication(out_str)
 
-        # Otherwise, we've been handed a bad scaling factor
-        else:
-            out_str = f"Incompatible scaling factor with type {type(scaling)} "
-            if hasattr(scaling, "shape"):
-                out_str += f"and shape {scaling.shape} (expected {self.shape})"
+        with timer("Sed.scale.wrap_output"):
+            if use_fast_2d_scaling:
+                new_lnu = lnu * units
+            elif lam_mask is not None:
+                new_lnu = self.lnu.copy()
+                new_lnu[..., lam_mask] = lnu
             else:
-                out_str += f"and value {scaling}"
-            raise exceptions.InconsistentMultiplication(out_str)
+                new_lnu = lnu * units
 
-        # Now complete the calculation if we need to
-        if use_fast_2d_scaling:
-            new_lnu = lnu * units
-        elif lam_mask is not None:
-            new_lnu = self.lnu.copy()
-            new_lnu[..., lam_mask] = lnu
-        else:
-            new_lnu = lnu * units
+            if not inplace:
+                return Sed(self.lam, lnu=new_lnu)
 
-        # Return a new Sed object if we aren't scaling inplace
-        if not inplace:
-            return Sed(self.lam, lnu=new_lnu)
-
-        self._lnu = new_lnu
+            self._lnu = new_lnu
         return self
 
     def __mul__(self, scaling):
@@ -1544,6 +1558,7 @@ class Sed:
             )
         return self.get_resampled_sed(new_lam=instrument.lam)
 
+    @timed("Sed.apply_attenuation")
     def apply_attenuation(
         self,
         tau_v=None,
@@ -1576,89 +1591,88 @@ class Sed:
                 A new Sed containing the rest frame spectra of self attenuated
                 by the transmission defined from tau_v and the dust curve.
         """
-        if dust_curve is None:
-            raise exceptions.MissingArgument("dust_curve must be provided")
+        with timer("Sed.apply_attenuation.validate_inputs"):
+            if dust_curve is None:
+                raise exceptions.MissingArgument("dust_curve must be provided")
 
-        if tau_v is None and "tau_v" in getattr(
-            dust_curve, "_required_params", ()
-        ):
-            raise exceptions.MissingArgument(
-                "tau_v is required by the selected attenuation law: "
-                f"{dust_curve.__class__.__name__}"
+            if tau_v is None and "tau_v" in getattr(
+                dust_curve, "_required_params", ()
+            ):
+                raise exceptions.MissingArgument(
+                    "tau_v is required by the selected attenuation law: "
+                    f"{dust_curve.__class__.__name__}"
+                )
+
+            if mask is not None:
+                if self._lnu.ndim < 2:
+                    raise exceptions.InconsistentArguments(
+                        "Masks are only applicable for Seds containing "
+                        "multiple spectra"
+                    )
+                if self._lnu.shape[: mask.ndim] != mask.shape:
+                    raise exceptions.InconsistentArguments(
+                        "Mask and spectra are incompatible shapes "
+                        f"({mask.shape}, {self._lnu.shape})"
+                    )
+
+            if isinstance(tau_v, np.ndarray):
+                if self._lnu.ndim < 2:
+                    raise exceptions.InconsistentArguments(
+                        "Arrays of tau_v values are only applicable for Seds"
+                        " containing multiple spectra"
+                    )
+                if self._lnu.shape[0] != tau_v.size:
+                    raise exceptions.InconsistentArguments(
+                        "tau_v and spectra are incompatible shapes "
+                        f"({tau_v.shape}, {self._lnu.shape})"
+                    )
+
+        with timer("Sed.apply_attenuation.get_transmission"):
+            transmission = dust_curve.get_transmission(
+                tau_v, self.lam, **dust_curve_kwargs
             )
 
-        # Ensure the mask is compatible with the spectra
-        if mask is not None:
-            if self._lnu.ndim < 2:
-                raise exceptions.InconsistentArguments(
-                    "Masks are only applicable for Seds containing "
-                    "multiple spectra"
-                )
-            if self._lnu.shape[: mask.ndim] != mask.shape:
-                raise exceptions.InconsistentArguments(
-                    "Mask and spectra are incompatible shapes "
-                    f"({mask.shape}, {self._lnu.shape})"
-                )
+        with timer("Sed.apply_attenuation.apply_transmission"):
+            if (
+                self._lnu.ndim == 2
+                and isinstance(transmission, np.ndarray)
+                and transmission.ndim == 1
+                and mask is not None
+            ):
+                with timer("Sed.apply_attenuation.masked_1d_kernel"):
+                    spectra = scale_spectra_2d(
+                        self._lnu,
+                        transmission,
+                        mask,
+                        None,
+                        nthreads,
+                    )
+                return Sed(self.lam, lnu=spectra * self.lnu.units)
 
-        # If tau_v is an array it needs to match the spectra shape
-        if isinstance(tau_v, np.ndarray):
-            if self._lnu.ndim < 2:
-                raise exceptions.InconsistentArguments(
-                    "Arrays of tau_v values are only applicable for Seds"
-                    " containing multiple spectra"
-                )
-            if self._lnu.shape[0] != tau_v.size:
-                raise exceptions.InconsistentArguments(
-                    "tau_v and spectra are incompatible shapes "
-                    f"({tau_v.shape}, {self._lnu.shape})"
-                )
+            if (
+                self._lnu.ndim == 2
+                and isinstance(transmission, np.ndarray)
+                and transmission.ndim == 1
+            ):
+                with timer("Sed.apply_attenuation.unmasked_1d_kernel"):
+                    spectra = multiply_array_by_vector_1d(
+                        self._lnu,
+                        transmission,
+                        nthreads,
+                    )
+                return Sed(self.lam, lnu=spectra * self.lnu.units)
 
-        # Compute the transmission
-        transmission = dust_curve.get_transmission(
-            tau_v, self.lam, **dust_curve_kwargs
-        )
+            with timer("Sed.apply_attenuation.numpy_fallback"):
+                spectra = np.copy(self._lnu)
 
-        if (
-            self._lnu.ndim == 2
-            and isinstance(transmission, np.ndarray)
-            and transmission.ndim == 1
-            and mask is not None
-        ):
-            spectra = scale_spectra_2d(
-                self._lnu,
-                transmission,
-                mask,
-                None,
-                nthreads,
-            )
+                if mask is None:
+                    spectra *= transmission
+                elif transmission.ndim > 1:
+                    spectra[mask] *= transmission[mask]
+                else:
+                    spectra[mask] *= transmission
+
             return Sed(self.lam, lnu=spectra * self.lnu.units)
-
-        if (
-            self._lnu.ndim == 2
-            and isinstance(transmission, np.ndarray)
-            and transmission.ndim == 1
-        ):
-            spectra = multiply_array_by_vector_1d(
-                self._lnu,
-                transmission,
-                nthreads,
-            )
-            return Sed(self.lam, lnu=spectra * self.lnu.units)
-
-        # Get a copy of the rest frame spectra, we need to avoid
-        # modifying the original
-        spectra = np.copy(self._lnu)
-
-        # Apply the transmission curve to the rest frame spectra with or
-        # without applying a mask
-        if mask is None:
-            spectra *= transmission
-        elif transmission.ndim > 1:
-            spectra[mask] *= transmission[mask]
-        else:
-            spectra[mask] *= transmission
-
-        return Sed(self.lam, lnu=spectra * self.lnu.units)
 
     @accepts(ionisation_energy=eV)
     def calculate_ionising_photon_production_rate(
