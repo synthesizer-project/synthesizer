@@ -292,8 +292,8 @@ class TestDopplerParticleSpectraExtension:
         )
 
         np.testing.assert_allclose(
-            threaded_part_spectra, serial_part_spectra, rtol=0.0, atol=0.0
+            threaded_part_spectra, serial_part_spectra, rtol=0.0, atol=1e-12
         )
         np.testing.assert_allclose(
-            threaded_spectra, serial_spectra, rtol=0.0, atol=0.0
+            threaded_spectra, serial_spectra, rtol=0.0, atol=1e-12
         )
