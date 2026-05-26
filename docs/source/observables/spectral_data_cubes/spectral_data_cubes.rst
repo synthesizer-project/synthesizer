@@ -15,9 +15,7 @@ high-level galaxy and component cube API used together with an
 - construct an ``IntegratedFieldUnit``
 - call ``galaxy.get_data_cube(...)`` or ``component.get_data_cube(...)``
 
-The lower-level ``SpectralCube`` container is still available for custom
-workflows that need direct control over the cube object and its generation
-inputs.
+These methods will return a ``SpectralCube``, which is the main data container for spectral data cubes in Synthesizer, and provides a consistent interface for working with cubes regardless of how they were generated.
 
 The documentation below starts with the high-level particle and parametric
 galaxy workflows, then shows how the returned cube can be analysed or how a

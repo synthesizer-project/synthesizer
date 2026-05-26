@@ -99,7 +99,7 @@ In the examples below, we demonstrate this process for individual components and
    spectra/galaxy
    lines/galaxy_lines
 
-Once you have created emissions, they can be combined with the appropriate
-specialised instrument configuration to produce a range of observables. See the
+Once you have created emissions, they can be combined with any
+specialised instrument object to produce a range of observables. See the
 `observables <../observables/observables.rst>`_ section of the documentation
 for more details on this process.

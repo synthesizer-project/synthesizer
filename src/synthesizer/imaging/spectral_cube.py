@@ -47,7 +47,6 @@ from synthesizer.imaging.data_cube_generators import (
     _generate_ifu_particle_hist,
     _generate_ifu_particle_smoothed,
 )
-from synthesizer.synth_warnings import deprecated
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
@@ -303,10 +302,6 @@ class SpectralCube(ImagingBase):
             nthreads=nthreads,
         )
 
-    @deprecated(
-        "is deprecated and will be removed in version 1.3.0. "
-        "Use generate_data_cube_hist(...) instead."
-    )
     def get_data_cube_hist(
         self,
         sed,
@@ -314,7 +309,7 @@ class SpectralCube(ImagingBase):
         quantity="lnu",
         nthreads=1,
     ):
-        """Deprecated wrapper for generate_data_cube_hist."""
+        """Compatibility wrapper for ``generate_data_cube_hist``."""
         # Delegate to the renamed low-level histogram cube entry point.
         return self.generate_data_cube_hist(
             sed=sed,
@@ -415,10 +410,6 @@ class SpectralCube(ImagingBase):
                 f"sed={type(sed)})"
             )
 
-    @deprecated(
-        "is deprecated and will be removed in version 1.3.0. "
-        "Use generate_data_cube_smoothed(...) instead."
-    )
     def get_data_cube_smoothed(
         self,
         sed,
@@ -430,7 +421,7 @@ class SpectralCube(ImagingBase):
         quantity="lnu",
         nthreads=1,
     ):
-        """Deprecated wrapper for generate_data_cube_smoothed."""
+        """Compatibility wrapper for ``generate_data_cube_smoothed``."""
         # Delegate to the renamed low-level spectral-cube entry point.
         return self.generate_data_cube_smoothed(
             sed=sed,
