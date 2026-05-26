@@ -44,6 +44,11 @@ static PyArrayObject *get_spectra_serial(GridProps *grid_props) {
       (PyArrayObject *)PyArray_ZEROS(1, np_int_dims, NPY_DOUBLE, 0);
   double *spectra = static_cast<double *>(PyArray_DATA(np_spectra));
 
+  /* Get raw pointers to the grid arrays. */
+  const double *__restrict grid_spectra = grid_props->get_spectra();
+  const double *__restrict grid_weights = grid_props->get_grid_weights();
+  const size_t nlam = static_cast<size_t>(grid_props->nlam);
+
   /* Loop over wavelengths */
   for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
 
@@ -56,14 +61,15 @@ static PyArrayObject *get_spectra_serial(GridProps *grid_props) {
     for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
 
       /* Get the weight. */
-      const double weight = grid_props->get_grid_weight_at(grid_ind);
+      const double weight = grid_weights[grid_ind];
 
       /* Skip zero weight cells. */
       if (weight <= 0)
         continue;
 
       /* Get the grid spectra value at this index and wavelength. */
-      double spec_val = grid_props->get_spectra_at(grid_ind, ilam);
+      const size_t spec_ind = static_cast<size_t>(grid_ind) * nlam + ilam;
+      double spec_val = grid_spectra[spec_ind];
 
       /* Add the contribution to this wavelength. */
       spectra[ilam] += spec_val * weight;
@@ -91,6 +97,11 @@ static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
   PyArrayObject *np_spectra =
       (PyArrayObject *)PyArray_ZEROS(1, np_int_dims, NPY_DOUBLE, 0);
   double *spectra = static_cast<double *>(PyArray_DATA(np_spectra));
+
+  /* Get raw pointers to the grid arrays. */
+  const double *__restrict grid_spectra = grid_props->get_spectra();
+  const double *__restrict grid_weights = grid_props->get_grid_weights();
+  const size_t nlam = static_cast<size_t>(grid_props->nlam);
 
 #pragma omp parallel num_threads(nthreads)
   {
@@ -124,14 +135,16 @@ static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
       for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
 
         /* Get the weight. */
-        const double weight = grid_props->get_grid_weight_at(grid_ind);
+        const double weight = grid_weights[grid_ind];
 
         /* Skip zero weight cells. */
         if (weight <= 0)
           continue;
 
         /* Get the grid spectra value at this index and wavelength. */
-        double spec_val = grid_props->get_spectra_at(grid_ind, start + ilam);
+        const size_t spec_ind =
+            static_cast<size_t>(grid_ind) * nlam + start + ilam;
+        double spec_val = grid_spectra[spec_ind];
 
         /* Add the contribution to this wavelength. */
         this_element += spec_val * weight;
