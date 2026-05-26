@@ -1303,6 +1303,8 @@ class Component(ABC):
         Returns:
             SpectralCube: Generated spectral data cube.
         """
+        # Reuse the shared component implementation so the public single-label
+        # API stays aligned with the multi-label/internal generation path.
         return Component._generate_data_cubes(
             self,
             label,
@@ -1360,6 +1362,7 @@ class Component(ABC):
                 Either a single SpectralCube if only one label is passed,
                 otherwise a dict of SpectralCubes keyed by label.
         """
+        # Convert labels tuple to a list and validate they are strings.
         labels = list(labels)
         for label in labels:
             if not isinstance(label, str):
@@ -1368,6 +1371,10 @@ class Component(ABC):
                     "If passing an EmissionModel, use model.label instead."
                 )
 
+        # Split the request into labels that correspond to concrete saved
+        # spectra on this component and labels that represent combinations of
+        # those spectra. This mirrors the image-generation routing logic, but
+        # stays local to a single component.
         model_cache = getattr(self, "model_param_cache", {})
 
         combine_labels, generate_labels = _prepare_component_data_cube_labels(
@@ -1376,11 +1383,19 @@ class Component(ABC):
             remove_missing=False,
         )
 
+        # Container for cubes generated or combined in this call.
         out_cubes = {}
+
+        # Collect every spectrum store that can legitimately seed a raw cube.
+        # Particle components may expose both integrated and per-particle
+        # spectra, while parametric components usually only expose the former.
         available_spectra = set(self.spectra)
         if hasattr(self, "particle_spectra"):
             available_spectra.update(self.particle_spectra)
 
+        # Ask the IFU for raw cubes only for labels that already exist as saved
+        # spectra. Any higher-level combination labels are handled afterwards
+        # from the cubes accumulated in ``out_cubes``.
         for label in generate_labels:
             if label not in available_spectra:
                 raise exceptions.InconsistentArguments(
@@ -1400,6 +1415,9 @@ class Component(ABC):
                 cosmo=cosmo,
             )
 
+        # Resolve any component-owned combination labels from the raw cube set
+        # just generated above. Keeping this separate from raw generation makes
+        # it possible for the galaxy layer to reuse the same two-step pattern.
         for label in combine_labels:
             out_cubes[label] = _combine_spectral_cubes(
                 cubes=out_cubes,
@@ -1407,6 +1425,9 @@ class Component(ABC):
                 model_cache=model_cache,
             )
 
+        # Cache raw cubes before any IFU observation recipe is applied. The
+        # galaxy-level orchestration path relies on these raw component cubes
+        # when it needs to assemble galaxy-owned combination cubes.
         if quantity in {"lnu", "llam", "luminosity"}:
             self.data_cubes_lnu.setdefault(instrument.label, {})
             self.data_cubes_lnu[instrument.label].update(out_cubes)
@@ -1414,8 +1435,9 @@ class Component(ABC):
             self.data_cubes_fnu.setdefault(instrument.label, {})
             self.data_cubes_fnu[instrument.label].update(out_cubes)
 
-        # Stop after raw generation when the caller needs unprocessed cubes for
-        # a higher-level combination step.
+        # When called from the galaxy layer we stop here, returning raw cubes
+        # so the parent object can combine them before any PSF/noise step is
+        # applied. Standalone component calls continue on to post-processing.
         if postprocess:
             out_cubes = _postprocess_existing_data_cubes(
                 self,
@@ -1424,9 +1446,13 @@ class Component(ABC):
                 limit_to=labels,
             )
 
+        # If no cubes survived generation or post-processing, return the empty
+        # mapping directly.
         if len(out_cubes) == 0:
             return out_cubes
 
+        # Mirror the image-generation API: a single requested label unwraps to
+        # a bare SpectralCube, while multi-label requests return the full map.
         if len(labels) == 1:
             return out_cubes[labels[0]]
         return out_cubes

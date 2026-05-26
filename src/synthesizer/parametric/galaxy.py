@@ -228,6 +228,8 @@ class Galaxy(BaseGalaxy):
                 The spectral data cube object containing the derived
                 data cube.
         """
+        # Normalise the legacy explicit-component arguments and the newer
+        # label-based API into one list of requested cube labels.
         labels = []
         if label is not None:
             if stellar_spectra is not None or blackhole_spectra is not None:
@@ -253,6 +255,9 @@ class Galaxy(BaseGalaxy):
             )
 
         if label is None:
+            # Legacy explicit-component requests stay component-owned: generate
+            # each requested cube on the relevant component and add them only
+            # when the caller asked for more than one component explicitly.
             cubes = []
 
             if stellar_spectra is not None:
@@ -279,6 +284,10 @@ class Galaxy(BaseGalaxy):
                 return cubes[0]
             return cubes[0] + cubes[1]
 
+        # Label-based requests use the galaxy-level orchestration path, which
+        # mirrors imaging: route labels to components, build any galaxy-level
+        # combinations, then apply IFU post-processing once at the owning
+        # level.
         return BaseGalaxy._generate_data_cubes(
             self,
             *labels,
