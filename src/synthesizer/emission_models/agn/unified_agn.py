@@ -30,6 +30,7 @@ from synthesizer.emission_models.models import (
 )
 from synthesizer.emission_models.transformers import (
     CoveringFraction,
+    DopplerBroadening,
     EscapingFraction,
 )
 from synthesizer.emission_models.utils import ParameterFunction
@@ -107,6 +108,8 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         blr_grid,
         torus_emission_model,
         disc_transmission="weighted_combination",
+        velocity_dispersion_blr=None,
+        velocity_dispersion_nlr=None,
         label="intrinsic",
         **kwargs,
     ):
@@ -133,6 +136,12 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
                 ``"nlr"``, which uses only disc emission transmitted through
                 the NLR; and ``"blr"``, which uses only disc emission
                 transmitted through the BLR.
+            velocity_dispersion_blr (unyt_quantity):
+                The optional velocity dispersion to use when Doppler broadening
+                the final BLR emission. If ``None`` no broadening is applied.
+            velocity_dispersion_nlr (unyt_quantity):
+                The optional velocity dispersion to use when Doppler broadening
+                the final NLR emission. If ``None`` no broadening is applied.
             label (str):
                 The label for the resulting spectra. Defaults to "intrinsic".
             **kwargs: Any additional keyword arguments to pass to the
@@ -202,6 +211,8 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             self._make_line_regions(
                 nlr_grid,
                 blr_grid,
+                velocity_dispersion_blr=velocity_dispersion_blr,
+                velocity_dispersion_nlr=velocity_dispersion_nlr,
                 **kwargs,
             )
         )
@@ -635,6 +646,8 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         self,
         nlr_grid,
         blr_grid,
+        velocity_dispersion_blr=None,
+        velocity_dispersion_nlr=None,
         **kwargs,
     ):
         """Make the line regions.
@@ -699,8 +712,14 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
         )
 
         # Now apply the relevant covering fractions to the different spectra
+        nlr_label = (
+            "unbroadened_nlr" if velocity_dispersion_nlr is not None else "nlr"
+        )
+        blr_label = (
+            "unbroadened_blr" if velocity_dispersion_blr is not None else "blr"
+        )
         nlr = BlackHoleEmissionModel(
-            label="nlr",
+            label=nlr_label,
             apply_to=full_nlr,
             transformer=CoveringFraction(
                 covering_attrs=("covering_fraction_nlr",)
@@ -708,7 +727,7 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             **kwargs,
         )
         blr = BlackHoleEmissionModel(
-            label="blr",
+            label=blr_label,
             apply_to=full_blr,
             transformer=CoveringFraction(
                 covering_attrs=("covering_fraction_blr",)
@@ -731,6 +750,27 @@ class UnifiedAGNIntrinsic(BlackHoleEmissionModel):
             ),
             **kwargs,
         )
+
+        if velocity_dispersion_nlr is not None:
+            nlr = BlackHoleEmissionModel(
+                label="nlr",
+                apply_to=nlr,
+                transformer=DopplerBroadening(
+                    sigma_v_attr="velocity_dispersion_nlr"
+                ),
+                velocity_dispersion_nlr=velocity_dispersion_nlr,
+                **kwargs,
+            )
+        if velocity_dispersion_blr is not None:
+            blr = BlackHoleEmissionModel(
+                label="blr",
+                apply_to=blr,
+                transformer=DopplerBroadening(
+                    sigma_v_attr="velocity_dispersion_blr"
+                ),
+                velocity_dispersion_blr=velocity_dispersion_blr,
+                **kwargs,
+            )
 
         return nlr, nlr_continuum, blr, blr_continuum
 
@@ -765,6 +805,8 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
         torus_emission_model,
         diffuse_dust_curve,
         disc_transmission="weighted_combination",
+        velocity_dispersion_blr=None,
+        velocity_dispersion_nlr=None,
         label="attenuated",
         tau_v="tau_v",
         **kwargs,
@@ -794,6 +836,12 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
                 the unobscured disc emission; ``"nlr"``, which uses only
                 disc emission transmitted through the NLR; and ``"blr"``,
                 which uses only disc emission transmitted through the BLR.
+            velocity_dispersion_blr (unyt_quantity):
+                The optional velocity dispersion to use when Doppler broadening
+                the final BLR emission. If ``None`` no broadening is applied.
+            velocity_dispersion_nlr (unyt_quantity):
+                The optional velocity dispersion to use when Doppler broadening
+                the final NLR emission. If ``None`` no broadening is applied.
             label (str):
                 The label for the resulting spectra. This defaults to
                 "attenuated".
@@ -808,6 +856,8 @@ class UnifiedAGNWithDiffuseDustAttenuation(BlackHoleEmissionModel):
             blr_grid,
             torus_emission_model,
             disc_transmission=disc_transmission,
+            velocity_dispersion_blr=velocity_dispersion_blr,
+            velocity_dispersion_nlr=velocity_dispersion_nlr,
             **kwargs,
         )
 
@@ -848,6 +898,8 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
         diffuse_dust_emission_model,
         tau_v="tau_v",
         disc_transmission="weighted_combination",
+        velocity_dispersion_blr=None,
+        velocity_dispersion_nlr=None,
         label="total",
         **kwargs,
     ):
@@ -878,6 +930,12 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
                 The dust attenuation curve for diffuse dust.
             diffuse_dust_emission_model:
                 The diffuse dust emission model.
+            velocity_dispersion_blr (unyt_quantity):
+                The optional velocity dispersion to use when Doppler broadening
+                the final BLR emission. If ``None`` no broadening is applied.
+            velocity_dispersion_nlr (unyt_quantity):
+                The optional velocity dispersion to use when Doppler broadening
+                the final NLR emission. If ``None`` no broadening is applied.
             tau_v (str):
                 The attribute on the emitter to use for tau_v
             label (str):
@@ -893,6 +951,8 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
             blr_grid,
             torus_emission_model,
             disc_transmission=disc_transmission,
+            velocity_dispersion_blr=velocity_dispersion_blr,
+            velocity_dispersion_nlr=velocity_dispersion_nlr,
             **kwargs,
         )
 
@@ -947,6 +1007,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
         disc_transmission="weighted_combination",
         diffuse_dust_curve=None,
         diffuse_dust_emission_model=None,
+        velocity_dispersion_blr=None,
+        velocity_dispersion_nlr=None,
         label=None,
         **kwargs,
     ):
@@ -977,6 +1039,12 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 The dust attenuation curve for diffuse dust.
             diffuse_dust_emission_model:
                 The diffuse dust emission model.
+            velocity_dispersion_blr (unyt_quantity):
+                The optional velocity dispersion to use when Doppler broadening
+                the final BLR emission. If ``None`` no broadening is applied.
+            velocity_dispersion_nlr (unyt_quantity):
+                The optional velocity dispersion to use when Doppler broadening
+                the final NLR emission. If ``None`` no broadening is applied.
             label (str):
                 The label for the resulting spectra. When dust attenuation and
                 emission is included this defaults to "total" otherwise it
@@ -1003,6 +1071,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 diffuse_dust_curve,
                 diffuse_dust_emission_model,
                 disc_transmission=disc_transmission,
+                velocity_dispersion_blr=velocity_dispersion_blr,
+                velocity_dispersion_nlr=velocity_dispersion_nlr,
                 label=label,
                 **kwargs,
             )
@@ -1018,6 +1088,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 torus_emission_model,
                 diffuse_dust_curve,
                 disc_transmission=disc_transmission,
+                velocity_dispersion_blr=velocity_dispersion_blr,
+                velocity_dispersion_nlr=velocity_dispersion_nlr,
                 label=label,
                 **kwargs,
             )
@@ -1031,6 +1103,8 @@ class UnifiedAGN(BlackHoleEmissionModel):
                 blr_grid,
                 torus_emission_model,
                 disc_transmission=disc_transmission,
+                velocity_dispersion_blr=velocity_dispersion_blr,
+                velocity_dispersion_nlr=velocity_dispersion_nlr,
                 label=label,
                 **kwargs,
             )
