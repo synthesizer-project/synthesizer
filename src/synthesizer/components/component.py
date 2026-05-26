@@ -27,6 +27,7 @@ from synthesizer.imaging.image_generators import (
     _combine_image_collections,
     _prepare_component_image_labels,
 )
+from synthesizer.imaging.postprocess import _postprocess_existing_images
 from synthesizer.synth_warnings import deprecated
 from synthesizer.units import unit_is_compatible
 from synthesizer.utils.ascii_table import TableFormatter
@@ -727,7 +728,7 @@ class Component(ABC):
 
         # Apply any instrument-defined PSF and noise processing in the
         # canonical order before returning the observable to the caller.
-        out_images = Component._postprocess_existing_images(
+        out_images = _postprocess_existing_images(
             self,
             instrument=instrument,
             phot_type=phot_type,
@@ -738,82 +739,6 @@ class Component(ABC):
         if len(labels) == 1:
             return out_images[labels[0]]
         return out_images
-
-    def _postprocess_existing_images(
-        self,
-        instrument,
-        phot_type,
-        limit_to=None,
-    ):
-        """Apply the instrument-defined imaging post-processing to images.
-
-        Args:
-            instrument (Instrument): Instrument defining the observation.
-            phot_type (str): Either ``"lnu"`` or ``"fnu"``.
-            limit_to (list, optional): Specific labels to post-process.
-
-        Returns:
-            dict: Final image collections keyed by label.
-        """
-        # Select the raw and post-processed image stores for this photometry
-        # flavour.
-        if phot_type == "lnu":
-            raw_store = self.images_lnu
-            if not hasattr(self, "images_psf_lnu"):
-                self.images_psf_lnu = {}
-            if not hasattr(self, "images_noise_lnu"):
-                self.images_noise_lnu = {}
-            psf_store = self.images_psf_lnu
-            noise_store = self.images_noise_lnu
-        elif phot_type == "fnu":
-            raw_store = self.images_fnu
-            if not hasattr(self, "images_psf_fnu"):
-                self.images_psf_fnu = {}
-            if not hasattr(self, "images_noise_fnu"):
-                self.images_noise_fnu = {}
-            psf_store = self.images_psf_fnu
-            noise_store = self.images_noise_fnu
-        else:
-            raise exceptions.InconsistentArguments(
-                f"Photometry type {phot_type} not recognised. Must be "
-                "'lnu' or 'fnu'."
-            )
-
-        # Resolve the raw images we are post-processing from the component
-        # storage populated during generation.
-        raw_images = raw_store.get(instrument.label, {})
-        labels = raw_images.keys() if limit_to is None else limit_to
-        final_images = {
-            label: raw_images[label] for label in labels if label in raw_images
-        }
-
-        # Apply PSFs first so any subsequent noise model acts on the observed
-        # PSF-convolved image.
-        if instrument.can_do_psf_imaging:
-            psf_store.setdefault(instrument.label, {})
-            for label, imgs in final_images.items():
-                psf_store[instrument.label][label] = instrument.apply_psfs(
-                    imgs
-                )
-            final_images = {
-                label: psf_store[instrument.label][label]
-                for label in final_images
-            }
-
-        # Apply the configured instrument noise to the latest image state.
-        if instrument.can_do_noisy_imaging:
-            noise_store.setdefault(instrument.label, {})
-            for label, imgs in final_images.items():
-                noise_store[instrument.label][label] = instrument.apply_noises(
-                    imgs,
-                    aperture_radius=instrument.depth_app_radius,
-                )
-            final_images = {
-                label: noise_store[instrument.label][label]
-                for label in final_images
-            }
-
-        return final_images
 
     def get_images_luminosity(
         self,
