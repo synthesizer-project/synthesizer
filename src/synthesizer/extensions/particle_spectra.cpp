@@ -236,10 +236,17 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
+ * @param has_lam_mask: Are we applying a wavelength mask?
  */
 static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
-                                    double *part_spectra) {
-  /* Precompute unmasked wavelengths */
+                                    double *part_spectra, bool has_lam_mask) {
+  /* If there is no wavelength mask, use the branch-free contiguous loop. */
+  if (!has_lam_mask) {
+    spectra_loop_cic_no_lam_mask_serial(grid_props, parts, part_spectra);
+    return;
+  }
+
+  /* Precompute unmasked wavelengths. */
   const size_t nlam = static_cast<size_t>(grid_props->nlam);
   std::vector<int> good_lams;
   good_lams.reserve(nlam);
@@ -249,13 +256,8 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
     }
   }
 
-  /* Call the masked implementation only if there are masked wavelengths. */
-  if (good_lams.size() != nlam) {
-    spectra_loop_cic_with_lam_mask_serial(grid_props, parts, part_spectra,
-                                          good_lams);
-  } else {
-    spectra_loop_cic_no_lam_mask_serial(grid_props, parts, part_spectra);
-  }
+  spectra_loop_cic_with_lam_mask_serial(grid_props, parts, part_spectra,
+                                        good_lams);
 }
 
 /**
@@ -522,10 +524,19 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param nthreads: The number of threads to use.
+ * @param has_lam_mask: Are we applying a wavelength mask?
  */
 static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
-                                 double *part_spectra, int nthreads) {
-  /* Precompute unmasked wavelengths */
+                                 double *part_spectra, int nthreads,
+                                 bool has_lam_mask) {
+  /* If there is no wavelength mask, use the branch-free contiguous loop. */
+  if (!has_lam_mask) {
+    spectra_loop_cic_no_lam_mask_omp(grid_props, parts, part_spectra,
+                                     nthreads);
+    return;
+  }
+
+  /* Precompute unmasked wavelengths. */
   const size_t nlam = static_cast<size_t>(grid_props->nlam);
   std::vector<int> good_lams;
   good_lams.reserve(nlam);
@@ -535,14 +546,8 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
     }
   }
 
-  /* Call the masked implementation only if there are masked wavelengths. */
-  if (good_lams.size() != nlam) {
-    spectra_loop_cic_with_lam_mask_omp(grid_props, parts, part_spectra,
-                                       nthreads, good_lams);
-  } else {
-    spectra_loop_cic_no_lam_mask_omp(grid_props, parts, part_spectra,
-                                     nthreads);
-  }
+  spectra_loop_cic_with_lam_mask_omp(grid_props, parts, part_spectra, nthreads,
+                                     good_lams);
 }
 #endif /* WITH_OPENMP */
 
@@ -556,9 +561,11 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param nthreads: The number of threads to use.
+ * @param has_lam_mask: Are we applying a wavelength mask?
  */
 void spectra_loop_cic(GridProps *grid_props, Particles *parts,
-                      double *part_spectra, const int nthreads) {
+                      double *part_spectra, const int nthreads,
+                      bool has_lam_mask) {
 
   /* First get the grid indices and fractions for all particles. */
   get_particle_indices_and_fracs(grid_props, parts, nthreads);
@@ -571,11 +578,12 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    spectra_loop_cic_omp(grid_props, parts, part_spectra, nthreads);
+    spectra_loop_cic_omp(grid_props, parts, part_spectra, nthreads,
+                         has_lam_mask);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    spectra_loop_cic_serial(grid_props, parts, part_spectra);
+    spectra_loop_cic_serial(grid_props, parts, part_spectra, has_lam_mask);
   }
 
 #else
@@ -583,7 +591,7 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  spectra_loop_cic_serial(grid_props, parts, part_spectra);
+  spectra_loop_cic_serial(grid_props, parts, part_spectra, has_lam_mask);
 
 #endif
   toc("spectra_loop_cic");
@@ -696,10 +704,17 @@ static void spectra_loop_ngp_no_lam_mask_serial(GridProps *grid_props,
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
+ * @param has_lam_mask: Are we applying a wavelength mask?
  */
 static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
-                                    double *part_spectra) {
-  /* Precompute unmasked wavelengths */
+                                    double *part_spectra, bool has_lam_mask) {
+  /* If there is no wavelength mask, use the branch-free contiguous loop. */
+  if (!has_lam_mask) {
+    spectra_loop_ngp_no_lam_mask_serial(grid_props, parts, part_spectra);
+    return;
+  }
+
+  /* Precompute unmasked wavelengths. */
   const size_t nlam = static_cast<size_t>(grid_props->nlam);
   std::vector<int> good_lams;
   good_lams.reserve(nlam);
@@ -709,13 +724,8 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
     }
   }
 
-  /* Call the masked implementation only if there are masked wavelengths. */
-  if (good_lams.size() != nlam) {
-    spectra_loop_ngp_with_lam_mask_serial(grid_props, parts, part_spectra,
-                                          good_lams);
-  } else {
-    spectra_loop_ngp_no_lam_mask_serial(grid_props, parts, part_spectra);
-  }
+  spectra_loop_ngp_with_lam_mask_serial(grid_props, parts, part_spectra,
+                                        good_lams);
 }
 
 /**
@@ -886,10 +896,19 @@ static void spectra_loop_ngp_no_lam_mask_omp(GridProps *grid_props,
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param nthreads: The number of threads to use.
+ * @param has_lam_mask: Are we applying a wavelength mask?
  */
 static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
-                                 double *part_spectra, int nthreads) {
-  /* Precompute unmasked wavelengths */
+                                 double *part_spectra, int nthreads,
+                                 bool has_lam_mask) {
+  /* If there is no wavelength mask, use the branch-free contiguous loop. */
+  if (!has_lam_mask) {
+    spectra_loop_ngp_no_lam_mask_omp(grid_props, parts, part_spectra,
+                                     nthreads);
+    return;
+  }
+
+  /* Precompute unmasked wavelengths. */
   const size_t nlam = static_cast<size_t>(grid_props->nlam);
   std::vector<int> good_lams;
   good_lams.reserve(nlam);
@@ -899,14 +918,8 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
     }
   }
 
-  /* Call the masked implementation only if there are masked wavelengths. */
-  if (good_lams.size() != nlam) {
-    spectra_loop_ngp_with_lam_mask_omp(grid_props, parts, part_spectra,
-                                       nthreads, good_lams);
-  } else {
-    spectra_loop_ngp_no_lam_mask_omp(grid_props, parts, part_spectra,
-                                     nthreads);
-  }
+  spectra_loop_ngp_with_lam_mask_omp(grid_props, parts, part_spectra, nthreads,
+                                     good_lams);
 }
 #endif
 
@@ -921,9 +934,11 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param nthreads: The number of threads to use.
+ * @param has_lam_mask: Are we applying a wavelength mask?
  */
 void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
-                      double *part_spectra, const int nthreads) {
+                      double *part_spectra, const int nthreads,
+                      bool has_lam_mask) {
 
   /* First get the grid indices for all particles. */
   get_particle_indices(grid_props, parts, nthreads);
@@ -936,11 +951,12 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    spectra_loop_ngp_omp(grid_props, parts, part_spectra, nthreads);
+    spectra_loop_ngp_omp(grid_props, parts, part_spectra, nthreads,
+                         has_lam_mask);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    spectra_loop_ngp_serial(grid_props, parts, part_spectra);
+    spectra_loop_ngp_serial(grid_props, parts, part_spectra, has_lam_mask);
   }
 
 #else
@@ -948,7 +964,7 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  spectra_loop_ngp_serial(grid_props, parts, part_spectra);
+  spectra_loop_ngp_serial(grid_props, parts, part_spectra, has_lam_mask);
 
 #endif
   toc("spectra_loop_ngp");
@@ -979,6 +995,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   (void)self;
 
   int ndim, npart, nlam, nthreads;
+  int has_lam_mask;
   PyObject *grid_tuple, *part_tuple;
   PyObject *prop_names = NULL;
   PyArrayObject *np_grid_spectra;
@@ -986,10 +1003,10 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiisiOO|O", &np_grid_spectra,
+  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOp|O", &np_grid_spectra,
                         &grid_tuple, &part_tuple, &np_part_mass, &np_ndims,
                         &ndim, &npart, &nlam, &method, &nthreads, &np_mask,
-                        &np_lam_mask, &prop_names)) {
+                        &np_lam_mask, &has_lam_mask, &prop_names)) {
     return NULL;
   }
 
@@ -1024,9 +1041,11 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
   if (strcmp(method, "cic") == 0) {
-    spectra_loop_cic(grid_props, part_props, part_spectra, nthreads);
+    spectra_loop_cic(grid_props, part_props, part_spectra, nthreads,
+                     has_lam_mask);
   } else if (strcmp(method, "ngp") == 0) {
-    spectra_loop_ngp(grid_props, part_props, part_spectra, nthreads);
+    spectra_loop_ngp(grid_props, part_props, part_spectra, nthreads,
+                     has_lam_mask);
   } else {
     PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",
                  method);

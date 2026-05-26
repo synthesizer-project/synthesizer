@@ -1526,6 +1526,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                 1,
                 valid,
                 None,
+                False,
                 (dtg_axis_name,),
             )
 

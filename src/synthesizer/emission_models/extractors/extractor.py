@@ -843,6 +843,7 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
+            lam_mask is not None,
             emitter_attr_names,
         )
 
@@ -970,6 +971,7 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
+            lam_mask is not None,
             emitter_attr_names,
         )
 
@@ -987,6 +989,7 @@ class ParticleExtractor(Extractor):
             nthreads,
             mask,
             lam_mask,
+            lam_mask is not None,
             emitter_attr_names,
         )
 
