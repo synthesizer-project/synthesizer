@@ -1130,7 +1130,14 @@ class LineCollection:
 
         return self._get_ratio(*ab), self._get_ratio(*cd)
 
-    def scale(self, scaling, inplace=False, mask=None, lam_mask=None):
+    def scale(
+        self,
+        scaling,
+        inplace=False,
+        mask=None,
+        lam_mask=None,
+        nthreads=1,
+    ):
         """Scale the lines by a given factor.
 
         Note: this will only scale the rest frame continuum and luminosity.
@@ -1150,6 +1157,9 @@ class LineCollection:
                 A mask array with an entry for each wavelength bin.
                 Masked out wavelengths will not be scaled. Only applicable
                 for multidimensional lines.
+            nthreads (int):
+                Unused thread-count placeholder passed through the generic
+                transformation interface.
 
         Returns:
             LineCollection
