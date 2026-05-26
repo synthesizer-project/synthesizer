@@ -14,6 +14,7 @@ import h5py
 import numpy as np
 from unyt import Msun, Myr, km, kpc, s
 
+from synthesizer import __version__
 from synthesizer.emission_models import PacmanEmission
 from synthesizer.grid import Grid
 from synthesizer.instruments.premade import JWSTNIRCamWide
@@ -135,12 +136,21 @@ def get_test_instrument(grid: Grid):
     Returns:
         Instrument: JWST NIRCam Wide instrument.
     """
-    # Load the instrument if we can
+    # Load the cached instrument only when it was produced by the current
+    # synthesizer version. Older caches can still load, but they emit warnings
+    # and are not reliable inputs for reproducible documentation profiling.
     if os.path.exists(INSTRUMENT_PATH):
-        # Load from file if it exists
-        with h5py.File(INSTRUMENT_PATH, "r") as hdf:
-            photometry_inst = JWSTNIRCamWide._from_hdf5(hdf)
-        return photometry_inst
+        try:
+            with h5py.File(INSTRUMENT_PATH, "r") as hdf:
+                cache_version = hdf["Header"].attrs.get(
+                    "synthesizer_version", None
+                )
+                if cache_version != __version__:
+                    raise ValueError("stale instrument cache")
+                photometry_inst = JWSTNIRCamWide._from_hdf5(hdf)
+                return photometry_inst
+        except (OSError, KeyError, ValueError):
+            os.remove(INSTRUMENT_PATH)
 
     # Otherwise, create a new instance and save it for future use
     photometry_inst = JWSTNIRCamWide(
