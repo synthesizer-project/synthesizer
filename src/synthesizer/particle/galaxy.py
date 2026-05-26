@@ -1349,15 +1349,15 @@ class Galaxy(BaseGalaxy):
             smoothing_lengths=self.stars.smoothing_lengths[mask],
         )
         stellar_mass_map = self._generate_particle_map(
-            signal=self.stars.current_masses[mask],
-            coordinates=self.stars.centered_coordinates[mask, :],
+            signal=self.stars.current_masses,
+            coordinates=self.stars.centered_coordinates,
             resolution=resolution,
             fov=fov,
             img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
-            smoothing_lengths=self.stars.smoothing_lengths[mask],
+            smoothing_lengths=self.stars.smoothing_lengths,
         )
 
         ssfr_img = Image(

@@ -174,6 +174,7 @@ def _load_cached_premade_imager(
         depth_app_radius=inst.depth_app_radius,
         snrs=_subset_dict_for_filters(inst.snrs, filter_codes),
         psfs=_subset_dict_for_filters(inst.psfs, filter_codes),
+        psf_resample_factor=inst.psf_resample_factor,
         noise_maps=_subset_dict_for_filters(inst.noise_maps, filter_codes),
         noise_source_maps=_subset_dict_for_filters(
             inst.noise_source_maps, filter_codes
