@@ -118,7 +118,9 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
 
         # Correlated-noise source maps are an alternative future noise
         # definition to depth+SNR pairs.
-        if self.snrs is not None and self.noise_source_maps is not None:
+        if (
+            self.depth is not None or self.snrs is not None
+        ) and self.noise_source_maps is not None:
             raise exceptions.MissingArgument(
                 "You cannot set depths and SNRs at the same time as "
                 "noise source maps"
@@ -144,12 +146,12 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
     @property
     def can_do_psf_spectroscopy(self):
         """Return whether this instrument supports PSF spectroscopy."""
-        return self.psfs is not None
+        return False
 
     @property
     def can_do_noisy_resolved_spectroscopy(self):
         """Return whether this instrument supports noisy IFU work."""
-        return self.can_do_noisy_spectroscopy
+        return False
 
     @timed("IntegratedFieldUnit._comparison_state")
     def _comparison_state(self):

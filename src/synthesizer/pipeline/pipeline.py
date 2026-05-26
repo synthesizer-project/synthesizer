@@ -2773,6 +2773,9 @@ class Pipeline:
                     nthreads=self.nthreads,
                     instrument=inst,
                     cosmo=op_kwargs["cosmo"],
+                    psf_resample_factor=op_kwargs.get(
+                        "psf_resample_factor", 1
+                    ),
                 )
 
         # Count the number of images we have generated
@@ -2998,6 +3001,9 @@ class Pipeline:
                     cosmo=op_kwargs.get("cosmo", None),
                     nthreads=self.nthreads,
                     instrument=inst,
+                    psf_resample_factor=op_kwargs.get(
+                        "psf_resample_factor", 1
+                    ),
                 )
 
         # Count the number of images we have generated

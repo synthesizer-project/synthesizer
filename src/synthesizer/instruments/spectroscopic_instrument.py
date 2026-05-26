@@ -126,9 +126,7 @@ class SpectroscopicInstrument(InstrumentBase):
     @property
     def can_do_noisy_spectroscopy(self):
         """Return whether this instrument supports noisy spectroscopy."""
-        have_noise = self.noise_maps is not None
-        have_noise |= self.snrs is not None and self.depth is not None
-        return have_noise
+        return False
 
     @timed("SpectroscopicInstrument._comparison_state")
     def _comparison_state(self):

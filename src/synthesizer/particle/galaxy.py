@@ -1337,7 +1337,7 @@ class Galaxy(BaseGalaxy):
         if self.stars.ages[mask].size == 0:
             warn("The SFR is 0! (there are 0 stars in the age bin)")
 
-        return self._generate_particle_map(
+        young_mass_map = self._generate_particle_map(
             signal=self.stars.initial_masses[mask],
             coordinates=self.stars.centered_coordinates[mask, :],
             resolution=resolution,
@@ -1347,8 +1347,37 @@ class Galaxy(BaseGalaxy):
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
             smoothing_lengths=self.stars.smoothing_lengths[mask],
-            normalisation=self.stars.current_masses[mask] / age_bin,
         )
+        stellar_mass_map = self._generate_particle_map(
+            signal=self.stars.current_masses[mask],
+            coordinates=self.stars.centered_coordinates[mask, :],
+            resolution=resolution,
+            fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            smoothing_lengths=self.stars.smoothing_lengths[mask],
+        )
+
+        ssfr_img = Image(
+            resolution=young_mass_map.resolution,
+            fov=young_mass_map.fov,
+        )
+        ssfr_img.arr = np.divide(
+            young_mass_map.arr / age_bin.value,
+            stellar_mass_map.arr,
+            out=np.zeros_like(young_mass_map.arr, dtype=float),
+            where=stellar_mass_map.arr != 0,
+        )
+        if (
+            young_mass_map.units is not None
+            and stellar_mass_map.units is not None
+        ):
+            ssfr_img.units = (
+                young_mass_map.units / age_bin.units / stellar_mass_map.units
+            )
+        return ssfr_img
 
     @timed("Galaxy.get_data_cube")
     def get_data_cube(

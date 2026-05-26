@@ -1305,8 +1305,7 @@ class Component(ABC):
         """
         # Reuse the shared component implementation so the public single-label
         # API stays aligned with the multi-label/internal generation path.
-        return Component._generate_data_cubes(
-            self,
+        return self._generate_data_cubes(
             label,
             fov=fov,
             instrument=instrument,

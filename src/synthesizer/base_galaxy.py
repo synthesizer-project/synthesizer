@@ -1545,7 +1545,12 @@ class BaseGalaxy:
                         and label
                         in self.black_holes.images_lnu.get(instrument_name, {})
                     )
-                    if not in_stars and not in_bhs:
+                    in_gas = (
+                        self.gas is not None
+                        and label
+                        in self.gas.images_lnu.get(instrument_name, {})
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
                         self.images_lnu.setdefault(instrument_name, {})
                         self.images_lnu[instrument_name][label] = out_images[
                             label
@@ -1563,7 +1568,12 @@ class BaseGalaxy:
                         and label
                         in self.black_holes.images_fnu.get(instrument_name, {})
                     )
-                    if not in_stars and not in_bhs:
+                    in_gas = (
+                        self.gas is not None
+                        and label
+                        in self.gas.images_fnu.get(instrument_name, {})
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
                         self.images_fnu.setdefault(instrument_name, {})
                         self.images_fnu[instrument_name][label] = out_images[
                             label
@@ -1581,7 +1591,10 @@ class BaseGalaxy:
                         self.black_holes is not None
                         and label in self.black_holes.images_lnu
                     )
-                    if not in_stars and not in_bhs:
+                    in_gas = (
+                        self.gas is not None and label in self.gas.images_lnu
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
                         self.images_lnu[label] = out_images[label]
             else:
                 for label in out_images:
@@ -1594,7 +1607,10 @@ class BaseGalaxy:
                         self.black_holes is not None
                         and label in self.black_holes.images_fnu
                     )
-                    if not in_stars and not in_bhs:
+                    in_gas = (
+                        self.gas is not None and label in self.gas.images_fnu
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
                         self.images_fnu[label] = out_images[label]
 
         # Probably, very unlikely but if we generated no images just return
@@ -1913,6 +1929,16 @@ class BaseGalaxy:
                 if label not in component_labels_by_emitter["blackhole"]:
                     component_labels_by_emitter["blackhole"].append(label)
 
+        routed_labels = set(galaxy_combine_labels)
+        for emitter_labels in component_labels_by_emitter.values():
+            routed_labels.update(emitter_labels)
+        unresolved_labels = set(labels) - routed_labels
+        if len(unresolved_labels) > 0:
+            raise exceptions.InconsistentArguments(
+                "Cannot generate galaxy data cubes for unresolved labels: "
+                f"{', '.join(sorted(unresolved_labels))}"
+            )
+
         # Container for all raw cubes generated during this call.
         out_cubes = {}
 
@@ -2002,14 +2028,27 @@ class BaseGalaxy:
                 if self.black_holes is not None
                 else {}
             )
+            gas_cubes = (
+                self.gas.data_cubes_fnu.get(instrument_name, {})
+                if self.gas is not None
+                else {}
+            )
         else:
             return out_cubes[labels[0]] if len(labels) == 1 else out_cubes
+
+        if quantity in {"lnu", "llam", "luminosity"}:
+            gas_cubes = (
+                self.gas.data_cubes_lnu.get(instrument_name, {})
+                if self.gas is not None
+                else {}
+            )
 
         galaxy_cubes.setdefault(instrument_name, {})
         for label in out_cubes:
             in_stars = label in stellar_cubes
             in_bhs = label in blackhole_cubes
-            if not in_stars and not in_bhs:
+            in_gas = label in gas_cubes
+            if not in_stars and not in_bhs and not in_gas:
                 galaxy_cubes[instrument_name][label] = out_cubes[label]
 
         # Start from the raw cube set, then replace entries with their observed

@@ -5,10 +5,10 @@ imaging. It extends :class:`PhotometricInstrument` with spatial resolution,
 optional PSFs, fixed noise maps, and correlated-noise source maps.
 """
 
+import hashlib
 import inspect
 
 import h5py
-import numpy as np
 from scipy import signal
 from unyt import arcsecond, kpc, unyt_array
 
@@ -496,18 +496,15 @@ class PhotometricImager(PhotometricInstrument):
         Returns:
             ImageCollection: New image collection with noise applied.
         """
-        # Use one generator to derive per-filter seeds without manually
-        # coupling the actual per-filter noise realisations to call order
-        rng = np.random.default_rng(rng_seed)
         noisy_imgs = {}
         for f in image_collection.filter_codes:
-            # Derive a reproducible per-filter seed when the caller supplied a
-            # top-level seed for the collection noise application
-            filter_rng_seed = (
-                None
-                if rng_seed is None
-                else int(rng.integers(0, np.iinfo(np.uint32).max))
-            )
+            if rng_seed is None:
+                filter_rng_seed = None
+            else:
+                seed_material = f"{rng_seed}:{f}".encode("utf-8")
+                filter_rng_seed = int.from_bytes(
+                    hashlib.sha256(seed_material).digest()[:4], "big"
+                )
 
             # Delegate the per-image noise policy to the single-image helper so
             # there is one canonical decision path for imaging noise
@@ -690,6 +687,7 @@ class PhotometricImager(PhotometricInstrument):
                 snrs=payload["snrs"],
                 psfs=payload["psfs"],
                 noise_maps=payload["noise_maps"],
+                noise_source_maps=payload["noise_source_maps"],
                 filter_subset=tuple(payload["filters"].filter_codes),
             )
 
