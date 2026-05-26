@@ -144,6 +144,7 @@ def get_param(
     emitter,
     obj=None,
     default=_NO_DEFAULT,
+    preserve_units=False,
     _singular_attempted=False,
     _plural_attempted=False,
     _visited=None,
@@ -172,6 +173,10 @@ def get_param(
             An optional additional object to look for the parameter on last.
         default (object, optional):
             The default value to return if the parameter is not found.
+        preserve_units (bool, optional):
+            If True, return raw parameter values with any attached units
+            preserved. If False, array-like values are normalised for C-backed
+            calculations where appropriate. Defaults to False.
         _singular_attempted (bool, optional):
             Internal flag to track if singular version has been attempted.
         _plural_attempted (bool, optional):
@@ -206,23 +211,35 @@ def get_param(
             model.fixed_parameters[param],
             ParameterFunction,
         ):
-            value = ensure_array_c_compatible_double(
-                model.fixed_parameters[param]
-            )
+            value = model.fixed_parameters[param]
+            if not preserve_units:
+                value = ensure_array_c_compatible_double(value)
         else:
             value = model.fixed_parameters[param]
 
     # Check the emission next
     elif emission is not None and hasattr(emission, param):
-        value = get_attr_c_compatible_double(emission, param)
+        value = (
+            getattr(emission, param)
+            if preserve_units
+            else get_attr_c_compatible_double(emission, param)
+        )
 
     # Check the emitter
     elif emitter is not None and hasattr(emitter, param):
-        value = get_attr_c_compatible_double(emitter, param)
+        value = (
+            getattr(emitter, param)
+            if preserve_units
+            else get_attr_c_compatible_double(emitter, param)
+        )
 
     # Finally, if we have an additional object, check that
     elif obj is not None and hasattr(obj, param):
-        value = get_attr_c_compatible_double(obj, param)
+        value = (
+            getattr(obj, param)
+            if preserve_units
+            else get_attr_c_compatible_double(obj, param)
+        )
 
     # Do we need to recursively look for the parameter? (We know we're only
     # looking on the emitter at this point)
@@ -244,6 +261,7 @@ def get_param(
             None,
             emitter,
             default=default,
+            preserve_units=preserve_units,
             _visited=new_visited,
         )
 
@@ -275,6 +293,7 @@ def get_param(
             emitter,
             obj,
             default=default,
+            preserve_units=preserve_units,
             _visited=_visited,
         )
         if value is not None:
@@ -294,6 +313,7 @@ def get_param(
                 emitter,
                 obj,
                 default=None,
+                preserve_units=preserve_units,
                 _singular_attempted=True,
                 _plural_attempted=_plural_attempted,
                 _visited=_visited,
@@ -308,6 +328,7 @@ def get_param(
                 emitter,
                 obj,
                 default=None,
+                preserve_units=preserve_units,
                 _singular_attempted=_singular_attempted,
                 _plural_attempted=True,
                 _visited=_visited,
@@ -344,7 +365,14 @@ def get_param(
         )
 
 
-def get_params(params, model, emission, emitter, obj=None):
+def get_params(
+    params,
+    model,
+    emission,
+    emitter,
+    obj=None,
+    preserve_units=False,
+):
     """Extract a list of parameters from a model, emission, emitter, or object.
 
     The priority of extraction is:
@@ -364,6 +392,10 @@ def get_params(params, model, emission, emitter, obj=None):
             The emitter object.
         obj (object, optional):
             An optional additional object to look for parameters on last.
+        preserve_units (bool, optional):
+            If True, return raw parameter values with any attached units
+            preserved. If False, array-like values are normalised for C-backed
+            calculations where appropriate. Defaults to False.
 
     Returns:
         values (dict):
@@ -378,6 +410,7 @@ def get_params(params, model, emission, emitter, obj=None):
             emission,
             emitter,
             obj,
+            preserve_units=preserve_units,
         )
 
     return values

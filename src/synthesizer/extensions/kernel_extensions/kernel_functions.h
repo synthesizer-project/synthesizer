@@ -82,6 +82,39 @@ static inline double cubic(const double r) {
 }
 
 /**
+ * @brief Evaluate the quartic spline (M5) kernel at a dimensionless radius.
+ *
+ * This is the SPHENIX quartic spline from Borrow et al. (2022), rescaled from
+ * support radius 5h/2 to the public convention where the support radius is 1.
+ *
+ * @param r The dimensionless radius.
+ *
+ * @return The kernel value.
+ */
+static inline double quartic(const double r) {
+  const double q = 2.5 * r;
+  const double norm = 25.0 / (32.0 * M_PI);
+
+  if (q < 0.5) {
+    const double a = 2.5 - q;
+    const double b = 1.5 - q;
+    const double c = 0.5 - q;
+    return norm * (a * a * a * a - 5.0 * b * b * b * b +
+                   10.0 * c * c * c * c);
+  }
+  if (q < 1.5) {
+    const double a = 2.5 - q;
+    const double b = 1.5 - q;
+    return norm * (a * a * a * a - 5.0 * b * b * b * b);
+  }
+  if (q < 2.5) {
+    const double a = 2.5 - q;
+    return norm * (a * a * a * a);
+  }
+  return 0.0;
+}
+
+/**
  * @brief Evaluate the quintic kernel at a dimensionless radius.
  *
  * @param r The dimensionless radius.
@@ -129,6 +162,9 @@ static kernel_func get_kernel_function(const char *name) {
   }
   if (strcmp(name, "cubic") == 0) {
     return cubic;
+  }
+  if (strcmp(name, "quartic") == 0) {
+    return quartic;
   }
   if (strcmp(name, "quintic") == 0) {
     return quintic;

@@ -5,11 +5,14 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pytest
-from unyt import K, Mpc, Msun, deg, yr
+from unyt import K, Mpc, Msun, deg, km, s, yr
 
 from synthesizer.emission_models.agn.unified_agn import UnifiedAGN
 from synthesizer.emission_models.base_model import BlackHoleEmissionModel
 from synthesizer.emission_models.generators.dust.greybody import Greybody
+from synthesizer.emission_models.transformers.broadening import (
+    DopplerBroadening,
+)
 from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
 from synthesizer.emission_models.utils import get_param
 from synthesizer.exceptions import InconsistentParameter
@@ -37,6 +40,7 @@ def make_unified_agn(
     test_grid,
     disc_transmission="weighted_combination",
     variant="intrinsic",
+    **model_kwargs,
 ):
     """Create a UnifiedAGN model for testing."""
     kwargs = {}
@@ -54,12 +58,13 @@ def make_unified_agn(
         torus_emission_model=Greybody(temperature=10**4 * K, emissivity=2),
         disc_transmission=disc_transmission,
         **kwargs,
+        **model_kwargs,
     )
 
 
 def get_intrinsic_model(model):
     """Return the intrinsic UnifiedAGN model carrying transmission branches."""
-    return model if hasattr(model, "disc_escaped") else model.intrinsic
+    return model.intrinsic if hasattr(model, "intrinsic") else model
 
 
 def make_no_weight_bh_grid(tmp_path: Path):
@@ -358,6 +363,55 @@ class TestUnifiedAGN:
         assert escape == 0.0
         assert nlr == 0.75
         assert blr == 0.25
+
+    @pytest.mark.parametrize("variant", ["intrinsic", "attenuated", "total"])
+    def test_line_regions_are_unbroadened_by_default(
+        self,
+        test_grid,
+        variant,
+    ):
+        """Test BLR/NLR labels are unchanged without velocity dispersions."""
+        model = get_intrinsic_model(
+            make_unified_agn(test_grid, variant=variant)
+        )
+
+        assert model.nlr.label == "nlr"
+        assert model.blr.label == "blr"
+        assert model.nlr.transformer._required_params == (
+            "covering_fraction_nlr",
+        )
+        assert model.blr.transformer._required_params == (
+            "covering_fraction_blr",
+        )
+
+    @pytest.mark.parametrize("variant", ["intrinsic", "attenuated", "total"])
+    def test_line_regions_are_broadened_when_velocity_dispersion_is_set(
+        self,
+        test_grid,
+        variant,
+    ):
+        """Test velocity dispersions add final BLR/NLR broadening models."""
+        model = get_intrinsic_model(
+            make_unified_agn(
+                test_grid,
+                variant=variant,
+                velocity_dispersion_blr=2000.0 * km / s,
+                velocity_dispersion_nlr=500.0 * km / s,
+            )
+        )
+
+        assert model.nlr.label == "nlr"
+        assert model.blr.label == "blr"
+        assert model.nlr._apply_to_label == "unbroadened_nlr"
+        assert model.blr._apply_to_label == "unbroadened_blr"
+        assert isinstance(model.nlr.transformer, DopplerBroadening)
+        assert isinstance(model.blr.transformer, DopplerBroadening)
+        assert model.nlr.fixed_parameters["velocity_dispersion_nlr"] == (
+            500.0 * km / s
+        )
+        assert model.blr.fixed_parameters["velocity_dispersion_blr"] == (
+            2000.0 * km / s
+        )
 
     def test_invalid_disc_transmission_raises(self, test_grid):
         """Test invalid transmission options are rejected."""
