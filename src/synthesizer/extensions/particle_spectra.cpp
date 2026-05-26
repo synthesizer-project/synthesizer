@@ -53,6 +53,10 @@ static void spectra_loop_cic_with_lam_mask_serial(
   /* Calculate the number of cell in a patch of the grid (2^ndim). */
   int ncells = 1 << ndim;
 
+  /* Store the non-zero cell contributions for each particle. */
+  std::vector<const double *> cell_spectra_ptrs(ncells);
+  std::vector<double> cell_weights(ncells);
+
   /* Set up fixed sub-dimensions array (always {2, 2, ..., 2}) */
   std::array<int, MAX_GRID_NDIM> sub_dims;
   for (int idim = 0; idim < ndim; idim++) {
@@ -90,6 +94,7 @@ static void spectra_loop_cic_with_lam_mask_serial(
     const double w_p = parts->get_weight_at(p);
 
     /* Loop over sub-cells collecting their weighted contributions. */
+    int nvalid_cells = 0;
     for (int icell = 0; icell < ncells; icell++) {
       const auto &sc = subcells[icell];
 
@@ -111,18 +116,24 @@ static void spectra_loop_cic_with_lam_mask_serial(
 
       /* Compute grid cell index via base + precomputed offset */
       const int grid_ind = base_linidx + sc.linoff;
-      const double *__restrict cell_spectra =
+      cell_spectra_ptrs[nvalid_cells] =
           grid_spectra + static_cast<size_t>(grid_ind) * nlam;
+      cell_weights[nvalid_cells] = weight;
+      nvalid_cells++;
+    }
 
-      /* Add this grid cell's contribution to the spectra. */
-      for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
-        const int ilam = good_lams[jl];
-        const double spec_val = cell_spectra[ilam];
-        const size_t idx = p * nlam + ilam;
+    /* Get this particle's output row. */
+    double *__restrict part_spec = part_spectra + p * nlam;
 
-        /* Fused multiply-add for precision */
-        part_spectra[idx] = std::fma(spec_val, weight, part_spectra[idx]);
+    /* Add all grid cell contributions to the spectra. */
+    for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
+      const int ilam = good_lams[jl];
+      double spec_val = 0.0;
+      for (int icell = 0; icell < nvalid_cells; icell++) {
+        spec_val = std::fma(cell_spectra_ptrs[icell][ilam],
+                            cell_weights[icell], spec_val);
       }
+      part_spec[ilam] = spec_val;
     }
   }
 }
@@ -151,6 +162,10 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
   /* Calculate the number of cell in a patch of the grid (2^ndim). */
   int ncells = 1 << ndim;
 
+  /* Store the non-zero cell contributions for each particle. */
+  std::vector<const double *> cell_spectra_ptrs(ncells);
+  std::vector<double> cell_weights(ncells);
+
   /* Set up fixed sub-dimensions array (always {2, 2, ..., 2}) */
   std::array<int, MAX_GRID_NDIM> sub_dims;
   for (int idim = 0; idim < ndim; idim++) {
@@ -187,10 +202,8 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
     /* Cache particle weight once */
     const double w_p = parts->get_weight_at(p);
 
-    /* Get this particle's output row. */
-    double *__restrict part_spec = part_spectra + p * nlam;
-
     /* Loop over sub-cells collecting their weighted contributions. */
+    int nvalid_cells = 0;
     for (int icell = 0; icell < ncells; icell++) {
       const auto &sc = subcells[icell];
 
@@ -212,16 +225,23 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
 
       /* Compute grid cell index via base + precomputed offset */
       const int grid_ind = base_linidx + sc.linoff;
-      const double *__restrict cell_spectra =
+      cell_spectra_ptrs[nvalid_cells] =
           grid_spectra + static_cast<size_t>(grid_ind) * nlam;
+      cell_weights[nvalid_cells] = weight;
+      nvalid_cells++;
+    }
 
-      /* Add this grid cell's contribution to the spectra. */
-      for (size_t ilam = 0; ilam < nlam; ilam++) {
-        const double spec_val = cell_spectra[ilam];
+    /* Get this particle's output row. */
+    double *__restrict part_spec = part_spectra + p * nlam;
 
-        /* Fused multiply-add for precision */
-        part_spec[ilam] = std::fma(spec_val, weight, part_spec[ilam]);
+    /* Add all grid cell contributions to the spectra. */
+    for (size_t ilam = 0; ilam < nlam; ilam++) {
+      double spec_val = 0.0;
+      for (int icell = 0; icell < nvalid_cells; icell++) {
+        spec_val = std::fma(cell_spectra_ptrs[icell][ilam],
+                            cell_weights[icell], spec_val);
       }
+      part_spec[ilam] = spec_val;
     }
   }
 }
@@ -321,11 +341,9 @@ static void spectra_loop_cic_with_lam_mask_omp(
     size_t end_idx =
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
-    /* Get this threads part of the output array. */
-    double *__restrict local_part_spectra = part_spectra + start_idx * nlam;
-
-    /* Get an array that we'll put each particle's spectra into. */
-    std::vector<double> this_part_spectra(nlam, 0.0);
+    /* Store the non-zero cell contributions for each particle. */
+    std::vector<const double *> cell_spectra_ptrs(ncells);
+    std::vector<double> cell_weights(ncells);
 
     /* Loop over particles in this thread's range. */
     for (size_t p = start_idx; p < end_idx; p++) {
@@ -342,6 +360,7 @@ static void spectra_loop_cic_with_lam_mask_omp(
       const double w_p = parts->get_weight_at(p);
 
       /* Loop over sub-cells collecting their weighted contributions. */
+      int nvalid_cells = 0;
       for (int icell = 0; icell < ncells; icell++) {
         const auto &sc = subcells[icell];
 
@@ -363,26 +382,25 @@ static void spectra_loop_cic_with_lam_mask_omp(
 
         /* Compute grid cell index via base + precomputed offset */
         const int grid_ind = base_linidx + sc.linoff;
-        const double *__restrict cell_spectra =
+        cell_spectra_ptrs[nvalid_cells] =
             grid_spectra + static_cast<size_t>(grid_ind) * nlam;
-
-        /* Add this grid cell's contribution to the spectra. */
-        for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
-          const int ilam = good_lams[jl];
-          const double spec_val = cell_spectra[ilam];
-
-          /* Write into the local spectra array for this thread. */
-          this_part_spectra[ilam] =
-              std::fma(spec_val, weight, this_part_spectra[ilam]);
-        }
+        cell_weights[nvalid_cells] = weight;
+        nvalid_cells++;
       }
 
-      /* Copy the entire spectrum at once  into the output array. */
-      memcpy(local_part_spectra + (p - start_idx) * nlam,
-             this_part_spectra.data(), nlam * sizeof(double));
+      /* Get this particle's output row. */
+      double *__restrict part_spec = part_spectra + p * nlam;
 
-      /* Reset the local spectra for this particle. */
-      std::fill(this_part_spectra.begin(), this_part_spectra.end(), 0.0);
+      /* Add all grid cell contributions to the spectra. */
+      for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
+        const int ilam = good_lams[jl];
+        double spec_val = 0.0;
+        for (int icell = 0; icell < nvalid_cells; icell++) {
+          spec_val = std::fma(cell_spectra_ptrs[icell][ilam],
+                              cell_weights[icell], spec_val);
+        }
+        part_spec[ilam] = spec_val;
+      }
     }
   }
 }
@@ -448,11 +466,9 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
     size_t end_idx =
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
-    /* Get this threads part of the output array. */
-    double *__restrict local_part_spectra = part_spectra + start_idx * nlam;
-
-    /* Get an array that we'll put each particle's spectra into. */
-    std::vector<double> this_part_spectra(nlam, 0.0);
+    /* Store the non-zero cell contributions for each particle. */
+    std::vector<const double *> cell_spectra_ptrs(ncells);
+    std::vector<double> cell_weights(ncells);
 
     /* Loop over particles in this thread's range. */
     for (size_t p = start_idx; p < end_idx; p++) {
@@ -469,6 +485,7 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
       const double w_p = parts->get_weight_at(p);
 
       /* Loop over sub-cells collecting their weighted contributions. */
+      int nvalid_cells = 0;
       for (int icell = 0; icell < ncells; icell++) {
         const auto &sc = subcells[icell];
 
@@ -490,25 +507,24 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
 
         /* Compute grid cell index via base + precomputed offset */
         const int grid_ind = base_linidx + sc.linoff;
-        const double *__restrict cell_spectra =
+        cell_spectra_ptrs[nvalid_cells] =
             grid_spectra + static_cast<size_t>(grid_ind) * nlam;
-
-        /* Add this grid cell's contribution to the spectra. */
-        for (size_t ilam = 0; ilam < nlam; ilam++) {
-          const double spec_val = cell_spectra[ilam];
-
-          /* Write into the local spectra array for this thread. */
-          this_part_spectra[ilam] =
-              std::fma(spec_val, weight, this_part_spectra[ilam]);
-        }
+        cell_weights[nvalid_cells] = weight;
+        nvalid_cells++;
       }
 
-      /* Copy the entire spectrum at once  into the output array. */
-      memcpy(local_part_spectra + (p - start_idx) * nlam,
-             this_part_spectra.data(), nlam * sizeof(double));
+      /* Get this particle's output row. */
+      double *__restrict part_spec = part_spectra + p * nlam;
 
-      /* Reset the local spectra for this particle. */
-      std::fill(this_part_spectra.begin(), this_part_spectra.end(), 0.0);
+      /* Add all grid cell contributions to the spectra. */
+      for (size_t ilam = 0; ilam < nlam; ilam++) {
+        double spec_val = 0.0;
+        for (int icell = 0; icell < nvalid_cells; icell++) {
+          spec_val = std::fma(cell_spectra_ptrs[icell][ilam],
+                              cell_weights[icell], spec_val);
+        }
+        part_spec[ilam] = spec_val;
+      }
     }
   }
 }
