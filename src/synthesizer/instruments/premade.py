@@ -64,8 +64,8 @@ import numpy as np
 from unyt import angstrom, arcsecond
 
 from synthesizer import INSTRUMENT_CACHE_DIR, exceptions
-from synthesizer.instruments import InstrumentCollection
 from synthesizer.instruments.filters import Filter, FilterCollection
+from synthesizer.instruments.instrument_collection import InstrumentCollection
 from synthesizer.instruments.photometric_imager import PhotometricImager
 
 __all__ = [
