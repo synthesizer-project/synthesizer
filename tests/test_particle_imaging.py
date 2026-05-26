@@ -396,8 +396,8 @@ class TestSpectralCube:
         assert basic_cube.cube.shape == (5, 5, 10)
         assert np.sum(basic_cube.cube) >= 0
 
-    def test_get_data_cube_hist_warns_and_delegates(self, basic_cube):
-        """Deprecated histogram cube wrapper should warn and still generate."""
+    def test_get_data_cube_hist_delegates(self, basic_cube):
+        """Histogram cube compatibility wrapper should still generate."""
         from synthesizer.emissions.sed import Sed
 
         n_particles = 10
@@ -407,8 +407,7 @@ class TestSpectralCube:
             np.random.uniform(-0.4, 0.4, (n_particles, 3)), kpc
         )
 
-        with pytest.warns(FutureWarning, match="generate_data_cube_hist"):
-            basic_cube.get_data_cube_hist(sed, coordinates=coords)
+        basic_cube.get_data_cube_hist(sed, coordinates=coords)
 
         assert basic_cube.cube is not None
 
@@ -462,8 +461,8 @@ class TestSpectralCube:
                 f"{expected_flux_per_wavelength[i]} - FLUX MUST BE CONSERVED!"
             )
 
-    def test_get_data_cube_smoothed_warns_and_delegates(self):
-        """Deprecated cube wrapper should warn and still generate."""
+    def test_get_data_cube_smoothed_delegates(self):
+        """Smoothed cube compatibility wrapper should still generate."""
         from synthesizer.emissions.sed import Sed
 
         wavelengths = np.linspace(5000, 6000, 5) * angstrom
@@ -482,13 +481,12 @@ class TestSpectralCube:
         smoothing_lengths = unyt_array([0.3] * n_particles, kpc)
         kernel = Kernel().get_kernel()
 
-        with pytest.warns(FutureWarning, match="generate_data_cube_smoothed"):
-            cube.get_data_cube_smoothed(
-                sed,
-                coords,
-                smoothing_lengths,
-                kernel=kernel,
-            )
+        cube.get_data_cube_smoothed(
+            sed,
+            coords,
+            smoothing_lengths,
+            kernel=kernel,
+        )
 
         assert cube.cube is not None
 
