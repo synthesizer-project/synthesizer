@@ -220,6 +220,8 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
  *     Observer-frame wavelength scaling factor.
  *   conversion (float):
  *     Scalar conversion from luminosity density to flux density.
+ *   nthreads (int):
+ *     Number of threads to use for the bulk flux conversion loop.
  *   fnu_out (np.ndarray):
  *     Preallocated float64 output array matching ``lnu``.
  *   obslam_out (np.ndarray):
@@ -239,73 +241,92 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
   PyObject *nu_obj;
   double one_plus_z;
   double conversion;
+  int nthreads;
   PyObject *fnu_out_obj;
   PyObject *obslam_out_obj;
   PyObject *obsnu_out_obj;
 
-  if (!PyArg_ParseTuple(args, "OOOddOOO", &lnu_obj, &lam_obj, &nu_obj,
-                        &one_plus_z, &conversion, &fnu_out_obj,
+  if (!PyArg_ParseTuple(args, "OOOddiOOO", &lnu_obj, &lam_obj, &nu_obj,
+                        &one_plus_z, &conversion, &nthreads, &fnu_out_obj,
                         &obslam_out_obj, &obsnu_out_obj)) {
     return NULL;
   }
 
-  PyArrayObject *np_lnu = (PyArrayObject *)PyArray_FROM_OTF(
-      lnu_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-  PyArrayObject *np_lam = (PyArrayObject *)PyArray_FROM_OTF(
-      lam_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-  PyArrayObject *np_nu = (PyArrayObject *)PyArray_FROM_OTF(
-      nu_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-
-  if (np_lnu == NULL || np_lam == NULL || np_nu == NULL) {
-    Py_XDECREF(np_lnu);
-    Py_XDECREF(np_lam);
-    Py_XDECREF(np_nu);
-    return NULL;
-  }
-
-  if (!PyArray_Check(fnu_out_obj) || !PyArray_Check(obslam_out_obj) ||
-      !PyArray_Check(obsnu_out_obj)) {
-    Py_DECREF(np_lnu);
-    Py_DECREF(np_lam);
-    Py_DECREF(np_nu);
+  if (!PyArray_Check(lnu_obj) || !PyArray_Check(lam_obj) ||
+      !PyArray_Check(nu_obj) || !PyArray_Check(fnu_out_obj)) {
     PyErr_SetString(PyExc_TypeError,
-                    "Output buffers must be NumPy arrays.");
+                    "compute_fnu expects NumPy array inputs and fnu_out.");
     return NULL;
   }
 
+  PyArrayObject *np_lnu = (PyArrayObject *)lnu_obj;
+  PyArrayObject *np_lam = (PyArrayObject *)lam_obj;
+  PyArrayObject *np_nu = (PyArrayObject *)nu_obj;
   PyArrayObject *np_fnu_out = (PyArrayObject *)fnu_out_obj;
-  PyArrayObject *np_obslam_out = (PyArrayObject *)obslam_out_obj;
-  PyArrayObject *np_obsnu_out = (PyArrayObject *)obsnu_out_obj;
+  Py_INCREF(np_lnu);
+  Py_INCREF(np_lam);
+  Py_INCREF(np_nu);
   Py_INCREF(np_fnu_out);
-  Py_INCREF(np_obslam_out);
-  Py_INCREF(np_obsnu_out);
 
-  if (PyArray_TYPE(np_fnu_out) != NPY_DOUBLE ||
-      PyArray_TYPE(np_obslam_out) != NPY_DOUBLE ||
-      PyArray_TYPE(np_obsnu_out) != NPY_DOUBLE ||
-      !PyArray_ISCARRAY(np_fnu_out) || !PyArray_ISCARRAY(np_obslam_out) ||
-      !PyArray_ISCARRAY(np_obsnu_out)) {
+  if (obslam_out_obj != Py_None && !PyArray_Check(obslam_out_obj)) {
     Py_DECREF(np_lnu);
     Py_DECREF(np_lam);
     Py_DECREF(np_nu);
     Py_DECREF(np_fnu_out);
-    Py_DECREF(np_obslam_out);
-    Py_DECREF(np_obsnu_out);
+    PyErr_SetString(PyExc_TypeError,
+                    "obslam_out must be a NumPy array or None.");
+    return NULL;
+  }
+
+  if (obsnu_out_obj != Py_None && !PyArray_Check(obsnu_out_obj)) {
+    Py_DECREF(np_lnu);
+    Py_DECREF(np_lam);
+    Py_DECREF(np_nu);
+    Py_DECREF(np_fnu_out);
+    PyErr_SetString(PyExc_TypeError,
+                    "obsnu_out must be a NumPy array or None.");
+    return NULL;
+  }
+
+  PyArrayObject *np_obslam_out =
+      obslam_out_obj == Py_None ? NULL : (PyArrayObject *)obslam_out_obj;
+  PyArrayObject *np_obsnu_out =
+      obsnu_out_obj == Py_None ? NULL : (PyArrayObject *)obsnu_out_obj;
+  Py_XINCREF(np_obslam_out);
+  Py_XINCREF(np_obsnu_out);
+
+  if (PyArray_TYPE(np_lnu) != NPY_DOUBLE || PyArray_TYPE(np_lam) != NPY_DOUBLE ||
+      PyArray_TYPE(np_nu) != NPY_DOUBLE || PyArray_TYPE(np_fnu_out) != NPY_DOUBLE ||
+      !PyArray_ISCARRAY_RO(np_lnu) || !PyArray_ISCARRAY_RO(np_lam) ||
+      !PyArray_ISCARRAY_RO(np_nu) || !PyArray_ISCARRAY(np_fnu_out) ||
+      (np_obslam_out != NULL &&
+       (PyArray_TYPE(np_obslam_out) != NPY_DOUBLE ||
+        !PyArray_ISCARRAY(np_obslam_out))) ||
+      (np_obsnu_out != NULL &&
+       (PyArray_TYPE(np_obsnu_out) != NPY_DOUBLE ||
+        !PyArray_ISCARRAY(np_obsnu_out)))) {
+    Py_DECREF(np_lnu);
+    Py_DECREF(np_lam);
+    Py_DECREF(np_nu);
+    Py_DECREF(np_fnu_out);
+    Py_XDECREF(np_obslam_out);
+    Py_XDECREF(np_obsnu_out);
     PyErr_SetString(
         PyExc_ValueError,
-        "Output buffers must be writable C-contiguous float64 arrays.");
+        "compute_fnu requires float64 C-contiguous inputs and outputs.");
     return NULL;
   }
 
   if (PyArray_NDIM(np_lnu) < 1 || PyArray_NDIM(np_lam) != 1 ||
-      PyArray_NDIM(np_nu) != 1 || PyArray_NDIM(np_obslam_out) != 1 ||
-      PyArray_NDIM(np_obsnu_out) != 1) {
+      PyArray_NDIM(np_nu) != 1 ||
+      (np_obslam_out != NULL && PyArray_NDIM(np_obslam_out) != 1) ||
+      (np_obsnu_out != NULL && PyArray_NDIM(np_obsnu_out) != 1)) {
     Py_DECREF(np_lnu);
     Py_DECREF(np_lam);
     Py_DECREF(np_nu);
     Py_DECREF(np_fnu_out);
-    Py_DECREF(np_obslam_out);
-    Py_DECREF(np_obsnu_out);
+    Py_XDECREF(np_obslam_out);
+    Py_XDECREF(np_obsnu_out);
     PyErr_SetString(
         PyExc_ValueError,
         "lnu must be at least 1D and lam/nu/output grids must be 1D.");
@@ -320,8 +341,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
     Py_DECREF(np_lam);
     Py_DECREF(np_nu);
     Py_DECREF(np_fnu_out);
-    Py_DECREF(np_obslam_out);
-    Py_DECREF(np_obsnu_out);
+    Py_XDECREF(np_obslam_out);
+    Py_XDECREF(np_obsnu_out);
     PyErr_SetString(PyExc_ValueError,
                     "fnu_out must have the same ndim as lnu.");
     return NULL;
@@ -333,8 +354,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
       Py_DECREF(np_lam);
       Py_DECREF(np_nu);
       Py_DECREF(np_fnu_out);
-      Py_DECREF(np_obslam_out);
-      Py_DECREF(np_obsnu_out);
+      Py_XDECREF(np_obslam_out);
+      Py_XDECREF(np_obsnu_out);
       PyErr_SetString(PyExc_ValueError,
                       "fnu_out must match the shape of lnu.");
       return NULL;
@@ -343,14 +364,14 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
 
   const npy_intp nlam = PyArray_DIMS(np_lam)[0];
   if (PyArray_DIMS(np_nu)[0] != nlam || lnu_dims[lnu_ndim - 1] != nlam ||
-      PyArray_DIMS(np_obslam_out)[0] != nlam ||
-      PyArray_DIMS(np_obsnu_out)[0] != nlam) {
+      (np_obslam_out != NULL && PyArray_DIMS(np_obslam_out)[0] != nlam) ||
+      (np_obsnu_out != NULL && PyArray_DIMS(np_obsnu_out)[0] != nlam)) {
     Py_DECREF(np_lnu);
     Py_DECREF(np_lam);
     Py_DECREF(np_nu);
     Py_DECREF(np_fnu_out);
-    Py_DECREF(np_obslam_out);
-    Py_DECREF(np_obsnu_out);
+    Py_XDECREF(np_obslam_out);
+    Py_XDECREF(np_obsnu_out);
     PyErr_SetString(PyExc_ValueError,
                     "lam/nu/output lengths must match the last lnu axis.");
     return NULL;
@@ -360,19 +381,26 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
   double *lam = static_cast<double *>(PyArray_DATA(np_lam));
   double *nu = static_cast<double *>(PyArray_DATA(np_nu));
   double *fnu_out = static_cast<double *>(PyArray_DATA(np_fnu_out));
-  double *obslam_out = static_cast<double *>(PyArray_DATA(np_obslam_out));
-  double *obsnu_out = static_cast<double *>(PyArray_DATA(np_obsnu_out));
+  double *obslam_out =
+      np_obslam_out == NULL ? NULL : static_cast<double *>(PyArray_DATA(np_obslam_out));
+  double *obsnu_out =
+      np_obsnu_out == NULL ? NULL : static_cast<double *>(PyArray_DATA(np_obsnu_out));
   const npy_intp nelem = PyArray_SIZE(np_lnu);
 
   tic("compute_fnu");
 
+#ifdef WITH_OPENMP
+#pragma omp parallel for if(nthreads > 1) num_threads(nthreads) schedule(static)
+#endif
   for (npy_intp idx = 0; idx < nelem; idx++) {
     fnu_out[idx] = lnu[idx] * conversion;
   }
 
-  for (npy_intp ilam = 0; ilam < nlam; ilam++) {
-    obslam_out[ilam] = lam[ilam] * one_plus_z;
-    obsnu_out[ilam] = nu[ilam] / one_plus_z;
+  if (obslam_out != NULL && obsnu_out != NULL) {
+    for (npy_intp ilam = 0; ilam < nlam; ilam++) {
+      obslam_out[ilam] = lam[ilam] * one_plus_z;
+      obsnu_out[ilam] = nu[ilam] / one_plus_z;
+    }
   }
 
   toc("compute_fnu");
@@ -381,8 +409,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
   Py_DECREF(np_lam);
   Py_DECREF(np_nu);
   Py_DECREF(np_fnu_out);
-  Py_DECREF(np_obslam_out);
-  Py_DECREF(np_obsnu_out);
+  Py_XDECREF(np_obslam_out);
+  Py_XDECREF(np_obsnu_out);
 
   Py_RETURN_NONE;
 }

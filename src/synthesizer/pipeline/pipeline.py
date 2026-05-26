@@ -1672,6 +1672,7 @@ class Pipeline:
             "get_observed_spectra",
             cosmo=cosmo,
             igm=igm,
+            nthreads=self.nthreads,
         )
 
         # Flag that we will compute the observed spectra
@@ -1707,6 +1708,7 @@ class Pipeline:
         galaxy.get_observed_spectra(
             cosmo=op_kwargs["cosmo"],
             igm=op_kwargs["igm"],
+            nthreads=op_kwargs["nthreads"],
         )
 
         # Count the number of observed spectra we have generated

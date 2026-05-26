@@ -15,6 +15,7 @@ Example usage:
 
 import os
 import re
+from functools import lru_cache
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -29,6 +30,7 @@ from unyt import (
     amu,
     angstrom,
     c,
+    cm,
     erg,
     eV,
     h,
@@ -60,6 +62,20 @@ from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
 from synthesizer.utils.operation_timers import timed, timer
+
+
+@lru_cache(maxsize=1)
+def _get_fnu_unit_factor():
+    """Return the scalar factor converting lnu/cm^2 to fnu units."""
+    lnu_unit = Sed.__dict__["lnu"].unit
+    fnu_unit = Sed.__dict__["fnu"].unit
+    return ((1 * lnu_unit) / cm**2).to_value(fnu_unit)
+
+
+@lru_cache(maxsize=1)
+def _get_ten_pc_in_cm():
+    """Return 10 parsec expressed as a scalar in centimetres."""
+    return (10 * pc).to_value(cm)
 
 
 class Sed:
@@ -1171,25 +1187,35 @@ class Sed:
         self._obslam = self._lam
         self._obsnu = self._nu
 
-        # Work directly on the raw arrays and fold the unit conversion into a
-        # single scalar factor so large particle spectra avoid repeated unyt
-        # array construction during the actual conversion.
-        flux_unit = self.__class__.__dict__["fnu"].unit
-        lnu_unit = self.__class__.__dict__["lnu"].unit
-        conversion = ((1 * lnu_unit) / (4 * np.pi * (10 * pc) ** 2)).to_value(
-            flux_unit
+        # Ensure the kernel sees internal float64 C-contiguous buffers so it
+        # never needs to allocate coercion copies on the hot path.
+        if self._lnu.dtype != np.float64 or not self._lnu.flags.c_contiguous:
+            self._lnu = np.ascontiguousarray(self._lnu, dtype=np.float64)
+        if self._lam.dtype != np.float64 or not self._lam.flags.c_contiguous:
+            self._lam = np.ascontiguousarray(self._lam, dtype=np.float64)
+        if self._nu.dtype != np.float64 or not self._nu.flags.c_contiguous:
+            self._nu = np.ascontiguousarray(self._nu, dtype=np.float64)
+
+        conversion = _get_fnu_unit_factor() / (
+            4 * np.pi * _get_ten_pc_in_cm() ** 2
         )
 
-        np.multiply(
+        compute_fnu(
             self._lnu,
+            self._lam,
+            self._nu,
+            1.0,
             conversion,
-            out=ensure_array_buffer(self, "_fnu", self._lnu),
+            1,
+            ensure_array_buffer(self, "_fnu", self._lnu),
+            None,
+            None,
         )
 
         return get_quantity_view(self, "_fnu")
 
     @timed("Sed.get_fnu")
-    def get_fnu(self, cosmo, z, igm=None):
+    def get_fnu(self, cosmo, z, igm=None, nthreads=1):
         """Calculate the observed frame spectral energy distribution.
 
         This will also populate the observed wavelength and frequency arrays
@@ -1207,6 +1233,8 @@ class Sed:
             igm (igm):
                 The IGM class. e.g. `synthesizer.igm.Inoue14`.
                 Defaults to None.
+            nthreads (int):
+                The number of threads to use for the bulk flux conversion.
 
         Returns:
             fnu (ndarray)
@@ -1223,22 +1251,24 @@ class Sed:
 
         # Get the observed wavelength and frequency arrays.
         one_plus_z = 1.0 + z
+        if self._lnu.dtype != np.float64 or not self._lnu.flags.c_contiguous:
+            self._lnu = np.ascontiguousarray(self._lnu, dtype=np.float64)
+        if self._lam.dtype != np.float64 or not self._lam.flags.c_contiguous:
+            self._lam = np.ascontiguousarray(self._lam, dtype=np.float64)
+        if self._nu.dtype != np.float64 or not self._nu.flags.c_contiguous:
+            self._nu = np.ascontiguousarray(self._nu, dtype=np.float64)
         if self._obslam is None or self._obslam.shape != self._lam.shape:
             self._obslam = np.empty_like(self._lam)
         if self._obsnu is None or self._obsnu.shape != self._nu.shape:
             self._obsnu = np.empty_like(self._nu)
 
         # Compute the luminosity distance
-        luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
-
-        # Fold the full unit conversion into a scalar once, then apply it to
-        # the raw spectra array to avoid constructing temporary unyt arrays for
-        # very large particle spectra.
-        flux_unit = self.__class__.__dict__["fnu"].unit
-        lnu_unit = self.__class__.__dict__["lnu"].unit
+        luminosity_distance_cm = get_luminosity_distance(cosmo, z).to_value(cm)
         conversion = (
-            (1 * lnu_unit) * one_plus_z / (4 * np.pi * luminosity_distance**2)
-        ).to_value(flux_unit)
+            _get_fnu_unit_factor()
+            * one_plus_z
+            / (4 * np.pi * luminosity_distance_cm**2)
+        )
 
         compute_fnu(
             self._lnu,
@@ -1246,6 +1276,7 @@ class Sed:
             self._nu,
             one_plus_z,
             conversion,
+            nthreads,
             ensure_array_buffer(self, "_fnu", self._lnu),
             self._obslam,
             self._obsnu,

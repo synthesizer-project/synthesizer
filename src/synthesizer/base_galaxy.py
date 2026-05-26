@@ -271,7 +271,7 @@ class BaseGalaxy:
 
         return equivalent_widths
 
-    def get_observed_spectra(self, cosmo, igm=Inoue14):
+    def get_observed_spectra(self, cosmo, igm=Inoue14, nthreads=1):
         """Calculate the observed spectra for all Seds within this galaxy.
 
         This will run Sed.get_fnu(...) and populate Sed.fnu (and sed.obslam
@@ -293,6 +293,9 @@ class BaseGalaxy:
             igm (igm):
                 The object describing the intergalactic medium (defaults to
                 Inoue14).
+            nthreads (int):
+                The number of threads to use for observer-frame flux
+                conversion.
 
         Raises:
             MissingAttribute
@@ -313,6 +316,7 @@ class BaseGalaxy:
                 cosmo=cosmo,
                 z=self.redshift,
                 igm=igm,
+                nthreads=nthreads,
             )
 
         # Do we have stars?
@@ -324,6 +328,7 @@ class BaseGalaxy:
                     cosmo=cosmo,
                     z=self.redshift,
                     igm=igm,
+                    nthreads=nthreads,
                 )
 
             # Loop over all stellar particle spectra
@@ -334,6 +339,7 @@ class BaseGalaxy:
                         cosmo=cosmo,
                         z=self.redshift,
                         igm=igm,
+                        nthreads=nthreads,
                     )
 
         # Do we have black holes?
@@ -345,6 +351,7 @@ class BaseGalaxy:
                     cosmo=cosmo,
                     z=self.redshift,
                     igm=igm,
+                    nthreads=nthreads,
                 )
 
             # Loop over all black hole particle spectra
@@ -355,6 +362,7 @@ class BaseGalaxy:
                         cosmo=cosmo,
                         z=self.redshift,
                         igm=igm,
+                        nthreads=nthreads,
                     )
 
     def get_observed_lines(self, cosmo, igm=Inoue14):
