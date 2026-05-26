@@ -50,7 +50,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
-from synthesizer.utils.operation_timers import timed, timer
+from synthesizer.utils.operation_timers import timed
 
 
 class Sed:
@@ -1118,29 +1118,25 @@ class Sed:
                 Spectral flux density calcualted at d=10 pc.
         """
         # Rest-frame fluxes reuse the emitted wavelength and frequency grids.
-        with timer("Sed.get_fnu0.setup_axes"):
-            self._obslam = self._lam
-            self._obsnu = self._nu
+        self._obslam = self._lam
+        self._obsnu = self._nu
 
         # Work directly on the raw arrays and fold the unit conversion into a
         # single scalar factor so large particle spectra avoid repeated unyt
         # array construction during the actual conversion.
-        with timer("Sed.get_fnu0.conversion_factor"):
-            flux_unit = self.__class__.__dict__["fnu"].unit
-            lnu_unit = self.__class__.__dict__["lnu"].unit
-            conversion = (
-                (1 * lnu_unit) / (4 * np.pi * (10 * pc) ** 2)
-            ).to_value(flux_unit)
+        flux_unit = self.__class__.__dict__["fnu"].unit
+        lnu_unit = self.__class__.__dict__["lnu"].unit
+        conversion = ((1 * lnu_unit) / (4 * np.pi * (10 * pc) ** 2)).to_value(
+            flux_unit
+        )
 
-        with timer("Sed.get_fnu0.multiply"):
-            np.multiply(
-                self._lnu,
-                conversion,
-                out=ensure_array_buffer(self, "_fnu", self._lnu),
-            )
+        np.multiply(
+            self._lnu,
+            conversion,
+            out=ensure_array_buffer(self, "_fnu", self._lnu),
+        )
 
-        with timer("Sed.get_fnu0.wrap_return"):
-            return get_quantity_view(self, "_fnu")
+        return get_quantity_view(self, "_fnu")
 
     @timed("Sed.get_fnu")
     def get_fnu(self, cosmo, z, igm=None):
@@ -1176,49 +1172,41 @@ class Sed:
             return self.get_fnu0()
 
         # Get the observed wavelength and frequency arrays.
-        with timer("Sed.get_fnu.setup_axes"):
-            one_plus_z = 1.0 + z
-            if self._obslam is None or self._obslam.shape != self._lam.shape:
-                self._obslam = np.empty_like(self._lam)
-            if self._obsnu is None or self._obsnu.shape != self._nu.shape:
-                self._obsnu = np.empty_like(self._nu)
-            np.multiply(self._lam, one_plus_z, out=self._obslam)
-            np.divide(self._nu, one_plus_z, out=self._obsnu)
+        one_plus_z = 1.0 + z
+        if self._obslam is None or self._obslam.shape != self._lam.shape:
+            self._obslam = np.empty_like(self._lam)
+        if self._obsnu is None or self._obsnu.shape != self._nu.shape:
+            self._obsnu = np.empty_like(self._nu)
+        np.multiply(self._lam, one_plus_z, out=self._obslam)
+        np.divide(self._nu, one_plus_z, out=self._obsnu)
 
         # Compute the luminosity distance
-        with timer("Sed.get_fnu.luminosity_distance"):
-            luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
+        luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
         # Fold the full unit conversion into a scalar once, then apply it to
         # the raw spectra array to avoid constructing temporary unyt arrays for
         # very large particle spectra.
-        with timer("Sed.get_fnu.conversion_factor"):
-            flux_unit = self.__class__.__dict__["fnu"].unit
-            lnu_unit = self.__class__.__dict__["lnu"].unit
-            conversion = (
-                (1 * lnu_unit)
-                * one_plus_z
-                / (4 * np.pi * luminosity_distance**2)
-            ).to_value(flux_unit)
+        flux_unit = self.__class__.__dict__["fnu"].unit
+        lnu_unit = self.__class__.__dict__["lnu"].unit
+        conversion = (
+            (1 * lnu_unit) * one_plus_z / (4 * np.pi * luminosity_distance**2)
+        ).to_value(flux_unit)
 
-        with timer("Sed.get_fnu.multiply"):
-            np.multiply(
-                self._lnu,
-                conversion,
-                out=ensure_array_buffer(self, "_fnu", self._lnu),
-            )
+        np.multiply(
+            self._lnu,
+            conversion,
+            out=ensure_array_buffer(self, "_fnu", self._lnu),
+        )
 
         # If we are applying an IGM model apply it
-        with timer("Sed.get_fnu.apply_igm"):
-            if igm is not None:
-                # Support bot class references and instantiated objects
-                if callable(igm):
-                    self._fnu *= igm().get_transmission(z, self.obslam)
-                else:
-                    self._fnu *= igm.get_transmission(z, self.obslam)
+        if igm is not None:
+            # Support bot class references and instantiated objects
+            if callable(igm):
+                self._fnu *= igm().get_transmission(z, self.obslam)
+            else:
+                self._fnu *= igm.get_transmission(z, self.obslam)
 
-        with timer("Sed.get_fnu.wrap_return"):
-            return get_quantity_view(self, "_fnu")
+        return get_quantity_view(self, "_fnu")
 
     @timed("Sed.get_photo_lnu")
     def get_photo_lnu(
