@@ -20,6 +20,7 @@ from synthesizer.emission_models.extractors.extractor import (
 )
 from synthesizer.emission_models.utils import cache_model_params
 from synthesizer.emissions import LineCollection, Sed, integrate_particle_sed
+from synthesizer.emissions.utils import get_array_quantity_view
 from synthesizer.grid import Template
 from synthesizer.utils.operation_timers import timed, timer
 
@@ -903,7 +904,9 @@ class Combination:
                 with timer("Combination._combine_spectra.wrap_sed"):
                     out_spec = Sed(
                         emission_model.lam,
-                        lnu=combined_lnu * erg / s / Hz,
+                        lnu=get_array_quantity_view(
+                            combined_lnu, erg / s / Hz
+                        ),
                     )
             else:
                 with timer("Combination._combine_spectra.python_initialise"):
@@ -911,7 +914,7 @@ class Combination:
                     np.nan_to_num(initial_lnu, copy=False)
                     out_spec = Sed(
                         emission_model.lam,
-                        lnu=initial_lnu * erg / s / Hz,
+                        lnu=get_array_quantity_view(initial_lnu, erg / s / Hz),
                     )
                     out_lnu = out_spec._lnu
 

@@ -43,7 +43,11 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
-from synthesizer.emissions.utils import ensure_array_buffer, get_quantity_view
+from synthesizer.emissions.utils import (
+    ensure_array_buffer,
+    get_array_quantity_view,
+    get_quantity_view,
+)
 from synthesizer.extensions.reductions import (
     multiply_array_by_vector_1d,
     reduce_particle_spectra,
@@ -506,12 +510,13 @@ class Sed:
 
         with timer("Sed.scale.wrap_output"):
             if use_fast_2d_scaling:
-                new_lnu = lnu * units
+                new_lnu = get_array_quantity_view(lnu, units)
             elif lam_mask is not None:
-                new_lnu = self.lnu.copy()
+                new_lnu = np.array(self._lnu, copy=True)
                 new_lnu[..., lam_mask] = lnu
+                new_lnu = get_array_quantity_view(new_lnu, units)
             else:
-                new_lnu = lnu * units
+                new_lnu = get_array_quantity_view(lnu, units)
 
             if not inplace:
                 return Sed(self.lam, lnu=new_lnu)

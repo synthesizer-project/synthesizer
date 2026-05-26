@@ -236,6 +236,22 @@ def get_quantity_view(obj, attr_name):
     return unyt_array(values, unit, bypass_validation=True)
 
 
+def get_array_quantity_view(values, unit):
+    """Wrap a raw ndarray in units without copying data.
+
+    Args:
+        values (np.ndarray):
+            Raw array buffer to wrap.
+        unit (unyt.Unit):
+            Unit to attach to ``values``.
+
+    Returns:
+        unyt_array:
+            Unit-bearing view of ``values``.
+    """
+    return unyt_array(values, unit, bypass_validation=True)
+
+
 @lru_cache(maxsize=1)
 def get_ratio_requirements():
     """Precompute required line ids for each ratio definition.

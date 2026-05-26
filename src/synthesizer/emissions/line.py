@@ -59,6 +59,7 @@ from synthesizer.emissions import line_ratios
 from synthesizer.emissions.sed import Sed
 from synthesizer.emissions.utils import (
     alias_to_line_id,
+    get_array_quantity_view,
     get_available_diagram_ids,
     get_available_ratio_ids,
     get_line2index,
@@ -1406,8 +1407,8 @@ class LineCollection:
                 return LineCollection(
                     line_ids=self.line_ids,
                     lam=self.lam,
-                    lum=lum * self.luminosity.units,
-                    cont=cont * self.continuum.units,
+                    lum=get_array_quantity_view(lum, self.luminosity.units),
+                    cont=get_array_quantity_view(cont, self.continuum.units),
                 )
 
             self._luminosity = lum
@@ -1514,8 +1515,12 @@ class LineCollection:
                 return LineCollection(
                     line_ids=self.line_ids,
                     lam=self.lam,
-                    lum=att_lum * self.luminosity.units,
-                    cont=att_cont * self.continuum.units,
+                    lum=get_array_quantity_view(
+                        att_lum, self.luminosity.units
+                    ),
+                    cont=get_array_quantity_view(
+                        att_cont, self.continuum.units
+                    ),
                 )
 
             if isinstance(transmission, np.ndarray) and transmission.ndim == 1:
@@ -1535,8 +1540,12 @@ class LineCollection:
                 return LineCollection(
                     line_ids=self.line_ids,
                     lam=self.lam,
-                    lum=att_lum * self.luminosity.units,
-                    cont=att_cont * self.continuum.units,
+                    lum=get_array_quantity_view(
+                        att_lum, self.luminosity.units
+                    ),
+                    cont=get_array_quantity_view(
+                        att_cont, self.continuum.units
+                    ),
                 )
 
             with timer("LineCollection.apply_attenuation.numpy_fallback"):
