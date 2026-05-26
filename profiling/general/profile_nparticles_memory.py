@@ -19,6 +19,7 @@ from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
+from synthesizer.utils.operation_timers import OperationTimers
 
 # Add pipeline profiling to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "pipeline"))
@@ -81,6 +82,9 @@ def profile_nparticles_memory(
         f"Initializing Grid and Models (nthreads={nthreads}, "
         f"n_averages={n_averages})..."
     )
+    timers = OperationTimers()
+    timers.reset()
+
     grid = Grid("test_grid")
     n_lam = grid.nlam
 
@@ -306,6 +310,8 @@ def profile_nparticles_memory(
 
     make_plot("spectra")
     make_plot("photometry")
+    print("Operation timing table:")
+    OperationTimers.print_table()
 
 
 if __name__ == "__main__":

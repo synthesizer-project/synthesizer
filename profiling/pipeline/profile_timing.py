@@ -20,6 +20,7 @@ from unyt import kpc
 from synthesizer import check_atomic_timing
 from synthesizer.grid import Grid
 from synthesizer.pipeline import Pipeline
+from synthesizer.utils.operation_timers import OperationTimers
 
 # Add profiling/pipeline to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -242,8 +243,6 @@ def run_pipeline_profiling(
                 Each entry contains 'time', 'count', and 'source'.
             - Pipeline: The pipeline object with all computed results.
     """
-    from synthesizer.utils.operation_timers import OperationTimers
-
     # Setup - load grid
     grid = Grid("test_grid")
 
@@ -440,6 +439,8 @@ def main() -> None:
             )
 
     print(f"✓ Timing profile saved: {csv_file}")
+    print("Operation timing table:")
+    OperationTimers.print_table()
     for op, data in timings.items():
         count_str = f"count={data['count']}"
         source_str = data["source"]
