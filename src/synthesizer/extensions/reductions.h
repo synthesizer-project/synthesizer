@@ -7,3 +7,5 @@ void reduce_spectra(double *spectra, double *part_spectra, int nlam, int npart,
                     int nthreads);
 
 PyObject *reduce_particle_spectra(PyObject *self, PyObject *args);
+PyObject *scale_spectra_2d(PyObject *self, PyObject *args);
+PyObject *combine_spectra_list_2d(PyObject *self, PyObject *args);

@@ -766,6 +766,7 @@ class Transformation:
                 this_model,
                 this_mask if this_model.per_particle else None,
                 lam_mask,
+                nthreads=nthreads,
             )
 
         with timer("Transformation._transform_emission.cache_model"):
@@ -881,23 +882,39 @@ class Combination:
 
             template = in_spectra[combine_labels[0]]
             template_lnu = template._lnu
-            initial_lnu = np.array(template_lnu, copy=True)
-            np.nan_to_num(initial_lnu, copy=False)
-            out_spec = Sed(emission_model.lam, lnu=initial_lnu * erg / s / Hz)
 
         with timer("Combination._combine_spectra.accumulate"):
-            out_lnu = out_spec._lnu
-
-            # Seed from the first spectrum so subsequent work only processes
-            # the remaining inputs.
-            for combine_label in combine_labels[1:]:
-                combine_lnu = in_spectra[combine_label]._lnu
-                np.add(
-                    out_lnu,
-                    combine_lnu,
-                    out=out_lnu,
-                    where=~np.isnan(combine_lnu),
+            if this_model.per_particle and template_lnu.ndim == 2:
+                from synthesizer.extensions.reductions import (
+                    combine_spectra_list_2d,
                 )
+
+                combined_lnu = combine_spectra_list_2d(
+                    [in_spectra[label]._lnu for label in combine_labels],
+                    nthreads,
+                )
+                out_spec = Sed(
+                    emission_model.lam, lnu=combined_lnu * erg / s / Hz
+                )
+            else:
+                initial_lnu = np.array(template_lnu, copy=True)
+                np.nan_to_num(initial_lnu, copy=False)
+                out_spec = Sed(
+                    emission_model.lam,
+                    lnu=initial_lnu * erg / s / Hz,
+                )
+                out_lnu = out_spec._lnu
+
+                # Seed from the first spectrum so subsequent work only
+                # processes the remaining inputs.
+                for combine_label in combine_labels[1:]:
+                    combine_lnu = in_spectra[combine_label]._lnu
+                    np.add(
+                        out_lnu,
+                        combine_lnu,
+                        out=out_lnu,
+                        where=~np.isnan(combine_lnu),
+                    )
 
         with timer("Combination._combine_spectra.cache_model"):
             # Cache the model on the emitter

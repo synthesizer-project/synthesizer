@@ -1,5 +1,6 @@
 /* Standard includes */
 #include <cmath>
+#include <vector>
 
 /* Python includes */
 #include <Python.h>
@@ -205,11 +206,281 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
   return Py_BuildValue("N", np_spectra);
 }
 
+/**
+ * @brief Scale a 2D spectra array by a per-spectrum factor.
+ *
+ * The common hot-path shape is ``(nspec, nlam)`` scaled by a 1D array of
+ * length ``nspec`` with optional per-spectrum and wavelength masks. This
+ * helper keeps the work in one threaded C++ loop and returns a new array.
+ */
+PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
+  (void)self;
+
+  PyObject *spectra_obj;
+  PyObject *scaling_obj;
+  PyObject *mask_obj = Py_None;
+  PyObject *lam_mask_obj = Py_None;
+  int nthreads;
+
+  if (!PyArg_ParseTuple(args, "OOOOi", &spectra_obj, &scaling_obj, &mask_obj,
+                        &lam_mask_obj, &nthreads)) {
+    return NULL;
+  }
+
+  PyArrayObject *np_spectra = (PyArrayObject *)PyArray_FROM_OTF(
+      spectra_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  PyArrayObject *np_scaling = (PyArrayObject *)PyArray_FROM_OTF(
+      scaling_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  PyArrayObject *np_mask = nullptr;
+  PyArrayObject *np_lam_mask = nullptr;
+
+  if (np_spectra == NULL || np_scaling == NULL) {
+    Py_XDECREF(np_spectra);
+    Py_XDECREF(np_scaling);
+    return NULL;
+  }
+
+  if (mask_obj != Py_None) {
+    np_mask = (PyArrayObject *)PyArray_FROM_OTF(mask_obj, NPY_BOOL,
+                                                NPY_ARRAY_IN_ARRAY);
+    if (np_mask == NULL) {
+      Py_DECREF(np_spectra);
+      Py_DECREF(np_scaling);
+      return NULL;
+    }
+  }
+
+  if (lam_mask_obj != Py_None) {
+    np_lam_mask = (PyArrayObject *)PyArray_FROM_OTF(lam_mask_obj, NPY_BOOL,
+                                                    NPY_ARRAY_IN_ARRAY);
+    if (np_lam_mask == NULL) {
+      Py_DECREF(np_spectra);
+      Py_DECREF(np_scaling);
+      Py_XDECREF(np_mask);
+      return NULL;
+    }
+  }
+
+  if (PyArray_NDIM(np_spectra) != 2 || PyArray_NDIM(np_scaling) != 1) {
+    PyErr_SetString(PyExc_ValueError,
+                    "spectra must be 2D and scaling must be 1D.");
+    Py_DECREF(np_spectra);
+    Py_DECREF(np_scaling);
+    Py_XDECREF(np_mask);
+    Py_XDECREF(np_lam_mask);
+    return NULL;
+  }
+
+  const npy_intp *spectra_dims = PyArray_DIMS(np_spectra);
+  const npy_intp *scaling_dims = PyArray_DIMS(np_scaling);
+  const int nspec = static_cast<int>(spectra_dims[0]);
+  const int nlam = static_cast<int>(spectra_dims[1]);
+
+  if (scaling_dims[0] != spectra_dims[0]) {
+    PyErr_SetString(PyExc_ValueError,
+                    "scaling length must match the spectra first dimension.");
+    Py_DECREF(np_spectra);
+    Py_DECREF(np_scaling);
+    Py_XDECREF(np_mask);
+    Py_XDECREF(np_lam_mask);
+    return NULL;
+  }
+
+  if (np_mask != NULL) {
+    if (PyArray_NDIM(np_mask) != 1 || PyArray_DIMS(np_mask)[0] != spectra_dims[0]) {
+      PyErr_SetString(PyExc_ValueError,
+                      "mask must be a 1D boolean array matching spectra rows.");
+      Py_DECREF(np_spectra);
+      Py_DECREF(np_scaling);
+      Py_XDECREF(np_mask);
+      Py_XDECREF(np_lam_mask);
+      return NULL;
+    }
+  }
+
+  if (np_lam_mask != NULL) {
+    if (PyArray_NDIM(np_lam_mask) != 1 ||
+        PyArray_DIMS(np_lam_mask)[0] != spectra_dims[1]) {
+      PyErr_SetString(
+          PyExc_ValueError,
+          "lam_mask must be a 1D boolean array matching spectra columns.");
+      Py_DECREF(np_spectra);
+      Py_DECREF(np_scaling);
+      Py_XDECREF(np_mask);
+      Py_XDECREF(np_lam_mask);
+      return NULL;
+    }
+  }
+
+  PyArrayObject *np_out = (PyArrayObject *)PyArray_NewLikeArray(
+      np_spectra, NPY_KEEPORDER, NULL, 0);
+  if (np_out == NULL) {
+    Py_DECREF(np_spectra);
+    Py_DECREF(np_scaling);
+    Py_XDECREF(np_mask);
+    Py_XDECREF(np_lam_mask);
+    return NULL;
+  }
+
+  double *spectra = static_cast<double *>(PyArray_DATA(np_spectra));
+  double *scaling = static_cast<double *>(PyArray_DATA(np_scaling));
+  double *out = static_cast<double *>(PyArray_DATA(np_out));
+  npy_bool *mask = np_mask == NULL ? NULL : (npy_bool *)PyArray_DATA(np_mask);
+  npy_bool *lam_mask =
+      np_lam_mask == NULL ? NULL : (npy_bool *)PyArray_DATA(np_lam_mask);
+
+  tic("scale_spectra_2d");
+
+#ifdef WITH_OPENMP
+#pragma omp parallel for if(nthreads > 1) num_threads(nthreads) schedule(static)
+#endif
+  for (int ispec = 0; ispec < nspec; ispec++) {
+    const double scale = scaling[ispec];
+    const bool apply_spec = mask == NULL || mask[ispec];
+    double *__restrict in_row = spectra + ispec * nlam;
+    double *__restrict out_row = out + ispec * nlam;
+
+    for (int ilam = 0; ilam < nlam; ilam++) {
+      const bool apply_lam = lam_mask == NULL || lam_mask[ilam];
+      out_row[ilam] = (apply_spec && apply_lam) ? in_row[ilam] * scale
+                                                : in_row[ilam];
+    }
+  }
+
+  toc("scale_spectra_2d");
+
+  Py_DECREF(np_spectra);
+  Py_DECREF(np_scaling);
+  Py_XDECREF(np_mask);
+  Py_XDECREF(np_lam_mask);
+
+  return Py_BuildValue("N", np_out);
+}
+
+/**
+ * @brief Combine a sequence of same-shaped 2D spectra arrays, skipping NaNs.
+ */
+PyObject *combine_spectra_list_2d(PyObject *self, PyObject *args) {
+  (void)self;
+
+  PyObject *spectra_seq_obj;
+  int nthreads;
+
+  if (!PyArg_ParseTuple(args, "Oi", &spectra_seq_obj, &nthreads)) {
+    return NULL;
+  }
+
+  PyObject *seq = PySequence_Fast(
+      spectra_seq_obj, "spectra_list must be a sequence of 2D arrays.");
+  if (seq == NULL) {
+    return NULL;
+  }
+
+  const Py_ssize_t nspectra = PySequence_Fast_GET_SIZE(seq);
+  if (nspectra < 1) {
+    Py_DECREF(seq);
+    PyErr_SetString(PyExc_ValueError,
+                    "spectra_list must contain at least one array.");
+    return NULL;
+  }
+
+  std::vector<PyArrayObject *> arrays;
+  arrays.reserve(nspectra);
+
+  for (Py_ssize_t i = 0; i < nspectra; i++) {
+    PyObject *item = PySequence_Fast_GET_ITEM(seq, i);
+    PyArrayObject *arr = (PyArrayObject *)PyArray_FROM_OTF(
+        item, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    if (arr == NULL) {
+      for (PyArrayObject *loaded : arrays) {
+        Py_DECREF(loaded);
+      }
+      Py_DECREF(seq);
+      return NULL;
+    }
+    if (PyArray_NDIM(arr) != 2) {
+      for (PyArrayObject *loaded : arrays) {
+        Py_DECREF(loaded);
+      }
+      Py_DECREF(arr);
+      Py_DECREF(seq);
+      PyErr_SetString(PyExc_ValueError,
+                      "All spectra arrays must be 2D float64 arrays.");
+      return NULL;
+    }
+    arrays.push_back(arr);
+  }
+
+  const npy_intp *template_dims = PyArray_DIMS(arrays[0]);
+  const int nspec = static_cast<int>(template_dims[0]);
+  const int nlam = static_cast<int>(template_dims[1]);
+  for (Py_ssize_t i = 1; i < nspectra; i++) {
+    const npy_intp *dims = PyArray_DIMS(arrays[i]);
+    if (dims[0] != template_dims[0] || dims[1] != template_dims[1]) {
+      for (PyArrayObject *loaded : arrays) {
+        Py_DECREF(loaded);
+      }
+      Py_DECREF(seq);
+      PyErr_SetString(PyExc_ValueError,
+                      "All spectra arrays must have identical 2D shapes.");
+      return NULL;
+    }
+  }
+
+  PyArrayObject *np_out = (PyArrayObject *)PyArray_ZEROS(
+      2, const_cast<npy_intp *>(template_dims), NPY_DOUBLE, 0);
+  if (np_out == NULL) {
+    for (PyArrayObject *loaded : arrays) {
+      Py_DECREF(loaded);
+    }
+    Py_DECREF(seq);
+    return NULL;
+  }
+
+  std::vector<double *> spectra_ptrs;
+  spectra_ptrs.reserve(nspectra);
+  for (PyArrayObject *arr : arrays) {
+    spectra_ptrs.push_back(static_cast<double *>(PyArray_DATA(arr)));
+  }
+  double *out = static_cast<double *>(PyArray_DATA(np_out));
+  const int nelem = nspec * nlam;
+
+  tic("combine_spectra_list_2d");
+
+#ifdef WITH_OPENMP
+#pragma omp parallel for if(nthreads > 1) num_threads(nthreads) schedule(static)
+#endif
+  for (int idx = 0; idx < nelem; idx++) {
+    double total = 0.0;
+    for (Py_ssize_t ispec = 0; ispec < nspectra; ispec++) {
+      const double value = spectra_ptrs[ispec][idx];
+      if (!std::isnan(value)) {
+        total += value;
+      }
+    }
+    out[idx] = total;
+  }
+
+  toc("combine_spectra_list_2d");
+
+  for (PyArrayObject *arr : arrays) {
+    Py_DECREF(arr);
+  }
+  Py_DECREF(seq);
+
+  return Py_BuildValue("N", np_out);
+}
+
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef ReductionMethods[] = {
     {"reduce_particle_spectra", (PyCFunction)reduce_particle_spectra,
      METH_VARARGS,
      "Method for reducing per-particle spectra to an integrated spectrum."},
+    {"scale_spectra_2d", (PyCFunction)scale_spectra_2d, METH_VARARGS,
+     "Scale a 2D spectra array by a 1D per-spectrum factor."},
+    {"combine_spectra_list_2d", (PyCFunction)combine_spectra_list_2d,
+     METH_VARARGS,
+     "Combine same-shaped 2D spectra arrays while skipping NaNs."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */

@@ -44,7 +44,10 @@ from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emissions.utils import ensure_array_buffer, get_quantity_view
-from synthesizer.extensions.reductions import reduce_particle_spectra
+from synthesizer.extensions.reductions import (
+    reduce_particle_spectra,
+    scale_spectra_2d,
+)
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
@@ -364,7 +367,14 @@ class Sed:
             return self
         return self.__add__(second_sed)
 
-    def scale(self, scaling, inplace=False, mask=None, lam_mask=None):
+    def scale(
+        self,
+        scaling,
+        inplace=False,
+        mask=None,
+        lam_mask=None,
+        nthreads=1,
+    ):
         """Scale the lnu of the Sed object.
 
         Note: only acts on the rest frame spectra. To get the
@@ -383,6 +393,9 @@ class Sed:
                 axis.
             lam_mask (array-like, bool):
                 A mask for the wavelength array to apply the scaling to.
+            nthreads (int):
+                The number of threads to use for the optimised 2D broadcast
+                scaling path.
 
         Returns:
             Sed
@@ -399,9 +412,19 @@ class Sed:
                 scaling = scaling.value
 
         scaling_ndim = getattr(scaling, "ndim", 0)
+        use_fast_2d_scaling = (
+            isinstance(scaling, np.ndarray)
+            and self._lnu.ndim == 2
+            and scaling_ndim == 1
+            and scaling.shape[0] == self._lnu.shape[0]
+            and (mask is None or (getattr(mask, "ndim", 0) == 1))
+            and (lam_mask is None or getattr(lam_mask, "ndim", 0) == 1)
+        )
 
         # Unpack the arrays we'll need during scaling.
-        if lam_mask is None:
+        if use_fast_2d_scaling:
+            lnu = None
+        elif lam_mask is None:
             lnu = np.array(self._lnu, copy=True)
         else:
             lnu = np.array(self._lnu[..., lam_mask], copy=True)
@@ -416,6 +439,14 @@ class Sed:
 
         # Handle a multi-element array scaling factor as long as it matches
         # the shape of the lnu array up to the dimensions of the scaling array
+        elif use_fast_2d_scaling:
+            lnu = scale_spectra_2d(
+                self._lnu,
+                scaling,
+                mask,
+                lam_mask,
+                nthreads,
+            )
         elif isinstance(scaling, np.ndarray) and scaling_ndim < lnu.ndim:
             expand_axes = tuple(range(scaling_ndim, lnu.ndim))
             expanded_scaling = np.expand_dims(scaling, axis=expand_axes)
@@ -458,7 +489,9 @@ class Sed:
             raise exceptions.InconsistentMultiplication(out_str)
 
         # Now complete the calculation if we need to
-        if lam_mask is not None:
+        if use_fast_2d_scaling:
+            new_lnu = lnu * units
+        elif lam_mask is not None:
             new_lnu = self.lnu.copy()
             new_lnu[..., lam_mask] = lnu
         else:

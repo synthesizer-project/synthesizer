@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from unyt import Hz, erg, s
 
 from synthesizer import exceptions
 from synthesizer.emission_models import (
@@ -189,6 +190,49 @@ def test_combination_spectra(
         "The combined spectra are not the same as the explicit sum"
         f" (combined={combined_spec.lnu}, explicit={explicit_spectra})"
     )
+
+
+def test_combination_spectra_ignores_nan_inputs(test_grid):
+    """Combination should skip NaN values rather than propagating them."""
+    from synthesizer.emissions import Sed
+
+    class DummyEmitter:
+        def __init__(self):
+            self.model_param_cache = {}
+
+    model = StellarEmissionModel(
+        label="combined",
+        combine=("a", "b"),
+        emitter="stellar",
+    )
+
+    dummy = StellarEmissionModel(
+        label="root",
+        grid=test_grid,
+        extract="incident",
+        emitter="stellar",
+    )
+    spectra = {
+        "a": Sed(test_grid.lam, np.ones(test_grid.nlam) * erg / s / Hz),
+        "b": Sed(
+            test_grid.lam,
+            np.full(test_grid.nlam, 2.0) * erg / s / Hz,
+        ),
+    }
+    spectra["a"]._lnu[0] = np.nan
+    spectra["b"]._lnu[1] = np.nan
+
+    combined, _ = model._combine_spectra(
+        dummy,
+        spectra,
+        {},
+        model,
+        emitter=DummyEmitter(),
+    )
+
+    assert np.isclose(combined["combined"]._lnu[0], 2.0)
+    assert np.isclose(combined["combined"]._lnu[1], 1.0)
+    assert np.allclose(combined["combined"]._lnu[2:], 3.0)
 
 
 def test_transformation_with_string_label(stars_with_fake_spectra):
