@@ -43,6 +43,7 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
+from synthesizer.emissions.utils import ensure_array_buffer, get_quantity_view
 from synthesizer.extensions.reductions import reduce_particle_spectra
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
@@ -1128,9 +1129,13 @@ class Sed:
         conversion = ((1 * lnu_unit) / (4 * np.pi * (10 * pc) ** 2)).to_value(
             flux_unit
         )
-        self._fnu = self._lnu * conversion
+        np.multiply(
+            self._lnu,
+            conversion,
+            out=ensure_array_buffer(self, "_fnu", self._lnu),
+        )
 
-        return self.fnu
+        return get_quantity_view(self, "_fnu")
 
     @timed("Sed.get_fnu")
     def get_fnu(self, cosmo, z, igm=None):
@@ -1166,8 +1171,13 @@ class Sed:
             return self.get_fnu0()
 
         # Get the observed wavelength and frequency arrays.
-        self._obslam = self._lam * (1.0 + z)
-        self._obsnu = self._nu / (1.0 + z)
+        one_plus_z = 1.0 + z
+        if self._obslam is None or self._obslam.shape != self._lam.shape:
+            self._obslam = np.empty_like(self._lam)
+        if self._obsnu is None or self._obsnu.shape != self._nu.shape:
+            self._obsnu = np.empty_like(self._nu)
+        np.multiply(self._lam, one_plus_z, out=self._obslam)
+        np.divide(self._nu, one_plus_z, out=self._obsnu)
 
         # Compute the luminosity distance
         luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
@@ -1178,9 +1188,13 @@ class Sed:
         flux_unit = self.__class__.__dict__["fnu"].unit
         lnu_unit = self.__class__.__dict__["lnu"].unit
         conversion = (
-            (1 * lnu_unit) * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
+            (1 * lnu_unit) * one_plus_z / (4 * np.pi * luminosity_distance**2)
         ).to_value(flux_unit)
-        self._fnu = self._lnu * conversion
+        np.multiply(
+            self._lnu,
+            conversion,
+            out=ensure_array_buffer(self, "_fnu", self._lnu),
+        )
 
         # If we are applying an IGM model apply it
         if igm is not None:
@@ -1190,7 +1204,7 @@ class Sed:
             else:
                 self._fnu *= igm.get_transmission(z, self.obslam)
 
-        return self.fnu
+        return get_quantity_view(self, "_fnu")
 
     @timed("Sed.get_photo_lnu")
     def get_photo_lnu(
@@ -1257,7 +1271,7 @@ class Sed:
                 Fluxes in each filter in filters.
         """
         # Ensure fluxes actually exist
-        if (self.obslam is None) | (self.fnu is None):
+        if self._obslam is None or self._fnu is None:
             raise ValueError(
                 (
                     "Fluxes not calculated, run `get_fnu` or "

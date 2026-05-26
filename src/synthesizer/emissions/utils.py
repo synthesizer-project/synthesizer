@@ -46,7 +46,7 @@ from functools import lru_cache
 from types import MappingProxyType
 
 import numpy as np
-from unyt import angstrom
+from unyt import angstrom, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.units import accepts
@@ -193,6 +193,47 @@ def flatten_linelist(list_to_flatten):
             )
 
     return list(set(flattened_list))
+
+
+def ensure_array_buffer(obj, attr_name, shape_like):
+    """Return a reusable ndarray buffer on ``obj`` matching ``shape_like``.
+
+    Args:
+        obj (object):
+            Object on which the buffer attribute is stored.
+        attr_name (str):
+            Name of the ndarray attribute to reuse or create.
+        shape_like (np.ndarray):
+            Array whose shape and dtype define the required buffer.
+
+    Returns:
+        np.ndarray:
+            Reusable buffer with the same shape and dtype as ``shape_like``.
+    """
+    buffer = getattr(obj, attr_name, None)
+    if buffer is None or buffer.shape != shape_like.shape:
+        buffer = np.empty_like(shape_like)
+        setattr(obj, attr_name, buffer)
+    return buffer
+
+
+def get_quantity_view(obj, attr_name):
+    """Wrap a raw ndarray attribute in units without copying data.
+
+    Args:
+        obj (object):
+            Object holding the raw ndarray attribute and the corresponding
+            Quantity descriptor on its class.
+        attr_name (str):
+            Private ndarray attribute name, e.g. ``"_fnu"``.
+
+    Returns:
+        unyt_array:
+            Unit-bearing view of the raw ndarray data.
+    """
+    values = getattr(obj, attr_name)
+    unit = obj.__class__.__dict__[attr_name[1:]].unit
+    return unyt_array(values, unit, bypass_validation=True)
 
 
 @lru_cache(maxsize=1)
