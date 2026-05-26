@@ -110,7 +110,6 @@ class PhotometricImager(PhotometricInstrument):
         self.noise_maps = noise_maps
         self.noise_source_maps = noise_source_maps
         self.correlated_noise_models = self._build_correlated_noise_models()
-        self._validate()
 
         # Validate the instrument configuration
         self._validate()

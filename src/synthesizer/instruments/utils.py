@@ -85,17 +85,14 @@ def print_premade_instruments() -> None:
     instrument_classes = []
     for name, obj in inspect.getmembers(instruments):
         if inspect.isclass(obj):
-            # Include PremadeInstrument subclasses
+            # Include premade collection factories
             if (
-                issubclass(obj, instruments.PremadeInstrument)
-                and obj is not instruments.PremadeInstrument
-            ):
-                instrument_classes.append(obj)
-            # Include PremadeInstrumentCollectionFactory subclasses
-            elif (
                 issubclass(obj, instruments.PremadeInstrumentCollectionFactory)
                 and obj is not instruments.PremadeInstrumentCollectionFactory
             ):
+                instrument_classes.append(obj)
+            # Include premade single-instrument classes
+            elif hasattr(obj, "available_filters") and hasattr(obj, "load"):
                 instrument_classes.append(obj)
 
     # Prepare the rows of the summary table

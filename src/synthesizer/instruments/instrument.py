@@ -5,7 +5,6 @@ specialised instrument class based on the supplied arguments. Configurations
 that do not map cleanly onto one of the supported specialised classes are
 rejected explicitly.
 
-<<<<<<< HEAD
 Use of the `Instrument` factory is optional. Users can construct the specific
 instrument type directly if they already know which configuration they need.
 """
@@ -70,9 +69,6 @@ class Instrument:
             InstrumentBase: An instance of the specialised instrument class
                 implied by the supplied arguments.
         """
-        if cls is not Instrument:
-            return super().__new__(cls)
-
         # Accept a single positional label for backwards compatibility with
         # existing scripts while keeping all other arguments explicit.
         if len(args) > 1:
@@ -107,7 +103,7 @@ class Instrument:
         noise_source_maps = kwargs.get("noise_source_maps", None)
 
         # Build a concise summary for error reporting so unsupported argument
-        # combinations are easier to diagnose.
+        # combinations are easier to diagnose
         present = sorted(
             key
             for key, value in {

@@ -20,6 +20,7 @@ All specialised instrument classes share the :class:`InstrumentBase`
 interface, while :class:`InstrumentCollection` provides the common container
 for working with multiple instruments at once.
 """
+
 from synthesizer.instruments import photometric_noise
 from synthesizer.instruments import premade as _premade
 from synthesizer.instruments.filters import UVJ, Filter, FilterCollection

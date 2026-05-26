@@ -73,4 +73,3 @@ In this section we detail creating and working with these instrument types.
    instrument_example 
    premade_instruments 
    filters
-
