@@ -1380,14 +1380,19 @@ class BaseGalaxy:
                 otherwise a dict of ImageCollections keyed by label.
 
         """
+
+
         # Convert labels tuple to a list and validate they are strings
         labels = list(labels)
+
         for label in labels:
             if not isinstance(label, str):
                 raise exceptions.InconsistentArguments(
                     f"All labels must be strings, got {type(label).__name__}. "
                     "If passing an EmissionModel, use model.label instead."
                 )
+
+
 
         _labels = []
         while len(labels) > 0:
@@ -1429,6 +1434,8 @@ class BaseGalaxy:
         if self.gas is not None and hasattr(self.gas, "model_param_cache"):
             combined_cache.update(self.gas.model_param_cache)
 
+
+
         # Prepare galaxy-level image generation, routing to components
         galaxy_combine_labels, component_labels_by_emitter = (
             _prepare_galaxy_image_labels(
@@ -1436,6 +1443,17 @@ class BaseGalaxy:
                 combined_cache,
             )
         )
+        
+        # Validate all requested labels were routed to an emitter or a combine step
+        routed_labels = set(galaxy_combine_labels)
+        for emitter_labels in component_labels_by_emitter.values():
+            routed_labels.update(emitter_labels)
+        missing = set(labels) - routed_labels
+        if missing:
+            raise exceptions.InconsistentArguments(
+                f"The following labels were not found in any emitter: "
+                f"{missing}."
+            )
 
         # Container for images we will make
         out_images = {}
