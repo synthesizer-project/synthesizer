@@ -62,6 +62,21 @@ python profiling/pipeline/make_profiling_instruments.py
 This writes `profiling/pipeline/jwst_pipeline_perf_inst.hdf5`, which the
 profiling scripts load without contacting SVO.
 
+To generate the documentation plots into a single directory without copying
+them into the docs tree:
+
+```bash
+bash profiling/run_doc_profiling_plots.sh
+```
+
+This places the final PNGs in `profiling/outputs/`.
+
+To copy those generated plots into the documentation directory afterwards:
+
+```bash
+bash profiling/move_profiling_to_docs.sh
+```
+
 #### `profile_timing.py` - Measure Execution Time
 
 Profile `Pipeline` execution time. Runs setup (grid load, galaxy/instrument build, emission model) + `pipeline.run()` for all operations, then extracts timing data from `pipeline._op_timing`.
