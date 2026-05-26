@@ -1452,7 +1452,7 @@ class BaseGalaxy:
         if missing:
             raise exceptions.InconsistentArguments(
                 f"The following labels were not found in any emitter: "
-                f"{missing}."
+                f"{missing}. Available labels are: {list(combined_cache.keys())}"
             )
 
         # Container for images we will make
