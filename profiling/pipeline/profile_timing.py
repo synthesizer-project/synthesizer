@@ -251,6 +251,7 @@ def run_pipeline_profiling(
     galaxies = build_test_galaxies(grid, nparticles, ngalaxies, seed)
     instrument = get_test_instrument(grid)
     kernel = get_test_kernel()
+    image_kernel = kernel.get_kernel()
     model = get_test_emission_model(grid)
 
     # Create Pipeline
@@ -297,7 +298,7 @@ def run_pipeline_profiling(
             pipeline.get_images_luminosity(
                 instrument,
                 fov=fov,
-                kernel=kernel,
+                kernel=image_kernel,
                 cosmo=cosmo,
                 labels="intrinsic",
             )
@@ -319,7 +320,7 @@ def run_pipeline_profiling(
                 pipeline.get_images_flux(
                     instrument,
                     fov=fov,
-                    kernel=kernel,
+                    kernel=image_kernel,
                     cosmo=cosmo,
                     labels="intrinsic",
                 )

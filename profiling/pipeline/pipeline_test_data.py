@@ -166,13 +166,12 @@ def get_test_instrument(grid: Grid):
 
 
 def get_test_kernel():
-    """Get the default SPH kernel for imaging.
+    """Get the default SPH kernel object for profiling.
 
     Returns:
-        np.ndarray: The kernel array from Kernel().get_kernel().
+        Kernel: Default kernel instance used by profiling scripts.
     """
-    kernel = Kernel()  # Default is sph_anarchy
-    return kernel.get_kernel()
+    return Kernel()  # Default is sph_anarchy
 
 
 def get_test_emission_model(grid: Grid):
