@@ -21,7 +21,7 @@ from synthesizer.emission_models.extractors.extractor import (
 from synthesizer.emission_models.utils import cache_model_params
 from synthesizer.emissions import LineCollection, Sed, integrate_particle_sed
 from synthesizer.grid import Template
-from synthesizer.utils.operation_timers import timer
+from synthesizer.utils.operation_timers import timed, timer
 
 
 class Extraction:
@@ -66,6 +66,7 @@ class Extraction:
         # peculiar velocities? (Particle Only!)
         self._use_vel_shift = vel_shift
 
+    @timed("Extraction._extract_spectra")
     def _extract_spectra(
         self,
         this_model,
@@ -395,6 +396,7 @@ class Generation:
         # Attach the emission generation model
         self._generator = generator
 
+    @timed("Generation._generate_spectra")
     def _generate_spectra(
         self,
         this_model,
@@ -679,6 +681,7 @@ class Transformation:
             else self._apply_to.label
         )
 
+    @timed("Transformation._transform_emission")
     def _transform_emission(
         self,
         this_model,
@@ -829,6 +832,7 @@ class Combination:
             for model in self._combine
         ]
 
+    @timed("Combination._combine_spectra")
     def _combine_spectra(
         self,
         emission_model,

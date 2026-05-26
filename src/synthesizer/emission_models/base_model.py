@@ -2562,12 +2562,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Before we do anything else, check that we have the emitters needed by
         # the active models in the queued execution graph.
-        for model in queue.models.values():
-            if emitters.get(model.emitter, None) is None:
-                raise exceptions.InconsistentArguments(
-                    f"Missing emitter '{model.emitter}' required by active "
-                    f"EmissionModel '{model.label}'."
-                )
+        with timer("EmissionModel._get_spectra.validate_emitters"):
+            for model in queue.models.values():
+                if emitters.get(model.emitter, None) is None:
+                    raise exceptions.InconsistentArguments(
+                        f"Missing emitter '{model.emitter}' required by "
+                        f"active EmissionModel '{model.label}'."
+                    )
 
         # Get any existing spectra we are reusing
         with timer("EmissionModel._get_spectra.get_existing_emissions"):
@@ -2588,7 +2589,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # Reused or externally supplied emissions still need to unlock the
             # graph, but they do not need to be regenerated.
             if label in spectra:
-                queue.done(this_model, spectra, particle_spectra)
+                with timer("EmissionModel._get_spectra.reuse_existing"):
+                    queue.done(this_model, spectra, particle_spectra)
                 continue
 
             # Active queued models must always have a matching emitter.
@@ -2614,15 +2616,16 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # Dispatch to the appropriate operation for this model.
             if this_model._is_extracting:
                 try:
-                    spectra, particle_spectra = self._extract_spectra(
-                        this_model,
-                        emitters,
-                        spectra,
-                        particle_spectra,
-                        verbose=verbose,
-                        nthreads=nthreads,
-                        grid_assignment_method=grid_assignment_method,
-                    )
+                    with timer("EmissionModel._get_spectra.extract_branch"):
+                        spectra, particle_spectra = self._extract_spectra(
+                            this_model,
+                            emitters,
+                            spectra,
+                            particle_spectra,
+                            verbose=verbose,
+                            nthreads=nthreads,
+                            grid_assignment_method=(grid_assignment_method),
+                        )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {label}")
@@ -2633,14 +2636,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_combining:
                 try:
-                    spectra, particle_spectra = self._combine_spectra(
-                        emission_model,
-                        spectra,
-                        particle_spectra,
-                        this_model,
-                        emitter,
-                        nthreads,
-                    )
+                    with timer("EmissionModel._get_spectra.combine_branch"):
+                        spectra, particle_spectra = self._combine_spectra(
+                            emission_model,
+                            spectra,
+                            particle_spectra,
+                            this_model,
+                            emitter,
+                            nthreads,
+                        )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -2651,15 +2655,18 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_transforming:
                 try:
-                    spectra, particle_spectra = this_model._transform_emission(
-                        this_model,
-                        spectra,
-                        particle_spectra,
-                        emitter,
-                        this_mask,
-                        self.lam,
-                        nthreads,
-                    )
+                    with timer("EmissionModel._get_spectra.transform_branch"):
+                        spectra, particle_spectra = (
+                            this_model._transform_emission(
+                                this_model,
+                                spectra,
+                                particle_spectra,
+                                emitter,
+                                this_mask,
+                                self.lam,
+                                nthreads,
+                            )
+                        )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -2670,15 +2677,16 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_generating:
                 try:
-                    spectra, particle_spectra = self._generate_spectra(
-                        this_model,
-                        emission_model,
-                        spectra,
-                        particle_spectra,
-                        self.lam,
-                        emitter,
-                        nthreads,
-                    )
+                    with timer("EmissionModel._get_spectra.generate_branch"):
+                        spectra, particle_spectra = self._generate_spectra(
+                            this_model,
+                            emission_model,
+                            spectra,
+                            particle_spectra,
+                            self.lam,
+                            emitter,
+                            nthreads,
+                        )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -2753,7 +2761,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 queue.done(this_model, spectra, particle_spectra)
 
         # Ensure the dependency graph was fully traversed before returning.
-        queue.assert_finished()
+        with timer("EmissionModel._get_spectra.assert_finished"):
+            queue.assert_finished()
 
         # Apply any post processing functions to the surviving emissions.
         with timer("EmissionModel._get_spectra.post_processing"):
