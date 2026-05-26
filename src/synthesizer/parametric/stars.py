@@ -1107,3 +1107,39 @@ class Stars(StarsComponent):
             10 ** grid.log10_specific_ionising_lum[ion] * self.sfzh,
             axis=(0, 1),
         )
+
+    def calculate_initial_mass_at_age(self, age):
+        """Calculate the initial mass of the stellar population at a given age.
+
+        This is the total mass of stars that were formed at the specified age
+        given the star formation and metal enrichment history.
+
+        Args:
+            age (float or unyt_quantity):
+                The age at which to calculate the initial mass. This can be a
+                float in years or a unyt quantity with time units.
+
+        Returns:
+            The total mass formed prior to this age.
+        """
+        if isinstance(age, unyt_quantity):
+            age = age.to("yr").value
+
+        log10ages = np.asarray(self.log10ages)
+        sf_hist = np.asarray(self.sf_hist)
+
+        # construct log-space bin edges from centres
+        dlog = np.diff(log10ages)
+        edges = np.empty(len(log10ages) + 1)
+
+        edges[1:-1] = 0.5 * (log10ages[1:] + log10ages[:-1])
+        edges[0] = log10ages[0] - dlog[0] / 2
+        edges[-1] = log10ages[-1] + dlog[-1] / 2
+
+        age_edges = 10**edges
+
+        frac = np.clip(
+            (age_edges[1:] - age) / (age_edges[1:] - age_edges[:-1]), 0, 1
+        )
+
+        return np.sum(sf_hist * frac) * Msun
