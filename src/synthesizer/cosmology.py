@@ -26,8 +26,10 @@ from astropy import units as u
 from unyt import Mpc
 
 from synthesizer import exceptions
+from synthesizer.utils.operation_timers import timed
 
 
+@timed("cosmology._get_cosmo_key")
 def _get_cosmo_key(cosmo):
     """Create a hashable key for a cosmology object.
 
@@ -81,6 +83,7 @@ def _get_cosmo_key(cosmo):
     return (class_name, param_items)
 
 
+@timed("cosmology._reconstruct_cosmology")
 def _reconstruct_cosmology(cosmo_key):
     """Reconstruct a cosmology object from its key.
 
@@ -143,6 +146,7 @@ def _reconstruct_cosmology(cosmo_key):
 
 
 @lru_cache(maxsize=1000)  # Cache up to 1000 different combinations
+@timed("cosmology._cached_luminosity_distance")
 def _cached_luminosity_distance(cosmo_key, redshift):
     """Internal cached function for luminosity distance calculation.
 
@@ -164,6 +168,7 @@ def _cached_luminosity_distance(cosmo_key, redshift):
 
 
 @lru_cache(maxsize=1000)  # Cache up to 1000 different combinations
+@timed("cosmology._cached_angular_diameter_distance")
 def _cached_angular_diameter_distance(cosmo_key, redshift):
     """Internal cached function for angular diameter distance calculation.
 
@@ -184,6 +189,7 @@ def _cached_angular_diameter_distance(cosmo_key, redshift):
     return cosmo.angular_diameter_distance(redshift).to("Mpc").value
 
 
+@timed("cosmology.get_luminosity_distance")
 def get_luminosity_distance(cosmo, redshift):
     """Get the luminosity distance for a given redshift and cosmology.
 
@@ -210,6 +216,7 @@ def get_luminosity_distance(cosmo, redshift):
     return result_value * Mpc
 
 
+@timed("cosmology.get_angular_diameter_distance")
 def get_angular_diameter_distance(cosmo, redshift):
     """Get the angular diameter distance for a given redshift and cosmology.
 
