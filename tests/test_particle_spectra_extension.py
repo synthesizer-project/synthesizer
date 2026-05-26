@@ -59,7 +59,7 @@ def test_compute_particle_seds_matches_expected(method, expected_func):
         _particle_spectra_inputs()
     )
 
-    part_spectra, spectra = compute_particle_seds(
+    part_spectra = compute_particle_seds(
         grid_spectra,
         axes,
         part_props,
@@ -78,9 +78,6 @@ def test_compute_particle_seds_matches_expected(method, expected_func):
 
     expected = expected_func(grid_spectra, weights)
     np.testing.assert_allclose(part_spectra, expected, rtol=0.0, atol=0.0)
-    np.testing.assert_allclose(
-        spectra, expected.sum(axis=0), rtol=0.0, atol=0.0
-    )
 
 
 @pytest.mark.parametrize("method", ["ngp", "cic"])
@@ -91,7 +88,7 @@ def test_compute_particle_seds_lam_mask_dispatch(method):
     )
     nlam = grid_spectra.shape[-1]
 
-    unmasked_part_spectra, unmasked_spectra = compute_particle_seds(
+    unmasked_part_spectra = compute_particle_seds(
         grid_spectra,
         axes,
         part_props,
@@ -109,7 +106,7 @@ def test_compute_particle_seds_lam_mask_dispatch(method):
     )
 
     all_lam_mask = np.ascontiguousarray(np.ones(nlam, dtype=np.bool_))
-    all_mask_part_spectra, all_mask_spectra = compute_particle_seds(
+    all_mask_part_spectra = compute_particle_seds(
         grid_spectra,
         axes,
         part_props,
@@ -129,14 +126,11 @@ def test_compute_particle_seds_lam_mask_dispatch(method):
     np.testing.assert_allclose(
         all_mask_part_spectra, unmasked_part_spectra, rtol=0.0, atol=0.0
     )
-    np.testing.assert_allclose(
-        all_mask_spectra, unmasked_spectra, rtol=0.0, atol=0.0
-    )
 
     partial_lam_mask = np.ascontiguousarray(
         [True, False, True, False, True], dtype=np.bool_
     )
-    partial_part_spectra, partial_spectra = compute_particle_seds(
+    partial_part_spectra = compute_particle_seds(
         grid_spectra,
         axes,
         part_props,
@@ -155,14 +149,9 @@ def test_compute_particle_seds_lam_mask_dispatch(method):
 
     expected_part_spectra = unmasked_part_spectra.copy()
     expected_part_spectra[:, ~partial_lam_mask] = 0.0
-    expected_spectra = unmasked_spectra.copy()
-    expected_spectra[~partial_lam_mask] = 0.0
 
     np.testing.assert_allclose(
         partial_part_spectra, expected_part_spectra, rtol=0.0, atol=0.0
-    )
-    np.testing.assert_allclose(
-        partial_spectra, expected_spectra, rtol=0.0, atol=0.0
     )
 
 
@@ -177,7 +166,7 @@ def test_compute_particle_seds_threaded_matches_serial(method):
         [True, False, True, True, False], dtype=np.bool_
     )
 
-    serial_part_spectra, serial_spectra = compute_particle_seds(
+    serial_part_spectra = compute_particle_seds(
         grid_spectra,
         axes,
         part_props,
@@ -193,7 +182,7 @@ def test_compute_particle_seds_threaded_matches_serial(method):
         True,
         ("x",),
     )
-    threaded_part_spectra, threaded_spectra = compute_particle_seds(
+    threaded_part_spectra = compute_particle_seds(
         grid_spectra,
         axes,
         part_props,
@@ -212,9 +201,6 @@ def test_compute_particle_seds_threaded_matches_serial(method):
 
     np.testing.assert_allclose(
         threaded_part_spectra, serial_part_spectra, rtol=0.0, atol=0.0
-    )
-    np.testing.assert_allclose(
-        threaded_spectra, serial_spectra, rtol=0.0, atol=0.0
     )
 
 

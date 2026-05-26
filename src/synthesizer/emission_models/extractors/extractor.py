@@ -828,9 +828,20 @@ class ParticleExtractor(Extractor):
             if nthreads == -1:
                 nthreads = os.cpu_count()
 
-        # Compute the lnu array
+        # Get the grid_weights if they exist and we don't have a mask. The
+        # particle spectra extraction no longer reduces to the integrated
+        # spectra; the integrated machinery is cheaper than reducing the full
+        # per-particle spectra array.
         emitter_attr_names = tuple(self._emitter_attributes)
-        spec, integrated_spec = compute_particle_seds(
+        if mask is None:
+            grid_weights = emitter._grid_weights.get(
+                grid_assignment_method.lower(), {}
+            ).get(self._grid.grid_name, None)
+        else:
+            grid_weights = None
+
+        # Compute the per-particle lnu array.
+        spec = compute_particle_seds(
             self._spectra_grid,
             self._grid_axes,
             extracted,
@@ -846,6 +857,36 @@ class ParticleExtractor(Extractor):
             lam_mask is not None,
             emitter_attr_names,
         )
+
+        # Compute the integrated lnu array using grid weights rather than a
+        # memory-bandwidth dominated reduction over the per-particle spectra.
+        integrated_spec, grid_weights = compute_integrated_sed(
+            self._spectra_grid,
+            self._grid_axes,
+            extracted,
+            weight,
+            self._grid_dims,
+            self._grid_naxes,
+            emitter.nparticles,
+            self._grid_nlam,
+            grid_assignment_method.lower(),
+            nthreads,
+            grid_weights,
+            mask,
+            lam_mask,
+            emitter_attr_names,
+        )
+
+        # If we have no mask then lets store the grid weights in case
+        # we can make use of them later.
+        if (
+            mask is None
+            and self._grid.grid_name
+            not in emitter._grid_weights[grid_assignment_method.lower()]
+        ):
+            emitter._grid_weights[grid_assignment_method.lower()][
+                self._grid.grid_name
+            ] = grid_weights
 
         # Make the Sed objects themselves
         part_lnu = unyt_array(spec, erg / s / Hz, bypass_validation=True)
@@ -956,9 +997,19 @@ class ParticleExtractor(Extractor):
             grid_dims = np.array(self._grid_dims)
             grid_dims[-1] = self._grid.nlines
 
-        # Compute the integrated line lum array
+        # Get the grid_weights if they exist and we don't have a mask. The
+        # integrated line spectra are computed through the integrated machinery
+        # rather than by reducing the per-particle line arrays.
         emitter_attr_names = tuple(self._emitter_attributes)
-        lum, integrated_lum = compute_particle_seds(
+        if mask is None:
+            grid_weights = emitter._grid_weights.get(
+                grid_assignment_method.lower(), {}
+            ).get(self._grid.grid_name, None)
+        else:
+            grid_weights = None
+
+        # Compute the per-particle line lum array.
+        lum = compute_particle_seds(
             self._line_lum_grid,
             self._grid_axes,
             extracted,
@@ -975,8 +1026,26 @@ class ParticleExtractor(Extractor):
             emitter_attr_names,
         )
 
-        # Compute the integrated continuum array
-        cont, integrated_cont = compute_particle_seds(
+        # Compute the integrated line lum array.
+        integrated_lum, grid_weights = compute_integrated_sed(
+            self._line_lum_grid,
+            self._grid_axes,
+            extracted,
+            weight,
+            grid_dims,
+            self._grid_naxes,
+            emitter.nparticles,
+            self._grid.nlines,
+            grid_assignment_method.lower(),
+            nthreads,
+            grid_weights,
+            mask,
+            lam_mask,
+            emitter_attr_names,
+        )
+
+        # Compute the per-particle continuum array.
+        cont = compute_particle_seds(
             self._line_cont_grid,
             self._grid_axes,
             extracted,
@@ -992,6 +1061,36 @@ class ParticleExtractor(Extractor):
             lam_mask is not None,
             emitter_attr_names,
         )
+
+        # Compute the integrated continuum array using the line luminosity grid
+        # weights computed above.
+        integrated_cont, _ = compute_integrated_sed(
+            self._line_cont_grid,
+            self._grid_axes,
+            extracted,
+            weight,
+            grid_dims,
+            self._grid_naxes,
+            emitter.nparticles,
+            self._grid.nlines,
+            grid_assignment_method.lower(),
+            nthreads,
+            grid_weights,
+            mask,
+            lam_mask,
+            emitter_attr_names,
+        )
+
+        # If we have no mask then lets store the grid weights in case
+        # we can make use of them later.
+        if (
+            mask is None
+            and self._grid.grid_name
+            not in emitter._grid_weights[grid_assignment_method.lower()]
+        ):
+            emitter._grid_weights[grid_assignment_method.lower()][
+                self._grid.grid_name
+            ] = grid_weights
 
         # Make the LineCollection objects themselves
         part_line = LineCollection(

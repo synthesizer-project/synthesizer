@@ -23,7 +23,6 @@
 #include "macros.h"
 #include "part_props.h"
 #include "property_funcs.h"
-#include "reductions.h"
 #include "timers.h"
 #ifdef ATOMIC_TIMING
 #include "timers_init.h"
@@ -1025,13 +1024,9 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   tic("compute_particle_seds.setup_output_arrays");
 
   /* Define the output dimensions. */
-  npy_intp np_int_dims[1] = {nlam};
   npy_intp np_part_dims[2] = {npart, nlam};
 
-  /* Allocate the spectra. */
-  PyArrayObject *np_spectra =
-      (PyArrayObject *)PyArray_ZEROS(1, np_int_dims, NPY_DOUBLE, 0);
-  double *spectra = static_cast<double *>(PyArray_DATA(np_spectra));
+  /* Allocate the particle spectra. */
   PyArrayObject *np_part_spectra =
       (PyArrayObject *)PyArray_ZEROS(2, np_part_dims, NPY_DOUBLE, 0);
   double *part_spectra = static_cast<double *>(PyArray_DATA(np_part_spectra));
@@ -1053,19 +1048,13 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   }
   RETURN_IF_PYERR();
 
-  /* Reduce the per-particle spectra to the integrated spectra. */
-  reduce_spectra(spectra, part_spectra, nlam, npart, nthreads);
-
   /* Clean up memory! */
   delete part_props;
   delete grid_props;
 
-  /* Construct the output tuple. */
-  PyObject *out_tuple = Py_BuildValue("NN", np_part_spectra, np_spectra);
-
   toc("compute_particle_seds");
 
-  return out_tuple;
+  return Py_BuildValue("N", np_part_spectra);
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
