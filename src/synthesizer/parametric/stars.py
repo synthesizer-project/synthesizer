@@ -248,8 +248,6 @@ class Stars(StarsComponent):
 
         # Store the total initial stellar mass
         self.initial_mass = initial_mass
-
-        # Store the total surviving stellar mass
         self.surviving_mass = surviving_mass
 
         if self.surviving_mass is not None and self.initial_mass is not None:
@@ -267,6 +265,10 @@ class Stars(StarsComponent):
         if self.surviving_mass is not None and grid is not None:
             # Get the stellar fraction from the grid
             self.stellar_fraction = grid.stellar_fraction
+
+        # If initial mass is not provided assume 1 Msun, this will be rescaled
+        # if self.initial_mass is None:
+        #     self.initial_mass = 1 * Msun
 
         # If we have been handed an explict SFZH grid we can ignore all the
         # calculation methods
@@ -286,6 +288,7 @@ class Stars(StarsComponent):
             else:
                 # Otherwise calculate the total initial mass
                 self._initial_mass = np.sum(self.sfzh)
+                self.initial_mass = self._initial_mass * Msun
 
             # Project the SFZH to get the 1D SFH
             self.sf_hist = np.sum(self.sfzh, axis=1)
@@ -369,7 +372,7 @@ class Stars(StarsComponent):
         # If both are instantaneous then we can do the whole SFZH in one go
         if instant_sf is not None and instant_metallicity is not None:
             inst_stars = ParticleStars(
-                initial_masses=np.array([self._initial_mass]) * Msun,
+                initial_masses=np.array([1.0]) * Msun,
                 ages=np.array([instant_sf.to("yr").value]) * yr,
                 metallicities=np.array([instant_metallicity]),
             )
@@ -381,16 +384,10 @@ class Stars(StarsComponent):
                 grid_assignment_method="cic",
             ).sfzh
 
-            # Compute the SFH and ZH arrays
-            self.sf_hist = np.sum(self.sfzh, axis=1)
-            self.metal_dist = np.sum(self.sfzh, axis=0)
-
-            return
-
         # Handle the instantaneous SFH case
         elif instant_sf is not None and instant_metallicity is None:
             inst_stars = ParticleStars(
-                initial_masses=np.array([self._initial_mass]) * Msun,
+                initial_masses=np.array([1.0]) * Msun,
                 ages=np.array([instant_sf.to("yr").value]) * yr,
                 metallicities=np.array([0]),  # this is a dummy value
             )
@@ -401,7 +398,7 @@ class Stars(StarsComponent):
         # Handle the instantaneous ZH case
         elif instant_metallicity is not None and instant_sf is None:
             inst_stars = ParticleStars(
-                initial_masses=np.array([self._initial_mass]) * Msun,
+                initial_masses=np.array([1.0]) * Msun,
                 ages=np.array([0]) * yr,  # this is a dummy value
                 metallicities=np.array([instant_metallicity]),
             )
@@ -424,15 +421,9 @@ class Stars(StarsComponent):
                 self.sf_hist[ia] = sf
                 min_age = max_age
 
-            # Normalise SFH array
-            self.sf_hist /= np.sum(self.sf_hist)
-
-            # Multiply by initial stellar mass
-            self.sf_hist *= self._initial_mass
-
-        # Calculate SFH from function if necessary
+        # Calculate ZH from function if necessary
         if self.metal_dist_func is not None and self.metal_dist is None:
-            # Set up SFH array
+            # Set up ZH array
             self.metal_dist = np.zeros(self.metallicities.size)
 
             # Loop over metallicity bins calculating the amount of mass in
@@ -451,12 +442,6 @@ class Stars(StarsComponent):
                 self.metal_dist[imetal] = sf
                 min_metal = max_metal
 
-            # Normalise ZH array
-            self.metal_dist /= np.sum(self.metal_dist)
-
-            # Multiply by initial stellar mass
-            self.metal_dist *= self._initial_mass
-
         # Ensure that by this point we have an array for SFH and ZH
         if self.sf_hist is None or self.metal_dist is None:
             raise exceptions.InconsistentArguments(
@@ -469,17 +454,30 @@ class Stars(StarsComponent):
         self.sfzh = self.sf_hist[:, np.newaxis] * self.metal_dist
 
         # Normalise the SFZH grid if needs be
-        if self.initial_mass is not None:
-            self.sfzh /= np.sum(self.sfzh)
+        if self.surviving_mass is not None:
+            self.sfzh_normalisation = (
+                self._surviving_mass / self.stellar_fraction
+            ) / np.sum(self.sfzh)
+            self.sfzh *= self.sfzh_normalisation
 
-            # ... and multiply it by the initial mass of stars
-            self.sfzh *= self._initial_mass
-        elif self.surviving_mass is not None:
-            self.sfzh /= np.sum(self.sfzh)
-
-            # ... and multiply it by the initial mass of stars
-            self.sfzh *= self._surviving_mass / self.stellar_fraction
+            # now calculate the initial mass
             self.initial_mass = np.sum(self.sfzh) * Msun
+
+            # now apply the normalisation to the SFH and ZH arrays for
+            # consistency
+            self.sf_hist /= np.sum(self.sf_hist)
+            self.sf_hist *= self.initial_mass
+            self.metal_dist /= np.sum(self.metal_dist)
+            self.metal_dist *= self.initial_mass
+
+        elif self.initial_mass is not None:
+            self.sfzh_normalisation = self._initial_mass / np.sum(self.sfzh)
+            self.sfzh *= self.sfzh_normalisation
+
+            # now apply the normalisation to the SFH and ZH arrays for
+            # consistency
+            self.sf_hist *= self.sfzh_normalisation
+            self.metal_dist *= self.sfzh_normalisation
 
         else:
             # Otherwise calculate the total initial mass
