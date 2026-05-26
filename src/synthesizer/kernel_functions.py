@@ -9,6 +9,7 @@ Available kernels include:
     - sph_anarchy
     - gadget_2
     - cubic
+    - quartic
     - quintic
 """
 
@@ -146,7 +147,7 @@ class Kernel:
         Args:
             name (str):
                 The name of the kernel to use. Options are: "uniform",
-                "sph_anarchy", "gadget_2", "cubic", "quintic".
+                "sph_anarchy", "gadget_2", "cubic", "quartic", "quintic".
             binsize (int):
                 The number of bins to use for the projected LOS kernel table.
             truncated_q_binsize (int, optional):
@@ -236,6 +237,8 @@ class Kernel:
             self.f = gadget_2
         elif name == "cubic":
             self.f = cubic
+        elif name == "quartic":
+            self.f = quartic
         elif name == "quintic":
             self.f = quintic
         else:
@@ -646,6 +649,18 @@ def cubic(r):
         float: The value of the cubic kernel.
     """
     return _call_kernel_function("cubic", r)
+
+
+def quartic(r):
+    """Calculate the SPHENIX quartic spline (M5) kernel.
+
+    Args:
+        r (float): The distance from the center of the kernel.
+
+    Returns:
+        float: The value of the quartic spline kernel.
+    """
+    return _call_kernel_function("quartic", r)
 
 
 def quintic(r):
