@@ -57,6 +57,7 @@ class PhotometricImager(PhotometricInstrument):
         filters,
         resolution,
         psfs=None,
+        psf_resample_factor=1,
         depth=None,
         depth_app_radius=None,
         snrs=None,
@@ -73,6 +74,10 @@ class PhotometricImager(PhotometricInstrument):
                 in kpc or arcseconds.
             psfs (dict, optional): An optional dictionary of point spread
                 functions, with one entry per filter.
+            psf_resample_factor (int, optional): Instrument-owned PSF
+                supersampling factor. When greater than 1, images are
+                temporarily resampled by this factor before PSF convolution and
+                then downsampled back to their original resolution.
             depth (dict or unyt_quantity, optional): The depth of the
                 instrument, typically in apparent magnitudes. If depths are
                 provided per filter, this should be a dictionary keyed by
@@ -101,6 +106,7 @@ class PhotometricImager(PhotometricInstrument):
         # Set the photometric imager-specific attributes
         self.resolution = resolution
         self.psfs = psfs
+        self.psf_resample_factor = psf_resample_factor
         self.noise_maps = noise_maps
         self.noise_source_maps = noise_source_maps
         self.correlated_noise_models = self._build_correlated_noise_models()
@@ -123,6 +129,11 @@ class PhotometricImager(PhotometricInstrument):
         if self.resolution is None:
             raise exceptions.MissingArgument(
                 "PhotometricImager requires a resolution."
+            )
+
+        if self.psf_resample_factor < 1:
+            raise exceptions.InconsistentArguments(
+                "psf_resample_factor must be greater than or equal to 1."
             )
 
         # Noise maps are an alternative noise definition to depth+SNR pairs
@@ -275,16 +286,12 @@ class PhotometricImager(PhotometricInstrument):
         )
 
     @timed("PhotometricImager.apply_psf")
-    def apply_psf(
-        self, image, filter_code, psf_resample_factor=1, inplace=False
-    ):
+    def apply_psf(self, image, filter_code, inplace=False):
         """Apply the configured PSF to one image.
 
         Args:
             image (Image): Image to which the PSF should be applied.
             filter_code (str): Filter code identifying which PSF to use.
-            psf_resample_factor (int): Factor by which to supersample the image
-                before convolution and downsample it afterwards.
             inplace (bool): If ``True`` update ``image`` directly and return
                 it. Otherwise return a new image.
 
@@ -294,7 +301,6 @@ class PhotometricImager(PhotometricInstrument):
         Raises:
             MissingArgument: If the instrument has no PSFs configured.
             InconsistentArguments: If no PSF is defined for ``filter_code``.
-                Also raised if ``psf_resample_factor`` is smaller than 1.
         """
         # Ensure the instrument actually has PSFs to apply
         if self.psfs is None:
@@ -309,6 +315,8 @@ class PhotometricImager(PhotometricInstrument):
                 f"No PSF found for filter '{filter_code}'. Available filters: "
                 f"{list(self.psfs.keys())}"
             )
+
+        psf_resample_factor = self.psf_resample_factor
 
         # Resampling factors smaller than one do not make sense for this PSF
         # application path because the image is optionally supersampled first
@@ -354,16 +362,12 @@ class PhotometricImager(PhotometricInstrument):
         return working_image
 
     @timed("PhotometricImager.apply_psfs")
-    def apply_psfs(
-        self, image_collection, psf_resample_factor=1, inplace=False
-    ):
+    def apply_psfs(self, image_collection, inplace=False):
         """Apply the configured PSFs to an image collection.
 
         Args:
             image_collection (ImageCollection): Collection to which PSFs should
                 be applied.
-            psf_resample_factor (int): Factor by which to supersample the
-                images before convolution and downsample them afterwards.
             inplace (bool): If ``True`` update ``image_collection`` directly
                 and return it. Otherwise return a new image collection.
 
@@ -374,6 +378,8 @@ class PhotometricImager(PhotometricInstrument):
             InconsistentArguments: If ``psf_resample_factor`` is smaller than
                 1.
         """
+        psf_resample_factor = self.psf_resample_factor
+
         # Resampling factors smaller than one do not make sense for this PSF
         # application path because the images are optionally supersampled first
         if psf_resample_factor < 1:
@@ -407,7 +413,6 @@ class PhotometricImager(PhotometricInstrument):
             target_imgs[filter_code] = self.apply_psf(
                 target_imgs[filter_code],
                 filter_code,
-                psf_resample_factor=psf_resample_factor,
                 inplace=True,
             )
 
@@ -544,6 +549,13 @@ class PhotometricImager(PhotometricInstrument):
                 ds = psfs_group.create_dataset(key, data=value, dtype=float)
                 ds.attrs["units"] = "dimensionless"
 
+        ds = group.create_dataset(
+            "PSFResampleFactor",
+            data=self.psf_resample_factor,
+            dtype=int,
+        )
+        ds.attrs["units"] = "dimensionless"
+
         if self.noise_maps is not None:
             noise_group = group.create_group("NoiseMaps")
             for key, value in self.noise_maps.items():
@@ -646,6 +658,11 @@ class PhotometricImager(PhotometricInstrument):
         else:
             psfs = None
 
+        if "PSFResampleFactor" in group:
+            psf_resample_factor = int(group["PSFResampleFactor"][...])
+        else:
+            psf_resample_factor = 1
+
         if "NoiseMaps" in group and isinstance(group["NoiseMaps"], h5py.Group):
             noise_maps = {
                 key: unyt_array(value[...], value.attrs["units"])
@@ -672,6 +689,7 @@ class PhotometricImager(PhotometricInstrument):
             "depth_app_radius": depth_app_radius,
             "snrs": snrs,
             "psfs": psfs,
+            "psf_resample_factor": psf_resample_factor,
             "noise_maps": noise_maps,
             "noise_source_maps": noise_source_maps,
         }
@@ -687,6 +705,7 @@ class PhotometricImager(PhotometricInstrument):
                 depth_app_radius=payload["depth_app_radius"],
                 snrs=payload["snrs"],
                 psfs=payload["psfs"],
+                psf_resample_factor=payload["psf_resample_factor"],
                 noise_maps=payload["noise_maps"],
                 noise_source_maps=payload["noise_source_maps"],
                 filter_subset=tuple(payload["filters"].filter_codes),
@@ -700,6 +719,7 @@ class PhotometricImager(PhotometricInstrument):
             depth_app_radius=payload["depth_app_radius"],
             snrs=payload["snrs"],
             psfs=payload["psfs"],
+            psf_resample_factor=payload["psf_resample_factor"],
             noise_maps=payload["noise_maps"],
             noise_source_maps=payload["noise_source_maps"],
         )
