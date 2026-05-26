@@ -212,6 +212,7 @@ class PhotometricImager(PhotometricInstrument):
         return super()._comparison_state() + (
             _hashable_state(self.resolution),
             _hashable_state(self.psfs),
+            _hashable_state(self.psf_resample_factor),
             _hashable_state(self.noise_maps),
             _hashable_state(self.noise_source_maps),
         )
