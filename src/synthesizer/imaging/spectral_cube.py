@@ -376,7 +376,6 @@ class SpectralCube(ImagingBase):
                 coordinates,
                 smoothing_lengths,
                 kernel,
-                kernel_threshold,
             )
         ):
             raise exceptions.InconsistentArguments(
