@@ -1,7 +1,7 @@
-"""Helpers for post-processing existing imaging products.
+"""Helpers for post-processing existing observables.
 
 This module contains shared orchestration helpers for applying instrument
-effects to already-generated images.
+effects to already-generated images and data cubes.
 """
 
 from synthesizer import exceptions
@@ -168,3 +168,144 @@ def _postprocess_existing_images(
     final_images = _apply_image_noise(final_images, noise_store, instrument)
 
     return final_images
+
+
+def _get_data_cube_postprocess_store(owner, quantity):
+    """Return the raw cube store for a spectral quantity family.
+
+    Args:
+        owner:
+            Object holding the data-cube stores.
+        quantity (str):
+            Spectral quantity family.
+
+    Returns:
+        dict:
+            Instrument-keyed store of raw cubes.
+    """
+    if quantity in {"lnu", "llam", "luminosity"}:
+        return owner.data_cubes_lnu
+    if quantity in {"fnu", "flam", "flux"}:
+        return owner.data_cubes_fnu
+    return {}
+
+
+def _get_raw_data_cubes_for_postprocess(
+    cube_store, instrument_label, limit_to=None
+):
+    """Resolve the raw data cubes to post-process from storage.
+
+    Args:
+        cube_store (dict):
+            Instrument-keyed store of raw data cubes.
+        instrument_label (str):
+            Label of the instrument whose cubes should be post-processed.
+        limit_to (list, optional):
+            Specific labels to post-process.
+
+    Returns:
+        dict:
+            Raw cubes keyed by label.
+    """
+    raw_cubes = cube_store.get(instrument_label, {})
+    labels = raw_cubes.keys() if limit_to is None else limit_to
+    return {label: raw_cubes[label] for label in labels if label in raw_cubes}
+
+
+def _apply_data_cube_psf(final_cubes, cube_store, instrument):
+    """Apply the instrument PSF configuration to data cubes.
+
+    Args:
+        final_cubes (dict):
+            Current data cubes keyed by label.
+        cube_store (dict):
+            Store containing the latest cube state.
+        instrument (IntegratedFieldUnit):
+            Instrument defining the PSF application.
+
+    Returns:
+        dict:
+            Updated cubes after PSF processing.
+    """
+    if not instrument.can_do_psf_spectroscopy:
+        return final_cubes
+
+    cube_store.setdefault(instrument.label, {})
+    for label, cube in final_cubes.items():
+        cube_store[instrument.label][label] = instrument.apply_psf(cube)
+
+    return {
+        label: cube_store[instrument.label][label] for label in final_cubes
+    }
+
+
+def _apply_data_cube_noise(final_cubes, cube_store, instrument):
+    """Apply the instrument noise configuration to data cubes.
+
+    Args:
+        final_cubes (dict):
+            Current data cubes keyed by label.
+        cube_store (dict):
+            Store containing the latest cube state.
+        instrument (IntegratedFieldUnit):
+            Instrument defining the noise application.
+
+    Returns:
+        dict:
+            Updated cubes after noise processing.
+    """
+    if not getattr(instrument, "can_do_noisy_resolved_spectroscopy", False):
+        return final_cubes
+
+    cube_store.setdefault(instrument.label, {})
+    for label, cube in final_cubes.items():
+        cube_store[instrument.label][label] = instrument.apply_noise(cube)
+
+    return {
+        label: cube_store[instrument.label][label] for label in final_cubes
+    }
+
+
+def _postprocess_existing_data_cubes(
+    owner,
+    instrument,
+    quantity,
+    limit_to=None,
+):
+    """Apply the instrument-defined IFU post-processing to cubes.
+
+    Args:
+        owner:
+            Object holding the raw cube stores. This is typically a Component
+            or BaseGalaxy instance.
+        instrument (IntegratedFieldUnit):
+            Instrument defining the observation.
+        quantity (str):
+            Spectral quantity family for selecting the store.
+        limit_to (list, optional):
+            Specific labels to post-process.
+
+    Returns:
+        dict:
+            Final cubes keyed by label.
+    """
+    # Resolve the appropriate cube store for the requested quantity family.
+    cube_store = _get_data_cube_postprocess_store(owner, quantity)
+    if len(cube_store) == 0:
+        return {}
+
+    # Resolve the raw cubes we are post-processing from storage populated
+    # during generation.
+    final_cubes = _get_raw_data_cubes_for_postprocess(
+        cube_store,
+        instrument.label,
+        limit_to=limit_to,
+    )
+
+    # Apply any configured IFU PSF before any configured IFU noise.
+    final_cubes = _apply_data_cube_psf(final_cubes, cube_store, instrument)
+
+    # Apply any configured IFU noise to the latest cube state.
+    final_cubes = _apply_data_cube_noise(final_cubes, cube_store, instrument)
+
+    return final_cubes

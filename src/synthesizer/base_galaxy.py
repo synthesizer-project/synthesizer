@@ -22,7 +22,10 @@ from synthesizer.imaging.image_generators import (
     _combine_image_collections,
     _prepare_galaxy_image_labels,
 )
-from synthesizer.imaging.postprocess import _postprocess_existing_images
+from synthesizer.imaging.postprocess import (
+    _postprocess_existing_data_cubes,
+    _postprocess_existing_images,
+)
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
@@ -1998,7 +2001,8 @@ class BaseGalaxy:
                 continue
 
             final_cubes.update(
-                component._postprocess_existing_data_cubes(
+                _postprocess_existing_data_cubes(
+                    component,
                     instrument=instrument,
                     quantity=quantity,
                     limit_to=emitter_labels,
@@ -2009,7 +2013,7 @@ class BaseGalaxy:
         # step so the observation recipe is applied once to the full galaxy.
         if len(galaxy_combine_labels) > 0:
             final_cubes.update(
-                BaseGalaxy._postprocess_existing_data_cubes(
+                _postprocess_existing_data_cubes(
                     self,
                     instrument=instrument,
                     quantity=quantity,
@@ -2022,63 +2026,6 @@ class BaseGalaxy:
 
         if len(labels) == 1:
             return final_cubes[labels[0]]
-        return final_cubes
-
-    def _postprocess_existing_data_cubes(
-        self,
-        instrument,
-        quantity,
-        limit_to=None,
-    ):
-        """Apply the instrument-defined IFU post-processing to cubes.
-
-        Args:
-            instrument (IntegratedFieldUnit): Instrument defining the
-                observation.
-            quantity (str): Spectral quantity family for selecting the store.
-            limit_to (list, optional): Specific labels to post-process.
-
-        Returns:
-            dict: Final cubes keyed by label.
-        """
-        # Select the appropriate cube store for this quantity family.
-        if quantity in {"lnu", "llam", "luminosity"}:
-            cube_store = self.data_cubes_lnu
-        elif quantity in {"fnu", "flam", "flux"}:
-            cube_store = self.data_cubes_fnu
-        else:
-            return {}
-
-        # Resolve the raw cubes we are post-processing from the galaxy-level
-        # storage populated during generation.
-        raw_cubes = cube_store.get(instrument.label, {})
-        labels = raw_cubes.keys() if limit_to is None else limit_to
-        final_cubes = {
-            label: raw_cubes[label] for label in labels if label in raw_cubes
-        }
-
-        # Apply any configured IFU PSF before any configured IFU noise.
-        if instrument.can_do_psf_spectroscopy:
-            for label, cube in final_cubes.items():
-                cube_store[instrument.label][label] = instrument.apply_psf(
-                    cube
-                )
-            final_cubes = {
-                label: cube_store[instrument.label][label]
-                for label in final_cubes
-            }
-
-        # Apply any configured IFU noise to the latest cube state.
-        if getattr(instrument, "can_do_noisy_resolved_spectroscopy", False):
-            for label, cube in final_cubes.items():
-                cube_store[instrument.label][label] = instrument.apply_noise(
-                    cube
-                )
-            final_cubes = {
-                label: cube_store[instrument.label][label]
-                for label in final_cubes
-            }
-
         return final_cubes
 
     @deprecated(
