@@ -144,6 +144,7 @@ class DummyPsfInstrument:
         """Initialise the PSF-call recording instrument."""
         self.label = "inst"
         self.psfs = {"F090W": np.ones((3, 3), dtype=float)}
+        self.psf_resample_factor = 1
         self.calls = []
 
     @property
@@ -156,13 +157,13 @@ class DummyPsfInstrument:
         """Return that this dummy instrument cannot apply noise."""
         return False
 
-    def apply_psfs(self, image_collection, psf_resample_factor=1):
+    def apply_psfs(self, image_collection):
         """Record the delegated PSF application call and return a marker."""
         marker = object()
         self.calls.append(
             {
                 "image_collection": image_collection,
-                "psf_resample_factor": psf_resample_factor,
+                "psf_resample_factor": self.psf_resample_factor,
                 "result": marker,
             }
         )
@@ -193,6 +194,31 @@ class DummyImageGenerationInstrument:
         """Record the delegated image-generation call and return a marker."""
         self.calls.append(kwargs)
         return self.expected_result
+
+
+class DummyComponent(Component):
+    """Minimal concrete Component used for unit tests."""
+
+    def __init__(self, **kwargs):
+        """Initialise a basic component with test-controlled attributes."""
+        super().__init__(component_type="Stars", fesc=0.0)
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def get_mask(
+        self,
+        attr,
+        thresh,
+        op,
+        mask=None,
+        attr_override_obj=None,
+    ):
+        """Return the provided mask unchanged for tests."""
+        return mask
+
+    def get_weighted_attr(self, attr, weights, **kwargs):
+        """Return a weighted attribute placeholder for tests."""
+        return None
 
 
 def test_galex_filters_are_not_duplicated_in_collection():
@@ -434,8 +460,9 @@ def test_base_galaxy_psf_routing_delegates_to_instrument(
     )
     getattr(galaxy, images_attr)["inst"] = {"stellar": image_collection}
     instrument = DummyPsfInstrument()
+    instrument.psf_resample_factor = 3
 
-    returned = method(galaxy, instrument, psf_resample_factor=3)
+    returned = method(galaxy, instrument)
 
     assert instrument.calls[0]["image_collection"] is image_collection
     assert instrument.calls[0]["psf_resample_factor"] == 3
@@ -474,8 +501,9 @@ def test_component_psf_routing_delegates_to_instrument(
     )
     getattr(component, images_attr)["inst"] = {"stellar": image_collection}
     instrument = DummyPsfInstrument()
+    instrument.psf_resample_factor = 3
 
-    returned = method(component, instrument, psf_resample_factor=3)
+    returned = method(component, instrument)
 
     assert instrument.calls[0]["image_collection"] is image_collection
     assert instrument.calls[0]["psf_resample_factor"] == 3
@@ -872,18 +900,14 @@ def test_component_level_combined_cube_uses_model_cache():
 
 def test_component_data_cube_applies_ifu_postprocessing_when_configured():
     """Component cubes should apply IFU PSF/noise when configured."""
-    component = SimpleNamespace(
-        component_type="Stars",
+    component = DummyComponent(
         spectra={"stellar": object()},
         particle_spectra={},
         model_param_cache={},
-        data_cubes_lnu={},
-        data_cubes_fnu={},
     )
     instrument = DummyIfuInstrument(do_psf=True, do_noise=True)
 
-    result = Component.get_data_cube(
-        component,
+    result = component.get_data_cube(
         "stellar",
         fov="fov",
         instrument=instrument,
@@ -903,17 +927,13 @@ def test_component_data_cube_applies_ifu_postprocessing_when_configured():
 
 def test_component_data_cube_only_caches_supported_quantities():
     """Component cube caching should only attach lnu and fnu families."""
-    component = SimpleNamespace(
-        component_type="Stars",
+    component = DummyComponent(
         spectra={"stellar": object()},
         particle_spectra={},
-        data_cubes_lnu={},
-        data_cubes_fnu={},
     )
     instrument = DummyIfuInstrument()
 
-    result = Component.get_data_cube(
-        component,
+    result = component.get_data_cube(
         "stellar",
         fov="fov",
         instrument=instrument,

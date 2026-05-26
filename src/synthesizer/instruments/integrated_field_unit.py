@@ -47,6 +47,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         lam,
         resolution,
         psfs=None,
+        psf_resample_factor=1,
         depth=None,
         depth_app_radius=None,
         snrs=None,
@@ -66,6 +67,8 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 If a 2D array is supplied, every wavelength is assumed to have
                 the same PSF. If a 3D array is supplied, the last axis must be
                 the wavelength axis.
+            psf_resample_factor (int, optional): Instrument-owned PSF
+                supersampling factor reserved for future IFU PSF application.
             depth (unyt_quantity, optional): The depth of the instrument, in
                 the same units as the image surface brightness.
             depth_app_radius (unyt_quantity, optional): The aperture radius for
@@ -94,6 +97,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         # Attach the IFU specific attributes
         self.resolution = resolution
         self.psfs = psfs
+        self.psf_resample_factor = psf_resample_factor
         self.noise_source_maps = noise_source_maps
 
         # Ensure we have been handed the correct information
@@ -114,6 +118,11 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         if self.resolution is None:
             raise exceptions.MissingArgument(
                 "IntegratedFieldUnit requires a resolution."
+            )
+
+        if self.psf_resample_factor < 1:
+            raise exceptions.InconsistentArguments(
+                "psf_resample_factor must be greater than or equal to 1."
             )
 
         # Correlated-noise source maps are an alternative future noise
@@ -163,6 +172,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         return super()._comparison_state() + (
             _hashable_state(self.resolution),
             _hashable_state(self.psfs),
+            _hashable_state(self.psf_resample_factor),
             _hashable_state(self.noise_source_maps),
         )
 
@@ -455,6 +465,13 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             ds = group.create_dataset("PSFs", data=self.psfs, dtype=float)
             ds.attrs["units"] = "dimensionless"
 
+        ds = group.create_dataset(
+            "PSFResampleFactor",
+            data=self.psf_resample_factor,
+            dtype=int,
+        )
+        ds.attrs["units"] = "dimensionless"
+
         if self.noise_source_maps is not None:
             if isinstance(self.noise_source_maps, dict):
                 noise_source_group = group.create_group("NoiseSourceMaps")
@@ -540,6 +557,11 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         else:
             psfs = None
 
+        if "PSFResampleFactor" in group:
+            psf_resample_factor = int(group["PSFResampleFactor"][...])
+        else:
+            psf_resample_factor = 1
+
         if "NoiseMaps" in group:
             noise_maps = unyt_array(
                 group["NoiseMaps"][...], group["NoiseMaps"].attrs["units"]
@@ -570,6 +592,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             "depth_app_radius": depth_app_radius,
             "snrs": snrs,
             "psfs": psfs,
+            "psf_resample_factor": psf_resample_factor,
             "noise_maps": noise_maps,
             "noise_source_maps": noise_source_maps,
         }
@@ -583,6 +606,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             depth_app_radius=payload["depth_app_radius"],
             snrs=payload["snrs"],
             psfs=payload["psfs"],
+            psf_resample_factor=payload["psf_resample_factor"],
             noise_maps=payload["noise_maps"],
             noise_source_maps=payload["noise_source_maps"],
         )

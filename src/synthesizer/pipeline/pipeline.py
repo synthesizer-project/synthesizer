@@ -2615,7 +2615,6 @@ class Pipeline:
         kernel=None,
         kernel_threshold=1.0,
         labels=None,
-        psf_resample_factor=1,
         cosmo=None,
         write=True,
     ):
@@ -2647,16 +2646,6 @@ class Pipeline:
                 The type of spectra to generate images for. By default this
                 is None and all saved spectra types will be used. This can
                 either be a list of strings or a single string.
-            psf_resample_factor (int):
-                (Only applicable for instruments with a PSF.) The resample
-                factor for the PSF. This should be a value greater than 1.
-                The image will be resampled by this factor before the
-                PSF is applied and then downsampled back to the original
-                after convolution. This can help minimize the effects of
-                using a generic PSF centred on the galaxy centre, a
-                simplification we make for performance reasons (the
-                effects are sufficiently small that this simplifications is
-                justified).
             cosmo (astropy.cosmology.Cosmology):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
@@ -2711,7 +2700,6 @@ class Pipeline:
             img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
-            psf_resample_factor=psf_resample_factor,
             cosmo=cosmo,
         )
 
@@ -2773,9 +2761,6 @@ class Pipeline:
                     nthreads=self.nthreads,
                     instrument=inst,
                     cosmo=op_kwargs["cosmo"],
-                    psf_resample_factor=op_kwargs.get(
-                        "psf_resample_factor", 1
-                    ),
                 )
 
         # Count the number of images we have generated
@@ -2826,7 +2811,6 @@ class Pipeline:
         cosmo=None,
         igm=None,
         labels=None,
-        psf_resample_factor=1,
         write=True,
     ):
         """Flag that the Pipeline should compute the flux images.
@@ -2866,16 +2850,6 @@ class Pipeline:
                 The type of spectra to generate images for. By default this
                 is None and all saved spectra types will be used. This can
                 either be a list of strings or a single string.
-            psf_resample_factor (int):
-                (Only applicable for instruments with a PSF.) The resample
-                factor for the PSF. This should be a value greater than 1.
-                The image will be resampled by this factor before the
-                PSF is applied and then downsampled back to the original
-                after convolution. This can help minimize the effects of
-                using a generic PSF centred on the galaxy centre, a
-                simplification we make for performance reasons (the
-                effects are sufficiently small that this simplifications is
-                justified).
             write (bool):
                 Whether to write out the flux images. Default is True.
         """
@@ -2937,7 +2911,6 @@ class Pipeline:
             img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
-            psf_resample_factor=psf_resample_factor,
             cosmo=cosmo,
         )
 
@@ -3001,9 +2974,6 @@ class Pipeline:
                     cosmo=op_kwargs.get("cosmo", None),
                     nthreads=self.nthreads,
                     instrument=inst,
-                    psf_resample_factor=op_kwargs.get(
-                        "psf_resample_factor", 1
-                    ),
                 )
 
         # Count the number of images we have generated

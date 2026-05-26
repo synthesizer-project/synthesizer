@@ -896,7 +896,6 @@ class Component(ABC):
     def apply_psf_to_images_lnu(
         self,
         instrument,
-        psf_resample_factor=1,
         limit_to=None,
     ):
         """Apply instrument PSFs to this component's luminosity images.
@@ -909,15 +908,6 @@ class Component(ABC):
         Args:
             instrument (Instrument):
                 The instrument with the PSF to apply.
-            psf_resample_factor (int):
-                The resample factor for the PSF. This should be a value greater
-                than 1. The image will be resampled by this factor before the
-                PSF is applied and then downsampled back to the original
-                after convolution. This can help minimize the effects of
-                using a generic PSF centred on the galaxy centre, a
-                simplification we make for performance reasons (the
-                effects are sufficiently small that this simplifications is
-                justified).
             limit_to (str/list):
                 If not None, defines a specific model (or list of models) to
                 limit the image generation to. Otherwise, all models with saved
@@ -960,7 +950,6 @@ class Component(ABC):
             # component layer only handles routing and output storage
             self.images_psf_lnu[instrument.label][key] = instrument.apply_psfs(
                 imgs,
-                psf_resample_factor=psf_resample_factor,
             )
 
         return self.images_psf_lnu[instrument.label]
@@ -972,7 +961,6 @@ class Component(ABC):
     def apply_psf_to_images_fnu(
         self,
         instrument,
-        psf_resample_factor=1,
         limit_to=None,
     ):
         """Apply instrument PSFs to this component's flux images.
@@ -985,15 +973,6 @@ class Component(ABC):
         Args:
             instrument (Instrument):
                 The instrument with the PSF to apply.
-            psf_resample_factor (int):
-                The resample factor for the PSF. This should be a value greater
-                than 1. The image will be resampled by this factor before the
-                PSF is applied and then downsampled back to the original
-                after convolution. This can help minimize the effects of
-                using a generic PSF centred on the galaxy centre, a
-                simplification we make for performance reasons (the
-                effects are sufficiently small that this simplifications is
-                justified).
             limit_to (str/list):
                 If not None, defines a specific model (or list of models) to
                 limit the image generation to. Otherwise, all models with saved
@@ -1036,7 +1015,6 @@ class Component(ABC):
             # component layer only handles routing and output storage
             self.images_psf_fnu[instrument.label][key] = instrument.apply_psfs(
                 imgs,
-                psf_resample_factor=psf_resample_factor,
             )
 
         return self.images_psf_fnu[instrument.label]

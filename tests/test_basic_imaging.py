@@ -785,7 +785,8 @@ class TestPhotometricImagerPsfApplication:
             for filter_code in image_collection.filter_codes
         }
 
-        instrument.apply_psfs(image_collection, psf_resample_factor=2)
+        instrument.psf_resample_factor = 2
+        instrument.apply_psfs(image_collection)
 
         assert image_collection.resolution == original_resolution
         assert np.array_equal(image_collection.npix, original_npix)
