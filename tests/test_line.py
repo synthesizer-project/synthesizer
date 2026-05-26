@@ -540,6 +540,51 @@ class TestLineCollectionManipulation:
             lines.continuum * 0.25,
         )
 
+    def test_multidim_scaling_with_row_vector(
+        self, multi_dimension_line_collection
+    ):
+        """Multidimensional line scaling should broadcast per-row factors."""
+        lines = multi_dimension_line_collection
+        scaling = np.array([2.0, 3.0])
+
+        scaled_lines = lines.scale(scaling)
+
+        np.testing.assert_allclose(
+            scaled_lines.luminosity.value,
+            lines.luminosity.value * scaling[:, None],
+        )
+        np.testing.assert_allclose(
+            scaled_lines.continuum.value,
+            lines.continuum.value * scaling[:, None],
+        )
+
+    def test_multidim_apply_attenuation_with_mask(
+        self, multi_dimension_line_collection
+    ):
+        """Attenuation should only affect the selected line rows."""
+        lines = multi_dimension_line_collection
+        dust_curve = NoTauDustCurve(transmission=0.25)
+        mask = np.array([True, False])
+
+        attenuated_lines = lines.apply_attenuation(
+            dust_curve=dust_curve,
+            mask=mask,
+        )
+
+        expected_lum = lines.luminosity.value.copy()
+        expected_cont = lines.continuum.value.copy()
+        expected_lum[0] *= 0.25
+        expected_cont[0] *= 0.25
+
+        np.testing.assert_allclose(
+            attenuated_lines.luminosity.value,
+            expected_lum,
+        )
+        np.testing.assert_allclose(
+            attenuated_lines.continuum.value,
+            expected_cont,
+        )
+
     def test_get_blended_lines(self, line_ratio_collection):
         """Test blending lines based on wavelength bins."""
         lines = line_ratio_collection

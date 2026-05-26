@@ -471,6 +471,190 @@ PyObject *combine_spectra_list_2d(PyObject *self, PyObject *args) {
   return Py_BuildValue("N", np_out);
 }
 
+/**
+ * @brief Multiply a 2D array by a 1D row vector with optional row mask.
+ */
+PyObject *multiply_rows_by_vector_2d(PyObject *self, PyObject *args) {
+  (void)self;
+
+  PyObject *array_obj;
+  PyObject *vector_obj;
+  PyObject *mask_obj = Py_None;
+  int nthreads;
+
+  if (!PyArg_ParseTuple(args, "OOOi", &array_obj, &vector_obj, &mask_obj,
+                        &nthreads)) {
+    return NULL;
+  }
+
+  PyArrayObject *np_array = (PyArrayObject *)PyArray_FROM_OTF(
+      array_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  PyArrayObject *np_vector = (PyArrayObject *)PyArray_FROM_OTF(
+      vector_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  PyArrayObject *np_mask = nullptr;
+
+  if (np_array == NULL || np_vector == NULL) {
+    Py_XDECREF(np_array);
+    Py_XDECREF(np_vector);
+    return NULL;
+  }
+
+  if (mask_obj != Py_None) {
+    np_mask = (PyArrayObject *)PyArray_FROM_OTF(mask_obj, NPY_BOOL,
+                                                NPY_ARRAY_IN_ARRAY);
+    if (np_mask == NULL) {
+      Py_DECREF(np_array);
+      Py_DECREF(np_vector);
+      return NULL;
+    }
+  }
+
+  if (PyArray_NDIM(np_array) != 2 || PyArray_NDIM(np_vector) != 1) {
+    PyErr_SetString(PyExc_ValueError,
+                    "array must be 2D and vector must be 1D.");
+    Py_DECREF(np_array);
+    Py_DECREF(np_vector);
+    Py_XDECREF(np_mask);
+    return NULL;
+  }
+
+  const npy_intp *array_dims = PyArray_DIMS(np_array);
+  if (PyArray_DIMS(np_vector)[0] != array_dims[0]) {
+    PyErr_SetString(PyExc_ValueError,
+                    "vector length must match the first array dimension.");
+    Py_DECREF(np_array);
+    Py_DECREF(np_vector);
+    Py_XDECREF(np_mask);
+    return NULL;
+  }
+
+  if (np_mask != NULL &&
+      (PyArray_NDIM(np_mask) != 1 || PyArray_DIMS(np_mask)[0] != array_dims[0])) {
+    PyErr_SetString(PyExc_ValueError,
+                    "mask must be a 1D boolean array matching array rows.");
+    Py_DECREF(np_array);
+    Py_DECREF(np_vector);
+    Py_XDECREF(np_mask);
+    return NULL;
+  }
+
+  PyArrayObject *np_out = (PyArrayObject *)PyArray_NewLikeArray(
+      np_array, NPY_KEEPORDER, NULL, 0);
+  if (np_out == NULL) {
+    Py_DECREF(np_array);
+    Py_DECREF(np_vector);
+    Py_XDECREF(np_mask);
+    return NULL;
+  }
+
+  const int nrows = static_cast<int>(array_dims[0]);
+  const int ncols = static_cast<int>(array_dims[1]);
+  double *array = static_cast<double *>(PyArray_DATA(np_array));
+  double *vector = static_cast<double *>(PyArray_DATA(np_vector));
+  double *out = static_cast<double *>(PyArray_DATA(np_out));
+  npy_bool *mask = np_mask == NULL ? NULL : (npy_bool *)PyArray_DATA(np_mask);
+
+  tic("multiply_rows_by_vector_2d");
+
+#ifdef WITH_OPENMP
+#pragma omp parallel for if(nthreads > 1) num_threads(nthreads) schedule(static)
+#endif
+  for (int irow = 0; irow < nrows; irow++) {
+    const bool apply = mask == NULL || mask[irow];
+    const double scale = vector[irow];
+    double *__restrict in_row = array + irow * ncols;
+    double *__restrict out_row = out + irow * ncols;
+    for (int icol = 0; icol < ncols; icol++) {
+      out_row[icol] = apply ? in_row[icol] * scale : in_row[icol];
+    }
+  }
+
+  toc("multiply_rows_by_vector_2d");
+
+  Py_DECREF(np_array);
+  Py_DECREF(np_vector);
+  Py_XDECREF(np_mask);
+  return Py_BuildValue("N", np_out);
+}
+
+/**
+ * @brief Multiply a 1D or 2D array by a 1D vector over the last axis.
+ */
+PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
+  (void)self;
+
+  PyObject *array_obj;
+  PyObject *vector_obj;
+  int nthreads;
+
+  if (!PyArg_ParseTuple(args, "OOi", &array_obj, &vector_obj, &nthreads)) {
+    return NULL;
+  }
+
+  PyArrayObject *np_array = (PyArrayObject *)PyArray_FROM_OTF(
+      array_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  PyArrayObject *np_vector = (PyArrayObject *)PyArray_FROM_OTF(
+      vector_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+
+  if (np_array == NULL || np_vector == NULL) {
+    Py_XDECREF(np_array);
+    Py_XDECREF(np_vector);
+    return NULL;
+  }
+
+  if (PyArray_NDIM(np_vector) != 1 ||
+      (PyArray_NDIM(np_array) != 1 && PyArray_NDIM(np_array) != 2)) {
+    PyErr_SetString(PyExc_ValueError,
+                    "array must be 1D or 2D and vector must be 1D.");
+    Py_DECREF(np_array);
+    Py_DECREF(np_vector);
+    return NULL;
+  }
+
+  const npy_intp *array_dims = PyArray_DIMS(np_array);
+  const int array_ndim = PyArray_NDIM(np_array);
+  const int ncols = static_cast<int>(array_dims[array_ndim - 1]);
+  if (PyArray_DIMS(np_vector)[0] != array_dims[array_ndim - 1]) {
+    PyErr_SetString(PyExc_ValueError,
+                    "vector length must match the last array dimension.");
+    Py_DECREF(np_array);
+    Py_DECREF(np_vector);
+    return NULL;
+  }
+
+  PyArrayObject *np_out = (PyArrayObject *)PyArray_NewLikeArray(
+      np_array, NPY_KEEPORDER, NULL, 0);
+  if (np_out == NULL) {
+    Py_DECREF(np_array);
+    Py_DECREF(np_vector);
+    return NULL;
+  }
+
+  double *array = static_cast<double *>(PyArray_DATA(np_array));
+  double *vector = static_cast<double *>(PyArray_DATA(np_vector));
+  double *out = static_cast<double *>(PyArray_DATA(np_out));
+  const int nrows = array_ndim == 1 ? 1 : static_cast<int>(array_dims[0]);
+
+  tic("multiply_array_by_vector_1d");
+
+#ifdef WITH_OPENMP
+#pragma omp parallel for if(nthreads > 1) num_threads(nthreads) schedule(static)
+#endif
+  for (int irow = 0; irow < nrows; irow++) {
+    double *__restrict in_row = array + irow * ncols;
+    double *__restrict out_row = out + irow * ncols;
+    for (int icol = 0; icol < ncols; icol++) {
+      out_row[icol] = in_row[icol] * vector[icol];
+    }
+  }
+
+  toc("multiply_array_by_vector_1d");
+
+  Py_DECREF(np_array);
+  Py_DECREF(np_vector);
+  return Py_BuildValue("N", np_out);
+}
+
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef ReductionMethods[] = {
     {"reduce_particle_spectra", (PyCFunction)reduce_particle_spectra,
@@ -481,6 +665,12 @@ static PyMethodDef ReductionMethods[] = {
     {"combine_spectra_list_2d", (PyCFunction)combine_spectra_list_2d,
      METH_VARARGS,
      "Combine same-shaped 2D spectra arrays while skipping NaNs."},
+    {"multiply_rows_by_vector_2d", (PyCFunction)multiply_rows_by_vector_2d,
+     METH_VARARGS,
+     "Multiply a 2D array by a 1D row vector with optional mask."},
+    {"multiply_array_by_vector_1d", (PyCFunction)multiply_array_by_vector_1d,
+     METH_VARARGS,
+     "Multiply a 1D or 2D array by a 1D vector over the last axis."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */

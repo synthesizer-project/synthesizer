@@ -45,6 +45,7 @@ from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emissions.utils import ensure_array_buffer, get_quantity_view
 from synthesizer.extensions.reductions import (
+    multiply_array_by_vector_1d,
     reduce_particle_spectra,
     scale_spectra_2d,
 )
@@ -1548,6 +1549,7 @@ class Sed:
         tau_v=None,
         dust_curve=None,
         mask=None,
+        nthreads=1,
         **dust_curve_kwargs,
     ):
         """Apply attenuation to spectra.
@@ -1563,6 +1565,8 @@ class Sed:
                 A mask array with an entry for each spectra. Masked out
                 spectra will be ignored when applying the attenuation. Only
                 applicable for Sed's holding an (N, Nlam) array.
+            nthreads (int):
+                The number of threads to use for compatible array kernels.
             dust_curve_kwargs (dict):
                 A dictionary of extra parameters set at runtime on the
                 attenuation model.
@@ -1613,6 +1617,33 @@ class Sed:
         transmission = dust_curve.get_transmission(
             tau_v, self.lam, **dust_curve_kwargs
         )
+
+        if (
+            self._lnu.ndim == 2
+            and isinstance(transmission, np.ndarray)
+            and transmission.ndim == 1
+            and mask is not None
+        ):
+            spectra = scale_spectra_2d(
+                self._lnu,
+                transmission,
+                mask,
+                None,
+                nthreads,
+            )
+            return Sed(self.lam, lnu=spectra * self.lnu.units)
+
+        if (
+            self._lnu.ndim == 2
+            and isinstance(transmission, np.ndarray)
+            and transmission.ndim == 1
+        ):
+            spectra = multiply_array_by_vector_1d(
+                self._lnu,
+                transmission,
+                nthreads,
+            )
+            return Sed(self.lam, lnu=spectra * self.lnu.units)
 
         # Get a copy of the rest frame spectra, we need to avoid
         # modifying the original

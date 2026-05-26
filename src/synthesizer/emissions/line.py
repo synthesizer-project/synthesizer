@@ -64,6 +64,10 @@ from synthesizer.emissions.utils import (
     get_line2index,
     get_line_id_signature,
 )
+from synthesizer.extensions.reductions import (
+    multiply_array_by_vector_1d,
+    multiply_rows_by_vector_2d,
+)
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
@@ -1191,9 +1195,25 @@ class LineCollection:
             scaling_cont = scaling
             scaling_lum = scaling
 
+        use_fast_row_scaling = (
+            self._luminosity.ndim == 2
+            and isinstance(scaling_lum, np.ndarray)
+            and isinstance(scaling_cont, np.ndarray)
+            and scaling_lum.ndim == 1
+            and scaling_cont.ndim == 1
+            and scaling_lum.shape[0] == self._luminosity.shape[0]
+            and scaling_cont.shape[0] == self._continuum.shape[0]
+            and (mask is None or (getattr(mask, "ndim", 0) == 1))
+            and lam_mask is None
+        )
+
         # Unpack the arrays we'll need during the scaling
-        lum = self._luminosity.copy()
-        cont = self._continuum.copy()
+        if use_fast_row_scaling:
+            lum = None
+            cont = None
+        else:
+            lum = self._luminosity.copy()
+            cont = self._continuum.copy()
 
         # Combine the masks if we have both a mask and a wavelength mask
         if (
@@ -1235,12 +1255,28 @@ class LineCollection:
                     "shape as the luminosity or wavelength."
                 )
 
+        if use_fast_row_scaling:
+            lum = multiply_rows_by_vector_2d(
+                self._luminosity,
+                scaling_lum,
+                mask,
+                nthreads,
+            )
+            cont = multiply_rows_by_vector_2d(
+                self._continuum,
+                scaling_cont,
+                mask,
+                nthreads,
+            )
+
         # First we will handle the luminosity scaling (we need to do each
         # individually because the scalings can have different dimensions
         # depending on the conversion done above)
 
         # Handle a scalar scaling factor
-        if np.isscalar(scaling_lum):
+        if use_fast_row_scaling:
+            pass
+        elif np.isscalar(scaling_lum):
             if mask is None:
                 lum *= scaling_lum
             else:
@@ -1303,7 +1339,9 @@ class LineCollection:
             raise exceptions.InconsistentMultiplication(out_str)
 
         # Handle a scalar scaling factor
-        if np.isscalar(scaling_cont):
+        if use_fast_row_scaling:
+            pass
+        elif np.isscalar(scaling_cont):
             if mask is None:
                 cont *= scaling_cont
             else:
@@ -1382,7 +1420,12 @@ class LineCollection:
         return self
 
     def apply_attenuation(
-        self, tau_v=None, dust_curve=None, mask=None, **dust_curve_kwargs
+        self,
+        tau_v=None,
+        dust_curve=None,
+        mask=None,
+        nthreads=1,
+        **dust_curve_kwargs,
     ):
         """Apply attenuation to this LineCollection.
 
@@ -1397,6 +1440,8 @@ class LineCollection:
                 A mask array with an entry for each line. Masked out
                 spectra will be ignored when applying the attenuation. Only
                 applicable for multidimensional lines.
+            nthreads (int):
+                The number of threads to use for compatible array kernels.
             dust_curve_kwargs (dict):
                 A dictionary of extra parameters set at runtime on the
                 attenuation model.
@@ -1447,6 +1492,49 @@ class LineCollection:
         transmission = dust_curve.get_transmission(
             tau_v, self.lam, **dust_curve_kwargs
         )
+
+        if (
+            self._luminosity.ndim == 2
+            and isinstance(transmission, np.ndarray)
+            and transmission.ndim == 1
+            and mask is not None
+        ):
+            att_lum = np.array(self._luminosity, copy=True)
+            att_cont = np.array(self._continuum, copy=True)
+            att_lum[mask] = multiply_array_by_vector_1d(
+                self._luminosity[mask],
+                transmission,
+                nthreads,
+            )
+            att_cont[mask] = multiply_array_by_vector_1d(
+                self._continuum[mask],
+                transmission,
+                nthreads,
+            )
+            return LineCollection(
+                line_ids=self.line_ids,
+                lam=self.lam,
+                lum=att_lum * self.luminosity.units,
+                cont=att_cont * self.continuum.units,
+            )
+
+        if isinstance(transmission, np.ndarray) and transmission.ndim == 1:
+            att_lum = multiply_array_by_vector_1d(
+                self._luminosity,
+                transmission,
+                nthreads,
+            )
+            att_cont = multiply_array_by_vector_1d(
+                self._continuum,
+                transmission,
+                nthreads,
+            )
+            return LineCollection(
+                line_ids=self.line_ids,
+                lam=self.lam,
+                lum=att_lum * self.luminosity.units,
+                cont=att_cont * self.continuum.units,
+            )
 
         # Apply the transmision
         att_lum = self.luminosity
