@@ -2581,7 +2581,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Execute the full model closure by processing each ready model once.
         while len(queue) > 0:
-            this_model = queue.pop()
+            with timer("EmissionModel._get_spectra.pop_model"):
+                this_model = queue.pop()
             label = this_model.label
 
             # Reused or externally supplied emissions still need to unlock the
@@ -2601,13 +2602,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             emitter = emitters[this_model.emitter]
 
             # Build the combined mask once for operations that use it.
-            this_mask = None
-            for mask_dict in this_model.masks:
-                this_mask = emitter.get_mask(
-                    **mask_dict,
-                    mask=this_mask,
-                    attr_override_obj=this_model,
-                )
+            with timer("EmissionModel._get_spectra.build_mask"):
+                this_mask = None
+                for mask_dict in this_model.masks:
+                    this_mask = emitter.get_mask(
+                        **mask_dict,
+                        mask=this_mask,
+                        attr_override_obj=this_model,
+                    )
 
             # Dispatch to the appropriate operation for this model.
             if this_model._is_extracting:
@@ -2687,74 +2689,78 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
 
             # Apply any requested scaling after the model has been generated.
-            for scaler in this_model.scale_by:
-                if scaler is None:
-                    continue
-                if hasattr(emitter, scaler):
-                    # Ok, the emitter has this scaler, get it
-                    scaler_arr = getattr(emitter, f"_{scaler}", None)
-                    if scaler_arr is None:
-                        scaler_arr = getattr(emitter, scaler)
+            with timer("EmissionModel._get_spectra.scale_outputs"):
+                for scaler in this_model.scale_by:
+                    if scaler is None:
+                        continue
+                    if hasattr(emitter, scaler):
+                        # Ok, the emitter has this scaler, get it
+                        scaler_arr = getattr(emitter, f"_{scaler}", None)
+                        if scaler_arr is None:
+                            scaler_arr = getattr(emitter, scaler)
 
-                    # Ensure we can actually multiply the spectra by it
-                    if (
-                        scaler_arr.ndim == 1
-                        and spectra[label].shape[0] != scaler_arr.shape[0]
-                    ):
-                        raise exceptions.InconsistentArguments(
-                            f"Can't scale a spectra with shape "
-                            f"{spectra[label].shape} by an array of "
-                            f"shape {scaler_arr.shape}. Did you mean to "
-                            "make particle spectra?"
-                        )
-                    elif (
-                        scaler_arr.ndim == spectra[label].ndim
-                        and scaler_arr.shape != spectra[label].shape
-                    ):
-                        raise exceptions.InconsistentArguments(
-                            f"Can't scale a spectra with shape "
-                            f"{spectra[label].shape} by an array of "
-                            f"shape {scaler_arr.shape}. Did you mean to "
-                            "make particle spectra?"
-                        )
+                        # Ensure we can actually multiply the spectra by it
+                        if (
+                            scaler_arr.ndim == 1
+                            and spectra[label].shape[0] != scaler_arr.shape[0]
+                        ):
+                            raise exceptions.InconsistentArguments(
+                                f"Can't scale a spectra with shape "
+                                f"{spectra[label].shape} by an array of "
+                                f"shape {scaler_arr.shape}. Did you mean to "
+                                "make particle spectra?"
+                            )
+                        elif (
+                            scaler_arr.ndim == spectra[label].ndim
+                            and scaler_arr.shape != spectra[label].shape
+                        ):
+                            raise exceptions.InconsistentArguments(
+                                f"Can't scale a spectra with shape "
+                                f"{spectra[label].shape} by an array of "
+                                f"shape {scaler_arr.shape}. Did you mean to "
+                                "make particle spectra?"
+                            )
 
-                    # Scale the spectra by this attribute
-                    if this_model.per_particle:
-                        particle_spectra[label] *= scaler_arr
-                    spectra[label]._lnu *= scaler_arr
-                elif scaler in spectra:
-                    # Compute the scaling against another generated spectrum.
-                    if this_model.per_particle:
-                        scaling = (
-                            particle_spectra[scaler].bolometric_luminosity
-                            / particle_spectra[label].bolometric_luminosity
-                        ).value
+                        # Scale the spectra by this attribute
+                        if this_model.per_particle:
+                            particle_spectra[label] *= scaler_arr
+                        spectra[label]._lnu *= scaler_arr
+                    elif scaler in spectra:
+                        # Compute the scaling against another generated
+                        # spectrum.
+                        if this_model.per_particle:
+                            scaling = (
+                                particle_spectra[scaler].bolometric_luminosity
+                                / particle_spectra[label].bolometric_luminosity
+                            ).value
+                        else:
+                            scaling = (
+                                spectra[scaler].bolometric_luminosity
+                                / spectra[label].bolometric_luminosity
+                            ).value
+
+                        # Scale the spectra (handling 1D and 2D cases)
+                        if this_model.per_particle:
+                            particle_spectra[label] *= scaling[:, None]
+                        spectra[label]._lnu *= scaling
                     else:
-                        scaling = (
-                            spectra[scaler].bolometric_luminosity
-                            / spectra[label].bolometric_luminosity
-                        ).value
-
-                    # Scale the spectra (handling 1D and 2D cases)
-                    if this_model.per_particle:
-                        particle_spectra[label] *= scaling[:, None]
-                    spectra[label]._lnu *= scaling
-                else:
-                    raise exceptions.InconsistentArguments(
-                        f"Can't scale spectra by {scaler}."
-                    )
+                        raise exceptions.InconsistentArguments(
+                            f"Can't scale spectra by {scaler}."
+                        )
 
             # Unlock downstream models and delete expired unsaved emissions.
-            queue.done(this_model, spectra, particle_spectra)
+            with timer("EmissionModel._get_spectra.queue_done"):
+                queue.done(this_model, spectra, particle_spectra)
 
         # Ensure the dependency graph was fully traversed before returning.
         queue.assert_finished()
 
         # Apply any post processing functions to the surviving emissions.
-        for func in self._post_processing:
-            spectra = func(spectra, emitters, self)
-            if len(particle_spectra) > 0:
-                particle_spectra = func(particle_spectra, emitters, self)
+        with timer("EmissionModel._get_spectra.post_processing"):
+            for func in self._post_processing:
+                spectra = func(spectra, emitters, self)
+                if len(particle_spectra) > 0:
+                    particle_spectra = func(particle_spectra, emitters, self)
 
         return spectra, particle_spectra
 
