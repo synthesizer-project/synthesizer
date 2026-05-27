@@ -18,6 +18,7 @@ from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
+from synthesizer.utils.operation_timers import OperationTimers
 
 # Set style
 plt.rcParams["font.family"] = "DejaVu Serif"
@@ -28,12 +29,17 @@ plt.rcParams["axes.titlesize"] = 0  # Force no titles
 np.random.seed(42)
 
 
-def profile_wavelength_scaling(nthreads=1, n_averages=3):
+def profile_wavelength_scaling(
+    nthreads=1, n_averages=3, output_dir=Path("profiling/plots")
+):
     """Run the profiling."""
     print(
         f"Initializing Base Grid (nthreads={nthreads}, "
         f"n_averages={n_averages})..."
     )
+    timers = OperationTimers()
+    timers.reset()
+
     # Load the base grid once to get the range
     base_grid = Grid("test_grid")
     lam_min = base_grid.lam.min()
@@ -160,7 +166,6 @@ def profile_wavelength_scaling(nthreads=1, n_averages=3):
         gc.collect()
 
     # --- Plotting ---
-    output_dir = Path("profiling/plots")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     def make_plot(category_name, filename):
@@ -199,14 +204,23 @@ def profile_wavelength_scaling(nthreads=1, n_averages=3):
         plt.close()
 
     make_plot("spectra", "scaling_wavelength_spectra.png")
+    print("Operation timing table:")
+    OperationTimers.print_table()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--nthreads", type=int, default=1)
     parser.add_argument("--n_averages", type=int, default=3)
+    parser.add_argument(
+        "--output_dir",
+        type=Path,
+        default=Path("profiling/plots"),
+    )
     args = parser.parse_args()
 
     profile_wavelength_scaling(
-        nthreads=args.nthreads, n_averages=args.n_averages
+        nthreads=args.nthreads,
+        n_averages=args.n_averages,
+        output_dir=args.output_dir,
     )
