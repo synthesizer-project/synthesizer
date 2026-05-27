@@ -448,6 +448,10 @@ class Stars(StarsComponent):
             # Otherwise calculate the total initial mass
             self.initial_mass = np.sum(self.sfzh) * Msun
 
+        # Ensure sf_hist and metal_dist reflect the rescaled sfzh
+        self.sf_hist = np.sum(self.sfzh, axis=1)
+        self.metal_dist = np.sum(self.sfzh, axis=0)
+
     @timed("Stars.get_mask")
     def get_mask(
         self,
@@ -1061,6 +1065,41 @@ class Stars(StarsComponent):
 
         return average_sfr.to("Msun/yr")
 
+    def calculate_surviving_sfzh(self, grid: Grid):
+        """Calculate the surviving SFZH of the stellar population.
+
+        This is the distribution of surviving stars in age and metallicity
+        given the star formation and metal enrichment history.
+
+        Args:
+            grid (Grid):
+                The grid to use for calculating the surviving SFZH. This is
+                used to get the stellar fraction at each SFZH bin.
+
+        Returns:
+            np.ndarray: The surviving SFZH grid in Msun.
+        """
+        surviving_sfzh = self.sfzh * grid.stellar_fraction
+
+        return surviving_sfzh
+
+    def calculate_surviving_sfh(self, grid: Grid):
+        """Calculate the surviving SFH of the stellar population.
+
+        This is the distribution of surviving stars in age.
+
+        Args:
+            grid (Grid):
+                The grid to use for calculating the surviving SFH. This is
+                used to get the stellar fraction at each SFH bin.
+
+        Returns:
+            np.ndarray: The surviving SFH grid in Msun.
+        """
+        surviving_sfh = np.sum(self.calculate_surviving_sfzh(grid), axis=1)
+
+        return surviving_sfh
+
     def calculate_surviving_mass(self, grid: Grid):
         """Calculate the surviving mass of the stellar population.
 
@@ -1076,7 +1115,7 @@ class Stars(StarsComponent):
             unyt_quantity: The total surviving mass of the stellar
             population in Msun.
         """
-        surviving_mass = np.sum(self.sfzh * grid.stellar_fraction)
+        surviving_mass = np.sum(self.calculate_surviving_sfzh(grid))
 
         return surviving_mass * Msun
 
@@ -1107,3 +1146,90 @@ class Stars(StarsComponent):
             10 ** grid.log10_specific_ionising_lum[ion] * self.sfzh,
             axis=(0, 1),
         )
+
+    @accepts(age=yr)
+    def calculate_initial_mass_at_age(self, age):
+        """Calculate the initial mass of the stellar population at a given age.
+
+        This is the total mass of stars that were formed at the specified age
+        given the star formation and metal enrichment history.
+
+        Args:
+            age (float or unyt_quantity):
+                The age at which to calculate the initial mass. This can be a
+                float in years or a unyt quantity with time units.
+
+        Returns:
+            The total mass formed prior to this age.
+        """
+        log10ages = self.log10ages
+        sf_hist = self.sf_hist
+
+        # construct log-space bin edges from centres
+        dlog = np.diff(log10ages)
+        edges = np.empty(len(log10ages) + 1)
+
+        edges[1:-1] = 0.5 * (log10ages[1:] + log10ages[:-1])
+        edges[0] = log10ages[0] - dlog[0] / 2
+        edges[-1] = log10ages[-1] + dlog[-1] / 2
+
+        age_edges = 10**edges
+
+        # This calculates the fraction of each bin that is younger than the
+        # specified age, and clips it to be between 0 and 1. So for bins that
+        # are entirely younger than the specified age, this will be 1, for
+        # bins that are entirely older than the specified age, this will be 0,
+        # and for bins that straddle the specified age, this will be inbetween.
+        frac = np.clip(
+            (age_edges[1:] - age.value) / (age_edges[1:] - age_edges[:-1]),
+            0,
+            1,
+        )
+
+        return np.sum(sf_hist * frac) * Msun
+
+    @accepts(age=yr)
+    def calculate_surviving_mass_at_age(self, age, grid: Grid):
+        """Calculate the surviving mass at a given age.
+
+        This is the mass of stars remaining at the specified age given the
+        star formation and metal enrichment history.
+
+        Args:
+            age (float or unyt_quantity):
+                The age at which to calculate the surviving mass. This can be a
+                float in years or a unyt quantity with time units.
+            grid (Grid):
+                The grid to use for calculating the surviving mass. This is
+                used to get the stellar fraction at each SFZH bin.
+
+        Returns:
+            The total mass formed prior to this age.
+        """
+        log10ages = self.log10ages
+
+        # First calculate the surviving SFH grid
+        surviving_sf_hist = self.calculate_surviving_sfh(grid)
+
+        # construct log-space bin edges from centres
+        dlog = np.diff(log10ages)
+        edges = np.empty(len(log10ages) + 1)
+
+        edges[1:-1] = 0.5 * (log10ages[1:] + log10ages[:-1])
+        edges[0] = log10ages[0] - dlog[0] / 2
+        edges[-1] = log10ages[-1] + dlog[-1] / 2
+
+        age_edges = 10**edges
+
+        # This calculates the fraction of each bin that is younger than the
+        # specified age, and clips it to be between 0 and 1. So for bins that
+        # are entirely younger than the specified age, this will be 1, for
+        # bins that are entirely older than the specified age, this will be 0,
+        # and for bins that straddle the specified age, this will be inbetween.
+        frac = np.clip(
+            (age_edges[1:] - age.value) / (age_edges[1:] - age_edges[:-1]),
+            0,
+            1,
+        )
+
+        return np.sum(surviving_sf_hist * frac) * Msun

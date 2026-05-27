@@ -1446,8 +1446,8 @@ class BaseGalaxy:
             )
         )
 
-        # Validate all requested labels were routed to an emitter or a combine
-        # step
+        # Validate all requested labels were routed to an emitter or a
+        # combine step
         routed_labels = set(galaxy_combine_labels)
         for emitter_labels in component_labels_by_emitter.values():
             routed_labels.update(emitter_labels)

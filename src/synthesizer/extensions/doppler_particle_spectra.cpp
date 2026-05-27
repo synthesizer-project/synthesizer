@@ -92,6 +92,10 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
   std::vector<double> shifted_wavelengths(nlam);
   std::vector<int> mapped_indices(nlam);
 
+  /* Collection arrays for non-zero CIC cell contributions */
+  std::vector<const double *> cell_spectra_ptrs(ncells);
+  std::vector<double> cell_weights(ncells);
+
   /* Loop over particles. */
   for (size_t p = 0; p < npart; ++p) {
 
@@ -117,7 +121,8 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
     /* Cache particle weight once */
     const double w_p = parts->get_weight_at(p);
 
-    /* Loop over all 2^ndim sub-cells. */
+    /* Gather non-zero CIC cell contributions */
+    int nvalid_cells = 0;
     for (int ic = 0; ic < ncells; ++ic) {
       const auto &sc = subcells[ic];
 
@@ -130,38 +135,38 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
       if (frac == 0.0)
         continue;
 
-      /* Combined weight */
-      const double weight = frac * w_p;
-
       /* Flattened grid index */
       const int grid_i = base_lin + sc.linoff;
-      const double *__restrict cell_spectra =
+      cell_spectra_ptrs[nvalid_cells] =
           grid_spectra + static_cast<size_t>(grid_i) * nlam;
+      cell_weights[nvalid_cells] = frac * w_p;
+      nvalid_cells++;
+    }
 
-      /* Loop over wavelengths (we can't prepare the unmasked wavelengths
-       * like we can in the non-shifted case, since the shifted wavelengths
-       * are particle-dependent) */
-      for (size_t il = 0; il < nlam; ++il) {
-        const int ils = mapped_indices[il];
-        /* Skip out-of-bounds or masked */
-        if (ils <= 0 || static_cast<size_t>(ils) >= nlam ||
-            grid_props->lam_is_masked(ils)) {
-          continue;
-        }
-
-        /* Interpolation fraction between bins */
-        const double lam_s = shifted_wavelengths[il];
-        const double frac_s = (lam_s - wavelength[ils - 1]) /
-                              (wavelength[ils] - wavelength[ils - 1]);
-
-        /* Base spectra value */
-        const double gs = cell_spectra[il] * weight;
-
-        /* Distribute into particle & global arrays */
-        const size_t base_idx = p * nlam;
-        part_spectra[base_idx + ils - 1] += (1.0 - frac_s) * gs;
-        part_spectra[base_idx + ils] += frac_s * gs;
+    /* Fused write phase: accumulate cell contributions, then scatter */
+    double *__restrict p_spec = part_spectra + p * nlam;
+    for (size_t il = 0; il < nlam; ++il) {
+      /* Accumulate the contribution from all valid cells */
+      double total = 0.0;
+      for (int icell = 0; icell < nvalid_cells; icell++) {
+        total = std::fma(cell_spectra_ptrs[icell][il],
+                         cell_weights[icell], total);
       }
+
+      const int ils = mapped_indices[il];
+      if (ils <= 0 || static_cast<size_t>(ils) >= nlam ||
+          grid_props->lam_is_masked(ils)) {
+        continue;
+      }
+
+      /* Interpolation fraction between bins */
+      const double lam_s = shifted_wavelengths[il];
+      const double frac_s = (lam_s - wavelength[ils - 1]) /
+                            (wavelength[ils] - wavelength[ils - 1]);
+
+      /* Distribute into per-particle output */
+      p_spec[ils - 1] += (1.0 - frac_s) * total;
+      p_spec[ils] += frac_s * total;
     }
   }
 }
@@ -174,9 +179,10 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
  * every particle, and all sub‐cell index math is hoisted out of the particle
  * loop.
  *
- * TODO: This currently scales poorly relative to the non-shifted case, since
- * the memory access pattern is not as cache-friendly due to the scattered
- * accesses to the shifted wavelengths and their mapped indices.
+ * Note: Cell contributions are collected first then fused per wavelength,
+ * reducing the outer loop over cells from ncells × nlam scatter-writes to a
+ * single accumulation per wavelength, matching the pattern used in the
+ * non-shifted CIC path.
  *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
@@ -223,9 +229,11 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
 
 #pragma omp parallel num_threads(nthreads)
   {
-    /* Allocate per-thread shift buffers once */
+    /* Allocate per-thread shift and collection buffers once */
     std::vector<double> shifted_wavelengths(nlam);
     std::vector<int> mapped_indices(nlam);
+    std::vector<const double *> cell_spectra_ptrs(ncells);
+    std::vector<double> cell_weights(ncells);
 
     /* Split the work evenly across threads (no single particle is more
      * expensive than another). */
@@ -268,7 +276,8 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
       const int base_lin = parts->grid_indices[p];
       const double w_p = parts->get_weight_at(p);
 
-      /* Loop over all 2^ndim sub-cells */
+      /* Gather non-zero CIC cell contributions */
+      int nvalid_cells = 0;
       for (int ic = 0; ic < ncells; ++ic) {
         const auto &sc = subcells[ic];
 
@@ -281,39 +290,42 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
         if (frac == 0.0)
           continue;
 
-        /* Combined weight */
-        const double weight = frac * w_p;
+        /* Flattened grid index */
         const int grid_i = base_lin + sc.linoff;
-        const double *__restrict cell_spectra =
+        cell_spectra_ptrs[nvalid_cells] =
             grid_spectra + static_cast<size_t>(grid_i) * nlam;
-
-        /* Loop over wavelengths (we can't prepare the unmasked wavelengths like
-         * we can in the non-shifted case, since the shifted wavelengths are
-         * particle-dependent) */
-        for (size_t il = 0; il < nlam; ++il) {
-          const int ils = mapped_indices[il];
-          /* Skip out-of-bounds or masked bins */
-          if (ils <= 0 || static_cast<size_t>(ils) >= nlam ||
-              grid_props->lam_is_masked(ils)) {
-            continue;
-          }
-
-          /* Interpolation fraction */
-          const double lam_s = shifted_wavelengths[il];
-          const double frac_s = (lam_s - wavelength[ils - 1]) /
-                                (wavelength[ils] - wavelength[ils - 1]);
-
-          /* Base spectra contribution */
-          const double gs = cell_spectra[il] * weight;
-
-          /* Deposit into the thread's part spectra */
-          this_part_spectra[ils - 1] =
-              std::fma((1.0 - frac_s), gs, this_part_spectra[ils - 1]);
-          this_part_spectra[ils] = std::fma(frac_s, gs, this_part_spectra[ils]);
-        }
+        cell_weights[nvalid_cells] = frac * w_p;
+        nvalid_cells++;
       }
 
-      /* Copy the entire spectrum at once  into the output array. */
+      /* Fused write phase: accumulate then scatter into local buffer */
+      for (size_t il = 0; il < nlam; ++il) {
+        /* Accumulate contributions from all valid cells */
+        double total = 0.0;
+        for (int icell = 0; icell < nvalid_cells; icell++) {
+          total = std::fma(cell_spectra_ptrs[icell][il],
+                           cell_weights[icell], total);
+        }
+
+        const int ils = mapped_indices[il];
+        if (ils <= 0 || static_cast<size_t>(ils) >= nlam ||
+            grid_props->lam_is_masked(ils)) {
+          continue;
+        }
+
+        /* Interpolation fraction */
+        const double lam_s = shifted_wavelengths[il];
+        const double frac_s = (lam_s - wavelength[ils - 1]) /
+                              (wavelength[ils] - wavelength[ils - 1]);
+
+        /* Deposit into the thread's local buffer */
+        this_part_spectra[ils - 1] =
+            std::fma((1.0 - frac_s), total, this_part_spectra[ils - 1]);
+        this_part_spectra[ils] =
+            std::fma(frac_s, total, this_part_spectra[ils]);
+      }
+
+      /* Copy the entire spectrum at once into the output array. */
       for (size_t il = 0; il < nlam; ++il) {
         local_part_spectra[(p - start_idx) * nlam + il] = this_part_spectra[il];
       }
