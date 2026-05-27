@@ -1061,7 +1061,7 @@ class Stars(StarsComponent):
 
         return average_sfr.to("Msun/yr")
 
-    def calaculate_surviving_sfzh(self, grid: Grid):
+    def calculate_surviving_sfzh(self, grid: Grid):
         """Calculate the surviving SFZH of the stellar population.
 
         This is the distribution of surviving stars in age and metallicity
