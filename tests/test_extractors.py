@@ -378,10 +378,14 @@ def test_integrated_doppler_shifted_generate_lnu(
 
 
 @patch(
+    "synthesizer.emission_models.extractors.extractor.compute_integrated_sed"
+)
+@patch(
     "synthesizer.emission_models.extractors.extractor.compute_particle_seds"
 )
 def test_particle_generate_lnu(
     mock_compute_particle_seds,
+    mock_compute_integrated_sed,
     test_grid,
     particle_stars_A,
     nebular_emission_model,
@@ -399,10 +403,8 @@ def test_particle_generate_lnu(
     n_particles = len(particle_stars_A.ages)
     mock_spectrum = np.ones((n_particles, test_grid.nlam))
     mock_int_spectrum = np.ones(test_grid.nlam)
-    mock_compute_particle_seds.return_value = (
-        mock_spectrum,
-        mock_int_spectrum,
-    )
+    mock_compute_particle_seds.return_value = mock_spectrum
+    mock_compute_integrated_sed.return_value = (mock_int_spectrum, None)
 
     # Call generate_lnu
     part_spec, spec = extractor.generate_lnu(
@@ -412,6 +414,14 @@ def test_particle_generate_lnu(
     # Check that compute_particle_seds was called with the right parameters
     mock_compute_particle_seds.assert_called_once()
     args = mock_compute_particle_seds.call_args[0]
+    assert args[0] is extractor._spectra_grid  # spectra_grid
+    assert args[1] is extractor._grid_axes  # grid_axes
+    assert args[2] == ("mock_extracted",)  # extracted
+    assert args[3] == "mock_weight"  # weight
+
+    # Check that compute_integrated_sed was called with the right parameters
+    mock_compute_integrated_sed.assert_called_once()
+    args = mock_compute_integrated_sed.call_args[0]
     assert args[0] is extractor._spectra_grid  # spectra_grid
     assert args[1] is extractor._grid_axes  # grid_axes
     assert args[2] == ("mock_extracted",)  # extracted

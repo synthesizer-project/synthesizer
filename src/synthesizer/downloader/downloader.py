@@ -86,7 +86,7 @@ INSTRUMENT_TRANSLATION = {
 # filename into the "test data alias"
 TEST_DATA_TRANSLATION = {
     "test_grid.hdf5": (
-        "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps.hdf5"
+        "bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps_updated-star-fraction.hdf5"
     ),
     "test_grid_agn-blr.hdf5": "qsosed-test_cloudy-c23.01-agn-test.hdf5",
     "test_grid_agn-nlr.hdf5": "qsosed-test_cloudy-c23.01-agn-test.hdf5",
