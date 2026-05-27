@@ -34,6 +34,8 @@ Example usage::
     )
 """
 
+import warnings
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
@@ -310,6 +312,12 @@ class SpectralCube(ImagingBase):
         nthreads=1,
     ):
         """Compatibility wrapper for ``generate_data_cube_hist``."""
+        warnings.warn(
+            "get_data_cube_hist is deprecated; use "
+            "generate_data_cube_hist instead.",
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
         # Delegate to the renamed low-level histogram cube entry point.
         return self.generate_data_cube_hist(
             sed=sed,
@@ -435,6 +443,12 @@ class SpectralCube(ImagingBase):
         nthreads=1,
     ):
         """Compatibility wrapper for ``generate_data_cube_smoothed``."""
+        warnings.warn(
+            "get_data_cube_smoothed is deprecated; use "
+            "generate_data_cube_smoothed instead.",
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
         # Delegate to the renamed low-level spectral-cube entry point.
         return self.generate_data_cube_smoothed(
             sed=sed,

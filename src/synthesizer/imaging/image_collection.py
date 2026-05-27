@@ -166,16 +166,29 @@ class ImageCollection(ImagingBase):
         # Check factor (NOTE: this doesn't actually cause an issue
         # mechanically but will ensure users are literal about resampling and
         # can't mistakenly resample in unintended ways).
+        if factor <= 0:
+            raise ValueError("Downsample factor must be positive.")
         if factor > 1:
             raise ValueError("Using downsample method to supersample!")
 
-        # Update the collection geometry so metadata stays aligned with the
-        # resampled child images.
+        # Validate every child image before mutating the collection-level
+        # geometry so one missing image array cannot leave the collection
+        # metadata updated while some children remain untouched.
+        for image in self.imgs.values():
+            if image.arr is None:
+                raise exceptions.MissingImage(
+                    "The image array hasn't been generated yet. Please run "
+                    "generate_img_hist() or generate_img_smoothed() before "
+                    "resampling."
+                )
+
+        # Update the collection geometry only once all child resamples are
+        # known to be able to run successfully.
         self._resample_resolution(factor)
 
         # Resample each image
-        for f in self.imgs:
-            self.imgs[f].resample(factor)
+        for image in self.imgs.values():
+            image.resample(factor)
 
     def supersample(self, factor):
         """Supersample all images contained within this instance.
@@ -199,16 +212,29 @@ class ImageCollection(ImagingBase):
         # Check factor (NOTE: this doesn't actually cause an issue
         # mechanically but will ensure users are literal about resampling and
         # can't mistakenly resample in unintended ways).
+        if factor <= 0:
+            raise ValueError("Supersample factor must be positive.")
         if factor < 1:
             raise ValueError("Using supersample method to downsample!")
 
-        # Update the collection geometry so metadata stays aligned with the
-        # resampled child images.
+        # Validate every child image before mutating the collection-level
+        # geometry so one missing image array cannot leave the collection
+        # metadata updated while some children remain untouched.
+        for image in self.imgs.values():
+            if image.arr is None:
+                raise exceptions.MissingImage(
+                    "The image array hasn't been generated yet. Please run "
+                    "generate_img_hist() or generate_img_smoothed() before "
+                    "resampling."
+                )
+
+        # Update the collection geometry only once all child resamples are
+        # known to be able to run successfully.
         self._resample_resolution(factor)
 
         # Resample each image
-        for f in self.imgs:
-            self.imgs[f].resample(factor)
+        for image in self.imgs.values():
+            image.resample(factor)
 
     def __len__(self):
         """Overload the len operator to return how many images there are."""

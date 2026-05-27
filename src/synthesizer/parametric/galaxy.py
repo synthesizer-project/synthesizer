@@ -260,7 +260,7 @@ class Galaxy(BaseGalaxy):
             # when the caller asked for more than one component explicitly.
             cubes = []
 
-            if stellar_spectra is not None:
+            if stellar_spectra is not None and self.stars is not None:
                 cubes.append(
                     self.stars.get_data_cube(
                         stellar_spectra,
@@ -270,7 +270,7 @@ class Galaxy(BaseGalaxy):
                     )
                 )
 
-            if blackhole_spectra is not None:
+            if blackhole_spectra is not None and self.black_holes is not None:
                 cubes.append(
                     self.black_holes.get_data_cube(
                         blackhole_spectra,
@@ -282,6 +282,10 @@ class Galaxy(BaseGalaxy):
 
             if len(cubes) == 1:
                 return cubes[0]
+            if len(cubes) == 0:
+                raise exceptions.MissingAttribute(
+                    "No requested component is present on this galaxy."
+                )
             return cubes[0] + cubes[1]
 
         # Label-based requests use the galaxy-level orchestration path, which

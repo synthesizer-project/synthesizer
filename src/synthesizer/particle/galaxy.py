@@ -1473,6 +1473,11 @@ class Galaxy(BaseGalaxy):
             cubes = []
 
             if stellar_spectra is not None:
+                if self.stars is None:
+                    raise ValueError(
+                        "stellar_spectra was provided but this galaxy has no "
+                        "stellar component."
+                    )
                 cubes.append(
                     self.stars.get_data_cube(
                         stellar_spectra,
@@ -1488,6 +1493,11 @@ class Galaxy(BaseGalaxy):
                 )
 
             if blackhole_spectra is not None:
+                if self.black_holes is None:
+                    raise ValueError(
+                        "blackhole_spectra was provided but this galaxy has "
+                        "no black-hole component."
+                    )
                 cubes.append(
                     self.black_holes.get_data_cube(
                         blackhole_spectra,

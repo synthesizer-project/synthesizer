@@ -214,13 +214,24 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         Returns:
             SpectralCube: Generated spectral data cube.
         """
-        if hasattr(component, "particle_spectra") and sed in getattr(
-            component, "particle_spectra", {}
-        ):
-            sed = component.particle_spectra[sed]
+        if isinstance(sed, str):
+            particle_spectra = getattr(component, "particle_spectra", {})
+            spectra = getattr(component, "spectra", {})
 
-        elif sed in getattr(component, "spectra", {}):
-            sed = component.spectra[sed]
+            if sed in particle_spectra:
+                sed = particle_spectra[sed]
+            elif sed in spectra:
+                sed = spectra[sed]
+            else:
+                component_name = getattr(
+                    component,
+                    "component_type",
+                    type(component).__name__,
+                )
+                raise ValueError(
+                    f"Component '{component_name}' has no saved spectrum "
+                    f"label '{sed}'."
+                )
 
         if hasattr(component, "morphology"):
             if cube_type != "smoothed":

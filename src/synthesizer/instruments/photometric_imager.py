@@ -153,6 +153,20 @@ class PhotometricImager(PhotometricInstrument):
                 "maps at the same time"
             )
 
+        # Imaging payloads are looked up directly by filter code during PSF and
+        # noise application, so reject partial dictionaries here instead of
+        # deferring the failure to a later KeyError deep in observation code.
+        for attr_name in ("psfs", "noise_maps", "noise_source_maps"):
+            payload = getattr(self, attr_name)
+            if payload is None:
+                continue
+            missing_filters = set(self.filters.filter_codes) - set(payload)
+            if len(missing_filters) > 0:
+                raise exceptions.MissingArgument(
+                    f"{attr_name} is missing entries for filters: "
+                    f"{sorted(missing_filters)}"
+                )
+
     @property
     def instrument_type(self):
         """Return the serialised type tag for this instrument."""

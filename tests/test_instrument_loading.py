@@ -2,6 +2,7 @@
 
 import h5py
 import numpy as np
+import pytest
 from unyt import arcsecond
 
 from synthesizer.instruments import FilterCollection
@@ -143,4 +144,5 @@ def test_cached_premade_load_preserves_filter_subset(tmp_path):
 
     assert loaded.filters.filter_codes == ["JWST/NIRCam.F090W"]
     assert set(loaded.psfs) == {"JWST/NIRCam.F090W"}
-    assert loaded.resolution == 0.031 * arcsecond
+    assert loaded.resolution.value == pytest.approx(0.031)
+    assert loaded.resolution.units == arcsecond.units

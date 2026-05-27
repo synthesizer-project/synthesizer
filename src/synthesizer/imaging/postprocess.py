@@ -183,8 +183,8 @@ def _postprocess_existing_images(
     return final_images
 
 
-def _get_data_cube_postprocess_store(owner, quantity):
-    """Return the raw cube store for a spectral quantity family.
+def _get_data_cube_postprocess_stores(owner, quantity):
+    """Return the raw and processed cube stores for a spectral family.
 
     Args:
         owner:
@@ -193,19 +193,24 @@ def _get_data_cube_postprocess_store(owner, quantity):
             Spectral quantity family.
 
     Returns:
-        dict:
-            Instrument-keyed store of raw cubes.
+        tuple:
+            ``(raw_store, processed_store)`` for the requested quantity family.
     """
     # Map the requested spectral quantity family onto the corresponding raw
-    # cube cache on the owner.
+    # cube cache on the owner, and lazily create a separate store for
+    # post-processed cubes so PSF/noise application never overwrites raw data.
     if quantity in {"lnu", "llam", "luminosity"}:
-        return owner.data_cubes_lnu
+        if not hasattr(owner, "processed_data_cubes_lnu"):
+            owner.processed_data_cubes_lnu = {}
+        return owner.data_cubes_lnu, owner.processed_data_cubes_lnu
     if quantity in {"fnu", "flam", "flux"}:
-        return owner.data_cubes_fnu
+        if not hasattr(owner, "processed_data_cubes_fnu"):
+            owner.processed_data_cubes_fnu = {}
+        return owner.data_cubes_fnu, owner.processed_data_cubes_fnu
 
     # Unknown quantity families are treated as non-cacheable here and simply
     # yield no post-processing work.
-    return {}
+    return {}, {}
 
 
 def _get_raw_data_cubes_for_postprocess(
@@ -232,14 +237,14 @@ def _get_raw_data_cubes_for_postprocess(
     return {label: raw_cubes[label] for label in labels if label in raw_cubes}
 
 
-def _apply_data_cube_psf(final_cubes, cube_store, instrument):
+def _apply_data_cube_psf(final_cubes, processed_cube_store, instrument):
     """Apply the instrument PSF configuration to data cubes.
 
     Args:
         final_cubes (dict):
             Current data cubes keyed by label.
-        cube_store (dict):
-            Store containing the latest cube state.
+        processed_cube_store (dict):
+            Store containing post-processed cube states.
         instrument (IntegratedFieldUnit):
             Instrument defining the PSF application.
 
@@ -251,26 +256,29 @@ def _apply_data_cube_psf(final_cubes, cube_store, instrument):
     if not instrument.can_do_psf_spectroscopy:
         return final_cubes
 
-    # Write the latest PSF-convolved cube state back to the owner cache so
-    # later accesses see the same observable returned to the caller.
-    cube_store.setdefault(instrument.label, {})
+    # Write PSF outputs into the processed store rather than the raw cache so
+    # repeated post-processing starts from the same pristine cubes.
+    processed_cube_store.setdefault(instrument.label, {})
     for label, cube in final_cubes.items():
-        cube_store[instrument.label][label] = instrument.apply_psf(cube)
+        processed_cube_store[instrument.label][label] = instrument.apply_psf(
+            cube
+        )
 
     # Return the updated view of the just-written PSF-processed cubes.
     return {
-        label: cube_store[instrument.label][label] for label in final_cubes
+        label: processed_cube_store[instrument.label][label]
+        for label in final_cubes
     }
 
 
-def _apply_data_cube_noise(final_cubes, cube_store, instrument):
+def _apply_data_cube_noise(final_cubes, processed_cube_store, instrument):
     """Apply the instrument noise configuration to data cubes.
 
     Args:
         final_cubes (dict):
             Current data cubes keyed by label.
-        cube_store (dict):
-            Store containing the latest cube state.
+        processed_cube_store (dict):
+            Store containing post-processed cube states.
         instrument (IntegratedFieldUnit):
             Instrument defining the noise application.
 
@@ -283,15 +291,18 @@ def _apply_data_cube_noise(final_cubes, cube_store, instrument):
     if not getattr(instrument, "can_do_noisy_resolved_spectroscopy", False):
         return final_cubes
 
-    # Write the latest noisy cube state back to the owner cache so later
-    # accesses see the same observable returned to the caller.
-    cube_store.setdefault(instrument.label, {})
+    # Continue writing to the processed store so this stage layers on top of
+    # PSF output without mutating the raw cube cache.
+    processed_cube_store.setdefault(instrument.label, {})
     for label, cube in final_cubes.items():
-        cube_store[instrument.label][label] = instrument.apply_noise(cube)
+        processed_cube_store[instrument.label][label] = instrument.apply_noise(
+            cube
+        )
 
     # Return the updated view of the just-written noisy cubes.
     return {
-        label: cube_store[instrument.label][label] for label in final_cubes
+        label: processed_cube_store[instrument.label][label]
+        for label in final_cubes
     }
 
 
@@ -318,8 +329,11 @@ def _postprocess_existing_data_cubes(
         dict:
             Final cubes keyed by label.
     """
-    # Resolve the appropriate cube store for the requested quantity family.
-    cube_store = _get_data_cube_postprocess_store(owner, quantity)
+    # Resolve the appropriate raw and processed stores for the requested
+    # quantity family.
+    cube_store, processed_cube_store = _get_data_cube_postprocess_stores(
+        owner, quantity
+    )
 
     # If the quantity family does not map onto a stored raw-cube cache there is
     # nothing to post-process here.
@@ -335,9 +349,13 @@ def _postprocess_existing_data_cubes(
     )
 
     # Apply any configured IFU PSF before any configured IFU noise.
-    final_cubes = _apply_data_cube_psf(final_cubes, cube_store, instrument)
+    final_cubes = _apply_data_cube_psf(
+        final_cubes, processed_cube_store, instrument
+    )
 
     # Apply any configured IFU noise to the latest cube state.
-    final_cubes = _apply_data_cube_noise(final_cubes, cube_store, instrument)
+    final_cubes = _apply_data_cube_noise(
+        final_cubes, processed_cube_store, instrument
+    )
 
     return final_cubes

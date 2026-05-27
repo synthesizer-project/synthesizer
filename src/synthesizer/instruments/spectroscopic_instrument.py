@@ -211,10 +211,14 @@ class SpectroscopicInstrument(InstrumentBase):
             if isinstance(self.depth, dict):
                 depth_group = group.create_group("Depth")
                 for key, value in self.depth.items():
-                    ds = depth_group.create_dataset(
-                        key, data=value.value, dtype=float
+                    raw = value.value if hasattr(value, "value") else value
+                    units = (
+                        str(value.units)
+                        if hasattr(value, "units")
+                        else "dimensionless"
                     )
-                    ds.attrs["units"] = "dimensionless"
+                    ds = depth_group.create_dataset(key, data=raw, dtype=float)
+                    ds.attrs["units"] = units
             else:
                 ds = group.create_dataset(
                     "Depth", data=self.depth.value, dtype=float
@@ -233,10 +237,14 @@ class SpectroscopicInstrument(InstrumentBase):
             if isinstance(self.snrs, dict):
                 snrs_group = group.create_group("SNRs")
                 for key, value in self.snrs.items():
-                    ds = snrs_group.create_dataset(
-                        key, data=value.value, dtype=float
+                    raw = value.value if hasattr(value, "value") else value
+                    units = (
+                        str(value.units)
+                        if hasattr(value, "units")
+                        else "dimensionless"
                     )
-                    ds.attrs["units"] = "dimensionless"
+                    ds = snrs_group.create_dataset(key, data=raw, dtype=float)
+                    ds.attrs["units"] = units
             else:
                 ds = group.create_dataset(
                     "SNRs", data=self.snrs.value, dtype=float

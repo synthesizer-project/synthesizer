@@ -747,7 +747,12 @@ class JWSTNIRSpec(PhotometricImager):
 
     # TODO: Implement NIRSpec class with appropriate filters, resolution, etc.
     _is_placeholder_premade = True
-    pass
+
+    def __init__(self, *args, **kwargs):
+        """Raise a clear placeholder error until NIRSpec is implemented."""
+        raise NotImplementedError(
+            "JWSTNIRSpec is a placeholder and not implemented."
+        )
 
 
 class JWSTMIRI(PhotometricImager):

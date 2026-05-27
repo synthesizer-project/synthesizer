@@ -10,6 +10,7 @@ from unyt import angstrom, arcsecond, kpc
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.components.component import Component
+from synthesizer.imaging.postprocess import _postprocess_existing_data_cubes
 from synthesizer.instruments import (
     GALEX,
     FilterCollection,
@@ -20,7 +21,7 @@ from synthesizer.instruments import (
     PhotometricInstrument,
     SpectroscopicInstrument,
 )
-from synthesizer.instruments.premade import GALEXFUV, GALEXNUV
+from synthesizer.instruments.premade import GALEXFUV, GALEXNUV, JWSTNIRSpec
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 
@@ -474,6 +475,42 @@ def test_base_galaxy_psf_routing_delegates_to_instrument(
 
 
 @pytest.mark.parametrize(
+    ("method", "images_attr"),
+    [
+        (BaseGalaxy.apply_psf_to_images_lnu, "images_lnu"),
+        (BaseGalaxy.apply_psf_to_images_fnu, "images_fnu"),
+    ],
+)
+def test_base_galaxy_psf_routing_includes_gas_components(method, images_attr):
+    """Deprecated galaxy PSF wrappers should still route gas images."""
+    gas = SimpleNamespace(calls=[], images_lnu={}, images_fnu={})
+    getattr(gas, images_attr)["inst"] = {"gas": object()}
+
+    def apply_psf_to_images(instrument, limit_to=None):
+        gas.calls.append((instrument, limit_to))
+
+    if images_attr == "images_lnu":
+        gas.apply_psf_to_images_lnu = apply_psf_to_images
+    else:
+        gas.apply_psf_to_images_fnu = apply_psf_to_images
+
+    galaxy = SimpleNamespace(
+        images_lnu={"inst": {}},
+        images_fnu={"inst": {}},
+        images_psf_lnu={},
+        images_psf_fnu={},
+        stars=None,
+        gas=gas,
+        black_holes=None,
+    )
+    instrument = DummyPsfInstrument()
+
+    method(galaxy, instrument)
+
+    assert gas.calls == [(instrument, None)]
+
+
+@pytest.mark.parametrize(
     ("method", "images_attr", "psf_attr"),
     [
         (
@@ -691,6 +728,57 @@ def test_integrated_field_unit_generate_data_cube_uses_instrument_logic():
     assert result is expected
 
 
+def test_integrated_field_unit_generate_data_cube_rejects_unknown_label():
+    """String SED labels should fail fast when the component lacks them."""
+    instrument = IntegratedFieldUnit(
+        label="ifu",
+        lam=np.linspace(1000, 3000, 32) * angstrom,
+        resolution=1 * arcsecond,
+    )
+    component = SimpleNamespace(
+        component_type="Stars",
+        spectra={},
+        particle_spectra={},
+    )
+
+    with pytest.raises(ValueError, match="missing"):
+        instrument.generate_data_cube(
+            component=component,
+            fov=5 * arcsecond,
+            sed="missing",
+            cube_type="hist",
+        )
+
+
+def test_data_cube_postprocess_keeps_raw_store_unchanged():
+    """Cube post-processing should not overwrite the raw cube cache."""
+    raw_cube = object()
+    owner = SimpleNamespace(data_cubes_lnu={"ifu": {"stellar": raw_cube}})
+
+    class DummyIfu:
+        label = "ifu"
+        can_do_psf_spectroscopy = True
+        can_do_noisy_resolved_spectroscopy = True
+
+        def apply_psf(self, cube):
+            assert cube is raw_cube
+            return "psf"
+
+        def apply_noise(self, cube):
+            assert cube == "psf"
+            return "noise"
+
+    result = _postprocess_existing_data_cubes(
+        owner,
+        instrument=DummyIfu(),
+        quantity="lnu",
+    )
+
+    assert owner.data_cubes_lnu["ifu"]["stellar"] is raw_cube
+    assert owner.processed_data_cubes_lnu["ifu"]["stellar"] == "noise"
+    assert result["stellar"] == "noise"
+
+
 def test_integrated_field_unit_cube_placeholders_raise():
     """IFU cube post-processing placeholders should fail explicitly."""
     instrument = IntegratedFieldUnit(
@@ -841,6 +929,93 @@ def test_parametric_galaxy_cube_routing_delegates_to_components():
     assert stars.calls[0]["kwargs"]["instrument"] is instrument
 
 
+def test_particle_galaxy_cube_routing_rejects_missing_component():
+    """Legacy component-specific cube requests should fail clearly."""
+    galaxy = SimpleNamespace(
+        galaxy_type="Particle",
+        redshift=None,
+        model_param_cache={},
+        stars=None,
+        gas=None,
+        black_holes=None,
+        data_cubes_lnu={},
+        data_cubes_fnu={},
+    )
+    instrument = SimpleNamespace(label="inst", resolution=1 * kpc)
+
+    with pytest.raises(ValueError, match="no stellar component"):
+        ParticleGalaxy.get_data_cube(
+            galaxy,
+            fov="fov",
+            instrument=instrument,
+            stellar_spectra="stellar",
+        )
+
+
+def test_photometric_imager_validate_rejects_partial_psf_dict():
+    """Imaging payload dictionaries must cover every configured filter."""
+    filters = FilterCollection(
+        generic_dict={"filter_a": np.ones(32), "filter_b": np.ones(32)},
+        new_lam=np.linspace(1000, 3000, 32) * angstrom,
+    )
+
+    with pytest.raises(exceptions.MissingArgument, match="psfs"):
+        PhotometricImager(
+            label="img",
+            filters=filters,
+            resolution=1 * arcsecond,
+            psfs={"filter_a": np.ones((3, 3))},
+        )
+
+
+def test_add_filters_requires_imaging_payloads_for_existing_maps():
+    """Adding filters should require matching payloads once maps exist."""
+    base_filters = FilterCollection(
+        generic_dict={"filter_a": np.ones(32)},
+        new_lam=np.linspace(1000, 3000, 32) * angstrom,
+    )
+    extra_filters = FilterCollection(
+        generic_dict={"filter_b": np.ones(32)},
+        new_lam=np.linspace(1000, 3000, 32) * angstrom,
+    )
+    instrument = PhotometricImager(
+        label="img",
+        filters=base_filters,
+        resolution=1 * arcsecond,
+        psfs={"filter_a": np.ones((3, 3))},
+    )
+
+    with pytest.raises(exceptions.InconsistentAddition, match="psfs"):
+        instrument.add_filters(extra_filters)
+
+
+def test_photometric_instrument_comparison_uses_filter_shapes():
+    """Equality should distinguish filters that share codes but not curves."""
+    lam = np.linspace(1000, 3000, 32) * angstrom
+    instrument_a = PhotometricInstrument(
+        label="phot",
+        filters=FilterCollection(
+            generic_dict={"filter_a": np.ones(32)},
+            new_lam=lam,
+        ),
+    )
+    instrument_b = PhotometricInstrument(
+        label="phot",
+        filters=FilterCollection(
+            generic_dict={"filter_a": np.linspace(0, 1, 32)},
+            new_lam=lam,
+        ),
+    )
+
+    assert instrument_a != instrument_b
+
+
+def test_jwst_nirspec_placeholder_raises_clear_error():
+    """Placeholder premade instruments should raise NotImplementedError."""
+    with pytest.raises(NotImplementedError, match="placeholder"):
+        JWSTNIRSpec()
+
+
 def test_component_level_combined_cube_uses_model_cache():
     """Component cube generation should combine labels already requested."""
 
@@ -921,7 +1096,11 @@ def test_component_data_cube_applies_ifu_postprocessing_when_configured():
     assert result is instrument.calls[2]["noise_result"]
     assert (
         component.data_cubes_lnu[instrument.label]["stellar"]
-        is instrument.calls[2]["noise_result"]
+        is (instrument.calls[0]["result"])
+    )
+    assert (
+        component.processed_data_cubes_lnu[instrument.label]["stellar"]
+        is (instrument.calls[2]["noise_result"])
     )
 
 

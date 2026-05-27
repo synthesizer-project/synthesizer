@@ -1928,6 +1928,12 @@ class BaseGalaxy:
                 component_labels_by_emitter.setdefault("blackhole", [])
                 if label not in component_labels_by_emitter["blackhole"]:
                     component_labels_by_emitter["blackhole"].append(label)
+            if label in getattr(self.gas, "spectra", {}) or label in getattr(
+                self.gas, "particle_spectra", {}
+            ):
+                component_labels_by_emitter.setdefault("gas", [])
+                if label not in component_labels_by_emitter["gas"]:
+                    component_labels_by_emitter["gas"].append(label)
 
         routed_labels = set(galaxy_combine_labels)
         for emitter_labels in component_labels_by_emitter.values():
@@ -2183,6 +2189,17 @@ class BaseGalaxy:
                 limit_to=limit_to,
             )
 
+        # Keep the deprecated galaxy-level wrapper symmetric with the stars and
+        # black-hole branches so gas-owned image collections receive the same
+        # PSF orchestration when callers still use this compatibility entry
+        # point.
+        gas = getattr(self, "gas", None)
+        if gas is not None and instrument.label in gas.images_lnu:
+            gas.apply_psf_to_images_lnu(
+                instrument,
+                limit_to=limit_to,
+            )
+
         return self.images_psf_lnu[instrument.label]
 
     @deprecated(
@@ -2266,6 +2283,16 @@ class BaseGalaxy:
             and instrument.label in self.black_holes.images_fnu
         ):
             self.black_holes.apply_psf_to_images_fnu(
+                instrument,
+                limit_to=limit_to,
+            )
+
+        # Mirror the luminosity-path compatibility handling for gas-owned flux
+        # images so the deprecated wrapper still routes every attached emitter
+        # through instrument-side PSF processing.
+        gas = getattr(self, "gas", None)
+        if gas is not None and instrument.label in gas.images_fnu:
+            gas.apply_psf_to_images_fnu(
                 instrument,
                 limit_to=limit_to,
             )

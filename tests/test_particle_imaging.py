@@ -407,7 +407,8 @@ class TestSpectralCube:
             np.random.uniform(-0.4, 0.4, (n_particles, 3)), kpc
         )
 
-        basic_cube.get_data_cube_hist(sed, coordinates=coords)
+        with pytest.warns(DeprecationWarning, match="generate_data_cube_hist"):
+            basic_cube.get_data_cube_hist(sed, coordinates=coords)
 
         assert basic_cube.cube is not None
 
@@ -481,12 +482,15 @@ class TestSpectralCube:
         smoothing_lengths = unyt_array([0.3] * n_particles, kpc)
         kernel = Kernel().get_kernel()
 
-        cube.get_data_cube_smoothed(
-            sed,
-            coords,
-            smoothing_lengths,
-            kernel=kernel,
-        )
+        with pytest.warns(
+            DeprecationWarning, match="generate_data_cube_smoothed"
+        ):
+            cube.get_data_cube_smoothed(
+                sed,
+                coords,
+                smoothing_lengths,
+                kernel=kernel,
+            )
 
         assert cube.cube is not None
 

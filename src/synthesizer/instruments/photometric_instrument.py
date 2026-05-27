@@ -115,8 +115,13 @@ class PhotometricInstrument(InstrumentBase):
         Returns:
             tuple: Hashable representation of the instrument state.
         """
+        filter_state = (
+            tuple(self.filters.filter_codes),
+            self.filters.lam,
+            {code: self.filters[code].t for code in self.filters.filter_codes},
+        )
         return (
-            _hashable_state(self.filters.filter_codes),
+            _hashable_state(filter_state),
             _hashable_state(self.depth),
             _hashable_state(self.depth_app_radius),
             _hashable_state(self.snrs),
@@ -203,6 +208,26 @@ class PhotometricInstrument(InstrumentBase):
                 raise exceptions.InconsistentAddition(
                     "Cannot add filters without matching SNR entries for: "
                     f"{missing_snrs}"
+                )
+
+        for attr_name, payload in (
+            ("psfs", psfs),
+            ("noise_maps", noise_maps),
+            ("noise_source_maps", noise_source_maps),
+        ):
+            existing_payload = getattr(self, attr_name, None)
+            if existing_payload is None:
+                continue
+            if payload is None:
+                raise exceptions.InconsistentAddition(
+                    f"Cannot add filters without matching {attr_name} entries "
+                    f"for: {sorted(new_filter_codes)}"
+                )
+            missing_payload = new_filter_codes - set(payload.keys())
+            if len(missing_payload) > 0:
+                raise exceptions.InconsistentAddition(
+                    f"Cannot add filters without matching {attr_name} "
+                    f"entries for: {sorted(missing_payload)}"
                 )
 
         self.filters += filters

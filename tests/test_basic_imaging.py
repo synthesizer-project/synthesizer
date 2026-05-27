@@ -646,12 +646,14 @@ class TestPhotometricImagerPsfApplication:
     @pytest.fixture
     def instrument(self):
         """Instrument with PSFs defined for two imaging filters."""
-        psf = np.zeros((3, 3), dtype=float)
-        psf[1, 1] = 1.0
+        psf_f090w = np.zeros((3, 3), dtype=float)
+        psf_f090w[1, 1] = 1.0
+        psf_f150w = np.zeros((3, 3), dtype=float)
+        psf_f150w[1, 0] = 1.0
         return make_test_imager(
             filter_codes=("F090W", "F150W"),
             label="psf_inst",
-            psfs={"F090W": psf, "F150W": psf},
+            psfs={"F090W": psf_f090w, "F150W": psf_f150w},
         )
 
     @pytest.fixture
@@ -680,12 +682,15 @@ class TestPhotometricImagerPsfApplication:
         image = Image(
             resolution=0.1 * kpc,
             fov=3.2 * kpc,
-            img=np.arange(32 * 32, dtype=float).reshape(32, 32),
+            img=np.pad(np.array([[1.0]]), ((15, 16), (15, 16))),
         )
 
-        result = instrument.apply_psf(image, "F090W")
+        centered = instrument.apply_psf(image, "F090W")
+        shifted = instrument.apply_psf(image, "F150W")
 
-        assert np.allclose(result.arr, image.arr)
+        assert centered.arr[15, 15] > 0
+        assert shifted.arr[15, 14] > 0
+        assert not np.allclose(centered.arr, shifted.arr)
 
     def test_apply_psf_returns_new_image_by_default(self, instrument):
         """apply_psf should return a fresh image by default."""
@@ -844,3 +849,44 @@ class TestImageCollectionResampling:
         assert np.array_equal(collection.npix, np.array([32, 32]))
         assert collection.imgs["F090W"].arr.shape == (32, 32)
         assert np.array_equal(collection.imgs["F090W"].npix, collection.npix)
+
+    def test_supersample_rejects_non_positive_factor(self):
+        """Supersample should reject zero or negative factors early."""
+        collection = ImageCollection(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            imgs={
+                "F090W": Image(
+                    resolution=0.1 * kpc,
+                    fov=3.2 * kpc,
+                    img=np.ones((32, 32), dtype=float),
+                )
+            },
+        )
+
+        with pytest.raises(ValueError, match="positive"):
+            collection.supersample(0)
+
+    def test_collection_geometry_is_not_mutated_when_child_resample_fails(
+        self,
+    ):
+        """Collection metadata should stay unchanged on child failure."""
+        collection = ImageCollection(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            imgs={
+                "F090W": Image(
+                    resolution=0.1 * kpc,
+                    fov=3.2 * kpc,
+                )
+            },
+        )
+
+        original_npix = collection.npix.copy()
+        original_resolution = collection.resolution
+
+        with pytest.raises(Exception, match="hasn't been generated yet"):
+            collection.supersample(2)
+
+        assert np.array_equal(collection.npix, original_npix)
+        assert collection.resolution == original_resolution

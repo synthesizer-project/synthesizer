@@ -523,10 +523,18 @@ def _generate_ifu_generic(
         fov = fov
         coords = smls = None
 
+    # SpectralCube expects one wavelength array carrying angstrom units. Keep
+    # existing units when the caller already supplied a unitful grid and only
+    # attach angstrom when the wavelength array is still unitless.
+    if hasattr(lam, "units"):
+        lam = lam.to(angstrom)
+    else:
+        lam = lam * angstrom
+
     # Create the output cube container using the standardized geometry
     ifu = SpectralCube(
         resolution=resolution,
-        lam=lam * angstrom,
+        lam=lam,
         fov=fov,
     )
 
