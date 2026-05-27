@@ -1158,8 +1158,6 @@ class Stars(StarsComponent):
         Returns:
             The total mass formed prior to this age.
         """
-        age = age.to("yr").value
-
         log10ages = self.log10ages
         sf_hist = self.sf_hist
 
@@ -1177,9 +1175,11 @@ class Stars(StarsComponent):
         # specified age, and clips it to be between 0 and 1. So for bins that
         # are entirely younger than the specified age, this will be 1, for
         # bins that are entirely older than the specified age, this will be 0,
-        # and for bins that straddle the specified age, this will be the
+        # and for bins that straddle the specified age, this will be inbetween.
         frac = np.clip(
-            (age_edges[1:] - age) / (age_edges[1:] - age_edges[:-1]), 0, 1
+            (age_edges[1:] - age.value) / (age_edges[1:] - age_edges[:-1]),
+            0,
+            1,
         )
 
         return np.sum(sf_hist * frac) * Msun
@@ -1202,8 +1202,6 @@ class Stars(StarsComponent):
         Returns:
             The total mass formed prior to this age.
         """
-        age = age.to("yr").value
-
         log10ages = self.log10ages
 
         # First calculate the surviving SFH grid
@@ -1223,9 +1221,11 @@ class Stars(StarsComponent):
         # specified age, and clips it to be between 0 and 1. So for bins that
         # are entirely younger than the specified age, this will be 1, for
         # bins that are entirely older than the specified age, this will be 0,
-        # and for bins that straddle the specified age, this will be the
+        # and for bins that straddle the specified age, this will be inbetween.
         frac = np.clip(
-            (age_edges[1:] - age) / (age_edges[1:] - age_edges[:-1]), 0, 1
+            (age_edges[1:] - age.value) / (age_edges[1:] - age_edges[:-1]),
+            0,
+            1,
         )
 
         return np.sum(surviving_sf_hist * frac) * Msun
