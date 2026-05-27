@@ -1092,7 +1092,7 @@ class Stars(StarsComponent):
         Returns:
             np.ndarray: The surviving SFH grid in Msun.
         """
-        surviving_sfh = np.sum(self.calaculate_surviving_sfzh(grid), axis=1)
+        surviving_sfh = np.sum(self.calculate_surviving_sfzh(grid), axis=1)
 
         return surviving_sfh
 
@@ -1111,7 +1111,7 @@ class Stars(StarsComponent):
             unyt_quantity: The total surviving mass of the stellar
             population in Msun.
         """
-        surviving_mass = np.sum(self.calaculate_surviving_sfzh(grid))
+        surviving_mass = np.sum(self.calculate_surviving_sfzh(grid))
 
         return surviving_mass * Msun
 
