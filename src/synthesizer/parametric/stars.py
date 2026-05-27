@@ -1179,6 +1179,7 @@ class Stars(StarsComponent):
 
         return np.sum(sf_hist * frac) * Msun
 
+    @accepts(age=yr)
     def calculate_surviving_mass_at_age(self, age, grid: Grid):
         """Calculate the surviving mass at a given age.
 
@@ -1196,9 +1197,6 @@ class Stars(StarsComponent):
         Returns:
             The total mass formed prior to this age.
         """
-        if isinstance(age, unyt_quantity):
-            age = age.to("yr").value
-
         log10ages = np.asarray(self.log10ages)
 
         # First calculate the surviving SFH grid
