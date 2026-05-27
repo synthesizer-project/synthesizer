@@ -1079,6 +1079,23 @@ class Stars(StarsComponent):
 
         return surviving_sfzh
 
+    def calculate_surviving_sfh(self, grid: Grid):
+        """Calculate the surviving SFH of the stellar population.
+
+        This is the distribution of surviving stars in age.
+
+        Args:
+            grid (Grid):
+                The grid to use for calculating the surviving SFH. This is
+                used to get the stellar fraction at each SFH bin.
+
+        Returns:
+            np.ndarray: The surviving SFH grid in Msun.
+        """
+        surviving_sfh = np.sum(self.calaculate_surviving_sfzh(grid), axis=1)
+
+        return surviving_sfh
+
     def calculate_surviving_mass(self, grid: Grid):
         """Calculate the surviving mass of the stellar population.
 
@@ -1184,11 +1201,8 @@ class Stars(StarsComponent):
 
         log10ages = np.asarray(self.log10ages)
 
-        # First calculate the surviving SFZH grid
-        surviving_sfzh = self.calculate_surviving_sfzh(grid)
-
-        # We can then get the surviving SFH by summing over metallicity bins
-        surviving_sf_hist = np.sum(surviving_sfzh, axis=1)
+        # First calculate the surviving SFH grid
+        surviving_sf_hist = self.calculate_surviving_sfh(grid)
 
         # construct log-space bin edges from centres
         dlog = np.diff(log10ages)
