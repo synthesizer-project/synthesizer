@@ -9,8 +9,31 @@ from unyt import Msun, angstrom, cm, g, pc
 
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.dust_attenuation import (
+    MWN18,
+    Calzetti2000,
     DraineLiGrainCurves,
 )
+
+
+def test_calzetti_tau_is_normalised_at_v_band():
+    """Calzetti2000 should remain normalised at the V band."""
+    dust_curve = Calzetti2000()
+
+    tau = dust_curve.get_tau(np.array([1500.0, 5500.0, 9000.0]) * angstrom)
+
+    np.testing.assert_allclose(tau[1], 1.0)
+    assert np.all(np.isfinite(tau))
+
+
+def test_mwn18_tau_and_tau_at_lam_agree_at_v_band():
+    """MWN18 should preserve its V-band normalisation after refactors."""
+    dust_curve = MWN18()
+
+    tau = dust_curve.get_tau(np.array([5500.0]) * angstrom)
+    tau_at_lam = dust_curve.get_tau_at_lam(np.array([5500.0]) * angstrom)
+
+    np.testing.assert_allclose(tau, np.array([1.0]))
+    np.testing.assert_allclose(tau_at_lam / dust_curve.tau_lam_v, tau)
 
 
 def _write_draine_li_grid(path: Path, log_on_read=False):

@@ -39,7 +39,7 @@ from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.extensions.particle_spectra import compute_particle_seds
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
-from synthesizer.units import accepts
+from synthesizer.units import accepts, unyt_to_ndview
 from synthesizer.utils.operation_timers import timed
 
 this_dir, this_filename = os.path.split(__file__)
@@ -57,6 +57,61 @@ _RESET_SENTINEL = object()
 _DRAINE_LI_MEAN_MOLECULAR_WEIGHT = 1.4
 _HYDROGEN_MASS = 1.6738e-24 * g
 _GAS_MASS_PER_H = (_DRAINE_LI_MEAN_MOLECULAR_WEIGHT * _HYDROGEN_MASS).to(Msun)
+_POWERLAW_V_BAND_ANGSTROM = 5500.0
+_N09_LAM_UM = np.linspace(0.01, 3.0, 10000, endpoint=True)
+_N09_LAM_V_UM = 0.55
+
+
+def _linear_interp_with_extrapolation(x, xp, fp):
+    """Interpolate linearly while preserving edge extrapolation slopes."""
+    x = np.asarray(x, dtype=np.float64)
+    out = np.interp(x, xp, fp)
+
+    if xp.size > 1:
+        low = x < xp[0]
+        if np.any(low):
+            low_slope = (fp[1] - fp[0]) / (xp[1] - xp[0])
+            out[low] = fp[0] + (x[low] - xp[0]) * low_slope
+
+        high = x > xp[-1]
+        if np.any(high):
+            high_slope = (fp[-1] - fp[-2]) / (xp[-1] - xp[-2])
+            out[high] = fp[-1] + (x[high] - xp[-1]) * high_slope
+
+    return out
+
+
+def _get_n09_base_curve():
+    """Precompute the wavelength-only Calzetti support curve once."""
+    k_lam = np.zeros_like(_N09_LAM_UM)
+
+    ok1 = (_N09_LAM_UM >= 0.12) & (_N09_LAM_UM < 0.63)
+    ok2 = (_N09_LAM_UM >= 0.63) & (_N09_LAM_UM < 3.1)
+    ok3 = _N09_LAM_UM < 0.12
+
+    k_lam[ok1] = (
+        -2.156
+        + (1.509 / _N09_LAM_UM[ok1])
+        - (0.198 / _N09_LAM_UM[ok1] ** 2)
+        + (0.011 / _N09_LAM_UM[ok1] ** 3)
+    )
+    k_lam[ok2] = -1.857 + (1.040 / _N09_LAM_UM[ok2])
+    k_lam[ok3] = _linear_interp_with_extrapolation(
+        _N09_LAM_UM[ok3], _N09_LAM_UM[ok1], k_lam[ok1]
+    )
+
+    k_lam = 4.05 + 2.659 * k_lam
+    k_v = 4.05 + 2.659 * (
+        -2.156
+        + (1.509 / _N09_LAM_V_UM)
+        - (0.198 / _N09_LAM_V_UM**2)
+        + (0.011 / _N09_LAM_V_UM**3)
+    )
+
+    return k_lam, k_v
+
+
+_N09_K_LAM, _N09_K_V = _get_n09_base_curve()
 
 
 class AttenuationLaw(Transformer):
@@ -159,18 +214,23 @@ class AttenuationLaw(Transformer):
             # Always restore previous state
             self._reset_params()
 
-        # Include the V band optical depth in the exponent
-        # For a scalar we can just multiply but for an array we need to
-        # broadcast
+        # Include the V band optical depth in the exponent while minimising
+        # temporary allocations on the hot path.
         if np.isscalar(tau_v):
-            exponent = tau_v * tau_x_v
-        else:
-            if np.ndim(lam) == 0:
-                exponent = tau_v[:] * tau_x_v
-            else:
-                exponent = tau_v[:, None] * tau_x_v
+            transmission = np.array(tau_x_v, copy=True)
+            transmission *= -tau_v
+            np.exp(transmission, out=transmission)
+            return transmission
 
-        return np.exp(-exponent)
+        if np.ndim(lam) == 0:
+            transmission = np.array(tau_v, copy=True)
+            transmission *= -tau_x_v
+        else:
+            transmission = np.multiply.outer(tau_v, tau_x_v)
+            transmission *= -1.0
+
+        np.exp(transmission, out=transmission)
+        return transmission
 
     def _check_required_params(self):
         """Get the required parameters for the transformer.
@@ -435,7 +495,8 @@ class PowerLaw(AttenuationLaw):
         Returns:
             float/np.ndarray of float: The optical depth.
         """
-        return (lam / (5500.0 * angstrom)) ** self.slope
+        lam_values = unyt_to_ndview(lam, angstrom)
+        return (lam_values / _POWERLAW_V_BAND_ANGSTROM) ** self.slope
 
     @accepts(lam=angstrom)
     def get_tau(self, lam):
@@ -449,9 +510,8 @@ class PowerLaw(AttenuationLaw):
         Returns:
             float/np.ndarray of float: The optical depth.
         """
-        return self.get_tau_at_lam(lam) / self.get_tau_at_lam(
-            5500.0 * angstrom
-        )
+        lam_values = unyt_to_ndview(lam, angstrom)
+        return (lam_values / _POWERLAW_V_BAND_ANGSTROM) ** self.slope
 
 
 @accepts(lam=angstrom, cent_lam=angstrom, gamma=angstrom)
@@ -482,64 +542,33 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
         np.ndarray of float: V-band normalised optical depth for
             given wavelength
     """
-    # Performing some unit conversions to match the
-    # Calzetti curve units which are in um
-    _lam = np.linspace(0.01, 3.0, 10000, endpoint=True) * um
-    _cent_lam = cent_lam.to("um")
-    _gamma = gamma.to("um")
-    lam_v = 0.55  # in um
+    lam_um = np.asarray(lam.to_value("um"), dtype=np.float64)
+    scalar_input = lam_um.ndim == 0
+    lam_um = np.atleast_1d(lam_um)
 
-    k_lam = np.zeros_like(_lam.value)
+    cent_lam_um = cent_lam.to_value("um")
+    gamma_um = gamma.to_value("um")
 
-    # Masking for different regimes in the Calzetti curve
-    ok1 = (_lam >= 0.12) * (_lam < 0.63)  # 0.12um<=lam<0.63um
-    ok2 = (_lam >= 0.63) * (_lam < 3.1)  # 0.63um<=lam<=3.10um
-    ok3 = _lam < 0.12  # lam<0.12um
-    if np.sum(ok1) > 0:  # equation 1
-        k_lam[ok1] = (
-            -2.156
-            + (1.509 / _lam.value[ok1])
-            - (0.198 / _lam.value[ok1] ** 2)
-            + (0.011 / _lam.value[ok1] ** 3)
-        )
-        func = interpolate.interp1d(
-            _lam.value[ok1], k_lam[ok1], fill_value="extrapolate"
-        )
-    else:
-        func = None
-    if np.sum(ok2) > 0:  # equation 2
-        k_lam[ok2] = -1.857 + (1.040 / _lam.value[ok2])
-    if np.sum(ok3) > 0:
-        # This will never be none
-        if func is None:
-            raise exceptions.InconsistentArguments("No data in the UV-optical")
-        # Extrapolating the 0.12um<=lam<0.63um regime
-        k_lam[ok3] = func(_lam.value[ok3])
-
-    # Using the Calzetti attenuation curve normalised
-    # to Av=4.05
-    k_lam = 4.05 + 2.659 * k_lam
-    k_v = 4.05 + 2.659 * (
-        -2.156 + (1.509 / lam_v) - (0.198 / lam_v**2) + (0.011 / lam_v**3)
-    )
-
-    # UV bump feature expression from Noll+2009
+    # UV bump feature expression from Noll+2009 evaluated on the fixed support
+    # grid used by the original implementation.
     D_lam = (
         ampl
-        * ((_lam * _gamma) ** 2)
-        / ((_lam**2 - _cent_lam**2) ** 2 + (_lam * _gamma) ** 2)
+        * ((_N09_LAM_UM * gamma_um) ** 2)
+        / (
+            (_N09_LAM_UM**2 - cent_lam_um**2) ** 2
+            + (_N09_LAM_UM * gamma_um) ** 2
+        )
     )
 
     # Normalising with the value at 0.55um, to obtain
     # normalised optical depth
-    tau_x_v = (k_lam + D_lam) / k_v
-    tau_x = tau_x_v * (_lam.value / lam_v) ** slope
+    tau_x_v = (_N09_K_LAM + D_lam) / _N09_K_V
+    tau_x = tau_x_v * (_N09_LAM_UM / _N09_LAM_V_UM) ** slope
+    out = np.interp(lam_um, _N09_LAM_UM, tau_x, left=tau_x[0], right=tau_x[-1])
 
-    func = interpolate.interp1d(
-        _lam, tau_x, bounds_error=False, fill_value=(tau_x[0], tau_x[-1])
-    )
-
-    return func(lam.to("um"))
+    if scalar_input:
+        return out[0]
+    return out
 
 
 class Calzetti2000(AttenuationLaw):
@@ -690,9 +719,10 @@ class MWN18(AttenuationLaw):
         description = "MW extinction curve from Desika"
         AttenuationLaw.__init__(self, description)
         self.data = np.load(f"{this_dir}/../../data/MW_N18.npz")
-        self.tau_lam_v = np.interp(
-            5500.0, self.data.f.mw_df_lam[::-1], self.data.f.mw_df_chi[::-1]
-        )
+        self._lam_grid = self.data.f.mw_df_lam[::-1]
+        self._chi_grid = self.data.f.mw_df_chi[::-1]
+        self.tau_lam_v = np.interp(5500.0, self._lam_grid, self._chi_grid)
+        self._interp_cache = {}
 
     def __repr__(self):
         """Return a string representation of the MWN18 object."""
@@ -716,13 +746,7 @@ class MWN18(AttenuationLaw):
         Returns:
             float/array, float: The optical depth.
         """
-        func = interpolate.interp1d(
-            self.data.f.mw_df_lam[::-1],
-            self.data.f.mw_df_chi[::-1],
-            kind=interp,
-            fill_value="extrapolate",
-        )
-        return func(lam) / self.tau_lam_v
+        return self.get_tau_at_lam(lam, interp=interp) / self.tau_lam_v
 
     @accepts(lam=angstrom)
     def get_tau_at_lam(self, lam, interp="cubic"):
@@ -743,13 +767,18 @@ class MWN18(AttenuationLaw):
             float/array, float
                 The optical depth.
         """
-        func = interpolate.interp1d(
-            self.data.f.mw_df_lam[::-1],
-            self.data.f.mw_df_chi[::-1],
-            kind=interp,
-            fill_value="extrapolate",
-        )
-        return func(lam)
+        if interp == "linear":
+            return np.interp(lam, self._lam_grid, self._chi_grid)
+
+        if interp not in self._interp_cache:
+            self._interp_cache[interp] = interpolate.interp1d(
+                self._lam_grid,
+                self._chi_grid,
+                kind=interp,
+                fill_value="extrapolate",
+            )
+
+        return self._interp_cache[interp](lam)
 
 
 class GrainModels(AttenuationLaw):
