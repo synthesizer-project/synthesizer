@@ -1143,6 +1143,7 @@ class Stars(StarsComponent):
             axis=(0, 1),
         )
 
+    @accepts(age=yr)
     def calculate_initial_mass_at_age(self, age):
         """Calculate the initial mass of the stellar population at a given age.
 
@@ -1157,9 +1158,6 @@ class Stars(StarsComponent):
         Returns:
             The total mass formed prior to this age.
         """
-        if isinstance(age, unyt_quantity):
-            age = age.to("yr").value
-
         log10ages = np.asarray(self.log10ages)
         sf_hist = np.asarray(self.sf_hist)
 
