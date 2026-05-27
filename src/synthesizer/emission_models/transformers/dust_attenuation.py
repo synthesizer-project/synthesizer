@@ -17,6 +17,7 @@ Example usage::
 
 import copy
 import os
+from abc import abstractmethod
 from typing import Dict
 
 import matplotlib.pyplot as plt
@@ -166,12 +167,10 @@ class AttenuationLaw(Transformer):
         """Return a string representation of the AttenuationLaw object."""
         return f"{self.__class__.__name__}({self.description})"
 
+    @abstractmethod
     def get_tau(self, *args):
         """Compute the V-band normalised optical depth."""
-        raise exceptions.UnimplementedFunctionality(
-            "AttenuationLaw should not be instantiated directly!"
-            " Instead use one to child models (" + ", ".join(__all__) + ")"
-        )
+        pass
 
     def get_tau_at_lam(self, *args):
         """Compute the optical depth at wavelength."""
@@ -215,14 +214,16 @@ class AttenuationLaw(Transformer):
             # Always restore previous state
             self._reset_params()
 
-        # Include the V band optical depth in the exponent while minimising
-        # temporary allocations on the hot path.
+        # Handle the scalar optical-depth case by reusing a single output
+        # buffer for both the exponent and the transmission.
         if np.isscalar(tau_v):
             transmission = np.array(tau_x_v, copy=True)
             transmission *= -tau_v
             np.exp(transmission, out=transmission)
             return transmission
 
+        # Otherwise build the row-by-wavelength grid and exponentiate it in
+        # place, avoiding a second temporary transmission array.
         if np.ndim(lam) == 0:
             transmission = np.array(tau_v, copy=True)
             transmission *= -tau_x_v
@@ -496,10 +497,13 @@ class PowerLaw(AttenuationLaw):
         Returns:
             float/np.ndarray of float: The optical depth.
         """
+        # Extract a raw angstrom buffer so the power-law evaluation avoids
+        # rebuilding unit-bearing wavelength arrays on the hot path.
         lam_values = unyt_to_ndview(lam, angstrom)
         return (lam_values / _POWERLAW_V_BAND_ANGSTROM) ** self.slope
 
     @accepts(lam=angstrom)
+    @timed("PowerLaw.get_tau")
     def get_tau(self, lam):
         """Calculate V-band normalised optical depth.
 
@@ -511,6 +515,8 @@ class PowerLaw(AttenuationLaw):
         Returns:
             float/np.ndarray of float: The optical depth.
         """
+        # A power-law attenuation curve is already V-band normalised once the
+        # wavelengths are expressed relative to 5500 Angstrom.
         lam_values = unyt_to_ndview(lam, angstrom)
         return (lam_values / _POWERLAW_V_BAND_ANGSTROM) ** self.slope
 

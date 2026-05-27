@@ -890,10 +890,9 @@ class Combination:
                     combine_spectra_list_2d,
                 )
 
-                with timer("Combination._combine_spectra.gather_inputs"):
-                    input_lnu = [
-                        in_spectra[label]._lnu for label in combine_labels
-                    ]
+                input_lnu = [
+                    in_spectra[label]._lnu for label in combine_labels
+                ]
 
                 with timer("Combination._combine_spectra.c_kernel"):
                     combined_lnu = combine_spectra_list_2d(
@@ -909,14 +908,13 @@ class Combination:
                         ),
                     )
             else:
-                with timer("Combination._combine_spectra.python_initialise"):
-                    initial_lnu = np.array(template_lnu, copy=True)
-                    np.nan_to_num(initial_lnu, copy=False)
-                    out_spec = Sed(
-                        emission_model.lam,
-                        lnu=get_array_quantity_view(initial_lnu, erg / s / Hz),
-                    )
-                    out_lnu = out_spec._lnu
+                initial_lnu = np.array(template_lnu, copy=True)
+                np.nan_to_num(initial_lnu, copy=False)
+                out_spec = Sed(
+                    emission_model.lam,
+                    lnu=get_array_quantity_view(initial_lnu, erg / s / Hz),
+                )
+                out_lnu = out_spec._lnu
 
                 with timer("Combination._combine_spectra.python_fallback"):
                     # Seed from the first spectrum so subsequent work only

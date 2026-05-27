@@ -58,6 +58,20 @@ def test_get_fnu0_handles_multidimensional_spectra():
     np.testing.assert_allclose(sed._obsnu, sed._nu)
 
 
+def test_get_fnu0_reuses_final_contiguous_wavelength_buffers():
+    """Rest-frame flux conversion should alias the final wavelength buffers."""
+    lam = np.linspace(1000, 2000, 16)[::2] * angstrom
+    lnu = (np.arange(16, dtype=float).reshape(2, 8) + 1.0) * erg / s / Hz
+
+    sed = Sed(lam=lam, lnu=lnu)
+    sed.get_fnu0()
+
+    assert sed._obslam is sed._lam
+    assert sed._obsnu is sed._nu
+    assert sed._lam.flags.c_contiguous
+    assert sed._nu.flags.c_contiguous
+
+
 def test_get_fnu_applies_igm_with_observer_frame_wavelengths():
     """IGM attenuation should use observer-frame wavelengths once."""
 
@@ -112,3 +126,20 @@ def test_scale_respects_wavelength_mask_with_broadcast_scaling():
     expected = lnu.value.copy()
     expected[:, lam_mask] *= scaling[:, None]
     np.testing.assert_allclose(scaled.lnu.value, expected)
+
+
+def test_apply_attenuation_fused_particle_path_matches_expected_scaling():
+    """Particle attenuation fast path should match separable scaling."""
+    lam = np.linspace(1000, 2000, 4) * angstrom
+    lnu = (np.arange(12, dtype=float).reshape(3, 4) + 1.0) * erg / s / Hz
+    tau_v = np.array([0.1, 0.2, 0.3])
+
+    from synthesizer.emission_models.transformers import PowerLaw
+
+    attenuated = Sed(lam=lam, lnu=lnu).apply_attenuation(
+        tau_v=tau_v,
+        dust_curve=PowerLaw(slope=0.0),
+    )
+
+    expected = lnu.value * np.exp(-tau_v)[:, None]
+    np.testing.assert_allclose(attenuated.lnu.value, expected)

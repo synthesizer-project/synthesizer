@@ -45,16 +45,19 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
+from synthesizer.emission_models.transformers.dust_attenuation import (
+    AttenuationLaw,
+)
 from synthesizer.emissions.utils import (
     ensure_array_buffer,
     get_array_quantity_view,
     get_quantity_view,
 )
-from synthesizer.extensions.reductions import (
+from synthesizer.extensions.observed_spectra import compute_fnu
+from synthesizer.extensions.reductions import reduce_particle_spectra
+from synthesizer.extensions.spectra_operations import (
     apply_separable_attenuation_2d,
-    compute_fnu,
     multiply_array_by_vector_1d,
-    reduce_particle_spectra,
     scale_spectra_2d,
 )
 from synthesizer.photometry import PhotometryCollection
@@ -425,121 +428,104 @@ class Sed:
             Sed
                 A new instance of Sed with scaled lnu.
         """
-        with timer("Sed.scale.prepare_inputs"):
-            # If we have units make sure they are ok and then strip them
-            if isinstance(scaling, (unyt_array, unyt_quantity)):
-                if self.lnu.units.dimensions != scaling.units.dimensions:
-                    raise exceptions.InconsistentMultiplication(
-                        "Incompatible units "
-                        f"{self.lnu.units} and {scaling.units}"
-                    )
-                else:
-                    scaling = scaling.to(self.lnu.units)
-                    scaling = scaling.value
-
-            scaling_ndim = getattr(scaling, "ndim", 0)
-            use_fast_2d_scaling = (
-                isinstance(scaling, np.ndarray)
-                and self._lnu.ndim == 2
-                and scaling_ndim == 1
-                and scaling.shape[0] == self._lnu.shape[0]
-                and (mask is None or (getattr(mask, "ndim", 0) == 1))
-                and (lam_mask is None or getattr(lam_mask, "ndim", 0) == 1)
-            )
-
-            # Unpack the arrays we'll need during scaling.
-            if use_fast_2d_scaling:
-                lnu = None
-            elif lam_mask is None:
-                lnu = np.array(self._lnu, copy=True)
-            else:
-                lnu = np.array(self._lnu[..., lam_mask], copy=True)
-            units = self.lnu.units
-
-        with timer("Sed.scale.apply_scaling"):
-            # Handle a scalar scaling factor
-            if np.isscalar(scaling):
-                with timer("Sed.scale.scalar"):
-                    if mask is not None:
-                        lnu[mask] *= scaling
-                    else:
-                        lnu *= scaling
-
-            # Handle a multi-element array scaling factor as long as it
-            # matches the lnu array up to the scaling dimensions.
-            elif use_fast_2d_scaling:
-                with timer("Sed.scale.fast_2d_kernel"):
-                    lnu = scale_spectra_2d(
-                        self._lnu,
-                        scaling,
-                        mask,
-                        lam_mask,
-                        nthreads,
-                    )
-            elif isinstance(scaling, np.ndarray) and scaling_ndim < lnu.ndim:
-                with timer("Sed.scale.broadcast_numpy"):
-                    expand_axes = tuple(range(scaling_ndim, lnu.ndim))
-                    expanded_scaling = np.expand_dims(
-                        scaling, axis=expand_axes
-                    )
-
-                    if mask is not None:
-                        lnu[mask] *= expanded_scaling
-                    else:
-                        lnu *= expanded_scaling
-
-            # If the scaling array already matches the lnu shape we can
-            # multiply directly.
-            elif (
-                isinstance(scaling, np.ndarray) and scaling.shape == lnu.shape
-            ):
-                with timer("Sed.scale.same_shape_numpy"):
-                    if mask is not None:
-                        lnu[mask] *= scaling[mask]
-                    else:
-                        lnu *= scaling
-
-            # If the shapes differ entirely, create a new array where each
-            # element of the scaling array is
-            # multipled by the whole lnu array producing a new lnu array of
-            # shape (scaling.shape + lnu.shape)
-            elif isinstance(scaling, np.ndarray):
-                with timer("Sed.scale.expand_new_axis"):
-                    lnu = scaling[..., np.newaxis] * lnu
-
-                    if mask is not None:
-                        raise exceptions.InconsistentMultiplication(
-                            "Masking is not supported for scaling arrays"
-                            " with different shapes"
-                        )
-
-            # Otherwise, we've been handed a bad scaling factor
-            else:
-                out_str = (
-                    f"Incompatible scaling factor with type {type(scaling)} "
+        # If we have units make sure they are ok and then strip them
+        if isinstance(scaling, (unyt_array, unyt_quantity)):
+            if self.lnu.units.dimensions != scaling.units.dimensions:
+                raise exceptions.InconsistentMultiplication(
+                    f"Incompatible units {self.lnu.units} and {scaling.units}"
                 )
-                if hasattr(scaling, "shape"):
-                    out_str += (
-                        f"and shape {scaling.shape} (expected {self.shape})"
-                    )
-                else:
-                    out_str += f"and value {scaling}"
+            else:
+                scaling = scaling.to(self.lnu.units)
+                scaling = scaling.value
+
+        scaling_ndim = getattr(scaling, "ndim", 0)
+        use_fast_2d_scaling = (
+            isinstance(scaling, np.ndarray)
+            and self._lnu.ndim == 2
+            and scaling_ndim == 1
+            and scaling.shape[0] == self._lnu.shape[0]
+            and (mask is None or (getattr(mask, "ndim", 0) == 1))
+            and (lam_mask is None or getattr(lam_mask, "ndim", 0) == 1)
+        )
+
+        # Unpack the arrays we'll need during scaling.
+        if use_fast_2d_scaling:
+            lnu = None
+        elif lam_mask is None:
+            lnu = np.array(self._lnu, copy=True)
+        else:
+            lnu = np.array(self._lnu[..., lam_mask], copy=True)
+        units = self.lnu.units
+
+        # Handle a scalar scaling factor
+        if np.isscalar(scaling):
+            if mask is not None:
+                lnu[mask] *= scaling
+            else:
+                lnu *= scaling
+
+        # Handle a multi-element array scaling factor as long as it
+        # matches the lnu array up to the scaling dimensions.
+        elif use_fast_2d_scaling:
+            lnu = scale_spectra_2d(
+                self._lnu,
+                scaling,
+                mask,
+                lam_mask,
+                nthreads,
+            )
+        elif isinstance(scaling, np.ndarray) and scaling_ndim < lnu.ndim:
+            expand_axes = tuple(range(scaling_ndim, lnu.ndim))
+            expanded_scaling = np.expand_dims(scaling, axis=expand_axes)
+
+            if mask is not None:
+                lnu[mask] *= expanded_scaling
+            else:
+                lnu *= expanded_scaling
+
+        # If the scaling array already matches the lnu shape we can
+        # multiply directly.
+        elif isinstance(scaling, np.ndarray) and scaling.shape == lnu.shape:
+            if mask is not None:
+                lnu[mask] *= scaling[mask]
+            else:
+                lnu *= scaling
+
+        # If the shapes differ entirely, create a new array where each
+        # element of the scaling array is
+        # multipled by the whole lnu array producing a new lnu array of
+        # shape (scaling.shape + lnu.shape)
+        elif isinstance(scaling, np.ndarray):
+            lnu = scaling[..., np.newaxis] * lnu
+
+            if mask is not None:
+                raise exceptions.InconsistentMultiplication(
+                    "Masking is not supported for scaling arrays"
+                    " with different shapes"
+                )
+
+        # Otherwise, we've been handed a bad scaling factor
+        else:
+            out_str = f"Incompatible scaling factor with type {type(scaling)} "
+            if hasattr(scaling, "shape"):
+                out_str += f"and shape {scaling.shape} (expected {self.shape})"
+            else:
+                out_str += f"and value {scaling}"
                 raise exceptions.InconsistentMultiplication(out_str)
 
-        with timer("Sed.scale.wrap_output"):
-            if use_fast_2d_scaling:
-                new_lnu = get_array_quantity_view(lnu, units)
-            elif lam_mask is not None:
-                new_lnu = np.array(self._lnu, copy=True)
-                new_lnu[..., lam_mask] = lnu
-                new_lnu = get_array_quantity_view(new_lnu, units)
-            else:
-                new_lnu = get_array_quantity_view(lnu, units)
+        if use_fast_2d_scaling:
+            new_lnu = get_array_quantity_view(lnu, units)
+        elif lam_mask is not None:
+            new_lnu = np.array(self._lnu, copy=True)
+            new_lnu[..., lam_mask] = lnu
+            new_lnu = get_array_quantity_view(new_lnu, units)
+        else:
+            new_lnu = get_array_quantity_view(lnu, units)
 
-            if not inplace:
-                return Sed(self.lam, lnu=new_lnu)
+        if not inplace:
+            return Sed(self.lam, lnu=new_lnu)
 
-            self._lnu = new_lnu
+        self._lnu = new_lnu
         return self
 
     def __mul__(self, scaling):
@@ -1184,10 +1170,6 @@ class Sed:
             fnu (ndarray):
                 Spectral flux density calcualted at d=10 pc.
         """
-        # Rest-frame fluxes reuse the emitted wavelength and frequency grids.
-        self._obslam = self._lam
-        self._obsnu = self._nu
-
         # Ensure the kernel sees internal float64 C-contiguous buffers so it
         # never needs to allocate coercion copies on the hot path.
         if self._lnu.dtype != np.float64 or not self._lnu.flags.c_contiguous:
@@ -1197,10 +1179,19 @@ class Sed:
         if self._nu.dtype != np.float64 or not self._nu.flags.c_contiguous:
             self._nu = np.ascontiguousarray(self._nu, dtype=np.float64)
 
+        # Rest-frame fluxes reuse the final emitted wavelength and frequency
+        # buffers after any contiguity normalisation above.
+        self._obslam = self._lam
+        self._obsnu = self._nu
+
+        # Fold the fixed 10 pc unit conversion into a single scalar before we
+        # enter the C kernel so the hot path stays entirely array based.
         conversion = _get_fnu_unit_factor() / (
             4 * np.pi * _get_ten_pc_in_cm() ** 2
         )
 
+        # Populate the flux buffer in place; the observer-frame grids are
+        # omitted here because the rest-frame conversion reuses self._lam/_nu.
         compute_fnu(
             self._lnu,
             self._lam,
@@ -1265,12 +1256,16 @@ class Sed:
 
         # Compute the luminosity distance
         luminosity_distance_cm = get_luminosity_distance(cosmo, z).to_value(cm)
+        # Fold the observer-frame distance and redshift conversion into a
+        # single scalar before we hand off to the C kernel.
         conversion = (
             _get_fnu_unit_factor()
             * one_plus_z
             / (4 * np.pi * luminosity_distance_cm**2)
         )
 
+        # Populate the observer-frame grids and flux buffer together so the
+        # large spectra array is only traversed once inside the C kernel.
         compute_fnu(
             self._lnu,
             self._lam,
@@ -1672,19 +1667,29 @@ class Sed:
                         f"({tau_v.shape}, {self._lnu.shape})"
                     )
 
+        # Use a no-copy wavelength view so attenuation calls do not rebuild a
+        # unit-bearing wavelength array from the public descriptor each time.
         lam = get_quantity_view(self, "_lam")
 
         if (
             self._lnu.ndim == 2
             and isinstance(tau_v, np.ndarray)
             and mask is None
-            and hasattr(dust_curve, "get_tau")
+            # Only use the separable fast path when the model uses the base
+            # get_transmission (exp(-tau_v * tau_x_v)). Subclasses that
+            # override get_transmission (e.g. DraineLiGrainCurves) may not
+            # factor this way and would get silently wrong results.
+            and type(dust_curve).get_transmission
+            is AttenuationLaw.get_transmission
         ):
-            with timer("Sed.apply_attenuation.get_tau"):
-                tau_x_v = dust_curve.get_tau(lam, **dust_curve_kwargs)
+            # When the attenuation is separable in particle and wavelength we
+            # can avoid ever materialising the full transmission matrix.
+            tau_x_v = dust_curve.get_tau(lam, **dust_curve_kwargs)
 
             with timer("Sed.apply_attenuation.apply_transmission"):
                 with timer("Sed.apply_attenuation.separable_2d_kernel"):
+                    # Apply exp(-tau_v * tau_x_v) directly to the spectra array
+                    # so the full transmission matrix never needs to exist.
                     spectra = apply_separable_attenuation_2d(
                         self._lnu,
                         tau_v,
@@ -1692,6 +1697,8 @@ class Sed:
                         None,
                         nthreads,
                     )
+                # Wrap the resulting raw buffer without another copy before
+                # constructing the attenuated Sed.
                 return Sed(
                     self.lam,
                     lnu=get_array_quantity_view(spectra, self.lnu.units),
@@ -1738,6 +1745,8 @@ class Sed:
                 )
 
             with timer("Sed.apply_attenuation.numpy_fallback"):
+                # Fall back to the generic NumPy path for shapes not covered by
+                # the specialised kernels above.
                 spectra = np.copy(self._lnu)
 
                 if mask is None:

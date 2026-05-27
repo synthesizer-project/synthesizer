@@ -91,13 +91,6 @@ def main() -> None:
 
     print(f"Loaded {len(timing_data)} timing profiles")
 
-    def _parse_numeric_labels(raw_labels: list[str]) -> list[float] | None:
-        """Return numeric labels when every run label is parseable."""
-        try:
-            return [float(label) for label in raw_labels]
-        except ValueError:
-            return None
-
     # Get operations (from first profile)
     operations = list(next(iter(timing_data.values())).keys())
 
@@ -122,7 +115,11 @@ def main() -> None:
 
     # Create a grouped comparison plot across the provided runs.
     fig, ax = plt.subplots(figsize=(12, 8))
-    numeric_labels = _parse_numeric_labels(labels)
+    try:
+        numeric_labels = [float(label) for label in labels]
+    except ValueError:
+        numeric_labels = None
+
     if numeric_labels is None:
         x_values = np.arange(len(labels))
         x_axis_label = "Run"

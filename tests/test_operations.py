@@ -32,6 +32,10 @@ class NoTauDustCurve(AttenuationLaw):
         """Return a constant transmission independent of tau_v."""
         return np.full(np.atleast_1d(lam).shape, self.transmission)
 
+    def get_tau(self, lam):
+        """Return the optical depth matching the fixed transmission."""
+        return np.full(np.atleast_1d(lam).shape, -np.log(self.transmission))
+
 
 def test_single_star_extraction(
     single_star_particle,
