@@ -150,6 +150,7 @@ class AttenuationLaw(Transformer):
         """
         # Store the description of the model.
         self.description = description
+
         # Store user-supplied conversions between model arguments and parameter
         # names, e.g. allows the user to set e.g. slope = 'slope_young' on the
         # emitter or model and have that passed to the dust curve as slope

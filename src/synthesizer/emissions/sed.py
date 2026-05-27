@@ -45,9 +45,6 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
-from synthesizer.emission_models.transformers.dust_attenuation import (
-    AttenuationLaw,
-)
 from synthesizer.emissions.utils import (
     ensure_array_buffer,
     get_array_quantity_view,
@@ -56,7 +53,6 @@ from synthesizer.emissions.utils import (
 from synthesizer.extensions.observed_spectra import compute_fnu
 from synthesizer.extensions.reductions import reduce_particle_spectra
 from synthesizer.extensions.spectra_operations import (
-    apply_separable_attenuation_2d,
     multiply_array_by_vector_1d,
     scale_spectra_2d,
 )
@@ -1671,95 +1667,63 @@ class Sed:
         # unit-bearing wavelength array from the public descriptor each time.
         lam = get_quantity_view(self, "_lam")
 
-        if (
-            self._lnu.ndim == 2
-            and isinstance(tau_v, np.ndarray)
-            and mask is None
-            # Only use the separable fast path when the model uses the base
-            # get_transmission (exp(-tau_v * tau_x_v)). Subclasses that
-            # override get_transmission (e.g. DraineLiGrainCurves) may not
-            # factor this way and would get silently wrong results.
-            and type(dust_curve).get_transmission
-            is AttenuationLaw.get_transmission
-        ):
-            # When the attenuation is separable in particle and wavelength we
-            # can avoid ever materialising the full transmission matrix.
-            tau_x_v = dust_curve.get_tau(lam, **dust_curve_kwargs)
-
-            with timer("Sed.apply_attenuation.apply_transmission"):
-                with timer("Sed.apply_attenuation.separable_2d_kernel"):
-                    # Apply exp(-tau_v * tau_x_v) directly to the spectra array
-                    # so the full transmission matrix never needs to exist.
-                    spectra = apply_separable_attenuation_2d(
-                        self._lnu,
-                        tau_v,
-                        tau_x_v,
-                        None,
-                        nthreads,
-                    )
-                # Wrap the resulting raw buffer without another copy before
-                # constructing the attenuated Sed.
-                return Sed(
-                    self.lam,
-                    lnu=get_array_quantity_view(spectra, self.lnu.units),
-                )
-
+        # Delegate the transmission computation to the dust curve. The
+        # transformer is responsible for any internal optimisation (e.g.
+        # separable exp(-tau_v * tau(lam)) vs direct tau_lam computation).
         transmission = dust_curve.get_transmission(
             tau_v, lam, **dust_curve_kwargs
         )
 
-        with timer("Sed.apply_attenuation.apply_transmission"):
-            if (
-                self._lnu.ndim == 2
-                and isinstance(transmission, np.ndarray)
-                and transmission.ndim == 1
-                and mask is not None
-            ):
-                with timer("Sed.apply_attenuation.masked_1d_kernel"):
-                    spectra = scale_spectra_2d(
-                        self._lnu,
-                        transmission,
-                        mask,
-                        None,
-                        nthreads,
-                    )
-                return Sed(
-                    self.lam,
-                    lnu=get_array_quantity_view(spectra, self.lnu.units),
+        # Apply the transmission to the spectra.
+        if (
+            self._lnu.ndim == 2
+            and isinstance(transmission, np.ndarray)
+            and transmission.ndim == 1
+            and mask is not None
+        ):
+            with timer("Sed.apply_attenuation.masked_1d_kernel"):
+                spectra = scale_spectra_2d(
+                    self._lnu,
+                    transmission,
+                    mask,
+                    None,
+                    nthreads,
                 )
-
-            if (
-                self._lnu.ndim == 2
-                and isinstance(transmission, np.ndarray)
-                and transmission.ndim == 1
-            ):
-                with timer("Sed.apply_attenuation.unmasked_1d_kernel"):
-                    spectra = multiply_array_by_vector_1d(
-                        self._lnu,
-                        transmission,
-                        nthreads,
-                    )
-                return Sed(
-                    self.lam,
-                    lnu=get_array_quantity_view(spectra, self.lnu.units),
-                )
-
-            with timer("Sed.apply_attenuation.numpy_fallback"):
-                # Fall back to the generic NumPy path for shapes not covered by
-                # the specialised kernels above.
-                spectra = np.copy(self._lnu)
-
-                if mask is None:
-                    spectra *= transmission
-                elif transmission.ndim > 1:
-                    spectra[mask] *= transmission[mask]
-                else:
-                    spectra[mask] *= transmission
-
             return Sed(
                 self.lam,
                 lnu=get_array_quantity_view(spectra, self.lnu.units),
             )
+
+        if (
+            self._lnu.ndim == 2
+            and isinstance(transmission, np.ndarray)
+            and transmission.ndim == 1
+        ):
+            with timer("Sed.apply_attenuation.unmasked_1d_kernel"):
+                spectra = multiply_array_by_vector_1d(
+                    self._lnu,
+                    transmission,
+                    nthreads,
+                )
+            return Sed(
+                self.lam,
+                lnu=get_array_quantity_view(spectra, self.lnu.units),
+            )
+
+        with timer("Sed.apply_attenuation.numpy_fallback"):
+            spectra = np.copy(self._lnu)
+
+            if mask is None:
+                spectra *= transmission
+            elif transmission.ndim > 1:
+                spectra[mask] *= transmission[mask]
+            else:
+                spectra[mask] *= transmission
+
+        return Sed(
+            self.lam,
+            lnu=get_array_quantity_view(spectra, self.lnu.units),
+        )
 
     @accepts(ionisation_energy=eV)
     def calculate_ionising_photon_production_rate(
