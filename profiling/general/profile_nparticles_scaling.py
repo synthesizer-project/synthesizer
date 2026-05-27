@@ -21,6 +21,7 @@ from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
+from synthesizer.utils.operation_timers import OperationTimers
 
 # Add pipeline profiling to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "pipeline"))
@@ -35,12 +36,17 @@ plt.rcParams["axes.titlesize"] = 0  # Force no titles
 np.random.seed(42)
 
 
-def profile_nparticles(nthreads=1, n_averages=3):
+def profile_nparticles(
+    nthreads=1, n_averages=3, output_dir=Path("profiling/plots")
+):
     """Run the profiling."""
     print(
         f"Initializing Grid and Models (nthreads={nthreads}, "
         f"n_averages={n_averages})..."
     )
+    timers = OperationTimers()
+    timers.reset()
+
     grid = Grid("test_grid")
     n_lam = grid.nlam
 
@@ -301,7 +307,6 @@ def profile_nparticles(nthreads=1, n_averages=3):
                 times[cat][label].append(np.mean(iter_times[cat][label]))
 
     # --- Plotting ---
-    output_dir = Path("profiling/plots")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     def make_plot(category_name, filename):
@@ -341,12 +346,23 @@ def profile_nparticles(nthreads=1, n_averages=3):
     make_plot("spectra", "scaling_nparticles_spectra.png")
     make_plot("photometry", "scaling_nparticles_photometry.png")
     make_plot("imaging", "scaling_nparticles_imaging.png")
+    print("Operation timing table:")
+    OperationTimers.print_table()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--nthreads", type=int, default=1)
     parser.add_argument("--n_averages", type=int, default=3)
+    parser.add_argument(
+        "--output_dir",
+        type=Path,
+        default=Path("profiling/plots"),
+    )
     args = parser.parse_args()
 
-    profile_nparticles(nthreads=args.nthreads, n_averages=args.n_averages)
+    profile_nparticles(
+        nthreads=args.nthreads,
+        n_averages=args.n_averages,
+        output_dir=args.output_dir,
+    )

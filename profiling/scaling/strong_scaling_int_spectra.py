@@ -6,6 +6,7 @@ Usage:
 """
 
 import argparse
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -36,6 +37,8 @@ def int_spectra_strong_scaling(
     paper_style,
 ):
     """Profile the cpu time usage of the particle spectra calculation."""
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+
     # Define the grid
     grid_name = "test_grid"
 

@@ -47,6 +47,8 @@ def images_strong_scaling(
     paper_style,
 ):
     """Profile the cpu time usage of the particle spectra calculation."""
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+
     # Define the grid
     grid_name = "test_grid"
 
