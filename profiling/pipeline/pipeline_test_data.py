@@ -8,12 +8,13 @@ same random seed.
 
 from __future__ import annotations
 
-import os
+from pathlib import Path
 
 import h5py
 import numpy as np
 from unyt import Msun, Myr, km, kpc, s
 
+from synthesizer import exceptions
 from synthesizer.emission_models import PacmanEmission
 from synthesizer.grid import Grid
 from synthesizer.instruments.premade import JWSTNIRCamWide
@@ -21,7 +22,7 @@ from synthesizer.kernel_functions import Kernel
 from synthesizer.particle import BlackHoles, Galaxy, Gas, Stars
 
 # Define the instrument file path
-INSTRUMENT_PATH = "jwst_pipeline_perf_inst.hdf5"
+INSTRUMENT_PATH = Path(__file__).with_name("jwst_pipeline_perf_inst.hdf5")
 
 
 def build_test_galaxies(
@@ -135,34 +136,34 @@ def get_test_instrument(grid: Grid):
     Returns:
         Instrument: JWST NIRCam Wide instrument.
     """
-    # Load the instrument if we can
-    if os.path.exists(INSTRUMENT_PATH):
-        # Load from file if it exists
+    if not INSTRUMENT_PATH.exists():
+        raise exceptions.MissingArgument(
+            "Profiling instrument cache is missing at "
+            f"{INSTRUMENT_PATH}. Run "
+            "`python profiling/pipeline/make_profiling_instruments.py` "
+            "on a machine with internet access before running profiling."
+        )
+
+    try:
         with h5py.File(INSTRUMENT_PATH, "r") as hdf:
             photometry_inst = JWSTNIRCamWide._from_hdf5(hdf)
-        return photometry_inst
-
-    # Otherwise, create a new instance and save it for future use
-    photometry_inst = JWSTNIRCamWide(
-        filter_lams=grid.lam,
-        label="JWST.NIRCam.Wide",
-    )
-
-    # Save the instrument to file for future runs
-    with h5py.File(INSTRUMENT_PATH, "w") as hdf:
-        photometry_inst.to_hdf5(hdf)
-
-    return photometry_inst
+            return photometry_inst
+    except (OSError, KeyError, ValueError) as err:
+        raise exceptions.MissingArgument(
+            "Profiling instrument cache at "
+            f"{INSTRUMENT_PATH} could not be loaded: {err} "
+            "Run `python profiling/pipeline/make_profiling_instruments.py` "
+            "on a machine with internet access to regenerate it."
+        ) from err
 
 
 def get_test_kernel():
-    """Get the default SPH kernel for imaging.
+    """Get the default SPH kernel object for profiling.
 
     Returns:
-        np.ndarray: The kernel array from Kernel().get_kernel().
+        Kernel: Default kernel instance used by profiling scripts.
     """
-    kernel = Kernel()  # Default is sph_anarchy
-    return kernel.get_kernel()
+    return Kernel()  # Default is sph_anarchy
 
 
 def get_test_emission_model(grid: Grid):
