@@ -1471,80 +1471,68 @@ class LineCollection:
             tau_v, get_quantity_view(self, "_lam"), **dust_curve_kwargs
         )
 
-        with timer("LineCollection.apply_attenuation.apply_transmission"):
-            if (
-                self._luminosity.ndim == 2
-                and isinstance(transmission, np.ndarray)
-                and transmission.ndim == 1
-                and mask is not None
-            ):
-                with timer(
-                    "LineCollection.apply_attenuation.masked_1d_kernel"
-                ):
-                    att_lum = np.array(self._luminosity, copy=True)
-                    att_cont = np.array(self._continuum, copy=True)
-                    att_lum[mask] = multiply_array_by_vector_1d(
-                        self._luminosity[mask],
-                        transmission,
-                        nthreads,
-                    )
-                    att_cont[mask] = multiply_array_by_vector_1d(
-                        self._continuum[mask],
-                        transmission,
-                        nthreads,
-                    )
-                return LineCollection(
-                    line_ids=self.line_ids,
-                    lam=self.lam,
-                    lum=get_array_quantity_view(
-                        att_lum, self.luminosity.units
-                    ),
-                    cont=get_array_quantity_view(
-                        att_cont, self.continuum.units
-                    ),
+        # Apply the transmission to the spectra.
+        if (
+            self._luminosity.ndim == 2
+            and isinstance(transmission, np.ndarray)
+            and transmission.ndim == 1
+            and mask is not None
+        ):
+            with timer("LineCollection.apply_attenuation.masked_1d_kernel"):
+                att_lum = np.array(self._luminosity, copy=True)
+                att_cont = np.array(self._continuum, copy=True)
+                att_lum[mask] = multiply_array_by_vector_1d(
+                    self._luminosity[mask],
+                    transmission,
+                    nthreads,
                 )
-
-            if isinstance(transmission, np.ndarray) and transmission.ndim == 1:
-                with timer(
-                    "LineCollection.apply_attenuation.unmasked_1d_kernel"
-                ):
-                    att_lum = multiply_array_by_vector_1d(
-                        self._luminosity,
-                        transmission,
-                        nthreads,
-                    )
-                    att_cont = multiply_array_by_vector_1d(
-                        self._continuum,
-                        transmission,
-                        nthreads,
-                    )
-                return LineCollection(
-                    line_ids=self.line_ids,
-                    lam=self.lam,
-                    lum=get_array_quantity_view(
-                        att_lum, self.luminosity.units
-                    ),
-                    cont=get_array_quantity_view(
-                        att_cont, self.continuum.units
-                    ),
+                att_cont[mask] = multiply_array_by_vector_1d(
+                    self._continuum[mask],
+                    transmission,
+                    nthreads,
                 )
-
-            with timer("LineCollection.apply_attenuation.numpy_fallback"):
-                att_lum = self.luminosity
-                att_cont = self.continuum
-                if mask is None:
-                    att_lum *= transmission
-                    att_cont *= transmission
-                else:
-                    att_lum[mask] *= transmission[mask]
-                    att_cont[mask] *= transmission[mask]
-
             return LineCollection(
                 line_ids=self.line_ids,
                 lam=self.lam,
-                lum=att_lum,
-                cont=att_cont,
+                lum=get_array_quantity_view(att_lum, self.luminosity.units),
+                cont=get_array_quantity_view(att_cont, self.continuum.units),
             )
+
+        if isinstance(transmission, np.ndarray) and transmission.ndim == 1:
+            with timer("LineCollection.apply_attenuation.unmasked_1d_kernel"):
+                att_lum = multiply_array_by_vector_1d(
+                    self._luminosity,
+                    transmission,
+                    nthreads,
+                )
+                att_cont = multiply_array_by_vector_1d(
+                    self._continuum,
+                    transmission,
+                    nthreads,
+                )
+            return LineCollection(
+                line_ids=self.line_ids,
+                lam=self.lam,
+                lum=get_array_quantity_view(att_lum, self.luminosity.units),
+                cont=get_array_quantity_view(att_cont, self.continuum.units),
+            )
+
+        with timer("LineCollection.apply_attenuation.numpy_fallback"):
+            att_lum = self.luminosity
+            att_cont = self.continuum
+            if mask is None:
+                att_lum *= transmission
+                att_cont *= transmission
+            else:
+                att_lum[mask] *= transmission[mask]
+                att_cont[mask] *= transmission[mask]
+
+        return LineCollection(
+            line_ids=self.line_ids,
+            lam=self.lam,
+            lum=att_lum,
+            cont=att_cont,
+        )
 
     def plot_lines(
         self,
