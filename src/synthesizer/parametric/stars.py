@@ -1158,8 +1158,10 @@ class Stars(StarsComponent):
         Returns:
             The total mass formed prior to this age.
         """
-        log10ages = np.asarray(self.log10ages)
-        sf_hist = np.asarray(self.sf_hist)
+        age = age.to("yr").value
+
+        log10ages = self.log10ages
+        sf_hist = self.sf_hist
 
         # construct log-space bin edges from centres
         dlog = np.diff(log10ages)
@@ -1171,6 +1173,11 @@ class Stars(StarsComponent):
 
         age_edges = 10**edges
 
+        # This calculates the fraction of each bin that is younger than the
+        # specified age, and clips it to be between 0 and 1. So for bins that
+        # are entirely younger than the specified age, this will be 1, for
+        # bins that are entirely older than the specified age, this will be 0,
+        # and for bins that straddle the specified age, this will be the
         frac = np.clip(
             (age_edges[1:] - age) / (age_edges[1:] - age_edges[:-1]), 0, 1
         )
@@ -1195,7 +1202,9 @@ class Stars(StarsComponent):
         Returns:
             The total mass formed prior to this age.
         """
-        log10ages = np.asarray(self.log10ages)
+        age = age.to("yr").value
+
+        log10ages = self.log10ages
 
         # First calculate the surviving SFH grid
         surviving_sf_hist = self.calculate_surviving_sfh(grid)
@@ -1210,6 +1219,11 @@ class Stars(StarsComponent):
 
         age_edges = 10**edges
 
+        # This calculates the fraction of each bin that is younger than the
+        # specified age, and clips it to be between 0 and 1. So for bins that
+        # are entirely younger than the specified age, this will be 1, for
+        # bins that are entirely older than the specified age, this will be 0,
+        # and for bins that straddle the specified age, this will be the
         frac = np.clip(
             (age_edges[1:] - age) / (age_edges[1:] - age_edges[:-1]), 0, 1
         )
