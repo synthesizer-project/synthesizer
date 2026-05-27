@@ -1170,7 +1170,7 @@ class Stars(StarsComponent):
 
         Args:
             age (float or unyt_quantity):
-                The age at which to calculate the initial mass. This can be a
+                The age at which to calculate the surviving mass. This can be a
                 float in years or a unyt quantity with time units.
             grid (Grid):
                 The grid to use for calculating the surviving mass. This is
