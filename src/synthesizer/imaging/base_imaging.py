@@ -17,6 +17,11 @@ from unyt import arcsecond, degree, kpc, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.units import Quantity, accepts, unit_is_compatible
 
+# To catch overflows in the number of pixels we use the absolute maximum
+# representable by a 32-bit integer. This is not a reasonable number of
+# pixels and will never come close to a realistic image shape passed by the
+# user, but it will catch pathological cases where the machinery overflows and
+# produces nonsense value.
 _MAX_NPIX_PER_AXIS = np.iinfo(np.int32).max
 
 
@@ -133,18 +138,24 @@ class ImagingBase(ABC):
         if npix.size == 1:
             npix = np.array((npix.item(), npix.item()))
 
+        # Check that the number of pixels is finite
         if np.any(~np.isfinite(npix)):
             raise exceptions.InconsistentArguments(
                 "Image pixel counts must be finite. Got npix="
                 f"{npix} from fov={self.fov} and "
                 f"resolution={self.resolution}."
             )
+
+        # Check that the number of pixels is non-negative
         if np.any(npix < 0):
             raise exceptions.InconsistentArguments(
                 "Image pixel counts must be non-negative. Got npix="
                 f"{npix} from fov={self.fov} and "
                 f"resolution={self.resolution}."
             )
+
+        # Check that the number of pixels does not exceed the maximum
+        # representable by a 32-bit integer (i.e. has not overflowed)
         if np.any(npix > _MAX_NPIX_PER_AXIS):
             raise exceptions.InconsistentArguments(
                 "Image pixel counts exceed the supported per-axis limit "
@@ -154,6 +165,7 @@ class ImagingBase(ABC):
                 "angular conversions."
             )
 
+        # Finally, set the npix as an integer array
         self.npix = npix.astype(np.int32)
 
         # Ensure that the npix is an array of 2 values
