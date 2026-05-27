@@ -448,6 +448,10 @@ class Stars(StarsComponent):
             # Otherwise calculate the total initial mass
             self.initial_mass = np.sum(self.sfzh) * Msun
 
+        # Ensure sf_hist and metal_dist reflect the rescaled sfzh
+        self.sf_hist = np.sum(self.sfzh, axis=1)
+        self.metal_dist = np.sum(self.sfzh, axis=0)
+
     @timed("Stars.get_mask")
     def get_mask(
         self,

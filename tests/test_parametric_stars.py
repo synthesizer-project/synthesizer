@@ -13,6 +13,7 @@ import pytest
 from unyt import Msun, Myr, yr
 
 from synthesizer.parametric.stars import Stars
+from synthesizer.units import Units
 
 
 @pytest.fixture
@@ -143,7 +144,7 @@ class TestCalculateSurvivingMass:
         result = instantaneous_stars.calculate_surviving_mass(test_grid)
         # Should be convertible to Msun without error
         result_msun = result.to("Msun")
-        assert result_msun.units == Msun.units
+        assert result_msun.units == Units().mass
 
     def test_surviving_mass_le_initial_mass(
         self,
@@ -182,7 +183,7 @@ class TestCalculateInitialMassAtAge:
         """Test that the returned quantity has solar mass units."""
         result = instantaneous_stars.calculate_initial_mass_at_age(50 * Myr)
         result_msun = result.to("Msun")
-        assert result_msun.units == Msun.units
+        assert result_msun.units == Units().mass
 
     def test_age_less_than_burst_returns_initial_mass(
         self, instantaneous_stars
@@ -279,7 +280,7 @@ class TestCalculateSurvivingMassAtAge:
             50 * Myr, test_grid
         )
         result_msun = result.to("Msun")
-        assert result_msun.units == Msun.units
+        assert result_msun.units == Units().mass
 
     def test_surviving_le_initial_at_same_age(
         self, constant_sfh_stars, test_grid
