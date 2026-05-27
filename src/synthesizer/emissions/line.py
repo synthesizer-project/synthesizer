@@ -64,6 +64,7 @@ from synthesizer.emissions.utils import (
     get_available_ratio_ids,
     get_line2index,
     get_line_id_signature,
+    get_quantity_view,
 )
 from synthesizer.extensions.reductions import (
     multiply_array_by_vector_1d,
@@ -1485,10 +1486,9 @@ class LineCollection:
                         f"({tau_v.shape}, {self.lum.shape})"
                     )
 
-        with timer("LineCollection.apply_attenuation.get_transmission"):
-            transmission = dust_curve.get_transmission(
-                tau_v, self.lam, **dust_curve_kwargs
-            )
+        transmission = dust_curve.get_transmission(
+            tau_v, get_quantity_view(self, "_lam"), **dust_curve_kwargs
+        )
 
         with timer("LineCollection.apply_attenuation.apply_transmission"):
             if (

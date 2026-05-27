@@ -681,6 +681,133 @@ PyObject *combine_spectra_list_2d(PyObject *self, PyObject *args) {
 }
 
 /**
+ * @brief Apply exp(-row_vector * col_vector) attenuation to a 2D array.
+ */
+PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
+  (void)self;
+
+  PyObject *spectra_obj;
+  PyObject *tau_v_obj;
+  PyObject *tau_x_v_obj;
+  PyObject *mask_obj = Py_None;
+  int nthreads;
+
+  if (!PyArg_ParseTuple(args, "OOOOi", &spectra_obj, &tau_v_obj, &tau_x_v_obj,
+                        &mask_obj, &nthreads)) {
+    return NULL;
+  }
+
+  PyArrayObject *np_spectra = (PyArrayObject *)PyArray_FROM_OTF(
+      spectra_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  PyArrayObject *np_tau_v = (PyArrayObject *)PyArray_FROM_OTF(
+      tau_v_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  PyArrayObject *np_tau_x_v = (PyArrayObject *)PyArray_FROM_OTF(
+      tau_x_v_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  PyArrayObject *np_mask = nullptr;
+
+  if (np_spectra == NULL || np_tau_v == NULL || np_tau_x_v == NULL) {
+    Py_XDECREF(np_spectra);
+    Py_XDECREF(np_tau_v);
+    Py_XDECREF(np_tau_x_v);
+    return NULL;
+  }
+
+  if (mask_obj != Py_None) {
+    np_mask = (PyArrayObject *)PyArray_FROM_OTF(mask_obj, NPY_BOOL,
+                                                NPY_ARRAY_IN_ARRAY);
+    if (np_mask == NULL) {
+      Py_DECREF(np_spectra);
+      Py_DECREF(np_tau_v);
+      Py_DECREF(np_tau_x_v);
+      return NULL;
+    }
+  }
+
+  if (PyArray_NDIM(np_spectra) != 2 || PyArray_NDIM(np_tau_v) != 1 ||
+      PyArray_NDIM(np_tau_x_v) != 1) {
+    PyErr_SetString(PyExc_ValueError,
+                    "spectra must be 2D and tau vectors must be 1D.");
+    Py_DECREF(np_spectra);
+    Py_DECREF(np_tau_v);
+    Py_DECREF(np_tau_x_v);
+    Py_XDECREF(np_mask);
+    return NULL;
+  }
+
+  const npy_intp *spectra_dims = PyArray_DIMS(np_spectra);
+  const int nrows = static_cast<int>(spectra_dims[0]);
+  const int ncols = static_cast<int>(spectra_dims[1]);
+  if (PyArray_DIMS(np_tau_v)[0] != spectra_dims[0] ||
+      PyArray_DIMS(np_tau_x_v)[0] != spectra_dims[1]) {
+    PyErr_SetString(PyExc_ValueError,
+                    "tau vectors must match the spectra dimensions.");
+    Py_DECREF(np_spectra);
+    Py_DECREF(np_tau_v);
+    Py_DECREF(np_tau_x_v);
+    Py_XDECREF(np_mask);
+    return NULL;
+  }
+
+  if (np_mask != NULL &&
+      (PyArray_NDIM(np_mask) != 1 || PyArray_DIMS(np_mask)[0] != spectra_dims[0])) {
+    PyErr_SetString(PyExc_ValueError,
+                    "mask must be a 1D boolean array matching spectra rows.");
+    Py_DECREF(np_spectra);
+    Py_DECREF(np_tau_v);
+    Py_DECREF(np_tau_x_v);
+    Py_XDECREF(np_mask);
+    return NULL;
+  }
+
+  PyArrayObject *np_out = (PyArrayObject *)PyArray_NewLikeArray(
+      np_spectra, NPY_KEEPORDER, NULL, 0);
+  if (np_out == NULL) {
+    Py_DECREF(np_spectra);
+    Py_DECREF(np_tau_v);
+    Py_DECREF(np_tau_x_v);
+    Py_XDECREF(np_mask);
+    return NULL;
+  }
+
+  double *spectra = static_cast<double *>(PyArray_DATA(np_spectra));
+  double *tau_v = static_cast<double *>(PyArray_DATA(np_tau_v));
+  double *tau_x_v = static_cast<double *>(PyArray_DATA(np_tau_x_v));
+  double *out = static_cast<double *>(PyArray_DATA(np_out));
+  npy_bool *mask = np_mask == NULL ? NULL : (npy_bool *)PyArray_DATA(np_mask);
+
+  tic("apply_separable_attenuation_2d");
+
+#ifdef WITH_OPENMP
+#pragma omp parallel for if(nthreads > 1) num_threads(nthreads) schedule(static)
+#endif
+  for (int irow = 0; irow < nrows; irow++) {
+    const bool apply = mask == NULL || mask[irow];
+    const double row_tau = tau_v[irow];
+    double *__restrict in_row = spectra + irow * ncols;
+    double *__restrict out_row = out + irow * ncols;
+
+    if (!apply) {
+      for (int icol = 0; icol < ncols; icol++) {
+        out_row[icol] = in_row[icol];
+      }
+      continue;
+    }
+
+    for (int icol = 0; icol < ncols; icol++) {
+      out_row[icol] = in_row[icol] * std::exp(-row_tau * tau_x_v[icol]);
+    }
+  }
+
+  toc("apply_separable_attenuation_2d");
+
+  Py_DECREF(np_spectra);
+  Py_DECREF(np_tau_v);
+  Py_DECREF(np_tau_x_v);
+  Py_XDECREF(np_mask);
+  return Py_BuildValue("N", np_out);
+}
+
+/**
  * @brief Multiply a 2D array by a 1D row vector with optional row mask.
  */
 PyObject *multiply_rows_by_vector_2d(PyObject *self, PyObject *args) {
@@ -876,6 +1003,9 @@ static PyMethodDef ReductionMethods[] = {
     {"combine_spectra_list_2d", (PyCFunction)combine_spectra_list_2d,
      METH_VARARGS,
      "Combine same-shaped 2D spectra arrays while skipping NaNs."},
+    {"apply_separable_attenuation_2d",
+     (PyCFunction)apply_separable_attenuation_2d, METH_VARARGS,
+     "Apply exp(-tau_v * tau_x_v) attenuation to a 2D spectra array."},
     {"multiply_rows_by_vector_2d", (PyCFunction)multiply_rows_by_vector_2d,
      METH_VARARGS,
      "Multiply a 2D array by a 1D row vector with optional mask."},

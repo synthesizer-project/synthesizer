@@ -181,6 +181,7 @@ class AttenuationLaw(Transformer):
         )
 
     @accepts(lam=angstrom)
+    @timed("AttenuationLaw.get_transmission")
     def get_transmission(self, tau_v, lam, **dust_curve_kwargs):
         """Compute the transmission curve.
 

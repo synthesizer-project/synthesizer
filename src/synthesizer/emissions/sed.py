@@ -51,6 +51,7 @@ from synthesizer.emissions.utils import (
     get_quantity_view,
 )
 from synthesizer.extensions.reductions import (
+    apply_separable_attenuation_2d,
     compute_fnu,
     multiply_array_by_vector_1d,
     reduce_particle_spectra,
@@ -1671,10 +1672,34 @@ class Sed:
                         f"({tau_v.shape}, {self._lnu.shape})"
                     )
 
-        with timer("Sed.apply_attenuation.get_transmission"):
-            transmission = dust_curve.get_transmission(
-                tau_v, self.lam, **dust_curve_kwargs
-            )
+        lam = get_quantity_view(self, "_lam")
+
+        if (
+            self._lnu.ndim == 2
+            and isinstance(tau_v, np.ndarray)
+            and mask is None
+            and hasattr(dust_curve, "get_tau")
+        ):
+            with timer("Sed.apply_attenuation.get_tau"):
+                tau_x_v = dust_curve.get_tau(lam, **dust_curve_kwargs)
+
+            with timer("Sed.apply_attenuation.apply_transmission"):
+                with timer("Sed.apply_attenuation.separable_2d_kernel"):
+                    spectra = apply_separable_attenuation_2d(
+                        self._lnu,
+                        tau_v,
+                        tau_x_v,
+                        None,
+                        nthreads,
+                    )
+                return Sed(
+                    self.lam,
+                    lnu=get_array_quantity_view(spectra, self.lnu.units),
+                )
+
+        transmission = dust_curve.get_transmission(
+            tau_v, lam, **dust_curve_kwargs
+        )
 
         with timer("Sed.apply_attenuation.apply_transmission"):
             if (
@@ -1691,7 +1716,10 @@ class Sed:
                         None,
                         nthreads,
                     )
-                return Sed(self.lam, lnu=spectra * self.lnu.units)
+                return Sed(
+                    self.lam,
+                    lnu=get_array_quantity_view(spectra, self.lnu.units),
+                )
 
             if (
                 self._lnu.ndim == 2
@@ -1704,7 +1732,10 @@ class Sed:
                         transmission,
                         nthreads,
                     )
-                return Sed(self.lam, lnu=spectra * self.lnu.units)
+                return Sed(
+                    self.lam,
+                    lnu=get_array_quantity_view(spectra, self.lnu.units),
+                )
 
             with timer("Sed.apply_attenuation.numpy_fallback"):
                 spectra = np.copy(self._lnu)
@@ -1716,7 +1747,10 @@ class Sed:
                 else:
                     spectra[mask] *= transmission
 
-            return Sed(self.lam, lnu=spectra * self.lnu.units)
+            return Sed(
+                self.lam,
+                lnu=get_array_quantity_view(spectra, self.lnu.units),
+            )
 
     @accepts(ionisation_energy=eV)
     def calculate_ionising_photon_production_rate(
