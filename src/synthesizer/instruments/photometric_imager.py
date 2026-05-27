@@ -153,10 +153,10 @@ class PhotometricImager(PhotometricInstrument):
                 "maps at the same time"
             )
 
-        # Imaging payloads are looked up directly by filter code during PSF and
-        # noise application, so reject partial dictionaries here instead of
-        # deferring the failure to a later KeyError deep in observation code.
-        for attr_name in ("psfs", "noise_maps", "noise_source_maps"):
+        # PSFs are always looked up by filter code during convolution, so keep
+        # that configuration strict here and reject partial PSF dictionaries at
+        # construction time.
+        for attr_name in ("psfs",):
             payload = getattr(self, attr_name)
             if payload is None:
                 continue
@@ -459,6 +459,11 @@ class PhotometricImager(PhotometricInstrument):
         """
         # Apply a fixed noise array directly if one has been configured
         if self.noise_maps is not None:
+            if filter_code not in self.noise_maps:
+                raise exceptions.MissingArgument(
+                    "noise_maps is missing an entry for filter "
+                    f"'{filter_code}'."
+                )
             noise_arr = self.noise_maps[filter_code]
             return image.apply_noise_array(noise_arr)
 

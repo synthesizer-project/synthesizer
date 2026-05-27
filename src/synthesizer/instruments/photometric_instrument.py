@@ -118,7 +118,10 @@ class PhotometricInstrument(InstrumentBase):
         filter_state = (
             tuple(self.filters.filter_codes),
             self.filters.lam,
-            {code: self.filters[code].t for code in self.filters.filter_codes},
+            tuple(
+                (code, self.filters[code].t)
+                for code in self.filters.filter_codes
+            ),
         )
         return (
             _hashable_state(filter_state),
