@@ -1405,6 +1405,7 @@ class Particles:
         return col_den
 
     @accepts(phi=rad, theta=rad)
+    @timed("Particles.rotate_particles")
     def rotate_particles(
         self,
         phi=0 * rad,
@@ -1444,7 +1445,10 @@ class Particles:
         if inplace:
             # Rotate the coordinates
             self.coordinates = rotate(self.coordinates, phi, theta, rot_matrix)
-            self.velocities = rotate(self.velocities, phi, theta, rot_matrix)
+            if self.velocities is not None:
+                self.velocities = rotate(
+                    self.velocities, phi, theta, rot_matrix
+                )
             if self.centre is not None:
                 self.centre = rotate(self.centre, phi, theta, rot_matrix)
 
@@ -1457,9 +1461,10 @@ class Particles:
         new_parts.coordinates = rotate(
             new_parts.coordinates, phi, theta, rot_matrix
         )
-        new_parts.velocities = rotate(
-            new_parts.velocities, phi, theta, rot_matrix
-        )
+        if new_parts.velocities is not None:
+            new_parts.velocities = rotate(
+                new_parts.velocities, phi, theta, rot_matrix
+            )
         if self.centre is not None:
             new_parts.centre = rotate(new_parts.centre, phi, theta, rot_matrix)
 
@@ -1502,6 +1507,7 @@ class Particles:
             axis=0,
         ).to(ang_mom_unit)
 
+    @timed("Particles.rotate_edge_on")
     def rotate_edge_on(self, inplace=True):
         """Rotate the particle distribution to edge-on.
 
@@ -1526,6 +1532,7 @@ class Particles:
         # Call the rotate_particles method with the computed angles
         return self.rotate_particles(rot_matrix=rot_matrix, inplace=inplace)
 
+    @timed("Particles.rotate_face_on")
     def rotate_face_on(self, inplace=True):
         """Rotate the particle distribution to face-on.
 
