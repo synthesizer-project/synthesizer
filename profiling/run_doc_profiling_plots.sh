@@ -205,7 +205,7 @@ echo "========================================"
 
 # Analyse timing results
 echo "Generating timing analysis plots..."
-python profiling/pipeline/analyse_timing.py \
+python profiling/pipeline/analyse_timing_scaling.py \
 	--inputs \
 	"$TIMING_DIR/npart_100/timing.csv" \
 	"$TIMING_DIR/npart_500/timing.csv" \
@@ -213,7 +213,7 @@ python profiling/pipeline/analyse_timing.py \
 	"$TIMING_DIR/npart_5000/timing.csv" \
 	"$TIMING_DIR/npart_10000/timing.csv" \
 	"$TIMING_DIR/npart_100000/timing.csv" \
-	--labels "100" "500" "1000" "5000" "10000" "100000" \
+	--labels 100 500 1000 5000 10000 100000 \
 	--output-dir "$TIMING_ANALYSIS_DIR"
 
 # Analyse memory results

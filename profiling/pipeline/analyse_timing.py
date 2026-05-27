@@ -91,6 +91,13 @@ def main() -> None:
 
     print(f"Loaded {len(timing_data)} timing profiles")
 
+    def _parse_numeric_labels(raw_labels: list[str]) -> list[float] | None:
+        """Return numeric labels when every run label is parseable."""
+        try:
+            return [float(label) for label in raw_labels]
+        except ValueError:
+            return None
+
     # Get operations (from first profile)
     operations = list(next(iter(timing_data.values())).keys())
 
@@ -115,7 +122,15 @@ def main() -> None:
 
     # Create a grouped comparison plot across the provided runs.
     fig, ax = plt.subplots(figsize=(12, 8))
-    x_positions = np.arange(len(labels))
+    numeric_labels = _parse_numeric_labels(labels)
+    if numeric_labels is None:
+        x_values = np.arange(len(labels))
+        x_axis_label = "Run"
+        use_log_x = False
+    else:
+        x_values = np.array(numeric_labels)
+        x_axis_label = "Number of Particles"
+        use_log_x = np.all(x_values > 0)
 
     # Group operations by source for legend
     c_ops = [
@@ -136,7 +151,7 @@ def main() -> None:
             timing_data[label].get(op, {}).get("time", 0) for label in labels
         ]
         ax.plot(
-            x_positions,
+            x_values,
             values,
             marker="o",
             linewidth=2,
@@ -153,7 +168,7 @@ def main() -> None:
             timing_data[label].get(op, {}).get("time", 0) for label in labels
         ]
         ax.plot(
-            x_positions,
+            x_values,
             values,
             marker="s",
             linewidth=2,
@@ -169,7 +184,7 @@ def main() -> None:
         for label in labels
     ]
     ax.plot(
-        x_positions,
+        x_values,
         total_values,
         marker="D",
         linewidth=3,
@@ -180,11 +195,14 @@ def main() -> None:
         alpha=0.7,
     )
 
-    ax.set_xlabel("Run", fontsize=12)
+    ax.set_xlabel(x_axis_label, fontsize=12)
     ax.set_ylabel("Time (seconds)", fontsize=12)
     ax.set_yscale("log")
-    ax.set_xticks(x_positions)
-    ax.set_xticklabels(labels, rotation=45, ha="right")
+    if use_log_x:
+        ax.set_xscale("log")
+    else:
+        ax.set_xticks(x_values)
+        ax.set_xticklabels(labels, rotation=45, ha="right")
 
     # Create main legend for operations
     legend1 = ax.legend(loc="best", fontsize=9, ncol=2, framealpha=0.9)
