@@ -1061,7 +1061,7 @@ class Stars(StarsComponent):
 
         return average_sfr.to("Msun/yr")
 
-    def calaculate_surviving_sfzh(self, grid: Grid):
+    def calculate_surviving_sfzh(self, grid: Grid):
         """Calculate the surviving SFZH of the stellar population.
 
         This is the distribution of surviving stars in age and metallicity
@@ -1092,7 +1092,7 @@ class Stars(StarsComponent):
         Returns:
             np.ndarray: The surviving SFH grid in Msun.
         """
-        surviving_sfh = np.sum(self.calaculate_surviving_sfzh(grid), axis=1)
+        surviving_sfh = np.sum(self.calculate_surviving_sfzh(grid), axis=1)
 
         return surviving_sfh
 
@@ -1111,7 +1111,7 @@ class Stars(StarsComponent):
             unyt_quantity: The total surviving mass of the stellar
             population in Msun.
         """
-        surviving_mass = np.sum(self.calaculate_surviving_sfzh(grid))
+        surviving_mass = np.sum(self.calculate_surviving_sfzh(grid))
 
         return surviving_mass * Msun
 
@@ -1143,6 +1143,37 @@ class Stars(StarsComponent):
             axis=(0, 1),
         )
 
+    def _get_age_bin_fractions(self, age):
+        """Compute the fractional bin overlap for bins older than ``age``.
+
+        Constructs log-space bin edges from the log10-age bin centres and
+        returns an array of fractions in [0, 1] representing how much of each
+        bin lies at lookback times older than ``age``.
+
+        Args:
+            age (float):
+                The lookback age in years (plain float, unit conversion must
+                be done by the caller).
+
+        Returns:
+            np.ndarray: Per-bin fractions with shape ``(n_ages,)``.
+        """
+        log10ages = np.asarray(self.log10ages)
+
+        # Construct log-space bin edges from bin centres
+        dlog = np.diff(log10ages)
+        edges = np.empty(len(log10ages) + 1)
+
+        edges[1:-1] = 0.5 * (log10ages[1:] + log10ages[:-1])
+        edges[0] = log10ages[0] - dlog[0] / 2
+        edges[-1] = log10ages[-1] + dlog[-1] / 2
+
+        age_edges = 10**edges
+
+        return np.clip(
+            (age_edges[1:] - age) / (age_edges[1:] - age_edges[:-1]), 0, 1
+        )
+
     def calculate_initial_mass_at_age(self, age):
         """Calculate the initial mass of the stellar population at a given age.
 
@@ -1155,27 +1186,14 @@ class Stars(StarsComponent):
                 float in years or a unyt quantity with time units.
 
         Returns:
-            The total mass formed prior to this age.
+            unyt_quantity: The total initial mass formed prior to this age
+            in Msun.
         """
         if isinstance(age, unyt_quantity):
             age = age.to("yr").value
 
-        log10ages = np.asarray(self.log10ages)
         sf_hist = np.asarray(self.sf_hist)
-
-        # construct log-space bin edges from centres
-        dlog = np.diff(log10ages)
-        edges = np.empty(len(log10ages) + 1)
-
-        edges[1:-1] = 0.5 * (log10ages[1:] + log10ages[:-1])
-        edges[0] = log10ages[0] - dlog[0] / 2
-        edges[-1] = log10ages[-1] + dlog[-1] / 2
-
-        age_edges = 10**edges
-
-        frac = np.clip(
-            (age_edges[1:] - age) / (age_edges[1:] - age_edges[:-1]), 0, 1
-        )
+        frac = self._get_age_bin_fractions(age)
 
         return np.sum(sf_hist * frac) * Msun
 
@@ -1194,28 +1212,13 @@ class Stars(StarsComponent):
                 used to get the stellar fraction at each SFZH bin.
 
         Returns:
-            The total mass formed prior to this age.
+            unyt_quantity: The total surviving mass prior to this age in Msun.
         """
         if isinstance(age, unyt_quantity):
             age = age.to("yr").value
 
-        log10ages = np.asarray(self.log10ages)
-
         # First calculate the surviving SFH grid
         surviving_sf_hist = self.calculate_surviving_sfh(grid)
-
-        # construct log-space bin edges from centres
-        dlog = np.diff(log10ages)
-        edges = np.empty(len(log10ages) + 1)
-
-        edges[1:-1] = 0.5 * (log10ages[1:] + log10ages[:-1])
-        edges[0] = log10ages[0] - dlog[0] / 2
-        edges[-1] = log10ages[-1] + dlog[-1] / 2
-
-        age_edges = 10**edges
-
-        frac = np.clip(
-            (age_edges[1:] - age) / (age_edges[1:] - age_edges[:-1]), 0, 1
-        )
+        frac = self._get_age_bin_fractions(age)
 
         return np.sum(surviving_sf_hist * frac) * Msun
