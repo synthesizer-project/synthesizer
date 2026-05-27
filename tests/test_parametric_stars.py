@@ -17,7 +17,7 @@ from synthesizer.parametric.stars import Stars
 
 @pytest.fixture
 def instantaneous_stars(test_grid):
-    """Return a parametric Stars object with an instantaneous burst at 10 Myr."""
+    """Return a parametric Stars with an instantaneous burst at 10 Myr."""
     return Stars(
         test_grid.log10ages,
         test_grid.metallicities,
@@ -29,7 +29,7 @@ def instantaneous_stars(test_grid):
 
 @pytest.fixture
 def constant_sfh_stars(test_grid):
-    """Return a parametric Stars object with a uniform SFH across all age bins."""
+    """Return a parametric Stars with a uniform SFH across all age bins."""
     n_ages = len(test_grid.log10ages)
     n_metals = len(test_grid.metallicities)
     # Uniform SFH distributed equally across age bins
@@ -59,7 +59,7 @@ class TestCalculateSurvivingSFZH:
         assert result.shape == instantaneous_stars.sfzh.shape
 
     def test_values_le_sfzh(self, instantaneous_stars, test_grid):
-        """Test that surviving SFZH values are <= the SFZH values (stellar fraction <= 1)."""
+        """Test that surviving SFZH <= the SFZH values."""
         result = instantaneous_stars.calculate_surviving_sfzh(test_grid)
         assert np.all(result <= instantaneous_stars.sfzh + 1e-30)
 
@@ -70,8 +70,12 @@ class TestCalculateSurvivingSFZH:
 
     def test_sum_matches_surviving_mass(self, instantaneous_stars, test_grid):
         """Test that the sum of surviving SFZH equals the surviving mass."""
-        surviving_sfzh = instantaneous_stars.calculate_surviving_sfzh(test_grid)
-        surviving_mass = instantaneous_stars.calculate_surviving_mass(test_grid)
+        surviving_sfzh = instantaneous_stars.calculate_surviving_sfzh(
+            test_grid
+        )
+        surviving_mass = instantaneous_stars.calculate_surviving_mass(
+            test_grid
+        )
         assert np.isclose(
             np.sum(surviving_sfzh) * Msun, surviving_mass, rtol=1e-10
         )
@@ -94,7 +98,7 @@ class TestCalculateSurvivingSFH:
         assert isinstance(result, np.ndarray)
 
     def test_shape_is_1d_with_n_ages(self, instantaneous_stars, test_grid):
-        """Test that surviving SFH is 1D with length equal to number of age bins."""
+        """Test that surviving SFH is 1D with length = number of age bins."""
         result = instantaneous_stars.calculate_surviving_sfh(test_grid)
         assert result.ndim == 1
         assert len(result) == len(test_grid.log10ages)
@@ -104,16 +108,20 @@ class TestCalculateSurvivingSFH:
         result = instantaneous_stars.calculate_surviving_sfh(test_grid)
         assert np.all(result >= 0)
 
-    def test_sum_matches_surviving_sfzh_sum(self, constant_sfh_stars, test_grid):
-        """Test that the sum of surviving SFH equals the sum of surviving SFZH."""
+    def test_sum_matches_surviving_sfzh_sum(
+        self, constant_sfh_stars, test_grid
+    ):
+        """Test that the sum of surviving SFH = the sum of surviving SFZH."""
         surviving_sfh = constant_sfh_stars.calculate_surviving_sfh(test_grid)
         surviving_sfzh = constant_sfh_stars.calculate_surviving_sfzh(test_grid)
-        assert np.isclose(np.sum(surviving_sfh), np.sum(surviving_sfzh), rtol=1e-10)
+        assert np.isclose(
+            np.sum(surviving_sfh), np.sum(surviving_sfzh), rtol=1e-10
+        )
 
     def test_is_metallicity_marginalisation_of_sfzh(
         self, constant_sfh_stars, test_grid
     ):
-        """Test that surviving SFH is the sum of surviving SFZH over metallicity axis."""
+        """Test that surviving SFH is the sum of surviving SFZH."""
         surviving_sfh = constant_sfh_stars.calculate_surviving_sfh(test_grid)
         surviving_sfzh = constant_sfh_stars.calculate_surviving_sfzh(test_grid)
         expected = np.sum(surviving_sfzh, axis=1)
@@ -137,8 +145,12 @@ class TestCalculateSurvivingMass:
         result_msun = result.to("Msun")
         assert result_msun.units == Msun.units
 
-    def test_surviving_mass_le_initial_mass(self, instantaneous_stars, test_grid):
-        """Test that surviving mass is less than or equal to the initial mass."""
+    def test_surviving_mass_le_initial_mass(
+        self,
+        instantaneous_stars,
+        test_grid,
+    ):
+        """Test that surviving mass is <= to the initial mass."""
         surviving = instantaneous_stars.calculate_surviving_mass(test_grid)
         initial = instantaneous_stars.initial_mass
         assert surviving <= initial + 1e-30 * Msun
@@ -172,8 +184,10 @@ class TestCalculateInitialMassAtAge:
         result_msun = result.to("Msun")
         assert result_msun.units == Msun.units
 
-    def test_age_less_than_burst_returns_initial_mass(self, instantaneous_stars):
-        """Test that querying before the burst age returns the full initial mass.
+    def test_age_less_than_burst_returns_initial_mass(
+        self, instantaneous_stars
+    ):
+        """Test that querying before the burst age returns the initial mass.
 
         The instantaneous_stars fixture has a burst at 10 Myr (1e7 yr).
         Querying at age=5 Myr (older than 5 Myr in lookback time) should
@@ -182,7 +196,9 @@ class TestCalculateInitialMassAtAge:
         result = instantaneous_stars.calculate_initial_mass_at_age(5 * Myr)
         initial = instantaneous_stars.initial_mass
         # The burst at 10 Myr is older than 5 Myr, so it should be included
-        assert np.isclose(result.to("Msun").value, initial.to("Msun").value, rtol=0.01)
+        assert np.isclose(
+            result.to("Msun").value, initial.to("Msun").value, rtol=0.01
+        )
 
     def test_age_greater_than_burst_returns_zero(self, instantaneous_stars):
         """Test that querying after the burst age returns near-zero mass.
@@ -195,7 +211,7 @@ class TestCalculateInitialMassAtAge:
         assert result.to("Msun").value == pytest.approx(0.0, abs=1.0)
 
     def test_very_small_age_returns_initial_mass(self, constant_sfh_stars):
-        """Test that querying at a very small age returns the full initial mass.
+        """Test that querying at a very small age returns the initial mass.
 
         With a tiny lookback time, all stellar populations are older than the
         query age, so the returned mass should equal the total initial mass.
@@ -224,14 +240,16 @@ class TestCalculateInitialMassAtAge:
         """
         ages = [1 * Myr, 10 * Myr, 100 * Myr, 1000 * Myr]
         masses = [
-            constant_sfh_stars.calculate_initial_mass_at_age(a).to("Msun").value
+            constant_sfh_stars.calculate_initial_mass_at_age(a)
+            .to("Msun")
+            .value
             for a in ages
         ]
         for i in range(len(masses) - 1):
             assert masses[i] >= masses[i + 1] - 1e-10
 
     def test_accepts_float_in_years(self, instantaneous_stars):
-        """Test that calculate_initial_mass_at_age accepts a plain float in years."""
+        """Test that calculate_initial_mass_at_age accepts float in years."""
         # @accepts(age=yr) should allow passing a float treated as years
         result = instantaneous_stars.calculate_initial_mass_at_age(5e6 * yr)
         assert result > 0 * Msun
@@ -247,7 +265,7 @@ class TestCalculateSurvivingMassAtAge:
     """Tests for Stars.calculate_surviving_mass_at_age."""
 
     def test_returns_unyt_quantity(self, instantaneous_stars, test_grid):
-        """Test that calculate_surviving_mass_at_age returns a unyt quantity."""
+        """Test that calculate_surviving_mass_at_age returns unyt quantity."""
         from unyt import unyt_quantity
 
         result = instantaneous_stars.calculate_surviving_mass_at_age(
@@ -263,8 +281,10 @@ class TestCalculateSurvivingMassAtAge:
         result_msun = result.to("Msun")
         assert result_msun.units == Msun.units
 
-    def test_surviving_le_initial_at_same_age(self, constant_sfh_stars, test_grid):
-        """Test that surviving mass at age is <= initial mass at the same age."""
+    def test_surviving_le_initial_at_same_age(
+        self, constant_sfh_stars, test_grid
+    ):
+        """Test that surviving mass at age <= initial mass at the same age."""
         age = 10 * Myr
         surviving = constant_sfh_stars.calculate_surviving_mass_at_age(
             age, test_grid
@@ -272,8 +292,10 @@ class TestCalculateSurvivingMassAtAge:
         initial = constant_sfh_stars.calculate_initial_mass_at_age(age)
         assert surviving <= initial + 1e-30 * Msun
 
-    def test_very_small_age_returns_surviving_mass(self, constant_sfh_stars, test_grid):
-        """Test that at very small lookback age, result approaches total surviving mass.
+    def test_very_small_age_returns_surviving_mass(
+        self, constant_sfh_stars, test_grid
+    ):
+        """Test at small lookback age, result approaches total surviving mass.
 
         With a tiny lookback time, all populations are included, so the
         result should approach calculate_surviving_mass(grid).
@@ -281,7 +303,9 @@ class TestCalculateSurvivingMassAtAge:
         result = constant_sfh_stars.calculate_surviving_mass_at_age(
             1e4 * yr, test_grid
         )
-        total_surviving = constant_sfh_stars.calculate_surviving_mass(test_grid)
+        total_surviving = constant_sfh_stars.calculate_surviving_mass(
+            test_grid
+        )
         assert np.isclose(
             result.to("Msun").value,
             total_surviving.to("Msun").value,
@@ -303,8 +327,10 @@ class TestCalculateSurvivingMassAtAge:
             )
             assert result >= 0 * Msun
 
-    def test_mass_decreases_with_increasing_age(self, constant_sfh_stars, test_grid):
-        """Test that surviving mass at age is monotonically non-increasing with age."""
+    def test_mass_decreases_with_increasing_age(
+        self, constant_sfh_stars, test_grid
+    ):
+        """Test surviving mass is monotonically non-increasing with age."""
         ages = [1 * Myr, 10 * Myr, 100 * Myr, 1000 * Myr]
         masses = [
             constant_sfh_stars.calculate_surviving_mass_at_age(a, test_grid)
@@ -315,8 +341,10 @@ class TestCalculateSurvivingMassAtAge:
         for i in range(len(masses) - 1):
             assert masses[i] >= masses[i + 1] - 1e-10
 
-    def test_age_greater_than_burst_returns_zero(self, instantaneous_stars, test_grid):
-        """Test that querying after the burst age returns near-zero surviving mass.
+    def test_age_greater_than_burst_returns_zero(
+        self, instantaneous_stars, test_grid
+    ):
+        """Test querying after the burst age returns near-zero surviving mass.
 
         The instantaneous_stars fixture has a burst at 10 Myr.
         Querying at 50 Myr should give ~0 since the burst is more recent.
@@ -326,8 +354,10 @@ class TestCalculateSurvivingMassAtAge:
         )
         assert result.to("Msun").value == pytest.approx(0.0, abs=1.0)
 
-    def test_age_less_than_burst_returns_positive(self, instantaneous_stars, test_grid):
-        """Test that querying before the burst age returns positive surviving mass.
+    def test_age_less_than_burst_returns_positive(
+        self, instantaneous_stars, test_grid
+    ):
+        """Test querying before the burst age returns positive surviving mass.
 
         The instantaneous_stars fixture has a burst at 10 Myr.
         Querying at 5 Myr should give positive surviving mass since the 10 Myr
