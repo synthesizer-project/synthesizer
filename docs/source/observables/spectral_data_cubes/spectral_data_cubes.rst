@@ -4,11 +4,22 @@ Spectral Data Cubes
 Overview
 --------
 
-Synthesizer can be used to make spectral data cubes (similar to the integral field unit instruments on telescopes)
+Synthesizer can be used to make spectral data cubes, similar to the output of
+integral field unit instruments on telescopes.
 
-- `SpectralCube` objects, a container for a spaxel data cube. These provide functionality to create, manipulate and visualise spectral data cubes
+For standard resolved-spectroscopy workflows, the main public interface is the
+high-level galaxy and component cube API used together with an
+``IntegratedFieldUnit``. In this workflow you:
 
-In the documentation below we demonstrate producing spectral data cubes from parametric and particle `Galaxy` objects. At the moment synthesizer does not support instrument specific spectral data cubes. 
+- generate spectra
+- construct an ``IntegratedFieldUnit``
+- call ``galaxy.get_data_cube(...)`` or ``component.get_data_cube(...)``
+
+These methods will return a ``SpectralCube``, which is the main data container for spectral data cubes in Synthesizer, and provides a consistent interface for working with cubes regardless of how they were generated.
+
+The documentation below starts with the high-level particle and parametric
+galaxy workflows, then shows how the returned cube can be analysed or how a
+``SpectralCube`` can be created directly when needed.
 
 .. toctree::
    :maxdepth: 2
