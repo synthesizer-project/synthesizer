@@ -17,14 +17,14 @@ Example usage::
         fov=1,
     )
 
-    # Get a hist data cube
-    cube.get_data_cube_hist(
+    # Generate a hist data cube
+    cube.generate_data_cube_hist(
         sed=sed,
         coordinates=coordinates,
     )
 
-    # Get a smoothed data cube
-    cube.get_data_cube_smoothed(
+    # Generate a smoothed data cube
+    cube.generate_data_cube_smoothed(
         sed=sed,
         coordinates=coordinates,
         smoothing_lengths=smoothing_lengths,
@@ -34,6 +34,8 @@ Example usage::
     )
 """
 
+import warnings
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
@@ -42,7 +44,7 @@ from unyt import angstrom
 
 from synthesizer import exceptions
 from synthesizer.imaging.base_imaging import ImagingBase
-from synthesizer.imaging.image_generators import (
+from synthesizer.imaging.data_cube_generators import (
     _generate_ifu_parametric_smoothed,
     _generate_ifu_particle_hist,
     _generate_ifu_particle_smoothed,
@@ -139,7 +141,8 @@ class SpectralCube(ImagingBase):
         if self.arr is None:
             raise exceptions.MissingIFU(
                 "The IFU array hasn't been generated yet. Please call "
-                "get_data_cube_hist or get_data_cube_smoothed first."
+                "generate_data_cube_hist or generate_data_cube_smoothed "
+                "first."
             )
         return self.arr * self.units
 
@@ -161,7 +164,8 @@ class SpectralCube(ImagingBase):
         if self.arr is None:
             raise exceptions.MissingIFU(
                 "The IFU array hasn't been generated yet. Please call "
-                "get_data_cube_hist or get_data_cube_smoothed first."
+                "generate_data_cube_hist or generate_data_cube_smoothed "
+                "first."
             )
         return self.arr * self.units
 
@@ -264,7 +268,7 @@ class SpectralCube(ImagingBase):
 
         return new_cube
 
-    def get_data_cube_hist(
+    def generate_data_cube_hist(
         self,
         sed,
         coordinates=None,
@@ -300,7 +304,29 @@ class SpectralCube(ImagingBase):
             nthreads=nthreads,
         )
 
-    def get_data_cube_smoothed(
+    def get_data_cube_hist(
+        self,
+        sed,
+        coordinates=None,
+        quantity="lnu",
+        nthreads=1,
+    ):
+        """Compatibility wrapper for ``generate_data_cube_hist``."""
+        warnings.warn(
+            "get_data_cube_hist is deprecated; use "
+            "generate_data_cube_hist instead.",
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
+        # Delegate to the renamed low-level histogram cube entry point.
+        return self.generate_data_cube_hist(
+            sed=sed,
+            coordinates=coordinates,
+            quantity=quantity,
+            nthreads=nthreads,
+        )
+
+    def generate_data_cube_smoothed(
         self,
         sed,
         coordinates=None,
@@ -328,8 +354,9 @@ class SpectralCube(ImagingBase):
                 The coordinates of the particles. (particle case only)
             smoothing_lengths (unyt_array, float):
                 The smoothing lengths of the particles. (particle case only)
-            kernel (str):
-                The kernel to use for smoothing. (particle case only)
+            kernel (np.ndarray or Kernel):
+                The kernel lookup table, or a ``Kernel`` instance to extract
+                the lookup table from. (particle case only)
             kernel_threshold (float):
                 The threshold for the kernel. (particle case only)
             density_grid (array_like, float):
@@ -351,6 +378,19 @@ class SpectralCube(ImagingBase):
                 If conflicting particle and parametric arguments are passed
                 or any arguments are missing an error is raised.
         """
+        if density_grid is not None and any(
+            value is not None
+            for value in (
+                coordinates,
+                smoothing_lengths,
+                kernel,
+            )
+        ):
+            raise exceptions.InconsistentArguments(
+                "Cannot pass density_grid together with particle cube inputs "
+                "(coordinates, smoothing_lengths, kernel, kernel_threshold)."
+            )
+
         # Call the correct generation function (particle or parametric)
         if density_grid is not None and sed is not None:
             return _generate_ifu_parametric_smoothed(
@@ -390,6 +430,36 @@ class SpectralCube(ImagingBase):
                 f"kernel_threshold={type(kernel_threshold)}, "
                 f"sed={type(sed)})"
             )
+
+    def get_data_cube_smoothed(
+        self,
+        sed,
+        coordinates=None,
+        smoothing_lengths=None,
+        kernel=None,
+        kernel_threshold=1,
+        density_grid=None,
+        quantity="lnu",
+        nthreads=1,
+    ):
+        """Compatibility wrapper for ``generate_data_cube_smoothed``."""
+        warnings.warn(
+            "get_data_cube_smoothed is deprecated; use "
+            "generate_data_cube_smoothed instead.",
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
+        # Delegate to the renamed low-level spectral-cube entry point.
+        return self.generate_data_cube_smoothed(
+            sed=sed,
+            coordinates=coordinates,
+            smoothing_lengths=smoothing_lengths,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            density_grid=density_grid,
+            quantity=quantity,
+            nthreads=nthreads,
+        )
 
     def apply_psf(self):
         """Apply a PSF to the data cube.

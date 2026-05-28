@@ -20,6 +20,7 @@ from unyt import Myr, kpc
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.instruments import FilterCollection as Filters
+from synthesizer.instruments import IntegratedFieldUnit
 from synthesizer.kernel_functions import Kernel
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
@@ -120,14 +121,18 @@ def cube_strong_scaling(
 
     # Get the kernel
     kernel = Kernel().get_kernel()
+    instrument = IntegratedFieldUnit(
+        label="profile_ifu",
+        lam=grid.lam,
+        resolution=resolution,
+    )
 
     # Get the tau_vs in serial first to get over any overhead due to linking
     # the first time the function is called
     print("Initial serial calculation")
     gal.get_data_cube(
-        resolution,
         fov=width,
-        lam=grid.lam,
+        instrument=instrument,
         cube_type=type,
         stellar_spectra="incident",
         blackhole_spectra=None,
@@ -154,9 +159,8 @@ def cube_strong_scaling(
             for i in range(average_over):
                 spec_start = time.time()
                 gal.get_data_cube(
-                    resolution,
                     fov=width,
-                    lam=grid.lam,
+                    instrument=instrument,
                     cube_type=type,
                     stellar_spectra="incident",
                     blackhole_spectra=None,
@@ -183,9 +187,8 @@ def cube_strong_scaling(
                 for i in range(average_over):
                     spec_start = time.time()
                     gal.get_data_cube(
-                        resolution,
                         fov=width,
-                        lam=grid.lam,
+                        instrument=instrument,
                         cube_type=type,
                         stellar_spectra="incident",
                         blackhole_spectra=None,

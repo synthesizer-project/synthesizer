@@ -14,11 +14,19 @@ from synthesizer.cosmology import (
 from synthesizer.emission_models.attenuation import Inoue14
 from synthesizer.emissions import Sed, plot_observed_spectra, plot_spectra
 from synthesizer.grid import Grid
+from synthesizer.imaging.data_cube_generators import (
+    _combine_spectral_cubes,
+    _prepare_galaxy_data_cube_labels,
+)
 from synthesizer.imaging.image_generators import (
     _combine_image_collections,
     _prepare_galaxy_image_labels,
 )
-from synthesizer.synth_warnings import warn
+from synthesizer.imaging.postprocess import (
+    _postprocess_existing_data_cubes,
+    _postprocess_existing_images,
+)
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
@@ -110,6 +118,8 @@ class BaseGalaxy:
 
         # Initialise the dictionary to hold instrument specific spectroscopy
         self.spectroscopy = {}
+        self.data_cubes_lnu = {}
+        self.data_cubes_fnu = {}
 
         # Attach the components
         self.stars = stars
@@ -1314,7 +1324,7 @@ class BaseGalaxy:
                 f"({emission_model.emitter})"
             )
 
-    def _get_images(
+    def _generate_images(
         self,
         *labels,
         fov,
@@ -1470,7 +1480,7 @@ class BaseGalaxy:
                 continue
 
             # Generate images for this component
-            component_imgs = component._get_images(
+            component_imgs = component._generate_images(
                 *emitter_labels,
                 img_type=img_type,
                 instrument=instrument,
@@ -1480,6 +1490,7 @@ class BaseGalaxy:
                 fov=fov,
                 cosmo=cosmo,
                 phot_type=phot_type,
+                postprocess=False,
             )
 
             # Component returns a dict if multiple labels, or bare
@@ -1534,7 +1545,12 @@ class BaseGalaxy:
                         and label
                         in self.black_holes.images_lnu.get(instrument_name, {})
                     )
-                    if not in_stars and not in_bhs:
+                    in_gas = (
+                        self.gas is not None
+                        and label
+                        in self.gas.images_lnu.get(instrument_name, {})
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
                         self.images_lnu.setdefault(instrument_name, {})
                         self.images_lnu[instrument_name][label] = out_images[
                             label
@@ -1552,7 +1568,12 @@ class BaseGalaxy:
                         and label
                         in self.black_holes.images_fnu.get(instrument_name, {})
                     )
-                    if not in_stars and not in_bhs:
+                    in_gas = (
+                        self.gas is not None
+                        and label
+                        in self.gas.images_fnu.get(instrument_name, {})
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
                         self.images_fnu.setdefault(instrument_name, {})
                         self.images_fnu[instrument_name][label] = out_images[
                             label
@@ -1570,7 +1591,10 @@ class BaseGalaxy:
                         self.black_holes is not None
                         and label in self.black_holes.images_lnu
                     )
-                    if not in_stars and not in_bhs:
+                    in_gas = (
+                        self.gas is not None and label in self.gas.images_lnu
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
                         self.images_lnu[label] = out_images[label]
             else:
                 for label in out_images:
@@ -1583,7 +1607,10 @@ class BaseGalaxy:
                         self.black_holes is not None
                         and label in self.black_holes.images_fnu
                     )
-                    if not in_stars and not in_bhs:
+                    in_gas = (
+                        self.gas is not None and label in self.gas.images_fnu
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
                         self.images_fnu[label] = out_images[label]
 
         # Probably, very unlikely but if we generated no images just return
@@ -1598,10 +1625,49 @@ class BaseGalaxy:
             )
             return {}
 
+        # Apply the instrument-defined observation recipe to component-owned
+        # images after all raw combinations are complete.
+        final_images = dict(out_images)
+
+        # Post-process each component's raw images in place on the component so
+        # the stored caches reflect the same observable returned here.
+        for emitter, emitter_labels in component_labels_by_emitter.items():
+            component = None
+            if emitter == "stellar" and self.stars is not None:
+                component = self.stars
+            elif emitter == "blackhole" and self.black_holes is not None:
+                component = self.black_holes
+            elif emitter == "gas" and self.gas is not None:
+                component = self.gas
+
+            if component is None:
+                continue
+
+            final_images.update(
+                _postprocess_existing_images(
+                    component,
+                    instrument=instrument,
+                    phot_type=phot_type,
+                    limit_to=emitter_labels,
+                )
+            )
+
+        # Post-process any galaxy-owned combined images after the combination
+        # step so the observation recipe is applied once to the full galaxy.
+        if len(galaxy_combine_labels) > 0:
+            final_images.update(
+                _postprocess_existing_images(
+                    self,
+                    instrument=instrument,
+                    phot_type=phot_type,
+                    limit_to=galaxy_combine_labels,
+                )
+            )
+
         # Return either the single image or the dict of images
         if len(labels) == 1:
-            return out_images[labels[0]]
-        return out_images
+            return final_images[labels[0]]
+        return final_images
 
     def get_images_luminosity(
         self,
@@ -1665,7 +1731,7 @@ class BaseGalaxy:
                 otherwise a dict of ImageCollections keyed by label.
 
         """
-        return self._get_images(
+        return self._generate_images(
             *labels,
             fov=fov,
             instrument=instrument,
@@ -1739,7 +1805,7 @@ class BaseGalaxy:
                 otherwise a dict of ImageCollections keyed by label.
 
         """
-        return self._get_images(
+        return self._generate_images(
             *labels,
             fov=fov,
             instrument=instrument,
@@ -1751,29 +1817,313 @@ class BaseGalaxy:
             phot_type="fnu",
         )
 
+    def _generate_data_cubes(
+        self,
+        *labels,
+        fov,
+        instrument,
+        cube_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        quantity="lnu",
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Make SpectralCube objects for a galaxy and attached components.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make data cubes for.
+            fov (unyt_quantity):
+                Width of the requested data cube.
+            instrument (IntegratedFieldUnit):
+                Instrument defining the wavelength sampling and spatial
+                resolution.
+            cube_type (str):
+                Either ``"smoothed"`` or ``"hist"``.
+            kernel (array-like, optional):
+                Kernel used for smoothed particle cubes.
+            kernel_threshold (float):
+                Kernel impact-parameter threshold.
+            quantity (str):
+                Spectral quantity to store in the cube.
+            nthreads (int):
+                Number of threads to use for particle cube generation.
+            cosmo (astropy.cosmology, optional):
+                Cosmology used for mixed-unit conversions.
+
+        Returns:
+            SpectralCube/dict:
+                Either a single SpectralCube if only one label is passed,
+                otherwise a dict of SpectralCubes keyed by label.
+        """
+        # This follows the same pattern as ``_generate_images``: normalise the
+        # requested labels, route them to the owning component or galaxy-level
+        # combination step, then apply IFU post-processing only after the raw
+        # ownership/combination work is complete.
+
+        # Convert labels tuple to a list and validate they are strings.
+        labels = list(labels)
+        for label in labels:
+            if not isinstance(label, str):
+                raise exceptions.InconsistentArguments(
+                    f"All labels must be strings, got {type(label).__name__}. "
+                    "If passing an EmissionModel, use model.label instead."
+                )
+
+        if self.galaxy_type == "Parametric" and cube_type == "hist":
+            raise exceptions.InconsistentArguments(
+                "Parametric Galaxies can only produce smoothed data cubes."
+            )
+
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set on a Galaxy when using an angular "
+                    "resolution and FOV."
+                )
+
+        # Merge the parameter caches from the galaxy and any attached
+        # components so label routing can see the full combination graph,
+        # including labels defined on child components but combined at the
+        # galaxy level.
+        combined_cache = dict(self.model_param_cache)
+        if self.stars is not None and hasattr(self.stars, "model_param_cache"):
+            combined_cache.update(self.stars.model_param_cache)
+        if self.black_holes is not None and hasattr(
+            self.black_holes, "model_param_cache"
+        ):
+            combined_cache.update(self.black_holes.model_param_cache)
+        if self.gas is not None and hasattr(self.gas, "model_param_cache"):
+            combined_cache.update(self.gas.model_param_cache)
+
+        # Work out which cubes are galaxy-level combinations and which must be
+        # generated by attached components.
+        galaxy_combine_labels, component_labels_by_emitter = (
+            _prepare_galaxy_data_cube_labels(labels, combined_cache)
+        )
+
+        # Preserve direct component-label routing when the label exists on an
+        # attached component but is not represented in the combined cache. This
+        # keeps older direct-spectrum labels working without forcing them into
+        # the galaxy combination graph.
+        for label in labels:
+            if label in combined_cache:
+                continue
+            if label in getattr(self.stars, "spectra", {}) or label in getattr(
+                self.stars, "particle_spectra", {}
+            ):
+                component_labels_by_emitter.setdefault("stellar", [])
+                if label not in component_labels_by_emitter["stellar"]:
+                    component_labels_by_emitter["stellar"].append(label)
+            if label in getattr(
+                self.black_holes, "spectra", {}
+            ) or label in getattr(self.black_holes, "particle_spectra", {}):
+                component_labels_by_emitter.setdefault("blackhole", [])
+                if label not in component_labels_by_emitter["blackhole"]:
+                    component_labels_by_emitter["blackhole"].append(label)
+            if label in getattr(self.gas, "spectra", {}) or label in getattr(
+                self.gas, "particle_spectra", {}
+            ):
+                component_labels_by_emitter.setdefault("gas", [])
+                if label not in component_labels_by_emitter["gas"]:
+                    component_labels_by_emitter["gas"].append(label)
+
+        routed_labels = set(galaxy_combine_labels)
+        for emitter_labels in component_labels_by_emitter.values():
+            routed_labels.update(emitter_labels)
+        unresolved_labels = set(labels) - routed_labels
+        if len(unresolved_labels) > 0:
+            raise exceptions.InconsistentArguments(
+                "Cannot generate galaxy data cubes for unresolved labels: "
+                f"{', '.join(sorted(unresolved_labels))}"
+            )
+
+        # Container for all raw cubes generated during this call.
+        out_cubes = {}
+
+        # Ask each relevant component for raw cubes only. This is the cube-side
+        # analogue of the image orchestration path: combine first at the galaxy
+        # level, then apply the observation recipe once to the owning result.
+        for emitter, emitter_labels in component_labels_by_emitter.items():
+            component = None
+            if emitter == "stellar" and self.stars is not None:
+                component = self.stars
+            elif emitter == "blackhole" and self.black_holes is not None:
+                component = self.black_holes
+            elif emitter == "gas" and self.gas is not None:
+                component = self.gas
+
+            if component is None:
+                continue
+
+            component_cubes = component._generate_data_cubes(
+                *emitter_labels,
+                fov=fov,
+                instrument=instrument,
+                cube_type=cube_type,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                quantity=quantity,
+                nthreads=nthreads,
+                cosmo=cosmo,
+                postprocess=False,
+            )
+
+            # Component generation mirrors the image API and may return either
+            # a bare cube or a label->cube mapping depending on request size.
+            if isinstance(component_cubes, dict):
+                out_cubes.update(component_cubes)
+            else:
+                out_cubes[emitter_labels[0]] = component_cubes
+
+        # Ensure every routed component label produced a raw cube before moving
+        # on to galaxy-level combinations.
+        expected_labels = []
+        for emitter_labels in component_labels_by_emitter.values():
+            expected_labels.extend(emitter_labels)
+
+        missing_labels = set(expected_labels) - set(out_cubes.keys())
+        if len(missing_labels) > 0:
+            raise exceptions.MissingIFU(
+                "Cannot generate galaxy data cubes for the following labels "
+                "as the necessary component cubes are missing: "
+                f"{', '.join(missing_labels)}"
+            )
+
+        # Build any galaxy-owned combination cubes from the raw component cube
+        # set assembled above. At this point ``out_cubes`` contains the same
+        # raw inputs the image path would hold before galaxy-level combination.
+        for label in galaxy_combine_labels:
+            out_cubes[label] = _combine_spectral_cubes(
+                cubes=out_cubes,
+                label=label,
+                model_cache=combined_cache,
+            )
+
+        # Attach only galaxy-owned raw cubes to galaxy caches, leaving cubes
+        # that already live on components in their existing component caches.
+        instrument_name = instrument.label
+        if quantity in {"lnu", "llam", "luminosity"}:
+            galaxy_cubes = self.data_cubes_lnu
+            stellar_cubes = (
+                self.stars.data_cubes_lnu.get(instrument_name, {})
+                if self.stars is not None
+                else {}
+            )
+            blackhole_cubes = (
+                self.black_holes.data_cubes_lnu.get(instrument_name, {})
+                if self.black_holes is not None
+                else {}
+            )
+        elif quantity in {"fnu", "flam", "flux"}:
+            galaxy_cubes = self.data_cubes_fnu
+            stellar_cubes = (
+                self.stars.data_cubes_fnu.get(instrument_name, {})
+                if self.stars is not None
+                else {}
+            )
+            blackhole_cubes = (
+                self.black_holes.data_cubes_fnu.get(instrument_name, {})
+                if self.black_holes is not None
+                else {}
+            )
+            gas_cubes = (
+                self.gas.data_cubes_fnu.get(instrument_name, {})
+                if self.gas is not None
+                else {}
+            )
+        else:
+            return out_cubes[labels[0]] if len(labels) == 1 else out_cubes
+
+        if quantity in {"lnu", "llam", "luminosity"}:
+            gas_cubes = (
+                self.gas.data_cubes_lnu.get(instrument_name, {})
+                if self.gas is not None
+                else {}
+            )
+
+        galaxy_cubes.setdefault(instrument_name, {})
+        for label in out_cubes:
+            in_stars = label in stellar_cubes
+            in_bhs = label in blackhole_cubes
+            in_gas = label in gas_cubes
+            if not in_stars and not in_bhs and not in_gas:
+                galaxy_cubes[instrument_name][label] = out_cubes[label]
+
+        # Start from the raw cube set, then replace entries with their observed
+        # versions as each owner applies the instrument-defined IFU recipe.
+        final_cubes = dict(out_cubes)
+
+        for emitter, emitter_labels in component_labels_by_emitter.items():
+            component = None
+            if emitter == "stellar" and self.stars is not None:
+                component = self.stars
+            elif emitter == "blackhole" and self.black_holes is not None:
+                component = self.black_holes
+            elif emitter == "gas" and self.gas is not None:
+                component = self.gas
+
+            if component is None:
+                continue
+
+            final_cubes.update(
+                _postprocess_existing_data_cubes(
+                    component,
+                    instrument=instrument,
+                    quantity=quantity,
+                    limit_to=emitter_labels,
+                )
+            )
+
+        # Post-process any galaxy-owned combined cubes after the combination
+        # step so the observation recipe is applied once to the full galaxy,
+        # just as in the shared image-postprocessing flow.
+        if len(galaxy_combine_labels) > 0:
+            final_cubes.update(
+                _postprocess_existing_data_cubes(
+                    self,
+                    instrument=instrument,
+                    quantity=quantity,
+                    limit_to=galaxy_combine_labels,
+                )
+            )
+
+        # Preserve the image-generation return convention for empty, single,
+        # and multi-label requests.
+        if len(out_cubes) == 0:
+            return out_cubes
+
+        if len(labels) == 1:
+            return final_cubes[labels[0]]
+        return final_cubes
+
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use galaxy.get_images_luminosity(...) instead."
+    )
     def apply_psf_to_images_lnu(
         self,
         instrument,
-        psf_resample_factor=1,
         limit_to=None,
     ):
         """Apply instrument PSFs to this galaxy's luminosity images.
 
-        This will also apply the PSF to any images attached to the galaxies
-        components, as well as those on the top level galaxy object.
+        This method now acts as an orchestration wrapper around the
+        instrument-owned PSF application path. It fetches the relevant image
+        collections, passes them into the instrument, stores the returned
+        PSF-processed images, and then repeats the same orchestration for any
+        attached components.
 
         Args:
             instrument (Instrument):
                 The instrument with the PSF to apply.
-            psf_resample_factor (int):
-                The resample factor for the PSF. This should be a value greater
-                than 1. The image will be resampled by this factor before the
-                PSF is applied and then downsampled back to the original
-                after convolution. This can help minimize the effects of
-                using a generic PSF centred on the galaxy centre, a
-                simplification we make for performance reasons (the
-                effects are sufficiently small that this simplifications is
-                justified).
             limit_to (str/list):
                 If not None, defines a specific model (or list of models) to
                 limit the image generation to. Otherwise, all models with saved
@@ -1810,23 +2160,14 @@ class BaseGalaxy:
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = images[key]
 
-            # If requested, do the resampling
-            if psf_resample_factor > 1:
-                imgs.supersample(psf_resample_factor)
-
-            # Apply the PSF
-            self.images_psf_lnu[instrument.label][key] = imgs.apply_psfs(
-                instrument.psfs
+            # Delegate the actual PSF application to the instrument so the
+            # galaxy layer only handles routing and output storage
+            self.images_psf_lnu[instrument.label][key] = instrument.apply_psfs(
+                imgs,
             )
-
-            # Undo the resampling (if needed)
-            if psf_resample_factor > 1:
-                self.images_psf_lnu[instrument.label][key].downsample(
-                    1 / psf_resample_factor
-                )
 
         # If we have stars, do those
         if (
@@ -1835,7 +2176,6 @@ class BaseGalaxy:
         ):
             self.stars.apply_psf_to_images_lnu(
                 instrument,
-                psf_resample_factor=psf_resample_factor,
                 limit_to=limit_to,
             )
 
@@ -1846,35 +2186,42 @@ class BaseGalaxy:
         ):
             self.black_holes.apply_psf_to_images_lnu(
                 instrument,
-                psf_resample_factor=psf_resample_factor,
+                limit_to=limit_to,
+            )
+
+        # Keep the deprecated galaxy-level wrapper symmetric with the stars and
+        # black-hole branches so gas-owned image collections receive the same
+        # PSF orchestration when callers still use this compatibility entry
+        # point.
+        gas = getattr(self, "gas", None)
+        if gas is not None and instrument.label in gas.images_lnu:
+            gas.apply_psf_to_images_lnu(
+                instrument,
                 limit_to=limit_to,
             )
 
         return self.images_psf_lnu[instrument.label]
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use galaxy.get_images_flux(...) instead."
+    )
     def apply_psf_to_images_fnu(
         self,
         instrument,
-        psf_resample_factor=1,
         limit_to=None,
     ):
         """Apply instrument PSFs to this galaxy's flux images.
 
-        This will also apply the PSF to any images attached to the galaxies
-        components, as well as those on the top level galaxy object.
+        This method now acts as an orchestration wrapper around the
+        instrument-owned PSF application path. It fetches the relevant image
+        collections, passes them into the instrument, stores the returned
+        PSF-processed images, and then repeats the same orchestration for any
+        attached components.
 
         Args:
             instrument (Instrument):
                 The instrument with the PSF to apply.
-            psf_resample_factor (int):
-                The resample factor for the PSF. This should be a value greater
-                than 1. The image will be resampled by this factor before the
-                PSF is applied and then downsampled back to the original
-                after convolution. This can help minimize the effects of
-                using a generic PSF centred on the galaxy centre, a
-                simplification we make for performance reasons (the
-                effects are sufficiently small that this simplifications is
-                justified).
             limit_to (str/list):
                 If not None, defines a specific model (or list of models) to
                 limit the image generation to. Otherwise, all models with saved
@@ -1911,23 +2258,14 @@ class BaseGalaxy:
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = images[key]
 
-            # If requested, do the resampling
-            if psf_resample_factor > 1:
-                imgs.supersample(psf_resample_factor)
-
-            # Apply the PSF
-            self.images_psf_fnu[instrument.label][key] = imgs.apply_psfs(
-                instrument.psfs
+            # Delegate the actual PSF application to the instrument so the
+            # galaxy layer only handles routing and output storage
+            self.images_psf_fnu[instrument.label][key] = instrument.apply_psfs(
+                imgs,
             )
-
-            # Undo the resampling (if needed)
-            if psf_resample_factor > 1:
-                self.images_psf_fnu[instrument.label][key].downsample(
-                    1 / psf_resample_factor
-                )
 
         # If we have stars, do those
         if (
@@ -1936,7 +2274,6 @@ class BaseGalaxy:
         ):
             self.stars.apply_psf_to_images_fnu(
                 instrument,
-                psf_resample_factor=psf_resample_factor,
                 limit_to=limit_to,
             )
 
@@ -1947,12 +2284,25 @@ class BaseGalaxy:
         ):
             self.black_holes.apply_psf_to_images_fnu(
                 instrument,
-                psf_resample_factor=psf_resample_factor,
+                limit_to=limit_to,
+            )
+
+        # Mirror the luminosity-path compatibility handling for gas-owned flux
+        # images so the deprecated wrapper still routes every attached emitter
+        # through instrument-side PSF processing.
+        gas = getattr(self, "gas", None)
+        if gas is not None and instrument.label in gas.images_fnu:
+            gas.apply_psf_to_images_fnu(
+                instrument,
                 limit_to=limit_to,
             )
 
         return self.images_psf_fnu[instrument.label]
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use galaxy.get_images_luminosity(...) instead."
+    )
     def apply_noise_to_images_lnu(
         self,
         instrument,
@@ -1960,6 +2310,12 @@ class BaseGalaxy:
         apply_to_psf=True,
     ):
         """Apply instrument noise to this galaxy's and its component's images.
+
+        This method now acts as an orchestration wrapper around the
+        instrument-owned imaging-noise path. It fetches the relevant image
+        collections, passes them into the instrument, stores the returned
+        noisy images, and then repeats the same orchestration for any attached
+        components.
 
         Args:
             instrument (Instrument):
@@ -1999,33 +2355,17 @@ class BaseGalaxy:
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = images[key]
 
-            # Apply the noise using the correct method
-            if instrument.noise_maps is not None:
-                self.images_noise_lnu[instrument.label][key] = (
-                    imgs.apply_noise_arrays(
-                        instrument.noise_maps,
-                    )
+            # Delegate the actual noise application to the instrument so the
+            # galaxy layer only handles routing and output storage
+            self.images_noise_lnu[instrument.label][key] = (
+                instrument.apply_noises(
+                    imgs,
+                    aperture_radius=instrument.depth_app_radius,
                 )
-            elif instrument.noise_source_maps is not None:
-                self.images_noise_lnu[instrument.label][key] = (
-                    imgs.apply_correlated_noise(instrument)
-                )
-            elif instrument.snrs is not None:
-                self.images_noise_lnu[instrument.label][key] = (
-                    imgs.apply_noise_from_snrs(
-                        snrs=instrument.snrs,
-                        depths=instrument.depth,
-                        aperture_radius=instrument.depth_aperture_radius,
-                    )
-                )
-            else:
-                raise exceptions.InconsistentArguments(
-                    f"Instrument ({instrument.label}) cannot be used "
-                    "for applying noise because no noise attributes are set."
-                )
+            )
 
         # If we have stars, do those
         if self.stars is not None and (
@@ -2054,6 +2394,10 @@ class BaseGalaxy:
 
         return self.images_noise_lnu[instrument.label]
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use galaxy.get_images_flux(...) instead."
+    )
     def apply_noise_to_images_fnu(
         self,
         instrument,
@@ -2061,6 +2405,12 @@ class BaseGalaxy:
         apply_to_psf=True,
     ):
         """Apply instrument noise to this galaxy's and its component's images.
+
+        This method now acts as an orchestration wrapper around the
+        instrument-owned imaging-noise path. It fetches the relevant image
+        collections, passes them into the instrument, stores the returned
+        noisy images, and then repeats the same orchestration for any attached
+        components.
 
         Args:
             instrument (Instrument):
@@ -2100,33 +2450,17 @@ class BaseGalaxy:
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = images[key]
 
-            # Apply the noise using the correct method
-            if instrument.noise_maps is not None:
-                self.images_noise_fnu[instrument.label][key] = (
-                    imgs.apply_noise_arrays(
-                        instrument.noise_maps,
-                    )
+            # Delegate the actual noise application to the instrument so the
+            # galaxy layer only handles routing and output storage
+            self.images_noise_fnu[instrument.label][key] = (
+                instrument.apply_noises(
+                    imgs,
+                    aperture_radius=instrument.depth_app_radius,
                 )
-            elif instrument.noise_source_maps is not None:
-                self.images_noise_fnu[instrument.label][key] = (
-                    imgs.apply_correlated_noise(instrument)
-                )
-            elif instrument.snrs is not None:
-                self.images_noise_fnu[instrument.label][key] = (
-                    imgs.apply_noise_from_snrs(
-                        snrs=instrument.snrs,
-                        depths=instrument.depth,
-                        aperture_radius=instrument.depth_aperture_radius,
-                    )
-                )
-            else:
-                raise exceptions.InconsistentArguments(
-                    f"Instrument ({instrument.label}) cannot be used "
-                    "for applying noise because no noise attributes are set."
-                )
+            )
 
         # If we have stars, do those
         if self.stars is not None and (
@@ -2162,8 +2496,10 @@ class BaseGalaxy:
     ):
         """Get spectroscopy for the galaxy based on a specific instrument.
 
-        This will apply the instrument's wavelength array to each
-        spectra stored on the galaxy and its components.
+        This method now acts as an orchestration wrapper around the
+        instrument-owned spectroscopy path. It fetches the relevant SEDs,
+        passes them into the instrument, stores the returned spectroscopy, and
+        then repeats the same orchestration for any attached components.
 
         Args:
             instrument (Instrument):
@@ -2205,10 +2541,12 @@ class BaseGalaxy:
             # Skip labels that don't exist on the galaxy
             if label not in self.spectra:
                 continue
-            # Get the spectroscopy
-            self.spectroscopy[instrument.label][label] = self.spectra[
-                label
-            ].apply_instrument_lams(instrument)
+            # Delegate the spectroscopy observation to the instrument so the
+            # galaxy layer only handles routing and output storage
+            spectrum = instrument.apply_lam_array(self.spectra[label])
+            if instrument.can_do_noisy_spectroscopy:
+                spectrum = instrument.apply_noise(spectrum)
+            self.spectroscopy[instrument.label][label] = spectrum
 
         # Do the stars level spectra
         if self.stars is not None:

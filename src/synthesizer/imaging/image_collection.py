@@ -13,11 +13,11 @@ Example usage::
         fov=(10, 10) * unyt.arcsec,
     )
 
-    # Get histograms of the particle distribution
-    img_coll.get_imgs_hist(photometry, coordinates)
+    # Generate histograms of the particle distribution
+    img_coll.generate_imgs_hist(photometry, coordinates)
 
-    # Get smoothed images of the particle distribution
-    img_coll.get_imgs_smoothed(
+    # Generate smoothed images of the particle distribution
+    img_coll.generate_imgs_smoothed(
         photometry,
         coordinates,
         smoothing_lengths,
@@ -25,8 +25,8 @@ Example usage::
         kernel_threshold,
     )
 
-    # Get smoothed images of a parametric distribution
-    img_coll.get_imgs_smoothed(
+    # Generate smoothed images of a parametric distribution
+    img_coll.generate_imgs_smoothed(
         photometry,
         density_grid=density_grid,
     )
@@ -57,6 +57,7 @@ from synthesizer.imaging.image_generators import (
     _generate_images_particle_hist,
     _generate_images_particle_smoothed,
 )
+from synthesizer.synth_warnings import deprecated
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
 
@@ -165,12 +166,29 @@ class ImageCollection(ImagingBase):
         # Check factor (NOTE: this doesn't actually cause an issue
         # mechanically but will ensure users are literal about resampling and
         # can't mistakenly resample in unintended ways).
+        if factor <= 0:
+            raise ValueError("Downsample factor must be positive.")
         if factor > 1:
             raise ValueError("Using downsample method to supersample!")
 
+        # Validate every child image before mutating the collection-level
+        # geometry so one missing image array cannot leave the collection
+        # metadata updated while some children remain untouched.
+        for image in self.imgs.values():
+            if image.arr is None:
+                raise exceptions.MissingImage(
+                    "The image array hasn't been generated yet. Please run "
+                    "generate_img_hist() or generate_img_smoothed() before "
+                    "resampling."
+                )
+
+        # Update the collection geometry only once all child resamples are
+        # known to be able to run successfully.
+        self._resample_resolution(factor)
+
         # Resample each image
-        for f in self.imgs:
-            self.imgs[f].resample(factor)
+        for image in self.imgs.values():
+            image.resample(factor)
 
     def supersample(self, factor):
         """Supersample all images contained within this instance.
@@ -194,12 +212,29 @@ class ImageCollection(ImagingBase):
         # Check factor (NOTE: this doesn't actually cause an issue
         # mechanically but will ensure users are literal about resampling and
         # can't mistakenly resample in unintended ways).
+        if factor <= 0:
+            raise ValueError("Supersample factor must be positive.")
         if factor < 1:
             raise ValueError("Using supersample method to downsample!")
 
+        # Validate every child image before mutating the collection-level
+        # geometry so one missing image array cannot leave the collection
+        # metadata updated while some children remain untouched.
+        for image in self.imgs.values():
+            if image.arr is None:
+                raise exceptions.MissingImage(
+                    "The image array hasn't been generated yet. Please run "
+                    "generate_img_hist() or generate_img_smoothed() before "
+                    "resampling."
+                )
+
+        # Update the collection geometry only once all child resamples are
+        # known to be able to run successfully.
+        self._resample_resolution(factor)
+
         # Resample each image
-        for f in self.imgs:
-            self.imgs[f].resample(factor)
+        for image in self.imgs.values():
+            image.resample(factor)
 
     def __len__(self):
         """Overload the len operator to return how many images there are."""
@@ -385,7 +420,7 @@ class ImageCollection(ImagingBase):
 
         return composite_img
 
-    def get_imgs_hist(
+    def generate_imgs_hist(
         self,
         photometry,
         coordinates,
@@ -416,7 +451,25 @@ class ImageCollection(ImagingBase):
             normalisations=normalisations,
         )
 
-    def get_imgs_smoothed(
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use generate_imgs_hist(...) instead."
+    )
+    def get_imgs_hist(
+        self,
+        photometry,
+        coordinates,
+        normalisations=None,
+    ):
+        """Deprecated wrapper for generate_imgs_hist."""
+        # Delegate to the renamed low-level histogram collection entry point.
+        return self.generate_imgs_hist(
+            photometry=photometry,
+            coordinates=coordinates,
+            normalisations=normalisations,
+        )
+
+    def generate_imgs_smoothed(
         self,
         photometry,
         coordinates=None,
@@ -445,9 +498,9 @@ class ImageCollection(ImagingBase):
             smoothing_lengths (unyt_array, float):
                 The smoothing lengths of the particles. (Only applicable to
                 particle imaging)
-            kernel (str):
-                The array describing the kernel. This is dervied from the
-                kernel_functions module. (Only applicable to particle imaging)
+            kernel (np.ndarray or Kernel):
+                The kernel lookup table, or a ``Kernel`` instance to extract
+                the lookup table from. (Only applicable to particle imaging)
             kernel_threshold (float):
                 The threshold for the kernel. Particles with a kernel value
                 below this threshold are included in the image. (Only
@@ -508,52 +561,32 @@ class ImageCollection(ImagingBase):
                 f"photometry={type(photometry)})"
             )
 
-    def apply_psfs(self, psfs):
-        """Convolve this ImageCollection's images with their PSFs.
-
-        To more accurately apply the PSF we recommend using a super resolution
-        image. This can be done via the supersample method and then
-        downsampling to the native pixel scale after resampling. However, it
-        is more efficient and robust to start at the super resolution initially
-        and then downsample after the fact.
-
-        Args:
-            psfs (dict):
-                A dictionary with a point spread function for each image within
-                the ImageCollection. The key of each PSF must be the
-                filter_code of the image it should be applied to.
-
-        Returns:
-            ImageCollection
-                A new image collection containing the images convolved with a
-                PSF.
-
-        Raises:
-            InconsistentArguments
-                If a dictionary of PSFs is provided that doesn't match the
-                filters an error is raised.
-        """
-        # Check we have a valid set of PSFs
-        if not isinstance(psfs, dict):
-            raise exceptions.InconsistentArguments(
-                "psfs must be a dictionary with a PSF for each image"
-            )
-        missing_psfs = [f for f in self.imgs.keys() if f not in psfs]
-        if len(missing_psfs) > 0:
-            raise exceptions.InconsistentArguments(
-                f"Missing a psf for the following filters: {missing_psfs}"
-            )
-
-        # Loop over each images and perform the convolution
-        psfed_imgs = {}
-        for f in psfs:
-            # Apply the PSF to this image
-            psfed_imgs[f] = self.imgs[f].apply_psf(psfs[f])
-
-        return ImageCollection(
-            resolution=self.resolution,
-            fov=self.fov,
-            imgs=psfed_imgs,
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use generate_imgs_smoothed(...) instead."
+    )
+    def get_imgs_smoothed(
+        self,
+        photometry,
+        coordinates=None,
+        smoothing_lengths=None,
+        kernel=None,
+        kernel_threshold=1,
+        density_grid=None,
+        nthreads=1,
+        normalisations=None,
+    ):
+        """Deprecated wrapper for generate_imgs_smoothed."""
+        # Delegate to the renamed low-level image-collection entry point.
+        return self.generate_imgs_smoothed(
+            photometry=photometry,
+            coordinates=coordinates,
+            smoothing_lengths=smoothing_lengths,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            density_grid=density_grid,
+            nthreads=nthreads,
+            normalisations=normalisations,
         )
 
     def apply_noise_arrays(self, noise_arrs):
