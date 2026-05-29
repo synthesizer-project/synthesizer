@@ -868,6 +868,23 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # picked up by get_param when trying to access attr_str
         self.fixed_parameters[attr_str] = overload_str
 
+    def set_fixed_parameter(self, param_name, value):
+        """Set a fixed parameter.
+
+        This method will set a fixed parameter on the model. This parameter
+        will take precedence over any parameter of the same name on an
+        emitter.
+
+        When get_param is called to access a parameter, it will first check
+        the fixed_parameters dictionary on the model, prior to looking for
+        the parameter on the emitter.
+
+        Args:
+            param_name (str): The name of the parameter to fix.
+            value (Any): The value to fix the parameter to.
+        """
+        self.fixed_parameters[param_name] = value
+
     @property
     def grid(self):
         """Get the Grid object used for extraction."""
