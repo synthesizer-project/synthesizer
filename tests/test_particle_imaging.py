@@ -22,9 +22,29 @@ from unyt import (
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_collection import ImageCollection
 from synthesizer.imaging.spectral_cube import SpectralCube
-from synthesizer.instruments import FilterCollection
+from synthesizer.instruments import FilterCollection, Instrument
 from synthesizer.kernel_functions import Kernel
 from synthesizer.photometry import PhotometryCollection
+
+
+def make_test_imager(resolution, filter_codes=("filter_r",), **kwargs):
+    """Create a minimal photometric imager for imaging tests."""
+    # Build a minimal filter set matching the requested test filter codes
+    filters = FilterCollection(
+        generic_dict={
+            filter_code: np.ones(1000) for filter_code in filter_codes
+        },
+        new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+    )
+
+    # Construct a real photometric imager so tests follow the current factory
+    # contract
+    return Instrument(
+        kwargs.pop("label", "test_inst"),
+        filters=filters,
+        resolution=resolution,
+        **kwargs,
+    )
 
 
 class TestImageGeneration:
@@ -43,12 +63,12 @@ class TestImageGeneration:
         smoothing_lengths = unyt_array(np.full(n_particles, 0.05), kpc)
         return coords, signal, smoothing_lengths
 
-    def test_get_img_hist(self, mock_particles):
+    def test_generate_img_hist(self, mock_particles):
         """Test histogram image generation."""
         coords, signal, _ = mock_particles
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
 
-        img.get_img_hist(signal, coords)
+        img.generate_img_hist(signal, coords)
 
         assert img.arr is not None
         assert np.all(img.shape == (10, 10)), (
@@ -56,13 +76,23 @@ class TestImageGeneration:
         )
         assert np.sum(img.arr) >= 0
 
-    def test_get_img_smoothed(self, mock_particles):
+    def test_get_img_hist_warns_and_delegates(self, mock_particles):
+        """Deprecated histogram image wrapper should warn and generate."""
+        coords, signal, _ = mock_particles
+        img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
+
+        with pytest.warns(FutureWarning, match="generate_img_hist"):
+            img.get_img_hist(signal, coords)
+
+        assert img.arr is not None
+
+    def test_generate_img_smoothed(self, mock_particles):
         """Test smoothed image generation."""
         coords, signal, smoothing_lengths = mock_particles
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -74,6 +104,41 @@ class TestImageGeneration:
             f"Image shape should be (10, 10) but found {img.shape}"
         )
         assert np.sum(img.arr) >= 0
+
+    def test_generate_img_smoothed_accepts_kernel_object(self, mock_particles):
+        """Smoothed image generation should accept Kernel objects directly."""
+        coords, signal, smoothing_lengths = mock_particles
+        img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
+        kernel = Kernel()
+
+        img.generate_img_smoothed(
+            signal,
+            coordinates=coords,
+            smoothing_lengths=smoothing_lengths,
+            kernel=kernel,
+        )
+
+        assert img.arr is not None
+        assert np.all(img.shape == (10, 10)), (
+            f"Image shape should be (10, 10) but found {img.shape}"
+        )
+        assert np.sum(img.arr) >= 0
+
+    def test_get_img_smoothed_warns_and_delegates(self, mock_particles):
+        """Deprecated image wrapper should warn and still generate."""
+        coords, signal, smoothing_lengths = mock_particles
+        img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
+        kernel = Kernel().get_kernel()
+
+        with pytest.warns(FutureWarning, match="generate_img_smoothed"):
+            img.get_img_smoothed(
+                signal,
+                coordinates=coords,
+                smoothing_lengths=smoothing_lengths,
+                kernel=kernel,
+            )
+
+        assert img.arr is not None
 
 
 class TestImageOperations:
@@ -141,9 +206,13 @@ class TestImageOperations:
             "Mean difference should be within expected noise range"
         )
 
-    def test_apply_psf(self, test_image):
-        """Test PSF application."""
-        img = test_image
+    def test_apply_psf(self):
+        """Test instrument-owned PSF application."""
+        # Use a compact central source so edge padding does not dominate the
+        # PSF-convolution behaviour under test.
+        data = np.zeros((10, 10), dtype=float)
+        data[4:6, 4:6] = 20.0
+        img = Image(resolution=0.1 * kpc, fov=1.0 * kpc, img=data)
         original_sum = np.sum(img.arr)
 
         # Create simple PSF kernel
@@ -151,11 +220,19 @@ class TestImageOperations:
         psf = np.ones((psf_size, psf_size))
         psf = psf / np.sum(psf)  # Normalize
 
-        img.apply_psf(psf)
+        # Apply the PSF through a real photometric imager.
+        instrument = make_test_imager(
+            resolution=0.1 * kpc,
+            psfs={"filter_r": psf},
+        )
+        img = instrument.apply_psf(img, "filter_r", inplace=True)
 
         # Total flux should be approximately conserved
         new_sum = np.sum(img.arr)
         assert np.abs(new_sum - original_sum) / original_sum < 0.01
+
+        # The central peak should be broadened by the PSF application.
+        assert img.arr[4, 4] < 20.0
 
 
 class TestImageCollection:
@@ -199,25 +276,36 @@ class TestImageCollection:
         assert collection.has_cartesian_units
         assert len(collection.imgs) == 0
 
-    def test_get_imgs_hist(self, mock_photometry, mock_coordinates):
+    def test_generate_imgs_hist(self, mock_photometry, mock_coordinates):
         """Test histogram image generation for collection."""
         collection = ImageCollection(resolution=0.1 * kpc, fov=1.0 * kpc)
 
-        collection.get_imgs_hist(mock_photometry, mock_coordinates)
+        collection.generate_imgs_hist(mock_photometry, mock_coordinates)
 
         assert len(collection.imgs) == 3
         for band_name in ["g_band", "r_band", "i_band"]:
             assert band_name in collection.imgs
             assert collection.imgs[band_name].arr is not None
 
-    def test_get_imgs_smoothed(self, mock_photometry, mock_coordinates):
+    def test_get_imgs_hist_warns_and_delegates(
+        self, mock_photometry, mock_coordinates
+    ):
+        """Deprecated histogram collection wrapper should warn and generate."""
+        collection = ImageCollection(resolution=0.1 * kpc, fov=1.0 * kpc)
+
+        with pytest.warns(FutureWarning, match="generate_imgs_hist"):
+            collection.get_imgs_hist(mock_photometry, mock_coordinates)
+
+        assert len(collection.imgs) == 3
+
+    def test_generate_imgs_smoothed(self, mock_photometry, mock_coordinates):
         """Test smoothed image generation for collection."""
         collection = ImageCollection(resolution=0.1 * kpc, fov=1.0 * kpc)
         n_particles = len(mock_coordinates)
         smoothing_lengths = unyt_array(np.full(n_particles, 0.05), kpc)
         kernel = Kernel().get_kernel()
 
-        collection.get_imgs_smoothed(
+        collection.generate_imgs_smoothed(
             mock_photometry, mock_coordinates, smoothing_lengths, kernel
         )
 
@@ -226,10 +314,29 @@ class TestImageCollection:
             assert band_name in collection.imgs
             assert collection.imgs[band_name].arr is not None
 
+    def test_get_imgs_smoothed_warns_and_delegates(
+        self, mock_photometry, mock_coordinates
+    ):
+        """Deprecated collection wrapper should warn and still generate."""
+        collection = ImageCollection(resolution=0.1 * kpc, fov=1.0 * kpc)
+        n_particles = len(mock_coordinates)
+        smoothing_lengths = unyt_array(np.full(n_particles, 0.05), kpc)
+        kernel = Kernel().get_kernel()
+
+        with pytest.warns(FutureWarning, match="generate_imgs_smoothed"):
+            collection.get_imgs_smoothed(
+                mock_photometry,
+                mock_coordinates,
+                smoothing_lengths,
+                kernel,
+            )
+
+        assert len(collection.imgs) == 3
+
     def test_make_rgb_image(self, mock_photometry, mock_coordinates):
         """Test RGB image creation."""
         collection = ImageCollection(resolution=0.1 * kpc, fov=1.0 * kpc)
-        collection.get_imgs_hist(mock_photometry, mock_coordinates)
+        collection.generate_imgs_hist(mock_photometry, mock_coordinates)
 
         rgb_filters = {
             "R": ("r_band",),
@@ -262,7 +369,7 @@ class TestSpectralCube:
             f"Should have 10 wavelengths but found {len(basic_cube.lam)}"
         )
 
-    def test_get_data_cube_hist(self, basic_cube):
+    def test_generate_data_cube_hist(self, basic_cube):
         """Test data cube generation with histogram method."""
         from synthesizer.emissions.sed import Sed
 
@@ -283,11 +390,27 @@ class TestSpectralCube:
             kpc,
         )
 
-        basic_cube.get_data_cube_hist(sed, coords)
+        basic_cube.generate_data_cube_hist(sed, coords)
 
         assert basic_cube.cube is not None
         assert basic_cube.cube.shape == (5, 5, 10)
         assert np.sum(basic_cube.cube) >= 0
+
+    def test_get_data_cube_hist_delegates(self, basic_cube):
+        """Histogram cube compatibility wrapper should still generate."""
+        from synthesizer.emissions.sed import Sed
+
+        n_particles = 10
+        spectra_values = np.ones((n_particles, len(basic_cube.lam))) * 1e30
+        sed = Sed(lam=basic_cube.lam, lnu=spectra_values * erg / s / Hz)
+        coords = unyt_array(
+            np.random.uniform(-0.4, 0.4, (n_particles, 3)), kpc
+        )
+
+        with pytest.warns(DeprecationWarning, match="generate_data_cube_hist"):
+            basic_cube.get_data_cube_hist(sed, coordinates=coords)
+
+        assert basic_cube.cube is not None
 
     def test_spectral_cube_flux_conservation_smoothed(self):
         """Test flux conservation in smoothed spectral cubes.
@@ -320,7 +443,7 @@ class TestSpectralCube:
 
         # Generate smoothed cube
         kernel = Kernel().get_kernel()
-        cube.get_data_cube_smoothed(
+        cube.generate_data_cube_smoothed(
             sed, coords, smoothing_lengths, kernel=kernel
         )
 
@@ -338,6 +461,67 @@ class TestSpectralCube:
                 f"Wavelength slice {i} flux {slice_flux} != expected "
                 f"{expected_flux_per_wavelength[i]} - FLUX MUST BE CONSERVED!"
             )
+
+    def test_get_data_cube_smoothed_delegates(self):
+        """Smoothed cube compatibility wrapper should still generate."""
+        from synthesizer.emissions.sed import Sed
+
+        wavelengths = np.linspace(5000, 6000, 5) * angstrom
+        cube = SpectralCube(
+            resolution=0.2 * kpc, fov=2.0 * kpc, lam=wavelengths
+        )
+
+        n_particles = 10
+        spectra_values = np.ones((n_particles, len(wavelengths))) * 1e30
+        sed = Sed(lam=wavelengths, lnu=spectra_values * erg / s / Hz)
+
+        coords = unyt_array(
+            np.random.uniform(-0.8, 0.8, (n_particles, 3)), kpc
+        )
+        coords[:, 2] = 0.0
+        smoothing_lengths = unyt_array([0.3] * n_particles, kpc)
+        kernel = Kernel().get_kernel()
+
+        with pytest.warns(
+            DeprecationWarning, match="generate_data_cube_smoothed"
+        ):
+            cube.get_data_cube_smoothed(
+                sed,
+                coords,
+                smoothing_lengths,
+                kernel=kernel,
+            )
+
+        assert cube.cube is not None
+
+    def test_generate_data_cube_smoothed_accepts_kernel_object(self):
+        """Smoothed cube generation should accept Kernel objects directly."""
+        from synthesizer.emissions.sed import Sed
+
+        wavelengths = np.linspace(5000, 6000, 5) * angstrom
+        cube = SpectralCube(
+            resolution=0.2 * kpc, fov=2.0 * kpc, lam=wavelengths
+        )
+
+        n_particles = 10
+        spectra_values = np.ones((n_particles, len(wavelengths))) * 1e30
+        sed = Sed(lam=wavelengths, lnu=spectra_values * erg / s / Hz)
+
+        coords = unyt_array(
+            np.random.uniform(-0.8, 0.8, (n_particles, 3)), kpc
+        )
+        coords[:, 2] = 0.0
+        smoothing_lengths = unyt_array([0.3] * n_particles, kpc)
+        kernel = Kernel()
+
+        cube.generate_data_cube_smoothed(
+            sed,
+            coords,
+            smoothing_lengths,
+            kernel=kernel,
+        )
+
+        assert cube.cube is not None
 
     def test_spectral_cube_very_small_smoothing_lengths(self):
         """Test spectral cube with very small smoothing lengths.
@@ -378,7 +562,7 @@ class TestSpectralCube:
         )  # 50x smaller
 
         kernel = Kernel().get_kernel()
-        cube.get_data_cube_smoothed(
+        cube.generate_data_cube_smoothed(
             sed, coords, smoothing_lengths, kernel=kernel
         )
 
@@ -434,7 +618,7 @@ class TestSpectralCube:
         )  # 3x larger than res
 
         kernel = Kernel().get_kernel()
-        cube.get_data_cube_smoothed(
+        cube.generate_data_cube_smoothed(
             sed, coords, smoothing_lengths, kernel=kernel
         )
 
@@ -482,7 +666,7 @@ class TestSpectralCube:
             cube = SpectralCube(
                 resolution=0.15 * kpc, fov=2.0 * kpc, lam=wavelengths
             )
-            cube.get_data_cube_smoothed(
+            cube.generate_data_cube_smoothed(
                 sed,
                 coords,
                 smoothing_lengths,
@@ -530,7 +714,7 @@ class TestSpectralCube:
         smoothing_lengths = unyt_array([0.3] * n_particles, kpc)
 
         kernel = Kernel().get_kernel()
-        cube.get_data_cube_smoothed(
+        cube.generate_data_cube_smoothed(
             sed, coords, smoothing_lengths, kernel=kernel
         )
 
@@ -582,7 +766,7 @@ class TestImageIntegration:
         collection = ImageCollection(resolution=0.05 * kpc, fov=1.0 * kpc)
 
         # Generate images
-        collection.get_imgs_hist(photometry, coords)
+        collection.generate_imgs_hist(photometry, coords)
 
         # Apply noise to make it realistic
         noise_stds = {
@@ -631,7 +815,7 @@ class TestImageIntegration:
         )
 
         # Generate data cube
-        cube.get_data_cube_hist(sed, coords)
+        cube.generate_data_cube_hist(sed, coords)
 
         # Verify cube structure
         assert cube.cube is not None
@@ -709,8 +893,6 @@ class TestGalaxyImagingSingleParticle:
     ):
         """Test image generation for a galaxy with one particle."""
         # Define the image properties
-        from synthesizer.instruments import Instrument
-
         resolution = 0.1 * kpc
         fov = 3.0 * kpc
 
@@ -719,11 +901,7 @@ class TestGalaxyImagingSingleParticle:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Create an image for the galaxy using the photometry label
         galaxy_image = one_part_galaxy.get_images_luminosity(
@@ -740,6 +918,130 @@ class TestGalaxyImagingSingleParticle:
             "Image array should not be None after generation"
         )
 
+    def test_single_particle_image_applies_instrument_psf(
+        self, one_part_galaxy, incident_emission_model
+    ):
+        """High-level image generation should apply configured PSFs."""
+        resolution = 0.1 * kpc
+        fov = 3.0 * kpc
+
+        incident_emission_model.set_per_particle(True)
+
+        kernel = Kernel().get_kernel()
+
+        raw_instrument = make_test_imager(resolution, label="raw_inst")
+        raw_images = one_part_galaxy.get_images_luminosity(
+            "incident",
+            fov=fov,
+            instrument=raw_instrument,
+            kernel=kernel,
+        )
+
+        psf = np.ones((3, 3), dtype=float)
+        psf /= np.sum(psf)
+        psf_instrument = make_test_imager(
+            resolution,
+            label="psf_inst",
+            psfs={"filter_r": psf},
+        )
+        psf_images = one_part_galaxy.get_images_luminosity(
+            "incident",
+            fov=fov,
+            instrument=psf_instrument,
+            kernel=kernel,
+        )
+
+        assert (
+            psf_images
+            is one_part_galaxy.stars.images_psf_lnu["psf_inst"]["incident"]
+        )
+        assert (
+            one_part_galaxy.stars.images_lnu["psf_inst"]["incident"]
+            is not psf_images
+        )
+        assert not np.allclose(
+            psf_images["filter_r"].arr,
+            raw_images["filter_r"].arr,
+        )
+
+    def test_single_particle_image_applies_instrument_noise(
+        self, one_part_galaxy, incident_emission_model
+    ):
+        """High-level image generation should apply configured noise."""
+        resolution = 0.1 * kpc
+        fov = 3.0 * kpc
+
+        incident_emission_model.set_per_particle(True)
+
+        kernel = Kernel().get_kernel()
+        noise_map = unyt_array(np.ones((30, 30)) * 1e20, erg / s / Hz)
+
+        noise_instrument = make_test_imager(
+            resolution,
+            label="noise_inst",
+            noise_maps={"filter_r": noise_map},
+        )
+        noise_images = one_part_galaxy.get_images_luminosity(
+            "incident",
+            fov=fov,
+            instrument=noise_instrument,
+            kernel=kernel,
+        )
+
+        assert (
+            noise_images
+            is one_part_galaxy.stars.images_noise_lnu["noise_inst"]["incident"]
+        )
+        assert not np.allclose(
+            noise_images["filter_r"].arr,
+            one_part_galaxy.stars.images_lnu["noise_inst"]["incident"][
+                "filter_r"
+            ].arr,
+        )
+
+    def test_single_particle_image_applies_psf_then_noise(
+        self, one_part_galaxy, incident_emission_model
+    ):
+        """High-level image generation should apply PSF then noise."""
+        resolution = 0.1 * kpc
+        fov = 3.0 * kpc
+
+        incident_emission_model.set_per_particle(True)
+
+        kernel = Kernel().get_kernel()
+        psf = np.ones((3, 3), dtype=float)
+        psf /= np.sum(psf)
+        noise_map = unyt_array(np.ones((30, 30)) * 1e20, erg / s / Hz)
+
+        observed_instrument = make_test_imager(
+            resolution,
+            label="observed_inst",
+            psfs={"filter_r": psf},
+            noise_maps={"filter_r": noise_map},
+        )
+        observed_images = one_part_galaxy.get_images_luminosity(
+            "incident",
+            fov=fov,
+            instrument=observed_instrument,
+            kernel=kernel,
+        )
+
+        assert (
+            observed_images
+            is one_part_galaxy.stars.images_noise_lnu["observed_inst"][
+                "incident"
+            ]
+        )
+        assert (
+            "incident" in one_part_galaxy.stars.images_psf_lnu["observed_inst"]
+        )
+        assert not np.allclose(
+            observed_images["filter_r"].arr,
+            one_part_galaxy.stars.images_psf_lnu["observed_inst"]["incident"][
+                "filter_r"
+            ].arr,
+        )
+
     def test_compare_hist_smoothed_single_particle(
         self, one_part_galaxy, incident_emission_model
     ):
@@ -750,8 +1052,6 @@ class TestGalaxyImagingSingleParticle:
         differ.
         """
         # Define the image properties
-        from synthesizer.instruments import Instrument
-
         resolution = 0.1 * kpc
         fov = 3.0 * kpc
 
@@ -760,11 +1060,7 @@ class TestGalaxyImagingSingleParticle:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Create histogram image
         hist_image = one_part_galaxy.get_images_luminosity(
@@ -830,8 +1126,6 @@ class TestGalaxyImagingSingleParticle:
     def test_orientation(self, one_part_galaxy, incident_emission_model):
         """Test image generation with different orientations."""
         # Define the image properties
-        from synthesizer.instruments import Instrument
-
         resolution = 0.1 * kpc
         fov = 3.0 * kpc
 
@@ -840,11 +1134,7 @@ class TestGalaxyImagingSingleParticle:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Get the image
         galaxy_image = one_part_galaxy.get_images_luminosity(
@@ -879,8 +1169,6 @@ class TestImagingFluxConservation:
     ):
         """Test flux conservation in histogram imaging."""
         # Define the image properties
-        from synthesizer.instruments import Instrument
-
         resolution = 0.5 * kpc
         fov = 200 * kpc
 
@@ -907,11 +1195,7 @@ class TestImagingFluxConservation:
         random_part_stars.centre = np.array([0.0, 0.0, 0.0]) * kpc
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Create histogram image
         hist_image = random_part_stars.get_images_luminosity(
@@ -940,8 +1224,6 @@ class TestImagingFluxConservation:
     ):
         """Test flux conservation in smoothed imaging."""
         # Define the image properties
-        from synthesizer.instruments import Instrument
-
         resolution = 0.5 * kpc
         fov = 200 * kpc
 
@@ -970,11 +1252,7 @@ class TestImagingFluxConservation:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Create smoothed image
         smoothed_image = random_part_stars.get_images_luminosity(
@@ -997,6 +1275,56 @@ class TestImagingFluxConservation:
             f"{expected_flux} within tolerance"
         )
 
+    def test_flux_conservation_smoothed_with_kernel_object(
+        self,
+        random_part_stars,
+        incident_emission_model,
+    ):
+        """High-level smoothed imaging should accept Kernel objects."""
+        resolution = 0.5 * kpc
+        fov = 200 * kpc
+
+        incident_emission_model.set_per_particle(True)
+
+        random_part_stars.get_spectra(incident_emission_model)
+        random_part_stars.get_particle_photo_lnu(
+            FilterCollection(
+                generic_dict={
+                    "filter_r": np.ones(1000),
+                },
+                new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+            )
+        )
+        random_part_stars.get_photo_lnu(
+            FilterCollection(
+                generic_dict={
+                    "filter_r": np.ones(1000),
+                },
+                new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+            )
+        )
+
+        random_part_stars.centre = np.array([0.0, 0.0, 0.0]) * kpc
+
+        kernel = Kernel()
+        instrument = make_test_imager(resolution)
+
+        smoothed_image = random_part_stars.get_images_luminosity(
+            "incident",
+            fov=fov,
+            instrument=instrument,
+            img_type="smoothed",
+            kernel=kernel,
+        )["filter_r"]
+
+        smoothed_flux = np.sum(smoothed_image.arr)
+        expected_flux = random_part_stars.photo_lnu["incident"]["filter_r"]
+
+        assert np.isclose(smoothed_flux, expected_flux, rtol=1e-3), (
+            f"Smoothed flux {smoothed_flux} does not match expected flux "
+            f"{expected_flux} within tolerance"
+        )
+
     def test_threaded_vs_serial_smoothed_images(
         self,
         random_part_stars,
@@ -1004,8 +1332,6 @@ class TestImagingFluxConservation:
     ):
         """Test threaded vs serial smoothed image generation."""
         # Define the image properties
-        from synthesizer.instruments import Instrument
-
         resolution = 0.5 * kpc
         fov = 200 * kpc
 
@@ -1034,11 +1360,7 @@ class TestImagingFluxConservation:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Create smoothed image using threading
         threaded_image = random_part_stars.get_images_luminosity(
@@ -1092,7 +1414,7 @@ class TestPixelOverlapFix:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1129,7 +1451,7 @@ class TestPixelOverlapFix:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1158,7 +1480,7 @@ class TestPixelOverlapFix:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1208,7 +1530,7 @@ class TestPixelOverlapFix:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1238,7 +1560,7 @@ class TestPixelOverlapFix:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1272,7 +1594,7 @@ class TestPixelOverlapFix:
         img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
         kernel = Kernel().get_kernel()
 
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1356,18 +1678,12 @@ class TestComprehensiveImagingCoverage:
         )
 
         # Create image with large pixels relative to smoothing length
-        from synthesizer.instruments import Instrument
-
         resolution = 0.5 * kpc
         fov = 200 * kpc
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         smoothed_image = stars.get_images_luminosity(
             "incident",
@@ -1437,18 +1753,12 @@ class TestComprehensiveImagingCoverage:
         )
 
         # Create image
-        from synthesizer.instruments import Instrument
-
         resolution = 0.5 * kpc
         fov = 200 * kpc
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         smoothed_image = stars.get_images_luminosity(
             "incident",
@@ -1512,13 +1822,7 @@ class TestComprehensiveImagingCoverage:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        from synthesizer.instruments import Instrument
-
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Create smoothed image
         smoothed_image = random_part_stars.get_images_luminosity(
@@ -1573,7 +1877,7 @@ class TestComprehensiveImagingCoverage:
         kernel = Kernel().get_kernel()
 
         img = Image(resolution=resolution, fov=fov)
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal=signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1615,7 +1919,7 @@ class TestComprehensiveImagingCoverage:
         kernel = Kernel().get_kernel()
 
         img = Image(resolution=resolution, fov=fov)
-        img.get_img_smoothed(
+        img.generate_img_smoothed(
             signal=signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1653,7 +1957,7 @@ class TestComprehensiveImagingCoverage:
             fov = 10.0 * kpc
 
             img = Image(resolution=resolution, fov=fov)
-            img.get_img_smoothed(
+            img.generate_img_smoothed(
                 signal=signal,
                 coordinates=coords,
                 smoothing_lengths=smoothing_lengths,
@@ -1706,12 +2010,9 @@ class TestComprehensiveImagingCoverage:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        from synthesizer.instruments import Instrument
-
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
+        instrument = make_test_imager(
+            resolution,
+            filter_codes=("filter_r", "filter_g", "filter_b"),
         )
 
         # Create images for all filters
@@ -1758,11 +2059,11 @@ class TestComprehensiveImagingCoverage:
 
         # Create histogram image
         hist_img = Image(resolution=resolution, fov=fov)
-        hist_img.get_img_hist(signal=signal, coordinates=coords)
+        hist_img.generate_img_hist(signal=signal, coordinates=coords)
 
         # Create smoothed image
         smooth_img = Image(resolution=resolution, fov=fov)
-        smooth_img.get_img_smoothed(
+        smooth_img.generate_img_smoothed(
             signal=signal,
             coordinates=coords,
             smoothing_lengths=smoothing_lengths,
@@ -1813,7 +2114,7 @@ class TestComprehensiveImagingCoverage:
             signal = unyt_array([signal_value / 2, signal_value / 2], erg / s)
 
             img = Image(resolution=resolution, fov=fov)
-            img.get_img_smoothed(
+            img.generate_img_smoothed(
                 signal=signal,
                 coordinates=coords,
                 smoothing_lengths=smoothing_lengths,
@@ -1869,13 +2170,7 @@ class TestComprehensiveImagingCoverage:
         kernel = Kernel().get_kernel()
 
         # Create an instrument for the image
-        from synthesizer.instruments import Instrument
-
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
 
         # Generate images with different thread counts
         thread_counts = [1, 2, 4, 8]
@@ -1920,7 +2215,6 @@ class TestCombinedModelImaging:
         3. _combine_image_collections can access the cache from components
         4. Images are correctly combined
         """
-        from synthesizer.instruments import Instrument
         from synthesizer.particle.galaxy import Galaxy
 
         # Set up the model
@@ -1949,11 +2243,7 @@ class TestCombinedModelImaging:
         # Create instrument
         resolution = 0.5 * kpc
         fov = 200 * kpc
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
         kernel = Kernel().get_kernel()
 
         # Generate images - this should combine nebular_line and
@@ -2002,8 +2292,6 @@ class TestCombinedModelImaging:
         Components should be able to generate images for their own combined
         models using their own model_param_cache.
         """
-        from synthesizer.instruments import Instrument
-
         nebular_emission_model.set_per_particle(True)
 
         # Generate spectra and photometry on the component directly
@@ -2021,16 +2309,12 @@ class TestCombinedModelImaging:
         # Create instrument
         resolution = 0.5 * kpc
         fov = 200 * kpc
-        instrument = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=resolution,
-        )
+        instrument = make_test_imager(resolution)
         kernel = Kernel().get_kernel()
 
         # Generate images at component level (single label returns
         # ImageCollection)
-        nebular_img = random_part_stars._get_images(
+        nebular_img = random_part_stars._generate_images(
             "nebular",
             img_type="smoothed",
             instrument=instrument,

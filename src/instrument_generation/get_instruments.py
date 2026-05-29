@@ -8,13 +8,13 @@ Note that this script requires extra dependencies not installed by default
 in Synthesizer (nor listed as optional dependencies since they are
 telescope specific). These include:
 
-    - stpsf (For Webb filters)
+    - stpsf (For JWST PSFs)
 
 Example usage:
     python get_instruments.py
 """
 
-import os
+from pathlib import Path
 
 import h5py
 import stpsf
@@ -42,10 +42,29 @@ from synthesizer.instruments import (
 )
 
 # Get the cache file location
-this_filepath = "/".join(os.path.abspath(__file__).split("/")[:-1])
-INSTRUMENT_CACHE_DIR = os.path.join(
-    this_filepath, "..", "synthesizer", "instruments", "instrument_cache"
-)
+THIS_DIR = Path(__file__).resolve().parent
+INSTRUMENT_CACHE_DIR = (
+    THIS_DIR / ".." / "synthesizer" / "instruments" / "instrument_cache"
+).resolve()
+
+
+def _write_cached_instrument(inst, inst_cls):
+    """Write a premade specialised instrument to its cache filepath.
+
+    Args:
+        inst: The instrument instance to serialise.
+        inst_cls: The premade instrument class defining the cache filepath.
+    """
+    # Resolve the output path from the specialised premade class itself so the
+    # generator cannot drift out of sync with the loader expectations.
+    cache_path = Path(inst_cls._instrument_cache_file)
+
+    # Ensure the parent cache directory exists before writing the file.
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Serialise the cached instrument into its canonical HDF5 location.
+    with h5py.File(cache_path, "w") as hdf:
+        inst.to_hdf5(hdf)
 
 
 def make_and_write_jwst_nircam():
@@ -84,23 +103,11 @@ def make_and_write_jwst_nircam():
     nircam_medium = JWSTNIRCamMedium(psfs=psfs_medium)
     nircam_narrow = JWSTNIRCamNarrow(psfs=psfs_narrow)
 
-    # Finally we can write each instrument to disk
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "JWST_NIRCam.hdf5"), "w"
-    ) as hdf:
-        nircam.to_hdf5(hdf)
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "JWST_NIRCamWide.hdf5"), "w"
-    ) as hdf:
-        nircam_wide.to_hdf5(hdf)
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "JWST_NIRCamMedium.hdf5"), "w"
-    ) as hdf:
-        nircam_medium.to_hdf5(hdf)
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "JWST_NIRCamNarrow.hdf5"), "w"
-    ) as hdf:
-        nircam_narrow.to_hdf5(hdf)
+    # Finally we can write each instrument to disk.
+    _write_cached_instrument(nircam, JWSTNIRCam)
+    _write_cached_instrument(nircam_wide, JWSTNIRCamWide)
+    _write_cached_instrument(nircam_medium, JWSTNIRCamMedium)
+    _write_cached_instrument(nircam_narrow, JWSTNIRCamNarrow)
 
 
 def make_and_write_jwst_miri():
@@ -123,11 +130,8 @@ def make_and_write_jwst_miri():
     # Now create the MIRI instrument with the PSFs
     miri_inst = JWSTMIRI(psfs=psfs)
 
-    # Finally we can write each instrument to disk
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "JWST_MIRI.hdf5"), "w"
-    ) as hdf:
-        miri_inst.to_hdf5(hdf)
+    # Finally we can write the instrument to disk.
+    _write_cached_instrument(miri_inst, JWSTMIRI)
 
 
 def make_and_write_hst_wfc3_uv():
@@ -138,30 +142,18 @@ def make_and_write_hst_wfc3_uv():
     # Now create the WFC3 UVIS instrument with the PSFs
     wfc3uv_inst = HSTWFC3UVIS()
 
-    # Finally we can write each instrument to disk
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "HST_WFC3_UVIS.hdf5"), "w"
-    ) as hdf:
-        wfc3uv_inst.to_hdf5(hdf)
+    # Finally we can write the parent instrument to disk.
+    _write_cached_instrument(wfc3uv_inst, HSTWFC3UVIS)
 
     # Now generate the HST WFC3 UVIS wide, medium and narrow filters
     wfc3uv_wide = HSTWFC3UVISWide()
     wfc3uv_medium = HSTWFC3UVISMedium()
     wfc3uv_narrow = HSTWFC3UVISNarrow()
 
-    # Finally we can write each instrument to disk
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "HST_WFC3_UVISWide.hdf5"), "w"
-    ) as hdf:
-        wfc3uv_wide.to_hdf5(hdf)
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "HST_WFC3_UVISMedium.hdf5"), "w"
-    ) as hdf:
-        wfc3uv_medium.to_hdf5(hdf)
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "HST_WFC3_UVISNarrow.hdf5"), "w"
-    ) as hdf:
-        wfc3uv_narrow.to_hdf5(hdf)
+    # Finally we can write each subset instrument to disk.
+    _write_cached_instrument(wfc3uv_wide, HSTWFC3UVISWide)
+    _write_cached_instrument(wfc3uv_medium, HSTWFC3UVISMedium)
+    _write_cached_instrument(wfc3uv_narrow, HSTWFC3UVISNarrow)
 
 
 def make_and_write_hst_wfc3_ir():
@@ -172,30 +164,18 @@ def make_and_write_hst_wfc3_ir():
     # Now create the WFC3 IR instrument with the PSFs
     wfc3ir_inst = HSTWFC3IR()
 
-    # Finally we can write each instrument to disk
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "HST_WFC3_IR.hdf5"), "w"
-    ) as hdf:
-        wfc3ir_inst.to_hdf5(hdf)
+    # Finally we can write the parent instrument to disk.
+    _write_cached_instrument(wfc3ir_inst, HSTWFC3IR)
 
     # Now generate the HST WFC3 IR wide, medium and narrow filters
     wfc3ir_wide = HSTWFC3IRWide()
     wfc3ir_medium = HSTWFC3IRMedium()
     wfc3ir_narrow = HSTWFC3IRNarrow()
 
-    # Finally we can write each instrument to disk
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "HST_WFC3_IRWide.hdf5"), "w"
-    ) as hdf:
-        wfc3ir_wide.to_hdf5(hdf)
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "HST_WFC3_IRMedium.hdf5"), "w"
-    ) as hdf:
-        wfc3ir_medium.to_hdf5(hdf)
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "HST_WFC3_IRNarrow.hdf5"), "w"
-    ) as hdf:
-        wfc3ir_narrow.to_hdf5(hdf)
+    # Finally we can write each subset instrument to disk.
+    _write_cached_instrument(wfc3ir_wide, HSTWFC3IRWide)
+    _write_cached_instrument(wfc3ir_medium, HSTWFC3IRMedium)
+    _write_cached_instrument(wfc3ir_narrow, HSTWFC3IRNarrow)
 
 
 def make_and_write_hst_acswfc():
@@ -206,30 +186,18 @@ def make_and_write_hst_acswfc():
     # Now create the ACS WFC instrument with the PSFs
     acswfc_inst = HSTACSWFC()
 
-    # Finally we can write each instrument to disk
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "HST_ACS_WFC.hdf5"), "w"
-    ) as hdf:
-        acswfc_inst.to_hdf5(hdf)
+    # Finally we can write the parent instrument to disk.
+    _write_cached_instrument(acswfc_inst, HSTACSWFC)
 
     # Now generate the HST ACS WFC wide, medium and narrow filters
     acswfc_wide = HSTACSWFCWide()
     acswfc_medium = HSTACSWFCMedium()
     acswfc_narrow = HSTACSWFCNarrow()
 
-    # Finally we can write each instrument to disk
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "HST_ACS_WFCWide.hdf5"), "w"
-    ) as hdf:
-        acswfc_wide.to_hdf5(hdf)
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "HST_ACS_WFCMedium.hdf5"), "w"
-    ) as hdf:
-        acswfc_medium.to_hdf5(hdf)
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "HST_ACS_WFCNarrow.hdf5"), "w"
-    ) as hdf:
-        acswfc_narrow.to_hdf5(hdf)
+    # Finally we can write each subset instrument to disk.
+    _write_cached_instrument(acswfc_wide, HSTACSWFCWide)
+    _write_cached_instrument(acswfc_medium, HSTACSWFCMedium)
+    _write_cached_instrument(acswfc_narrow, HSTACSWFCNarrow)
 
 
 def make_and_write_euclid():
@@ -240,31 +208,21 @@ def make_and_write_euclid():
     # Now create the Euclid instrument with the PSFs
     euclid_inst = EuclidNISP()
 
-    # Finally we can write each instrument to disk
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "Euclid_NISP.hdf5"), "w"
-    ) as hdf:
-        euclid_inst.to_hdf5(hdf)
+    # Finally we can write the NISP instrument to disk.
+    _write_cached_instrument(euclid_inst, EuclidNISP)
 
     # Now generate the Euclid VIS instrument
     euclid_vis = EuclidVIS()
 
-    # Finally we can write each instrument to disk
-    with h5py.File(
-        os.path.join(INSTRUMENT_CACHE_DIR, "Euclid_VIS.hdf5"), "w"
-    ) as hdf:
-        euclid_vis.to_hdf5(hdf)
+    # Finally we can write the VIS instrument to disk.
+    _write_cached_instrument(euclid_vis, EuclidVIS)
 
 
 if __name__ == "__main__":
-    # Create the cache directory if it doesn't exist
-    if not os.path.exists(INSTRUMENT_CACHE_DIR):
-        raise FileNotFoundError(
-            f"Cache directory {INSTRUMENT_CACHE_DIR} does not exist. "
-            "Please create it before running this script."
-        )
+    # Create the cache directory tree if it does not already exist.
+    INSTRUMENT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Generate the instruments
+    # Generate the instruments.
     make_and_write_jwst_nircam()
     make_and_write_jwst_miri()
     make_and_write_hst_wfc3_uv()
