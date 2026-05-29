@@ -14,7 +14,6 @@
 
 /* Local includes */
 #include "cpp_to_python.h"
-#include "observed_spectra.h"
 #include "timers.h"
 #ifdef ATOMIC_TIMING
 #include "timers_init.h"
