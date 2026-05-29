@@ -1,15 +1,7 @@
-"""A submodule for instrument related utility functions.
+"""Utility helpers for instrument-related workflows.
 
-Example usage:
-
-    # Generate a wavelength array with a constant resolving power of 10000
-    lams = get_lams_from_resolving_power(400 * angstrom, 700 * angstrom, 10000)
-
-    # Generate a wavelength array with a variable resolving power
-    func = lambda wav: 10000 + (wav.value - 400) / 300 * 5000
-    lams = get_lams_from_resolving_power(
-        400 * angstrom, 700 * angstrom, func
-    )
+This module currently provides helpers for constructing wavelength grids from
+resolving power and for inspecting the available premade instruments.
 """
 
 import inspect
@@ -27,7 +19,7 @@ def get_lams_from_resolving_power(
     lam_max: unyt_quantity,
     resolving_power: Union[float, Callable[[unyt_quantity], float]],
 ) -> unyt_array:
-    """Generate a wavelength array with variable resolving power.
+    """Generate a wavelength array from a resolving-power definition.
 
     This function creates an array of wavelengths between `lam_min` and
     `lam_max`, where the spacing between wavelengths is determined by the
@@ -35,15 +27,19 @@ def get_lams_from_resolving_power(
     or as a function that varies with wavelength.
 
     Args:
-        lam_min (unyt_quantity): Minimum wavelength in nanometers.
-        lam_max (unyt_quantity): Maximum wavelength in nanometers.
+        lam_min (unyt_quantity): Minimum wavelength of the output grid.
+        lam_max (unyt_quantity): Maximum wavelength of the output grid.
         resolving_power (float or callable): Resolving power (R = λ / Δλ).
             Can be a constant value or a function that takes a wavelength
-            with units and returns a resolving power.
+            with units and returns a resolving power. This allows either a
+            fixed-resolution grid or one whose spacing varies with wavelength.
 
     Returns:
-        unyt_array: Array of wavelengths in nanometers.
+        unyt_array: Array of wavelengths with the same units as the inputs.
+            The spacing is chosen such that successive wavelength bins follow
+            the supplied resolving-power definition.
     """
+    # Start the output grid at the supplied minimum wavelength
     wavelengths = [lam_min]
     current_wav = lam_min
 
@@ -61,7 +57,8 @@ def get_lams_from_resolving_power(
         # Update current wavelength
         current_wav += delta_lambda
 
-        # Include the current wavelength in the array if it's within bounds
+        # Include the current wavelength in the array if it still lies within
+        # the requested wavelength interval
         if current_wav <= lam_max:
             wavelengths.append(current_wav)
 
@@ -74,29 +71,31 @@ def print_premade_instruments() -> None:
 
     This will also count the filters (if any) available for each instrument
     and check whether the cached instrument file has been downloaded or not.
+    The output is formatted as a simple ASCII table for quick inspection at
+    the command line.
+
+    Factory classes are included in the table, but they report cache
+    availability as ``N/A`` because they do not correspond to a single cached
+    instrument file.
     """
     # Avoid circular import
     from synthesizer.instruments import premade as instruments
 
-    # Find all subclasses of PremadeInstrument and
-    # PremadeInstrumentCollectionFactory
+    # Find all premade instruments and collection factories
     instrument_classes = []
     for name, obj in inspect.getmembers(instruments):
         if inspect.isclass(obj):
-            # Include PremadeInstrument subclasses
+            # Include premade collection factories
             if (
-                issubclass(obj, instruments.PremadeInstrument)
-                and obj is not instruments.PremadeInstrument
-            ):
-                instrument_classes.append(obj)
-            # Include PremadeInstrumentCollectionFactory subclasses
-            elif (
                 issubclass(obj, instruments.PremadeInstrumentCollectionFactory)
                 and obj is not instruments.PremadeInstrumentCollectionFactory
             ):
                 instrument_classes.append(obj)
+            # Include premade single-instrument classes
+            elif hasattr(obj, "available_filters") and hasattr(obj, "load"):
+                instrument_classes.append(obj)
 
-    # Prepare table rows
+    # Prepare the rows of the summary table
     rows = []
     for cls in instrument_classes:
         name = cls.__name__
@@ -133,6 +132,8 @@ def print_premade_instruments() -> None:
                     else "No"
                 )
         except Exception:
+            # Keep the summary robust even if one premade class fails to
+            # introspect cleanly
             num_instruments = "Error"
             num_filters = "Error"
             available = "Error"

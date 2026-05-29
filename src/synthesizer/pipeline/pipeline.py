@@ -2617,7 +2617,6 @@ class Pipeline:
         kernel=None,
         kernel_threshold=1.0,
         labels=None,
-        psf_resample_factor=1,
         cosmo=None,
         write=True,
     ):
@@ -2649,16 +2648,6 @@ class Pipeline:
                 The type of spectra to generate images for. By default this
                 is None and all saved spectra types will be used. This can
                 either be a list of strings or a single string.
-            psf_resample_factor (int):
-                (Only applicable for instruments with a PSF.) The resample
-                factor for the PSF. This should be a value greater than 1.
-                The image will be resampled by this factor before the
-                PSF is applied and then downsampled back to the original
-                after convolution. This can help minimize the effects of
-                using a generic PSF centred on the galaxy centre, a
-                simplification we make for performance reasons (the
-                effects are sufficiently small that this simplifications is
-                justified).
             cosmo (astropy.cosmology.Cosmology):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
@@ -2713,7 +2702,6 @@ class Pipeline:
             img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
-            psf_resample_factor=psf_resample_factor,
             cosmo=cosmo,
         )
 
@@ -2754,10 +2742,6 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # We want to time PSF application and noise application separately
-        psf_time = 0
-        noise_time = 0
-
         # Loop over all the queued operation configurations
         for model_label, op_kwargs in self._operation_kwargs[
             "get_images_luminosity"
@@ -2767,7 +2751,9 @@ class Pipeline:
 
             # Loop over instruments and perform any imaging they define
             for inst in instruments:
-                # Get the basic images for the requested spectra types
+                # Generate the observable defined by the instrument. Any
+                # configured PSF or noise processing is now applied inside the
+                # high-level getter itself.
                 galaxy.get_images_luminosity(
                     *model_label,
                     fov=op_kwargs["fov"],
@@ -2778,26 +2764,6 @@ class Pipeline:
                     instrument=inst,
                     cosmo=op_kwargs["cosmo"],
                 )
-
-                # Apply the PSF if applicable to the instrument
-                if inst.can_do_psf_imaging:
-                    psf_start = time.perf_counter()
-                    galaxy.apply_psf_to_images_lnu(
-                        instrument=inst,
-                        psf_resample_factor=op_kwargs["psf_resample_factor"],
-                        limit_to=model_label,
-                    )
-                    psf_time += time.perf_counter() - psf_start
-
-                # Apply the instrument noise if applicable to the instrument
-                if inst.can_do_noisy_imaging:
-                    noise_start = time.perf_counter()
-                    galaxy.apply_noise_to_images_lnu(
-                        instrument=inst,
-                        limit_to=model_label,
-                        apply_to_psf=inst.can_do_psf_imaging,
-                    )
-                    noise_time += time.perf_counter() - noise_start
 
         # Count the number of images we have generated
         self._op_counts["Luminosity Images"] += count_and_check_dict_recursive(
@@ -2835,11 +2801,7 @@ class Pipeline:
             )
 
         # Record the time taken
-        self._op_timing["Luminosity Images"] += (
-            time.perf_counter() - start - psf_time - noise_time
-        )
-        self._op_timing["Luminosity Images (With PSF)"] += psf_time
-        self._op_timing["Luminosity Images (With Noise)"] += noise_time
+        self._op_timing["Luminosity Images"] += time.perf_counter() - start
 
     def get_images_flux(
         self,
@@ -2851,7 +2813,6 @@ class Pipeline:
         cosmo=None,
         igm=None,
         labels=None,
-        psf_resample_factor=1,
         write=True,
     ):
         """Flag that the Pipeline should compute the flux images.
@@ -2891,16 +2852,6 @@ class Pipeline:
                 The type of spectra to generate images for. By default this
                 is None and all saved spectra types will be used. This can
                 either be a list of strings or a single string.
-            psf_resample_factor (int):
-                (Only applicable for instruments with a PSF.) The resample
-                factor for the PSF. This should be a value greater than 1.
-                The image will be resampled by this factor before the
-                PSF is applied and then downsampled back to the original
-                after convolution. This can help minimize the effects of
-                using a generic PSF centred on the galaxy centre, a
-                simplification we make for performance reasons (the
-                effects are sufficiently small that this simplifications is
-                justified).
             write (bool):
                 Whether to write out the flux images. Default is True.
         """
@@ -2962,7 +2913,6 @@ class Pipeline:
             img_type=img_type,
             kernel=kernel,
             kernel_threshold=kernel_threshold,
-            psf_resample_factor=psf_resample_factor,
             cosmo=cosmo,
         )
 
@@ -3005,10 +2955,6 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # We want to time PSF application and noise application separately
-        psf_time = 0
-        noise_time = 0
-
         # Loop over all the queued operation configurations
         for model_label, op_kwargs in self._operation_kwargs[
             "get_images_flux"
@@ -3018,7 +2964,9 @@ class Pipeline:
 
             # Loop over instruments and perform any imaging they define
             for inst in instruments:
-                # Get the basic images for the requested spectra types
+                # Generate the observable defined by the instrument. Any
+                # configured PSF or noise processing is now applied inside the
+                # high-level getter itself.
                 galaxy.get_images_flux(
                     *model_label,
                     fov=op_kwargs["fov"],
@@ -3029,26 +2977,6 @@ class Pipeline:
                     nthreads=self.nthreads,
                     instrument=inst,
                 )
-
-                # Apply the PSF if applicable to the instrument
-                if inst.can_do_psf_imaging:
-                    psf_start = time.perf_counter()
-                    galaxy.apply_psf_to_images_fnu(
-                        instrument=inst,
-                        psf_resample_factor=op_kwargs["psf_resample_factor"],
-                        limit_to=model_label,
-                    )
-                    psf_time += time.perf_counter() - psf_start
-
-                # Apply the instrument noise if applicable to the instrument
-                if inst.can_do_noisy_imaging:
-                    noise_start = time.perf_counter()
-                    galaxy.apply_noise_to_images_fnu(
-                        instrument=inst,
-                        limit_to=model_label,
-                        apply_to_psf=inst.can_do_psf_imaging,
-                    )
-                    noise_time += time.perf_counter() - noise_start
 
         # Count the number of images we have generated
         self._op_counts["Flux Images"] += count_and_check_dict_recursive(
@@ -3086,11 +3014,7 @@ class Pipeline:
             )
 
         # Record the time taken
-        self._op_timing["Flux Images"] += (
-            time.perf_counter() - start - psf_time - noise_time
-        )
-        self._op_timing["Flux Images (With PSF)"] += psf_time
-        self._op_timing["Flux Images (With Noise)"] += noise_time
+        self._op_timing["Flux Images"] += time.perf_counter() - start
 
     def get_data_cubes_lnu(
         self,
@@ -3235,24 +3159,15 @@ class Pipeline:
             for inst in instruments:
                 # Loop over each label and create a data cube
                 for label in model_label:
-                    # Determine which component this label belongs to
-                    # and call get_data_cube appropriately
-                    cube = galaxy.get_data_cube(
-                        resolution=inst.resolution,
+                    # Mirror the image flow by keeping galaxy methods as the
+                    # public orchestration layer while the IFU owns low-level
+                    # cube construction
+                    galaxy.get_data_cube(
+                        instrument=inst,
                         fov=op_kwargs["fov"],
-                        lam=inst.lam,
+                        label=label,
                         cube_type=op_kwargs.get("cube_type", "smoothed"),
-                        stellar_spectra=label
-                        if label in getattr(galaxy.stars, "spectra", {})
-                        or label
-                        in getattr(galaxy.stars, "particle_spectra", {})
-                        else None,
-                        blackhole_spectra=label
-                        if label in getattr(galaxy.black_holes, "spectra", {})
-                        or label
-                        in getattr(galaxy.black_holes, "particle_spectra", {})
-                        else None,
-                        kernel=op_kwargs.get("kernel"),
+                        kernel=op_kwargs.get("kernel", None),
                         kernel_threshold=op_kwargs.get(
                             "kernel_threshold", 1.0
                         ),
@@ -3261,18 +3176,20 @@ class Pipeline:
                         nthreads=self.nthreads,
                     )
 
-                    # Store the cube (we'll need to add a data_cubes_lnu
-                    # attribute to galaxies)
-                    if not hasattr(galaxy, "data_cubes_lnu"):
-                        galaxy.data_cubes_lnu = {}
-                    # Use instrument label in the key to differentiate
-                    # between data cubes from different instruments
-                    key = f"{label}_{inst.label}"
-                    galaxy.data_cubes_lnu[key] = cube
-
         # Count the number of data cubes we have generated
-        if hasattr(galaxy, "data_cubes_lnu"):
-            self._op_counts["Lnu Data Cubes"] += len(galaxy.data_cubes_lnu)
+        self._op_counts["Lnu Data Cubes"] += count_and_check_dict_recursive(
+            galaxy.data_cubes_lnu
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Lnu Data Cubes"] += (
+                count_and_check_dict_recursive(galaxy.stars.data_cubes_lnu)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Lnu Data Cubes"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.data_cubes_lnu
+                )
+            )
 
         # Record the time taken
         self._op_timing["Lnu Data Cubes"] += time.perf_counter() - start
@@ -3424,24 +3341,15 @@ class Pipeline:
             for inst in instruments:
                 # Loop over each label and create a data cube
                 for label in model_label:
-                    # Determine which component this label belongs to
-                    # and call get_data_cube appropriately
-                    cube = galaxy.get_data_cube(
-                        resolution=inst.resolution,
+                    # Mirror the image flow by keeping galaxy methods as the
+                    # public orchestration layer while the IFU owns low-level
+                    # cube construction
+                    galaxy.get_data_cube(
+                        instrument=inst,
                         fov=op_kwargs["fov"],
-                        lam=inst.lam,
+                        label=label,
                         cube_type=op_kwargs.get("cube_type", "smoothed"),
-                        stellar_spectra=label
-                        if label in getattr(galaxy.stars, "spectra", {})
-                        or label
-                        in getattr(galaxy.stars, "particle_spectra", {})
-                        else None,
-                        blackhole_spectra=label
-                        if label in getattr(galaxy.black_holes, "spectra", {})
-                        or label
-                        in getattr(galaxy.black_holes, "particle_spectra", {})
-                        else None,
-                        kernel=op_kwargs.get("kernel"),
+                        kernel=op_kwargs.get("kernel", None),
                         kernel_threshold=op_kwargs.get(
                             "kernel_threshold", 1.0
                         ),
@@ -3450,17 +3358,20 @@ class Pipeline:
                         nthreads=self.nthreads,
                     )
 
-                    # Store the cube
-                    if not hasattr(galaxy, "data_cubes_fnu"):
-                        galaxy.data_cubes_fnu = {}
-                    # Use instrument label in the key to differentiate
-                    # between data cubes from different instruments
-                    key = f"{label}_{inst.label}"
-                    galaxy.data_cubes_fnu[key] = cube
-
         # Count the number of data cubes we have generated
-        if hasattr(galaxy, "data_cubes_fnu"):
-            self._op_counts["Fnu Data Cubes"] += len(galaxy.data_cubes_fnu)
+        self._op_counts["Fnu Data Cubes"] += count_and_check_dict_recursive(
+            galaxy.data_cubes_fnu
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Fnu Data Cubes"] += (
+                count_and_check_dict_recursive(galaxy.stars.data_cubes_fnu)
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Fnu Data Cubes"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.data_cubes_fnu
+                )
+            )
 
         # Record the time taken
         self._op_timing["Fnu Data Cubes"] += time.perf_counter() - start

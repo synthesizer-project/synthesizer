@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 from unyt import (
     Hz,
+    angstrom,
     arcsecond,
     erg,
     kpc,
@@ -21,11 +22,32 @@ from synthesizer import exceptions
 from synthesizer.imaging.base_imaging import ImagingBase
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_collection import ImageCollection
+from synthesizer.instruments import FilterCollection, Instrument
 from synthesizer.instruments.photometric_noise import (
     CorrelatedNoiseModel,
     _cf_periodicity_dilution_correction_standalone,
     _generate_noise_from_rootps_standalone,
 )
+
+
+def make_test_imager(filter_codes, resolution=0.1 * kpc, **kwargs):
+    """Create a minimal photometric imager for imaging tests."""
+    # Build a small synthetic filter set matching the requested test filters.
+    filters = FilterCollection(
+        generic_dict={
+            filter_code: np.ones(1000) for filter_code in filter_codes
+        },
+        new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+    )
+
+    # Construct a real imaging-capable instrument so tests follow the current
+    # factory contract.
+    return Instrument(
+        kwargs.pop("label", "test_inst"),
+        filters=filters,
+        resolution=resolution,
+        **kwargs,
+    )
 
 
 class DummyImaging(ImagingBase):
@@ -406,10 +428,8 @@ class TestImageCorrelatedNoise:
     @pytest.fixture
     def instrument(self, noise_source):
         """Instrument with a single correlated-noise source map."""
-        from synthesizer.instruments import Instrument
-
-        return Instrument(
-            label="test_inst",
+        return make_test_imager(
+            filter_codes=("F150W",),
             noise_source_maps={"F150W": noise_source},
         )
 
@@ -459,10 +479,9 @@ class TestImageCorrelatedNoise:
 
     def test_noise_source_different_shape(self, base_image):
         """Noise template with a larger shape than the image is accepted."""
-        from synthesizer.instruments import Instrument
-
         noise_source_big = np.random.default_rng(5).normal(size=(64, 64))
-        inst = Instrument(
+        inst = make_test_imager(
+            filter_codes=("F150W",),
             label="test_inst_big",
             noise_source_maps={"F150W": noise_source_big},
         )
@@ -486,18 +505,15 @@ class TestImageCorrelatedNoise:
 
     def test_no_noise_source_maps_raises(self, base_image):
         """An instrument without source maps raises MissingArgument."""
-        from synthesizer.instruments import Instrument
-
-        inst = Instrument(label="no_noise")
+        inst = make_test_imager(filter_codes=("F150W",), label="no_noise")
         with pytest.raises(exceptions.MissingArgument):
             base_image.apply_correlated_noise(inst, "F150W")
 
     def test_fixed_noise_maps_are_not_correlated_models(self, base_image):
         """Fixed noise arrays do not satisfy the correlated-noise API."""
-        from synthesizer.instruments import Instrument
-
         fixed_noise = np.ones((32, 32))
-        inst = Instrument(
+        inst = make_test_imager(
+            filter_codes=("F150W",),
             label="fixed_noise",
             noise_maps={"F150W": fixed_noise},
         )
@@ -509,10 +525,9 @@ class TestImageCorrelatedNoise:
         self, base_image
     ):
         """Instrument.apply_noise applies fixed arrays without modelling."""
-        from synthesizer.instruments import Instrument
-
         fixed_noise = np.arange(32 * 32, dtype=float).reshape(32, 32)
-        inst = Instrument(
+        inst = make_test_imager(
+            filter_codes=("F150W",),
             label="fixed_noise",
             noise_maps={"F150W": fixed_noise},
         )
@@ -529,11 +544,9 @@ class TestImageCollectionCorrelatedNoise:
     @pytest.fixture
     def instrument(self):
         """Instrument with correlated-noise source maps for two filters."""
-        from synthesizer.instruments import Instrument
-
         rng = np.random.default_rng(21)
-        return Instrument(
-            label="test_inst",
+        return make_test_imager(
+            filter_codes=("F090W", "F150W"),
             noise_source_maps={
                 "F090W": rng.normal(size=(32, 32)),
                 "F150W": rng.normal(size=(32, 32)),
@@ -595,10 +608,8 @@ class TestImageCollectionCorrelatedNoise:
 
     def test_missing_filter_model_raises(self, image_collection):
         """Missing a model for one collection filter raises an error."""
-        from synthesizer.instruments import Instrument
-
-        inst = Instrument(
-            label="test_inst",
+        inst = make_test_imager(
+            filter_codes=("F090W",),
             noise_source_maps={
                 "F090W": np.random.default_rng(23).normal(size=(32, 32))
             },
@@ -627,3 +638,255 @@ class TestImageCollectionCorrelatedNoise:
             result.imgs["F090W"].noise_arr,
             result.imgs["F150W"].noise_arr,
         )
+
+
+class TestPhotometricImagerPsfApplication:
+    """Tests for instrument-owned PSF application on photometric imagers."""
+
+    @pytest.fixture
+    def instrument(self):
+        """Instrument with PSFs defined for two imaging filters."""
+        psf_f090w = np.zeros((3, 3), dtype=float)
+        psf_f090w[1, 1] = 1.0
+        psf_f150w = np.zeros((3, 3), dtype=float)
+        psf_f150w[1, 0] = 1.0
+        return make_test_imager(
+            filter_codes=("F090W", "F150W"),
+            label="psf_inst",
+            psfs={"F090W": psf_f090w, "F150W": psf_f150w},
+        )
+
+    @pytest.fixture
+    def image_collection(self):
+        """Two-filter image collection for instrument-side PSF application."""
+        imgs = {
+            "F090W": Image(
+                resolution=0.1 * kpc,
+                fov=3.2 * kpc,
+                img=np.arange(32 * 32, dtype=float).reshape(32, 32),
+            ),
+            "F150W": Image(
+                resolution=0.1 * kpc,
+                fov=3.2 * kpc,
+                img=np.eye(32, dtype=float),
+            ),
+        }
+        return ImageCollection(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            imgs=imgs,
+        )
+
+    def test_apply_psf_uses_filter_specific_psf(self, instrument):
+        """apply_psf should use the PSF matching the requested filter."""
+        image = Image(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            img=np.pad(np.array([[1.0]]), ((15, 16), (15, 16))),
+        )
+
+        centered = instrument.apply_psf(image, "F090W")
+        shifted = instrument.apply_psf(image, "F150W")
+
+        assert centered.arr[15, 15] > 0
+        assert shifted.arr[15, 14] > 0
+        assert not np.allclose(centered.arr, shifted.arr)
+
+    def test_apply_psf_returns_new_image_by_default(self, instrument):
+        """apply_psf should return a fresh image by default."""
+        image = Image(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            img=np.arange(32 * 32, dtype=float).reshape(32, 32),
+        )
+
+        result = instrument.apply_psf(image, "F090W")
+
+        assert result is not image
+
+    def test_apply_psf_can_update_image_inplace(self, instrument):
+        """apply_psf should support explicit in-place updates."""
+        image = Image(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            img=np.arange(32 * 32, dtype=float).reshape(32, 32),
+        )
+
+        result = instrument.apply_psf(image, "F090W", inplace=True)
+
+        assert result is image
+
+    def test_apply_psf_raises_without_psf_configuration(self):
+        """apply_psf should fail explicitly when no PSFs are configured."""
+        instrument = make_test_imager(
+            filter_codes=("F090W",),
+            label="no_psf",
+        )
+        image = Image(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            img=np.ones((32, 32), dtype=float),
+        )
+
+        with pytest.raises(exceptions.MissingArgument):
+            instrument.apply_psf(image, "F090W")
+
+    def test_apply_psfs_returns_new_image_collection(
+        self, instrument, image_collection
+    ):
+        """apply_psfs should return a new image collection."""
+        result = instrument.apply_psfs(image_collection)
+
+        assert isinstance(result, ImageCollection)
+        assert result is not image_collection
+        for filter_code in image_collection.filter_codes:
+            assert (
+                result.imgs[filter_code]
+                is not image_collection.imgs[filter_code]
+            )
+
+    def test_apply_psfs_can_update_collection_inplace(
+        self, instrument, image_collection
+    ):
+        """apply_psfs should support explicit in-place updates."""
+        result = instrument.apply_psfs(image_collection, inplace=True)
+
+        assert result is image_collection
+
+    def test_image_container_no_longer_owns_psf_application(self):
+        """Image containers should no longer expose PSF application methods."""
+        image = Image(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            img=np.ones((32, 32), dtype=float),
+        )
+
+        assert not hasattr(image, "apply_psf")
+
+    def test_image_collection_container_no_longer_owns_psf_application(self):
+        """ImageCollection should no longer expose collection PSF methods."""
+        collection = ImageCollection(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            imgs={
+                "F090W": Image(
+                    resolution=0.1 * kpc,
+                    fov=3.2 * kpc,
+                    img=np.ones((32, 32), dtype=float),
+                )
+            },
+        )
+
+        assert not hasattr(collection, "apply_psfs")
+
+    def test_apply_psfs_with_resampling_does_not_mutate_input(
+        self, instrument, image_collection
+    ):
+        """Instrument-side PSF application should not mutate inputs."""
+        original_resolution = image_collection.resolution
+        original_npix = image_collection.npix.copy()
+        original_arrays = {
+            filter_code: image_collection.imgs[filter_code].arr.copy()
+            for filter_code in image_collection.filter_codes
+        }
+
+        instrument.psf_resample_factor = 2
+        instrument.apply_psfs(image_collection)
+
+        assert image_collection.resolution == original_resolution
+        assert np.array_equal(image_collection.npix, original_npix)
+        for filter_code in image_collection.filter_codes:
+            assert np.array_equal(
+                image_collection.imgs[filter_code].arr,
+                original_arrays[filter_code],
+            )
+
+
+class TestImageCollectionResampling:
+    """Tests for image-collection geometry resampling helpers."""
+
+    def test_supersample_updates_collection_geometry(self):
+        """Supersample should keep collection geometry in sync."""
+        collection = ImageCollection(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            imgs={
+                "F090W": Image(
+                    resolution=0.1 * kpc,
+                    fov=3.2 * kpc,
+                    img=np.ones((32, 32), dtype=float),
+                )
+            },
+        )
+
+        # Supersample the collection and its contained image together.
+        collection.supersample(2)
+
+        assert np.array_equal(collection.npix, np.array([64, 64]))
+        assert collection.imgs["F090W"].arr.shape == (64, 64)
+        assert np.array_equal(collection.imgs["F090W"].npix, collection.npix)
+
+    def test_downsample_updates_collection_geometry(self):
+        """Downsample should keep collection geometry in sync."""
+        collection = ImageCollection(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            imgs={
+                "F090W": Image(
+                    resolution=0.1 * kpc,
+                    fov=3.2 * kpc,
+                    img=np.ones((32, 32), dtype=float),
+                )
+            },
+        )
+
+        # First supersample so the downsampling path has work to do.
+        collection.supersample(2)
+
+        # Downsample back to the original resolution and shape.
+        collection.downsample(0.5)
+
+        assert np.array_equal(collection.npix, np.array([32, 32]))
+        assert collection.imgs["F090W"].arr.shape == (32, 32)
+        assert np.array_equal(collection.imgs["F090W"].npix, collection.npix)
+
+    def test_supersample_rejects_non_positive_factor(self):
+        """Supersample should reject zero or negative factors early."""
+        collection = ImageCollection(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            imgs={
+                "F090W": Image(
+                    resolution=0.1 * kpc,
+                    fov=3.2 * kpc,
+                    img=np.ones((32, 32), dtype=float),
+                )
+            },
+        )
+
+        with pytest.raises(ValueError, match="positive"):
+            collection.supersample(0)
+
+    def test_collection_geometry_is_not_mutated_when_child_resample_fails(
+        self,
+    ):
+        """Collection metadata should stay unchanged on child failure."""
+        collection = ImageCollection(
+            resolution=0.1 * kpc,
+            fov=3.2 * kpc,
+            imgs={
+                "F090W": Image(
+                    resolution=0.1 * kpc,
+                    fov=3.2 * kpc,
+                )
+            },
+        )
+
+        original_npix = collection.npix.copy()
+        original_resolution = collection.resolution
+
+        with pytest.raises(Exception, match="hasn't been generated yet"):
+            collection.supersample(2)
+
+        assert np.array_equal(collection.npix, original_npix)
+        assert collection.resolution == original_resolution

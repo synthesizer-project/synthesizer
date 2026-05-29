@@ -19,7 +19,6 @@ Example Usage:
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import Normalize
-from scipy import signal
 from scipy.ndimage import zoom
 from unyt import arcsecond, kpc, unyt_array, unyt_quantity
 
@@ -30,6 +29,7 @@ from synthesizer.imaging.image_generators import (
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,
 )
+from synthesizer.synth_warnings import deprecated
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
@@ -106,7 +106,8 @@ class Image(ImagingBase):
         if self.arr is None:
             raise exceptions.MissingImage(
                 "The image array hasn't been generated yet. Please run "
-                "get_img_hist() or get_img_smoothed() before accessing the "
+                "generate_img_hist() or generate_img_smoothed() before "
+                "accessing the "
                 "image."
             )
         return self.arr * self.units if self.units is not None else self.arr
@@ -152,13 +153,35 @@ class Image(ImagingBase):
         else:
             raise exceptions.MissingImage(
                 "The image array hasn't been generated yet. Please run "
-                "get_img_hist() or get_img_smoothed() before resampling."
+                "generate_img_hist() or generate_img_smoothed() before "
+                "resampling."
             )
 
         # Handle the edge case where the conversion between resolutions has
         # messed with the FOV.
         if self.npix[0] != new_shape[0] or self.npix[1] != new_shape[1]:
             self.set_npix(new_shape)
+
+    def downsample(self, factor):
+        """Downsample the image by a factor.
+
+        Useful when returning from a temporarily supersampled image.
+
+        Args:
+            factor (float):
+                The factor by which to resample the image. Values smaller than
+                1 reduce the image resolution.
+
+        Raises:
+            ValueError: If ``factor`` is greater than 1.
+        """
+        # Keep the directional convenience API explicit so callers do not use
+        # the downsampling helper to accidentally supersample images.
+        if factor > 1:
+            raise ValueError("Using downsample method to supersample!")
+
+        # Delegate the actual image resampling to the canonical helper.
+        self.resample(factor)
 
     def __add__(self, other_img):
         """Add 2 Images together.
@@ -296,7 +319,7 @@ class Image(ImagingBase):
         new_img.arr *= mult
         return new_img
 
-    def get_img_hist(
+    def generate_img_hist(
         self,
         signal,
         coordinates,
@@ -328,7 +351,25 @@ class Image(ImagingBase):
             normalisation=normalisation,
         )
 
-    def get_img_smoothed(
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use generate_img_hist(...) instead."
+    )
+    def get_img_hist(
+        self,
+        signal,
+        coordinates,
+        normalisation=None,
+    ):
+        """Deprecated wrapper for generate_img_hist."""
+        # Delegate to the renamed low-level histogram image entry point.
+        return self.generate_img_hist(
+            signal=signal,
+            coordinates=coordinates,
+            normalisation=normalisation,
+        )
+
+    def generate_img_smoothed(
         self,
         signal,
         coordinates=None,
@@ -356,8 +397,9 @@ class Image(ImagingBase):
                 The coordinates of the particles. (particle case only)
             smoothing_lengths (unyt_array, float):
                 The smoothing lengths of the particles. (particle case only)
-            kernel (str):
-                The kernel to use for smoothing. (particle case only)
+            kernel (np.ndarray or Kernel):
+                The kernel lookup table, or a ``Kernel`` instance to extract
+                the lookup table from. (particle case only)
             kernel_threshold (float):
                 The threshold for the kernel. (particle case only)
             density_grid (array_like, float):
@@ -421,28 +463,32 @@ class Image(ImagingBase):
                 f"signal={type(signal)})"
             )
 
-    def apply_psf(self, psf):
-        """Apply a Point Spread Function to this image.
-
-        Args:
-            psf (np.ndarray of float):
-                An array describing the point spread function.
-
-        Returns:
-            Image
-                The image convolved with the psf.
-        """
-        # Perform the convolution
-        convolved_img = signal.fftconvolve(self.arr, psf, mode="same")
-
-        # Include units if we have them
-        if self.units is not None:
-            convolved_img *= self.units
-
-        return Image(
-            resolution=self.resolution,
-            fov=self.fov,
-            img=convolved_img,
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use generate_img_smoothed(...) instead."
+    )
+    def get_img_smoothed(
+        self,
+        signal,
+        coordinates=None,
+        smoothing_lengths=None,
+        kernel=None,
+        kernel_threshold=1,
+        density_grid=None,
+        normalisation=None,
+        nthreads=1,
+    ):
+        """Deprecated wrapper for generate_img_smoothed."""
+        # Delegate to the renamed low-level image-generation entry point.
+        return self.generate_img_smoothed(
+            signal=signal,
+            coordinates=coordinates,
+            smoothing_lengths=smoothing_lengths,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            density_grid=density_grid,
+            normalisation=normalisation,
+            nthreads=nthreads,
         )
 
     def apply_noise_array(self, noise_arr):
