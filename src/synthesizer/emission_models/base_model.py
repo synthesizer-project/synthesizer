@@ -830,6 +830,43 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 "model is not compatible with this attribute."
             )
 
+    def set_attribute_overload(self, attr_str, overload_str):
+        """Redirect a model attribute to read a different attribute.
+
+        This function is useful for redirecting get_param to read a different
+        attribute from the one the model would expect. This is particularly,
+        useful when redirecting a grid axis to read from a different attribute
+        on the emitter.
+
+        For example, if we have a grid that contains "ages" and "metallicities"
+        axes but we want to instead use "special_ages" and
+        "special_metallicities" attributes on the emitter, we can use this
+        function which will cause get_param to first attempt to extract
+        "ages" and "metallicities" from the model, see the overload_str
+        string, recurse and attempt to extract "special_ages" and
+        "special_metallicities" from the model, find they are not there, and
+        then look for "special_ages" and "special_metallicities" on the
+        emitter and return them.
+
+        This same behaviour can be achieved by passing kwargs at init but
+        this function enables retroactive redirection, especially useful when
+        using premade models.
+
+        Args:
+            attr_str (str): The attribute to redirect.
+            overload_str (str): The attribute to redirect to.
+        """
+        # Ensure we don't already have an override
+        if hasattr(self, attr_str):
+            raise exceptions.InconsistentArguments(
+                f"Cannot overload attribute {attr_str} on model {self.label}. "
+                f"{attr_str} is already set on the model "
+                f"{getattr(self, attr_str)}. "
+            )
+
+        # Set up the overload by setting the attribute to the overload string
+        setattr(self, attr_str, overload_str)
+
     @property
     def grid(self):
         """Get the Grid object used for extraction."""
