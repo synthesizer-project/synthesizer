@@ -19,11 +19,19 @@ from synthesizer.cosmology import (
     get_luminosity_distance,
 )
 from synthesizer.emissions import plot_spectra
+from synthesizer.imaging.data_cube_generators import (
+    _combine_spectral_cubes,
+    _prepare_component_data_cube_labels,
+)
 from synthesizer.imaging.image_generators import (
     _combine_image_collections,
-    _generate_image_collection_generic,
     _prepare_component_image_labels,
 )
+from synthesizer.imaging.postprocess import (
+    _postprocess_existing_data_cubes,
+    _postprocess_existing_images,
+)
+from synthesizer.synth_warnings import deprecated
 from synthesizer.units import unit_is_compatible
 from synthesizer.utils.ascii_table import TableFormatter
 
@@ -97,6 +105,8 @@ class Component(ABC):
         # Define the dictionaries to hold instrument specific spectroscopy
         self.spectroscopy = {}
         self.particle_spectroscopy = {}
+        self.data_cubes_lnu = {}
+        self.data_cubes_fnu = {}
 
         # Attach a default escape fraction
         self.fesc = fesc if fesc is not None else 0.0
@@ -524,7 +534,7 @@ class Component(ABC):
             return self.particle_lines[emission_model.label]
         return self.lines[emission_model.label]
 
-    def _get_images(
+    def _generate_images(
         self,
         *labels,
         fov,
@@ -535,6 +545,7 @@ class Component(ABC):
         nthreads=1,
         cosmo=None,
         phot_type="lnu",
+        postprocess=True,
     ):
         """Make an ImageCollection from component luminosities or fluxes.
 
@@ -584,6 +595,9 @@ class Component(ABC):
             phot_type (str):
                 The type of photometry to use, either 'lnu' for luminosity
                 units or 'fnu' for flux units.
+            postprocess (bool):
+                If True, automatically apply the instrument-defined imaging
+                post-processing after raw image generation.
 
         Returns:
             ImageCollection/dict
@@ -663,8 +677,7 @@ class Component(ABC):
                     f"Available photometry keys: {available_keys}"
                 )
 
-            out_images[label] = _generate_image_collection_generic(
-                instrument=instrument,
+            out_images[label] = instrument.generate_images(
                 photometry=photometry_dict[label],
                 fov=fov,
                 img_type=img_type,
@@ -708,6 +721,22 @@ class Component(ABC):
         # If we generated nothing there's nothing to return
         if len(out_images) == 0:
             return out_images
+
+        # Stop after raw generation when the caller needs unprocessed images
+        # for a higher-level combination step.
+        if not postprocess:
+            if len(labels) == 1:
+                return out_images[labels[0]]
+            return out_images
+
+        # Apply any instrument-defined PSF and noise processing in the
+        # canonical order before returning the observable to the caller.
+        out_images = _postprocess_existing_images(
+            self,
+            instrument=instrument,
+            phot_type=phot_type,
+            limit_to=labels,
+        )
 
         # Return either the single image or the dict of images
         if len(labels) == 1:
@@ -775,7 +804,7 @@ class Component(ABC):
                 Either a single ImageCollection if only one label is passed,
                 otherwise a dict of ImageCollections keyed by label.
         """
-        return self._get_images(
+        return self._generate_images(
             *labels,
             fov=fov,
             instrument=instrument,
@@ -848,7 +877,7 @@ class Component(ABC):
                 Either a single ImageCollection if only one label is passed,
                 otherwise a dict of ImageCollections keyed by label.
         """
-        return self._get_images(
+        return self._generate_images(
             *labels,
             fov=fov,
             instrument=instrument,
@@ -860,26 +889,25 @@ class Component(ABC):
             phot_type="fnu",
         )
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use component.get_images_luminosity(...) instead."
+    )
     def apply_psf_to_images_lnu(
         self,
         instrument,
-        psf_resample_factor=1,
         limit_to=None,
     ):
         """Apply instrument PSFs to this component's luminosity images.
 
+        This method now acts as an orchestration wrapper around the
+        instrument-owned PSF application path. It fetches the relevant image
+        collections, passes them into the instrument, and stores the returned
+        PSF-processed images on the component.
+
         Args:
             instrument (Instrument):
                 The instrument with the PSF to apply.
-            psf_resample_factor (int):
-                The resample factor for the PSF. This should be a value greater
-                than 1. The image will be resampled by this factor before the
-                PSF is applied and then downsampled back to the original
-                after convolution. This can help minimize the effects of
-                using a generic PSF centred on the galaxy centre, a
-                simplification we make for performance reasons (the
-                effects are sufficiently small that this simplifications is
-                justified).
             limit_to (str/list):
                 If not None, defines a specific model (or list of models) to
                 limit the image generation to. Otherwise, all models with saved
@@ -915,46 +943,36 @@ class Component(ABC):
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = self.images_lnu[instrument.label][key]
 
-            # If requested, do the resampling
-            if psf_resample_factor > 1:
-                imgs.supersample(psf_resample_factor)
-
-            # Apply the PSF
-            self.images_psf_lnu[instrument.label][key] = imgs.apply_psfs(
-                instrument.psfs
+            # Delegate the actual PSF application to the instrument so the
+            # component layer only handles routing and output storage
+            self.images_psf_lnu[instrument.label][key] = instrument.apply_psfs(
+                imgs,
             )
-
-            # Undo the resampling (if needed)
-            if psf_resample_factor > 1:
-                self.images_psf_lnu[instrument.label][key].downsample(
-                    1 / psf_resample_factor
-                )
 
         return self.images_psf_lnu[instrument.label]
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use component.get_images_flux(...) instead."
+    )
     def apply_psf_to_images_fnu(
         self,
         instrument,
-        psf_resample_factor=1,
         limit_to=None,
     ):
         """Apply instrument PSFs to this component's flux images.
 
+        This method now acts as an orchestration wrapper around the
+        instrument-owned PSF application path. It fetches the relevant image
+        collections, passes them into the instrument, and stores the returned
+        PSF-processed images on the component.
+
         Args:
             instrument (Instrument):
                 The instrument with the PSF to apply.
-            psf_resample_factor (int):
-                The resample factor for the PSF. This should be a value greater
-                than 1. The image will be resampled by this factor before the
-                PSF is applied and then downsampled back to the original
-                after convolution. This can help minimize the effects of
-                using a generic PSF centred on the galaxy centre, a
-                simplification we make for performance reasons (the
-                effects are sufficiently small that this simplifications is
-                justified).
             limit_to (str/list):
                 If not None, defines a specific model (or list of models) to
                 limit the image generation to. Otherwise, all models with saved
@@ -990,26 +1008,21 @@ class Component(ABC):
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = self.images_fnu[instrument.label][key]
 
-            # If requested, do the resampling
-            if psf_resample_factor > 1:
-                imgs.supersample(psf_resample_factor)
-
-            # Apply the PSF
-            self.images_psf_fnu[instrument.label][key] = imgs.apply_psfs(
-                instrument.psfs
+            # Delegate the actual PSF application to the instrument so the
+            # component layer only handles routing and output storage
+            self.images_psf_fnu[instrument.label][key] = instrument.apply_psfs(
+                imgs,
             )
-
-            # Undo the resampling (if needed)
-            if psf_resample_factor > 1:
-                self.images_psf_fnu[instrument.label][key].downsample(
-                    1 / psf_resample_factor
-                )
 
         return self.images_psf_fnu[instrument.label]
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use component.get_images_luminosity(...) instead."
+    )
     def apply_noise_to_images_lnu(
         self,
         instrument,
@@ -1017,6 +1030,11 @@ class Component(ABC):
         apply_to_psf=True,
     ):
         """Apply instrument noise to this component's images.
+
+        This method now acts as an orchestration wrapper around the
+        instrument-owned imaging-noise path. It fetches the relevant image
+        collections, passes them into the instrument, and stores the returned
+        noisy images on the component.
 
         Args:
             instrument (Instrument):
@@ -1062,36 +1080,24 @@ class Component(ABC):
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = images[key]
 
-            # Apply the noise using the correct method
-            if instrument.noise_maps is not None:
-                self.images_noise_lnu[instrument.label][key] = (
-                    imgs.apply_noise_arrays(
-                        instrument.noise_maps,
-                    )
+            # Delegate the actual noise application to the instrument so the
+            # component layer only handles routing and output storage
+            self.images_noise_lnu[instrument.label][key] = (
+                instrument.apply_noises(
+                    imgs,
+                    aperture_radius=instrument.depth_app_radius,
                 )
-            elif instrument.noise_source_maps is not None:
-                self.images_noise_lnu[instrument.label][key] = (
-                    imgs.apply_correlated_noise(instrument)
-                )
-            elif instrument.snrs is not None:
-                self.images_noise_lnu[instrument.label][key] = (
-                    imgs.apply_noise_from_snrs(
-                        snrs=instrument.snrs,
-                        depths=instrument.depth,
-                        aperture_radius=instrument.depth_aperture_radius,
-                    )
-                )
-            else:
-                raise exceptions.InconsistentArguments(
-                    f"Instrument ({instrument.label}) cannot be used "
-                    "for applying noise."
-                )
+            )
 
         return self.images_noise_lnu[instrument.label]
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.3.0. "
+        "Use component.get_images_flux(...) instead."
+    )
     def apply_noise_to_images_fnu(
         self,
         instrument,
@@ -1099,6 +1105,11 @@ class Component(ABC):
         apply_to_psf=True,
     ):
         """Apply instrument noise to this component's images.
+
+        This method now acts as an orchestration wrapper around the
+        instrument-owned imaging-noise path. It fetches the relevant image
+        collections, passes them into the instrument, and stores the returned
+        noisy images on the component.
 
         Args:
             instrument (Instrument):
@@ -1144,33 +1155,17 @@ class Component(ABC):
             if limit_to is not None and key not in limit_to:
                 continue
 
-            # Unpack the image
+            # Unpack the image collection to be post-processed
             imgs = images[key]
 
-            # Apply the noise using the correct method
-            if instrument.noise_maps is not None:
-                self.images_noise_fnu[instrument.label][key] = (
-                    imgs.apply_noise_arrays(
-                        instrument.noise_maps,
-                    )
+            # Delegate the actual noise application to the instrument so the
+            # component layer only handles routing and output storage
+            self.images_noise_fnu[instrument.label][key] = (
+                instrument.apply_noises(
+                    imgs,
+                    aperture_radius=instrument.depth_app_radius,
                 )
-            elif instrument.noise_source_maps is not None:
-                self.images_noise_fnu[instrument.label][key] = (
-                    imgs.apply_correlated_noise(instrument)
-                )
-            elif instrument.snrs is not None:
-                self.images_noise_fnu[instrument.label][key] = (
-                    imgs.apply_noise_from_snrs(
-                        snrs=instrument.snrs,
-                        depths=instrument.depth,
-                        aperture_radius=instrument.depth_aperture_radius,
-                    )
-                )
-            else:
-                raise exceptions.InconsistentArguments(
-                    f"Instrument ({instrument.label}) cannot be used "
-                    "for applying noise."
-                )
+            )
 
         return self.images_noise_fnu[instrument.label]
 
@@ -1181,8 +1176,10 @@ class Component(ABC):
     ):
         """Get spectroscopy for the component based on a specific instrument.
 
-        This will apply the instrument's wavelength array to each
-        spectra stored on the component.
+        This method now acts as an orchestration wrapper around the
+        instrument-owned spectroscopy path. It fetches the relevant SEDs,
+        passes them into the instrument, and stores the returned spectroscopy
+        on the component.
 
         Args:
             instrument (Instrument):
@@ -1210,9 +1207,12 @@ class Component(ABC):
             # Skip labels that don't exist on this component
             if label not in self.spectra:
                 continue
-            self.spectroscopy[instrument.label][label] = self.spectra[
-                label
-            ].apply_instrument_lams(instrument)
+            # Delegate the spectroscopy observation to the instrument so the
+            # component layer only handles routing and output storage
+            spectrum = instrument.apply_lam_array(self.spectra[label])
+            if instrument.can_do_noisy_spectroscopy:
+                spectrum = instrument.apply_noise(spectrum)
+            self.spectroscopy[instrument.label][label] = spectrum
 
         # If we have particle spectra then do the same for them
         if (
@@ -1232,14 +1232,207 @@ class Component(ABC):
                 # Skip labels that don't exist on this component
                 if label not in self.particle_spectra:
                     continue
-                self.particle_spectroscopy[instrument.label][label] = (
-                    self.particle_spectra[label].apply_instrument_lams(
-                        instrument
-                    )
+                # Delegate the particle-spectrum observation to the instrument
+                # so the component layer only handles routing and output
+                # storage
+                spectrum = instrument.apply_lam_array(
+                    self.particle_spectra[label]
                 )
+                if instrument.can_do_noisy_spectroscopy:
+                    spectrum = instrument.apply_noise(spectrum)
+                self.particle_spectroscopy[instrument.label][label] = spectrum
 
         # Return the spectroscopy for the component
         return self.spectroscopy[instrument.label]
+
+    def get_data_cube(
+        self,
+        label,
+        fov,
+        instrument,
+        cube_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        quantity="lnu",
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Get a data cube for one saved spectrum on this component.
+
+        This is the public component-level cube API. It delegates the
+        low-level cube construction to the IFU, stores the generated cube on
+        the component, and returns it.
+
+        Args:
+            label (str): Saved spectrum label to turn into a data cube.
+            fov (unyt_quantity): Width of the requested data cube.
+            instrument (IntegratedFieldUnit): Instrument defining the
+                wavelength sampling and spatial resolution.
+            cube_type (str): Either ``"smoothed"`` or ``"hist"``.
+            kernel (array-like, optional): Kernel used for smoothed particle
+                cubes.
+            kernel_threshold (float): Kernel impact-parameter threshold.
+            quantity (str): Spectral quantity to store in the cube.
+            nthreads (int): Number of threads to use for particle cube
+                generation.
+            cosmo (astropy.cosmology, optional): Cosmology used for mixed-unit
+                conversions.
+
+        Returns:
+            SpectralCube: Generated spectral data cube.
+        """
+        # Reuse the shared component implementation so the public single-label
+        # API stays aligned with the multi-label/internal generation path.
+        return self._generate_data_cubes(
+            label,
+            fov=fov,
+            instrument=instrument,
+            cube_type=cube_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            quantity=quantity,
+            nthreads=nthreads,
+            cosmo=cosmo,
+        )
+
+    def _generate_data_cubes(
+        self,
+        *labels,
+        fov,
+        instrument,
+        cube_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        quantity="lnu",
+        nthreads=1,
+        cosmo=None,
+        postprocess=True,
+    ):
+        """Make SpectralCube objects for one component.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make data cubes for.
+            fov (unyt_quantity):
+                Width of the requested data cube.
+            instrument (IntegratedFieldUnit):
+                Instrument defining the wavelength sampling and spatial
+                resolution.
+            cube_type (str):
+                Either ``"smoothed"`` or ``"hist"``.
+            kernel (array-like, optional):
+                Kernel used for smoothed particle cubes.
+            kernel_threshold (float):
+                Kernel impact-parameter threshold.
+            quantity (str):
+                Spectral quantity to store in the cube.
+            nthreads (int):
+                Number of threads to use for particle cube generation.
+            cosmo (astropy.cosmology, optional):
+                Cosmology used for mixed-unit conversions.
+            postprocess (bool):
+                If True, automatically apply any instrument-defined IFU
+                post-processing after raw cube generation.
+
+        Returns:
+            SpectralCube/dict:
+                Either a single SpectralCube if only one label is passed,
+                otherwise a dict of SpectralCubes keyed by label.
+        """
+        # Convert labels tuple to a list and validate they are strings.
+        labels = list(labels)
+        for label in labels:
+            if not isinstance(label, str):
+                raise exceptions.InconsistentArguments(
+                    f"All labels must be strings, got {type(label).__name__}. "
+                    "If passing an EmissionModel, use model.label instead."
+                )
+
+        # Split the request into labels that correspond to concrete saved
+        # spectra on this component and labels that represent combinations of
+        # those spectra. This mirrors the image-generation routing logic, but
+        # stays local to a single component.
+        model_cache = getattr(self, "model_param_cache", {})
+
+        combine_labels, generate_labels = _prepare_component_data_cube_labels(
+            labels,
+            model_cache,
+            remove_missing=False,
+        )
+
+        # Container for cubes generated or combined in this call.
+        out_cubes = {}
+
+        # Collect every spectrum store that can legitimately seed a raw cube.
+        # Particle components may expose both integrated and per-particle
+        # spectra, while parametric components usually only expose the former.
+        available_spectra = set(self.spectra)
+        if hasattr(self, "particle_spectra"):
+            available_spectra.update(self.particle_spectra)
+
+        # Ask the IFU for raw cubes only for labels that already exist as saved
+        # spectra. Any higher-level combination labels are handled afterwards
+        # from the cubes accumulated in ``out_cubes``.
+        for label in generate_labels:
+            if label not in available_spectra:
+                raise exceptions.InconsistentArguments(
+                    f"No saved spectrum with label '{label}' was found on the "
+                    f"{self.component_type} component."
+                )
+
+            out_cubes[label] = instrument.generate_data_cube(
+                component=self,
+                fov=fov,
+                sed=label,
+                cube_type=cube_type,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                quantity=quantity,
+                nthreads=nthreads,
+                cosmo=cosmo,
+            )
+
+        # Resolve any component-owned combination labels from the raw cube set
+        # just generated above. Keeping this separate from raw generation makes
+        # it possible for the galaxy layer to reuse the same two-step pattern.
+        for label in combine_labels:
+            out_cubes[label] = _combine_spectral_cubes(
+                cubes=out_cubes,
+                label=label,
+                model_cache=model_cache,
+            )
+
+        # Cache raw cubes before any IFU observation recipe is applied. The
+        # galaxy-level orchestration path relies on these raw component cubes
+        # when it needs to assemble galaxy-owned combination cubes.
+        if quantity in {"lnu", "llam", "luminosity"}:
+            self.data_cubes_lnu.setdefault(instrument.label, {})
+            self.data_cubes_lnu[instrument.label].update(out_cubes)
+        elif quantity in {"fnu", "flam", "flux"}:
+            self.data_cubes_fnu.setdefault(instrument.label, {})
+            self.data_cubes_fnu[instrument.label].update(out_cubes)
+
+        # When called from the galaxy layer we stop here, returning raw cubes
+        # so the parent object can combine them before any PSF/noise step is
+        # applied. Standalone component calls continue on to post-processing.
+        if postprocess:
+            out_cubes = _postprocess_existing_data_cubes(
+                self,
+                instrument=instrument,
+                quantity=quantity,
+                limit_to=labels,
+            )
+
+        # If no cubes survived generation or post-processing, return the empty
+        # mapping directly.
+        if len(out_cubes) == 0:
+            return out_cubes
+
+        # Mirror the image-generation API: a single requested label unwraps to
+        # a bare SpectralCube, while multi-label requests return the full map.
+        if len(labels) == 1:
+            return out_cubes[labels[0]]
+        return out_cubes
 
     def plot_spectra(
         self,

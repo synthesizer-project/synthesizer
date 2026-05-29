@@ -16,7 +16,7 @@ We provide a number of different ways to define a ``Filter`` or set of ``Filters
 - SVO: We also provide an interface to the `Spanish Virtual Observatory (SVO) filter service <http://svo2.cab.inta-csic.es/theory/fps/>`_.
     The user need only provide the filter code in "Observatory/Instrument.code" format (as shown on the SVO website) to extract the relevant information from this service, and create a ``Filter`` object.
 
-Filters can be used for producing photometry from ``Sed`` objects, as well as for creating monochromatic or RGB images.
+Filters can be used for producing photometry from ``Sed`` objects, as well as for creating monochromatic or RGB images. In practice they are most commonly attached to ``PhotometricInstrument`` or ``PhotometricImager`` objects for use with observable generator methods.
 
 
 .. toctree::

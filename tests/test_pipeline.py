@@ -8,12 +8,13 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 from astropy.cosmology import Planck18 as cosmo
-from unyt import Mpc, kpc, unyt_array
+from unyt import Mpc, angstrom, kpc, unyt_array
 
 from synthesizer import check_atomic_timing, exceptions
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.emissions import Sed
 from synthesizer.extensions.timers import reset_timings, tic, toc
+from synthesizer.instruments import FilterCollection, Instrument
 from synthesizer.pipeline.pipeline import Pipeline
 from synthesizer.pipeline.pipeline_utils import (
     cached_split,
@@ -28,6 +29,26 @@ from synthesizer.pipeline.pipeline_utils import (
 )
 from synthesizer.units import Quantity
 from synthesizer.utils.operation_timers import build_timing_analysis_rows
+
+
+def make_test_imager(filter_codes=("F150W",), resolution=1.0 * kpc, **kwargs):
+    """Create a minimal photometric imager for pipeline tests."""
+    # Build a small synthetic filter collection matching the requested codes.
+    filters = FilterCollection(
+        generic_dict={
+            filter_code: np.ones(1000) for filter_code in filter_codes
+        },
+        new_lam=np.linspace(4000, 8000, 1000) * angstrom,
+    )
+
+    # Construct a real imaging-capable instrument so utility tests do not rely
+    # on removed generic factory shapes.
+    return Instrument(
+        kwargs.pop("label", "test_inst"),
+        filters=filters,
+        resolution=resolution,
+        **kwargs,
+    )
 
 
 @pytest.fixture
@@ -1185,7 +1206,7 @@ class TestPipelineNewFeatures:
 
         # Create instrument with wrong units (nJy instead of erg/s/Hz)
         bad_instrument = Instrument(
-            label="bad_inst",
+            "bad_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=nircam_instrument_no_psf.resolution,
             depth={"JWST/NIRCam.F090W": 1.0 * nJy},
@@ -1213,7 +1234,7 @@ class TestPipelineNewFeatures:
 
         # Create instrument with wrong units (erg/s/Hz instead of nJy)
         bad_instrument = Instrument(
-            label="bad_inst",
+            "bad_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=nircam_instrument_no_psf.resolution,
             depth={"JWST/NIRCam.F090W": 1.0 * Unit("erg/s/Hz")},
@@ -1245,7 +1266,7 @@ class TestPipelineNewFeatures:
 
         # Create instrument with wrong units (nJy instead of erg/s/Hz)
         bad_instrument = Instrument(
-            label="bad_inst",
+            "bad_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=nircam_instrument_no_psf.resolution,
             noise_maps={"JWST/NIRCam.F090W": noise_map},
@@ -1275,7 +1296,7 @@ class TestPipelineNewFeatures:
 
         # Create instrument with wrong units (erg/s/Hz instead of nJy)
         bad_instrument = Instrument(
-            label="bad_inst",
+            "bad_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=nircam_instrument_no_psf.resolution,
             noise_maps={"JWST/NIRCam.F090W": noise_map},
@@ -1298,16 +1319,12 @@ class TestValidateNoiseUnitCompatibility:
         """Test validation passes with correct depth units for luminosity."""
         from unyt import Unit
 
-        from synthesizer.instruments import Instrument
         from synthesizer.pipeline.pipeline_utils import (
             validate_noise_unit_compatibility,
         )
 
         # Create instrument with correct units
-        inst = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=1.0 * kpc,
+        inst = make_test_imager(
             depth=1.0 * Unit("erg/s/Hz"),
             snrs=5.0,
         )
@@ -1319,16 +1336,12 @@ class TestValidateNoiseUnitCompatibility:
         """Test validation passes with correct depth units for flux."""
         from unyt import nJy
 
-        from synthesizer.instruments import Instrument
         from synthesizer.pipeline.pipeline_utils import (
             validate_noise_unit_compatibility,
         )
 
         # Create instrument with correct units
-        inst = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=1.0 * kpc,
+        inst = make_test_imager(
             depth=1.0 * nJy,
             snrs=5.0,
         )
@@ -1340,7 +1353,6 @@ class TestValidateNoiseUnitCompatibility:
         """Test validation passes with correct noise_maps units."""
         from unyt import Unit
 
-        from synthesizer.instruments import Instrument
         from synthesizer.pipeline.pipeline_utils import (
             validate_noise_unit_compatibility,
         )
@@ -1349,10 +1361,7 @@ class TestValidateNoiseUnitCompatibility:
         noise_map = np.random.randn(10, 10) * Unit("erg/s/Hz")
 
         # Create instrument with correct units
-        inst = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=1.0 * kpc,
+        inst = make_test_imager(
             noise_maps=noise_map,
         )
 
@@ -1370,7 +1379,7 @@ class TestValidateNoiseUnitCompatibility:
 
         # Create instrument with dict depth
         inst = Instrument(
-            label="test_inst",
+            "test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
             depth={
@@ -1397,7 +1406,7 @@ class TestValidateNoiseUnitCompatibility:
 
         # Create instrument with dict noise_maps
         inst = Instrument(
-            label="test_inst",
+            "test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
             noise_maps={
@@ -1423,7 +1432,7 @@ class TestValidateNoiseUnitCompatibility:
         )
 
         inst = Instrument(
-            label="test_inst",
+            "test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
             noise_source_maps={
@@ -1448,7 +1457,7 @@ class TestValidateNoiseUnitCompatibility:
         )
 
         inst = Instrument(
-            label="test_inst",
+            "test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
             noise_source_maps={
@@ -1471,7 +1480,7 @@ class TestValidateNoiseUnitCompatibility:
         )
 
         inst = Instrument(
-            label="test_inst",
+            "test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
             noise_source_maps={
@@ -1485,16 +1494,12 @@ class TestValidateNoiseUnitCompatibility:
 
     def test_validate_apparent_magnitude_depth_scalar(self):
         """Test validation passes with apparent magnitude depth (float)."""
-        from synthesizer.instruments import Instrument
         from synthesizer.pipeline.pipeline_utils import (
             validate_noise_unit_compatibility,
         )
 
         # Create instrument with apparent magnitude depth (plain float)
-        inst = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=1.0 * kpc,
+        inst = make_test_imager(
             depth=25.0,  # Apparent magnitude (dimensionless)
             snrs=5.0,
         )
@@ -1505,16 +1510,12 @@ class TestValidateNoiseUnitCompatibility:
 
     def test_validate_apparent_magnitude_depth_int(self):
         """Test validation passes with int apparent magnitude depth."""
-        from synthesizer.instruments import Instrument
         from synthesizer.pipeline.pipeline_utils import (
             validate_noise_unit_compatibility,
         )
 
         # Create instrument with int apparent magnitude depth
-        inst = Instrument(
-            label="test_inst",
-            filters=None,
-            resolution=1.0 * kpc,
+        inst = make_test_imager(
             depth=25,  # Integer apparent magnitude
             snrs=5.0,
         )
@@ -1534,7 +1535,7 @@ class TestValidateNoiseUnitCompatibility:
 
         # Create instrument with apparent magnitude depths
         inst = Instrument(
-            label="test_inst",
+            "test_inst",
             filters=nircam_instrument_no_psf.filters,
             resolution=1.0 * kpc,
             depth={
@@ -1874,8 +1875,6 @@ class TestAngularCoordinates:
         """
         from unyt import arcsec
 
-        from synthesizer.instruments import Instrument
-
         # Create instrument with angular resolution
         angular_inst = Instrument(
             "JWST_Angular",
@@ -1986,8 +1985,6 @@ class TestAngularCoordinates:
         """
         from unyt import arcsec
 
-        from synthesizer.instruments import Instrument
-
         # Create instrument with angular resolution
         angular_inst = Instrument(
             "JWST_Angular",
@@ -2022,8 +2019,6 @@ class TestAngularCoordinates:
         matches what was provided, ensuring it will be passed correctly.
         """
         from unyt import arcsec
-
-        from synthesizer.instruments import Instrument
 
         # Create instrument with angular resolution
         angular_inst = Instrument(
@@ -2327,22 +2322,19 @@ class TestPipelineUtilsFunctions:
 
     def test_validate_noise_unit_compatibility_with_float_depth(self):
         """Test validate_noise_unit_compatibility with plain float depth."""
-        import numpy as np
         from unyt import Unit, kpc
 
-        from synthesizer.instruments import Instrument
         from synthesizer.pipeline.pipeline_utils import (
             validate_noise_unit_compatibility,
         )
 
         # Create an instrument with plain float depth (apparent magnitude)
-        # Need resolution to enable can_do_imaging
-        inst = Instrument(
-            "TestInstrument",
-            filters=["filter1"],
-            resolution=0.1 * kpc,  # Required for can_do_imaging
+        inst = make_test_imager(
+            label="TestInstrument",
+            filter_codes=("filter1",),
+            resolution=0.1 * kpc,
             depth=25.0,  # Plain float - apparent magnitude
-            snrs=np.array([5.0]),  # Required when depth is set
+            snrs=5.0,
         )
 
         # Should not raise - float depths are valid for both types

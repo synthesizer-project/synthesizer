@@ -5,6 +5,11 @@ Observables are theoretical emissions that have been translated into the observe
 
 In this section, we will cover the different types of observable that can be generated with Synthesizer, including photometry, spectroscopy, imaging, and spectral data cubes. 
 
+These observables are typically generated through the specialised instrument
+classes introduced in the observatories section: ``PhotometricInstrument`` for
+photometry, ``PhotometricImager`` for imaging, ``SpectroscopicInstrument`` for
+one-dimensional spectroscopy, and ``IntegratedFieldUnit`` for spectral cubes.
+
 
 .. toctree::
    :maxdepth: 1
