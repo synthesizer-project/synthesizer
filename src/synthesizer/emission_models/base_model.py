@@ -864,8 +864,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 f"{getattr(self, attr_str)}. "
             )
 
-        # Set up the overload by setting the attribute to the overload string
-        setattr(self, attr_str, overload_str)
+        # Store the overload in the fixed parameters dictionary so it will be
+        # picked up by get_param when trying to access attr_str
+        self.fixed_parameters[attr_str] = overload_str
 
     @property
     def grid(self):
