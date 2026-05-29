@@ -883,7 +883,36 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             param_name (str): The name of the parameter to fix.
             value (Any): The value to fix the parameter to.
         """
+        # Ensure we don't already have an override for this parameter
+        if param_name in self.fixed_parameters:
+            raise exceptions.InconsistentArguments(
+                f"Cannot set fixed parameter {param_name} on model "
+                f"{self.label} to {value}. This parameter is already fixed "
+                f"to {self.fixed_parameters[param_name]}."
+            )
+
         self.fixed_parameters[param_name] = value
+
+    def clear_fixed_parameter(self, param_name):
+        """Clear a fixed parameter.
+
+        This method will clear a fixed parameter on the model, allowing
+        get_param to access the parameter on the emitter again.
+
+        Args:
+            param_name (str): The name of the parameter to clear.
+        """
+        if param_name in self.fixed_parameters:
+            del self.fixed_parameters[param_name]
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Cannot clear fixed parameter {param_name} on model "
+                f"{self.label}. This parameter is not currently fixed."
+            )
+
+    def clear_fixed_parameters(self):
+        """Clear all fixed parameters on the model."""
+        self.fixed_parameters = {}
 
     @property
     def grid(self):
