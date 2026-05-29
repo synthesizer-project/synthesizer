@@ -2,8 +2,9 @@
 
 import numpy as np
 from astropy.cosmology import Planck18
-from unyt import Hz, angstrom, erg, nJy, s
+from unyt import Hz, angstrom, cm, erg, nJy, pc, s
 
+from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emissions import Sed
 
 
@@ -14,12 +15,14 @@ def test_sed_empty(empty_sed):
 
 
 def test_get_fnu_matches_expected_observer_frame_conversion():
-    """Observed-frame flux conversion should preserve values and units."""
+    """Observed-frame flux conversion should match the old formula."""
     lam = np.linspace(1000, 2000, 8) * angstrom
     lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
 
     sed = Sed(lam=lam, lnu=lnu)
     z = 2.0
+    old_luminosity_distance = get_luminosity_distance(Planck18, z).to(cm)
+    expected_fnu = lnu * (1.0 + z) / (4 * np.pi * old_luminosity_distance**2)
 
     fnu = sed.get_fnu(Planck18, z)
 
@@ -28,6 +31,10 @@ def test_get_fnu_matches_expected_observer_frame_conversion():
     np.testing.assert_allclose(sed._obsnu, sed._nu / (1.0 + z))
     assert fnu.units.same_dimensions_as(nJy)
     np.testing.assert_allclose(fnu.to("nJy").value, sed._fnu)
+    np.testing.assert_allclose(
+        fnu.to("nJy").value,
+        expected_fnu.to("nJy").value,
+    )
 
 
 def test_get_fnu_handles_multidimensional_spectra():
@@ -44,9 +51,10 @@ def test_get_fnu_handles_multidimensional_spectra():
 
 
 def test_get_fnu0_handles_multidimensional_spectra():
-    """Rest-frame flux-at-10pc conversion should preserve multidim shape."""
+    """Rest-frame flux-at-10pc should match the old formula."""
     lam = np.linspace(1000, 2000, 8) * angstrom
     lnu = (np.arange(16, dtype=float).reshape(2, 8) + 1.0) * erg / s / Hz
+    expected_fnu = lnu / (4 * np.pi * (10 * pc) ** 2)
 
     sed = Sed(lam=lam, lnu=lnu)
     fnu = sed.get_fnu0()
@@ -56,6 +64,10 @@ def test_get_fnu0_handles_multidimensional_spectra():
     assert fnu.units.same_dimensions_as(nJy)
     np.testing.assert_allclose(sed._obslam, sed._lam)
     np.testing.assert_allclose(sed._obsnu, sed._nu)
+    np.testing.assert_allclose(
+        fnu.to("nJy").value,
+        expected_fnu.to("nJy").value,
+    )
 
 
 def test_get_fnu0_reuses_final_contiguous_wavelength_buffers():

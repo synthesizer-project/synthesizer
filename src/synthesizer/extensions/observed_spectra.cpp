@@ -1,3 +1,11 @@
+/******************************************************************************
+ * C extension to convert rest-frame luminosity density spectra into
+ * observer-frame flux density spectra.
+ *
+ * This fills observer-frame wavelength, frequency, and flux buffers in place
+ * so Python callers can avoid large temporary array allocations on the hot
+ * path.
+ *****************************************************************************/
 /* Standard includes */
 #include <cmath>
 
@@ -6,24 +14,36 @@
 
 /* Local includes */
 #include "cpp_to_python.h"
-#include "observed_spectra.h"
 #include "timers.h"
+#ifdef ATOMIC_TIMING
 #include "timers_init.h"
+#endif
 
 /**
  * @brief Populate observer-frame wavelength, frequency, and flux arrays.
  *
- * This helper fills preallocated output buffers so the Python hot path can
- * avoid repeated temporary arrays when converting rest-frame luminosity
- * densities into observer-frame flux densities.
+ * This expects preallocated NumPy output buffers provided by the Python layer
+ * and fills them in place. The flux conversion is applied to the full spectra
+ * array, while the observer-frame wavelength and frequency grids are populated
+ * from the one-dimensional emitted grids.
+ *
+ * @param lnu_obj: The rest-frame luminosity density array.
+ * @param lam_obj: The emitted wavelength grid.
+ * @param nu_obj: The emitted frequency grid.
+ * @param one_plus_z: The scalar redshift factor (1 + z).
+ * @param conversion: The scalar luminosity-to-flux conversion factor.
+ * @param nthreads: The number of threads to use.
+ * @param fnu_out_obj: The output flux density buffer.
+ * @param obslam_out_obj: The output observer-frame wavelength buffer.
+ * @param obsnu_out_obj: The output observer-frame frequency buffer.
  */
 PyObject *compute_fnu(PyObject *self, PyObject *args) {
-  /* We don't need the self argument but it has to be there. Tell the
-   * compiler we don't care. */
+  /* We don't need the self argument but it has to be there. Tell the compiler
+   * we don't care. */
   (void)self;
 
-  /* Declare the Python-level inputs. The caller owns the output buffers so we
-   * can fill them in place on the hot path. */
+  /* Declare the Python-level inputs. The caller owns the output buffers and
+   * we fill them in place. */
   PyObject *lnu_obj;
   PyObject *lam_obj;
   PyObject *nu_obj;
@@ -34,6 +54,9 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
   PyObject *obslam_out_obj;
   PyObject *obsnu_out_obj;
 
+  /* Parse the Python arguments. The expected signature is
+   * compute_fnu(lnu, lam, nu, one_plus_z, conversion, nthreads,
+   *             fnu_out, obslam_out, obsnu_out). */
   if (!PyArg_ParseTuple(args, "OOOddiOOO", &lnu_obj, &lam_obj, &nu_obj,
                         &one_plus_z, &conversion, &nthreads, &fnu_out_obj,
                         &obslam_out_obj, &obsnu_out_obj)) {
@@ -49,6 +72,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Cast the required inputs to NumPy arrays and hold references to them
+   * while we validate shapes and execute the kernel. */
   PyArrayObject *np_lnu = (PyArrayObject *)lnu_obj;
   PyArrayObject *np_lam = (PyArrayObject *)lam_obj;
   PyArrayObject *np_nu = (PyArrayObject *)nu_obj;
@@ -59,7 +84,7 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
   Py_INCREF(np_fnu_out);
 
   /* The observer-frame wavelength and frequency outputs are optional because
-   * get_fnu0 reuses the emitted grids directly. */
+   * the rest-frame conversion path reuses the emitted grids directly. */
   if (obslam_out_obj != Py_None && !PyArray_Check(obslam_out_obj)) {
     Py_DECREF(np_lnu);
     Py_DECREF(np_lam);
@@ -80,6 +105,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Convert the optional outputs to NumPy arrays and retain references while
+   * we fill them. */
   PyArrayObject *np_obslam_out =
       obslam_out_obj == Py_None ? NULL : (PyArrayObject *)obslam_out_obj;
   PyArrayObject *np_obsnu_out =
@@ -112,6 +139,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Validate that the emitted wavelength/frequency grids are one-dimensional
+   * and that the spectra array has at least one dimension. */
   if (PyArray_NDIM(np_lnu) < 1 || PyArray_NDIM(np_lam) != 1 ||
       PyArray_NDIM(np_nu) != 1 ||
       (np_obslam_out != NULL && PyArray_NDIM(np_obslam_out) != 1) ||
@@ -128,8 +157,7 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Ensure the output shapes match the input spectra shape and the shared
-   * wavelength-axis length before entering the kernel loop. */
+  /* Ensure the flux output has the same shape as the input spectra. */
   const int lnu_ndim = PyArray_NDIM(np_lnu);
   const npy_intp *lnu_dims = PyArray_DIMS(np_lnu);
   const npy_intp *fnu_dims = PyArray_DIMS(np_fnu_out);
@@ -159,6 +187,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
     }
   }
 
+  /* Validate that the one-dimensional emitted and observer-frame grids all
+   * match the wavelength axis length of the spectra. */
   const npy_intp nlam = PyArray_DIMS(np_lam)[0];
   if (PyArray_DIMS(np_nu)[0] != nlam || lnu_dims[lnu_ndim - 1] != nlam ||
       (np_obslam_out != NULL && PyArray_DIMS(np_obslam_out)[0] != nlam) ||
@@ -174,6 +204,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Extract raw pointers to the NumPy buffers so the inner loops operate on
+   * contiguous double arrays directly. */
   double *lnu = static_cast<double *>(PyArray_DATA(np_lnu));
   double *lam = static_cast<double *>(PyArray_DATA(np_lam));
   double *nu = static_cast<double *>(PyArray_DATA(np_nu));
@@ -186,8 +218,9 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
                           : static_cast<double *>(PyArray_DATA(np_obsnu_out));
   const npy_intp nelem = PyArray_SIZE(np_lnu);
 
-  /* Apply the scalar luminosity-to-flux conversion over the full spectra
-   * buffer, then populate the observer-frame grids if requested. */
+  /* Apply the scalar luminosity-to-flux conversion to the full spectra array.
+   * When observer-frame grids are requested, populate those from the shared
+   * emitted grids afterwards. */
   tic("compute_fnu");
 
 #ifdef WITH_OPENMP
@@ -206,6 +239,7 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
 
   toc("compute_fnu");
 
+  /* Drop the borrowed array references now that the kernel has finished. */
   Py_DECREF(np_lnu);
   Py_DECREF(np_lam);
   Py_DECREF(np_nu);
@@ -224,10 +258,10 @@ static PyMethodDef ObservedSpectraMethods[] = {
 /* Make this importable. */
 static struct PyModuleDef moduledef = {
     PyModuleDef_HEAD_INIT,
-    "observed_spectra",                       /* m_name */
-    "Observer-frame spectra helper kernels", /* m_doc */
-    -1,                                        /* m_size */
-    ObservedSpectraMethods,                    /* m_methods */
+    "observed_spectra",
+    "Observer-frame spectra helper kernels",
+    -1,
+    ObservedSpectraMethods,
     NULL,
     NULL,
     NULL,
@@ -238,11 +272,13 @@ PyMODINIT_FUNC PyInit_observed_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
   if (m == NULL)
     return NULL;
+
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);
     return NULL;
   }
+
 #ifdef ATOMIC_TIMING
   if (import_toc_capsule() < 0) {
     Py_DECREF(m);

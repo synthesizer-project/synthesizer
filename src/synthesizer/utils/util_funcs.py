@@ -6,9 +6,11 @@ Example usage:
     rebin_1d(arr, 10, func=np.sum)
 """
 
+from functools import lru_cache
+
 import numpy as np
 import unyt.physical_constants as const
-from unyt import Hz, K, erg, pc, s, unyt_array, unyt_quantity
+from unyt import Hz, K, Unit, cm, erg, pc, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.synth_warnings import warn
@@ -43,6 +45,76 @@ def planck(frequency, temperature):
 
     # Convert the result to erg/s/Hz and return
     return lnu.to(erg / s / Hz)
+
+
+@lru_cache(maxsize=128)
+def _get_attr_unit_conversion_cached(from_unit, to_unit):
+    """Convert between two units represented by cacheable strings.
+
+    Args:
+        from_unit (str):
+            The string representation of the source unit.
+        to_unit (str):
+            The string representation of the target unit.
+
+    Returns:
+        float:
+            Scalar conversion factor from ``from_unit`` to ``to_unit``.
+    """
+    return (1 * Unit(from_unit)).to_value(Unit(to_unit))
+
+
+def get_attr_unit_conversion(from_unit, to_unit):
+    """Return a cached scalar conversion between two units.
+
+    Args:
+        from_unit (unyt.Unit or str):
+            The source unit.
+        to_unit (unyt.Unit or str):
+            The target unit.
+
+    Returns:
+        float:
+            Scalar conversion factor from ``from_unit`` to ``to_unit``.
+    """
+    return _get_attr_unit_conversion_cached(str(from_unit), str(to_unit))
+
+
+@lru_cache(maxsize=32)
+def get_distance_in_cm(distance_pc=10.0):
+    """Return a parsec distance expressed as a scalar in centimetres.
+
+    Args:
+        distance_pc (float):
+            Distance in parsecs.
+
+    Returns:
+        float:
+            Distance converted to centimetres.
+    """
+    return (distance_pc * pc).to_value(cm)
+
+
+def ensure_array_buffer(obj, attr_name, shape_like):
+    """Return a reusable ndarray buffer on ``obj`` matching ``shape_like``.
+
+    Args:
+        obj (object):
+            Object on which the buffer attribute is stored.
+        attr_name (str):
+            Name of the ndarray attribute to reuse or create.
+        shape_like (np.ndarray):
+            Array whose shape and dtype define the required buffer.
+
+    Returns:
+        np.ndarray:
+            Reusable buffer with the same shape and dtype as ``shape_like``.
+    """
+    buffer = getattr(obj, attr_name, None)
+    if buffer is None or buffer.shape != shape_like.shape:
+        buffer = np.empty_like(shape_like)
+        setattr(obj, attr_name, buffer)
+    return buffer
 
 
 def rebin_1d(arr, resample_factor, func=np.sum):
