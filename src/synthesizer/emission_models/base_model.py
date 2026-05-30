@@ -2720,8 +2720,16 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
                     # Scale the spectra by this attribute
                     if this_model.per_particle:
-                        particle_spectra[label] *= scaler_arr
-                    spectra[label]._lnu *= scaler_arr
+                        particle_spectra[label].scale(
+                            scaler_arr,
+                            inplace=True,
+                            nthreads=nthreads,
+                        )
+                    spectra[label].scale(
+                        scaler_arr,
+                        inplace=True,
+                        nthreads=nthreads,
+                    )
                 elif scaler in spectra:
                     # Compute the scaling against another generated spectrum.
                     if this_model.per_particle:
@@ -2737,8 +2745,16 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
                     # Scale the spectra (handling 1D and 2D cases)
                     if this_model.per_particle:
-                        particle_spectra[label] *= scaling[:, None]
-                    spectra[label]._lnu *= scaling
+                        particle_spectra[label].scale(
+                            scaling,
+                            inplace=True,
+                            nthreads=nthreads,
+                        )
+                    spectra[label].scale(
+                        scaling,
+                        inplace=True,
+                        nthreads=nthreads,
+                    )
                 else:
                     raise exceptions.InconsistentArguments(
                         f"Can't scale spectra by {scaler}."

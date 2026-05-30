@@ -34,7 +34,15 @@ class DopplerBroadening(Transformer):
         return f"DopplerBroadening(sigma_v_attr={self.sigma_v_attr})"
 
     @timed("DopplerBroadening._transform")
-    def _transform(self, emission, emitter, model, mask, lam_mask):
+    def _transform(
+        self,
+        emission,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        nthreads=1,
+    ):
         """Apply Doppler broadening to the emission.
 
         Args:
@@ -48,6 +56,9 @@ class DopplerBroadening(Transformer):
                 The mask to apply to the emission.
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
+            nthreads (int):
+                Unused thread-count placeholder passed through the generic
+                transformation interface.
 
         Returns:
             Sed: The broadened emission.
@@ -127,7 +138,15 @@ class ThermalBroadening(Transformer):
         )
 
     @timed("ThermalBroadening._transform")
-    def _transform(self, emission, emitter, model, mask, lam_mask):
+    def _transform(
+        self,
+        emission,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        nthreads=1,
+    ):
         """Apply thermal broadening to the emission.
 
         Args:
@@ -141,6 +160,9 @@ class ThermalBroadening(Transformer):
                 The mask to apply to the emission.
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
+            nthreads (int):
+                Unused thread-count placeholder passed through the generic
+                transformation interface.
 
         Returns:
             Sed: The broadened emission.

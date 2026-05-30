@@ -760,6 +760,7 @@ class Transformation:
             this_model,
             this_mask if this_model.per_particle else None,
             lam_mask,
+            nthreads=nthreads,
         )
 
         # Cache the model on the emitter

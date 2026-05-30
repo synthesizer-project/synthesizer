@@ -194,7 +194,15 @@ class AttenuationLaw(Transformer):
 
         self._required_params = required_params
 
-    def _transform(self, emission, emitter, model, mask, lam_mask):
+    def _transform(
+        self,
+        emission,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        nthreads=1,
+    ):
         """Apply the dust attenuation to the emission.
 
         Args:
@@ -206,6 +214,8 @@ class AttenuationLaw(Transformer):
             lam_mask (np.ndarray): We must define this parameter in the
                 transformer method, but it is not used in this case. If not
                 None an error will be raised.
+            nthreads (int):
+                The number of threads to use for compatible attenuation paths.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -223,6 +233,7 @@ class AttenuationLaw(Transformer):
         return emission.apply_attenuation(
             dust_curve=self,
             mask=mask,
+            nthreads=nthreads,
             **params,
         )
 

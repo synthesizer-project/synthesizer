@@ -77,7 +77,15 @@ class ProcessedFraction(Transformer):
         """Return a string representation of the ProcessedFraction object."""
         return f"ProcessedFraction(fesc_attrs={self._required_params})"
 
-    def _transform(self, emission, emitter, model, mask, lam_mask):
+    def _transform(
+        self,
+        emission,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        nthreads=1,
+    ):
         """Apply the transformation to the emission.
 
         Args:
@@ -91,6 +99,8 @@ class ProcessedFraction(Transformer):
                 The mask to apply to the emission.
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
+            nthreads (int):
+                The number of threads to use for compatible Sed scaling.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -122,6 +132,7 @@ class ProcessedFraction(Transformer):
             1 - fesc,
             mask=mask,
             lam_mask=lam_mask,
+            nthreads=nthreads,
         )
 
 
@@ -168,7 +179,15 @@ class EscapedFraction(Transformer):
         """Return a string representation of the EscapedFraction object."""
         return f"EscapedFraction(fesc_attrs={self._required_params})"
 
-    def _transform(self, emission, emitter, model, mask, lam_mask):
+    def _transform(
+        self,
+        emission,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        nthreads=1,
+    ):
         """Apply the escape fraction to the emission.
 
         Args:
@@ -182,6 +201,8 @@ class EscapedFraction(Transformer):
                 The mask to apply to the emission.
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
+            nthreads (int):
+                The number of threads to use for compatible Sed scaling.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -213,6 +234,7 @@ class EscapedFraction(Transformer):
             fesc,
             mask=mask,
             lam_mask=lam_mask,
+            nthreads=nthreads,
         )
 
 
@@ -260,7 +282,15 @@ class CoveringFraction(Transformer):
         """Return a string representation of the CoveringFraction object."""
         return f"CoveringFraction(covering_attrs={self._required_params})"
 
-    def _transform(self, emission, emitter, model, mask, lam_mask):
+    def _transform(
+        self,
+        emission,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        nthreads=1,
+    ):
         """Apply the transformation to the emission.
 
         Args:
@@ -274,6 +304,8 @@ class CoveringFraction(Transformer):
                 The mask to apply to the emission.
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
+            nthreads (int):
+                The number of threads to use for compatible Sed scaling.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -305,6 +337,7 @@ class CoveringFraction(Transformer):
             fcov,
             mask=mask,
             lam_mask=lam_mask,
+            nthreads=nthreads,
         )
 
 
@@ -352,7 +385,15 @@ class EscapingFraction(Transformer):
         """Return a string representation of the EscapingFraction object."""
         return f"EscapingFraction(covering_attrs={self._required_params})"
 
-    def _transform(self, emission, emitter, model, mask, lam_mask):
+    def _transform(
+        self,
+        emission,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        nthreads=1,
+    ):
         """Apply the transformation to the emission.
 
         Args:
@@ -366,6 +407,8 @@ class EscapingFraction(Transformer):
                 The mask to apply to the emission.
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
+            nthreads (int):
+                The number of threads to use for compatible Sed scaling.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -397,4 +440,5 @@ class EscapingFraction(Transformer):
             1 - fcov,
             mask=mask,
             lam_mask=lam_mask,
+            nthreads=nthreads,
         )
