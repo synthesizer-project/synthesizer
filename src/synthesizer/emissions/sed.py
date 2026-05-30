@@ -43,10 +43,19 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
+from synthesizer.emissions.scaling import scale_array
 from synthesizer.extensions.reductions import reduce_particle_spectra
+from synthesizer.extensions.spectra_operations import (
+    multiply_array_by_vector_1d,
+    scale_spectra_2d,
+)
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import (
+    Quantity,
+    accepts,
+    get_array_quantity_view,
+)
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
 from synthesizer.utils.operation_timers import timed
@@ -363,7 +372,15 @@ class Sed:
             return self
         return self.__add__(second_sed)
 
-    def scale(self, scaling, inplace=False, mask=None, lam_mask=None):
+    @timed("Sed.scale")
+    def scale(
+        self,
+        scaling,
+        inplace=False,
+        mask=None,
+        lam_mask=None,
+        nthreads=1,
+    ):
         """Scale the lnu of the Sed object.
 
         Note: only acts on the rest frame spectra. To get the
@@ -382,6 +399,9 @@ class Sed:
                 axis.
             lam_mask (array-like, bool):
                 A mask for the wavelength array to apply the scaling to.
+            nthreads (int):
+                The number of threads to use for the optimised 2D broadcast
+                scaling path.
 
         Returns:
             Sed
@@ -397,82 +417,43 @@ class Sed:
                 scaling = scaling.to(self.lnu.units)
                 scaling = scaling.value
 
-        # Unpack the array's we'll need during scaling
-        lnu = self._lnu.copy()
-        units = self.lnu.units
+        # Get the unit from the Quantity descriptor directly, NOT through
+        # ``self.lnu`` (which copies the entire array via ``value * unit``).
+        units = next(
+            cls.__dict__["lnu"].unit
+            for cls in type(self).__mro__
+            if "lnu" in cls.__dict__
+        )
 
-        # If we have a wavelength mask apply it now
-        if lam_mask is not None:
-            lnu = lnu[..., lam_mask]
-
-        # Handle a scalar scaling factor
-        if np.isscalar(scaling):
-            if mask is not None:
-                lnu[mask] *= scaling
-            else:
-                lnu *= scaling
-
-        # Handle a multi-element array scaling factor as long as it matches
-        # the shape of the lnu array up to the dimensions of the scaling array
-        elif isinstance(scaling, np.ndarray) and len(scaling.shape) < len(
-            self.shape
-        ):
-            # We need to expand the scaling array to match the lnu array
-            expand_axes = tuple(range(len(scaling.shape), len(self.shape)))
-            new_scaling = np.ones(self.shape) * np.expand_dims(
-                scaling, axis=expand_axes
+        # When scaling in-place write directly into the existing buffer so
+        # ``self._lnu`` is mutated without an allocation. The ``self.lnu``
+        # property returns ``self._lnu * unit`` on each access, so the new
+        # values are visible immediately.
+        if inplace:
+            scale_array(
+                self._lnu,
+                scaling,
+                mask=mask,
+                lam_mask=lam_mask,
+                nthreads=nthreads,
+                out=self._lnu,
             )
+            return self
 
-            # Apply the scaling
-            if mask is not None:
-                lnu[mask] *= new_scaling[mask]
-            else:
-                lnu *= new_scaling
+        # Delegate the array scaling and any compatible fast-path dispatch to
+        # the shared helper.
+        new_lnu = get_array_quantity_view(
+            scale_array(
+                self._lnu,
+                scaling,
+                mask=mask,
+                lam_mask=lam_mask,
+                nthreads=nthreads,
+            ),
+            units,
+        )
 
-        # If the scaling array is the same shape as the lnu array then we can
-        # just multiply them together
-        elif isinstance(scaling, np.ndarray) and scaling.shape == self.shape:
-            if mask is not None:
-                lnu[mask] *= scaling[mask]
-            else:
-                lnu *= scaling
-
-        # Ok, if we have an array but the shapes don't match then we need to
-        # create a new array where each element of the scaling array is
-        # multipled by the whole lnu array producing a new lnu array of
-        # shape (scaling.shape + lnu.shape)
-        elif isinstance(scaling, np.ndarray):
-            lnu = scaling[..., np.newaxis] * lnu
-
-            # Masks are not supported in this case
-            if mask is not None:
-                raise exceptions.InconsistentMultiplication(
-                    "Masking is not supported for scaling arrays"
-                    " with different shapes"
-                )
-
-        # Otherwise, we've been handed a bad scaling factor
-        else:
-            out_str = f"Incompatible scaling factor with type {type(scaling)} "
-            if hasattr(scaling, "shape"):
-                out_str += f"and shape {scaling.shape} (expected {self.shape})"
-            else:
-                out_str += f"and value {scaling}"
-            raise exceptions.InconsistentMultiplication(out_str)
-
-        # Now complete the calculation if we need to
-        if lam_mask is not None:
-            new_lnu = self.lnu.copy()
-            new_lnu[..., lam_mask] = lnu
-        else:
-            new_lnu = lnu * units
-
-        # Return a new Sed object if we aren't scaling inplace
-        if not inplace:
-            return Sed(self.lam, lnu=new_lnu)
-
-        self._lnu = new_lnu
-        return self
+        return Sed(self.lam, lnu=new_lnu)
 
     def __mul__(self, scaling):
         """Scale the lnu of the Sed object.
@@ -1490,6 +1471,7 @@ class Sed:
         tau_v=None,
         dust_curve=None,
         mask=None,
+        nthreads=1,
         **dust_curve_kwargs,
     ):
         """Apply attenuation to spectra.
@@ -1505,6 +1487,8 @@ class Sed:
                 A mask array with an entry for each spectra. Masked out
                 spectra will be ignored when applying the attenuation. Only
                 applicable for Sed's holding an (N, Nlam) array.
+            nthreads (int):
+                The number of threads to use for compatible array kernels.
             dust_curve_kwargs (dict):
                 A dictionary of extra parameters set at runtime on the
                 attenuation model.
@@ -1556,20 +1540,58 @@ class Sed:
             tau_v, self.lam, **dust_curve_kwargs
         )
 
+        # When attenuation reduces to a wavelength-only transmission curve we
+        # can use the dedicated scaling kernels instead of NumPy broadcasting.
+        if (
+            self._lnu.ndim == 2
+            and isinstance(transmission, np.ndarray)
+            and transmission.ndim == 1
+            and mask is not None
+        ):
+            out = scale_spectra_2d(
+                self._lnu,
+                transmission,
+                mask,
+                None,
+                nthreads,
+            )
+            return Sed(
+                self.lam,
+                lnu=get_array_quantity_view(out, self.lnu.units),
+            )
+
+        if (
+            self._lnu.ndim == 2
+            and isinstance(transmission, np.ndarray)
+            and transmission.ndim == 1
+        ):
+            out = multiply_array_by_vector_1d(
+                self._lnu,
+                transmission,
+                nthreads,
+            )
+            return Sed(
+                self.lam,
+                lnu=get_array_quantity_view(out, self.lnu.units),
+            )
+
         # Get a copy of the rest frame spectra, we need to avoid
         # modifying the original
-        spectra = np.copy(self._lnu)
+        out = np.copy(self._lnu)
 
         # Apply the transmission curve to the rest frame spectra with or
         # without applying a mask
         if mask is None:
-            spectra *= transmission
+            out *= transmission
         elif transmission.ndim > 1:
-            spectra[mask] *= transmission[mask]
+            out[mask] *= transmission[mask]
         else:
-            spectra[mask] *= transmission
+            out[mask] *= transmission
 
-        return Sed(self.lam, lnu=spectra * self.lnu.units)
+        return Sed(
+            self.lam,
+            lnu=get_array_quantity_view(out, self.lnu.units),
+        )
 
     @accepts(ionisation_energy=eV)
     def calculate_ionising_photon_production_rate(
