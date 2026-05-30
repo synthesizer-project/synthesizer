@@ -17,6 +17,13 @@ from unyt import arcsecond, degree, kpc, unyt_array, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.units import Quantity, accepts, unit_is_compatible
 
+# To catch overflows in the number of pixels we use the absolute maximum
+# representable by a 32-bit integer. This is not a reasonable number of
+# pixels and will never come close to a realistic image shape passed by the
+# user, but it will catch pathological cases where the machinery overflows and
+# produces nonsense value.
+_MAX_NPIX_PER_AXIS = np.iinfo(np.int32).max
+
 
 class ImagingBase(ABC):
     """A base class to encompass common functionality for all imaging classes.
@@ -125,10 +132,41 @@ class ImagingBase(ABC):
             compute_fov (bool): If True, compute the fov based on the
                 resolution and new npix. Defaults to True.
         """
-        # Compute how many pixels fall in the FOV
-        self.npix = np.round(self.fov / self.resolution + 1e-10).astype(
-            np.int32
-        )
+        # Compute how many pixels fall in the FOV, validating before casting
+        # to avoid float-to-int overflow for pathological angular conversions.
+        npix = np.asarray(np.round(self.fov / self.resolution + 1e-10))
+        if npix.size == 1:
+            npix = np.array((npix.item(), npix.item()))
+
+        # Check that the number of pixels is finite
+        if np.any(~np.isfinite(npix)):
+            raise exceptions.InconsistentArguments(
+                "Image pixel counts must be finite. Got npix="
+                f"{npix} from fov={self.fov} and "
+                f"resolution={self.resolution}."
+            )
+
+        # Check that the number of pixels is non-negative
+        if np.any(npix < 0):
+            raise exceptions.InconsistentArguments(
+                "Image pixel counts must be non-negative. Got npix="
+                f"{npix} from fov={self.fov} and "
+                f"resolution={self.resolution}."
+            )
+
+        # Check that the number of pixels does not exceed the maximum
+        # representable by a 32-bit integer (i.e. has not overflowed)
+        if np.any(npix > _MAX_NPIX_PER_AXIS):
+            raise exceptions.InconsistentArguments(
+                "Image pixel counts exceed the supported per-axis limit "
+                f"({_MAX_NPIX_PER_AXIS}). Got npix={npix} from "
+                f"fov={self.fov} and resolution={self.resolution}. "
+                "Check the FOV/resolution units and redshift used for "
+                "angular conversions."
+            )
+
+        # Finally, set the npix as an integer array
+        self.npix = npix.astype(np.int32)
 
         # Ensure that the npix is an array of 2 values
         if self.npix.size == 1:
@@ -278,11 +316,21 @@ class ImagingBase(ABC):
         """
         # Ensure we have a number of pix per axis
         if isinstance(npix, int):
+            if npix < 0 or npix > _MAX_NPIX_PER_AXIS:
+                raise exceptions.InconsistentArguments(
+                    "npix values must be non-negative and no larger than "
+                    f"{_MAX_NPIX_PER_AXIS}. Got {npix}."
+                )
             npix = np.array((npix, npix), dtype=np.int32)
         elif isinstance(npix, tuple):
             if len(npix) != 2:
                 raise exceptions.InconsistentArguments(
                     "npix must contain exactly two elements (nx, ny)."
+                )
+            if any(n < 0 or n > _MAX_NPIX_PER_AXIS for n in npix):
+                raise exceptions.InconsistentArguments(
+                    "npix values must be non-negative and no larger than "
+                    f"{_MAX_NPIX_PER_AXIS}. Got {npix}."
                 )
             npix = np.array(npix, dtype=np.int32)
         else:

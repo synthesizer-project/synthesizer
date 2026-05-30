@@ -147,6 +147,50 @@ class TestStandardizeImagingUnits:
         assert coords_out.units == arcsecond
         assert smls_out.units == arcsecond
 
+    def test_angular_resolution_cartesian_fov_z0_warns(self):
+        """Test z=0 mixed-unit angular imaging uses the local convention."""
+        resolution = 0.05 * arcsecond
+        fov = 100.0 * kpc
+        coords = unyt_array(np.random.rand(10, 3), "kpc") - 0.5 * kpc
+        smls = unyt_array(np.random.rand(10), "kpc")
+        emitter = MockEmitter(coords, smls, redshift=0.0)
+
+        with pytest.warns(RuntimeWarning, match="10 pc"):
+            res_out, fov_out, coords_out, smls_out = (
+                _standardize_imaging_units(
+                    resolution=resolution,
+                    fov=fov,
+                    emitter=emitter,
+                    cosmo=Planck18,
+                    include_smoothing_lengths=True,
+                )
+            )
+
+        assert res_out.units == arcsecond
+        assert fov_out.units == arcsecond
+        assert coords_out.units == arcsecond
+        assert smls_out.units == arcsecond
+        assert np.all(np.isfinite(fov_out.value))
+        assert np.all(np.isfinite(coords_out.value))
+        assert np.all(np.isfinite(smls_out.value))
+
+    def test_angular_resolution_cartesian_fov_negative_z_raises(self):
+        """Test negative redshift mixed-unit angular imaging fails clearly."""
+        resolution = 0.05 * arcsecond
+        fov = 100.0 * kpc
+        coords = unyt_array(np.random.rand(10, 3), "kpc") - 0.5 * kpc
+        smls = unyt_array(np.random.rand(10), "kpc")
+        emitter = MockEmitter(coords, smls, redshift=-0.1)
+
+        with pytest.raises(exceptions.InconsistentArguments, match="negative"):
+            _standardize_imaging_units(
+                resolution=resolution,
+                fov=fov,
+                emitter=emitter,
+                cosmo=Planck18,
+                include_smoothing_lengths=True,
+            )
+
     def test_mixed_units_no_cosmo_raises_error(self):
         """Test that missing cosmology raises an error with mixed units."""
         # Setup
