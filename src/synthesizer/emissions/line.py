@@ -56,6 +56,7 @@ from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emissions import line_ratios
+from synthesizer.emissions.scaling import normalise_scale_masks, scale_array
 from synthesizer.emissions.sed import Sed
 from synthesizer.emissions.utils import (
     alias_to_line_id,
@@ -64,8 +65,12 @@ from synthesizer.emissions.utils import (
     get_line2index,
     get_line_id_signature,
 )
+from synthesizer.extensions.spectra_operations import (
+    multiply_array_by_vector_1d,
+    scale_line_2d,
+)
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, get_array_quantity_view
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
 
@@ -1130,7 +1135,15 @@ class LineCollection:
 
         return self._get_ratio(*ab), self._get_ratio(*cd)
 
-    def scale(self, scaling, inplace=False, mask=None, lam_mask=None):
+    @timed("LineCollection.scale")
+    def scale(
+        self,
+        scaling,
+        inplace=False,
+        mask=None,
+        lam_mask=None,
+        nthreads=1,
+    ):
         """Scale the lines by a given factor.
 
         Note: this will only scale the rest frame continuum and luminosity.
@@ -1150,6 +1163,8 @@ class LineCollection:
                 A mask array with an entry for each wavelength bin.
                 Masked out wavelengths will not be scaled. Only applicable
                 for multidimensional lines.
+            nthreads (int):
+                The number of threads to use for compatible 2D scaling paths.
 
         Returns:
             LineCollection
@@ -1181,198 +1196,104 @@ class LineCollection:
             scaling_cont = scaling
             scaling_lum = scaling
 
-        # Unpack the arrays we'll need during the scaling
-        lum = self._luminosity.copy()
-        cont = self._continuum.copy()
+        # Preserve row and wavelength masks separately when possible so the
+        # shared scaling helper can still dispatch to the 2D kernel.
+        mask, lam_mask = normalise_scale_masks(mask, lam_mask, self.shape)
 
-        # Combine the masks if we have both a mask and a wavelength mask
-        if (
-            mask is not None
-            and lam_mask is not None
-            and mask.shape[-1] == lam_mask.shape[0]
-        ):
-            mask = np.logical_and(mask, lam_mask)
-        elif mask is not None and lam_mask is not None:
-            mask = np.logical_and(mask[:, None], lam_mask)
-        elif lam_mask is not None and mask is None:
-            mask = lam_mask
-        elif mask is not None and lam_mask is None:
-            pass
-        else:
-            mask = None
-
-        # Handle some mask munging we have to do to make shapes work
-        if mask is not None:
-            if mask.shape == lum.shape:
-                # If the mask is the same shape as the luminosity we can use it
-                # directly
-                pass
-            elif mask.ndim == 1 and mask.shape[0] == lum.shape[0]:
-                # If the mask is 1D and matches the first dimension of the
-                # luminosity we don't need to do anything
-                pass
-            elif mask.ndim == 1 and mask.shape[0] == lum.shape[-1]:
-                # If the mask is 1D and matches the last dimension of the
-                # luminosity we need to expand it to match the luminosity shape
-                mask = np.broadcast_to(mask[np.newaxis, :], lum.shape)
-            else:
-                # Otherwise, we have an incompatible mask
-                raise exceptions.InconsistentArguments(
-                    f"Mask shape {mask.shape} is incompatible with the"
-                    f" luminosity {lum.shape} or "
-                    f"wavelength {self.lam.shape} "
-                    "wavelength shape. Please provide a mask with the same "
-                    "shape as the luminosity or wavelength."
-                )
-
-        # First we will handle the luminosity scaling (we need to do each
-        # individually because the scalings can have different dimensions
-        # depending on the conversion done above)
-
-        # Handle a scalar scaling factor
-        if np.isscalar(scaling_lum):
-            if mask is None:
-                lum *= scaling_lum
-            else:
-                lum[mask] *= scaling_lum
-
-        # Handle an single element array scaling factor
-        elif scaling_lum.size == 1:
-            scaling_lum = scaling_lum.item()
-            if mask is None:
-                lum *= scaling_lum
-            else:
-                lum[mask] *= scaling_lum
-
-        # Handle the case where we have a 1D scaling array that matches the
-        # wavelength axis
-        elif scaling_lum.ndim == 1 and scaling_lum.size == self.lam.size:
-            if mask is None:
-                lum *= scaling_lum
-            else:
-                lum[mask] *= scaling_lum[mask]
-
-        # Handle a multi-element array scaling factor as long as it matches
-        # the shape of the lnu array up to the dimensions of the scaling array
-        elif isinstance(scaling_lum, np.ndarray) and len(
-            scaling_lum.shape
-        ) < len(self.shape):
-            # We need to expand the scaling array to match the lnu array
-            expand_axes = tuple(range(len(scaling_lum.shape), len(self.shape)))
-            new_scaling_lum = np.ones(self.shape) * np.expand_dims(
-                scaling_lum, axis=expand_axes
+        # Check whether we can use the fused lum+cont C++ kernel instead of
+        # two separate scale_array calls.  This applies when both scaling
+        # arrays are 1D (per-row) and masks are in the simple 1D form the
+        # C++ kernel expects.
+        _nspec = self._luminosity.shape[0]
+        _nlam = self._luminosity.shape[-1]
+        _lum_1d = isinstance(scaling_lum, np.ndarray) and scaling_lum.ndim == 1
+        _cont_1d = (
+            isinstance(scaling_cont, np.ndarray) and scaling_cont.ndim == 1
+        )
+        _use_fused = (
+            self._luminosity.ndim == 2
+            and _lum_1d
+            and _cont_1d
+            and scaling_lum.shape[0] == _nspec
+            and scaling_cont.shape[0] == _nspec
+            and (mask is None or (mask.ndim == 1 and mask.shape[0] == _nspec))
+            and (
+                lam_mask is None
+                or (lam_mask.ndim == 1 and lam_mask.shape[0] == _nlam)
             )
+        )
 
-            # Now we can multiply the arrays together
-            if mask is None:
-                lum *= new_scaling_lum
-            else:
-                lum[mask] *= new_scaling_lum[mask]
-
-        # If the scaling array is the same shape as the lnu array then we can
-        # just multiply them together
-        elif (
-            isinstance(scaling_lum, np.ndarray)
-            and scaling_lum.shape == self.shape
-        ):
-            if mask is None:
-                lum *= scaling_lum
-            else:
-                lum[mask] *= scaling_lum[mask]
-
-        # Otherwise, we've been handed a bad scaling factor
-        else:
-            out_str = (
-                "Incompatible scaling factor for luminsoity "
-                f"with type {type(scaling)} "
+        if _use_fused:
+            out_lum = self._luminosity if inplace else None
+            out_cont = self._continuum if inplace else None
+            new_lum, new_cont = scale_line_2d(
+                self._luminosity,
+                self._continuum,
+                scaling_lum,
+                scaling_cont,
+                mask,
+                lam_mask,
+                nthreads,
+                out_lum,
+                out_cont,
             )
-            if hasattr(scaling, "shape"):
-                out_str += f"and shape {scaling.shape}"
-            else:
-                out_str += f"and value {scaling}"
-            raise exceptions.InconsistentMultiplication(out_str)
-
-        # Handle a scalar scaling factor
-        if np.isscalar(scaling_cont):
-            if mask is None:
-                cont *= scaling_cont
-            else:
-                cont[mask] *= scaling_cont
-
-        # Handle an single element array scaling factor
-        elif scaling_cont.size == 1:
-            scaling_cont = scaling_cont.item()
-            if mask is None:
-                cont *= scaling_cont
-            else:
-                cont[mask] *= scaling_cont
-
-        # Handle the case where we have a 1D scaling array that matches the
-        # wavelength axis
-        elif scaling_cont.ndim == 1 and scaling_cont.size == self.lam.size:
-            if mask is None:
-                cont *= scaling_cont
-            else:
-                cont[mask] *= scaling_cont[mask]
-
-        # Handle a multi-element array scaling factor as long as it matches
-        elif isinstance(scaling_cont, np.ndarray) and len(
-            scaling_cont.shape
-        ) < len(self.shape):
-            # We need to expand the scaling array to match the lnu array
-            expand_axes = tuple(
-                range(len(scaling_cont.shape), len(self.shape))
-            )
-            new_scaling_cont = np.ones(self.shape) * np.expand_dims(
-                scaling_cont, axis=expand_axes
-            )
-
-            # Now we can multiply the arrays together
-            if mask is None:
-                cont *= new_scaling_cont
-            else:
-                cont[mask] *= new_scaling_cont[mask]
-
-        # If the scaling array is the same shape as the lnu array then we can
-        # just multiply them together
-        elif (
-            isinstance(scaling_cont, np.ndarray)
-            and scaling_cont.shape == self.shape
-        ):
-            if mask is None:
-                cont *= scaling_cont
-            else:
-                cont[mask] *= scaling_cont[mask]
-
-        # Otherwise, we've been handed a bad scaling factor
-        else:
-            out_str = (
-                "Incompatible scaling factor for continuum "
-                f"with type {type(scaling)} "
-            )
-            if hasattr(scaling, "shape"):
-                out_str += f"and shape {scaling.shape}"
-            else:
-                out_str += f"and value {scaling}"
-            raise exceptions.InconsistentMultiplication(out_str)
-
-        # If we aren't doing this inplace then return a new Line object
-        if not inplace:
+            if inplace:
+                return self
             return LineCollection(
                 line_ids=self.line_ids,
                 lam=self.lam,
-                lum=lum * self.luminosity.units,
-                cont=cont * self.continuum.units,
+                lum=get_array_quantity_view(new_lum, self.luminosity.units),
+                cont=get_array_quantity_view(new_cont, self.continuum.units),
             )
 
-        # Otherwise, we need to update the Line inplace
-        self._luminosity = lum
-        self._continuum = cont
+        if inplace:
+            scale_array(
+                self._luminosity,
+                scaling_lum,
+                mask=mask,
+                lam_mask=lam_mask,
+                nthreads=nthreads,
+                out=self._luminosity,
+            )
+            scale_array(
+                self._continuum,
+                scaling_cont,
+                mask=mask,
+                lam_mask=lam_mask,
+                nthreads=nthreads,
+                out=self._continuum,
+            )
+            return self
 
-        return self
+        lum = scale_array(
+            self._luminosity,
+            scaling_lum,
+            mask=mask,
+            lam_mask=lam_mask,
+            nthreads=nthreads,
+        )
+        cont = scale_array(
+            self._continuum,
+            scaling_cont,
+            mask=mask,
+            lam_mask=lam_mask,
+            nthreads=nthreads,
+        )
+
+        return LineCollection(
+            line_ids=self.line_ids,
+            lam=self.lam,
+            lum=get_array_quantity_view(lum, self.luminosity.units),
+            cont=get_array_quantity_view(cont, self.continuum.units),
+        )
 
     def apply_attenuation(
-        self, tau_v=None, dust_curve=None, mask=None, **dust_curve_kwargs
+        self,
+        tau_v=None,
+        dust_curve=None,
+        mask=None,
+        nthreads=1,
+        **dust_curve_kwargs,
     ):
         """Apply attenuation to this LineCollection.
 
@@ -1387,6 +1308,8 @@ class LineCollection:
                 A mask array with an entry for each line. Masked out
                 spectra will be ignored when applying the attenuation. Only
                 applicable for multidimensional lines.
+            nthreads (int):
+                The number of threads to use for compatible array kernels.
             dust_curve_kwargs (dict):
                 A dictionary of extra parameters set at runtime on the
                 attenuation model.
@@ -1437,6 +1360,51 @@ class LineCollection:
         transmission = dust_curve.get_transmission(
             tau_v, self.lam, **dust_curve_kwargs
         )
+
+        # When attenuation reduces to a wavelength-only transmission curve we
+        # can apply it with the dedicated last-axis scaling kernel.
+        if (
+            self._luminosity.ndim == 2
+            and isinstance(transmission, np.ndarray)
+            and transmission.ndim == 1
+            and mask is not None
+        ):
+            att_lum = np.array(self._luminosity, copy=True)
+            att_cont = np.array(self._continuum, copy=True)
+            att_lum[mask] = multiply_array_by_vector_1d(
+                self._luminosity[mask],
+                transmission,
+                nthreads,
+            )
+            att_cont[mask] = multiply_array_by_vector_1d(
+                self._continuum[mask],
+                transmission,
+                nthreads,
+            )
+            return LineCollection(
+                line_ids=self.line_ids,
+                lam=self.lam,
+                lum=get_array_quantity_view(att_lum, self.luminosity.units),
+                cont=get_array_quantity_view(att_cont, self.continuum.units),
+            )
+
+        if isinstance(transmission, np.ndarray) and transmission.ndim == 1:
+            att_lum = multiply_array_by_vector_1d(
+                self._luminosity,
+                transmission,
+                nthreads,
+            )
+            att_cont = multiply_array_by_vector_1d(
+                self._continuum,
+                transmission,
+                nthreads,
+            )
+            return LineCollection(
+                line_ids=self.line_ids,
+                lam=self.lam,
+                lum=get_array_quantity_view(att_lum, self.luminosity.units),
+                cont=get_array_quantity_view(att_cont, self.continuum.units),
+            )
 
         # Apply the transmision
         att_lum = self.luminosity
