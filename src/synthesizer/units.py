@@ -120,6 +120,41 @@ def unit_is_compatible(value, unit):
     )
 
 
+def get_quantity_view(obj, attr_name):
+    """Wrap a raw ndarray attribute in units without copying data.
+
+    Args:
+        obj (object):
+            Object holding the raw ndarray attribute and the corresponding
+            Quantity descriptor on its class.
+        attr_name (str):
+            Private ndarray attribute name, e.g. ``"_fnu"``.
+
+    Returns:
+        unyt_array:
+            Unit-bearing view of the raw ndarray data.
+    """
+    values = getattr(obj, attr_name)
+    unit = obj.__class__.__dict__[attr_name[1:]].unit
+    return unyt_array(values, unit, bypass_validation=True)
+
+
+def get_array_quantity_view(values, unit):
+    """Wrap a raw ndarray in units without copying data.
+
+    Args:
+        values (np.ndarray):
+            Raw array buffer to wrap.
+        unit (unyt.Unit):
+            Unit to attach to ``values``.
+
+    Returns:
+        unyt_array:
+            Unit-bearing view of ``values``.
+    """
+    return unyt_array(values, unit, bypass_validation=True)
+
+
 class DefaultUnits:
     """The DefaultUnits class is a container for the default unit system.
 
