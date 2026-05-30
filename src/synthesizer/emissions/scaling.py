@@ -1,4 +1,19 @@
-"""Shared helpers for scaling emission arrays."""
+"""Shared helpers for scaling emission arrays.
+
+Provides normalised mask handling and a unified scaling dispatcher that
+tries the mask-specialised C++ kernels first before falling back to
+NumPy broadcasting. Both ``Sed.scale`` and ``LineCollection.scale``
+delegate here for the single-array path.
+
+Example usage::
+
+    from synthesizer.emissions.scaling import (
+        normalise_scale_masks,
+        scale_array,
+    )
+
+    scaled = scale_array(array, scaling, mask=mask, nthreads=4)
+"""
 
 import numpy as np
 

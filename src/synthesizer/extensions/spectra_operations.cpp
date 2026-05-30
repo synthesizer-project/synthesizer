@@ -10,14 +10,12 @@
 #include "timers.h"
 #include "timers_init.h"
 
-/* ===========================================================================
- * Internal kernels: scale_spectra_2d
+/* Internal kernels: scale_spectra_2d
  *
  * Each mask combination is compiled as a separate function so the compiler
  * sees dedicated inner loops without runtime branch checks. The four
  * combinations (no mask, row mask, wavelength mask, both) are each emitted
- * in a serial and an OpenMP variant.
- * =========================================================================== */
+ * in a serial and an OpenMP variant. */
 
 /**
  * @brief Per-spectrum row scaling with no masks applied.
@@ -25,11 +23,11 @@
  * Branch-free multiply loop. Both the outer and inner loops
  * run without any conditional checks.
  *
- * @param spectra The input 2D spectra array (nspec x nlam).
- * @param scaling The per-spectrum scaling vector (nspec).
- * @param out The pre-allocated output buffer (nspec x nlam).
- * @param nspec The number of spectra rows.
- * @param nlam The number of wavelength bins.
+ * @param spectra: The input 2D spectra array (nspec x nlam).
+ * @param scaling: The per-spectrum scaling vector (nspec).
+ * @param out: The pre-allocated output buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
  */
 static void scale_spectra_2d_no_mask_serial(
     const double *spectra, const double *__restrict__ scaling, double *out,
@@ -51,6 +49,13 @@ static void scale_spectra_2d_no_mask_serial(
  *
  * Masked-out rows are copied through unchanged. The inner loop within
  * each mask arm is branch-free.
+ *
+ * @param spectra: The input 2D spectra array (nspec x nlam).
+ * @param scaling: The per-spectrum scaling vector (nspec).
+ * @param mask: 1D boolean row mask (nspec).
+ * @param out: The pre-allocated output buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
  */
 static void scale_spectra_2d_row_mask_serial(
     const double *spectra, const double *__restrict__ scaling,
@@ -81,6 +86,13 @@ static void scale_spectra_2d_row_mask_serial(
  * The wavelength mask is evaluated as a conditional inside the inner loop.
  * While the branch remains, the outer row-level dispatch to a dedicated
  * function avoids combining row and column mask checks in the same iteration.
+ *
+ * @param spectra: The input 2D spectra array (nspec x nlam).
+ * @param scaling: The per-spectrum scaling vector (nspec).
+ * @param lam_mask: 1D boolean wavelength mask (nlam).
+ * @param out: The pre-allocated output buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
  */
 static void scale_spectra_2d_lam_mask_serial(
     const double *spectra, const double *scaling, const npy_bool *lam_mask,
@@ -98,6 +110,14 @@ static void scale_spectra_2d_lam_mask_serial(
 
 /**
  * @brief Per-spectrum row scaling with both a row mask and a wavelength mask.
+ *
+ * @param spectra: The input 2D spectra array (nspec x nlam).
+ * @param scaling: The per-spectrum scaling vector (nspec).
+ * @param mask: 1D boolean row mask (nspec).
+ * @param lam_mask: 1D boolean wavelength mask (nlam).
+ * @param out: The pre-allocated output buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
  */
 static void scale_spectra_2d_both_masks_serial(
     const double *spectra, const double *scaling, const npy_bool *mask,
@@ -124,6 +144,13 @@ static void scale_spectra_2d_both_masks_serial(
 
 /**
  * @brief OpenMP parallel variant of scale_spectra_2d with no masks.
+ *
+ * @param spectra: The input 2D spectra array (nspec x nlam).
+ * @param scaling: The per-spectrum scaling vector (nspec).
+ * @param out: The pre-allocated output buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
+ * @param nthreads: The number of OpenMP threads.
  */
 static void scale_spectra_2d_no_mask_omp(const double *spectra,
                                          const double *__restrict__ scaling,
@@ -144,6 +171,14 @@ static void scale_spectra_2d_no_mask_omp(const double *spectra,
 
 /**
  * @brief OpenMP parallel variant of scale_spectra_2d with a row mask.
+ *
+ * @param spectra: The input 2D spectra array (nspec x nlam).
+ * @param scaling: The per-spectrum scaling vector (nspec).
+ * @param mask: 1D boolean row mask (nspec).
+ * @param out: The pre-allocated output buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
+ * @param nthreads: The number of OpenMP threads.
  */
 static void scale_spectra_2d_row_mask_omp(const double *spectra,
                                            const double *scaling,
@@ -170,6 +205,14 @@ static void scale_spectra_2d_row_mask_omp(const double *spectra,
 
 /**
  * @brief OpenMP parallel variant of scale_spectra_2d with a wavelength mask.
+ *
+ * @param spectra: The input 2D spectra array (nspec x nlam).
+ * @param scaling: The per-spectrum scaling vector (nspec).
+ * @param lam_mask: 1D boolean wavelength mask (nlam).
+ * @param out: The pre-allocated output buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
+ * @param nthreads: The number of OpenMP threads.
  */
 static void scale_spectra_2d_lam_mask_omp(const double *spectra,
                                            const double *scaling,
@@ -190,6 +233,15 @@ static void scale_spectra_2d_lam_mask_omp(const double *spectra,
 
 /**
  * @brief OpenMP parallel variant of scale_spectra_2d with both masks.
+ *
+ * @param spectra: The input 2D spectra array (nspec x nlam).
+ * @param scaling: The per-spectrum scaling vector (nspec).
+ * @param mask: 1D boolean row mask (nspec).
+ * @param lam_mask: 1D boolean wavelength mask (nlam).
+ * @param out: The pre-allocated output buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
+ * @param nthreads: The number of OpenMP threads.
  */
 static void scale_spectra_2d_both_masks_omp(const double *spectra,
                                              const double *scaling,
@@ -221,29 +273,26 @@ static void scale_spectra_2d_both_masks_omp(const double *spectra,
 /**
  * @brief Scale a 2D spectra array by a per-spectrum factor.
  *
- * This is the public Python entry point. It parses the Python arguments,
- * validates the shapes, allocates (or reuses) an output buffer, then
- * dispatches to the correct mask-specialised internal kernel.
+ * Parses the Python arguments, validates shapes, allocates (or reuses) an
+ * output buffer, then dispatches to the correct mask-specialised kernel.
  *
  * When @p out_obj is a writable ndarray of matching shape the result is
  * written directly into that buffer (safe for in-place when out_obj is the
  * same array as spectra). When @p out_obj is None a fresh array is allocated.
  *
- * Args:
- *     spectra_obj: 2D float64 ndarray (nspec x nlam).
- *     scaling_obj: 1D float64 ndarray (nspec).
- *     mask_obj: Optional 1D boolean ndarray (nspec).
- *     lam_mask_obj: Optional 1D boolean ndarray (nlam).
- *     nthreads: Number of OpenMP threads.
- *     out_obj: Optional output buffer. Same shape and dtype as spectra.
+ * @param spectra_obj: 2D float64 ndarray (nspec x nlam).
+ * @param scaling_obj: 1D float64 ndarray (nspec).
+ * @param mask_obj: Optional 1D boolean ndarray (nspec).
+ * @param lam_mask_obj: Optional 1D boolean ndarray (nlam).
+ * @param nthreads: Number of OpenMP threads.
+ * @param out_obj: Optional output buffer, same shape and dtype as spectra.
  *
- * Returns:
- *     2D float64 ndarray containing the scaled spectra.
+ * @return 2D float64 ndarray containing the scaled spectra.
  */
 PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
   (void)self;
 
-  /* Declare the Python-level inputs including the optional output buffer */
+  /* Declare the Python-level inputs and optional output buffer */
   PyObject *spectra_obj, *scaling_obj;
   PyObject *mask_obj = Py_None;
   PyObject *lam_mask_obj = Py_None;
@@ -255,8 +304,7 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Convert the required inputs into float64 NumPy array views so the
-   * kernel sees the dtype and layout it expects. */
+  /* Convert inputs to float64 NumPy array views. */
   PyArrayObject *np_spectra = (PyArrayObject *)PyArray_FROM_OTF(
       spectra_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
   PyArrayObject *np_scaling = (PyArrayObject *)PyArray_FROM_OTF(
@@ -268,8 +316,7 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Convert the optional mask arrays to boolean NumPy array views. NULL
-   * pointers signal "no mask" to the dispatch logic. */
+  /* Convert optional masks to boolean array views. NULL signals no mask. */
   PyArrayObject *np_mask = nullptr;
   PyArrayObject *np_lam_mask = nullptr;
 
@@ -294,8 +341,7 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     }
   }
 
-  /* Validate the spectra/scaling shapes and any optional masks before
-   * allocating or validating the output buffer. */
+  /* Validate shapes before allocating output. */
   if (PyArray_NDIM(np_spectra) != 2 || PyArray_NDIM(np_scaling) != 1) {
     PyErr_SetString(PyExc_ValueError,
                     "spectra must be 2D and scaling must be 1D.");
@@ -345,8 +391,7 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Determine the output buffer: reuse the caller-provided array when
-   * out_obj is not None, otherwise allocate a fresh output. */
+  /* Reuse caller-provided output buffer or allocate a fresh one. */
   PyArrayObject *np_out = nullptr;
 
   if (out_obj != Py_None) {
@@ -360,7 +405,7 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
       return NULL;
     }
 
-    /* Verify the caller-provided output has the expected shape. */
+    /* Verify the output buffer has the expected shape. */
     if (PyArray_NDIM(np_out) != 2 ||
         PyArray_DIMS(np_out)[0] != spectra_dims[0] ||
         PyArray_DIMS(np_out)[1] != spectra_dims[1]) {
@@ -400,9 +445,7 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
                                  : static_cast<const npy_bool *>(
                                        PyArray_DATA(np_lam_mask));
 
-  /* Dispatch to the correct mask-specialised kernel. The dispatch is done
-   * once at the top so the inner loop body is always branch-free w.r.t.
-   * the mask presence checks. */
+  /* Dispatch to the correct mask-specialised kernel. */
   tic("scale_spectra_2d");
 
   const bool has_mask = (mask != NULL);
@@ -456,8 +499,7 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
 
   toc("scale_spectra_2d");
 
-  /* Release the input references. The output reference (fresh or user-
-   * provided) is passed to the caller. */
+  /* Release input references. The output reference is passed to the caller. */
   Py_DECREF(np_spectra);
   Py_DECREF(np_scaling);
   Py_XDECREF(np_mask);
@@ -466,12 +508,10 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
   return Py_BuildValue("N", np_out);
 }
 
-/* ===========================================================================
- * Internal kernels: apply_separable_attenuation_2d
+/* Internal kernels: apply_separable_attenuation_2d
  *
  * Separated into no-mask and row-mask variants so the inner expfma chain
- * in the no-mask case compiles without runtime branch checks.
- * =========================================================================== */
+ * in the no-mask case compiles without runtime branch checks. */
 
 /**
  * @brief Apply separable attenuation with no row mask.
@@ -575,26 +615,23 @@ static void attenuate_2d_with_mask_omp(const double *spectra,
 /**
  * @brief Apply exp(-tau_v * tau_x_v) attenuation to a 2D spectra array.
  *
- * This is the public Python entry point. It dispatches to a mask-specialised
- * kernel so the inner expfma chain is free of runtime branch checks.
+ * Dispatches to a mask-specialised kernel so the inner expfma chain
+ * is free of runtime branch checks.
  *
- * Args:
- *     spectra_obj: 2D float64 ndarray (nrows x ncols).
- *     tau_v_obj: 1D float64 ndarray (nrows), V-band optical depth.
- *     tau_x_v_obj: 1D float64 ndarray (ncols), extinction curve.
- *     mask_obj: Optional 1D boolean ndarray (nrows).
- *     nthreads: Number of OpenMP threads.
- *     out_obj: Optional output buffer. Same shape as spectra.
+ * @param spectra_obj: 2D float64 ndarray (nrows x ncols).
+ * @param tau_v_obj: 1D float64 ndarray (nrows), V-band optical depth.
+ * @param tau_x_v_obj: 1D float64 ndarray (ncols), extinction curve.
+ * @param mask_obj: Optional 1D boolean ndarray (nrows).
+ * @param nthreads: Number of OpenMP threads.
+ * @param out_obj: Optional output buffer, same shape as spectra.
  *
- * Returns:
- *     2D float64 ndarray containing the attenuated spectra.
+ * @return 2D float64 ndarray containing the attenuated spectra.
  */
 PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
   (void)self;
 
-  /* Declare the Python-level inputs for the spectra buffer, the per-particle
-   * optical depths, the wavelength-dependent optical-depth curve, and the
-   * optional row mask and output buffer. */
+  /* Declare inputs for spectra, per-particle optical depths,
+   * wavelength-dependent extinction curve, and optional row mask. */
   PyObject *spectra_obj, *tau_v_obj, *tau_x_v_obj;
   PyObject *mask_obj = Py_None;
   PyObject *out_obj = Py_None;
@@ -605,8 +642,7 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Convert the required inputs into float64 NumPy array views and unpack
-   * the optional row mask if one has been provided. */
+  /* Convert inputs to float64 NumPy array views and unpack optional mask. */
   PyArrayObject *np_spectra = (PyArrayObject *)PyArray_FROM_OTF(
       spectra_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
   PyArrayObject *np_tau_v = (PyArrayObject *)PyArray_FROM_OTF(
@@ -634,9 +670,7 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     }
   }
 
-  /* Validate that the row and column vectors match the 2D spectra shape so
-   * we can fuse attenuation application without building a transmission
-   * matrix. */
+  /* Validate shapes — vectors must match the 2D spectra dimensions. */
   if (PyArray_NDIM(np_spectra) != 2 || PyArray_NDIM(np_tau_v) != 1 ||
       PyArray_NDIM(np_tau_x_v) != 1) {
     PyErr_SetString(PyExc_ValueError,
@@ -675,7 +709,7 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Allocate or reuse the output buffer. */
+  /* Reuse caller-provided output buffer or allocate a fresh one. */
   PyArrayObject *np_out = nullptr;
 
   if (out_obj != Py_None) {
@@ -766,14 +800,12 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
   return Py_BuildValue("N", np_out);
 }
 
-/* ===========================================================================
- * Internal kernels: multiply_rows_by_vector_2d
+/* Internal kernels: multiply_rows_by_vector_2d
  *
  * Kept as an independent entry point for callers that need row-wise
  * multiplication without the per-spectrum scaling-semantic overload.
  * The internal structure mirrors scale_spectra_2d minus the lam_mask
- * dimension.
- * =========================================================================== */
+ * dimension. */
 
 /**
  * @brief Row-wise multiplication with no row mask (branch-free).
@@ -869,15 +901,13 @@ static void multiply_rows_by_vector_2d_with_mask_omp(
  *
  * Dispatches to a mask-specialised kernel.
  *
- * Args:
- *     array_obj: 2D float64 ndarray (nrows x ncols).
- *     vector_obj: 1D float64 ndarray (nrows).
- *     mask_obj: Optional 1D boolean ndarray (nrows).
- *     nthreads: Number of OpenMP threads.
- *     out_obj: Optional output buffer. Same shape as array.
+ * @param array_obj: 2D float64 ndarray (nrows x ncols).
+ * @param vector_obj: 1D float64 ndarray (nrows).
+ * @param mask_obj: Optional 1D boolean ndarray (nrows).
+ * @param nthreads: Number of OpenMP threads.
+ * @param out_obj: Optional output buffer, same shape as array.
  *
- * Returns:
- *     2D float64 ndarray with each row i multiplied by vector[i].
+ * @return 2D float64 ndarray with each row i multiplied by vector[i].
  */
 PyObject *multiply_rows_by_vector_2d(PyObject *self, PyObject *args) {
   (void)self;
@@ -892,7 +922,8 @@ PyObject *multiply_rows_by_vector_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Convert the input buffers into float64 NumPy array views. */
+  /* Convert inputs to float64 NumPy array views. */
+
   PyArrayObject *np_array = (PyArrayObject *)PyArray_FROM_OTF(
       array_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
   PyArrayObject *np_vector = (PyArrayObject *)PyArray_FROM_OTF(
@@ -950,7 +981,7 @@ PyObject *multiply_rows_by_vector_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Allocate or reuse the output buffer. */
+  /* Reuse caller-provided output buffer or allocate a fresh one. */
   PyArrayObject *np_out = nullptr;
 
   if (out_obj != Py_None) {
@@ -1037,25 +1068,21 @@ PyObject *multiply_rows_by_vector_2d(PyObject *self, PyObject *args) {
   return Py_BuildValue("N", np_out);
 }
 
-/* ===========================================================================
- * multiply_array_by_vector_1d
+/* multiply_array_by_vector_1d
  *
- * Already branch-free (no mask dimension). The only change is an optional
- * out buffer for in-place support.
- * =========================================================================== */
+ * Already branch-free (no mask dimension). The only addition is an optional
+ * out buffer for in-place support. */
 
 /**
  * @brief Multiply a 1D or 2D array by a 1D vector over the last axis.
  *
- * Args:
- *     array_obj: 1D or 2D float64 ndarray.
- *     vector_obj: 1D float64 ndarray matching the last array dimension.
- *     nthreads: Number of OpenMP threads.
- *     out_obj: Optional output buffer. Same shape as array.
+ * @param array_obj: 1D or 2D float64 ndarray.
+ * @param vector_obj: 1D float64 ndarray matching the last array dimension.
+ * @param nthreads: Number of OpenMP threads.
+ * @param out_obj: Optional output buffer, same shape as array.
  *
- * Returns:
- *     Array with each element multiplied by the corresponding vector entry
- *     on the last axis.
+ * @return Array with each element multiplied by the corresponding vector
+ *     entry on the last axis.
  */
 PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
   (void)self;
@@ -1069,7 +1096,8 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Convert the input buffers into float64 NumPy array views. */
+  /* Convert inputs to float64 NumPy array views. */
+
   PyArrayObject *np_array = (PyArrayObject *)PyArray_FROM_OTF(
       array_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
   PyArrayObject *np_vector = (PyArrayObject *)PyArray_FROM_OTF(
@@ -1081,8 +1109,7 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Validate dimensions: array can be 1D or 2D, vector must be 1D and
-   * match the last array dimension. */
+  /* Validate dimensions. */
   if (PyArray_NDIM(np_vector) != 1 ||
       (PyArray_NDIM(np_array) != 1 && PyArray_NDIM(np_array) != 2)) {
     PyErr_SetString(PyExc_ValueError,
@@ -1104,7 +1131,7 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Allocate or reuse the output buffer. */
+  /* Reuse caller-provided output buffer or allocate a fresh one. */
   PyArrayObject *np_out = nullptr;
 
   if (out_obj != Py_None) {
@@ -1116,7 +1143,7 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
       return NULL;
     }
 
-    /* Validate shape match. */
+    /* Verify shape matches. */
     bool shape_ok = (PyArray_NDIM(np_out) == array_ndim);
     if (shape_ok) {
       for (int d = 0; d < array_ndim; d++) {
@@ -1151,7 +1178,7 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
   double *out = static_cast<double *>(PyArray_DATA(np_out));
   const int nrows = (array_ndim == 1) ? 1 : static_cast<int>(array_dims[0]);
 
-  /* Apply the last-axis scaling in one pass over the output buffer. */
+  /* Apply the last-axis scaling in a single pass. */
   tic("multiply_array_by_vector_1d");
 
 #ifdef WITH_OPENMP
@@ -1175,18 +1202,28 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
   return Py_BuildValue("N", np_out);
 }
 
-/* ===========================================================================
- * scale_line_2d — fused lum+cont scaling
+/* scale_line_2d — fused lum+cont scaling
  *
  * Processes both arrays in one OpenMP loop so the scaling vectors are read
- * once instead of twice. The 4 mask combinations mirror scale_spectra_2d.
- * =========================================================================== */
+ * once instead of twice. The four mask combinations mirror scale_spectra_2d. */
 
-static void scale_line_2d_no_mask_serial(const double *lum, const double *cont,
-                                         const double *scaling_lum,
-                                         const double *scaling_cont,
-                                         double *out_lum, double *out_cont,
-                                         int nspec, int nlam) {
+/**
+ * @brief Fused lum+cont row scaling with no masks (branch-free).
+ *
+ * @param lum: Input luminosity array (nspec x nlam).
+ * @param cont: Input continuum array (nspec x nlam).
+ * @param scaling_lum: Per-spectrum luminosity factor (nspec).
+ * @param scaling_cont: Per-spectrum continuum factor (nspec).
+ * @param out_lum: Output luminosity buffer (nspec x nlam).
+ * @param out_cont: Output continuum buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
+ */
+static void scale_line_2d_no_mask_serial(
+    const double *lum, const double *cont,
+    const double *scaling_lum, const double *scaling_cont,
+    double *out_lum, double *out_cont,
+    int nspec, int nlam) {
   for (int i = 0; i < nspec; i++) {
     const double sl = scaling_lum[i];
     const double sc = scaling_cont[i];
@@ -1201,6 +1238,19 @@ static void scale_line_2d_no_mask_serial(const double *lum, const double *cont,
   }
 }
 
+/**
+ * @brief Fused lum+cont row scaling with a 1D row mask.
+ *
+ * @param lum: Input luminosity array (nspec x nlam).
+ * @param cont: Input continuum array (nspec x nlam).
+ * @param scaling_lum: Per-spectrum luminosity factor (nspec).
+ * @param scaling_cont: Per-spectrum continuum factor (nspec).
+ * @param mask: 1D boolean row mask (nspec).
+ * @param out_lum: Output luminosity buffer (nspec x nlam).
+ * @param out_cont: Output continuum buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
+ */
 static void scale_line_2d_row_mask_serial(const double *lum, const double *cont,
                                           const double *scaling_lum,
                                           const double *scaling_cont,
@@ -1228,6 +1278,19 @@ static void scale_line_2d_row_mask_serial(const double *lum, const double *cont,
   }
 }
 
+/**
+ * @brief Fused lum+cont row scaling with a 1D wavelength mask.
+ *
+ * @param lum: Input luminosity array (nspec x nlam).
+ * @param cont: Input continuum array (nspec x nlam).
+ * @param scaling_lum: Per-spectrum luminosity factor (nspec).
+ * @param scaling_cont: Per-spectrum continuum factor (nspec).
+ * @param lam_mask: 1D boolean wavelength mask (nlam).
+ * @param out_lum: Output luminosity buffer (nspec x nlam).
+ * @param out_cont: Output continuum buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
+ */
 static void scale_line_2d_lam_mask_serial(
     const double *lum, const double *cont, const double *scaling_lum,
     const double *scaling_cont, const npy_bool *lam_mask, double *out_lum,
@@ -1247,6 +1310,21 @@ static void scale_line_2d_lam_mask_serial(
   }
 }
 
+/**
+ * @brief Fused lum+cont row scaling with both a row mask and a wavelength
+ * mask.
+ *
+ * @param lum: Input luminosity array (nspec x nlam).
+ * @param cont: Input continuum array (nspec x nlam).
+ * @param scaling_lum: Per-spectrum luminosity factor (nspec).
+ * @param scaling_cont: Per-spectrum continuum factor (nspec).
+ * @param mask: 1D boolean row mask (nspec).
+ * @param lam_mask: 1D boolean wavelength mask (nlam).
+ * @param out_lum: Output luminosity buffer (nspec x nlam).
+ * @param out_cont: Output continuum buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
+ */
 static void scale_line_2d_both_masks_serial(
     const double *lum, const double *cont, const double *scaling_lum,
     const double *scaling_cont, const npy_bool *mask,
@@ -1276,6 +1354,19 @@ static void scale_line_2d_both_masks_serial(
 
 #ifdef WITH_OPENMP
 
+/**
+ * @brief OpenMP parallel variant of fused lum+cont scaling with no masks.
+ *
+ * @param lum: Input luminosity array (nspec x nlam).
+ * @param cont: Input continuum array (nspec x nlam).
+ * @param scaling_lum: Per-spectrum luminosity factor (nspec).
+ * @param scaling_cont: Per-spectrum continuum factor (nspec).
+ * @param out_lum: Output luminosity buffer (nspec x nlam).
+ * @param out_cont: Output continuum buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
+ * @param nthreads: The number of OpenMP threads.
+ */
 static void scale_line_2d_no_mask_omp(const double *lum, const double *cont,
                                       const double *scaling_lum,
                                       const double *scaling_cont,
@@ -1296,6 +1387,20 @@ static void scale_line_2d_no_mask_omp(const double *lum, const double *cont,
   }
 }
 
+/**
+ * @brief OpenMP parallel variant of fused lum+cont scaling with a row mask.
+ *
+ * @param lum: Input luminosity array (nspec x nlam).
+ * @param cont: Input continuum array (nspec x nlam).
+ * @param scaling_lum: Per-spectrum luminosity factor (nspec).
+ * @param scaling_cont: Per-spectrum continuum factor (nspec).
+ * @param mask: 1D boolean row mask (nspec).
+ * @param out_lum: Output luminosity buffer (nspec x nlam).
+ * @param out_cont: Output continuum buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
+ * @param nthreads: The number of OpenMP threads.
+ */
 static void scale_line_2d_row_mask_omp(const double *lum, const double *cont,
                                        const double *scaling_lum,
                                        const double *scaling_cont,
@@ -1324,6 +1429,21 @@ static void scale_line_2d_row_mask_omp(const double *lum, const double *cont,
   }
 }
 
+/**
+ * @brief OpenMP parallel variant of fused lum+cont scaling with a wavelength
+ * mask.
+ *
+ * @param lum: Input luminosity array (nspec x nlam).
+ * @param cont: Input continuum array (nspec x nlam).
+ * @param scaling_lum: Per-spectrum luminosity factor (nspec).
+ * @param scaling_cont: Per-spectrum continuum factor (nspec).
+ * @param lam_mask: 1D boolean wavelength mask (nlam).
+ * @param out_lum: Output luminosity buffer (nspec x nlam).
+ * @param out_cont: Output continuum buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
+ * @param nthreads: The number of OpenMP threads.
+ */
 static void scale_line_2d_lam_mask_omp(const double *lum, const double *cont,
                                        const double *scaling_lum,
                                        const double *scaling_cont,
@@ -1346,6 +1466,21 @@ static void scale_line_2d_lam_mask_omp(const double *lum, const double *cont,
   }
 }
 
+/**
+ * @brief OpenMP parallel variant of fused lum+cont scaling with both masks.
+ *
+ * @param lum: Input luminosity array (nspec x nlam).
+ * @param cont: Input continuum array (nspec x nlam).
+ * @param scaling_lum: Per-spectrum luminosity factor (nspec).
+ * @param scaling_cont: Per-spectrum continuum factor (nspec).
+ * @param mask: 1D boolean row mask (nspec).
+ * @param lam_mask: 1D boolean wavelength mask (nlam).
+ * @param out_lum: Output luminosity buffer (nspec x nlam).
+ * @param out_cont: Output continuum buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
+ * @param nthreads: The number of OpenMP threads.
+ */
 static void scale_line_2d_both_masks_omp(const double *lum, const double *cont,
                                          const double *scaling_lum,
                                          const double *scaling_cont,
@@ -1385,19 +1520,17 @@ static void scale_line_2d_both_masks_omp(const double *lum, const double *cont,
  * are read once instead of twice. Accepts separate factors for luminosity
  * and continuum (relevant when unyt unit conversion differs).
  *
- * Args:
- *     lum_obj: 2D float64 ndarray (nspec x nlam).
- *     cont_obj: 2D float64 ndarray (nspec x nlam), same shape as lum.
- *     scaling_lum_obj: 1D float64 ndarray (nspec).
- *     scaling_cont_obj: 1D float64 ndarray (nspec).
- *     mask_obj: Optional 1D boolean (nspec).
- *     lam_mask_obj: Optional 1D boolean (nlam).
- *     nthreads: Number of OpenMP threads.
- *     out_lum_obj: Optional output buffer for lum.
- *     out_cont_obj: Optional output buffer for cont.
+ * @param lum_obj: 2D float64 ndarray (nspec x nlam).
+ * @param cont_obj: 2D float64 ndarray (nspec x nlam), same shape as lum.
+ * @param scaling_lum_obj: 1D float64 ndarray (nspec).
+ * @param scaling_cont_obj: 1D float64 ndarray (nspec).
+ * @param mask_obj: Optional 1D boolean (nspec).
+ * @param lam_mask_obj: Optional 1D boolean (nlam).
+ * @param nthreads: Number of OpenMP threads.
+ * @param out_lum_obj: Optional output buffer for lum.
+ * @param out_cont_obj: Optional output buffer for cont.
  *
- * Returns:
- *     Tuple (scaled_lum, scaled_cont).
+ * @return Tuple (scaled_lum, scaled_cont).
  */
 PyObject *scale_line_2d(PyObject *self, PyObject *args) {
   (void)self;
@@ -1416,7 +1549,7 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Convert arrays. */
+  /* Convert inputs to float64 NumPy array views. */
   PyArrayObject *np_lum = (PyArrayObject *)PyArray_FROM_OTF(
       lum_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
   PyArrayObject *np_cont = (PyArrayObject *)PyArray_FROM_OTF(
