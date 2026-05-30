@@ -250,6 +250,22 @@ class TestLineCollectionOperations:
             f" {expected_cont}"
         )
 
+    def test_scaling_multidim_threaded(self, multi_dimension_line_collection):
+        """Test threaded scaling for a multidimensional line collection."""
+        lines = multi_dimension_line_collection
+        scaling = np.array([2.0, 3.0])
+
+        scaled_lines = lines.scale(scaling, nthreads=2)
+
+        np.testing.assert_allclose(
+            scaled_lines.luminosity.value,
+            lines.luminosity.value * scaling[:, None],
+        )
+        np.testing.assert_allclose(
+            scaled_lines.continuum.value,
+            lines.continuum.value * scaling[:, None],
+        )
+
     def test_addition(self, simple_line_collection):
         """Test adding line collections."""
         lines = simple_line_collection
