@@ -1223,6 +1223,9 @@ class LineCollection:
             )
         )
 
+        # If we can use the fused kernel we do, otherwise we fall back to
+        # separate calls to the 1D scaling kernel for the luminosity and
+        # continuum
         if _use_fused:
             out_lum = self._luminosity if inplace else None
             out_cont = self._continuum if inplace else None
@@ -1237,6 +1240,9 @@ class LineCollection:
                 out_lum,
                 out_cont,
             )
+            # If inplace is True the fused kernel will have written to the
+            # existing arrays so we can just return self, otherwise we need to
+            # create a new LineCollection with the new arrays
             if inplace:
                 return self
             return LineCollection(
@@ -1246,6 +1252,9 @@ class LineCollection:
                 cont=get_array_quantity_view(new_cont, self.continuum.units),
             )
 
+        # Ok, we couldn't use the fused kernel, use the 1D scaling kernel
+        # for the luminosity and continuum separately. If inplace is True
+        # write to the existing arrays and return self
         if inplace:
             scale_array(
                 self._luminosity,
@@ -1265,6 +1274,8 @@ class LineCollection:
             )
             return self
 
+        # Otherwise, create new arrays for the luminosity and continuum and
+        # return a new LineCollection
         lum = scale_array(
             self._luminosity,
             scaling_lum,
@@ -1279,7 +1290,6 @@ class LineCollection:
             lam_mask=lam_mask,
             nthreads=nthreads,
         )
-
         return LineCollection(
             line_ids=self.line_ids,
             lam=self.lam,
@@ -1362,7 +1372,9 @@ class LineCollection:
         )
 
         # When attenuation reduces to a wavelength-only transmission curve we
-        # can apply it with the dedicated last-axis scaling kernel.
+        # can apply it with the dedicated last-axis scaling kernel. Here we
+        # have a row mask so we need to copy the arrays and apply the
+        # transmission only to the masked rows
         if (
             self._luminosity.ndim == 2
             and isinstance(transmission, np.ndarray)
@@ -1388,6 +1400,9 @@ class LineCollection:
                 cont=get_array_quantity_view(att_cont, self.continuum.units),
             )
 
+        # If the transmission is a wavelength-only curve and we don't have a
+        # row mask we can apply it directly using the dedicated 1D scaling
+        # kernel without a copy
         if isinstance(transmission, np.ndarray) and transmission.ndim == 1:
             att_lum = multiply_array_by_vector_1d(
                 self._luminosity,
@@ -1406,7 +1421,9 @@ class LineCollection:
                 cont=get_array_quantity_view(att_cont, self.continuum.units),
             )
 
-        # Apply the transmision
+        # If neither fast path applies we fall back to NumPy broadcasting,
+        # copying the arrays and applying the transmission with or without
+        # a mask
         att_lum = self.luminosity
         att_cont = self.continuum
         if mask is None:

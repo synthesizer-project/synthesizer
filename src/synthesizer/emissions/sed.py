@@ -417,18 +417,17 @@ class Sed:
                 scaling = scaling.to(self.lnu.units)
                 scaling = scaling.value
 
-        # Get the unit from the Quantity descriptor directly, NOT through
-        # ``self.lnu`` (which copies the entire array via ``value * unit``).
+        # Get the unit from the Quantity descriptor directly, not from
+        # self.lnu (which copies the entire array through value * unit)
         units = next(
             cls.__dict__["lnu"].unit
             for cls in type(self).__mro__
             if "lnu" in cls.__dict__
         )
 
-        # When scaling in-place write directly into the existing buffer so
-        # ``self._lnu`` is mutated without an allocation. The ``self.lnu``
-        # property returns ``self._lnu * unit`` on each access, so the new
-        # values are visible immediately.
+        # If we are scaling in place we can write directly into the existing
+        # buffer, avoiding an allocation of a new array. The scale_array
+        # helper will handle the dispatch to the C++ kernels for us
         if inplace:
             scale_array(
                 self._lnu,
@@ -440,8 +439,8 @@ class Sed:
             )
             return self
 
-        # Delegate the array scaling and any compatible fast-path dispatch to
-        # the shared helper.
+        # Otherwise we need to create a new array with the scaled values and
+        # return a new Sed object
         new_lnu = get_array_quantity_view(
             scale_array(
                 self._lnu,
@@ -1541,7 +1540,9 @@ class Sed:
         )
 
         # When attenuation reduces to a wavelength-only transmission curve we
-        # can use the dedicated scaling kernels instead of NumPy broadcasting.
+        # can use the dedicated 2D scaling kernel with mask support. This
+        # applies when we have a row mask and the transmission is wavelength-
+        # only
         if (
             self._lnu.ndim == 2
             and isinstance(transmission, np.ndarray)
@@ -1560,6 +1561,8 @@ class Sed:
                 lnu=get_array_quantity_view(out, self.lnu.units),
             )
 
+        # If we don't have a row mask but the transmission is still wavelength-
+        # only we can use the dedicated 1D scaling kernel instead
         if (
             self._lnu.ndim == 2
             and isinstance(transmission, np.ndarray)
@@ -1575,12 +1578,11 @@ class Sed:
                 lnu=get_array_quantity_view(out, self.lnu.units),
             )
 
-        # Get a copy of the rest frame spectra, we need to avoid
-        # modifying the original
+        # If neither fast path applies we fall back to NumPy broadcasting.
+        # We need a copy here so we don't modify the original
         out = np.copy(self._lnu)
 
-        # Apply the transmission curve to the rest frame spectra with or
-        # without applying a mask
+        # Apply the transmission with or without a mask
         if mask is None:
             out *= transmission
         elif transmission.ndim > 1:

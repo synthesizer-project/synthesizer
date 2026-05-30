@@ -36,25 +36,36 @@ def normalise_scale_masks(mask, lam_mask, shape):
         tuple:
             ``(mask, lam_mask)`` in a form the scaling helper understands.
     """
+    # No mask at all — nothing to normalise, return as-is
     if mask is None:
         return None, lam_mask
 
+    # The mask matches the full array shape so it's an element-level mask.
+    # If we also have a wavelength mask we can combine them into one
     if mask.shape == shape:
         if lam_mask is not None:
             mask = np.logical_and(mask, lam_mask)
         return mask, None
 
+    # The mask is 1D and matches the row count so it works as a row selector
+    # with an optional wavelength mask alongside
     if mask.ndim == 1 and mask.shape[0] == shape[0]:
         return mask, lam_mask
 
+    # The mask is 1D and matches the wavelength count so it works as a
+    # wavelength selector. If we also have a lam_mask we combine them
     if mask.ndim == 1 and mask.shape[0] == shape[-1]:
         if lam_mask is None:
             return None, mask
         return None, np.logical_and(mask, lam_mask)
 
+    # The mask is 1D but doesn't match either dimension — we can still
+    # use it if we have an explicit lam_mask by broadcasting row-wise
     if lam_mask is not None and mask.ndim == 1:
         return np.logical_and(mask[:, None], lam_mask), None
 
+    # None of the known shapes matched — the caller gave us something
+    # incompatible
     raise exceptions.InconsistentArguments(
         f"Mask shape {mask.shape} is incompatible with target shape {shape}."
     )
@@ -87,8 +98,9 @@ def scale_array(
     """
     scaling_ndim = getattr(scaling, "ndim", 0)
 
-    # Use the dedicated 2D kernel when the scaling is per-row and any masks
-    # can be expressed as simple row/column selectors.
+    # If the scaling is a 1D array that matches the first dimension of the
+    # array we can use the dedicated 2D C++ kernel. This will handle per-
+    # spectrum scaling with optional row and wavelength masks for us
     use_fast_2d_scaling = (
         isinstance(scaling, np.ndarray)
         and array.ndim == 2
@@ -112,10 +124,10 @@ def scale_array(
     if use_fast_2d_scaling:
         return scale_spectra_2d(array, scaling, mask, lam_mask, nthreads, out)
 
-    # Fast 2D path for scalar scaling: broadcast to per-row array so the
-    # C++ kernel (with OpenMP) handles it instead of the NumPy scalar path.
-    # Mask/lam_mask must be in the simple form the kernel accepts
-    # (1D row/lambda).
+    # If the scaling is a scalar and the array is 2D we can broadcast it to a
+    # per-row array and use the C++ kernel instead of falling back to the
+    # NumPy scalar path. The masks must be in the simple form the kernel
+    # accepts (1D row/lambda)
     if (
         array.ndim == 2
         and np.isscalar(scaling)
@@ -142,10 +154,9 @@ def scale_array(
             array, scaling_arr, mask, lam_mask, nthreads, out
         )
 
-    # Fast path for true in-place mutation: when ``out is array`` (same
-    # buffer) we can mutate the buffer directly instead of the
-    # copy-modify-copy-back dance below.  This is the common case for
-    # ``Sed.scale(..., inplace=True)`` with a scalar scaling factor.
+    # If we are scaling in place (out is the same buffer as array) we can
+    # mutate the buffer directly without the copy-modify-copy-back dance at
+    # the end. This is the common case for Sed.scale with inplace=True
     if out is not None and out is array and lam_mask is None:
         if np.isscalar(scaling):
             if mask is not None:
@@ -161,23 +172,33 @@ def scale_array(
                 array *= scaling
                 return array
 
+    # We couldn't use any of the fast paths — fall back to NumPy.
+    # Start by making a copy of the array so we don't modify the original.
+    # If we have a wavelength mask we only copy the relevant columns
     if lam_mask is None:
         work = np.array(array, copy=True)
     else:
         work = np.array(array[..., lam_mask], copy=True)
 
+    # Scalar scaling — multiply every element by the same number, with
+    # or without a row/element mask
     if np.isscalar(scaling):
         if mask is not None:
             work[mask] *= scaling
         else:
             work *= scaling
 
+    # The scaling array has the same shape as the (possibly masked) work
+    # array so we can multiply element-by-element
     elif isinstance(scaling, np.ndarray) and scaling.shape == work.shape:
         if mask is not None:
             work[mask] *= scaling[mask]
         else:
             work *= scaling
 
+    # The scaling is a 1D array matching the last dimension — this is the
+    # per-wavelength case where each wavelength gets a different factor
+    # applied to all rows
     elif (
         isinstance(scaling, np.ndarray)
         and scaling_ndim == 1
@@ -190,6 +211,8 @@ def scale_array(
         else:
             work[mask] *= np.broadcast_to(scaling, work.shape)[mask]
 
+    # The scaling has fewer dimensions than the work array — we expand
+    # it to match by inserting dimensions at the end, then broadcast
     elif isinstance(scaling, np.ndarray) and scaling_ndim < work.ndim:
         expand_axes = tuple(range(scaling_ndim, work.ndim))
         expanded_scaling = np.expand_dims(scaling, axis=expand_axes)
@@ -201,6 +224,9 @@ def scale_array(
         else:
             work *= expanded_scaling
 
+    # The shapes are completely different — let NumPy figure out the
+    # broadcast with an explicit trailing dimension. Masking is not
+    # supported in this case since the shapes don't align
     elif isinstance(scaling, np.ndarray):
         work = scaling[..., np.newaxis] * work
         if mask is not None:
@@ -209,6 +235,7 @@ def scale_array(
                 "different shapes"
             )
 
+    # We don't know how to handle this type of scaling at all
     else:
         out_str = f"Incompatible scaling factor with type {type(scaling)} "
         if hasattr(scaling, "shape"):
@@ -217,12 +244,17 @@ def scale_array(
             out_str += f"and value {scaling}"
         raise exceptions.InconsistentMultiplication(out_str)
 
+    # If we didn't use a wavelength mask the work array is a direct copy
+    # of the full array and we can write it back as-is (or return it)
     if lam_mask is None:
         if out is not None:
             out[...] = work
             return out
         return work
 
+    # With a wavelength mask the work array is smaller than the original
+    # (only the masked columns). We need to create a fresh copy of the
+    # original and place the scaled columns back in the right positions
     out_arr = np.array(array, copy=True)
     out_arr[..., lam_mask] = work
     if out is not None:
