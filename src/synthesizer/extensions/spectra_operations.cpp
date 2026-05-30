@@ -6,7 +6,6 @@
 
 /* Local includes */
 #include "cpp_to_python.h"
-#include "spectra_operations.h"
 #include "timers.h"
 #include "timers_init.h"
 
