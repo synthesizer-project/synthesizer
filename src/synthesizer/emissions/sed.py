@@ -1538,7 +1538,7 @@ class Sed:
             and type(dust_curve).get_transmission
             is AttenuationLaw.get_transmission
         ):
-            tau_x_v = dust_curve.get_tau_x_v(
+            tau_x_v = dust_curve.get_extinction_curve(
                 self.lam,
                 **dust_curve_kwargs,
             )

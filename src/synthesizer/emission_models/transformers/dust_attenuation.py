@@ -173,21 +173,37 @@ class AttenuationLaw(Transformer):
         return np.exp(-exponent)
 
     @accepts(lam=angstrom)
-    def get_tau_x_v(self, lam, **dust_curve_kwargs):
-        """Compute the wavelength-dependent optical depth curve.
+    def get_extinction_curve(self, lam, **dust_curve_kwargs):
+        """Compute the normalised extinction curve tau(lambda)/tau(V).
+
+        Returns the wavelength-dependent extinction curve from the underlying
+        attenuation law at the requested wavelengths.  This is the ``tau_x_v``
+        factor used in separable attenuation::
+
+            transmission = exp(-tau_v * tau_x_v)
+
+        where ``tau_v`` is the V-band optical depth supplied separately by the
+        caller.  This method only returns the normalised curve; the caller is
+        responsible for providing ``tau_v`` and computing the exponential.
 
         Args:
             lam (np.ndarray of float):
                 The wavelengths (with units) at which to calculate the
-                normalised optical depth curve.
+                normalised extinction curve.
             **dust_curve_kwargs (dict):
                 Additional keyword arguments to be passed to the dust curve
-                which have been defined on the emitter or model.
+                which have been defined on the emitter or model.  These are
+                forwarded to ``_set_params`` before the computation and the
+                original state is restored afterward.
 
         Returns:
             np.ndarray of float:
-                The normalised optical depth curve with shape ``lam.shape``.
+                The normalised extinction curve ``tau(lambda)/tau(V)``
+                with shape ``lam.shape``.
         """
+        # Push any dynamically-set dust curve parameters onto the instance,
+        # compute the raw normalised extinction curve, then restore the
+        # previous state regardless of exceptions.
         self._set_params(**dust_curve_kwargs)
 
         try:
