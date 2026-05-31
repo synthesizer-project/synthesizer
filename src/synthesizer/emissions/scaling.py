@@ -122,6 +122,15 @@ def scale_array(
         )
     )
     if use_fast_2d_scaling:
+        # Without masks the C++ dispatch overhead outweighs its benefit.
+        # NumPy broadcasting (scaling[:, np.newaxis]) is a strided view with
+        # zero allocation and matches the C++ kernel's element throughput.
+        if mask is None and lam_mask is None:
+            scaling_2d = scaling[:, np.newaxis]
+            if out is not None:
+                np.multiply(array, scaling_2d, out=out)
+                return out
+            return array * scaling_2d
         return scale_spectra_2d(array, scaling, mask, lam_mask, nthreads, out)
 
     # If the scaling is a scalar and the array is 2D we can broadcast it to a

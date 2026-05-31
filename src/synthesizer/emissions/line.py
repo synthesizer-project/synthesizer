@@ -167,7 +167,7 @@ class LineCollection:
         self.continuum = cont
 
         # Ensure the luminosity and continuum are the same shape
-        if self.luminosity.shape != self.continuum.shape:
+        if self._luminosity.shape != self._continuum.shape:
             raise exceptions.InconsistentArguments(
                 "Luminosity and continuum arrays must have the same shape"
             )
@@ -422,7 +422,7 @@ class LineCollection:
             Tuple
                 The shape of self.lnu
         """
-        return self.luminosity.shape
+        return self._luminosity.shape
 
     @property
     def nlam(self):
@@ -1201,9 +1201,8 @@ class LineCollection:
         mask, lam_mask = normalise_scale_masks(mask, lam_mask, self.shape)
 
         # Check whether we can use the fused lum+cont C++ kernel instead of
-        # two separate scale_array calls.  This applies when both scaling
-        # arrays are 1D (per-row) and masks are in the simple 1D form the
-        # C++ kernel expects.
+        # two separate scale_array calls.  This only applies when there is at
+        # least one mask (the no-mask case is faster with NumPy broadcasting).
         _nspec = self._luminosity.shape[0]
         _nlam = self._luminosity.shape[-1]
         _lum_1d = isinstance(scaling_lum, np.ndarray) and scaling_lum.ndim == 1
@@ -1216,6 +1215,7 @@ class LineCollection:
             and _cont_1d
             and scaling_lum.shape[0] == _nspec
             and scaling_cont.shape[0] == _nspec
+            and (mask is not None or lam_mask is not None)
             and (mask is None or (mask.ndim == 1 and mask.shape[0] == _nspec))
             and (
                 lam_mask is None
@@ -1240,9 +1240,6 @@ class LineCollection:
                 out_lum,
                 out_cont,
             )
-            # If inplace is True the fused kernel will have written to the
-            # existing arrays so we can just return self, otherwise we need to
-            # create a new LineCollection with the new arrays
             if inplace:
                 return self
             return LineCollection(
@@ -1252,9 +1249,9 @@ class LineCollection:
                 cont=get_array_quantity_view(new_cont, self.continuum.units),
             )
 
-        # Ok, we couldn't use the fused kernel, use the 1D scaling kernel
-        # for the luminosity and continuum separately. If inplace is True
-        # write to the existing arrays and return self
+        # Apply the scaling to the luminosity and continuum separately using
+        # the shared scale_array helper.  If inplace is True write to the
+        # existing arrays and return self
         if inplace:
             scale_array(
                 self._luminosity,

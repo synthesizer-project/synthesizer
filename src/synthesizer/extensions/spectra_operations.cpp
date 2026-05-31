@@ -1377,7 +1377,8 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
  */
 static void scale_line_2d_no_mask_serial(
     const double *lum, const double *cont,
-    const double *scaling_lum, const double *scaling_cont,
+    const double *scaling_lum,
+    const double *scaling_cont,
     double *out_lum, double *out_cont,
     int nspec, int nlam) {
   /* Loop over every spectrum and scale both lum and cont in one pass. */
@@ -1389,6 +1390,8 @@ static void scale_line_2d_no_mask_serial(
     const double *in_cont_row = cont + i * nlam;
     double *out_lum_row = out_lum + i * nlam;
     double *out_cont_row = out_cont + i * nlam;
+
+#pragma GCC ivdep
     for (int j = 0; j < nlam; j++) {
       out_lum_row[j] = in_lum_row[j] * sl;
       out_cont_row[j] = in_cont_row[j] * sc;
@@ -1428,11 +1431,13 @@ static void scale_line_2d_row_mask_serial(const double *lum, const double *cont,
     if (mask[i]) {
       const double sl = scaling_lum[i];
       const double sc = scaling_cont[i];
+#pragma GCC ivdep
       for (int j = 0; j < nlam; j++) {
         out_lum_row[j] = in_lum_row[j] * sl;
         out_cont_row[j] = in_cont_row[j] * sc;
       }
     } else {
+#pragma GCC ivdep
       for (int j = 0; j < nlam; j++) {
         out_lum_row[j] = in_lum_row[j];
         out_cont_row[j] = in_cont_row[j];
@@ -1458,9 +1463,10 @@ static void scale_line_2d_row_mask_serial(const double *lum, const double *cont,
  * @param nlam: The number of wavelength bins.
  */
 static void scale_line_2d_lam_mask_serial(
-    const double *lum, const double *cont, const double *scaling_lum,
-    const double *scaling_cont, const npy_bool *lam_mask, double *out_lum,
-    double *out_cont, int nspec, int nlam) {
+    const double *lum, const double *cont,
+    const double *scaling_lum,
+    const double *scaling_cont, const npy_bool *lam_mask,
+    double *out_lum, double *out_cont, int nspec, int nlam) {
   /* Loop over every spectrum. */
   for (int i = 0; i < nspec; i++) {
     /* Cache both scale factors for this row. */
@@ -1498,7 +1504,8 @@ static void scale_line_2d_lam_mask_serial(
  * @param nlam: The number of wavelength bins.
  */
 static void scale_line_2d_both_masks_serial(
-    const double *lum, const double *cont, const double *scaling_lum,
+    const double *lum, const double *cont,
+    const double *scaling_lum,
     const double *scaling_cont, const npy_bool *mask,
     const npy_bool *lam_mask, double *out_lum, double *out_cont, int nspec,
     int nlam) {
@@ -1559,6 +1566,8 @@ static void scale_line_2d_no_mask_omp(const double *lum, const double *cont,
     const double *in_cont_row = cont + i * nlam;
     double *out_lum_row = out_lum + i * nlam;
     double *out_cont_row = out_cont + i * nlam;
+
+#pragma omp simd
     for (int j = 0; j < nlam; j++) {
       out_lum_row[j] = in_lum_row[j] * sl;
       out_cont_row[j] = in_cont_row[j] * sc;
@@ -1600,11 +1609,13 @@ static void scale_line_2d_row_mask_omp(const double *lum, const double *cont,
     if (mask[i]) {
       const double sl = scaling_lum[i];
       const double sc = scaling_cont[i];
+#pragma omp simd
       for (int j = 0; j < nlam; j++) {
         out_lum_row[j] = in_lum_row[j] * sl;
         out_cont_row[j] = in_cont_row[j] * sc;
       }
     } else {
+#pragma omp simd
       for (int j = 0; j < nlam; j++) {
         out_lum_row[j] = in_lum_row[j];
         out_cont_row[j] = in_cont_row[j];
@@ -2018,10 +2029,6 @@ static PyMethodDef SpectraOperationMethods[] = {
     {"scale_spectra_2d", (PyCFunction)scale_spectra_2d, METH_VARARGS,
      "Scale a 2D spectra array by a 1D per-spectrum factor with mask-"
      "specialised kernels. Accepts an optional out array for in-place use."},
-    {"scale_line_2d", (PyCFunction)scale_line_2d, METH_VARARGS,
-     "Fused lum+cont scaling with per-spectrum factors. Processes both "
-     "arrays in one parallel loop to halve dispatch overhead. "
-     "Accepts optional out arrays for in-place use."},
     {"apply_separable_attenuation_2d",
      (PyCFunction)apply_separable_attenuation_2d, METH_VARARGS,
      "Apply exp(-tau_v * tau_x_v) attenuation to a 2D spectra array. "
@@ -2034,6 +2041,10 @@ static PyMethodDef SpectraOperationMethods[] = {
      METH_VARARGS,
      "Multiply a 1D or 2D array by a 1D vector over the last axis. "
      "Accepts an optional out array for in-place use."},
+    {"scale_line_2d", (PyCFunction)scale_line_2d, METH_VARARGS,
+     "Fused lum+cont scaling with per-spectrum factors. Processes both "
+     "arrays in one parallel loop to halve dispatch overhead. "
+     "Accepts optional out arrays for in-place use."},
     {NULL, NULL, 0, NULL}};
 
 static struct PyModuleDef moduledef = {
