@@ -100,7 +100,7 @@ class ProcessedFraction(Transformer):
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
             nthreads (int):
-                The number of threads to use for compatible Sed scaling.
+                The number of threads to use for compatible scaling kernels.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -202,7 +202,7 @@ class EscapedFraction(Transformer):
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
             nthreads (int):
-                The number of threads to use for compatible Sed scaling.
+                The number of threads to use for compatible scaling kernels.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -305,7 +305,7 @@ class CoveringFraction(Transformer):
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
             nthreads (int):
-                The number of threads to use for compatible Sed scaling.
+                The number of threads to use for compatible scaling kernels.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -408,7 +408,7 @@ class EscapingFraction(Transformer):
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
             nthreads (int):
-                The number of threads to use for compatible Sed scaling.
+                The number of threads to use for compatible scaling kernels.
 
         Returns:
             Line/Sed: The transformed emission.

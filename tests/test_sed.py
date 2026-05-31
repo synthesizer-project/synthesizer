@@ -3,6 +3,7 @@
 import numpy as np
 from unyt import Hz, angstrom, erg, s
 
+from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.emissions.sed import Sed
 
 
@@ -44,3 +45,24 @@ def test_scale_threaded_row_broadcast_respects_masks():
     expected = lnu.value.copy()
     expected[np.ix_(mask, lam_mask)] *= scaling[mask][:, None]
     np.testing.assert_allclose(scaled.lnu.value, expected)
+
+
+def test_apply_attenuation_uses_separable_row_kernel():
+    """Row-wise attenuation should match direct transmission broadcasting."""
+    lam = np.linspace(1000, 2000, 4) * angstrom
+    lnu = (np.arange(12, dtype=float).reshape(3, 4) + 1.0) * erg / s / Hz
+    tau_v = np.array([0.1, 0.2, 0.3])
+    mask = np.array([True, False, True])
+    dust_curve = PowerLaw(slope=-0.7)
+
+    attenuated = Sed(lam=lam, lnu=lnu).apply_attenuation(
+        tau_v=tau_v,
+        dust_curve=dust_curve,
+        mask=mask,
+        nthreads=2,
+    )
+
+    transmission = dust_curve.get_transmission(tau_v, lam)
+    expected = lnu.value.copy()
+    expected[mask] *= transmission[mask]
+    np.testing.assert_allclose(attenuated.lnu.value, expected)

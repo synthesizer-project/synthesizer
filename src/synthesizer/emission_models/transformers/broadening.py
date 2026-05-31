@@ -57,8 +57,8 @@ class DopplerBroadening(Transformer):
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
             nthreads (int):
-                Unused thread-count placeholder passed through the generic
-                transformation interface.
+                Accepted for API consistency with other transformers.
+                Doppler broadening does not currently use threaded kernels.
 
         Returns:
             Sed: The broadened emission.
@@ -161,8 +161,8 @@ class ThermalBroadening(Transformer):
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
             nthreads (int):
-                Unused thread-count placeholder passed through the generic
-                transformation interface.
+                Accepted for API consistency with other transformers.
+                Thermal broadening does not currently use threaded kernels.
 
         Returns:
             Sed: The broadened emission.

@@ -172,6 +172,29 @@ class AttenuationLaw(Transformer):
 
         return np.exp(-exponent)
 
+    @accepts(lam=angstrom)
+    def get_tau_x_v(self, lam, **dust_curve_kwargs):
+        """Compute the wavelength-dependent optical depth curve.
+
+        Args:
+            lam (np.ndarray of float):
+                The wavelengths (with units) at which to calculate the
+                normalised optical depth curve.
+            **dust_curve_kwargs (dict):
+                Additional keyword arguments to be passed to the dust curve
+                which have been defined on the emitter or model.
+
+        Returns:
+            np.ndarray of float:
+                The normalised optical depth curve with shape ``lam.shape``.
+        """
+        self._set_params(**dust_curve_kwargs)
+
+        try:
+            return self.get_tau(lam)
+        finally:
+            self._reset_params()
+
     def _check_required_params(self):
         """Get the required parameters for the transformer.
 

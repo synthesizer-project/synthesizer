@@ -2,8 +2,8 @@
  * Generic spectra operation kernels with split masked/unmasked backends.
  *
  * Provides scale_spectra_2d, apply_separable_attenuation_2d,
- * multiply_rows_by_vector_2d, multiply_array_by_vector_1d, and
- * scale_line_2d. Each arithmetic operation is compiled as dedicated no-mask,
+ * multiply_array_by_vector_1d, and scale_line_2d. Each arithmetic
+ * operation is compiled as dedicated no-mask,
  * row-mask, lam-mask, and both-mask variants so the inner loops stay
  * branch-free.
  ******************************************************************************/
@@ -317,6 +317,61 @@ static void scale_spectra_2d_both_masks_omp(const double *__restrict__ spectra,
 #endif /* WITH_OPENMP */
 
 /**
+ * @brief Dispatch per-spectrum row scaling to the correct kernel.
+ *
+ * @param spectra: Input spectra array (nspec x nlam).
+ * @param scaling: Per-spectrum scaling vector (nspec).
+ * @param mask: Optional 1D row mask (nspec).
+ * @param lam_mask: Optional 1D wavelength mask (nlam).
+ * @param out: Output buffer (nspec x nlam).
+ * @param nspec: The number of spectra rows.
+ * @param nlam: The number of wavelength bins.
+ * @param nthreads: The number of OpenMP threads.
+ */
+static void dispatch_scale_spectra_2d(const double *spectra,
+                                      const double *scaling,
+                                      const npy_bool *mask,
+                                      const npy_bool *lam_mask, double *out,
+                                      int nspec, int nlam, int nthreads) {
+  const bool has_mask = (mask != NULL);
+  const bool has_lam_mask = (lam_mask != NULL);
+
+  if (nthreads > 1) {
+#ifdef WITH_OPENMP
+    if (!has_mask && !has_lam_mask) {
+      scale_spectra_2d_no_mask_omp(spectra, scaling, out, nspec, nlam,
+                                   nthreads);
+    } else if (has_mask && !has_lam_mask) {
+      scale_spectra_2d_row_mask_omp(spectra, scaling, mask, out, nspec, nlam,
+                                    nthreads);
+    } else if (!has_mask && has_lam_mask) {
+      scale_spectra_2d_lam_mask_omp(spectra, scaling, lam_mask, out, nspec,
+                                    nlam, nthreads);
+    } else {
+      scale_spectra_2d_both_masks_omp(spectra, scaling, mask, lam_mask, out,
+                                      nspec, nlam, nthreads);
+    }
+    return;
+#else
+    (void)nthreads;
+#endif
+  }
+
+  if (!has_mask && !has_lam_mask) {
+    scale_spectra_2d_no_mask_serial(spectra, scaling, out, nspec, nlam);
+  } else if (has_mask && !has_lam_mask) {
+    scale_spectra_2d_row_mask_serial(spectra, scaling, mask, out, nspec,
+                                     nlam);
+  } else if (!has_mask && has_lam_mask) {
+    scale_spectra_2d_lam_mask_serial(spectra, scaling, lam_mask, out, nspec,
+                                     nlam);
+  } else {
+    scale_spectra_2d_both_masks_serial(spectra, scaling, mask, lam_mask, out,
+                                       nspec, nlam);
+  }
+}
+
+/**
  * @brief Scale a 2D spectra array by a per-spectrum factor.
  *
  * Parses the Python arguments, validates shapes, allocates (or reuses) an
@@ -494,56 +549,8 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
   /* Dispatch to the correct mask-specialised kernel. */
   tic("scale_spectra_2d");
 
-  const bool has_mask = (mask != NULL);
-  const bool has_lam_mask = (lam_mask != NULL);
-
-  if (nthreads > 1) {
-#ifdef WITH_OPENMP
-    /* Use OpenMP variants when multiple threads are available. */
-    if (!has_mask && !has_lam_mask) {
-      scale_spectra_2d_no_mask_omp(spectra, scaling, out, nspec, nlam,
-                                   nthreads);
-    } else if (has_mask && !has_lam_mask) {
-      scale_spectra_2d_row_mask_omp(spectra, scaling, mask, out, nspec, nlam,
-                                    nthreads);
-    } else if (!has_mask && has_lam_mask) {
-      scale_spectra_2d_lam_mask_omp(spectra, scaling, lam_mask, out, nspec,
-                                    nlam, nthreads);
-    } else {
-      scale_spectra_2d_both_masks_omp(spectra, scaling, mask, lam_mask, out,
-                                      nspec, nlam, nthreads);
-    }
-#else
-    /* OpenMP not available; fall back to the serial variants. */
-    (void)nthreads;
-    if (!has_mask && !has_lam_mask) {
-      scale_spectra_2d_no_mask_serial(spectra, scaling, out, nspec, nlam);
-    } else if (has_mask && !has_lam_mask) {
-      scale_spectra_2d_row_mask_serial(spectra, scaling, mask, out, nspec,
-                                       nlam);
-    } else if (!has_mask && has_lam_mask) {
-      scale_spectra_2d_lam_mask_serial(spectra, scaling, lam_mask, out, nspec,
-                                       nlam);
-    } else {
-      scale_spectra_2d_both_masks_serial(spectra, scaling, mask, lam_mask, out,
-                                         nspec, nlam);
-    }
-#endif
-  } else {
-    /* Single-threaded dispatch — always use serial kernels. */
-    if (!has_mask && !has_lam_mask) {
-      scale_spectra_2d_no_mask_serial(spectra, scaling, out, nspec, nlam);
-    } else if (has_mask && !has_lam_mask) {
-      scale_spectra_2d_row_mask_serial(spectra, scaling, mask, out, nspec,
-                                       nlam);
-    } else if (!has_mask && has_lam_mask) {
-      scale_spectra_2d_lam_mask_serial(spectra, scaling, lam_mask, out, nspec,
-                                       nlam);
-    } else {
-      scale_spectra_2d_both_masks_serial(spectra, scaling, mask, lam_mask, out,
-                                         nspec, nlam);
-    }
-  }
+  dispatch_scale_spectra_2d(spectra, scaling, mask, lam_mask, out, nspec,
+                            nlam, nthreads);
 
   toc("scale_spectra_2d");
 
@@ -713,6 +720,47 @@ static void attenuate_2d_with_mask_omp(const double *__restrict__ spectra,
 #endif /* WITH_OPENMP */
 
 /**
+ * @brief Dispatch separable attenuation to the correct kernel.
+ *
+ * @param spectra: Input spectra array (nrows x ncols).
+ * @param tau_v: 1D V-band optical depth per row (nrows).
+ * @param tau_x_v: 1D extinction curve per column (ncols).
+ * @param mask: Optional 1D row mask (nrows).
+ * @param out: Output buffer (nrows x ncols).
+ * @param nrows: The number of spectra rows.
+ * @param ncols: The number of spectral columns.
+ * @param nthreads: The number of OpenMP threads.
+ */
+static void dispatch_attenuate_2d(const double *spectra, const double *tau_v,
+                                  const double *tau_x_v,
+                                  const npy_bool *mask, double *out,
+                                  int nrows, int ncols, int nthreads) {
+  const bool has_mask = (mask != NULL);
+
+  if (nthreads > 1) {
+#ifdef WITH_OPENMP
+    if (!has_mask) {
+      attenuate_2d_no_mask_omp(spectra, tau_v, tau_x_v, out, nrows, ncols,
+                               nthreads);
+    } else {
+      attenuate_2d_with_mask_omp(spectra, tau_v, tau_x_v, mask, out, nrows,
+                                 ncols, nthreads);
+    }
+    return;
+#else
+    (void)nthreads;
+#endif
+  }
+
+  if (!has_mask) {
+    attenuate_2d_no_mask_serial(spectra, tau_v, tau_x_v, out, nrows, ncols);
+  } else {
+    attenuate_2d_with_mask_serial(spectra, tau_v, tau_x_v, mask, out, nrows,
+                                  ncols);
+  }
+}
+
+/**
  * @brief Apply exp(-tau_v * tau_x_v) attenuation to a 2D spectra array.
  *
  * Dispatches to a mask-specialised kernel so the inner expfma chain
@@ -861,364 +909,14 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
   /* Dispatch to the mask-specialised kernel. */
   tic("apply_separable_attenuation_2d");
 
-  const bool has_mask = (mask != NULL);
-
-  if (nthreads > 1) {
-#ifdef WITH_OPENMP
-    if (!has_mask) {
-      attenuate_2d_no_mask_omp(spectra, tau_v, tau_x_v, out, nrows, ncols,
-                               nthreads);
-    } else {
-      attenuate_2d_with_mask_omp(spectra, tau_v, tau_x_v, mask, out, nrows,
-                                 ncols, nthreads);
-    }
-#else
-    (void)nthreads;
-    if (!has_mask) {
-      attenuate_2d_no_mask_serial(spectra, tau_v, tau_x_v, out, nrows, ncols);
-    } else {
-      attenuate_2d_with_mask_serial(spectra, tau_v, tau_x_v, mask, out, nrows,
-                                    ncols);
-    }
-#endif
-  } else {
-    if (!has_mask) {
-      attenuate_2d_no_mask_serial(spectra, tau_v, tau_x_v, out, nrows, ncols);
-    } else {
-      attenuate_2d_with_mask_serial(spectra, tau_v, tau_x_v, mask, out, nrows,
-                                    ncols);
-    }
-  }
+  dispatch_attenuate_2d(spectra, tau_v, tau_x_v, mask, out, nrows, ncols,
+                        nthreads);
 
   toc("apply_separable_attenuation_2d");
 
   Py_DECREF(np_spectra);
   Py_DECREF(np_tau_v);
   Py_DECREF(np_tau_x_v);
-  Py_XDECREF(np_mask);
-
-  return Py_BuildValue("N", np_out);
-}
-
-/* ------------------------------------------------------------------------ */
-/*  multiply_rows_by_vector_2d — row-wise multiply with optional row mask   */
-/* ------------------------------------------------------------------------ */
-/*
- * Kept as an independent entry point for callers that need row-wise
- * multiplication without the per-spectrum scaling-semantic overload.
- * The internal structure mirrors scale_spectra_2d minus the lam_mask
- * dimension. */
-
-/**
- * @brief This calculates row-wise multiplication with no row mask.
- *
- * This is the serial version of the function for rows without a mask.
- *
- * @param array: The input 2D array (nrows x ncols).
- * @param vector: The per-row scaling vector (nrows).
- * @param out: The pre-allocated output buffer (nrows x ncols).
- * @param nrows: The number of rows.
- * @param ncols: The number of columns.
- */
-static void multiply_rows_by_vector_2d_no_mask_serial(
-    const double *__restrict__ array, const double *__restrict__ vector, double *out, int nrows,
-    int ncols) {
-  /* Loop over every row and multiply by the row's scale factor. */
-  for (int irow = 0; irow < nrows; irow++) {
-    /* Cache the row-scale factor so we only read it once. */
-    const double scale = vector[irow];
-    const double *in_row = array + irow * ncols;
-    double *out_row = out + irow * ncols;
-
-    /* Multiply every column by the row factor. */
-    for (int icol = 0; icol < ncols; icol++) {
-      out_row[icol] = in_row[icol] * scale;
-    }
-  }
-}
-
-/**
- * @brief This calculates row-wise multiplication with a 1D row mask.
- *
- * This is the serial version of the function for rows with a row mask.
- *
- * @param array: The input 2D array (nrows x ncols).
- * @param vector: The per-row scaling vector (nrows).
- * @param mask: 1D boolean row mask (nrows).
- * @param out: The pre-allocated output buffer (nrows x ncols).
- * @param nrows: The number of rows.
- * @param ncols: The number of columns.
- */
-static void multiply_rows_by_vector_2d_with_mask_serial(
-    const double *__restrict__ array, const double *__restrict__ vector, const npy_bool *mask,
-    double *out, int nrows, int ncols) {
-  /* Loop over every row and dispatch based on the mask. */
-  for (int irow = 0; irow < nrows; irow++) {
-    const double *in_row = array + irow * ncols;
-    double *out_row = out + irow * ncols;
-
-    /* Scale masked rows and copy unmasked rows through unchanged. */
-    if (mask[irow]) {
-      const double scale = vector[irow];
-
-      for (int icol = 0; icol < ncols; icol++) {
-        out_row[icol] = in_row[icol] * scale;
-      }
-    } else {
-      for (int icol = 0; icol < ncols; icol++) {
-        out_row[icol] = in_row[icol];
-      }
-    }
-  }
-}
-
-#ifdef WITH_OPENMP
-
-/**
- * @brief This calculates row-wise multiplication with no mask using OpenMP.
- *
- * This is the parallel version of the function for rows without a mask.
- *
- * @param array: The input 2D array (nrows x ncols).
- * @param vector: The per-row scaling vector (nrows).
- * @param out: The pre-allocated output buffer (nrows x ncols).
- * @param nrows: The number of rows.
- * @param ncols: The number of columns.
- * @param nthreads: The number of OpenMP threads.
- */
-static void multiply_rows_by_vector_2d_no_mask_omp(const double *__restrict__ array,
-                                                    const double *__restrict__ vector,
-                                                    double *out, int nrows,
-                                                    int ncols, int nthreads) {
-  /* Split the rows evenly across threads. */
-#pragma omp parallel for num_threads(nthreads) schedule(static)
-
-  for (int irow = 0; irow < nrows; irow++) {
-    /* Cache the row-scale factor for this row. */
-    const double scale = vector[irow];
-    const double *in_row = array + irow * ncols;
-    double *out_row = out + irow * ncols;
-
-    /* Multiply every column by the row factor. */
-    for (int icol = 0; icol < ncols; icol++) {
-      out_row[icol] = in_row[icol] * scale;
-    }
-  }
-}
-
-/**
- * @brief This calculates row-wise multiplication with a mask using OpenMP.
- *
- * This is the parallel version of the function for rows with a row mask.
- *
- * @param array: The input 2D array (nrows x ncols).
- * @param vector: The per-row scaling vector (nrows).
- * @param mask: 1D boolean row mask (nrows).
- * @param out: The pre-allocated output buffer (nrows x ncols).
- * @param nrows: The number of rows.
- * @param ncols: The number of columns.
- * @param nthreads: The number of OpenMP threads.
- */
-static void multiply_rows_by_vector_2d_with_mask_omp(
-    const double *__restrict__ array, const double *__restrict__ vector, const npy_bool *mask,
-    double *out, int nrows, int ncols, int nthreads) {
-  /* Split the rows evenly across threads. */
-#pragma omp parallel for num_threads(nthreads) schedule(static)
-
-  for (int irow = 0; irow < nrows; irow++) {
-    const double *in_row = array + irow * ncols;
-    double *out_row = out + irow * ncols;
-
-    /* Scale masked rows and copy unmasked rows through unchanged. */
-    if (mask[irow]) {
-      const double scale = vector[irow];
-
-      for (int icol = 0; icol < ncols; icol++) {
-        out_row[icol] = in_row[icol] * scale;
-      }
-    } else {
-      for (int icol = 0; icol < ncols; icol++) {
-        out_row[icol] = in_row[icol];
-      }
-    }
-  }
-}
-
-#endif /* WITH_OPENMP */
-
-/**
- * @brief Multiply a 2D array by a 1D row vector with optional row mask.
- *
- * Dispatches to a mask-specialised kernel.
- *
- * @param array_obj: 2D float64 ndarray (nrows x ncols).
- * @param vector_obj: 1D float64 ndarray (nrows).
- * @param mask_obj: Optional 1D boolean ndarray (nrows).
- * @param nthreads: Number of OpenMP threads.
- * @param out_obj: Optional output buffer, same shape as array.
- *
- * @return 2D float64 ndarray with each row i multiplied by vector[i].
- */
-PyObject *multiply_rows_by_vector_2d(PyObject *self, PyObject *args) {
-  (void)self;
-
-  /* Parse the argument tuple. */
-  PyObject *array_obj, *vector_obj;
-  PyObject *mask_obj = Py_None;
-  PyObject *out_obj = Py_None;
-  int nthreads;
-
-  if (!PyArg_ParseTuple(args, "OOOi|O", &array_obj, &vector_obj, &mask_obj,
-                        &nthreads, &out_obj)) {
-    return NULL;
-  }
-
-  /* Convert inputs to float64 NumPy array views. */
-  PyArrayObject *np_array = (PyArrayObject *)PyArray_FROM_OTF(
-      array_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-  PyArrayObject *np_vector = (PyArrayObject *)PyArray_FROM_OTF(
-      vector_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-
-  if (np_array == NULL || np_vector == NULL) {
-    Py_XDECREF(np_array);
-    Py_XDECREF(np_vector);
-    return NULL;
-  }
-
-  /* Convert the optional row mask. */
-  PyArrayObject *np_mask = nullptr;
-
-  if (mask_obj != Py_None) {
-    np_mask = (PyArrayObject *)PyArray_FROM_OTF(mask_obj, NPY_BOOL,
-                                                NPY_ARRAY_IN_ARRAY);
-    if (np_mask == NULL) {
-      Py_DECREF(np_array);
-      Py_DECREF(np_vector);
-      return NULL;
-    }
-  }
-
-  /* Validate shapes. */
-  if (PyArray_NDIM(np_array) != 2 || PyArray_NDIM(np_vector) != 1) {
-    PyErr_SetString(PyExc_ValueError,
-                    "array must be 2D and vector must be 1D.");
-    Py_DECREF(np_array);
-    Py_DECREF(np_vector);
-    Py_XDECREF(np_mask);
-    return NULL;
-  }
-
-  const npy_intp *array_dims = PyArray_DIMS(np_array);
-  const int nrows = static_cast<int>(array_dims[0]);
-  const int ncols = static_cast<int>(array_dims[1]);
-
-  if (PyArray_DIMS(np_vector)[0] != array_dims[0]) {
-    PyErr_SetString(PyExc_ValueError,
-                    "vector length must match the first array dimension.");
-    Py_DECREF(np_array);
-    Py_DECREF(np_vector);
-    Py_XDECREF(np_mask);
-    return NULL;
-  }
-
-  if (np_mask != NULL && (PyArray_NDIM(np_mask) != 1 ||
-                          PyArray_DIMS(np_mask)[0] != array_dims[0])) {
-    PyErr_SetString(PyExc_ValueError,
-                    "mask must be a 1D bool array matching array rows.");
-    Py_DECREF(np_array);
-    Py_DECREF(np_vector);
-    Py_XDECREF(np_mask);
-    return NULL;
-  }
-
-  /* Reuse caller-provided output buffer or allocate a fresh one. */
-  PyArrayObject *np_out = nullptr;
-
-  if (out_obj != Py_None) {
-    np_out = (PyArrayObject *)PyArray_FROM_OTF(out_obj, NPY_DOUBLE,
-                                               NPY_ARRAY_INOUT_ARRAY);
-    if (np_out == NULL) {
-      Py_DECREF(np_array);
-      Py_DECREF(np_vector);
-      Py_XDECREF(np_mask);
-      return NULL;
-    }
-
-    /* Verify the output buffer has the expected shape. */
-    if (PyArray_NDIM(np_out) != 2 ||
-        PyArray_DIMS(np_out)[0] != array_dims[0] ||
-        PyArray_DIMS(np_out)[1] != array_dims[1]) {
-      PyErr_SetString(PyExc_ValueError,
-                      "out must have shape (nrows, ncols) matching array.");
-      Py_DECREF(np_array);
-      Py_DECREF(np_vector);
-      Py_XDECREF(np_mask);
-      Py_DECREF(np_out);
-      return NULL;
-    }
-  } else {
-    np_out = (PyArrayObject *)PyArray_NewLikeArray(np_array, NPY_KEEPORDER,
-                                                   NULL, 0);
-    if (np_out == NULL) {
-      Py_DECREF(np_array);
-      Py_DECREF(np_vector);
-      Py_XDECREF(np_mask);
-      return NULL;
-    }
-  }
-
-  /* Extract the raw C pointers for the kernel. */
-  const double *array =
-      static_cast<const double *>(PyArray_DATA(np_array));
-  const double *vector =
-      static_cast<const double *>(PyArray_DATA(np_vector));
-  double *out = static_cast<double *>(PyArray_DATA(np_out));
-  const npy_bool *mask = np_mask == NULL
-                             ? NULL
-                             : static_cast<const npy_bool *>(
-                                   PyArray_DATA(np_mask));
-
-  /* Dispatch based on whether a row mask is present. */
-  tic("multiply_rows_by_vector_2d");
-
-  const bool has_mask = (mask != NULL);
-
-  if (nthreads > 1) {
-#ifdef WITH_OPENMP
-    /* Use OpenMP variants when multiple threads are available. */
-    if (!has_mask) {
-      multiply_rows_by_vector_2d_no_mask_omp(array, vector, out, nrows, ncols,
-                                             nthreads);
-    } else {
-      multiply_rows_by_vector_2d_with_mask_omp(array, vector, mask, out, nrows,
-                                               ncols, nthreads);
-    }
-#else
-    /* OpenMP not available; fall back to the serial variants. */
-    (void)nthreads;
-    if (!has_mask) {
-      multiply_rows_by_vector_2d_no_mask_serial(array, vector, out, nrows,
-                                                ncols);
-    } else {
-      multiply_rows_by_vector_2d_with_mask_serial(array, vector, mask, out,
-                                                  nrows, ncols);
-    }
-#endif
-  } else {
-    /* Single-threaded dispatch — always use serial kernels. */
-    if (!has_mask) {
-      multiply_rows_by_vector_2d_no_mask_serial(array, vector, out, nrows,
-                                                ncols);
-    } else {
-      multiply_rows_by_vector_2d_with_mask_serial(array, vector, mask, out,
-                                                  nrows, ncols);
-    }
-  }
-
-  toc("multiply_rows_by_vector_2d");
-
-  Py_DECREF(np_array);
-  Py_DECREF(np_vector);
   Py_XDECREF(np_mask);
 
   return Py_BuildValue("N", np_out);
@@ -2044,10 +1742,6 @@ static PyMethodDef SpectraOperationMethods[] = {
     {"apply_separable_attenuation_2d",
      (PyCFunction)apply_separable_attenuation_2d, METH_VARARGS,
      "Apply exp(-tau_v * tau_x_v) attenuation to a 2D spectra array. "
-     "Accepts an optional out array for in-place use."},
-    {"multiply_rows_by_vector_2d", (PyCFunction)multiply_rows_by_vector_2d,
-     METH_VARARGS,
-     "Multiply a 2D array by a 1D row vector with optional row mask. "
      "Accepts an optional out array for in-place use."},
     {"multiply_array_by_vector_1d", (PyCFunction)multiply_array_by_vector_1d,
      METH_VARARGS,

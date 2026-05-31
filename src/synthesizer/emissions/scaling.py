@@ -1,9 +1,9 @@
 """Shared helpers for scaling emission arrays.
 
 Provides normalised mask handling and a unified scaling dispatcher that
-tries the mask-specialised C++ kernels first before falling back to
-NumPy broadcasting. Both ``Sed.scale`` and ``LineCollection.scale``
-delegate here for the single-array path.
+uses the specialised C++ kernels where they help, while keeping simple
+no-mask broadcasts on the NumPy path. Both ``Sed.scale`` and
+``LineCollection.scale`` delegate here for the single-array path.
 
 Example usage::
 
@@ -16,9 +16,14 @@ Example usage::
 """
 
 import numpy as np
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.extensions.spectra_operations import scale_spectra_2d
+from synthesizer.extensions.spectra_operations import (
+    scale_line_2d,
+    scale_spectra_2d,
+)
+from synthesizer.units import get_array_quantity_view
 
 
 def normalise_scale_masks(mask, lam_mask, shape):
@@ -36,9 +41,14 @@ def normalise_scale_masks(mask, lam_mask, shape):
         tuple:
             ``(mask, lam_mask)`` in a form the scaling helper understands.
     """
+    if lam_mask is not None:
+        lam_mask = np.asarray(lam_mask)
+
     # No mask at all — nothing to normalise, return as-is
     if mask is None:
         return None, lam_mask
+
+    mask = np.asarray(mask)
 
     # The mask matches the full array shape so it's an element-level mask.
     # If we also have a wavelength mask we can combine them into one
@@ -71,6 +81,239 @@ def normalise_scale_masks(mask, lam_mask, shape):
     )
 
 
+def normalise_scaling_for_units(scaling, units):
+    """Convert a scaling factor into raw values compatible with ``units``.
+
+    Args:
+        scaling (float, np.ndarray, or unyt quantity):
+            Scaling factor supplied by the caller.
+        units (unyt.Unit):
+            Units expected by the target array.
+
+    Returns:
+        float or np.ndarray:
+            Raw scaling values with any units stripped.
+    """
+    if not isinstance(scaling, (unyt_array, unyt_quantity)):
+        return scaling
+
+    if units.dimensions != scaling.units.dimensions:
+        raise exceptions.InconsistentMultiplication(
+            f"Incompatible units {units} and {scaling.units}"
+        )
+
+    return scaling.to(units).value
+
+
+def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
+    """Resolve a line scaling into luminosity and continuum factors.
+
+    Line luminosity and continuum carry different physical units, so a single
+    unit-bearing scaling may need to be converted into two different raw
+    arrays. The frequency coordinate is only constructed when we actually need
+    one of those unit conversions.
+
+    Args:
+        scaling (float, np.ndarray, or unyt quantity):
+            Scaling factor supplied by the caller.
+        get_nu (Callable[[], unyt_array]):
+            Callable returning the frequency coordinate for the lines.
+        lum_units (unyt.Unit):
+            Units of the luminosity array.
+        cont_units (unyt.Unit):
+            Units of the continuum array.
+
+    Returns:
+        tuple:
+            ``(scaling_lum, scaling_cont)`` as raw values.
+    """
+    if not isinstance(scaling, (unyt_array, unyt_quantity)):
+        return scaling, scaling
+
+    nu = get_nu()
+
+    if cont_units.dimensions == scaling.units.dimensions:
+        scaling_cont = scaling.to(cont_units).value
+        scaling_lum = (scaling * nu).to(lum_units).value
+        return scaling_lum, scaling_cont
+
+    if lum_units.dimensions == scaling.units.dimensions:
+        scaling_lum = scaling.to(lum_units).value
+        scaling_cont = (scaling / nu).to(cont_units).value
+        return scaling_lum, scaling_cont
+
+    raise exceptions.InconsistentMultiplication(
+        f"{scaling.units} is neither compatible with the "
+        f"continuum ({cont_units}) nor the luminosity ({lum_units})"
+    )
+
+
+def scale_to_quantity(
+    array,
+    scaling,
+    units,
+    mask=None,
+    lam_mask=None,
+    nthreads=1,
+):
+    """Scale an array and wrap the result in units without copying again.
+
+    Args:
+        array (np.ndarray):
+            Raw array to scale.
+        scaling (float or np.ndarray):
+            Raw scaling values.
+        units (unyt.Unit):
+            Units to attach to the scaled result.
+        mask (np.ndarray or None):
+            Optional row or element mask.
+        lam_mask (np.ndarray or None):
+            Optional wavelength mask.
+        nthreads (int):
+            The number of OpenMP threads available to compatible kernels.
+
+    Returns:
+        unyt_array:
+            Scaled result wrapped in ``units``.
+    """
+    return get_array_quantity_view(
+        scale_array(
+            array,
+            scaling,
+            mask=mask,
+            lam_mask=lam_mask,
+            nthreads=nthreads,
+        ),
+        units,
+    )
+
+
+def scale_inplace(array, scaling, mask=None, lam_mask=None, nthreads=1):
+    """Scale an array into its existing buffer.
+
+    Args:
+        array (np.ndarray):
+            Raw array to mutate.
+        scaling (float or np.ndarray):
+            Raw scaling values.
+        mask (np.ndarray or None):
+            Optional row or element mask.
+        lam_mask (np.ndarray or None):
+            Optional wavelength mask.
+        nthreads (int):
+            The number of OpenMP threads available to compatible kernels.
+
+    Returns:
+        np.ndarray:
+            The mutated ``array`` buffer.
+    """
+    return scale_array(
+        array,
+        scaling,
+        mask=mask,
+        lam_mask=lam_mask,
+        nthreads=nthreads,
+        out=array,
+    )
+
+
+def scale_line_arrays(
+    luminosity,
+    continuum,
+    scaling_lum,
+    scaling_cont,
+    mask=None,
+    lam_mask=None,
+    nthreads=1,
+    out_lum=None,
+    out_cont=None,
+):
+    """Scale a luminosity/continuum pair, using the fused kernel when useful.
+
+    This keeps the Python-side dispatch rules for line scaling in one place.
+    The fused C++ kernel is only worthwhile for the 2D masked row-scaling
+    case; otherwise we delegate to ``scale_array`` for each array.
+
+    Args:
+        luminosity (np.ndarray):
+            Raw luminosity array.
+        continuum (np.ndarray):
+            Raw continuum array.
+        scaling_lum (float or np.ndarray):
+            Raw luminosity scaling values.
+        scaling_cont (float or np.ndarray):
+            Raw continuum scaling values.
+        mask (np.ndarray or None):
+            Optional row or element mask.
+        lam_mask (np.ndarray or None):
+            Optional wavelength mask.
+        nthreads (int):
+            The number of OpenMP threads available to compatible kernels.
+        out_lum (np.ndarray or None):
+            Optional output buffer for luminosity.
+        out_cont (np.ndarray or None):
+            Optional output buffer for continuum.
+
+    Returns:
+        tuple:
+            Tuple of scaled ``(luminosity, continuum)`` arrays.
+    """
+    mask, lam_mask = normalise_scale_masks(mask, lam_mask, luminosity.shape)
+
+    nspec = luminosity.shape[0]
+    nlam = luminosity.shape[-1]
+    lum_1d = isinstance(scaling_lum, np.ndarray) and scaling_lum.ndim == 1
+    cont_1d = isinstance(scaling_cont, np.ndarray) and scaling_cont.ndim == 1
+    use_fused = (
+        luminosity.ndim == 2
+        and lum_1d
+        and cont_1d
+        and scaling_lum.shape[0] == nspec
+        and scaling_cont.shape[0] == nspec
+        and (mask is not None or lam_mask is not None)
+        and (mask is None or (mask.ndim == 1 and mask.shape[0] == nspec))
+        and (
+            lam_mask is None
+            or (lam_mask.ndim == 1 and lam_mask.shape[0] == nlam)
+        )
+    )
+
+    # If the fused kernel matches the shapes we use it, otherwise we fall back
+    # to two independent array scales and let ``scale_array`` pick the best
+    # path for each one.
+    if use_fused:
+        return scale_line_2d(
+            luminosity,
+            continuum,
+            scaling_lum,
+            scaling_cont,
+            mask,
+            lam_mask,
+            nthreads,
+            out_lum,
+            out_cont,
+        )
+
+    return (
+        scale_array(
+            luminosity,
+            scaling_lum,
+            mask=mask,
+            lam_mask=lam_mask,
+            nthreads=nthreads,
+            out=out_lum,
+        ),
+        scale_array(
+            continuum,
+            scaling_cont,
+            mask=mask,
+            lam_mask=lam_mask,
+            nthreads=nthreads,
+            out=out_cont,
+        ),
+    )
+
+
 def scale_array(
     array, scaling, mask=None, lam_mask=None, nthreads=1, out=None
 ):
@@ -97,6 +340,19 @@ def scale_array(
             The scaled array (may be ``out`` if the fast path was used).
     """
     scaling_ndim = getattr(scaling, "ndim", 0)
+
+    # With no masks a scalar multiply is already the simple fast path.
+    # Avoid building a temporary row vector and dispatching into C++.
+    if (
+        array.ndim == 2
+        and np.isscalar(scaling)
+        and mask is None
+        and lam_mask is None
+    ):
+        if out is not None:
+            np.multiply(array, scaling, out=out)
+            return out
+        return array * scaling
 
     # If the scaling is a 1D array that matches the first dimension of the
     # array we can use the dedicated 2D C++ kernel. This will handle per-
@@ -134,9 +390,8 @@ def scale_array(
         return scale_spectra_2d(array, scaling, mask, lam_mask, nthreads, out)
 
     # If the scaling is a scalar and the array is 2D we can broadcast it to a
-    # per-row array and use the C++ kernel instead of falling back to the
-    # NumPy scalar path. The masks must be in the simple form the kernel
-    # accepts (1D row/lambda)
+    # per-row array and use the C++ kernel for the masked cases. The masks
+    # must be in the simple form the kernel accepts (1D row/lambda).
     if (
         array.ndim == 2
         and np.isscalar(scaling)

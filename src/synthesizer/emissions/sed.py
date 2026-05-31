@@ -43,9 +43,14 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
-from synthesizer.emissions.scaling import scale_array
+from synthesizer.emissions.scaling import (
+    normalise_scaling_for_units,
+    scale_inplace,
+    scale_to_quantity,
+)
 from synthesizer.extensions.reductions import reduce_particle_spectra
 from synthesizer.extensions.spectra_operations import (
+    apply_separable_attenuation_2d,
     multiply_array_by_vector_1d,
     scale_spectra_2d,
 )
@@ -55,6 +60,7 @@ from synthesizer.units import (
     Quantity,
     accepts,
     get_array_quantity_view,
+    get_quantity_unit,
 )
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
@@ -388,7 +394,7 @@ class Sed:
         Sed object.
 
         Args:
-            scaling (float):
+            scaling (float, np.ndarray, or unyt quantity):
                 The scaling to apply to lnu.
             inplace (bool):
                 If True, the Sed object is modified in place. If False, a new
@@ -400,56 +406,37 @@ class Sed:
             lam_mask (array-like, bool):
                 A mask for the wavelength array to apply the scaling to.
             nthreads (int):
-                The number of threads to use for the optimised 2D broadcast
-                scaling path.
+                The number of threads to use for compatible scaling kernels.
 
         Returns:
             Sed
                 A new instance of Sed with scaled lnu.
         """
-        # If we have units make sure they are ok and then strip them
-        if isinstance(scaling, (unyt_array, unyt_quantity)):
-            if self.lnu.units.dimensions != scaling.units.dimensions:
-                raise exceptions.InconsistentMultiplication(
-                    f"Incompatible units {self.lnu.units} and {scaling.units}"
-                )
-            else:
-                scaling = scaling.to(self.lnu.units)
-                scaling = scaling.value
-
-        # Get the unit from the Quantity descriptor directly, not from
-        # self.lnu (which copies the entire array through value * unit)
-        units = next(
-            cls.__dict__["lnu"].unit
-            for cls in type(self).__mro__
-            if "lnu" in cls.__dict__
-        )
+        units = get_quantity_unit(self, "lnu")
+        scaling = normalise_scaling_for_units(scaling, units)
 
         # If we are scaling in place we can write directly into the existing
-        # buffer, avoiding an allocation of a new array. The scale_array
-        # helper will handle the dispatch to the C++ kernels for us
+        # buffer, avoiding an allocation of a new array. The shared scaling
+        # helpers handle the dispatch to the compatible kernels for us.
         if inplace:
-            scale_array(
+            scale_inplace(
                 self._lnu,
                 scaling,
                 mask=mask,
                 lam_mask=lam_mask,
                 nthreads=nthreads,
-                out=self._lnu,
             )
             return self
 
         # Otherwise we need to create a new array with the scaled values and
         # return a new Sed object
-        new_lnu = get_array_quantity_view(
-            scale_array(
-                self._lnu,
-                scaling,
-                mask=mask,
-                lam_mask=lam_mask,
-                nthreads=nthreads,
-            ),
+        new_lnu = scale_to_quantity(
+            self._lnu,
+            scaling,
             units,
+            mask=mask,
+            lam_mask=lam_mask,
+            nthreads=nthreads,
         )
 
         return Sed(self.lam, lnu=new_lnu)
@@ -1534,7 +1521,40 @@ class Sed:
                     f"({tau_v.shape}, {self._lnu.shape})"
                 )
 
-        # Compute the transmission
+        units = get_quantity_unit(self, "lnu")
+
+        # For the standard AttenuationLaw implementation with per-row tau_v we
+        # can avoid materialising a full 2D transmission array and instead use
+        # the separable attenuation kernel directly.
+        from synthesizer.emission_models.transformers.dust_attenuation import (
+            AttenuationLaw,
+        )
+
+        if (
+            self._lnu.ndim == 2
+            and isinstance(tau_v, np.ndarray)
+            and tau_v.ndim == 1
+            and tau_v.shape[0] == self._lnu.shape[0]
+            and type(dust_curve).get_transmission
+            is AttenuationLaw.get_transmission
+        ):
+            tau_x_v = dust_curve.get_tau_x_v(
+                self.lam,
+                **dust_curve_kwargs,
+            )
+            out = apply_separable_attenuation_2d(
+                self._lnu,
+                tau_v,
+                tau_x_v,
+                mask,
+                nthreads,
+            )
+            return Sed(
+                self.lam,
+                lnu=get_array_quantity_view(out, units),
+            )
+
+        # Compute the transmission for the remaining generic cases.
         transmission = dust_curve.get_transmission(
             tau_v, self.lam, **dust_curve_kwargs
         )
@@ -1559,7 +1579,7 @@ class Sed:
             )
             return Sed(
                 self.lam,
-                lnu=get_array_quantity_view(out, self.lnu.units),
+                lnu=get_array_quantity_view(out, units),
             )
 
         # If we don't have a row mask but the transmission is still wavelength-
@@ -1576,7 +1596,7 @@ class Sed:
             )
             return Sed(
                 self.lam,
-                lnu=get_array_quantity_view(out, self.lnu.units),
+                lnu=get_array_quantity_view(out, units),
             )
 
         # If neither fast path applies we fall back to NumPy broadcasting.
@@ -1593,7 +1613,7 @@ class Sed:
 
         return Sed(
             self.lam,
-            lnu=get_array_quantity_view(out, self.lnu.units),
+            lnu=get_array_quantity_view(out, units),
         )
 
     @accepts(ionisation_energy=eV)

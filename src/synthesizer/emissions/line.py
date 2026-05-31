@@ -49,14 +49,16 @@ from unyt import (
     pc,
     s,
     unyt_array,
-    unyt_quantity,
 )
 
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam, standard_to_vacuum
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emissions import line_ratios
-from synthesizer.emissions.scaling import normalise_scale_masks, scale_array
+from synthesizer.emissions.scaling import (
+    normalise_line_scaling,
+    scale_line_arrays,
+)
 from synthesizer.emissions.sed import Sed
 from synthesizer.emissions.utils import (
     alias_to_line_id,
@@ -66,11 +68,16 @@ from synthesizer.emissions.utils import (
     get_line_id_signature,
 )
 from synthesizer.extensions.spectra_operations import (
+    apply_separable_attenuation_2d,
     multiply_array_by_vector_1d,
-    scale_line_2d,
 )
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts, get_array_quantity_view
+from synthesizer.units import (
+    Quantity,
+    accepts,
+    get_array_quantity_view,
+    get_quantity_unit,
+)
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
 
@@ -1147,14 +1154,15 @@ class LineCollection:
         """Scale the lines by a given factor.
 
         Note: this will only scale the rest frame continuum and luminosity.
-        To get the scaled flux get_flux must be called on the new Line object.
+        To get the scaled flux get_flux must be called on the new
+        LineCollection object.
 
         Args:
             scaling (float, np.ndarray, or unyt quantity):
                 The factor by which to scale the line.
             inplace (bool):
-                If True the Line object will be scaled in place, otherwise a
-                new Line object will be returned.
+                If True the LineCollection will be scaled in place, otherwise
+                a new LineCollection will be returned.
             mask (array-like, bool):
                 A mask array with an entry for each line. Masked out
                 spectra will not be scaled. Only applicable for
@@ -1172,126 +1180,42 @@ class LineCollection:
                 inplace is True in which case the LineCollection object will be
                 scaled in place.
         """
-        # If we have units make sure they are ok and then strip them
-        if isinstance(scaling, (unyt_array, unyt_quantity)):
-            # Check if we have compatible units with the continuum
-            if self.continuum.units.dimensions == scaling.units.dimensions:
-                scaling_cont = scaling.to(self.continuum.units).value
-                scaling_lum = (
-                    (scaling * self.nu).to(self.luminosity.units).value
-                )
-            elif self.luminosity.units.dimensions == scaling.units.dimensions:
-                scaling_lum = scaling.to(self.luminosity.units).value
-                scaling_cont = (
-                    (scaling / self.nu).to(self.continuum.units).value
-                )
-            else:
-                raise exceptions.InconsistentMultiplication(
-                    f"{scaling.units} is neither compatible with the "
-                    f"continuum ({self.continuum.units}) nor the "
-                    f"luminosity ({self.luminosity.units})"
-                )
-        else:
-            # Ok, dimensionless scaling is easier
-            scaling_cont = scaling
-            scaling_lum = scaling
+        lum_units = get_quantity_unit(self, "luminosity")
+        cont_units = get_quantity_unit(self, "continuum")
 
-        # Preserve row and wavelength masks separately when possible so the
-        # shared scaling helper can still dispatch to the 2D kernel.
-        mask, lam_mask = normalise_scale_masks(mask, lam_mask, self.shape)
-
-        # Check whether we can use the fused lum+cont C++ kernel instead of
-        # two separate scale_array calls.  This only applies when there is at
-        # least one mask (the no-mask case is faster with NumPy broadcasting).
-        _nspec = self._luminosity.shape[0]
-        _nlam = self._luminosity.shape[-1]
-        _lum_1d = isinstance(scaling_lum, np.ndarray) and scaling_lum.ndim == 1
-        _cont_1d = (
-            isinstance(scaling_cont, np.ndarray) and scaling_cont.ndim == 1
+        scaling_lum, scaling_cont = normalise_line_scaling(
+            scaling,
+            lambda: (
+                c
+                / get_array_quantity_view(
+                    self._lam,
+                    get_quantity_unit(self, "lam"),
+                )
+            ).to(Hz),
+            lum_units,
+            cont_units,
         )
-        _use_fused = (
-            self._luminosity.ndim == 2
-            and _lum_1d
-            and _cont_1d
-            and scaling_lum.shape[0] == _nspec
-            and scaling_cont.shape[0] == _nspec
-            and (mask is not None or lam_mask is not None)
-            and (mask is None or (mask.ndim == 1 and mask.shape[0] == _nspec))
-            and (
-                lam_mask is None
-                or (lam_mask.ndim == 1 and lam_mask.shape[0] == _nlam)
-            )
-        )
-
-        # If we can use the fused kernel we do, otherwise we fall back to
-        # separate calls to the 1D scaling kernel for the luminosity and
-        # continuum
-        if _use_fused:
-            out_lum = self._luminosity if inplace else None
-            out_cont = self._continuum if inplace else None
-            new_lum, new_cont = scale_line_2d(
-                self._luminosity,
-                self._continuum,
-                scaling_lum,
-                scaling_cont,
-                mask,
-                lam_mask,
-                nthreads,
-                out_lum,
-                out_cont,
-            )
-            if inplace:
-                return self
-            return LineCollection(
-                line_ids=self.line_ids,
-                lam=self.lam,
-                lum=get_array_quantity_view(new_lum, self.luminosity.units),
-                cont=get_array_quantity_view(new_cont, self.continuum.units),
-            )
-
-        # Apply the scaling to the luminosity and continuum separately using
-        # the shared scale_array helper.  If inplace is True write to the
-        # existing arrays and return self
-        if inplace:
-            scale_array(
-                self._luminosity,
-                scaling_lum,
-                mask=mask,
-                lam_mask=lam_mask,
-                nthreads=nthreads,
-                out=self._luminosity,
-            )
-            scale_array(
-                self._continuum,
-                scaling_cont,
-                mask=mask,
-                lam_mask=lam_mask,
-                nthreads=nthreads,
-                out=self._continuum,
-            )
-            return self
-
-        # Otherwise, create new arrays for the luminosity and continuum and
-        # return a new LineCollection
-        lum = scale_array(
+        out_lum = self._luminosity if inplace else None
+        out_cont = self._continuum if inplace else None
+        lum, cont = scale_line_arrays(
             self._luminosity,
-            scaling_lum,
-            mask=mask,
-            lam_mask=lam_mask,
-            nthreads=nthreads,
-        )
-        cont = scale_array(
             self._continuum,
+            scaling_lum,
             scaling_cont,
             mask=mask,
             lam_mask=lam_mask,
             nthreads=nthreads,
+            out_lum=out_lum,
+            out_cont=out_cont,
         )
+        if inplace:
+            return self
+
         return LineCollection(
             line_ids=self.line_ids,
             lam=self.lam,
-            lum=get_array_quantity_view(lum, self.luminosity.units),
-            cont=get_array_quantity_view(cont, self.continuum.units),
+            lum=get_array_quantity_view(lum, lum_units),
+            cont=get_array_quantity_view(cont, cont_units),
         )
 
     def apply_attenuation(
@@ -1363,7 +1287,50 @@ class LineCollection:
                     f"({tau_v.shape}, {self.lum.shape})"
                 )
 
-        # Compute the transmission
+        lum_units = get_quantity_unit(self, "luminosity")
+        cont_units = get_quantity_unit(self, "continuum")
+
+        # For the standard AttenuationLaw implementation with per-row tau_v we
+        # can avoid materialising a full 2D transmission array and instead use
+        # the separable attenuation kernel directly.
+        from synthesizer.emission_models.transformers.dust_attenuation import (
+            AttenuationLaw,
+        )
+
+        if (
+            self._luminosity.ndim == 2
+            and isinstance(tau_v, np.ndarray)
+            and tau_v.ndim == 1
+            and tau_v.shape[0] == self._luminosity.shape[0]
+            and type(dust_curve).get_transmission
+            is AttenuationLaw.get_transmission
+        ):
+            tau_x_v = dust_curve.get_tau_x_v(
+                self.lam,
+                **dust_curve_kwargs,
+            )
+            att_lum = apply_separable_attenuation_2d(
+                self._luminosity,
+                tau_v,
+                tau_x_v,
+                mask,
+                nthreads,
+            )
+            att_cont = apply_separable_attenuation_2d(
+                self._continuum,
+                tau_v,
+                tau_x_v,
+                mask,
+                nthreads,
+            )
+            return LineCollection(
+                line_ids=self.line_ids,
+                lam=self.lam,
+                lum=get_array_quantity_view(att_lum, lum_units),
+                cont=get_array_quantity_view(att_cont, cont_units),
+            )
+
+        # Compute the transmission for the remaining generic cases.
         transmission = dust_curve.get_transmission(
             tau_v, self.lam, **dust_curve_kwargs
         )
@@ -1393,8 +1360,8 @@ class LineCollection:
             return LineCollection(
                 line_ids=self.line_ids,
                 lam=self.lam,
-                lum=get_array_quantity_view(att_lum, self.luminosity.units),
-                cont=get_array_quantity_view(att_cont, self.continuum.units),
+                lum=get_array_quantity_view(att_lum, lum_units),
+                cont=get_array_quantity_view(att_cont, cont_units),
             )
 
         # If the transmission is a wavelength-only curve and we don't have a
@@ -1414,8 +1381,8 @@ class LineCollection:
             return LineCollection(
                 line_ids=self.line_ids,
                 lam=self.lam,
-                lum=get_array_quantity_view(att_lum, self.luminosity.units),
-                cont=get_array_quantity_view(att_cont, self.continuum.units),
+                lum=get_array_quantity_view(att_lum, lum_units),
+                cont=get_array_quantity_view(att_cont, cont_units),
             )
 
         # If neither fast path applies we fall back to NumPy broadcasting,
