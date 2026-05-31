@@ -181,8 +181,6 @@ static void scale_spectra_2d_no_mask_omp(const double *__restrict__ spectra,
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
 
-    /* Hint the compiler to vectorize this loop. */
-#pragma omp simd
   for (int ispec = 0; ispec < nspec; ispec++) {
     /* Cache the row-scale factor for this row. */
     const double scale = scaling[ispec];
@@ -218,8 +216,6 @@ static void scale_spectra_2d_row_mask_omp(const double *__restrict__ spectra,
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
 
-    /* Hint the compiler to vectorize this loop. */
-#pragma omp simd
   for (int ispec = 0; ispec < nspec; ispec++) {
     const double *in_row = spectra + ispec * nlam;
     double *out_row = out + ispec * nlam;
@@ -262,8 +258,6 @@ static void scale_spectra_2d_lam_mask_omp(const double *__restrict__ spectra,
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
 
-    /* Hint the compiler to vectorize this loop. */
-#pragma omp simd
   for (int ispec = 0; ispec < nspec; ispec++) {
     /* Cache the row-scale factor for this row. */
     const double scale = scaling[ispec];
@@ -301,8 +295,6 @@ static void scale_spectra_2d_both_masks_omp(const double *__restrict__ spectra,
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
 
-    /* Hint the compiler to vectorize this loop. */
-#pragma omp simd
   for (int ispec = 0; ispec < nspec; ispec++) {
     const double *in_row = spectra + ispec * nlam;
     double *out_row = out + ispec * nlam;
@@ -664,8 +656,6 @@ static void attenuate_2d_no_mask_omp(const double *__restrict__ spectra,
   /* Split the rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
 
-    /* Hint the compiler to vectorize this loop. */
-#pragma omp simd
   for (int irow = 0; irow < nrows; irow++) {
     /* Cache the V-band optical depth for this row. */
     const double row_tau = tau_v[irow];
@@ -701,8 +691,6 @@ static void attenuate_2d_with_mask_omp(const double *__restrict__ spectra,
   /* Split the rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
 
-    /* Hint the compiler to vectorize this loop. */
-#pragma omp simd
   for (int irow = 0; irow < nrows; irow++) {
     const double *in_row = spectra + irow * ncols;
     double *out_row = out + irow * ncols;
@@ -1005,8 +993,6 @@ static void multiply_rows_by_vector_2d_no_mask_omp(const double *__restrict__ ar
   /* Split the rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
 
-    /* Hint the compiler to vectorize this loop. */
-#pragma omp simd
   for (int irow = 0; irow < nrows; irow++) {
     /* Cache the row-scale factor for this row. */
     const double scale = vector[irow];
@@ -1039,8 +1025,6 @@ static void multiply_rows_by_vector_2d_with_mask_omp(
   /* Split the rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
 
-    /* Hint the compiler to vectorize this loop. */
-#pragma omp simd
   for (int irow = 0; irow < nrows; irow++) {
     const double *in_row = array + irow * ncols;
     double *out_row = out + irow * ncols;
@@ -1583,8 +1567,6 @@ static void scale_line_2d_no_mask_omp(const double *__restrict__ lum, const doub
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
 
-    /* Hint the compiler to vectorize this loop. */
-#pragma omp simd
   for (int i = 0; i < nspec; i++) {
     /* Cache both scale factors for this row. */
     const double sl = scaling_lum[i];
@@ -1627,8 +1609,6 @@ static void scale_line_2d_row_mask_omp(const double *__restrict__ lum, const dou
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
 
-    /* Hint the compiler to vectorize this loop. */
-#pragma omp simd
   for (int i = 0; i < nspec; i++) {
     const double *in_lum_row = lum + i * nlam;
     const double *in_cont_row = cont + i * nlam;
@@ -1681,8 +1661,6 @@ static void scale_line_2d_lam_mask_omp(const double *__restrict__ lum, const dou
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
 
-    /* Hint the compiler to vectorize this loop. */
-#pragma omp simd
   for (int i = 0; i < nspec; i++) {
     /* Cache both scale factors for this row. */
     const double sl = scaling_lum[i];
@@ -1728,8 +1706,6 @@ static void scale_line_2d_both_masks_omp(const double *__restrict__ lum, const d
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
 
-    /* Hint the compiler to vectorize this loop. */
-#pragma omp simd
   for (int i = 0; i < nspec; i++) {
     const double *in_lum_row = lum + i * nlam;
     const double *in_cont_row = cont + i * nlam;
