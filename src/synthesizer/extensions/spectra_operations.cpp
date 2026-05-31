@@ -40,7 +40,7 @@
  * @param nlam: The number of wavelength bins.
  */
 static void scale_spectra_2d_no_mask_serial(
-    const double *spectra, const double *__restrict__ scaling, double *out,
+    const double *__restrict__ spectra, const double *__restrict__ scaling, double *out,
     int nspec, int nlam) {
   /* Loop over every spectrum in the grid. */
   for (int ispec = 0; ispec < nspec; ispec++) {
@@ -70,7 +70,7 @@ static void scale_spectra_2d_no_mask_serial(
  * @param nlam: The number of wavelength bins.
  */
 static void scale_spectra_2d_row_mask_serial(
-    const double *spectra, const double *__restrict__ scaling,
+    const double *__restrict__ spectra, const double *__restrict__ scaling,
     const npy_bool *mask, double *out, int nspec, int nlam) {
   /* Loop over every spectrum in the grid. */
   for (int ispec = 0; ispec < nspec; ispec++) {
@@ -107,7 +107,7 @@ static void scale_spectra_2d_row_mask_serial(
  * @param nlam: The number of wavelength bins.
  */
 static void scale_spectra_2d_lam_mask_serial(
-    const double *spectra, const double *scaling, const npy_bool *lam_mask,
+    const double *__restrict__ spectra, const double *__restrict__ scaling, const npy_bool *lam_mask,
     double *out, int nspec, int nlam) {
   /* Loop over every spectrum in the grid. */
   for (int ispec = 0; ispec < nspec; ispec++) {
@@ -138,7 +138,7 @@ static void scale_spectra_2d_lam_mask_serial(
  * @param nlam: The number of wavelength bins.
  */
 static void scale_spectra_2d_both_masks_serial(
-    const double *spectra, const double *scaling, const npy_bool *mask,
+    const double *__restrict__ spectra, const double *__restrict__ scaling, const npy_bool *mask,
     const npy_bool *lam_mask, double *out, int nspec, int nlam) {
   /* Loop over every spectrum in the grid. */
   for (int ispec = 0; ispec < nspec; ispec++) {
@@ -174,12 +174,15 @@ static void scale_spectra_2d_both_masks_serial(
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_spectra_2d_no_mask_omp(const double *spectra,
+static void scale_spectra_2d_no_mask_omp(const double *__restrict__ spectra,
                                          const double *__restrict__ scaling,
                                          double *out, int nspec, int nlam,
                                          int nthreads) {
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
+
+    /* Hint the compiler to vectorize this loop. */
+#pragma omp simd
   for (int ispec = 0; ispec < nspec; ispec++) {
     /* Cache the row-scale factor for this row. */
     const double scale = scaling[ispec];
@@ -208,12 +211,15 @@ static void scale_spectra_2d_no_mask_omp(const double *spectra,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_spectra_2d_row_mask_omp(const double *spectra,
-                                           const double *scaling,
+static void scale_spectra_2d_row_mask_omp(const double *__restrict__ spectra,
+                                           const double *__restrict__ scaling,
                                            const npy_bool *mask, double *out,
                                            int nspec, int nlam, int nthreads) {
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
+
+    /* Hint the compiler to vectorize this loop. */
+#pragma omp simd
   for (int ispec = 0; ispec < nspec; ispec++) {
     const double *in_row = spectra + ispec * nlam;
     double *out_row = out + ispec * nlam;
@@ -248,13 +254,16 @@ static void scale_spectra_2d_row_mask_omp(const double *spectra,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_spectra_2d_lam_mask_omp(const double *spectra,
-                                           const double *scaling,
+static void scale_spectra_2d_lam_mask_omp(const double *__restrict__ spectra,
+                                           const double *__restrict__ scaling,
                                            const npy_bool *lam_mask,
                                            double *out, int nspec, int nlam,
                                            int nthreads) {
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
+
+    /* Hint the compiler to vectorize this loop. */
+#pragma omp simd
   for (int ispec = 0; ispec < nspec; ispec++) {
     /* Cache the row-scale factor for this row. */
     const double scale = scaling[ispec];
@@ -283,14 +292,17 @@ static void scale_spectra_2d_lam_mask_omp(const double *spectra,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_spectra_2d_both_masks_omp(const double *spectra,
-                                             const double *scaling,
+static void scale_spectra_2d_both_masks_omp(const double *__restrict__ spectra,
+                                             const double *__restrict__ scaling,
                                              const npy_bool *mask,
                                              const npy_bool *lam_mask,
                                              double *out, int nspec, int nlam,
                                              int nthreads) {
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
+
+    /* Hint the compiler to vectorize this loop. */
+#pragma omp simd
   for (int ispec = 0; ispec < nspec; ispec++) {
     const double *in_row = spectra + ispec * nlam;
     double *out_row = out + ispec * nlam;
@@ -574,9 +586,9 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
  * @param nrows: The number of spectra rows.
  * @param ncols: The number of spectral columns.
  */
-static void attenuate_2d_no_mask_serial(const double *spectra,
-                                        const double *tau_v,
-                                        const double *tau_x_v, double *out,
+static void attenuate_2d_no_mask_serial(const double *__restrict__ spectra,
+                                        const double *__restrict__ tau_v,
+                                        const double *__restrict__ tau_x_v, double *out,
                                         int nrows, int ncols) {
   /* Loop over every row and apply the fused exponential-attenuation chain. */
   for (int irow = 0; irow < nrows; irow++) {
@@ -605,9 +617,9 @@ static void attenuate_2d_no_mask_serial(const double *spectra,
  * @param nrows: The number of spectra rows.
  * @param ncols: The number of spectral columns.
  */
-static void attenuate_2d_with_mask_serial(const double *spectra,
-                                           const double *tau_v,
-                                           const double *tau_x_v,
+static void attenuate_2d_with_mask_serial(const double *__restrict__ spectra,
+                                           const double *__restrict__ tau_v,
+                                           const double *__restrict__ tau_x_v,
                                            const npy_bool *mask, double *out,
                                            int nrows, int ncols) {
   /* Loop over every row and dispatch based on the mask. */
@@ -645,12 +657,15 @@ static void attenuate_2d_with_mask_serial(const double *spectra,
  * @param ncols: The number of spectral columns.
  * @param nthreads: The number of OpenMP threads.
  */
-static void attenuate_2d_no_mask_omp(const double *spectra,
-                                      const double *tau_v,
-                                      const double *tau_x_v, double *out,
+static void attenuate_2d_no_mask_omp(const double *__restrict__ spectra,
+                                      const double *__restrict__ tau_v,
+                                      const double *__restrict__ tau_x_v, double *out,
                                       int nrows, int ncols, int nthreads) {
   /* Split the rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
+
+    /* Hint the compiler to vectorize this loop. */
+#pragma omp simd
   for (int irow = 0; irow < nrows; irow++) {
     /* Cache the V-band optical depth for this row. */
     const double row_tau = tau_v[irow];
@@ -678,13 +693,16 @@ static void attenuate_2d_no_mask_omp(const double *spectra,
  * @param ncols: The number of spectral columns.
  * @param nthreads: The number of OpenMP threads.
  */
-static void attenuate_2d_with_mask_omp(const double *spectra,
-                                        const double *tau_v,
-                                        const double *tau_x_v,
+static void attenuate_2d_with_mask_omp(const double *__restrict__ spectra,
+                                        const double *__restrict__ tau_v,
+                                        const double *__restrict__ tau_x_v,
                                         const npy_bool *mask, double *out,
                                         int nrows, int ncols, int nthreads) {
   /* Split the rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
+
+    /* Hint the compiler to vectorize this loop. */
+#pragma omp simd
   for (int irow = 0; irow < nrows; irow++) {
     const double *in_row = spectra + irow * ncols;
     double *out_row = out + irow * ncols;
@@ -915,7 +933,7 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
  * @param ncols: The number of columns.
  */
 static void multiply_rows_by_vector_2d_no_mask_serial(
-    const double *array, const double *vector, double *out, int nrows,
+    const double *__restrict__ array, const double *__restrict__ vector, double *out, int nrows,
     int ncols) {
   /* Loop over every row and multiply by the row's scale factor. */
   for (int irow = 0; irow < nrows; irow++) {
@@ -944,7 +962,7 @@ static void multiply_rows_by_vector_2d_no_mask_serial(
  * @param ncols: The number of columns.
  */
 static void multiply_rows_by_vector_2d_with_mask_serial(
-    const double *array, const double *vector, const npy_bool *mask,
+    const double *__restrict__ array, const double *__restrict__ vector, const npy_bool *mask,
     double *out, int nrows, int ncols) {
   /* Loop over every row and dispatch based on the mask. */
   for (int irow = 0; irow < nrows; irow++) {
@@ -980,12 +998,15 @@ static void multiply_rows_by_vector_2d_with_mask_serial(
  * @param ncols: The number of columns.
  * @param nthreads: The number of OpenMP threads.
  */
-static void multiply_rows_by_vector_2d_no_mask_omp(const double *array,
-                                                    const double *vector,
+static void multiply_rows_by_vector_2d_no_mask_omp(const double *__restrict__ array,
+                                                    const double *__restrict__ vector,
                                                     double *out, int nrows,
                                                     int ncols, int nthreads) {
   /* Split the rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
+
+    /* Hint the compiler to vectorize this loop. */
+#pragma omp simd
   for (int irow = 0; irow < nrows; irow++) {
     /* Cache the row-scale factor for this row. */
     const double scale = vector[irow];
@@ -1013,10 +1034,13 @@ static void multiply_rows_by_vector_2d_no_mask_omp(const double *array,
  * @param nthreads: The number of OpenMP threads.
  */
 static void multiply_rows_by_vector_2d_with_mask_omp(
-    const double *array, const double *vector, const npy_bool *mask,
+    const double *__restrict__ array, const double *__restrict__ vector, const npy_bool *mask,
     double *out, int nrows, int ncols, int nthreads) {
   /* Split the rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
+
+    /* Hint the compiler to vectorize this loop. */
+#pragma omp simd
   for (int irow = 0; irow < nrows; irow++) {
     const double *in_row = array + irow * ncols;
     double *out_row = out + irow * ncols;
@@ -1376,7 +1400,7 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
  * @param nlam: The number of wavelength bins.
  */
 static void scale_line_2d_no_mask_serial(
-    const double *lum, const double *cont,
+    const double *__restrict__ lum, const double *__restrict__ cont,
     const double *scaling_lum,
     const double *scaling_cont,
     double *out_lum, double *out_cont,
@@ -1414,7 +1438,7 @@ static void scale_line_2d_no_mask_serial(
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-static void scale_line_2d_row_mask_serial(const double *lum, const double *cont,
+static void scale_line_2d_row_mask_serial(const double *__restrict__ lum, const double *__restrict__ cont,
                                           const double *scaling_lum,
                                           const double *scaling_cont,
                                           const npy_bool *mask,
@@ -1463,7 +1487,7 @@ static void scale_line_2d_row_mask_serial(const double *lum, const double *cont,
  * @param nlam: The number of wavelength bins.
  */
 static void scale_line_2d_lam_mask_serial(
-    const double *lum, const double *cont,
+    const double *__restrict__ lum, const double *__restrict__ cont,
     const double *scaling_lum,
     const double *scaling_cont, const npy_bool *lam_mask,
     double *out_lum, double *out_cont, int nspec, int nlam) {
@@ -1504,7 +1528,7 @@ static void scale_line_2d_lam_mask_serial(
  * @param nlam: The number of wavelength bins.
  */
 static void scale_line_2d_both_masks_serial(
-    const double *lum, const double *cont,
+    const double *__restrict__ lum, const double *__restrict__ cont,
     const double *scaling_lum,
     const double *scaling_cont, const npy_bool *mask,
     const npy_bool *lam_mask, double *out_lum, double *out_cont, int nspec,
@@ -1551,13 +1575,16 @@ static void scale_line_2d_both_masks_serial(
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_line_2d_no_mask_omp(const double *lum, const double *cont,
+static void scale_line_2d_no_mask_omp(const double *__restrict__ lum, const double *__restrict__ cont,
                                       const double *scaling_lum,
                                       const double *scaling_cont,
                                       double *out_lum, double *out_cont,
                                       int nspec, int nlam, int nthreads) {
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
+
+    /* Hint the compiler to vectorize this loop. */
+#pragma omp simd
   for (int i = 0; i < nspec; i++) {
     /* Cache both scale factors for this row. */
     const double sl = scaling_lum[i];
@@ -1591,7 +1618,7 @@ static void scale_line_2d_no_mask_omp(const double *lum, const double *cont,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_line_2d_row_mask_omp(const double *lum, const double *cont,
+static void scale_line_2d_row_mask_omp(const double *__restrict__ lum, const double *__restrict__ cont,
                                        const double *scaling_lum,
                                        const double *scaling_cont,
                                        const npy_bool *mask, double *out_lum,
@@ -1599,6 +1626,9 @@ static void scale_line_2d_row_mask_omp(const double *lum, const double *cont,
                                        int nthreads) {
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
+
+    /* Hint the compiler to vectorize this loop. */
+#pragma omp simd
   for (int i = 0; i < nspec; i++) {
     const double *in_lum_row = lum + i * nlam;
     const double *in_cont_row = cont + i * nlam;
@@ -1642,7 +1672,7 @@ static void scale_line_2d_row_mask_omp(const double *lum, const double *cont,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_line_2d_lam_mask_omp(const double *lum, const double *cont,
+static void scale_line_2d_lam_mask_omp(const double *__restrict__ lum, const double *__restrict__ cont,
                                        const double *scaling_lum,
                                        const double *scaling_cont,
                                        const npy_bool *lam_mask,
@@ -1650,6 +1680,9 @@ static void scale_line_2d_lam_mask_omp(const double *lum, const double *cont,
                                        int nspec, int nlam, int nthreads) {
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
+
+    /* Hint the compiler to vectorize this loop. */
+#pragma omp simd
   for (int i = 0; i < nspec; i++) {
     /* Cache both scale factors for this row. */
     const double sl = scaling_lum[i];
@@ -1685,7 +1718,7 @@ static void scale_line_2d_lam_mask_omp(const double *lum, const double *cont,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_line_2d_both_masks_omp(const double *lum, const double *cont,
+static void scale_line_2d_both_masks_omp(const double *__restrict__ lum, const double *__restrict__ cont,
                                          const double *scaling_lum,
                                          const double *scaling_cont,
                                          const npy_bool *mask,
@@ -1694,6 +1727,9 @@ static void scale_line_2d_both_masks_omp(const double *lum, const double *cont,
                                          int nspec, int nlam, int nthreads) {
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
+
+    /* Hint the compiler to vectorize this loop. */
+#pragma omp simd
   for (int i = 0; i < nspec; i++) {
     const double *in_lum_row = lum + i * nlam;
     const double *in_cont_row = cont + i * nlam;

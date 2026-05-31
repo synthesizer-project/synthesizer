@@ -480,11 +480,11 @@ class Sed:
         As above but for x * scaling.
 
         Note: only acts on the rest frame spectra. To get the
-        scaled fnu get_fnu must be called on the newly
-        scaled Sed object.
+        scaled fnu get_fnu must be called on the newly scaled
+        Sed object.
 
         Args:
-            scaling (float):
+            scaling (float, np.ndarray, or unyt quantity):
                 The scaling to apply to lnu.
 
         Returns:
@@ -1539,14 +1539,15 @@ class Sed:
             tau_v, self.lam, **dust_curve_kwargs
         )
 
-        # When attenuation reduces to a wavelength-only transmission curve we
-        # can use the dedicated 2D scaling kernel with mask support. This
-        # applies when we have a row mask and the transmission is wavelength-
-        # only
+        # When attenuation reduces to a per-row transmission curve we can use
+        # the dedicated 2D scaling kernel with mask support. This applies when
+        # the 1D transmission matches the first array dimension (one factor per
+        # row).
         if (
             self._lnu.ndim == 2
             and isinstance(transmission, np.ndarray)
             and transmission.ndim == 1
+            and transmission.shape[0] == self._lnu.shape[0]
             and mask is not None
         ):
             out = scale_spectra_2d(

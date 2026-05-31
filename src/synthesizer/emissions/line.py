@@ -1150,7 +1150,7 @@ class LineCollection:
         To get the scaled flux get_flux must be called on the new Line object.
 
         Args:
-            scaling (float):
+            scaling (float, np.ndarray, or unyt quantity):
                 The factor by which to scale the line.
             inplace (bool):
                 If True the Line object will be scaled in place, otherwise a

@@ -187,7 +187,7 @@ def scale_array(
     if lam_mask is None:
         work = np.array(array, copy=True)
     else:
-        work = np.array(array[..., lam_mask], copy=True)
+        work = array[..., lam_mask]
 
     # Scalar scaling — multiply every element by the same number, with
     # or without a row/element mask
