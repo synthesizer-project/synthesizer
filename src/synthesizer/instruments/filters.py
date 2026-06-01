@@ -46,7 +46,7 @@ from synthesizer.utils.integrate import (
     integrate_weighted_last_axis,
     trapezoid,
 )
-from synthesizer.utils.operation_timers import timed, timer
+from synthesizer.utils.operation_timers import timed
 
 
 @accepts(new_lam=angstrom)
@@ -1070,6 +1070,13 @@ class FilterCollection:
             )
 
         xarr = xs
+        if xarr.dtype not in (np.float32, np.float64):
+            raise exceptions.InconsistentArguments(
+                "Batched filter integration requires a float32 or float64 "
+                f"grid (got {xarr.dtype})."
+            )
+
+        input_dtype = xarr.dtype
         cache_space = f"{space}_{method}"
         cache_key = self._grid_cache_key(xarr, cache_space)
         cached = self._batch_cache.get(cache_key)
@@ -1106,14 +1113,14 @@ class FilterCollection:
                         for code in self.filter_codes
                     ]
                 ),
-                dtype=np.float64,
+                dtype=input_dtype,
             )
 
-        weights = np.ascontiguousarray(trans / xarr, dtype=np.float64)
+        weights = np.ascontiguousarray(trans / xarr, dtype=input_dtype)
 
         starts = np.zeros(self.nfilters, dtype=np.int64)
         ends = np.zeros(self.nfilters, dtype=np.int64)
-        denominators = np.zeros(self.nfilters, dtype=np.float64)
+        denominators = np.zeros(self.nfilters, dtype=input_dtype)
         for i in range(self.nfilters):
             nonzero = np.flatnonzero(weights[i] != 0)
             if nonzero.size == 0:
@@ -1170,6 +1177,7 @@ class FilterCollection:
         nu=None,
         nthreads=1,
         integration_method="trapz",
+        out_dtype=np.float32,
     ):
         """Apply all filters to an array in a single batched integration.
 
@@ -1179,55 +1187,80 @@ class FilterCollection:
             nu (np.ndarray): Frequency grid.
             nthreads (int): Number of threads.
             integration_method (str): Integration method.
+            out_dtype (np.dtype): Requested floating-point dtype for the
+                returned photometry array. Input arrays must already be
+                contiguous and share one supported floating-point precision
+                family; no implicit casting is performed.
 
         Returns:
             np.ndarray:
                 Broadband values with shape (nfilters, *arr.shape[:-1]).
         """
+        # Get input array dtype
+        input_dtype = arr.dtype
+
+        # Ensure the wavelength or frequency grid is provided, or that a
+        # native grid is cached that matches the dtype of the input array
         if lam is None and nu is None:
-            native_payload = self._batch_cache.get(("__native__",))
-            xs = (
-                None if native_payload is None else native_payload["nu_native"]
-            )
-            if xs is None:
+            if self.lam is None:
                 raise exceptions.InconsistentArguments(
                     "No native frequency grid is cached. Provide lam/nu "
                     "or call prepare_for_grid first."
                 )
+
+            # The xs will be frequency values in Hz
+            xs = (c / self.lam).to("Hz").value
             space = "nu"
+
+            # Check the dtype of the cached grid matches the input array
+            if xs.dtype != input_dtype:
+                raise exceptions.InconsistentArguments(
+                    "The cached native frequency grid does not match the "
+                    f"input array dtype (got {xs.dtype} and {input_dtype}). "
+                    "Provide lam/nu explicitly with a matching dtype."
+                )
+
+        # Frequencies provided, xs will be frequency values in Hz
         elif nu is not None:
             xs = nu
             space = "nu"
+
+        # Wavelengths provided, xs will be wavelength values in Angstrom
         else:
             xs = lam
             space = "lam"
 
+        # If nthreads is -1 we use all available threads
         if nthreads == -1:
             nthreads = os.cpu_count()
 
+        # Ensure the input array last dimension matches the grid size
         if arr.shape[-1] != xs.shape[0]:
             raise exceptions.InconsistentArguments(
                 "The shape of the integration grid and final axis of arr do "
                 f"not match (arr.shape={arr.shape}, xs.shape={np.shape(xs)})."
             )
 
+        # Get the cached weights and denominators for set of xs, or compute
+        # and cache them if not already cached.
         weights, denominators, starts, ends = self._get_batched_weights(
             xs,
             space=space,
             method=integration_method,
         )
 
-        with timer("FilterCollection.apply_filters.compute_photometry"):
-            return compute_photometry(
-                xs,
-                arr,
-                weights,
-                denominators,
-                starts,
-                ends,
-                nthreads,
-                integration_method,
-            )
+        # Get and return the photometry by applying the filter curves
+        return compute_photometry(
+            xs,
+            arr,
+            weights,
+            denominators,
+            starts,
+            ends,
+            nthreads,
+            integration_method,
+            out_dtype,
+        )
 
     def unify_with_grid(self, grid, loop_spectra=False):
         """Unify a grid with this FilterCollection.
