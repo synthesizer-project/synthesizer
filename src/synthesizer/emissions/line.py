@@ -1183,6 +1183,8 @@ class LineCollection:
         lum_units = get_quantity_unit(self, "luminosity")
         cont_units = get_quantity_unit(self, "continuum")
 
+        # Let the shared helper decide whether the incoming scaling belongs to
+        # luminosity units, continuum units, or is already unitless.
         scaling_lum, scaling_cont = normalise_line_scaling(
             scaling,
             lambda: (
@@ -1195,8 +1197,11 @@ class LineCollection:
             lum_units,
             cont_units,
         )
+        # In-place scaling can hand the existing buffers down as outputs.
         out_lum = self._luminosity if inplace else None
         out_cont = self._continuum if inplace else None
+        # The shared helper decides whether this should go through the fused
+        # lum+cont kernel or two independent array scalings.
         lum, cont = scale_line_arrays(
             self._luminosity,
             self._continuum,
@@ -1297,6 +1302,8 @@ class LineCollection:
             AttenuationLaw,
         )
 
+        # As in Sed.apply_attenuation, the separable AttenuationLaw case lets
+        # us keep tau_v and the wavelength curve split until the inner loop.
         if (
             self._luminosity.ndim == 2
             and isinstance(tau_v, np.ndarray)
@@ -1305,10 +1312,14 @@ class LineCollection:
             and type(dust_curve).get_transmission
             is AttenuationLaw.get_transmission
         ):
+            # Pull out just the wavelength-dependent extinction curve once and
+            # reuse it for both luminosity and continuum.
             tau_x_v = dust_curve.get_extinction_curve(
                 self.lam,
                 **dust_curve_kwargs,
             )
+            # Both arrays see the same attenuation structure, so we run the
+            # same kernel twice rather than building two transmission matrices.
             att_lum = apply_separable_attenuation_2d(
                 self._luminosity,
                 tau_v,
@@ -1345,6 +1356,8 @@ class LineCollection:
             and transmission.ndim == 1
             and mask is not None
         ):
+            # We only want to touch the masked rows here, so start from copies
+            # and then patch the attenuated rows back in.
             att_lum = np.array(self._luminosity, copy=True)
             att_cont = np.array(self._continuum, copy=True)
             att_lum[mask] = multiply_array_by_vector_1d(
@@ -1368,6 +1381,8 @@ class LineCollection:
         # row mask we can apply it directly using the dedicated 1D scaling
         # kernel without a copy
         if isinstance(transmission, np.ndarray) and transmission.ndim == 1:
+            # With no row mask, both arrays can go straight through the
+            # wavelength-vector kernel.
             att_lum = multiply_array_by_vector_1d(
                 self._luminosity,
                 transmission,
@@ -1394,6 +1409,8 @@ class LineCollection:
             att_lum *= transmission
             att_cont *= transmission
         else:
+            # Full transmission matrices already line up with the row mask, so
+            # we can attenuate only the selected rows in both arrays.
             att_lum[mask] *= transmission[mask]
             att_cont[mask] *= transmission[mask]
 

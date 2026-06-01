@@ -333,11 +333,14 @@ static void dispatch_scale_spectra_2d(const double *spectra,
                                       const npy_bool *mask,
                                       const npy_bool *lam_mask, double *out,
                                       int nspec, int nlam, int nthreads) {
+  /* Collapse the pointer checks once so the dispatch tree reads clearly. */
   const bool has_mask = (mask != NULL);
   const bool has_lam_mask = (lam_mask != NULL);
 
   if (nthreads > 1) {
 #ifdef WITH_OPENMP
+    /* When OpenMP is enabled, pick the parallel kernel that exactly matches
+     * the caller's mask combination. */
     if (!has_mask && !has_lam_mask) {
       scale_spectra_2d_no_mask_omp(spectra, scaling, out, nspec, nlam,
                                    nthreads);
@@ -353,10 +356,14 @@ static void dispatch_scale_spectra_2d(const double *spectra,
     }
     return;
 #else
+    /* If this build has no OpenMP support, ignore the thread count and keep
+     * going to the serial dispatch below. */
     (void)nthreads;
 #endif
   }
 
+  /* Single-threaded work, or OpenMP-disabled builds, both come through the
+   * serial kernels. */
   if (!has_mask && !has_lam_mask) {
     scale_spectra_2d_no_mask_serial(spectra, scaling, out, nspec, nlam);
   } else if (has_mask && !has_lam_mask) {
@@ -421,6 +428,8 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
   PyArrayObject *np_mask = nullptr;
   PyArrayObject *np_lam_mask = nullptr;
 
+  /* Optional masks stay NULL when absent so the C dispatch can branch on a
+   * single pointer check. */
   if (mask_obj != Py_None) {
     np_mask = (PyArrayObject *)PyArray_FROM_OTF(mask_obj, NPY_BOOL,
                                                 NPY_ARRAY_IN_ARRAY);
@@ -433,7 +442,7 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
 
   if (lam_mask_obj != Py_None) {
     np_lam_mask = (PyArrayObject *)PyArray_FROM_OTF(lam_mask_obj, NPY_BOOL,
-                                                     NPY_ARRAY_IN_ARRAY);
+                                                      NPY_ARRAY_IN_ARRAY);
     if (np_lam_mask == NULL) {
       Py_DECREF(np_spectra);
       Py_DECREF(np_scaling);
@@ -453,6 +462,8 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Once the basic dimensionality checks pass, cache the array shape for the
+   * remaining validation and dispatch steps. */
   const npy_intp *spectra_dims = PyArray_DIMS(np_spectra);
   const int nspec = static_cast<int>(spectra_dims[0]);
   const int nlam = static_cast<int>(spectra_dims[1]);
@@ -520,6 +531,8 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
       return NULL;
     }
   } else {
+    /* No output buffer was supplied, so allocate one with the same memory
+     * layout as the input spectra. */
     np_out = (PyArrayObject *)PyArray_NewLikeArray(np_spectra, NPY_KEEPORDER,
                                                    NULL, 0);
     if (np_out == NULL) {
@@ -735,10 +748,13 @@ static void dispatch_attenuate_2d(const double *spectra, const double *tau_v,
                                   const double *tau_x_v,
                                   const npy_bool *mask, double *out,
                                   int nrows, int ncols, int nthreads) {
+  /* Attenuation only has one optional mask dimension, so the dispatch tree is
+   * simpler than the scaling case. */
   const bool has_mask = (mask != NULL);
 
   if (nthreads > 1) {
 #ifdef WITH_OPENMP
+    /* Use the threaded kernels only when this build actually supports them. */
     if (!has_mask) {
       attenuate_2d_no_mask_omp(spectra, tau_v, tau_x_v, out, nrows, ncols,
                                nthreads);
@@ -748,10 +764,13 @@ static void dispatch_attenuate_2d(const double *spectra, const double *tau_v,
     }
     return;
 #else
+    /* OpenMP-free builds quietly fall back to the serial kernels below. */
     (void)nthreads;
 #endif
   }
 
+  /* The serial dispatch only needs to distinguish between masked and
+   * unmasked rows. */
   if (!has_mask) {
     attenuate_2d_no_mask_serial(spectra, tau_v, tau_x_v, out, nrows, ncols);
   } else {
@@ -807,6 +826,8 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
 
   PyArrayObject *np_mask = nullptr;
 
+  /* Keep the optional mask as NULL when absent so the lower-level dispatch can
+   * recognise the no-mask case cheaply. */
   if (mask_obj != Py_None) {
     np_mask = (PyArrayObject *)PyArray_FROM_OTF(mask_obj, NPY_BOOL,
                                                 NPY_ARRAY_IN_ARRAY);
@@ -830,6 +851,8 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Cache the spectra shape once and reuse it for the vector checks, output
+   * validation, and final kernel dispatch. */
   const npy_intp *spectra_dims = PyArray_DIMS(np_spectra);
   const int nrows = static_cast<int>(spectra_dims[0]);
   const int ncols = static_cast<int>(spectra_dims[1]);
@@ -884,6 +907,8 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
       return NULL;
     }
   } else {
+    /* No reusable output was provided, so mirror the input layout in a fresh
+     * array. */
     np_out = (PyArrayObject *)PyArray_NewLikeArray(np_spectra, NPY_KEEPORDER,
                                                    NULL, 0);
     if (np_out == NULL) {
@@ -895,6 +920,7 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     }
   }
 
+  /* Turn the validated NumPy views into the raw pointers the kernels expect. */
   const double *spectra =
       static_cast<const double *>(PyArray_DATA(np_spectra));
   const double *tau_v = static_cast<const double *>(PyArray_DATA(np_tau_v));
@@ -914,6 +940,8 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
 
   toc("apply_separable_attenuation_2d");
 
+  /* Hand ownership of np_out to Python and clean up the temporary views we
+   * created while validating the inputs. */
   Py_DECREF(np_spectra);
   Py_DECREF(np_tau_v);
   Py_DECREF(np_tau_x_v);
@@ -975,6 +1003,8 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* The last axis is the one the vector must match, regardless of whether the
+   * input is 1D or 2D. */
   const npy_intp *array_dims = PyArray_DIMS(np_array);
   const int array_ndim = PyArray_NDIM(np_array);
   const int ncols = static_cast<int>(array_dims[array_ndim - 1]);
@@ -1018,6 +1048,8 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
       return NULL;
     }
   } else {
+    /* Allocate a fresh output buffer with the same shape and memory layout as
+     * the input array. */
     np_out = (PyArrayObject *)PyArray_NewLikeArray(np_array, NPY_KEEPORDER,
                                                    NULL, 0);
     if (np_out == NULL) {
@@ -1028,6 +1060,8 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
   }
 
   /* Extract the raw C pointers for the kernel. */
+  /* The kernel itself is just a pair of nested loops, so after validation we
+   * only need the raw pointers and row/column counts. */
   const double *array =
       static_cast<const double *>(PyArray_DATA(np_array));
   const double *vector =
@@ -1486,7 +1520,8 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Optional masks. */
+  /* Optional masks start out absent and only become arrays when the caller
+   * explicitly passed them in. */
   PyArrayObject *np_mask = nullptr;
   PyArrayObject *np_lam_mask = nullptr;
 
@@ -1530,6 +1565,7 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Cache the common shape information once so the later checks stay simple. */
   const npy_intp *lum_dims = PyArray_DIMS(np_lum);
   const npy_intp *cont_dims = PyArray_DIMS(np_cont);
   const int nspec = static_cast<int>(lum_dims[0]);
@@ -1627,6 +1663,8 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
       return NULL;
     }
   } else {
+    /* If we are not writing in place, allocate matching output arrays for
+     * both the luminosity and continuum buffers. */
     np_out_lum = (PyArrayObject *)PyArray_NewLikeArray(np_lum, NPY_KEEPORDER,
                                                        NULL, 0);
     np_out_cont = (PyArrayObject *)PyArray_NewLikeArray(np_cont, NPY_KEEPORDER,
@@ -1645,6 +1683,7 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
   }
 
   /* Extract raw pointers. */
+  /* Convert the validated arrays into the raw pointers the fused kernels use. */
   const double *lum = static_cast<const double *>(PyArray_DATA(np_lum));
   const double *cont = static_cast<const double *>(PyArray_DATA(np_cont));
   const double *scaling_lum =
@@ -1665,6 +1704,8 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
   /* Dispatch based on mask combination. */
   tic("scale_line_2d");
 
+  /* Collapse the mask presence checks once so the dispatch tree below reads
+   * like a simple table lookup. */
   const bool has_mask = (mask != NULL);
   const bool has_lam_mask = (lam_mask != NULL);
 
@@ -1724,6 +1765,8 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
 
   toc("scale_line_2d");
 
+  /* Return the two output arrays and drop every temporary view we created
+   * during parsing and validation. */
   Py_DECREF(np_lum);
   Py_DECREF(np_cont);
   Py_DECREF(np_scaling_lum);

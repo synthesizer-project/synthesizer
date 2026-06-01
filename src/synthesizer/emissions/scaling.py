@@ -94,14 +94,20 @@ def normalise_scaling_for_units(scaling, units):
         float or np.ndarray:
             Raw scaling values with any units stripped.
     """
+    # Plain NumPy arrays and scalars are already in the raw form the kernels
+    # expect, so we can hand them straight through.
     if not isinstance(scaling, (unyt_array, unyt_quantity)):
         return scaling
 
+    # If the dimensions do not line up we stop early with the same error the
+    # higher-level API has always raised for incompatible unit math.
     if units.dimensions != scaling.units.dimensions:
         raise exceptions.InconsistentMultiplication(
             f"Incompatible units {units} and {scaling.units}"
         )
 
+    # The kernels operate on raw doubles, so once the units are compatible we
+    # convert into the target units and strip the unit wrapper.
     return scaling.to(units).value
 
 
@@ -127,16 +133,24 @@ def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
         tuple:
             ``(scaling_lum, scaling_cont)`` as raw values.
     """
+    # Unitless scaling hits both arrays identically, so we do not need to
+    # build frequencies or split the factor.
     if not isinstance(scaling, (unyt_array, unyt_quantity)):
         return scaling, scaling
 
+    # We only pay to construct nu when the scaling itself carries units and we
+    # need to decide whether it belongs with luminosity or continuum.
     nu = get_nu()
 
+    # Continuum-compatible scaling can be pushed onto luminosity by
+    # multiplying through by nu.
     if cont_units.dimensions == scaling.units.dimensions:
         scaling_cont = scaling.to(cont_units).value
         scaling_lum = (scaling * nu).to(lum_units).value
         return scaling_lum, scaling_cont
 
+    # Luminosity-compatible scaling takes the opposite route: divide by nu to
+    # recover the matching continuum factor.
     if lum_units.dimensions == scaling.units.dimensions:
         scaling_lum = scaling.to(lum_units).value
         scaling_cont = (scaling / nu).to(cont_units).value
@@ -176,6 +190,8 @@ def scale_to_quantity(
         unyt_array:
             Scaled result wrapped in ``units``.
     """
+    # We keep the scaling and unit-wrapping steps together here so callers can
+    # request a quantity result without re-implementing the raw-array path.
     return get_array_quantity_view(
         scale_array(
             array,
@@ -207,6 +223,8 @@ def scale_inplace(array, scaling, mask=None, lam_mask=None, nthreads=1):
         np.ndarray:
             The mutated ``array`` buffer.
     """
+    # In-place callers still go through the shared dispatcher so they obey the
+    # same fast-path rules as the allocating variant.
     return scale_array(
         array,
         scaling,
@@ -258,8 +276,12 @@ def scale_line_arrays(
         tuple:
             Tuple of scaled ``(luminosity, continuum)`` arrays.
     """
+    # First collapse the caller's mask inputs into the small set of mask shapes
+    # the fused kernel actually understands.
     mask, lam_mask = normalise_scale_masks(mask, lam_mask, luminosity.shape)
 
+    # From here on we are deciding whether the fused lum+cont kernel is legal,
+    # not whether it is desirable in the abstract.
     nspec = luminosity.shape[0]
     nlam = luminosity.shape[-1]
     lum_1d = isinstance(scaling_lum, np.ndarray) and scaling_lum.ndim == 1
@@ -339,6 +361,8 @@ def scale_array(
         np.ndarray:
             The scaled array (may be ``out`` if the fast path was used).
     """
+    # Treat scalars as ndim=0 so the later branching can talk about arrays and
+    # scalars using one variable.
     scaling_ndim = getattr(scaling, "ndim", 0)
 
     # With no masks a scalar multiply is already the simple fast path.
@@ -349,6 +373,8 @@ def scale_array(
         and mask is None
         and lam_mask is None
     ):
+        # If the caller handed us an output buffer we can write directly into
+        # it and still avoid the C++ dispatch.
         if out is not None:
             np.multiply(array, scaling, out=out)
             return out
@@ -383,10 +409,15 @@ def scale_array(
         # zero allocation and matches the C++ kernel's element throughput.
         if mask is None and lam_mask is None:
             scaling_2d = scaling[:, np.newaxis]
+            # As above, honour a caller-provided output buffer when we can stay
+            # on the NumPy path.
             if out is not None:
                 np.multiply(array, scaling_2d, out=out)
                 return out
             return array * scaling_2d
+
+        # Once either mask is present the specialised kernel earns its keep by
+        # fusing the row scaling and masked copy logic.
         return scale_spectra_2d(array, scaling, mask, lam_mask, nthreads, out)
 
     # If the scaling is a scalar and the array is 2D we can broadcast it to a
@@ -412,6 +443,8 @@ def scale_array(
             )
         )
     ):
+        # The kernel expects a per-row vector, so for masked scalar scaling we
+        # materialise the obvious repeated row factor once.
         scaling_arr = np.empty(array.shape[0], dtype=float)
         scaling_arr.fill(scaling)
         return scale_spectra_2d(
@@ -422,6 +455,8 @@ def scale_array(
     # mutate the buffer directly without the copy-modify-copy-back dance at
     # the end. This is the common case for Sed.scale with inplace=True
     if out is not None and out is array and lam_mask is None:
+        # In-place updates are only safe here when we are touching the full set
+        # of wavelength columns, otherwise we would need a temporary.
         if np.isscalar(scaling):
             if mask is not None:
                 array[mask] *= scaling
@@ -429,6 +464,8 @@ def scale_array(
                 array *= scaling
             return array
         if isinstance(scaling, np.ndarray) and scaling_ndim == 1:
+            # Row-wise and wavelength-wise 1D scaling both map cleanly onto
+            # NumPy broadcasting without allocating a second work array.
             if scaling.shape[0] == array.shape[0]:
                 array *= scaling[:, np.newaxis] if array.ndim == 2 else scaling
                 return array
@@ -442,6 +479,8 @@ def scale_array(
     if lam_mask is None:
         work = np.array(array, copy=True)
     else:
+        # We only need to scale the selected wavelength columns, so slice down
+        # to that smaller view first and rebuild the full array at the end.
         work = array[..., lam_mask]
 
     # Scalar scaling — multiply every element by the same number, with
@@ -471,13 +510,19 @@ def scale_array(
         if mask is None:
             work *= scaling
         elif getattr(mask, "ndim", 0) == 1:
+            # A 1D row mask lets NumPy broadcast the wavelength vector across
+            # just the selected rows.
             work[mask] *= scaling
         else:
+            # Full element masks need an explicitly broadcast view so the mask
+            # and scaling arrays line up element-by-element.
             work[mask] *= np.broadcast_to(scaling, work.shape)[mask]
 
     # The scaling has fewer dimensions than the work array — we expand
     # it to match by inserting dimensions at the end, then broadcast
     elif isinstance(scaling, np.ndarray) and scaling_ndim < work.ndim:
+        # This is the generic "missing trailing axes" case, so we insert the
+        # axes NumPy would have broadcast for us and then apply the mask logic.
         expand_axes = tuple(range(scaling_ndim, work.ndim))
         expanded_scaling = np.expand_dims(scaling, axis=expand_axes)
         if mask is not None:
@@ -492,6 +537,8 @@ def scale_array(
     # broadcast with an explicit trailing dimension. Masking is not
     # supported in this case since the shapes don't align
     elif isinstance(scaling, np.ndarray):
+        # This is the last-resort broadcast shape we still support: treat the
+        # scaling as living one axis above the data and let NumPy broadcast.
         work = scaling[..., np.newaxis] * work
         if mask is not None:
             raise exceptions.InconsistentMultiplication(

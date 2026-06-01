@@ -1530,6 +1530,9 @@ class Sed:
             AttenuationLaw,
         )
 
+        # This is the main new fast path: one tau_v per spectrum row plus the
+        # stock AttenuationLaw transmission formula means we can keep the work
+        # separable as tau_v[row] * tau_x_v[lam].
         if (
             self._lnu.ndim == 2
             and isinstance(tau_v, np.ndarray)
@@ -1538,10 +1541,14 @@ class Sed:
             and type(dust_curve).get_transmission
             is AttenuationLaw.get_transmission
         ):
+            # Ask the dust law for just the wavelength part of the attenuation
+            # so the kernel can combine it with tau_v on the fly.
             tau_x_v = dust_curve.get_extinction_curve(
                 self.lam,
                 **dust_curve_kwargs,
             )
+            # The kernel both attenuates and respects the optional row mask, so
+            # we avoid ever materialising the full transmission matrix.
             out = apply_separable_attenuation_2d(
                 self._lnu,
                 tau_v,
@@ -1570,6 +1577,8 @@ class Sed:
             and transmission.shape[0] == self._lnu.shape[0]
             and mask is not None
         ):
+            # Here the transmission is really one factor per spectrum row, so
+            # we reuse the same masked row-scaling kernel as Sed.scale.
             out = scale_spectra_2d(
                 self._lnu,
                 transmission,
@@ -1589,6 +1598,8 @@ class Sed:
             and isinstance(transmission, np.ndarray)
             and transmission.ndim == 1
         ):
+            # This is the wavelength-only case: every row sees the same vector,
+            # so the last-axis multiply kernel is the natural fit.
             out = multiply_array_by_vector_1d(
                 self._lnu,
                 transmission,
@@ -1607,8 +1618,12 @@ class Sed:
         if mask is None:
             out *= transmission
         elif transmission.ndim > 1:
+            # A full transmission matrix already lines up with the row mask, so
+            # we can mask both arrays in parallel.
             out[mask] *= transmission[mask]
         else:
+            # Otherwise the transmission is shared across rows and NumPy will
+            # broadcast it over the masked subset.
             out[mask] *= transmission
 
         return Sed(

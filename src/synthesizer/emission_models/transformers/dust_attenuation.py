@@ -207,8 +207,12 @@ class AttenuationLaw(Transformer):
         self._set_params(**dust_curve_kwargs)
 
         try:
+            # The heavy lifting still lives in get_tau; this helper just gives
+            # callers a clearer, attenuation-specific entry point.
             return self.get_tau(lam)
         finally:
+            # Always put the instance back the way we found it so temporary
+            # overrides do not leak into later calls.
             self._reset_params()
 
     def _check_required_params(self):
