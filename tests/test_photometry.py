@@ -166,6 +166,77 @@ def test_apply_filters_supports_float64_output_from_float32_inputs():
     assert photometry.dtype == np.float64
 
 
+def test_apply_filters_precision_combinations_agree_with_float64_reference():
+    """Photometry precision combinations should agree within tolerance."""
+    lam = np.linspace(1000, 5000, 500) * angstrom
+    filters = _make_filters(lam)
+
+    spectra64 = np.ascontiguousarray(
+        np.vstack(
+            [
+                np.linspace(0.2, 1.4, len(lam), dtype=np.float64),
+                0.5 + 0.3 * np.sin(np.linspace(0.0, 8.0, len(lam))),
+                np.exp(-0.5 * np.linspace(-3.0, 3.0, len(lam)) ** 2),
+            ]
+        ),
+        dtype=np.float64,
+    )
+    nu64 = np.ascontiguousarray((c / lam).to("Hz").value, dtype=np.float64)
+
+    reference = filters.apply_filters(
+        spectra64,
+        nu=nu64,
+        integration_method="trapz",
+        out_dtype=np.float64,
+    )
+
+    spectra32 = np.ascontiguousarray(spectra64, dtype=np.float32)
+    nu32 = np.ascontiguousarray(nu64, dtype=np.float32)
+
+    float32_to_float32 = filters.apply_filters(
+        spectra32,
+        nu=nu32,
+        integration_method="trapz",
+        out_dtype=np.float32,
+    )
+    float32_to_float64 = filters.apply_filters(
+        spectra32,
+        nu=nu32,
+        integration_method="trapz",
+        out_dtype=np.float64,
+    )
+    float64_to_float32 = filters.apply_filters(
+        spectra64,
+        nu=nu64,
+        integration_method="trapz",
+        out_dtype=np.float32,
+    )
+
+    assert reference.dtype == np.float64
+    assert float32_to_float32.dtype == np.float32
+    assert float32_to_float64.dtype == np.float64
+    assert float64_to_float32.dtype == np.float32
+
+    np.testing.assert_allclose(
+        float32_to_float32,
+        reference,
+        rtol=5e-5,
+        atol=5e-7,
+    )
+    np.testing.assert_allclose(
+        float32_to_float64,
+        reference,
+        rtol=5e-5,
+        atol=5e-7,
+    )
+    np.testing.assert_allclose(
+        float64_to_float32,
+        reference,
+        rtol=5e-6,
+        atol=5e-8,
+    )
+
+
 def test_apply_filters_rejects_mismatched_precision_families():
     """The extension should reject mixed input precision families clearly."""
     lam = np.linspace(1000, 5000, 500) * angstrom
