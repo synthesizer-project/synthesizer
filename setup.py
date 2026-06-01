@@ -267,7 +267,6 @@ extensions = [
             "src/synthesizer/extensions/kernel_extensions/projected_kernel.cpp",
             "src/synthesizer/extensions/kernel_extensions/truncated_kernel.cpp",
             "src/synthesizer/extensions/kernel_extensions/overlap_kernel.cpp",
-            "src/synthesizer/extensions/integration.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
         ],
@@ -415,8 +414,8 @@ extensions = [
     create_extension(
         "synthesizer.extensions.integration",
         [
-            "src/synthesizer/extensions/integration.cpp",
             "src/synthesizer/extensions/integration_py.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/cpp_to_python.cpp",
             "src/synthesizer/extensions/part_props.cpp",
