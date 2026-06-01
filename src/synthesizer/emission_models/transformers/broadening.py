@@ -9,6 +9,7 @@ from unyt import amu
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.emissions.sed import Sed
+from synthesizer.synth_warnings import warn
 from synthesizer.utils.operation_timers import timed
 
 
@@ -63,6 +64,15 @@ class DopplerBroadening(Transformer):
         Returns:
             Sed: The broadened emission.
         """
+        # Broadening still runs through the existing serial Sed helpers, so if
+        # the caller asked for multiple threads we should say plainly that this
+        # transformer will ignore that request.
+        if nthreads != 1:
+            warn(
+                "DopplerBroadening accepts nthreads for API consistency, "
+                "but it is not currently used."
+            )
+
         # Ensure we have an Sed to work on (this transformation is not defined
         # for other emission types)
         if not isinstance(emission, Sed):
@@ -167,6 +177,14 @@ class ThermalBroadening(Transformer):
         Returns:
             Sed: The broadened emission.
         """
+        # As above, this transformer does not yet have a threaded execution
+        # path, so warn when the caller explicitly asks for one.
+        if nthreads != 1:
+            warn(
+                "ThermalBroadening accepts nthreads for API consistency, "
+                "but it is not currently used."
+            )
+
         # Ensure we have an Sed to work on (this transformation is not defined
         # for other emission types)
         if not isinstance(emission, Sed):
