@@ -1,9 +1,10 @@
 """Shared helpers for scaling emission arrays.
 
 Provides normalised mask handling and a unified scaling dispatcher that
-uses the specialised C++ kernels where they help, while keeping simple
-no-mask broadcasts on the NumPy path. Both ``Sed.scale`` and
-``LineCollection.scale`` delegate here for the single-array path.
+hands the common 2D scaling cases over to the specialised C++ kernels,
+while retaining a NumPy fallback for the more general broadcast shapes.
+Both ``Sed.scale`` and ``LineCollection.scale`` delegate here for the
+single-array path.
 
 Example usage::
 
@@ -20,11 +21,11 @@ from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.extensions.spectra_operations import (
+    multiply_array_by_vector_1d,
     scale_line_2d,
     scale_spectra_2d,
 )
 from synthesizer.units import get_array_quantity_view
-from synthesizer.utils.operation_timers import timed
 
 
 def normalise_scale_masks(mask, lam_mask, shape):
@@ -82,7 +83,6 @@ def normalise_scale_masks(mask, lam_mask, shape):
     )
 
 
-@timed("scaling.normalise_scaling_for_units")
 def normalise_scaling_for_units(scaling, units):
     """Convert a scaling factor into raw values compatible with ``units``.
 
@@ -113,7 +113,6 @@ def normalise_scaling_for_units(scaling, units):
     return scaling.to(units).value
 
 
-@timed("scaling.normalise_line_scaling")
 def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
     """Resolve a line scaling into luminosity and continuum factors.
 
@@ -165,7 +164,6 @@ def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
     )
 
 
-@timed("scaling.scale_to_quantity")
 def scale_to_quantity(
     array,
     scaling,
@@ -208,7 +206,6 @@ def scale_to_quantity(
     )
 
 
-@timed("scaling.scale_inplace")
 def scale_inplace(array, scaling, mask=None, lam_mask=None, nthreads=1):
     """Scale an array into its existing buffer.
 
@@ -240,7 +237,6 @@ def scale_inplace(array, scaling, mask=None, lam_mask=None, nthreads=1):
     )
 
 
-@timed("scaling.scale_line_arrays")
 def scale_line_arrays(
     luminosity,
     continuum,
@@ -255,8 +251,8 @@ def scale_line_arrays(
     """Scale a luminosity/continuum pair, using the fused kernel when useful.
 
     This keeps the Python-side dispatch rules for line scaling in one place.
-    The fused C++ kernel is only worthwhile for the 2D masked row-scaling
-    case; otherwise we delegate to ``scale_array`` for each array.
+    When both scaling arrays are 1D row factors we hand straight over to the
+    fused C++ kernel; otherwise we delegate to ``scale_array`` for each array.
 
     Args:
         luminosity (np.ndarray):
@@ -286,8 +282,8 @@ def scale_line_arrays(
     # the fused kernel actually understands.
     mask, lam_mask = normalise_scale_masks(mask, lam_mask, luminosity.shape)
 
-    # From here on we are deciding whether the fused lum+cont kernel is legal,
-    # not whether it is desirable in the abstract.
+    # From here on we are deciding whether the fused lum+cont kernel can take
+    # the inputs directly.
     nspec = luminosity.shape[0]
     nlam = luminosity.shape[-1]
     lum_1d = isinstance(scaling_lum, np.ndarray) and scaling_lum.ndim == 1
@@ -298,7 +294,6 @@ def scale_line_arrays(
         and cont_1d
         and scaling_lum.shape[0] == nspec
         and scaling_cont.shape[0] == nspec
-        and (mask is not None or lam_mask is not None)
         and (mask is None or (mask.ndim == 1 and mask.shape[0] == nspec))
         and (
             lam_mask is None
@@ -342,7 +337,6 @@ def scale_line_arrays(
     )
 
 
-@timed("scaling.scale_array")
 def scale_array(
     array, scaling, mask=None, lam_mask=None, nthreads=1, out=None
 ):
@@ -372,25 +366,10 @@ def scale_array(
     # scalars using one variable.
     scaling_ndim = getattr(scaling, "ndim", 0)
 
-    # With no masks a scalar multiply is already the simple fast path.
-    # Avoid building a temporary row vector and dispatching into C++.
-    if (
-        array.ndim == 2
-        and np.isscalar(scaling)
-        and mask is None
-        and lam_mask is None
-    ):
-        # If the caller handed us an output buffer we can write directly into
-        # it and still avoid the C++ dispatch.
-        if out is not None:
-            np.multiply(array, scaling, out=out)
-            return out
-        return array * scaling
-
-    # If the scaling is a 1D array that matches the first dimension of the
-    # array we can use the dedicated 2D C++ kernel. This will handle per-
-    # spectrum scaling with optional row and wavelength masks for us
-    use_fast_2d_scaling = (
+    # When scaling is one factor per row and the masks are in the simple 1D
+    # forms the extension understands, hand the whole operation over to the
+    # specialised kernel.
+    use_row_scaling_kernel = (
         isinstance(scaling, np.ndarray)
         and array.ndim == 2
         and scaling_ndim == 1
@@ -410,26 +389,11 @@ def scale_array(
             )
         )
     )
-    if use_fast_2d_scaling:
-        # Without masks the C++ dispatch overhead outweighs its benefit.
-        # NumPy broadcasting (scaling[:, np.newaxis]) is a strided view with
-        # zero allocation and matches the C++ kernel's element throughput.
-        if mask is None and lam_mask is None:
-            scaling_2d = scaling[:, np.newaxis]
-            # As above, honour a caller-provided output buffer when we can stay
-            # on the NumPy path.
-            if out is not None:
-                np.multiply(array, scaling_2d, out=out)
-                return out
-            return array * scaling_2d
-
-        # Once either mask is present the specialised kernel earns its keep by
-        # fusing the row scaling and masked copy logic.
+    if use_row_scaling_kernel:
         return scale_spectra_2d(array, scaling, mask, lam_mask, nthreads, out)
 
-    # If the scaling is a scalar and the array is 2D we can broadcast it to a
-    # per-row array and use the C++ kernel for the masked cases. The masks
-    # must be in the simple form the kernel accepts (1D row/lambda).
+    # Scalar 2D scaling with simple 1D masks can use the same row-scaling
+    # kernel after materialising the repeated row factor once.
     if (
         array.ndim == 2
         and np.isscalar(scaling)
@@ -457,6 +421,17 @@ def scale_array(
         return scale_spectra_2d(
             array, scaling_arr, mask, lam_mask, nthreads, out
         )
+
+    # If every wavelength uses the same 1D vector and there is no masking, the
+    # dedicated last-axis kernel is the simplest path.
+    if (
+        isinstance(scaling, np.ndarray)
+        and scaling_ndim == 1
+        and scaling.shape[0] == array.shape[-1]
+        and mask is None
+        and lam_mask is None
+    ):
+        return multiply_array_by_vector_1d(array, scaling, nthreads, out)
 
     # If we are scaling in place (out is the same buffer as array) we can
     # mutate the buffer directly without the copy-modify-copy-back dance at
