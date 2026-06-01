@@ -412,7 +412,11 @@ class Sed:
             Sed
                 A new instance of Sed with scaled lnu.
         """
+        # Get the units without making a copy
         units = get_quantity_unit(self, "lnu")
+
+        # Get the scaling based on the units we just unpacked. Safe for
+        # unitless scaling
         scaling = normalise_scaling_for_units(scaling, units)
 
         # If we are scaling in place we can write directly into the existing
@@ -1485,9 +1489,16 @@ class Sed:
                 A new Sed containing the rest frame spectra of self attenuated
                 by the transmission defined from tau_v and the dust curve.
         """
+        # Avoid cyclic imports.
+        from synthesizer.emission_models.transformers.dust_attenuation import (
+            AttenuationLaw,
+        )
+
+        # Ensure we have a dust curve
         if dust_curve is None:
             raise exceptions.MissingArgument("dust_curve must be provided")
 
+        # Ensure we have tau_v if the dust curve requires it
         if tau_v is None and "tau_v" in getattr(
             dust_curve, "_required_params", ()
         ):
@@ -1522,15 +1533,12 @@ class Sed:
                     f"({tau_v.shape}, {self._lnu.shape})"
                 )
 
+        # Get the unit without making a copy
         units = get_quantity_unit(self, "lnu")
 
         # For the standard AttenuationLaw implementation with per-row tau_v we
         # can avoid materialising a full 2D transmission array and instead use
         # the separable attenuation kernel directly.
-        from synthesizer.emission_models.transformers.dust_attenuation import (
-            AttenuationLaw,
-        )
-
         # This is the main new fast path: one tau_v per spectrum row plus the
         # stock AttenuationLaw transmission formula means we can keep the work
         # separable as tau_v[row] * tau_x_v[lam].

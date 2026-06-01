@@ -1180,6 +1180,7 @@ class LineCollection:
                 inplace is True in which case the LineCollection object will be
                 scaled in place.
         """
+        # Get the units without making a copy
         lum_units = get_quantity_unit(self, "luminosity")
         cont_units = get_quantity_unit(self, "continuum")
 
@@ -1200,6 +1201,7 @@ class LineCollection:
         # In-place scaling can hand the existing buffers down as outputs.
         out_lum = self._luminosity if inplace else None
         out_cont = self._continuum if inplace else None
+
         # The shared helper decides whether this should go through the fused
         # lum+cont kernel or two independent array scalings.
         lum, cont = scale_line_arrays(
@@ -1213,9 +1215,13 @@ class LineCollection:
             out_lum=out_lum,
             out_cont=out_cont,
         )
+
+        # For in-place scaling we have already updated the existing buffers
+        # and can just return self
         if inplace:
             return self
 
+        # Otherwise we need to build a new LineCollection
         return LineCollection(
             line_ids=self.line_ids,
             lam=self.lam,
@@ -1256,9 +1262,16 @@ class LineCollection:
                     A new LineCollection object containing the attenuated
                     lines.
         """
+        # Avoid cyclic imports.
+        from synthesizer.emission_models.transformers.dust_attenuation import (
+            AttenuationLaw,
+        )
+
+        # Ensure we have a dust curve to apply
         if dust_curve is None:
             raise exceptions.MissingArgument("dust_curve must be provided")
 
+        # Ensure we have tau_v if the dust curve requires it
         if tau_v is None and "tau_v" in getattr(
             dust_curve, "_required_params", ()
         ):
@@ -1293,16 +1306,13 @@ class LineCollection:
                     f"({tau_v.shape}, {self.lum.shape})"
                 )
 
+        # Get the units without making a copy
         lum_units = get_quantity_unit(self, "luminosity")
         cont_units = get_quantity_unit(self, "continuum")
 
         # For the standard AttenuationLaw implementation with per-row tau_v we
         # can avoid materialising a full 2D transmission array and instead use
         # the separable attenuation kernel directly.
-        from synthesizer.emission_models.transformers.dust_attenuation import (
-            AttenuationLaw,
-        )
-
         # As in Sed.apply_attenuation, the separable AttenuationLaw case lets
         # us keep tau_v and the wavelength curve split until the inner loop.
         if (
