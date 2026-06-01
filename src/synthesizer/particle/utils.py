@@ -118,9 +118,9 @@ def calculate_smoothing_lengths(
     query_coords = coordinates.value
     source_values = source_coords.to(coordinates.units).value
 
+    # Ensure the number of neighbours and speedup factor are valid
     if num_neighbours < 1:
         raise ValueError("num_neighbours must be at least 1.")
-
     if speedup_fac < 1:
         raise ValueError("speedup_fac must be at least 1.")
 
@@ -133,9 +133,12 @@ def calculate_smoothing_lengths(
             source_values, boxsize=boxsize.to(coordinates.units).value
         )
 
+    # Prepare an array to hold the resultant smoothing lengths
     smoothing_lengths: np.ndarray = np.empty(nparts, dtype=np.float32)
 
-    # Include speedup_fac stuff here:
+    # Derive the number of neighbours to search for and the correction factor
+    # to apply to the smoothing lengths based on the speedup factor around
+    # dimension
     neighbours_search: int = max(1, num_neighbours // speedup_fac)
     hsml_correction_fac_speedup: float = (speedup_fac) ** (1 / dimension)
 
@@ -145,7 +148,9 @@ def calculate_smoothing_lengths(
     # testing." - SWIFTsimio (probably Josh)
     block_size: int = 65536
 
+    # Loop through the coordinates in blocks
     for starting_index in range(0, nparts, block_size):
+        # Get the block indices
         ending_index = min(starting_index + block_size, nparts)
 
         # Query the tree for this chunk
@@ -164,4 +169,5 @@ def calculate_smoothing_lengths(
     return unyt_array(
         smoothing_lengths * (hsml_correction_fac_speedup / kernel_gamma),
         units=coordinates.units,
+        bypass_validation=True,
     )
