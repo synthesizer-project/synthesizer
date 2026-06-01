@@ -116,6 +116,80 @@ def test_photometry_collection_select_preserves_lookup():
     np.testing.assert_allclose(sub["f3"].value, pc["f3"].value)
 
 
+def test_apply_filters_supports_float32_inputs_and_outputs():
+    """Batched photometry should preserve a float32 precision family."""
+    lam = np.linspace(1000, 5000, 500, dtype=np.float32) * angstrom
+    filters = _make_filters(lam)
+    nu = np.ascontiguousarray((c / lam).to("Hz").value, dtype=np.float32)
+    spectra = np.ascontiguousarray(
+        np.vstack(
+            [
+                np.ones(len(lam), dtype=np.float32),
+                np.linspace(0.1, 1.0, len(lam), dtype=np.float32),
+            ]
+        ),
+        dtype=np.float32,
+    )
+
+    photometry = filters.apply_filters(
+        spectra,
+        nu=nu,
+        integration_method="trapz",
+        out_dtype=np.float32,
+    )
+
+    assert photometry.dtype == np.float32
+
+
+def test_apply_filters_supports_float64_output_from_float32_inputs():
+    """Users should be able to request float64 output independently."""
+    lam = np.linspace(1000, 5000, 500, dtype=np.float32) * angstrom
+    filters = _make_filters(lam)
+    nu = np.ascontiguousarray((c / lam).to("Hz").value, dtype=np.float32)
+    spectra = np.ascontiguousarray(
+        np.vstack(
+            [
+                np.ones(len(lam), dtype=np.float32),
+                np.linspace(0.1, 1.0, len(lam), dtype=np.float32),
+            ]
+        ),
+        dtype=np.float32,
+    )
+
+    photometry = filters.apply_filters(
+        spectra,
+        nu=nu,
+        integration_method="trapz",
+        out_dtype=np.float64,
+    )
+
+    assert photometry.dtype == np.float64
+
+
+def test_apply_filters_rejects_mismatched_precision_families():
+    """The extension should reject mixed input precision families clearly."""
+    lam = np.linspace(1000, 5000, 500) * angstrom
+    filters = _make_filters(lam)
+    nu = np.ascontiguousarray((c / lam).to("Hz").value, dtype=np.float64)
+    spectra = np.ascontiguousarray(
+        np.vstack(
+            [
+                np.ones(len(lam), dtype=np.float32),
+                np.linspace(0.1, 1.0, len(lam), dtype=np.float32),
+            ]
+        ),
+        dtype=np.float32,
+    )
+
+    with pytest.raises(TypeError, match="same floating-point dtype"):
+        filters.apply_filters(
+            spectra,
+            nu=nu,
+            integration_method="trapz",
+            out_dtype=np.float32,
+        )
+
+
 def test_photometry_collection_addition():
     """Photometry collections with matching filters should add."""
     lam = np.linspace(1000, 5000, 500) * angstrom
