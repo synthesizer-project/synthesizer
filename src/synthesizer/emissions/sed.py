@@ -1452,6 +1452,7 @@ class Sed:
             )
         return self.get_resampled_sed(new_lam=instrument.lam)
 
+    @timed("Sed.apply_attenuation")
     def apply_attenuation(
         self,
         tau_v=None,

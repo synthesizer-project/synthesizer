@@ -1223,6 +1223,7 @@ class LineCollection:
             cont=get_array_quantity_view(cont, cont_units),
         )
 
+    @timed("LineCollection.apply_attenuation")
     def apply_attenuation(
         self,
         tau_v=None,

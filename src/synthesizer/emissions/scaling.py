@@ -24,6 +24,7 @@ from synthesizer.extensions.spectra_operations import (
     scale_spectra_2d,
 )
 from synthesizer.units import get_array_quantity_view
+from synthesizer.utils.operation_timers import timed
 
 
 def normalise_scale_masks(mask, lam_mask, shape):
@@ -81,6 +82,7 @@ def normalise_scale_masks(mask, lam_mask, shape):
     )
 
 
+@timed("scaling.normalise_scaling_for_units")
 def normalise_scaling_for_units(scaling, units):
     """Convert a scaling factor into raw values compatible with ``units``.
 
@@ -111,6 +113,7 @@ def normalise_scaling_for_units(scaling, units):
     return scaling.to(units).value
 
 
+@timed("scaling.normalise_line_scaling")
 def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
     """Resolve a line scaling into luminosity and continuum factors.
 
@@ -162,6 +165,7 @@ def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
     )
 
 
+@timed("scaling.scale_to_quantity")
 def scale_to_quantity(
     array,
     scaling,
@@ -204,6 +208,7 @@ def scale_to_quantity(
     )
 
 
+@timed("scaling.scale_inplace")
 def scale_inplace(array, scaling, mask=None, lam_mask=None, nthreads=1):
     """Scale an array into its existing buffer.
 
@@ -235,6 +240,7 @@ def scale_inplace(array, scaling, mask=None, lam_mask=None, nthreads=1):
     )
 
 
+@timed("scaling.scale_line_arrays")
 def scale_line_arrays(
     luminosity,
     continuum,
@@ -336,6 +342,7 @@ def scale_line_arrays(
     )
 
 
+@timed("scaling.scale_array")
 def scale_array(
     array, scaling, mask=None, lam_mask=None, nthreads=1, out=None
 ):
