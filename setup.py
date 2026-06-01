@@ -292,7 +292,9 @@ extensions = [
         "synthesizer.extensions.reductions",
         [
             "src/synthesizer/extensions/reductions.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
             "src/synthesizer/extensions/timers.cpp",
         ],
         compile_flags=compile_flags,

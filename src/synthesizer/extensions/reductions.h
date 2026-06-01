@@ -2,7 +2,7 @@
 
 typedef struct _object PyObject;
 
-// Reduction prototypes
+/* Prototypes for reduction helpers. */
 void reduce_spectra(double *spectra, double *part_spectra, int nlam, int npart,
                     int nthreads);
 

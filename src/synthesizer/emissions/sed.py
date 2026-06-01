@@ -2738,5 +2738,5 @@ def integrate_particle_sed(sed, nthreads=1):
 
     # Reduce the per-particle spectra in C++ and rebuild a unit-aware Sed on
     # the original wavelength grid.
-    reduced_lnu = reduce_particle_spectra(sed._lnu, nthreads)
+    reduced_lnu = reduce_particle_spectra(sed._lnu, nthreads, sed._lnu.dtype)
     return Sed(sed.lam, reduced_lnu * sed.lnu.units)
