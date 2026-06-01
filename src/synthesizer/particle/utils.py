@@ -62,14 +62,16 @@ def rotate(
     return np.dot(coordinates, rot_matrix.T)
 
 
-@accepts(coordinates=Mpc, boxsize=Mpc)
+@accepts(coordinates=Mpc, source_coords=Mpc, boxsize=Mpc)
 def calculate_smoothing_lengths(
     coordinates: unyt_array,
+    source_coords: unyt_array = None,
     kernel_gamma: np.float32 = 1.4,
     num_neighbours: int = 32,
     speedup_fac: int = 2,
     dimension: int = 3,
     boxsize: unyt_array = None,
+    workers: int = 1,
 ) -> unyt_array[Mpc]:
     """Calculate smoothing lengths based on the kth nearest neighbour distance.
 
@@ -82,6 +84,9 @@ def calculate_smoothing_lengths(
     Args:
         coordinates (unyt_array):
             The coordinates to calculate the smoothing lengths for.
+        source_coords (unyt_array, optional):
+            The source coordinates to query against. If None, smoothing
+            lengths are calculated from `coordinates` themselves.
         kernel_gamma (float, optional):
             The kernel gamma of the kernel being used. (default: 1.4)
         num_neighbours (int, optional):
@@ -101,26 +106,37 @@ def calculate_smoothing_lengths(
         boxsize (unyt_array, optional):
             The boxsize to use for the periodic boundary conditions. If None,
             no periodic boundary conditions are used
+        workers (int, optional):
+            The number of workers to use in the neighbour search. The default
+            is 1.
 
     Returns:
         unyt_array: An unyt array of smoothing lengths.
     """
     nparts: int = coordinates.shape[0]
+    source_coords = coordinates if source_coords is None else source_coords
+    query_coords = coordinates.value
+    source_values = source_coords.to(coordinates.units).value
+
+    if num_neighbours < 1:
+        raise ValueError("num_neighbours must be at least 1.")
+
+    if speedup_fac < 1:
+        raise ValueError("speedup_fac must be at least 1.")
 
     # Build the tree (with or without periodic boundary conditions)
     tree: cKDTree
     if boxsize is None:
-        tree = cKDTree(coordinates.value)
+        tree = cKDTree(source_values)
     else:
         tree = cKDTree(
-            coordinates.value, boxsize=boxsize.to(coordinates.units).value
+            source_values, boxsize=boxsize.to(coordinates.units).value
         )
 
     smoothing_lengths: np.ndarray = np.empty(nparts, dtype=np.float32)
-    smoothing_lengths[-1] = -0.1
 
     # Include speedup_fac stuff here:
-    neighbours_search: int = num_neighbours // speedup_fac
+    neighbours_search: int = max(1, num_neighbours // speedup_fac)
     hsml_correction_fac_speedup: float = (speedup_fac) ** (1 / dimension)
 
     # We create a lot of data doing this, so we want to do it in small chunks
@@ -128,31 +144,23 @@ def calculate_smoothing_lengths(
     # reasonable chunk size based on previous performance
     # testing." - SWIFTsimio (probably Josh)
     block_size: int = 65536
-    number_of_blocks: int = 1 + nparts // block_size
 
-    d: np.ndarray
-    for block in range(number_of_blocks):
-        starting_index: int = block * block_size
-        ending_index: int = (block + 1) * (block_size)
-
-        # Handles the bounds
-        if ending_index > nparts:
-            ending_index = nparts + 1
-        if starting_index >= ending_index:
-            break
+    for starting_index in range(0, nparts, block_size):
+        ending_index = min(starting_index + block_size, nparts)
 
         # Query the tree for this chunk
         d, _ = tree.query(
-            coordinates[starting_index:ending_index].value,
+            query_coords[starting_index:ending_index],
             k=neighbours_search,
-            workers=-1,
+            workers=workers,
         )
 
         # Store the smoothing lengths
-        smoothing_lengths[starting_index:ending_index] = d[:, -1]
+        if np.ndim(d) == 1:
+            smoothing_lengths[starting_index:ending_index] = d
+        else:
+            smoothing_lengths[starting_index:ending_index] = d[:, -1]
 
-    # Correct the smoothing lengths for the speedup factor and kernel gamma
-    # before returning
     return unyt_array(
         smoothing_lengths * (hsml_correction_fac_speedup / kernel_gamma),
         units=coordinates.units,
