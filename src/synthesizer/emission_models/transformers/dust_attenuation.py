@@ -172,6 +172,49 @@ class AttenuationLaw(Transformer):
 
         return np.exp(-exponent)
 
+    @accepts(lam=angstrom)
+    def get_extinction_curve(self, lam, **dust_curve_kwargs):
+        """Compute the normalised extinction curve tau(lambda)/tau(V).
+
+        Returns the wavelength-dependent extinction curve from the underlying
+        attenuation law at the requested wavelengths.  This is the ``tau_x_v``
+        factor used in separable attenuation::
+
+            transmission = exp(-tau_v * tau_x_v)
+
+        where ``tau_v`` is the V-band optical depth supplied separately by the
+        caller.  This method only returns the normalised curve; the caller is
+        responsible for providing ``tau_v`` and computing the exponential.
+
+        Args:
+            lam (np.ndarray of float):
+                The wavelengths (with units) at which to calculate the
+                normalised extinction curve.
+            **dust_curve_kwargs (dict):
+                Additional keyword arguments to be passed to the dust curve
+                which have been defined on the emitter or model.  These are
+                forwarded to ``_set_params`` before the computation and the
+                original state is restored afterward.
+
+        Returns:
+            np.ndarray of float:
+                The normalised extinction curve ``tau(lambda)/tau(V)``
+                with shape ``lam.shape``.
+        """
+        # Push any dynamically-set dust curve parameters onto the instance,
+        # compute the raw normalised extinction curve, then restore the
+        # previous state regardless of exceptions.
+        self._set_params(**dust_curve_kwargs)
+
+        try:
+            # The heavy lifting still lives in get_tau; this helper just gives
+            # callers a clearer, attenuation-specific entry point.
+            return self.get_tau(lam)
+        finally:
+            # Always put the instance back the way we found it so temporary
+            # overrides do not leak into later calls.
+            self._reset_params()
+
     def _check_required_params(self):
         """Get the required parameters for the transformer.
 
@@ -194,7 +237,15 @@ class AttenuationLaw(Transformer):
 
         self._required_params = required_params
 
-    def _transform(self, emission, emitter, model, mask, lam_mask):
+    def _transform(
+        self,
+        emission,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        nthreads=1,
+    ):
         """Apply the dust attenuation to the emission.
 
         Args:
@@ -206,6 +257,8 @@ class AttenuationLaw(Transformer):
             lam_mask (np.ndarray): We must define this parameter in the
                 transformer method, but it is not used in this case. If not
                 None an error will be raised.
+            nthreads (int):
+                The number of threads to use for compatible attenuation paths.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -223,6 +276,7 @@ class AttenuationLaw(Transformer):
         return emission.apply_attenuation(
             dust_curve=self,
             mask=mask,
+            nthreads=nthreads,
             **params,
         )
 

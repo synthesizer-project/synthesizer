@@ -99,7 +99,15 @@ class IGMBase(Transformer):
 
         return fig, ax
 
-    def _transform(self, emission, emitter, model, mask=None, lam_mask=None):
+    def _transform(
+        self,
+        emission,
+        emitter,
+        model,
+        mask=None,
+        lam_mask=None,
+        nthreads=1,
+    ):
         """Apply the IGM to either a Line or Sed object.
 
         Args:
@@ -110,6 +118,8 @@ class IGMBase(Transformer):
             mask (np.ndarray): The mask to apply to the emission.
             lam_mask (np.ndarray): The wavelength mask to apply to the
                 emission.
+            nthreads (int):
+                The number of threads to use for compatible scaling kernels.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -134,7 +144,12 @@ class IGMBase(Transformer):
         # Apply the transmission to the emission (here we can use the
         # overloaded multiplication operator regardless of the type of
         # emission object)
-        return emission.scale(transmission, lam_mask=lam_mask, mask=mask)
+        return emission.scale(
+            transmission,
+            lam_mask=lam_mask,
+            mask=mask,
+            nthreads=nthreads,
+        )
 
 
 class Inoue14(IGMBase):
