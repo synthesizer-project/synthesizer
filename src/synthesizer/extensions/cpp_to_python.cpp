@@ -84,6 +84,40 @@ PyArrayObject *wrap_array_to_numpy(int ndim, npy_intp *dims,
   return wrap_array_to_numpy<T>(ndim, dims, raw);
 }
 
+/**
+ * @brief Resolve and validate a requested floating-point output dtype.
+ *
+ * @param dtype_obj: Python dtype-like object to parse.
+ * @param argument_name: The Python argument name. (For error messages)
+ *
+ * @return The resolved NumPy typenum, or -1 on failure.
+ */
+int resolve_output_typenum(PyObject *dtype_obj, const char *argument_name) {
+
+  PyArray_Descr *descr = NULL;
+
+  /* Let NumPy parse dtype-like objects such as np.float32 or np.dtype("f4"). */
+  if (!PyArray_DescrConverter(dtype_obj, &descr)) {
+    PyErr_Format(PyExc_TypeError,
+                 "%s must be a NumPy dtype or floating-point type.",
+                 argument_name);
+    return -1;
+  }
+
+  /* Extract the resolved typenum and release the temporary descriptor. */
+  const int typenum = descr->type_num;
+  Py_DECREF(descr);
+
+  /* Only float32 and float64 are valid output dtypes for this pass. */
+  if (typenum != NPY_FLOAT32 && typenum != NPY_FLOAT64) {
+    PyErr_Format(PyExc_TypeError, "%s must be float32 or float64.",
+                 argument_name);
+    return -1;
+  }
+
+  return typenum;
+}
+
 /* Declarations of specialized functions for common types */
 template PyArrayObject *wrap_array_to_numpy<double>(int, npy_intp *, double *);
 template PyArrayObject *wrap_array_to_numpy<float>(int, npy_intp *, float *);
@@ -105,8 +139,9 @@ wrap_array_to_numpy<int64_t>(int, npy_intp *, std::unique_ptr<int64_t[]> &&);
  *
  * @param obj  The Python object to check (e.g. from argument parsing).
  * @param name Optional name to include in the error message.
- * @return     nullptr if obj is Py_None, or a PyArrayObject* if it's a valid
- * array. Returns nullptr and sets a Python error if the type is invalid.
+ *
+ * @return nullptr if obj is Py_None, or a PyArrayObject* if it's a valid array.
+ * Returns nullptr and sets a Python error if the type is invalid.
  */
 PyArrayObject *array_or_none(PyObject *obj, const char *name) {
   if (obj == Py_None) {

@@ -27,6 +27,9 @@ template <typename T>
 PyArrayObject *wrap_array_to_numpy(int ndim, npy_intp *dims,
                                    std::unique_ptr<T[]> &&ptr);
 
+int resolve_output_typenum(PyObject *dtype_obj,
+                           const char *argument_name = "out_dtype");
+
 PyArrayObject *array_or_none(PyObject *obj, const char *name = "argument");
 
 #define RETURN_IF_PYERR()                                                      \
