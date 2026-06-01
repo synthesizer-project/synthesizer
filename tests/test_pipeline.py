@@ -2,6 +2,7 @@
 
 import copy
 import time
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -10,6 +11,7 @@ from astropy.cosmology import Planck18 as cosmo
 from unyt import Mpc, angstrom, kpc, unyt_array
 
 from synthesizer import check_atomic_timing, exceptions
+from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.emissions import Sed
 from synthesizer.extensions.timers import reset_timings, tic, toc
 from synthesizer.instruments import FilterCollection, Instrument
@@ -651,6 +653,67 @@ class TestPipelineNotReady:
 
 class TestPipelineOperations:
     """Tests for the pipeline operations."""
+
+    def test_base_galaxy_get_observed_spectra_passes_nthreads(self):
+        """BaseGalaxy should forward nthreads to each Sed.get_fnu call."""
+        igm = MagicMock()
+        galaxy = SimpleNamespace(
+            redshift=1.0,
+            spectra={"total": MagicMock()},
+            stars=SimpleNamespace(
+                spectra={"stellar": MagicMock()},
+                particle_spectra={"stellar_particles": MagicMock()},
+            ),
+            black_holes=SimpleNamespace(
+                spectra={"bh": MagicMock()},
+                particle_spectra={"bh_particles": MagicMock()},
+            ),
+        )
+
+        BaseGalaxy.get_observed_spectra(
+            galaxy,
+            cosmo=cosmo,
+            igm=igm,
+            nthreads=7,
+        )
+
+        for sed in (
+            galaxy.spectra["total"],
+            galaxy.stars.spectra["stellar"],
+            galaxy.stars.particle_spectra["stellar_particles"],
+            galaxy.black_holes.spectra["bh"],
+            galaxy.black_holes.particle_spectra["bh_particles"],
+        ):
+            sed.get_fnu.assert_called_once_with(
+                cosmo=cosmo,
+                z=1.0,
+                igm=igm,
+                nthreads=7,
+            )
+
+    def test_pipeline_get_observed_spectra_passes_pipeline_nthreads(
+        self,
+        nebular_emission_model,
+    ):
+        """Pipeline should forward its configured nthreads to galaxies."""
+        pipeline = Pipeline(
+            emission_model=nebular_emission_model,
+            verbose=0,
+        )
+        pipeline.nthreads = 5
+        galaxy = MagicMock()
+        galaxy.spectra = {}
+        galaxy.stars = None
+        galaxy.black_holes = None
+
+        pipeline.get_observed_spectra(cosmo=cosmo, igm=None, write=False)
+        pipeline._get_observed_spectra(galaxy)
+
+        galaxy.get_observed_spectra.assert_called_once_with(
+            cosmo=cosmo,
+            igm=None,
+            nthreads=5,
+        )
 
     def test_run_bare_pipeline(
         self,
