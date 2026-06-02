@@ -237,8 +237,8 @@ def test_apply_filters_precision_combinations_agree_with_float64_reference():
     )
 
 
-def test_apply_filters_rejects_mismatched_precision_families():
-    """The extension should reject mixed input precision families clearly."""
+def test_apply_filters_casts_lam_nu_to_input_dtype():
+    """apply_filters should cast lam/nu to match the spectra dtype."""
     lam = np.linspace(1000, 5000, 500) * angstrom
     filters = _make_filters(lam)
     nu = np.ascontiguousarray((c / lam).to("Hz").value, dtype=np.float64)
@@ -252,13 +252,15 @@ def test_apply_filters_rejects_mismatched_precision_families():
         dtype=np.float32,
     )
 
-    with pytest.raises(TypeError, match="same floating-point dtype"):
-        filters.apply_filters(
-            spectra,
-            nu=nu,
-            integration_method="trapz",
-            out_dtype=np.float32,
-        )
+    # Should not raise: nu (float64) is cast to match spectra (float32)
+    result = filters.apply_filters(
+        spectra,
+        nu=nu,
+        integration_method="trapz",
+        out_dtype=np.float32,
+    )
+    assert result.dtype == np.float32
+    assert result.shape == (3, 2)
 
 
 def test_photometry_collection_addition():

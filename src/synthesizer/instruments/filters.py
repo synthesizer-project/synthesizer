@@ -1208,26 +1208,18 @@ class FilterCollection:
                     "or call prepare_for_grid first."
                 )
 
-            # The xs will be frequency values in Hz
-            xs = (c / self.lam).to("Hz").value
+            # The xs will be frequency values in Hz matching the input dtype
+            xs = np.asarray((c / self.lam).to("Hz").value, dtype=input_dtype)
             space = "nu"
-
-            # Check the dtype of the cached grid matches the input array
-            if xs.dtype != input_dtype:
-                raise exceptions.InconsistentArguments(
-                    "The cached native frequency grid does not match the "
-                    f"input array dtype (got {xs.dtype} and {input_dtype}). "
-                    "Provide lam/nu explicitly with a matching dtype."
-                )
 
         # Frequencies provided, xs will be frequency values in Hz
         elif nu is not None:
-            xs = nu
+            xs = np.asarray(nu, dtype=input_dtype)
             space = "nu"
 
         # Wavelengths provided, xs will be wavelength values in Angstrom
         else:
-            xs = lam
+            xs = np.asarray(lam, dtype=input_dtype)
             space = "lam"
 
         # If nthreads is -1 we use all available threads

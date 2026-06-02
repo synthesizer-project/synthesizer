@@ -17,7 +17,7 @@ from synthesizer.emission_models.utils import get_param
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
+from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.utils.operation_timers import timed, timer
 
@@ -112,8 +112,8 @@ class Particles:
                 The name of the particle type.
         """
         # Set phase space coordinates
-        self.coordinates = ensure_array_c_compatible_double(coordinates)
-        self.velocities = ensure_array_c_compatible_double(velocities)
+        self.coordinates = coordinates
+        self.velocities = velocities
 
         # Define the dictionary to hold particle spectra
         self.particle_spectra = {}
@@ -128,12 +128,10 @@ class Particles:
         # Set unit information
 
         # Set the softening length
-        self.softening_lengths = ensure_array_c_compatible_double(
-            softening_lengths
-        )
+        self.softening_lengths = softening_lengths
 
         # Set the particle masses
-        self.masses = ensure_array_c_compatible_double(masses)
+        self.masses = masses
 
         # Set the redshift of the particles
         self.redshift = redshift
@@ -142,7 +140,7 @@ class Particles:
         self.nparticles = nparticles
 
         # Set the centre of the particle distribution
-        self.centre = ensure_array_c_compatible_double(centre)
+        self.centre = centre
 
         # Set the radius to None, this will be populated when needed and
         # can then be subsequently accessed
@@ -245,7 +243,7 @@ class Particles:
         coords[:, 1] = np.arctan2(y, d)
 
         # Ensure the array is C-contiguous
-        coords = ensure_array_c_compatible_double(coords)
+        coords = np.ascontiguousarray(coords)
 
         return coords * rad
 
@@ -317,11 +315,8 @@ class Particles:
         d = los_dists.to_value(self.smoothing_lengths.units)
 
         # Calculate and return the projected angular smoothing lengths
-        projected_smoothing_lengths = np.arctan2(self._smoothing_lengths, d)
-
-        # Ensure the array is C-contiguous
-        projected_smoothing_lengths = ensure_array_c_compatible_double(
-            projected_smoothing_lengths
+        projected_smoothing_lengths = np.ascontiguousarray(
+            np.arctan2(self._smoothing_lengths, d)
         )
 
         return projected_smoothing_lengths * rad
