@@ -830,6 +830,95 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 "model is not compatible with this attribute."
             )
 
+    def set_attribute_overload(self, attr_str, overload_str):
+        """Redirect a model attribute to read a different attribute.
+
+        This function is useful for redirecting get_param to read a different
+        attribute from the one the model would expect. This is particularly,
+        useful when redirecting a grid axis to read from a different attribute
+        on the emitter.
+
+        For example, if we have a grid that contains "ages" and "metallicities"
+        axes but we want to instead use "special_ages" and
+        "special_metallicities" attributes on the emitter, we can use this
+        function which will cause get_param to first attempt to extract
+        "ages" and "metallicities" from the model, see the overload_str
+        string, recurse and attempt to extract "special_ages" and
+        "special_metallicities" from the model, find they are not there, and
+        then look for "special_ages" and "special_metallicities" on the
+        emitter and return them.
+
+        This same behaviour can be achieved by passing kwargs at init but
+        this function enables retroactive redirection, especially useful when
+        using premade models.
+
+        Args:
+            attr_str (str): The attribute to redirect.
+            overload_str (str): The attribute to redirect to.
+        """
+        # Ensure we don't already have an override. Previously this checked
+        # hasattr(self, attr_str) which is incorrect because that tests for a
+        # property/attribute name on the object rather than whether an overload
+        # has already been stored in fixed_parameters. Use membership in the
+        # fixed_parameters dict so attempting to set the same overload twice
+        # raises an error and reports the existing value.
+        if attr_str in self.fixed_parameters:
+            raise exceptions.InconsistentArguments(
+                f"Cannot overload attribute {attr_str} on model {self.label}. "
+                f"{attr_str} is already set on the model "
+                f"{self.fixed_parameters[attr_str]}. "
+            )
+
+        # Store the overload in the fixed parameters dictionary so it will be
+        # picked up by get_param when trying to access attr_str
+        self.fixed_parameters[attr_str] = overload_str
+
+    def set_fixed_parameter(self, param_name, value):
+        """Set a fixed parameter.
+
+        This method will set a fixed parameter on the model. This parameter
+        will take precedence over any parameter of the same name on an
+        emitter.
+
+        When get_param is called to access a parameter, it will first check
+        the fixed_parameters dictionary on the model, prior to looking for
+        the parameter on the emitter.
+
+        Args:
+            param_name (str): The name of the parameter to fix.
+            value (Any): The value to fix the parameter to.
+        """
+        # Ensure we don't already have an override for this parameter
+        if param_name in self.fixed_parameters:
+            raise exceptions.InconsistentArguments(
+                f"Cannot set fixed parameter {param_name} on model "
+                f"{self.label} to {value}. This parameter is already fixed "
+                f"to {self.fixed_parameters[param_name]}."
+            )
+
+        self.fixed_parameters[param_name] = value
+
+    def clear_fixed_parameter(self, param_name):
+        """Clear a fixed parameter.
+
+        This method will clear a fixed parameter on the model, allowing
+        get_param to access the parameter on the emitter again.
+
+        Args:
+            param_name (str): The name of the parameter to clear.
+        """
+        if param_name in self.fixed_parameters:
+            del self.fixed_parameters[param_name]
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Cannot clear fixed parameter {param_name} on model "
+                f"{self.label}. This parameter is not currently fixed."
+            )
+
+    def clear_fixed_parameters(self):
+        """Clear all fixed parameters on the model."""
+        self.fixed_parameters = {}
+
     @property
     def grid(self):
         """Get the Grid object used for extraction."""
