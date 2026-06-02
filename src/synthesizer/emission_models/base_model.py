@@ -856,12 +856,17 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             attr_str (str): The attribute to redirect.
             overload_str (str): The attribute to redirect to.
         """
-        # Ensure we don't already have an override
-        if hasattr(self, attr_str):
+        # Ensure we don't already have an override. Previously this checked
+        # hasattr(self, attr_str) which is incorrect because that tests for a
+        # property/attribute name on the object rather than whether an overload
+        # has already been stored in fixed_parameters. Use membership in the
+        # fixed_parameters dict so attempting to set the same overload twice
+        # raises an error and reports the existing value.
+        if attr_str in self.fixed_parameters:
             raise exceptions.InconsistentArguments(
                 f"Cannot overload attribute {attr_str} on model {self.label}. "
                 f"{attr_str} is already set on the model "
-                f"{getattr(self, attr_str)}. "
+                f"{self.fixed_parameters[attr_str]}. "
             )
 
         # Store the overload in the fixed parameters dictionary so it will be
