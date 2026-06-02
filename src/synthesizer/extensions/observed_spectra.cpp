@@ -60,11 +60,11 @@
  *     loops for populating the observer-frame grids.
  */
 template <typename Real, typename OutT, typename GridT>
-static void compute_fnu_typed(const Real *lnu, const GridT *lam,
-                              const GridT *nu, GridT one_plus_z,
-                              Real conversion, int nthreads, OutT *fnu_out,
-                              GridT *obslam_out, GridT *obsnu_out,
-                              npy_intp nelem, npy_intp nlam) {
+static void compute_fnu_kernel(const Real *lnu, const GridT *lam,
+                               const GridT *nu, GridT one_plus_z,
+                               Real conversion, int nthreads, OutT *fnu_out,
+                               GridT *obslam_out, GridT *obsnu_out,
+                               npy_intp nelem, npy_intp nlam) {
 #ifdef WITH_OPENMP
 #pragma omp parallel for if (nthreads > 1) num_threads(nthreads)               \
     schedule(static)
@@ -82,7 +82,7 @@ static void compute_fnu_typed(const Real *lnu, const GridT *lam,
 }
 
 /*
- * @brief Python wrapper for compute_fnu_typed with dtype dispatch and
+ * @brief Python wrapper for compute_fnu_kernel with dtype dispatch and
  * validation.
  *
  * This parses the Python-level inputs, validates them, and dispatches to the
@@ -293,7 +293,7 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
             np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
         float *obsnu_out =
             np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
-        compute_fnu_typed<float, float, float>(
+        compute_fnu_kernel<float, float, float>(
             lnu, lam, nu, static_cast<float>(one_plus_z),
             static_cast<float>(conversion), nthreads, fnu_out, obslam_out,
             obsnu_out, nelem, nlam);
@@ -303,7 +303,7 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
             np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
         float *obsnu_out =
             np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
-        compute_fnu_typed<float, double, float>(
+        compute_fnu_kernel<float, double, float>(
             lnu, lam, nu, static_cast<float>(one_plus_z),
             static_cast<float>(conversion), nthreads, fnu_out, obslam_out,
             obsnu_out, nelem, nlam);
@@ -318,7 +318,7 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
             np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
         double *obsnu_out =
             np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
-        compute_fnu_typed<float, float, double>(
+        compute_fnu_kernel<float, float, double>(
             lnu, lam, nu, one_plus_z, static_cast<float>(conversion), nthreads,
             fnu_out, obslam_out, obsnu_out, nelem, nlam);
       } else {
@@ -327,7 +327,7 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
             np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
         double *obsnu_out =
             np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
-        compute_fnu_typed<float, double, double>(
+        compute_fnu_kernel<float, double, double>(
             lnu, lam, nu, one_plus_z, static_cast<float>(conversion), nthreads,
             fnu_out, obslam_out, obsnu_out, nelem, nlam);
       }
@@ -344,7 +344,7 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
             np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
         float *obsnu_out =
             np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
-        compute_fnu_typed<double, float, float>(
+        compute_fnu_kernel<double, float, float>(
             lnu, lam, nu, static_cast<float>(one_plus_z), conversion, nthreads,
             fnu_out, obslam_out, obsnu_out, nelem, nlam);
       } else {
@@ -353,7 +353,7 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
             np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
         float *obsnu_out =
             np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
-        compute_fnu_typed<double, double, float>(
+        compute_fnu_kernel<double, double, float>(
             lnu, lam, nu, static_cast<float>(one_plus_z), conversion, nthreads,
             fnu_out, obslam_out, obsnu_out, nelem, nlam);
       }
@@ -367,7 +367,7 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
             np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
         double *obsnu_out =
             np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
-        compute_fnu_typed<double, float, double>(
+        compute_fnu_kernel<double, float, double>(
             lnu, lam, nu, one_plus_z, conversion, nthreads, fnu_out, obslam_out,
             obsnu_out, nelem, nlam);
       } else {
@@ -376,7 +376,7 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
             np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
         double *obsnu_out =
             np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
-        compute_fnu_typed<double, double, double>(
+        compute_fnu_kernel<double, double, double>(
             lnu, lam, nu, one_plus_z, conversion, nthreads, fnu_out, obslam_out,
             obsnu_out, nelem, nlam);
       }
