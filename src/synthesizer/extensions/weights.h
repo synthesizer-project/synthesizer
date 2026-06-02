@@ -189,12 +189,12 @@ void weight_loop_ngp(GridProps *grid, Particles *parts, int out_size, void *out,
                      const int nthreads);
 
 /* Typed kernel entry points. Callers must provide validated buffers. */
-template <typename Real>
+template <typename Real, typename OutT = Real>
 void weight_loop_cic(GridProps *grid, Particles *parts, int out_size,
-                     Real *out, const int nthreads);
+                     OutT *out, const int nthreads);
 
-template <typename Real>
+template <typename Real, typename OutT = Real>
 void weight_loop_ngp(GridProps *grid, Particles *parts, int out_size,
-                     Real *out, const int nthreads);
+                     OutT *out, const int nthreads);
 
 #endif // WEIGHTS_H_
