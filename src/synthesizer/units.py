@@ -158,6 +158,25 @@ def get_quantity_unit(obj, attr_name):
     )
 
 
+def get_quantity_view(obj, attr_name):
+    """Wrap a raw ndarray attribute in units without copying data.
+
+    Args:
+        obj (object):
+            Object holding the raw ndarray attribute and the corresponding
+            Quantity descriptor on its class.
+        attr_name (str):
+            Private ndarray attribute name, e.g. ``"_fnu"``.
+
+    Returns:
+        unyt_array:
+            Unit-bearing view of the raw ndarray data.
+    """
+    values = getattr(obj, attr_name)
+    unit = obj.__class__.__dict__[attr_name[1:]].unit
+    return unyt_array(values, unit, bypass_validation=True)
+
+
 class DefaultUnits:
     """The DefaultUnits class is a container for the default unit system.
 
