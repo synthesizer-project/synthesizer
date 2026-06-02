@@ -25,8 +25,9 @@
  * @param arr: The array to search in.
  * @param val: The value to search for.
  */
-static inline int binary_search(int low, int high, const double *arr,
-                                const double val) {
+template <typename Real>
+static inline int binary_search(int low, int high, const Real *arr,
+                                const Real val) {
 
   /* While we don't have a pair of adjacent indices. */
   int diff = high - low;
@@ -100,8 +101,8 @@ get_part_ind_frac_cic(std::array<int, MAX_GRID_NDIM> &part_indices,
       /* Find the upper cell index such that:
        *   grid_axis[lower] <= part_val < grid_axis[upper]
        */
-      upper =
-          binary_search(/*low=*/0, /*high=*/dim_size - 1, grid_axis, part_val);
+      upper = binary_search(/*low=*/0, /*high=*/dim_size - 1, grid_axis,
+                            part_val);
       lower = upper - 1;
 
       /* Compute the linear fraction between the two grid points. */
@@ -114,6 +115,57 @@ get_part_ind_frac_cic(std::array<int, MAX_GRID_NDIM> &part_indices,
     part_indices[dim] = lower;
 
     /* Set the fraction toward the upper cell. */
+    axis_fracs[dim] = frac;
+  }
+}
+
+/**
+ * @brief Get the grid indices and fractions for a particle using CIC.
+ *
+ * This variant relies on GridProps and Particles having validated that
+ * all floating-point arrays are contiguous and share one supported dtype.
+ */
+template <typename Real>
+static inline void get_part_ind_frac_cic(
+    std::array<int, MAX_GRID_NDIM> &part_indices,
+    std::array<Real, MAX_GRID_NDIM> &axis_fracs, GridProps *grid_props,
+    Particles *parts, int p) {
+
+  /* Loop over dimensions, finding the mass weightings and indices. */
+  for (int dim = 0; dim < grid_props->ndim; dim++) {
+
+    /* Get the array of grid coordinates for this dimension. */
+    const Real *grid_axis = grid_props->get_axis<Real>(dim);
+    const int dim_size = grid_props->dims[dim];
+
+    /* Get the particle's value along this dimension. */
+    const Real part_val = parts->get_part_prop_at<Real>(dim, p);
+
+    int lower, upper;
+    Real frac;
+
+    /* Handle values outside the grid bounds. Clamp to edges. */
+    if (part_val <= grid_axis[0]) {
+      lower = 0;
+      upper = 1;
+      frac = static_cast<Real>(0);
+
+    } else if (part_val >= grid_axis[dim_size - 1]) {
+      lower = dim_size - 2;
+      upper = dim_size - 1;
+      frac = static_cast<Real>(1);
+
+    } else {
+      upper = binary_search(/*low=*/0, /*high=*/dim_size - 1, grid_axis,
+                            part_val);
+      lower = upper - 1;
+
+      const Real low = grid_axis[lower];
+      const Real high = grid_axis[upper];
+      frac = (part_val - low) / (high - low);
+    }
+
+    part_indices[dim] = lower;
     axis_fracs[dim] = frac;
   }
 }
@@ -159,8 +211,8 @@ get_part_inds_ngp(std::array<int, MAX_GRID_NDIM> &part_indices,
 
     } else {
       /* Find the upper bounding grid cell. */
-      part_cell =
-          binary_search(/*low=*/0, /*high=*/dim_size - 1, grid_axis, part_val);
+      part_cell = binary_search(/*low=*/0, /*high=*/dim_size - 1, grid_axis,
+                                part_val);
     }
 
     /* Choose the closest grid point (lower or upper) based on distance. */
@@ -177,10 +229,60 @@ get_part_inds_ngp(std::array<int, MAX_GRID_NDIM> &part_indices,
   }
 }
 
+/**
+ * @brief NGP index finder for float32/float64 kernels.
+ */
+template <typename Real>
+static inline void get_part_inds_ngp(
+    std::array<int, MAX_GRID_NDIM> &part_indices, GridProps *grid_props,
+    Particles *parts, int p) {
+
+  for (int dim = 0; dim < grid_props->ndim; dim++) {
+
+    const Real *grid_axis = grid_props->get_axis<Real>(dim);
+    const int dim_size = grid_props->dims[dim];
+    const Real part_val = parts->get_part_prop_at<Real>(dim, p);
+
+    int part_cell;
+
+    if (dim_size == 1) {
+      part_indices[dim] = 0;
+      continue;
+    }
+
+    if (part_val <= grid_axis[0]) {
+      part_cell = 0;
+    } else if (part_val >= grid_axis[dim_size - 1]) {
+      part_cell = dim_size - 1;
+    } else {
+      part_cell = binary_search(/*low=*/0, /*high=*/dim_size - 1, grid_axis,
+                                part_val);
+    }
+
+    if (part_cell == 0) {
+      part_indices[dim] = 0;
+    } else if ((part_val - grid_axis[part_cell - 1]) <
+               (grid_axis[part_cell] - part_val)) {
+      part_indices[dim] = part_cell - 1;
+    } else {
+      part_indices[dim] = part_cell;
+    }
+  }
+}
+
 /* Prototypes */
 void weight_loop_cic(GridProps *grid, Particles *parts, int out_size, void *out,
                      const int nthreads);
 void weight_loop_ngp(GridProps *grid, Particles *parts, int out_size, void *out,
                      const int nthreads);
+
+/* Typed kernel entry points. Callers must provide validated buffers. */
+template <typename Real>
+void weight_loop_cic(GridProps *grid, Particles *parts, int out_size,
+                     Real *out, const int nthreads);
+
+template <typename Real>
+void weight_loop_ngp(GridProps *grid, Particles *parts, int out_size,
+                     Real *out, const int nthreads);
 
 #endif // WEIGHTS_H_

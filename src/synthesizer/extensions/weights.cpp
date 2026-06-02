@@ -45,8 +45,9 @@
  * @param parts: A class containing the particle properties.
  * @param out: The output array. Must have been allocated to grid size.
  */
+template <typename Real>
 static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
-                                   void *out) {
+                                   Real *out_arr) {
   /* Unpack the grid properties. */
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   const int ndim = grid_props->ndim;
@@ -78,9 +79,6 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
     }
   }
 
-  /* Cast the output buffer to a double array. */
-  double *out_arr = static_cast<double *>(out);
-
   /* Loop over particles. */
   for (int p = 0; p < parts->npart; ++p) {
     /* Skip if this particle is masked. */
@@ -89,11 +87,11 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
     }
 
     /* Get this particle's weight and base cell info. */
-    const double weight = parts->get_weight_at(p);
+    const Real weight = parts->get_weight_at<Real>(p);
 
     std::array<int, MAX_GRID_NDIM> part_idx;
-    std::array<double, MAX_GRID_NDIM> axis_frac;
-    get_part_ind_frac_cic(part_idx, axis_frac, grid_props, parts, p);
+    std::array<Real, MAX_GRID_NDIM> axis_frac;
+    get_part_ind_frac_cic<Real>(part_idx, axis_frac, grid_props, parts, p);
 
     /* Compute linear index of the “low” corner once */
     const int base_lin = get_flat_index(part_idx, dims.data(), ndim);
@@ -103,11 +101,11 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
       const auto &sc = subcells[ic];
 
       /* Compute the CIC fraction for this corner */
-      double frac = 1.0;
+      Real frac = static_cast<Real>(1);
       for (int d = 0; d < ndim; ++d) {
-        frac *= sc.offs[d] ? axis_frac[d] : (1.0 - axis_frac[d]);
+        frac *= sc.offs[d] ? axis_frac[d] : (static_cast<Real>(1) - axis_frac[d]);
       }
-      if (frac == 0.0) {
+      if (frac == static_cast<Real>(0)) {
         continue;
       }
 
@@ -135,11 +133,9 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
  * @param nthreads: The number of threads to use.
  */
 #ifdef WITH_OPENMP
+template <typename Real>
 static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
-                                int out_size, void *out, int nthreads) {
-
-  /* Convert out. */
-  double *out_arr = static_cast<double *>(out);
+                                int out_size, Real *out_arr, int nthreads) {
 
   /* Unpack the grid properties. */
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
@@ -178,7 +174,7 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
       end = parts->npart;
 
     /* Allocate a local output array to avoid races. */
-    std::vector<double> local_out_arr(out_size, 0.0);
+    std::vector<Real> local_out_arr(out_size, static_cast<Real>(0));
 
     /* Loop over the particles assigned to this thread. */
     for (int p = start; p < end; p++) {
@@ -189,12 +185,13 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
       }
 
       /* Get this particle's weight. */
-      const double weight = parts->get_weight_at(p);
+      const Real weight = parts->get_weight_at<Real>(p);
 
       /* Setup the base cell indices and axis fractions. */
       std::array<int, MAX_GRID_NDIM> part_indices;
-      std::array<double, MAX_GRID_NDIM> axis_fracs;
-      get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
+      std::array<Real, MAX_GRID_NDIM> axis_fracs;
+      get_part_ind_frac_cic<Real>(part_indices, axis_fracs, grid_props, parts,
+                                  p);
 
       /* Compute base linear index for the “low” corner once */
       const int base_lin = get_flat_index(part_indices, dims.data(), ndim);
@@ -204,11 +201,13 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
         const auto &sc = subcells[ic];
 
         /* Compute the CIC fraction for this corner */
-        double frac = 1.0;
+        Real frac = static_cast<Real>(1);
         for (int d = 0; d < ndim; d++) {
-          frac *= sc.offs[d] ? axis_fracs[d] : (1.0 - axis_fracs[d]);
+          frac *=
+              sc.offs[d] ? axis_fracs[d]
+                          : (static_cast<Real>(1) - axis_fracs[d]);
         }
-        if (frac == 0.0) {
+        if (frac == static_cast<Real>(0)) {
           continue;
         }
 
@@ -243,8 +242,9 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
  * @param out: The output array.
  * @param nthreads: The number of threads to use.
  */
+template <typename Real>
 void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
-                     void *out, const int nthreads) {
+                     Real *out, const int nthreads) {
 
   tic("weight_loop_cic");
 
@@ -254,11 +254,11 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    weight_loop_cic_omp(grid_props, parts, out_size, out, nthreads);
+    weight_loop_cic_omp<Real>(grid_props, parts, out_size, out, nthreads);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    weight_loop_cic_serial(grid_props, parts, out);
+    weight_loop_cic_serial<Real>(grid_props, parts, out);
   }
 
 #else
@@ -266,10 +266,32 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  weight_loop_cic_serial(grid_props, parts, out);
+  weight_loop_cic_serial<Real>(grid_props, parts, out);
 
 #endif
   toc("weight_loop_cic");
+}
+
+void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
+                     void *out, const int nthreads) {
+
+  const int grid_typenum = grid_props->get_float_typenum();
+  const int part_typenum = parts->get_float_typenum();
+  if (grid_typenum != -1 && part_typenum != -1 && grid_typenum != part_typenum) {
+    PyErr_SetString(PyExc_TypeError,
+                    "[weight_loop_cic]: Grid and particle arrays must share the same floating-point dtype.");
+    return;
+  }
+
+  const int resolved = grid_typenum != -1 ? grid_typenum : part_typenum;
+  if (resolved == NPY_FLOAT32) {
+    weight_loop_cic<float>(grid_props, parts, out_size,
+                           static_cast<float *>(out), nthreads);
+  } else {
+    /* Default to float64 for backwards compatibility. */
+    weight_loop_cic<double>(grid_props, parts, out_size,
+                            static_cast<double *>(out), nthreads);
+  }
 }
 
 /**
@@ -282,15 +304,13 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
  * @param parts: A struct containing the particle properties.
  * @param out: The output array.
  */
+template <typename Real>
 static void weight_loop_ngp_serial(GridProps *grid_props, Particles *parts,
-                                   void *out) {
+                                   Real *out_arr) {
 
   /* Unpack the grid properties. */
   std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   const int ndim = grid_props->ndim;
-
-  /* Convert out. */
-  double *out_arr = static_cast<double *>(out);
 
   /* Loop over particles. */
   for (int p = 0; p < parts->npart; p++) {
@@ -301,13 +321,13 @@ static void weight_loop_ngp_serial(GridProps *grid_props, Particles *parts,
     }
 
     /* Get this particle's weight. */
-    const double weight = parts->get_weight_at(p);
+    const Real weight = parts->get_weight_at<Real>(p);
 
     /* Setup the index array. */
     std::array<int, MAX_GRID_NDIM> part_indices;
 
     /* Get the grid indices for the particle. */
-    get_part_inds_ngp(part_indices, grid_props, parts, p);
+    get_part_inds_ngp<Real>(part_indices, grid_props, parts, p);
 
     /* Unravel the indices. */
     int flat_ind = get_flat_index(part_indices, dims.data(), ndim);
@@ -334,11 +354,9 @@ static void weight_loop_ngp_serial(GridProps *grid_props, Particles *parts,
  * @param nthreads: The number of threads to use.
  */
 #ifdef WITH_OPENMP
+template <typename Real>
 static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
-                                int out_size, void *out, int nthreads) {
-
-  /* Convert out. */
-  double *out_arr = static_cast<double *>(out);
+                                int out_size, Real *out_arr, int nthreads) {
 
   /* Unpack the grid properties. */
   std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
@@ -362,7 +380,7 @@ static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
 
     /* Allocate a local output array. This avoids race conditions and false
      * sharing. */
-    std::vector<double> local_out_arr(out_size, 0.0);
+    std::vector<Real> local_out_arr(out_size, static_cast<Real>(0));
 
     /* Loop over the assigned particle range. */
     for (int p = start; p < end; ++p) {
@@ -373,13 +391,13 @@ static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
       }
 
       /* Get this particle's weight. */
-      const double weight = parts->get_weight_at(p);
+      const Real weight = parts->get_weight_at<Real>(p);
 
       /* Setup the index array. */
       std::array<int, MAX_GRID_NDIM> part_indices;
 
       /* Get the grid indices for the particle. */
-      get_part_inds_ngp(part_indices, grid_props, parts, p);
+      get_part_inds_ngp<Real>(part_indices, grid_props, parts, p);
 
       /* Unravel the indices. */
       int flat_ind = get_flat_index(part_indices, dims.data(), ndim);
@@ -413,8 +431,9 @@ static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
  * @param out: The output array.
  * @param nthreads: The number of threads to use.
  */
+template <typename Real>
 void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
-                     void *out, const int nthreads) {
+                     Real *out, const int nthreads) {
 
   tic("weight_loop_ngp");
 
@@ -424,11 +443,11 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    weight_loop_ngp_omp(grid_props, parts, out_size, out, nthreads);
+    weight_loop_ngp_omp<Real>(grid_props, parts, out_size, out, nthreads);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    weight_loop_ngp_serial(grid_props, parts, out);
+    weight_loop_ngp_serial<Real>(grid_props, parts, out);
   }
 
 #else
@@ -436,11 +455,42 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  weight_loop_ngp_serial(grid_props, parts, out);
+  weight_loop_ngp_serial<Real>(grid_props, parts, out);
 
 #endif
   toc("weight_loop_ngp");
 }
+
+void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
+                     void *out, const int nthreads) {
+
+  const int grid_typenum = grid_props->get_float_typenum();
+  const int part_typenum = parts->get_float_typenum();
+  if (grid_typenum != -1 && part_typenum != -1 && grid_typenum != part_typenum) {
+    PyErr_SetString(PyExc_TypeError,
+                    "[weight_loop_ngp]: Grid and particle arrays must share the same floating-point dtype.");
+    return;
+  }
+
+  const int resolved = grid_typenum != -1 ? grid_typenum : part_typenum;
+  if (resolved == NPY_FLOAT32) {
+    weight_loop_ngp<float>(grid_props, parts, out_size,
+                           static_cast<float *>(out), nthreads);
+  } else {
+    weight_loop_ngp<double>(grid_props, parts, out_size,
+                            static_cast<double *>(out), nthreads);
+  }
+}
+
+/* Explicit instantiations to satisfy multi-extension linking. */
+template void weight_loop_cic<float>(GridProps *, Particles *, int, float *,
+                                     const int);
+template void weight_loop_cic<double>(GridProps *, Particles *, int, double *,
+                                      const int);
+template void weight_loop_ngp<float>(GridProps *, Particles *, int, float *,
+                                     const int);
+template void weight_loop_ngp<double>(GridProps *, Particles *, int, double *,
+                                      const int);
 
 /**
  * @brief Compute the weight in each grid cell based on the particles.
@@ -488,10 +538,32 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
   RETURN_IF_PYERR();
 
   /* Allocate the sfzh array to output. */
-  double *grid_weights = new (std::nothrow) double[grid_props->size]();
-  /* If allocation failed, clean up and return nullptr to propagate the MemoryError. */
-  if (grid_weights == nullptr) {
-    PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
+  const int grid_typenum = grid_props->get_float_typenum();
+  const int part_typenum = part_props->get_float_typenum();
+  if (grid_typenum != -1 && part_typenum != -1 && grid_typenum != part_typenum) {
+    PyErr_SetString(PyExc_TypeError,
+                    "Grid and particle arrays must share the same floating-point dtype.");
+    delete part_props;
+    delete grid_props;
+    return nullptr;
+  }
+
+  const int resolved = grid_typenum != -1 ? grid_typenum : part_typenum;
+
+  int out_typenum = NPY_FLOAT64;
+  float *grid_weights_f32 = nullptr;
+  double *grid_weights_f64 = nullptr;
+  if (resolved == NPY_FLOAT32) {
+    out_typenum = NPY_FLOAT32;
+    grid_weights_f32 = new (std::nothrow) float[grid_props->size]();
+  } else {
+    out_typenum = NPY_FLOAT64;
+    grid_weights_f64 = new (std::nothrow) double[grid_props->size]();
+  }
+
+  if (grid_weights_f32 == nullptr && grid_weights_f64 == nullptr) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Could not allocate memory for grid weights.");
     delete part_props;
     delete grid_props;
     return nullptr;
@@ -502,22 +574,28 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
   /* With everything set up we can compute the weights for each particle using
    * the requested method. */
   if (strcmp(method, "cic") == 0) {
-    weight_loop_cic(grid_props, part_props, grid_props->size, grid_weights,
-                    nthreads);
+    if (out_typenum == NPY_FLOAT32) {
+      weight_loop_cic<float>(grid_props, part_props, grid_props->size,
+                             grid_weights_f32, nthreads);
+    } else {
+      weight_loop_cic<double>(grid_props, part_props, grid_props->size,
+                              grid_weights_f64, nthreads);
+    }
   } else if (strcmp(method, "ngp") == 0) {
-    weight_loop_ngp(grid_props, part_props, grid_props->size, grid_weights,
-                    nthreads);
+    if (out_typenum == NPY_FLOAT32) {
+      weight_loop_ngp<float>(grid_props, part_props, grid_props->size,
+                             grid_weights_f32, nthreads);
+    } else {
+      weight_loop_ngp<double>(grid_props, part_props, grid_props->size,
+                              grid_weights_f64, nthreads);
+    }
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method.");
     /* Clean up all allocated memory before returning nullptr to propagate the ValueError. */
     delete part_props;
     delete grid_props;
-    delete[] grid_weights;
-    return nullptr;
-  }
-
-  /* Check we got the output. (Any error messages will already be set) */
-  if (grid_weights == nullptr) {
+    delete[] grid_weights_f32;
+    delete[] grid_weights_f64;
     return nullptr;
   }
 
@@ -527,8 +605,14 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
     np_dims[idim] = grid_props->dims[idim];
   }
 
-  PyArrayObject *out_weights =
-      wrap_array_to_numpy(grid_props->ndim, np_dims.data(), grid_weights);
+  PyArrayObject *out_weights = NULL;
+  if (out_typenum == NPY_FLOAT32) {
+    out_weights = wrap_array_to_numpy<float>(grid_props->ndim, np_dims.data(),
+                                             NPY_FLOAT32, grid_weights_f32);
+  } else {
+    out_weights = wrap_array_to_numpy<double>(grid_props->ndim, np_dims.data(),
+                                              NPY_FLOAT64, grid_weights_f64);
+  }
 
   /* Clean up memory! */
   delete part_props;

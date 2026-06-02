@@ -5,6 +5,7 @@
 #include <array>
 #include <stdlib.h>
 #include <string>
+#include <type_traits>
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
@@ -13,7 +14,9 @@
 #include <Python.h>
 
 /* Local includes */
+#include "cpp_to_python.h"
 #include "property_funcs.h"
+#include "python_to_cpp.h"
 
 #pragma omp declare target
 
@@ -61,6 +64,90 @@ public:
   PyArrayObject *get_np_grid_weights() const;
   double get_grid_weight_at(int ind) const;
 
+  /* Accessors for validated float32/float64 arrays. */
+  template <typename Real> const Real *get_spectra() const {
+    static_assert(std::is_same_v<Real, float> || std::is_same_v<Real, double>,
+                  "GridProps supports only float32 and float64 arrays.");
+    return data_ptr<const Real>(np_spectra_);
+  }
+
+  template <typename Real> const Real *get_lam() const {
+    static_assert(std::is_same_v<Real, float> || std::is_same_v<Real, double>,
+                  "GridProps supports only float32 and float64 arrays.");
+    return data_ptr<const Real>(np_lam_);
+  }
+
+  template <typename Real> const Real *get_axis(int idim) const {
+    static_assert(std::is_same_v<Real, float> || std::is_same_v<Real, double>,
+                  "GridProps supports only float32 and float64 arrays.");
+    if (idim < 0 || idim >= ndim) {
+      PyErr_SetString(PyExc_IndexError,
+                      "[GridProps::get_axis]: Axis index out of bounds.");
+      return NULL;
+    }
+
+    PyArrayObject *np_axis_arr =
+        (PyArrayObject *)PyTuple_GetItem(axes_tuple_, idim);
+    if (np_axis_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError,
+                      "[GridProps::get_axis]: Failed to extract axis "
+                      "array.");
+      return NULL;
+    }
+
+    return data_ptr<const Real>(np_axis_arr);
+  }
+
+  template <typename Real>
+  std::array<const Real *, MAX_GRID_NDIM> get_all_axes() const {
+    static_assert(std::is_same_v<Real, float> || std::is_same_v<Real, double>,
+                  "GridProps supports only float32 and float64 arrays.");
+    std::array<const Real *, MAX_GRID_NDIM> axes = {};
+    for (int idim = 0; idim < ndim; idim++) {
+      const Real *axis = get_axis<Real>(idim);
+      if (axis == NULL) {
+        PyErr_SetString(PyExc_ValueError,
+                        "[GridProps::get_all_axes]: Axis retrieval "
+                        "failed.");
+        return {};
+      }
+      axes[idim] = axis;
+    }
+    return axes;
+  }
+
+  template <typename Real> Real *get_grid_weights() {
+    static_assert(std::is_same_v<Real, float> || std::is_same_v<Real, double>,
+                  "GridProps supports only float32 and float64 arrays.");
+    constexpr int typenum =
+        std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
+
+    if (has_grid_weights()) {
+      grid_weights_ = static_cast<void *>(PyArray_DATA(np_grid_weights_));
+      need_grid_weights_ = false;
+      return static_cast<Real *>(grid_weights_);
+    }
+
+    npy_intp np_dims_weights[MAX_GRID_NDIM];
+    for (int i = 0; i < ndim; i++) {
+      np_dims_weights[i] = dims[i];
+    }
+    np_grid_weights_ = (PyArrayObject *)PyArray_ZEROS(
+        ndim, np_dims_weights, typenum, 0);
+    if (np_grid_weights_ == NULL) {
+      return NULL;
+    }
+
+    grid_weights_ = static_cast<void *>(PyArray_DATA(np_grid_weights_));
+    RETURN_IF_PYERR();
+
+    need_grid_weights_ = true;
+    owns_grid_weights_ = true;
+    return static_cast<Real *>(grid_weights_);
+  }
+
+  int get_float_typenum() const;
+
   /* Is wavelength masked? */
   bool lam_is_masked(int ind) const;
 
@@ -90,7 +177,10 @@ private:
   PyArrayObject *np_grid_weights_;
 
   /* A pointer to the grid weights array data. */
-  double *grid_weights_ = nullptr;
+  void *grid_weights_ = nullptr;
+
+  /* The shared floating-point dtype used by the grid arrays. */
+  int float_typenum_ = -1;
 
   /* Flag for whether we need to populate the grid weights */
   bool need_grid_weights_ = true;

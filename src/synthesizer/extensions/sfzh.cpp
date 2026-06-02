@@ -72,8 +72,26 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
                                    np_mask, part_tuple, prop_names, npart);
   RETURN_IF_PYERR();
 
-  /* Get the grid weights we'll work on. */
-  double *sfzh = grid_props->get_grid_weights();
+  /* Resolve the shared input precision family before allocating the output. */
+  const int grid_typenum = grid_props->get_float_typenum();
+  const int part_typenum = parts->get_float_typenum();
+  if (grid_typenum != -1 && part_typenum != -1 && grid_typenum != part_typenum) {
+    PyErr_SetString(PyExc_TypeError,
+                    "Grid and particle arrays must share the same floating-point dtype.");
+    delete parts;
+    delete grid_props;
+    return NULL;
+  }
+
+  const int resolved_typenum = grid_typenum != -1 ? grid_typenum : part_typenum;
+
+  /* Allocate the SFZH array in the shared input precision. */
+  void *sfzh = NULL;
+  if (resolved_typenum == NPY_FLOAT32) {
+    sfzh = static_cast<void *>(grid_props->get_grid_weights<float>());
+  } else {
+    sfzh = static_cast<void *>(grid_props->get_grid_weights<double>());
+  }
   RETURN_IF_PYERR();
 
   /* With everything set up we can compute the weights for each particle using
@@ -83,7 +101,10 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   } else if (strcmp(method, "ngp") == 0) {
     weight_loop_ngp(grid_props, parts, grid_props->size, sfzh, nthreads);
   } else {
-    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+    PyErr_Format(PyExc_ValueError,
+                 "Unknown grid assignment method (%s).", method);
+    delete parts;
+    delete grid_props;
     return NULL;
   }
   RETURN_IF_PYERR();

@@ -1,20 +1,15 @@
 /******************************************************************************
  * C extension for reducing per-particle spectra.
  *
- * This module provides two closely related reduction paths:
- *
- *   1. A shared internal double-precision reduction kernel used by existing
- *      particle spectra extraction code.
- *   2. A Python-facing wrapper that validates NumPy inputs, dispatches to
- *      typed float32/float64 kernels, and returns a newly allocated reduced
- *      spectrum in the requested floating-point output precision.
+ * This module provides a shared templated reduction kernel used both by the
+ * spectra extraction extensions and by the Python-facing wrapper.
  *
  * The core operation is a reduction over the leading particle axis:
  *
  *     result[lam] = sum_p part_spectra[p, lam]
  *
- * Serial and parallel (OpenMP) implementations are provided for both the
- * legacy internal double path and the Python-facing typed path.
+ * Serial and parallel (OpenMP) implementations are provided for the shared
+ * templated path.
  *****************************************************************************/
 
 /* C/C++ includes */
@@ -38,17 +33,18 @@
 #endif
 
 /**
- * @brief Reduce Npart spectra to integrated spectra.
+ * @brief Reduce Npart spectra to integrated spectra in serial.
  *
- * This is the legacy serial reduction path used internally by the particle
- * spectra extraction extensions, which still operate on double buffers.
+ * @tparam Real The floating-point type of the input per-particle spectra.
+ * @tparam OutT The floating-point type stored in the reduced spectrum.
  *
  * @param spectra: The output array to accumulate the spectra.
  * @param part_spectra: The per-particle spectra array.
  * @param nlam: The number of wavelengths in the spectra.
  * @param npart: The number of particles.
  */
-static void reduce_spectra_serial(double *spectra, double *part_spectra,
+template <typename Real, typename OutT>
+static void reduce_spectra_serial(OutT *spectra, const Real *part_spectra,
                                   int nlam, int npart) {
 
   /* Cast npart to size_t for safety in the loop. */
@@ -56,22 +52,23 @@ static void reduce_spectra_serial(double *spectra, double *part_spectra,
 
   /* Loop over particles. */
   for (size_t p = 0; p < npart_size; p++) {
-    double *__restrict part_spectra_row = part_spectra + p * nlam;
+    const Real *__restrict part_spectra_row = part_spectra + p * nlam;
 
     /* Loop over wavelengths. */
     for (int ilam = 0; ilam < nlam; ilam++) {
       /* Use fused multiply-add to accumulate with better precision.
        * Equivalent to: += spec_val * weight, but with a single rounding. */
-      spectra[ilam] = std::fma(part_spectra_row[ilam], 1.0, spectra[ilam]);
+      spectra[ilam] = std::fma(static_cast<OutT>(part_spectra_row[ilam]),
+                               static_cast<OutT>(1.0), spectra[ilam]);
     }
   }
 }
 
 /**
- * @brief Reduce Npart spectra to integrated spectra.
+ * @brief Reduce Npart spectra to integrated spectra in parallel.
  *
- * This is the legacy parallel reduction path used internally by the particle
- * spectra extraction extensions, which still operate on double buffers.
+ * @tparam Real The floating-point type of the input per-particle spectra.
+ * @tparam OutT The floating-point type stored in the reduced spectrum.
  *
  * @param spectra: The output array to accumulate the spectra.
  * @param part_spectra: The per-particle spectra array.
@@ -80,7 +77,8 @@ static void reduce_spectra_serial(double *spectra, double *part_spectra,
  * @param nthreads: The number of threads to use.
  */
 #ifdef WITH_OPENMP
-static void reduce_spectra_parallel(double *spectra, double *part_spectra,
+template <typename Real, typename OutT>
+static void reduce_spectra_parallel(OutT *spectra, const Real *part_spectra,
                                     int nlam, int npart, int nthreads) {
 
   /* Cast npart to size_t for safety in the loop. */
@@ -90,24 +88,22 @@ static void reduce_spectra_parallel(double *spectra, double *part_spectra,
 #if defined(_OPENMP) && _OPENMP >= 201511
 #pragma omp parallel for num_threads(nthreads) reduction(+ : spectra[ : nlam])
   for (size_t p = 0; p < npart_size; p++) {
-    double *__restrict part_spectra_row = part_spectra + p * nlam;
+    const Real *__restrict part_spectra_row = part_spectra + p * nlam;
     for (int ilam = 0; ilam < nlam; ilam++) {
-      spectra[ilam] += part_spectra_row[ilam];
+      spectra[ilam] += static_cast<OutT>(part_spectra_row[ilam]);
     }
   }
 #else // OpenMP < 4.5 or no array reduction support
 #pragma omp parallel num_threads(nthreads)
   {
-    // Thread-local accumulation to avoid false sharing and atomics
-    std::vector<double> local(nlam, 0.0);
+    std::vector<OutT> local(nlam, static_cast<OutT>(0.0));
 #pragma omp for nowait schedule(static)
     for (size_t p = 0; p < npart; p++) {
-      double *__restrict part_spectra_row = part_spectra + p * nlam;
+      const Real *__restrict part_spectra_row = part_spectra + p * nlam;
       for (int ilam = 0; ilam < nlam; ilam++) {
-        local[ilam] += part_spectra_row[ilam];
+        local[ilam] += static_cast<OutT>(part_spectra_row[ilam]);
       }
     }
-    // Merge
 #pragma omp critical
     {
       for (int ilam = 0; ilam < nlam; ilam++) {
@@ -122,9 +118,8 @@ static void reduce_spectra_parallel(double *spectra, double *part_spectra,
 /**
  * @brief Reduce Npart spectra to integrated spectra.
  *
- * This is the shared legacy wrapper that selects the serial or parallel double
- * implementation depending on the requested thread count and whether OpenMP is
- * available.
+ * @tparam Real The floating-point type of the input per-particle spectra.
+ * @tparam OutT The floating-point type stored in the reduced spectrum.
  *
  * @param spectra: The output array to accumulate the spectra.
  * @param part_spectra: The per-particle spectra array.
@@ -132,119 +127,23 @@ static void reduce_spectra_parallel(double *spectra, double *part_spectra,
  * @param npart: The number of particles.
  * @param nthreads: The number of threads to use.
  */
-void reduce_spectra(double *spectra, double *part_spectra, int nlam, int npart,
-                    int nthreads) {
+template <typename Real, typename OutT>
+void reduce_spectra(OutT *spectra, const Real *part_spectra, int nlam,
+                    int npart, int nthreads) {
 
   tic("reduce_spectra");
   if (nthreads > 1) {
 #ifdef WITH_OPENMP
-    reduce_spectra_parallel(spectra, part_spectra, nlam, npart, nthreads);
+    reduce_spectra_parallel<Real, OutT>(spectra, part_spectra, nlam, npart,
+                                        nthreads);
 #else
-    reduce_spectra_serial(spectra, part_spectra, nlam, npart);
+    reduce_spectra_serial<Real, OutT>(spectra, part_spectra, nlam, npart);
 #endif
   } else {
-    reduce_spectra_serial(spectra, part_spectra, nlam, npart);
+    reduce_spectra_serial<Real, OutT>(spectra, part_spectra, nlam, npart);
   }
   toc("reduce_spectra");
 }
-
-/**
- * @brief Reduce per-particle spectra to an integrated spectrum in serial.
- *
- * This typed path is used by the Python wrapper after dtype dispatch. It sums
- * over the leading particle axis and writes a one-dimensional spectrum of
- * length nlam.
- *
- * @tparam Real The floating-point type of the input per-particle spectra.
- * @tparam OutT The floating-point type stored in the reduced spectrum.
- *
- * @param spectra The output array to accumulate the spectra.
- * @param part_spectra The per-particle spectra array.
- * @param nlam The number of wavelengths in the spectra.
- * @param npart The number of particles.
- */
-template <typename Real, typename OutT>
-static void reduce_particle_spectra_serial_typed(OutT *spectra,
-                                                 const Real *part_spectra,
-                                                 npy_intp nlam,
-                                                 npy_intp npart) {
-
-  /* Cast once so the outer loop uses a size_t counter. */
-  const size_t npart_size = static_cast<size_t>(npart);
-
-  /* Walk over particles and accumulate directly into the reduced spectrum. */
-  for (size_t p = 0; p < npart_size; p++) {
-    const Real *__restrict part_spectra_row = part_spectra + p * nlam;
-
-    /* Sum this particle's contribution across all wavelengths. */
-    for (npy_intp ilam = 0; ilam < nlam; ilam++) {
-      spectra[ilam] = std::fma(static_cast<OutT>(part_spectra_row[ilam]),
-                               static_cast<OutT>(1.0), spectra[ilam]);
-    }
-  }
-}
-
-/**
- * @brief Reduce per-particle spectra to an integrated spectrum in parallel.
- *
- * The work is parallelised over particles while each thread accumulates into a
- * shared output reduction or a thread-local buffer, depending on available
- * OpenMP features.
- *
- * @tparam Real The floating-point type of the input per-particle spectra.
- * @tparam OutT The floating-point type stored in the reduced spectrum.
- *
- * @param spectra The output array to accumulate the spectra.
- * @param part_spectra The per-particle spectra array.
- * @param nlam The number of wavelengths in the spectra.
- * @param npart The number of particles.
- * @param nthreads The number of threads to use.
- */
-#ifdef WITH_OPENMP
-template <typename Real, typename OutT>
-static void reduce_particle_spectra_parallel_typed(OutT *spectra,
-                                                   const Real *part_spectra,
-                                                   npy_intp nlam,
-                                                   npy_intp npart,
-                                                   int nthreads) {
-
-  /* Cast once so the OpenMP loop uses a size_t counter. */
-  const size_t npart_size = static_cast<size_t>(npart);
-
-#if defined(_OPENMP) && _OPENMP >= 201511
-  /* Use an OpenMP array reduction when the compiler supports it. */
-#pragma omp parallel for num_threads(nthreads) reduction(+ : spectra[ : nlam])
-  for (size_t p = 0; p < npart_size; p++) {
-    const Real *__restrict part_spectra_row = part_spectra + p * nlam;
-    for (npy_intp ilam = 0; ilam < nlam; ilam++) {
-      spectra[ilam] += static_cast<OutT>(part_spectra_row[ilam]);
-    }
-  }
-#else
-  /* Fall back to thread-local accumulators when array reductions are not
-   * available. */
-#pragma omp parallel num_threads(nthreads)
-  {
-    std::vector<OutT> local((size_t)nlam, static_cast<OutT>(0.0));
-#pragma omp for nowait schedule(static)
-    for (size_t p = 0; p < npart_size; p++) {
-      const Real *__restrict part_spectra_row = part_spectra + p * nlam;
-      for (npy_intp ilam = 0; ilam < nlam; ilam++) {
-        local[(size_t)ilam] += static_cast<OutT>(part_spectra_row[ilam]);
-      }
-    }
-
-    /* Merge each thread-local spectrum into the shared output. */
-#pragma omp critical
-    {
-      for (npy_intp ilam = 0; ilam < nlam; ilam++) {
-        spectra[ilam] += local[(size_t)ilam];
-      }
-    }
-  }
-#endif
-}
-#endif
 
 /**
  * @brief Execute typed particle spectra reduction after dtype dispatch.
@@ -259,8 +158,8 @@ static void reduce_particle_spectra_parallel_typed(OutT *spectra,
  *         NULL on failure.
  */
 template <typename Real, typename OutT>
-static PyObject *reduce_particle_spectra_typed(PyArrayObject *np_part_spectra,
-                                               int nthreads) {
+static PyObject *reduce_particle_spectra_impl(PyArrayObject *np_part_spectra,
+                                              int nthreads) {
   /* Extract the particle and wavelength dimensions from the validated input
    * array. The wrapper has already guaranteed a 2D contiguous float array. */
   const npy_intp *part_dims = PyArray_DIMS(np_part_spectra);
@@ -279,20 +178,8 @@ static PyObject *reduce_particle_spectra_typed(PyArrayObject *np_part_spectra,
    * access. */
   const Real *part_spectra = data_ptr<const Real>(np_part_spectra);
 
-  /* Select the serial or OpenMP reduction once the input/output dtypes are
-   * known. */
-  if (nthreads > 1) {
-#ifdef WITH_OPENMP
-    reduce_particle_spectra_parallel_typed<Real, OutT>(spectra, part_spectra,
-                                                       nlam, npart, nthreads);
-#else
-    reduce_particle_spectra_serial_typed<Real, OutT>(spectra, part_spectra,
-                                                     nlam, npart);
-#endif
-  } else {
-    reduce_particle_spectra_serial_typed<Real, OutT>(spectra, part_spectra,
-                                                     nlam, npart);
-  }
+  reduce_spectra<Real, OutT>(spectra, part_spectra, (int)nlam, (int)npart,
+                             nthreads);
 
   /* Wrap the raw buffer as a one-dimensional NumPy array. */
   npy_intp out_dims[1] = {nlam};
@@ -373,22 +260,31 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
   /* Dispatch to the matching Real/OutT reduction path. */
   if (input_typenum == NPY_FLOAT32) {
     if (output_typenum == NPY_FLOAT32) {
-      return reduce_particle_spectra_typed<float, float>(np_part_spectra,
-                                                         nthreads);
+      return reduce_particle_spectra_impl<float, float>(np_part_spectra,
+                                                        nthreads);
     }
 
-    return reduce_particle_spectra_typed<float, double>(np_part_spectra,
-                                                        nthreads);
+    return reduce_particle_spectra_impl<float, double>(np_part_spectra,
+                                                       nthreads);
   }
 
   if (output_typenum == NPY_FLOAT32) {
-    return reduce_particle_spectra_typed<double, float>(np_part_spectra,
-                                                        nthreads);
+    return reduce_particle_spectra_impl<double, float>(np_part_spectra,
+                                                       nthreads);
   }
 
-  return reduce_particle_spectra_typed<double, double>(np_part_spectra,
-                                                       nthreads);
+  return reduce_particle_spectra_impl<double, double>(np_part_spectra,
+                                                      nthreads);
 }
+
+template void reduce_spectra<float, float>(float *, const float *, int, int,
+                                           int);
+template void reduce_spectra<float, double>(double *, const float *, int, int,
+                                            int);
+template void reduce_spectra<double, float>(float *, const double *, int, int,
+                                            int);
+template void reduce_spectra<double, double>(double *, const double *, int,
+                                             int, int);
 
 /* Python module definition. */
 static PyMethodDef ReductionMethods[] = {

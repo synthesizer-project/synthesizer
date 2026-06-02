@@ -5,6 +5,7 @@
 /* C includes */
 #include <array>
 #include <math.h>
+#include <new>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,19 +35,25 @@
  *
  * @return The integrated spectra.
  */
+template <typename Real, typename OutT>
 static PyArrayObject *get_spectra_serial(GridProps *grid_props) {
 
   /* Define the output dimensions. */
   npy_intp np_int_dims[1] = {grid_props->nlam};
 
-  /* Allocate the output spectra. */
-  PyArrayObject *np_spectra =
-      (PyArrayObject *)PyArray_ZEROS(1, np_int_dims, NPY_DOUBLE, 0);
-  double *spectra = static_cast<double *>(PyArray_DATA(np_spectra));
+  /* Allocate the output spectra in the requested output precision. */
+  OutT *spectra = new (std::nothrow) OutT[grid_props->nlam]();
+  if (spectra == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Could not allocate integrated spectra output array.");
+    return NULL;
+  }
 
   /* Get raw pointers to the grid arrays. */
-  const double *__restrict grid_spectra = grid_props->get_spectra();
-  const double *__restrict grid_weights = grid_props->get_grid_weights();
+  const Real *__restrict grid_spectra = grid_props->get_spectra<Real>();
+  const Real *__restrict grid_weights = grid_props->get_grid_weights<Real>();
+  RETURN_IF_PYERR();
+
   const size_t nlam = static_cast<size_t>(grid_props->nlam);
 
   /* Loop over wavelengths */
@@ -61,7 +68,7 @@ static PyArrayObject *get_spectra_serial(GridProps *grid_props) {
     for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
 
       /* Get the weight. */
-      const double weight = grid_weights[grid_ind];
+      const Real weight = grid_weights[grid_ind];
 
       /* Skip zero weight cells. */
       if (weight <= 0)
@@ -69,14 +76,14 @@ static PyArrayObject *get_spectra_serial(GridProps *grid_props) {
 
       /* Get the grid spectra value at this index and wavelength. */
       const size_t spec_ind = static_cast<size_t>(grid_ind) * nlam + ilam;
-      double spec_val = grid_spectra[spec_ind];
+      const OutT spec_val = static_cast<OutT>(grid_spectra[spec_ind]);
 
       /* Add the contribution to this wavelength. */
-      spectra[ilam] += spec_val * weight;
+      spectra[ilam] += spec_val * static_cast<OutT>(weight);
     }
   }
 
-  return np_spectra;
+  return wrap_array_to_numpy<OutT>(1, np_int_dims, spectra);
 }
 
 /**
@@ -88,19 +95,25 @@ static PyArrayObject *get_spectra_serial(GridProps *grid_props) {
  * @return The integrated spectra.
  */
 #ifdef WITH_OPENMP
+template <typename Real, typename OutT>
 static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
 
   /* Define the output dimensions. */
   npy_intp np_int_dims[1] = {grid_props->nlam};
 
-  /* Allocate the output spectra. */
-  PyArrayObject *np_spectra =
-      (PyArrayObject *)PyArray_ZEROS(1, np_int_dims, NPY_DOUBLE, 0);
-  double *spectra = static_cast<double *>(PyArray_DATA(np_spectra));
+  /* Allocate the output spectra in the requested output precision. */
+  OutT *spectra = new (std::nothrow) OutT[grid_props->nlam]();
+  if (spectra == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Could not allocate integrated spectra output array.");
+    return NULL;
+  }
 
   /* Get raw pointers to the grid arrays. */
-  const double *__restrict grid_spectra = grid_props->get_spectra();
-  const double *__restrict grid_weights = grid_props->get_grid_weights();
+  const Real *__restrict grid_spectra = grid_props->get_spectra<Real>();
+  const Real *__restrict grid_weights = grid_props->get_grid_weights<Real>();
+  RETURN_IF_PYERR();
+
   const size_t nlam = static_cast<size_t>(grid_props->nlam);
 
 #pragma omp parallel num_threads(nthreads)
@@ -129,13 +142,13 @@ static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
       }
 
       /* Temporary value to hold the the spectra for this wavelength. */
-      double this_element = 0.0;
+      OutT this_element = static_cast<OutT>(0);
 
       /* Loop over grid cells. */
       for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
 
         /* Get the weight. */
-        const double weight = grid_weights[grid_ind];
+        const Real weight = grid_weights[grid_ind];
 
         /* Skip zero weight cells. */
         if (weight <= 0)
@@ -144,17 +157,17 @@ static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
         /* Get the grid spectra value at this index and wavelength. */
         const size_t spec_ind =
             static_cast<size_t>(grid_ind) * nlam + start + ilam;
-        double spec_val = grid_spectra[spec_ind];
+        const OutT spec_val = static_cast<OutT>(grid_spectra[spec_ind]);
 
         /* Add the contribution to this wavelength. */
-        this_element += spec_val * weight;
+        this_element += spec_val * static_cast<OutT>(weight);
       }
 
       spectra[start + ilam] = this_element;
     }
   }
 
-  return np_spectra;
+  return wrap_array_to_numpy<OutT>(1, np_int_dims, spectra);
 }
 #endif
 
@@ -167,6 +180,7 @@ static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
  *
  * @return The integrated spectra.
  */
+template <typename Real, typename OutT>
 static PyArrayObject *get_spectra(GridProps *grid_props, int nthreads) {
 
   tic("get_spectra");
@@ -174,13 +188,13 @@ static PyArrayObject *get_spectra(GridProps *grid_props, int nthreads) {
   /* Do we have multiple threads to do the reduction on to the spectra? */
   PyArrayObject *np_spectra;
   if (nthreads > 1) {
-    np_spectra = get_spectra_omp(grid_props, nthreads);
+    np_spectra = get_spectra_omp<Real, OutT>(grid_props, nthreads);
   } else {
-    np_spectra = get_spectra_serial(grid_props);
+    np_spectra = get_spectra_serial<Real, OutT>(grid_props);
   }
 #else
   /* We can't do the reduction in parallel without OpenMP. */
-  PyArrayObject *np_spectra = get_spectra_serial(grid_props);
+  PyArrayObject *np_spectra = get_spectra_serial<Real, OutT>(grid_props);
 #endif
 
   toc("get_spectra");
@@ -201,6 +215,10 @@ static PyArrayObject *get_spectra(GridProps *grid_props, int nthreads) {
  * @param ndim: The number of grid axes.
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements.
+ * @param out_dtype: Requested floating-point dtype for the returned
+ *                   integrated spectrum.
+ *
+ * @return A tuple containing the integrated spectrum and grid weights.
  */
 PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
@@ -212,16 +230,17 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   int ndim, npart, nlam, nthreads;
   PyObject *grid_tuple, *part_tuple;
+  PyObject *out_dtype;
   PyObject *prop_names = NULL;
   PyArrayObject *np_grid_spectra, *np_grid_weights;
   PyArrayObject *np_part_mass, *np_ndims;
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOO|O", &np_grid_spectra,
+  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOOO|O", &np_grid_spectra,
                         &grid_tuple, &part_tuple, &np_part_mass, &np_ndims,
                         &ndim, &npart, &nlam, &method, &nthreads,
-                        &np_grid_weights, &np_mask, &np_lam_mask,
+                        &np_grid_weights, &np_mask, &np_lam_mask, &out_dtype,
                         &prop_names))
     return NULL;
 
@@ -236,8 +255,35 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
                                         np_mask, part_tuple, prop_names, npart);
   RETURN_IF_PYERR();
 
-  /* Get existing grid weights or allocate new ones. */
-  double *grid_weights = grid_props->get_grid_weights();
+  /* Validate that grid and particle arrays share one floating precision
+   * family, then resolve the independently requested output dtype. */
+  const int grid_typenum = grid_props->get_float_typenum();
+  const int part_typenum = part_props->get_float_typenum();
+  if (grid_typenum != -1 && part_typenum != -1 && grid_typenum != part_typenum) {
+    PyErr_SetString(PyExc_TypeError,
+                    "Grid and particle arrays must share the same floating-point dtype.");
+    delete grid_props;
+    delete part_props;
+    return NULL;
+  }
+
+  const int input_typenum = grid_typenum != -1 ? grid_typenum : part_typenum;
+  const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
+  if (output_typenum < 0) {
+    delete grid_props;
+    delete part_props;
+    return NULL;
+  }
+
+  /* Get existing grid weights or allocate new ones in the shared input
+   * precision. */
+  void *grid_weights = NULL;
+  if (input_typenum == NPY_FLOAT32) {
+    grid_weights = static_cast<void *>(grid_props->get_grid_weights<float>());
+  } else {
+    grid_weights =
+        static_cast<void *>(grid_props->get_grid_weights<double>());
+  }
   RETURN_IF_PYERR();
 
   /* With everything set up we can compute the weights for each particle using
@@ -250,16 +296,33 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
       weight_loop_ngp(grid_props, part_props, grid_props->size, grid_weights,
                       nthreads);
     } else {
-      PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+      PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",
+                   method);
+      delete grid_props;
+      delete part_props;
       return NULL;
     }
   }
   RETURN_IF_PYERR();
 
   /* Compute the integrated SED. */
-  PyArrayObject *np_spectra = get_spectra(grid_props, nthreads);
+  PyArrayObject *np_spectra = NULL;
+  if (input_typenum == NPY_FLOAT32) {
+    if (output_typenum == NPY_FLOAT32) {
+      np_spectra = get_spectra<float, float>(grid_props, nthreads);
+    } else {
+      np_spectra = get_spectra<float, double>(grid_props, nthreads);
+    }
+  } else if (output_typenum == NPY_FLOAT32) {
+    np_spectra = get_spectra<double, float>(grid_props, nthreads);
+  } else {
+    np_spectra = get_spectra<double, double>(grid_props, nthreads);
+  }
+
   if (np_spectra == NULL) {
     PyErr_SetString(PyExc_RuntimeError, "Could not compute integrated SED.");
+    delete grid_props;
+    delete part_props;
     return NULL;
   }
   RETURN_IF_PYERR();

@@ -14,6 +14,7 @@
 
 /* Local includes */
 #include "property_funcs.h"
+#include "python_to_cpp.h"
 
 /**
  * @brief A class to hold particle related numpy arrays with getters and
@@ -25,13 +26,6 @@ class Particles {
 public:
   /* The number of particles. */
   int npart;
-
-  /* The grid index for each particle (for CIC this is the base index, i.e.
-   * the lower left corner of the cells). */
-  std::vector<int> grid_indices;
-
-  /* The fractions of the particle's mass in each grid cell (for CIC). */
-  std::vector<double> grid_fracs;
 
   /* Constructor */
   Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
@@ -51,10 +45,90 @@ public:
   npy_bool get_mask_at(int pind) const;
   double get_part_prop_at(int idim, int pind) const;
 
+  /* The resolved floating-point dtype for particle arrays. */
+  int get_float_typenum() const;
+
+  /* Accessors for validated float32/float64 arrays. */
+  template <typename Real> const Real *get_weights() const {
+    return data_ptr<const Real>(np_weights_);
+  }
+
+  template <typename Real> const Real *get_velocities() const {
+    if (np_velocities_ == NULL || reinterpret_cast<PyObject *>(np_velocities_) == Py_None) {
+      return NULL;
+    }
+    return data_ptr<const Real>(np_velocities_);
+  }
+
+  template <typename Real> const Real *get_part_props(int idim) const {
+    PyArrayObject *np_part_arr =
+        (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
+    if (np_part_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError,
+                      "[Particles::get_part_props]: Failed to extract part_arr.");
+      return NULL;
+    }
+    return data_ptr<const Real>(np_part_arr);
+  }
+
+  template <typename Real> Real get_weight_at(int pind) const {
+    if (pind < 0 || pind >= npart) {
+      PyErr_Format(PyExc_IndexError,
+                   "[Particles::get_weight_at]: Index (%d) out of bounds for weights. "
+                   "Valid range is [0, %d).",
+                   pind, npart);
+      return static_cast<Real>(0);
+    }
+    return get_weights<Real>()[pind];
+  }
+
+  template <typename Real> Real get_vel_at(int pind) const {
+    if (np_velocities_ == NULL || reinterpret_cast<PyObject *>(np_velocities_) == Py_None) {
+      PyErr_SetString(PyExc_ValueError,
+                      "[Particles::get_vel_at]: Velocities were not provided.");
+      return static_cast<Real>(0);
+    }
+
+    if (pind < 0 || pind >= npart) {
+      PyErr_Format(PyExc_IndexError,
+                   "[Particles::get_vel_at]: Index (%d) out of bounds for velocities. "
+                   "Valid range is [0, %d).",
+                   pind, npart);
+      return static_cast<Real>(0);
+    }
+
+    return get_velocities<Real>()[pind];
+  }
+
+  template <typename Real> Real get_part_prop_at(int idim, int pind) const {
+    PyArrayObject *np_part_arr =
+        (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
+    if (np_part_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError,
+                      "[Particles::get_part_prop_at]: Failed to extract part_arr.");
+      return static_cast<Real>(0);
+    }
+
+    /* If we have a size 1 array then we have a fixed scalar value. */
+    if (PyArray_SIZE(np_part_arr) == 1) {
+      return data_ptr<const Real>(np_part_arr)[0];
+    }
+
+    if (pind < 0 || pind >= npart) {
+      PyErr_Format(PyExc_IndexError,
+                   "[Particles::get_part_prop_at]: Index (%d) out of bounds for particle properties. "
+                   "Valid range is [0, %d).",
+                   pind, npart);
+      return static_cast<Real>(0);
+    }
+
+    return data_ptr<const Real>(np_part_arr)[pind];
+  }
+
   /* Is a particle masked? */
   bool part_is_masked(int pind) const;
 
-private:
+ private:
   /* The numpy array holding the particle weights (e.g. initial mass for
    * SPS grid weighting). */
   PyArrayObject *np_weights_;
@@ -71,12 +145,9 @@ private:
 
   /* Names for the particle property arrays. */
   std::vector<std::string> part_names_;
-};
 
-// Prototypes for helper functions.
-void get_particle_indices_and_fracs(GridProps *grid_props, Particles *parts,
-                                    int nthreads = 1);
-void get_particle_indices(GridProps *grid_props, Particles *parts,
-                          int nthreads = 1);
+  /* The shared floating-point dtype used by the particle arrays. */
+  int float_typenum_ = -1;
+};
 
 #endif // PART_PROPS_H_

@@ -16,6 +16,7 @@
 #include "grid_props.h"
 #include "index_utils.h"
 #include "property_funcs.h"
+#include "python_to_cpp.h"
 #include "timers.h"
 
 /**
@@ -63,6 +64,51 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
              "increased if needed.)",
              ndim, MAX_GRID_NDIM - 1);
     PyErr_SetString(PyExc_ValueError, error_msg);
+    return;
+  }
+
+  /* Validate that all present floating-point inputs are contiguous and share
+   * one supported dtype family before any hot kernels use raw pointers. */
+  PyArrayObject *float_arrays[MAX_GRID_NDIM + 3] = {NULL};
+  const char *float_names[MAX_GRID_NDIM + 3] = {NULL};
+  int float_count = 0;
+
+  if (np_spectra_ != NULL && reinterpret_cast<PyObject *>(np_spectra_) != Py_None) {
+    float_arrays[float_count] = np_spectra_;
+    float_names[float_count] = "grid_spectra";
+    float_count++;
+  }
+
+  for (int idim = 0; idim < ndim; idim++) {
+    PyArrayObject *np_axis_arr =
+        (PyArrayObject *)PyTuple_GetItem(axes_tuple, idim);
+    if (np_axis_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError,
+                      "[GridProps::GridProps]: Failed to extract axis array.");
+      return;
+    }
+
+    float_arrays[float_count] = np_axis_arr;
+    float_names[float_count] = "grid axis";
+    float_count++;
+  }
+
+  if (np_lam_ != NULL && reinterpret_cast<PyObject *>(np_lam_) != Py_None) {
+    float_arrays[float_count] = np_lam_;
+    float_names[float_count] = "lam";
+    float_count++;
+  }
+
+  if (np_grid_weights_ != NULL &&
+      reinterpret_cast<PyObject *>(np_grid_weights_) != Py_None) {
+    float_arrays[float_count] = np_grid_weights_;
+    float_names[float_count] = "grid_weights";
+    float_count++;
+  }
+
+  if (float_count > 0 &&
+      !is_matching_float_dtypes(float_arrays, float_names, float_count,
+                                &float_typenum_)) {
     return;
   }
 
@@ -347,9 +393,9 @@ bool GridProps::has_grid_weights() const {
 double *GridProps::get_grid_weights() {
   /* If we already have grid weights, return them. */
   if (has_grid_weights()) {
-    grid_weights_ = static_cast<double *>(PyArray_DATA(np_grid_weights_));
+    grid_weights_ = static_cast<void *>(PyArray_DATA(np_grid_weights_));
     need_grid_weights_ = false; // We don't need to populate them.
-    return grid_weights_;
+    return static_cast<double *>(grid_weights_);
   }
 
   /* If we don't have grid weights, allocate a new numpy array for filling. */
@@ -359,14 +405,14 @@ double *GridProps::get_grid_weights() {
   }
   np_grid_weights_ =
       (PyArrayObject *)PyArray_ZEROS(ndim, np_dims_weights, NPY_DOUBLE, 0);
-  grid_weights_ = static_cast<double *>(PyArray_DATA(np_grid_weights_));
+  grid_weights_ = static_cast<void *>(PyArray_DATA(np_grid_weights_));
   RETURN_IF_PYERR();
 
   /* Flag that we need to populate the grid weights. */
   need_grid_weights_ = true;
   owns_grid_weights_ = true;
 
-  return grid_weights_;
+  return static_cast<double *>(grid_weights_);
 }
 
 /**
@@ -407,7 +453,7 @@ double GridProps::get_grid_weight_at(int ind) const {
     return 0.0;
   }
 
-  return grid_weights_[ind];
+  return static_cast<double *>(grid_weights_)[ind];
 }
 
 /**
@@ -444,3 +490,10 @@ bool GridProps::need_grid_weights() const {
 
   return need_grid_weights_;
 }
+
+/**
+ * @brief Get the shared floating-point dtype used by the grid arrays.
+ *
+ * @return The resolved NumPy typenum, or -1 if no float arrays were provided.
+ */
+int GridProps::get_float_typenum() const { return float_typenum_; }
