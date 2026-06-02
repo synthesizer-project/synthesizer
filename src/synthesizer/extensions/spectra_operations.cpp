@@ -436,7 +436,8 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Convert required inputs to array views (no conversion yet). */
+  /* Convert required inputs to array views (no conversion yet).
+   * TODO: Remove coercion by default. */
   PyArrayObject *np_spectra = (PyArrayObject *)PyArray_FromAny(
       spectra_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
   PyArrayObject *np_scaling = (PyArrayObject *)PyArray_FromAny(
@@ -447,7 +448,8 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Optional masks handled as bool array views or NULL. */
+  /* Optional masks handled as bool array views or NULL.
+   * TODO: Remove coercion by default. */
   PyArrayObject *np_mask = nullptr;
   PyArrayObject *np_lam_mask = nullptr;
   if (mask_obj != Py_None) {
@@ -545,7 +547,8 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
   if (out_typenum < 0)
     out_typenum = input_typenum;
 
-  /* Prepare output array: reuse provided or allocate with requested dtype. */
+  /* Prepare output array: reuse provided or allocate with requested dtype.
+   * TODO: Remove coercion by default. */
   PyArrayObject *np_out = NULL;
   if (out_obj != Py_None) {
     np_out = (PyArrayObject *)PyArray_FromAny(
@@ -894,7 +897,8 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
   /* Convert inputs to array views (no conversion yet) so we can accept both
-   * float32 and float64 inputs. */
+   * float32 and float64 inputs.
+   * TODO: Remove coercion by default. */
   PyArrayObject *np_spectra = (PyArrayObject *)PyArray_FromAny(
       spectra_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
   PyArrayObject *np_tau_v = (PyArrayObject *)PyArray_FromAny(
@@ -908,6 +912,8 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Optional masks are also currently normalised through PyArray_FromAny.
+   * TODO: Remove coercion by default. */
   PyArrayObject *np_mask = nullptr;
   if (mask_obj != Py_None) {
     np_mask = (PyArrayObject *)PyArray_FromAny(mask_obj, NULL, 0, 0,
@@ -984,7 +990,8 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
   if (out_typenum < 0)
     out_typenum = input_typenum;
 
-  /* Prepare output array: reuse provided or allocate with requested dtype. */
+  /* Prepare output array: reuse provided or allocate with requested dtype.
+   * TODO: Remove coercion by default. */
   PyArrayObject *np_out = NULL;
   if (out_obj != Py_None) {
     np_out = (PyArrayObject *)PyArray_FromAny(
@@ -1145,7 +1152,8 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Convert inputs to array views (no conversion yet). */
+  /* Convert inputs to array views (no conversion yet).
+   * TODO: Remove coercion by default. */
   PyArrayObject *np_array = (PyArrayObject *)PyArray_FromAny(
       array_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
   PyArrayObject *np_vector = (PyArrayObject *)PyArray_FromAny(
@@ -1200,7 +1208,8 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
     out_typenum = input_typenum;
 
   /* Prepare output array: reuse provided or allocate a new one with
-   * out_typenum. */
+   * out_typenum.
+   * TODO: Remove coercion by default. */
   PyArrayObject *np_out = NULL;
   if (out_obj != Py_None) {
     np_out = (PyArrayObject *)PyArray_FromAny(
@@ -1754,7 +1763,8 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Convert inputs to array views (accept float32 or float64). */
+  /* Convert inputs to array views (accept float32 or float64).
+   * TODO: Remove coercion by default. */
   PyArrayObject *np_lum = (PyArrayObject *)PyArray_FromAny(
       lum_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
   PyArrayObject *np_cont = (PyArrayObject *)PyArray_FromAny(
@@ -1773,7 +1783,8 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
   }
 
   /* Optional masks start out absent and only become arrays when the caller
-   * explicitly passed them in. */
+   * explicitly passed them in.
+   * TODO: Remove coercion by default. */
   PyArrayObject *np_mask = nullptr;
   PyArrayObject *np_lam_mask = nullptr;
 
@@ -1903,7 +1914,8 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
   if (out_typenum < 0)
     out_typenum = input_typenum;
 
-  /* Allocate or reuse output buffers with the requested dtype. */
+  /* Allocate or reuse output buffers with the requested dtype.
+   * TODO: Remove coercion by default. */
   PyArrayObject *np_out_lum = nullptr;
   PyArrayObject *np_out_cont = nullptr;
   if (out_lum_obj != Py_None && out_cont_obj != Py_None) {
