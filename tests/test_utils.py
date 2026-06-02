@@ -3,9 +3,7 @@
 import numpy as np
 import unyt
 
-from synthesizer.emission_models.utils import (
-    ensure_array_c_compatible_double,
-)
+from synthesizer.utils import ensure_array_c_compatible_double
 
 
 class TestEnsureCompatibles:
