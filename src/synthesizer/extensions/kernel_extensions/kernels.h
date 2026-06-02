@@ -39,7 +39,8 @@
 #endif
 
 /* Kernel function typedef shared across all table builders. */
-typedef double (*kernel_func)(double);
+template <typename Real>
+using kernel_func = Real (*)(Real);
 
 /* Declare the Python wrapper functions defined in separate source files.
  * Each compute_* function is implemented in its own .cpp file and

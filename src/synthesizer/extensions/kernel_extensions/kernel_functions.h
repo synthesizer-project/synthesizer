@@ -22,11 +22,12 @@
  *
  * @return The kernel value.
  */
-static inline double uniform(const double r) {
-  if (r < 1.0) {
-    return 1.0 / ((4.0 / 3.0) * M_PI);
+template <typename Real>
+static inline Real uniform(const Real r) {
+  if (r < static_cast<Real>(1.0)) {
+    return static_cast<Real>(1.0) / (static_cast<Real>(4.0 / 3.0) * static_cast<Real>(M_PI));
   }
-  return 0.0;
+  return static_cast<Real>(0.0);
 }
 
 /**
@@ -36,13 +37,15 @@ static inline double uniform(const double r) {
  *
  * @return The kernel value.
  */
-static inline double sph_anarchy(const double r) {
-  if (r <= 1.0) {
-    const double one_minus_r = 1.0 - r;
-    return (21.0 / (2.0 * M_PI)) * (one_minus_r * one_minus_r * one_minus_r *
-                                     one_minus_r * (1.0 + 4.0 * r));
+template <typename Real>
+static inline Real sph_anarchy(const Real r) {
+  if (r <= static_cast<Real>(1.0)) {
+    const Real one_minus_r = static_cast<Real>(1.0) - r;
+    return static_cast<Real>(21.0 / (2.0 * M_PI)) *
+           (one_minus_r * one_minus_r * one_minus_r *
+            one_minus_r * (static_cast<Real>(1.0) + static_cast<Real>(4.0) * r));
   }
-  return 0.0;
+  return static_cast<Real>(0.0);
 }
 
 /**
@@ -52,15 +55,19 @@ static inline double sph_anarchy(const double r) {
  *
  * @return The kernel value.
  */
-static inline double gadget_2(const double r) {
-  if (r < 0.5) {
-    return (8.0 / M_PI) * (1.0 - 6.0 * (r * r) + 6.0 * (r * r * r));
+template <typename Real>
+static inline Real gadget_2(const Real r) {
+  if (r < static_cast<Real>(0.5)) {
+    return static_cast<Real>(8.0 / M_PI) *
+           (static_cast<Real>(1.0) - static_cast<Real>(6.0) * (r * r) +
+            static_cast<Real>(6.0) * (r * r * r));
   }
-  if (r < 1.0) {
-    const double one_minus_r = 1.0 - r;
-    return (16.0 / M_PI) * (one_minus_r * one_minus_r * one_minus_r);
+  if (r < static_cast<Real>(1.0)) {
+    const Real one_minus_r = static_cast<Real>(1.0) - r;
+    return static_cast<Real>(16.0 / M_PI) *
+           (one_minus_r * one_minus_r * one_minus_r);
   }
-  return 0.0;
+  return static_cast<Real>(0.0);
 }
 
 /**
@@ -70,15 +77,18 @@ static inline double gadget_2(const double r) {
  *
  * @return The kernel value.
  */
-static inline double cubic(const double r) {
-  if (r < 0.5) {
-    return 2.546479089470 + 15.278874536822 * (r - 1.0) * r * r;
+template <typename Real>
+static inline Real cubic(const Real r) {
+  if (r < static_cast<Real>(0.5)) {
+    return static_cast<Real>(2.546479089470) +
+           static_cast<Real>(15.278874536822) * (r - static_cast<Real>(1.0)) * r * r;
   }
-  if (r < 1.0) {
-    const double one_minus_r = 1.0 - r;
-    return 5.092958178941 * (one_minus_r * one_minus_r * one_minus_r);
+  if (r < static_cast<Real>(1.0)) {
+    const Real one_minus_r = static_cast<Real>(1.0) - r;
+    return static_cast<Real>(5.092958178941) *
+           (one_minus_r * one_minus_r * one_minus_r);
   }
-  return 0.0;
+  return static_cast<Real>(0.0);
 }
 
 /**
@@ -91,27 +101,28 @@ static inline double cubic(const double r) {
  *
  * @return The kernel value.
  */
-static inline double quartic(const double r) {
-  const double q = 2.5 * r;
-  const double norm = 25.0 / (32.0 * M_PI);
+template <typename Real>
+static inline Real quartic(const Real r) {
+  const Real q = static_cast<Real>(2.5) * r;
+  const Real norm = static_cast<Real>(25.0 / (32.0 * M_PI));
 
-  if (q < 0.5) {
-    const double a = 2.5 - q;
-    const double b = 1.5 - q;
-    const double c = 0.5 - q;
-    return norm * (a * a * a * a - 5.0 * b * b * b * b +
-                   10.0 * c * c * c * c);
+  if (q < static_cast<Real>(0.5)) {
+    const Real a = static_cast<Real>(2.5) - q;
+    const Real b = static_cast<Real>(1.5) - q;
+    const Real c = static_cast<Real>(0.5) - q;
+    return norm * (a * a * a * a - static_cast<Real>(5.0) * b * b * b * b +
+                   static_cast<Real>(10.0) * c * c * c * c);
   }
-  if (q < 1.5) {
-    const double a = 2.5 - q;
-    const double b = 1.5 - q;
-    return norm * (a * a * a * a - 5.0 * b * b * b * b);
+  if (q < static_cast<Real>(1.5)) {
+    const Real a = static_cast<Real>(2.5) - q;
+    const Real b = static_cast<Real>(1.5) - q;
+    return norm * (a * a * a * a - static_cast<Real>(5.0) * b * b * b * b);
   }
-  if (q < 2.5) {
-    const double a = 2.5 - q;
+  if (q < static_cast<Real>(2.5)) {
+    const Real a = static_cast<Real>(2.5) - q;
     return norm * (a * a * a * a);
   }
-  return 0.0;
+  return static_cast<Real>(0.0);
 }
 
 /**
@@ -121,23 +132,32 @@ static inline double quartic(const double r) {
  *
  * @return The kernel value.
  */
-static inline double quintic(const double r) {
-  if (r < 0.333333333) {
-    return 27.0 *
-           (6.4457752 * r * r * r * r * (1.0 - r) - 1.4323945 * r * r +
-            0.17507044);
+template <typename Real>
+static inline Real quintic(const Real r) {
+  if (r < static_cast<Real>(0.333333333)) {
+    return static_cast<Real>(27.0) *
+           (static_cast<Real>(6.4457752) * r * r * r * r *
+                (static_cast<Real>(1.0) - r) -
+            static_cast<Real>(1.4323945) * r * r +
+            static_cast<Real>(0.17507044));
   }
-  if (r < 0.666666667) {
-    return 27.0 *
-           (3.2228876 * r * r * r * r * (r - 3.0) + 10.7429587 * r * r * r -
-            5.01338071 * r * r + 0.5968310366 * r + 0.1352817016);
+  if (r < static_cast<Real>(0.666666667)) {
+    return static_cast<Real>(27.0) *
+           (static_cast<Real>(3.2228876) * r * r * r * r *
+                (r - static_cast<Real>(3.0)) +
+            static_cast<Real>(10.7429587) * r * r * r -
+            static_cast<Real>(5.01338071) * r * r +
+            static_cast<Real>(0.5968310366) * r +
+            static_cast<Real>(0.1352817016));
   }
-  if (r < 1.0) {
-    return 27.0 * 0.64457752 *
-           (-r * r * r * r * r + 5.0 * r * r * r * r - 10.0 * r * r * r +
-            10.0 * r * r - 5.0 * r + 1.0);
+  if (r < static_cast<Real>(1.0)) {
+    return static_cast<Real>(27.0) * static_cast<Real>(0.64457752) *
+           (-r * r * r * r * r + static_cast<Real>(5.0) * r * r * r * r -
+            static_cast<Real>(10.0) * r * r * r +
+            static_cast<Real>(10.0) * r * r - static_cast<Real>(5.0) * r +
+            static_cast<Real>(1.0));
   }
-  return 0.0;
+  return static_cast<Real>(0.0);
 }
 
 /**
@@ -146,28 +166,30 @@ static inline double quintic(const double r) {
  * Keeping the name dispatch in one place ensures the Python wrappers and the
  * truncated LOS table builder both use exactly the same implementation.
  *
+ * @tparam Real The floating-point type (float or double).
  * @param name The public kernel name.
  *
  * @return Pointer to the matching kernel function, or ``NULL`` if unknown.
  */
-static kernel_func get_kernel_function(const char *name) {
+template <typename Real>
+static kernel_func<Real> get_kernel_function(const char *name) {
   if (strcmp(name, "uniform") == 0) {
-    return uniform;
+    return uniform<Real>;
   }
   if (strcmp(name, "sph_anarchy") == 0) {
-    return sph_anarchy;
+    return sph_anarchy<Real>;
   }
   if (strcmp(name, "gadget_2") == 0) {
-    return gadget_2;
+    return gadget_2<Real>;
   }
   if (strcmp(name, "cubic") == 0) {
-    return cubic;
+    return cubic<Real>;
   }
   if (strcmp(name, "quartic") == 0) {
-    return quartic;
+    return quartic<Real>;
   }
   if (strcmp(name, "quintic") == 0) {
-    return quintic;
+    return quintic<Real>;
   }
   return NULL;
 }

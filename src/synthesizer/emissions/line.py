@@ -1357,6 +1357,10 @@ class LineCollection:
             tau_v, self.lam, **dust_curve_kwargs
         )
 
+        # Ensure transmission dtype matches the emission array dtype.
+        if isinstance(transmission, np.ndarray):
+            transmission = transmission.astype(self._luminosity.dtype)
+
         # When attenuation reduces to a wavelength-only transmission curve we
         # can apply it with the dedicated last-axis scaling kernel. Here we
         # have a row mask so we need to copy the arrays and apply the

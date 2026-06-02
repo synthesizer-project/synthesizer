@@ -416,7 +416,7 @@ def scale_array(
     ):
         # The kernel expects a per-row vector, so for masked scalar scaling we
         # materialise the obvious repeated row factor once.
-        scaling_arr = np.empty(array.shape[0], dtype=float)
+        scaling_arr = np.empty(array.shape[0], dtype=array.dtype)
         scaling_arr.fill(scaling)
         return scale_spectra_2d(
             array, scaling_arr, mask, lam_mask, nthreads, out

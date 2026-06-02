@@ -10,6 +10,50 @@
 #include "kernel_functions.h"
 
 /**
+ * @brief Templated implementation of kernel evaluation.
+ *
+ * @tparam Real The floating-point type (float or double).
+ */
+template <typename Real>
+static PyObject *evaluate_kernel_impl(PyObject *self,
+                                      PyArrayObject *np_radii,
+                                      const char *kernel_name) {
+  (void)self;
+
+  const Real *radii = extract_data<Real>(np_radii, "radii");
+  if (radii == NULL) {
+    return NULL;
+  }
+
+  kernel_func<Real> func = get_kernel_function<Real>(kernel_name);
+  if (func == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Kernel name not defined");
+    return NULL;
+  }
+
+  const int ndim = static_cast<int>(PyArray_DIM(np_radii, 0));
+  const int typenum =
+      std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
+  npy_intp dims[1] = {ndim};
+  PyArrayObject *np_values =
+      (PyArrayObject *)PyArray_ZEROS(1, dims, typenum, 0);
+  if (np_values == NULL) {
+    PyErr_NoMemory();
+    return NULL;
+  }
+  Real *values = static_cast<Real *>(PyArray_DATA(np_values));
+
+#ifdef WITH_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+  for (int i = 0; i < ndim; i++) {
+    values[i] = func(radii[i]);
+  }
+
+  return Py_BuildValue("N", np_values);
+}
+
+/**
  * @brief Evaluate a named kernel on a 1D radius array.
  *
  * This exposes the analytic kernel implementations to Python so the public
@@ -19,7 +63,7 @@
  * @param self The module instance (unused).
  * @param args Python arguments containing a 1D radius array and kernel name.
  *
- * @return A 1D float64 NumPy array of kernel values.
+ * @return A 1D float64 or float32 NumPy array of kernel values.
  */
 PyObject *evaluate_kernel(PyObject *self, PyObject *args) {
 
@@ -36,44 +80,17 @@ PyObject *evaluate_kernel(PyObject *self, PyObject *args) {
     PyErr_SetString(PyExc_ValueError, "radii must be a 1D array.");
     return NULL;
   }
-  if (PyArray_TYPE(np_radii) != NPY_DOUBLE) {
-    PyErr_SetString(PyExc_TypeError, "radii must be float64.");
-    return NULL;
+
+  const int input_typenum = PyArray_TYPE(np_radii);
+  if (input_typenum == NPY_FLOAT32) {
+    return evaluate_kernel_impl<float>(self, np_radii, kernel_name);
+  }
+  if (input_typenum == NPY_FLOAT64) {
+    return evaluate_kernel_impl<double>(self, np_radii, kernel_name);
   }
 
-  /* The helper expects a contiguous float64 buffer and returns a borrowed data
-   * pointer owned by the NumPy array object. */
-  const double *radii = extract_data_double(np_radii, "radii");
-  if (radii == NULL) {
-    return NULL;
-  }
-
-  kernel_func func = get_kernel_function(kernel_name);
-  if (func == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Kernel name not defined");
-    return NULL;
-  }
-
-  /* Allocate the result array on the Python side and fill it in place from
-   * the shared analytic kernel implementation. */
-  const int ndim = static_cast<int>(PyArray_DIM(np_radii, 0));
-  npy_intp dims[1] = {ndim};
-  PyArrayObject *np_values =
-      (PyArrayObject *)PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
-  if (np_values == NULL) {
-    PyErr_NoMemory();
-    return NULL;
-  }
-  double *values = static_cast<double *>(PyArray_DATA(np_values));
-
-#ifdef WITH_OPENMP
-#pragma omp parallel for schedule(static)
-#endif
-  for (int i = 0; i < ndim; i++) {
-    values[i] = func(radii[i]);
-  }
-
-  return Py_BuildValue("N", np_values);
+  PyErr_SetString(PyExc_TypeError, "radii must be float32 or float64.");
+  return NULL;
 }
 
 /* Expose the Python-callable entry points for this extension module. */
