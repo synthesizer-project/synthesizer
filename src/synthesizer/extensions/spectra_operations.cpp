@@ -1121,7 +1121,7 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
  * instead of twice. The four mask combinations mirror scale_spectra_2d. */
 
 /**
- * @brief This calculates fused lum+cont row scaling with no masks.
+ * @brief Scale both luminosity and continuum with no masks.
  *
  * This is the serial version of the function for rows without a mask.
  *
@@ -1161,7 +1161,7 @@ static void scale_line_2d_no_mask_serial(const double *__restrict__ lum,
 }
 
 /**
- * @brief This calculates fused lum+cont row scaling with a 1D row mask.
+ * @brief Scale both luminosity and continuum with a 1D row mask.
  *
  * This is the serial version of the function for rows with a row mask.
  *
@@ -1207,7 +1207,7 @@ static void scale_line_2d_row_mask_serial(
 }
 
 /**
- * @brief This calculates fused lum+cont row scaling with a 1D wavelength
+ * @brief Scale both luminosity and continuum with a 1D wavelength
  *        mask.
  *
  * This is the serial version of the function for rows with a wavelength mask.
@@ -1251,7 +1251,7 @@ static void scale_line_2d_lam_mask_serial(const double *__restrict__ lum,
 }
 
 /**
- * @brief This calculates fused lum+cont row scaling with both a row mask
+ * @brief Scale both luminosity and continuum with both a row mask
  *        and a wavelength mask.
  *
  * This is the serial version of the function for rows with both masks.
@@ -1301,7 +1301,7 @@ static void scale_line_2d_both_masks_serial(
 #ifdef WITH_OPENMP
 
 /**
- * @brief This calculates fused lum+cont scaling with no masks using OpenMP.
+ * @brief Scale both luminosity and continuum with no masks using OpenMP.
  *
  * This is the parallel version of the function for rows without a mask.
  *
@@ -1342,7 +1342,7 @@ static void scale_line_2d_no_mask_omp(const double *__restrict__ lum,
 }
 
 /**
- * @brief This calculates fused lum+cont scaling with a row mask using OpenMP.
+ * @brief Scale both luminosity and continuum with a row mask using OpenMP.
  *
  * This is the parallel version of the function for rows with a row mask.
  *
@@ -1390,7 +1390,7 @@ static void scale_line_2d_row_mask_omp(
 }
 
 /**
- * @brief This calculates fused lum+cont scaling with a wavelength mask using
+ * @brief Scale both luminosity and continuum with a wavelength mask using
  *        OpenMP.
  *
  * This is the parallel version of the function for rows with a wavelength
@@ -1436,7 +1436,7 @@ static void scale_line_2d_lam_mask_omp(const double *__restrict__ lum,
 }
 
 /**
- * @brief This calculates fused lum+cont scaling with both masks using OpenMP.
+ * @brief Scale both luminosity and continuum with both masks using OpenMP.
  *
  * This is the parallel version of the function for rows with both masks.
  *
@@ -1487,7 +1487,7 @@ static void scale_line_2d_both_masks_omp(
 #endif /* WITH_OPENMP */
 
 /**
- * @brief Fused lum+cont scaling with per-spectrum factors.
+ * @brief Scale both luminosity and continuum with per-spectrum factors.
  *
  * Processes both arrays in one parallel loop so the scaling vectors and masks
  * are read once instead of twice. Accepts separate factors for luminosity
