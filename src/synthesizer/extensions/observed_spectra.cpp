@@ -127,9 +127,9 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
   }
 
   PyArrayObject *np_obslam_out =
-      cpp_to_python::array_or_none(obslam_out_obj, "obslam_out");
+      array_or_none(obslam_out_obj, "obslam_out");
   PyArrayObject *np_obsnu_out =
-      cpp_to_python::array_or_none(obsnu_out_obj, "obsnu_out");
+      array_or_none(obsnu_out_obj, "obsnu_out");
   if (PyErr_Occurred()) {
     Py_DECREF(np_lnu);
     Py_DECREF(np_lam);
