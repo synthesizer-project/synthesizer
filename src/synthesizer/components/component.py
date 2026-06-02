@@ -11,6 +11,7 @@ respectively.
 
 from abc import ABC, abstractmethod
 
+import numpy as np
 from unyt import arcsecond, kpc, pc
 
 from synthesizer import exceptions
@@ -357,6 +358,7 @@ class Component(ABC):
         verbose=True,
         nthreads=1,
         grid_assignment_method="cic",
+        out_dtype=np.float32,
         **kwargs,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -407,6 +409,8 @@ class Component(ABC):
             grid_assignment_method (str):
                 The method to use for assigning particles to the grid. Options
                 are "cic" (cloud-in-cell) or "ngp" (nearest grid point)."
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted spectra arrays.
             **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -430,6 +434,7 @@ class Component(ABC):
             verbose=verbose,
             nthreads=nthreads,
             grid_assignment_method=grid_assignment_method,
+            out_dtype=out_dtype,
             **kwargs,
         )
 

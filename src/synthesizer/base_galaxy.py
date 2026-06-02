@@ -4,6 +4,7 @@ The class described in this module should never be directly instantiated. It
 only contains common attributes and methods to reduce boilerplate.
 """
 
+import numpy as np
 from unyt import Mpc, arcsecond, kpc, pc
 
 from synthesizer import exceptions
@@ -1073,6 +1074,7 @@ class BaseGalaxy:
         mask=None,
         vel_shift=None,
         verbose=True,
+        out_dtype=np.float32,
         **kwargs,
     ):
         """Generate spectra as described by the emission model.
@@ -1128,6 +1130,8 @@ class BaseGalaxy:
                 then the velocity shift is applied when generating all spectra.
             verbose (bool):
                 Are we talking?
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted spectra arrays.
             kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -1149,6 +1153,7 @@ class BaseGalaxy:
             mask=mask,
             vel_shift=vel_shift,
             verbose=verbose,
+            out_dtype=out_dtype,
             **kwargs,
         )
 

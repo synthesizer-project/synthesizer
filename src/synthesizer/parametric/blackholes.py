@@ -253,3 +253,7 @@ class BlackHole(BlackholesComponent):
                 "It is necessary to first calculate the disc_incident "
                 "spectra before calculating the ionising luminosity"
             )
+
+    def get_spectra(self, *args, out_dtype=np.float64, **kwargs):
+        """Generate spectra with a float64 default for black holes."""
+        return super().get_spectra(*args, out_dtype=out_dtype, **kwargs)
