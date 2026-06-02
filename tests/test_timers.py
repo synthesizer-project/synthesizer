@@ -460,7 +460,6 @@ class TestPyCapsuleArchitecture(unittest.TestCase):
         import synthesizer.extensions.integration  # noqa: F401
         import synthesizer.extensions.particle_spectra  # noqa: F401
         import synthesizer.extensions.sfzh  # noqa: F401
-        import synthesizer.extensions.weights  # noqa: F401
         import synthesizer.imaging.extensions.circular_aperture  # noqa: F401
         import synthesizer.imaging.extensions.image  # noqa: F401
 
