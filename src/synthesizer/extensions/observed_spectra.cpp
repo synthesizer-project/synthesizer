@@ -30,34 +30,34 @@
  * from the one-dimensional emitted grids.
  *
  * @param lnu: The input rest-frame luminosity density spectra, shape (...,
- * nlam).
+ *     nlam).
  * @param lam: The input rest-frame wavelength grid, shape (nlam).
  * @param nu: The input rest-frame frequency grid, shape (nlam).
  * @param one_plus_z: The redshift factor (1 + z) to apply to the wavelength and
- * frequency grids.
+ *      frequency grids.
  * @param conversion: The flux conversion factor to apply to the luminosity
- * density spectra to convert to flux density. This should already include the
- * (1 + z) factor for the bandwidth compression, so the kernel just applies it
- * as a simple scaling.
+ *     density spectra to convert to flux density. This should already include
+ *     the (1 + z) factor for the bandwidth compression, so the kernel just
+ *     applies it as a simple scaling.
  * @param nthreads: The number of threads to use for the flux conversion. If
- * less than 1, the conversion is done in a single thread. The wavelength and
- * frequency grid population is not parallelised since it's typically much
- * smaller than the spectra arrays.
+ *     less than 1, the conversion is done in a single thread. The wavelength
+ *     and frequency grid population is not parallelised since it's typically
+ *     much smaller than the spectra arrays.
  * @param fnu_out: The preallocated output array for the observer-frame flux
- * density spectra, shape (..., nlam). Must be writable and have the same shape
- * and memory layout as lnu.
+ *     density spectra, shape (..., nlam). Must be writable and have the same
+ * shape and memory layout as lnu.
  * @param obslam_out: The preallocated output array for the observer-frame
- * wavelength grid, shape (nlam). Must be writable and have the same length as
- * lam. Can be NULL if the caller does not need this output.
+ *     wavelength grid, shape (nlam). Must be writable and have the same length
+ *     as lam. Can be NULL if the caller does not need this output.
  * @param obsnu_out: The preallocated output array for the observer-frame
- * frequency grid, shape (nlam). Must be writable and have the same length as
- * nu. Can be NULL if the caller does not need this output.
+ *     frequency grid, shape (nlam). Must be writable and have the same length
+ *     as nu. Can be NULL if the caller does not need this output.
  * @param nelem: The total number of elements in the spectra arrays (the product
- * of all dimensions of lnu). This is used to drive the parallel loop for the
- * flux conversion.
+ *     of all dimensions of lnu). This is used to drive the parallel loop for
+ *     the flux conversion.
  * @param nlam: The number of wavelength/frequency bins (the size of the last
- * dimension of lnu and the length of lam/nu). This is used to drive the loops
- * for populating the observer-frame grids.
+ *     dimension of lnu and the length of lam/nu). This is used to drive the
+ *     loops for populating the observer-frame grids.
  */
 template <typename Real, typename OutT>
 static void compute_fnu_typed(const Real *lnu, const Real *lam, const Real *nu,
@@ -126,10 +126,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  PyArrayObject *np_obslam_out =
-      array_or_none(obslam_out_obj, "obslam_out");
-  PyArrayObject *np_obsnu_out =
-      array_or_none(obsnu_out_obj, "obsnu_out");
+  PyArrayObject *np_obslam_out = array_or_none(obslam_out_obj, "obslam_out");
+  PyArrayObject *np_obsnu_out = array_or_none(obsnu_out_obj, "obsnu_out");
   if (PyErr_Occurred()) {
     Py_DECREF(np_lnu);
     Py_DECREF(np_lam);
