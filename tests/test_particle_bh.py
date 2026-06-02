@@ -1,5 +1,7 @@
 """Test suite for particle based black holes."""
 
+from unittest.mock import MagicMock
+
 import numpy as np
 import pytest
 from unyt import Msun, s, unyt_array
@@ -7,6 +9,20 @@ from unyt import Msun, s, unyt_array
 from synthesizer import exceptions
 from synthesizer.particle.blackholes import BlackHoles
 from synthesizer.utils import scalar_to_array
+
+
+def test_get_spectra_defaults_to_float64_for_blackholes(particle_black_hole):
+    """Black-hole get_spectra should default to float64."""
+    emission_model = MagicMock()
+    emission_model.per_particle = False
+    emission_model.label = "mock"
+    emission_model._get_spectra.return_value = ({"mock": MagicMock()}, {})
+
+    particle_black_hole.get_spectra(emission_model)
+
+    assert (
+        emission_model._get_spectra.call_args.kwargs["out_dtype"] is np.float64
+    )
 
 
 class TestBlackHolesInit:
