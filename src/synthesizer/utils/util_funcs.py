@@ -642,6 +642,61 @@ def as_contiguous(array):
     return np.ascontiguousarray(array)
 
 
+def convert_array_dtype(array, dtype):
+    """Convert a array-like object to a target dtype.
+
+    This works for NumPy arrays and unyt_arrays, preserving units for the
+    latter while ensuring the underlying storage is contiguous and of the
+    correct dtype.
+
+    Note that this will always make a copy of the array.
+
+    Args:
+        array (array-like):
+            The input array-like object.
+        dtype (np.dtype/type):
+            The target dtype to convert to (e.g. np.float32 or np.float64).
+
+    Returns:
+        array-like:
+            Converted array with contiguous storage where applicable.
+
+    Raises:
+        ValueError:
+            If ``dtype`` is not ``np.float32`` or ``np.float64``.
+    """
+    # Nothing to do if input is None
+    if array is None:
+        return None
+
+    # We always make a copy to avoid confusion with in-place modifications
+    array = np.asanyarray(array, copy=True)
+
+    # Handle the unyt_array case where we act on the underlying array and
+    # then reattach the units
+    if isinstance(array, unyt_array):
+        return unyt_array(
+            np.ascontiguousarray(array.ndview, dtype=dtype),
+            array.units,
+            bypass_validation=True,
+        )
+
+    # Handle the regular NumPy array case where we just convert to the target
+    # dtype and ensure it's contiguous
+    elif isinstance(array, np.ndarray) and np.issubdtype(
+        array.dtype, np.floating
+    ):
+        return np.ascontiguousarray(array, dtype=dtype)
+
+    else:
+        raise ValueError(
+            f"Unsupported array type or dtype for conversion: "
+            f"type(array)={type(array)}, dtype={getattr(array, 'dtype', None)}"
+        )
+
+    return array
+
+
 def get_attr_c_compatible_double(obj, attr):
     """Ensure an attribute of an object is compatible with our C extensions.
 
