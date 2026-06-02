@@ -125,7 +125,7 @@ static PyArrayObject *wrap_last_axis_result(OutT *result_arr, npy_intp ndim,
 }
 
 /**
- * @brief Execute typed trapezoidal integration after dtype dispatch.
+ * @brief Execute trapezoidal integration after dtype dispatch.
  *
  * @tparam Real The floating-point type of the validated input arrays.
  * @tparam OutT The requested floating-point output type.
@@ -141,10 +141,9 @@ static PyArrayObject *wrap_last_axis_result(OutT *result_arr, npy_intp ndim,
  * @return The wrapped NumPy output array, or NULL on failure.
  */
 template <typename Real, typename OutT>
-static PyObject *trapz_last_axis_typed(PyArrayObject *xs, PyArrayObject *ys,
-                                       npy_intp ndim, npy_intp *shape,
-                                       npy_intp n, npy_intp num_elements,
-                                       int nthreads) {
+static PyObject *trapz_last_axis(PyArrayObject *xs, PyArrayObject *ys,
+                                 npy_intp ndim, npy_intp *shape, npy_intp n,
+                                 npy_intp num_elements, int nthreads) {
   const Real *x = data_ptr<const Real>(xs);
   const Real *y = data_ptr<const Real>(ys);
 
@@ -238,21 +237,21 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
   const npy_intp num_elements = PyArray_SIZE(ys) / n;
   if (input_typenum == NPY_FLOAT32) {
     if (output_typenum == NPY_FLOAT32) {
-      return trapz_last_axis_typed<float, float>(xs, ys, ndim, shape, n,
-                                                 num_elements, nthreads);
+      return trapz_last_axis<float, float>(xs, ys, ndim, shape, n,
+                                           num_elements, nthreads);
     }
 
-    return trapz_last_axis_typed<float, double>(xs, ys, ndim, shape, n,
-                                                num_elements, nthreads);
+    return trapz_last_axis<float, double>(xs, ys, ndim, shape, n,
+                                          num_elements, nthreads);
   }
 
   if (output_typenum == NPY_FLOAT32) {
-    return trapz_last_axis_typed<double, float>(xs, ys, ndim, shape, n,
-                                                num_elements, nthreads);
+    return trapz_last_axis<double, float>(xs, ys, ndim, shape, n,
+                                          num_elements, nthreads);
   }
 
-  return trapz_last_axis_typed<double, double>(xs, ys, ndim, shape, n,
-                                               num_elements, nthreads);
+  return trapz_last_axis<double, double>(xs, ys, ndim, shape, n,
+                                         num_elements, nthreads);
 }
 
 /**
@@ -324,7 +323,7 @@ static OutT *simps_last_axis_parallel(const Real *x, const Real *y, npy_intp n,
 #endif
 
 /**
- * @brief Execute typed Simpson integration after dtype dispatch.
+ * @brief Execute Simpson integration after dtype dispatch.
  *
  * @tparam Real The floating-point type of the validated input arrays.
  * @tparam OutT The requested floating-point output type.
@@ -340,10 +339,9 @@ static OutT *simps_last_axis_parallel(const Real *x, const Real *y, npy_intp n,
  * @return The wrapped NumPy output array, or NULL on failure.
  */
 template <typename Real, typename OutT>
-static PyObject *simps_last_axis_typed(PyArrayObject *xs, PyArrayObject *ys,
-                                       npy_intp ndim, npy_intp *shape,
-                                       npy_intp n, npy_intp num_elements,
-                                       int nthreads) {
+static PyObject *simps_last_axis(PyArrayObject *xs, PyArrayObject *ys,
+                                 npy_intp ndim, npy_intp *shape, npy_intp n,
+                                 npy_intp num_elements, int nthreads) {
   const Real *x = data_ptr<const Real>(xs);
   const Real *y = data_ptr<const Real>(ys);
 
@@ -431,21 +429,21 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
   const npy_intp num_elements = PyArray_SIZE(ys) / n;
   if (input_typenum == NPY_FLOAT32) {
     if (output_typenum == NPY_FLOAT32) {
-      return simps_last_axis_typed<float, float>(xs, ys, ndim, shape, n,
-                                                 num_elements, nthreads);
+      return simps_last_axis<float, float>(xs, ys, ndim, shape, n,
+                                           num_elements, nthreads);
     }
 
-    return simps_last_axis_typed<float, double>(xs, ys, ndim, shape, n,
-                                                num_elements, nthreads);
+    return simps_last_axis<float, double>(xs, ys, ndim, shape, n,
+                                          num_elements, nthreads);
   }
 
   if (output_typenum == NPY_FLOAT32) {
-    return simps_last_axis_typed<double, float>(xs, ys, ndim, shape, n,
-                                                num_elements, nthreads);
+    return simps_last_axis<double, float>(xs, ys, ndim, shape, n,
+                                          num_elements, nthreads);
   }
 
-  return simps_last_axis_typed<double, double>(xs, ys, ndim, shape, n,
-                                               num_elements, nthreads);
+  return simps_last_axis<double, double>(xs, ys, ndim, shape, n,
+                                         num_elements, nthreads);
 }
 
 /**
@@ -571,7 +569,7 @@ static OutT *weighted_trapz_last_axis_parallel(const Real *x, const Real *y,
 #endif
 
 /**
- * @brief Execute typed weighted trapezoidal integration after dtype dispatch.
+ * @brief Execute weighted trapezoidal integration after dtype dispatch.
  *
  * @tparam Real The floating-point type of the validated input arrays.
  * @tparam OutT The requested floating-point output type.
@@ -588,13 +586,12 @@ static OutT *weighted_trapz_last_axis_parallel(const Real *x, const Real *y,
  * @return The wrapped NumPy output array, or NULL on failure.
  */
 template <typename Real, typename OutT>
-static PyObject *weighted_trapz_last_axis_typed(PyArrayObject *xs,
-                                                PyArrayObject *ys,
-                                                PyArrayObject *ws,
-                                                npy_intp ndim, npy_intp *shape,
-                                                npy_intp n,
-                                                npy_intp num_elements,
-                                                int nthreads) {
+static PyObject *weighted_trapz_last_axis(PyArrayObject *xs,
+                                          PyArrayObject *ys,
+                                          PyArrayObject *ws, npy_intp ndim,
+                                          npy_intp *shape, npy_intp n,
+                                          npy_intp num_elements,
+                                          int nthreads) {
   const Real *x = data_ptr<const Real>(xs);
   const Real *y = data_ptr<const Real>(ys);
   const Real *w = data_ptr<const Real>(ws);
@@ -691,20 +688,20 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
   const npy_intp num_elements = PyArray_SIZE(ys) / n;
   if (input_typenum == NPY_FLOAT32) {
     if (output_typenum == NPY_FLOAT32) {
-      return weighted_trapz_last_axis_typed<float, float>(
+      return weighted_trapz_last_axis<float, float>(
           xs, ys, ws, ndim, shape, n, num_elements, nthreads);
     }
 
-    return weighted_trapz_last_axis_typed<float, double>(
+    return weighted_trapz_last_axis<float, double>(
         xs, ys, ws, ndim, shape, n, num_elements, nthreads);
   }
 
   if (output_typenum == NPY_FLOAT32) {
-    return weighted_trapz_last_axis_typed<double, float>(
+    return weighted_trapz_last_axis<double, float>(
         xs, ys, ws, ndim, shape, n, num_elements, nthreads);
   }
 
-  return weighted_trapz_last_axis_typed<double, double>(
+  return weighted_trapz_last_axis<double, double>(
       xs, ys, ws, ndim, shape, n, num_elements, nthreads);
 }
 
@@ -906,7 +903,7 @@ static OutT *weighted_simps_last_axis_parallel(const Real *x, const Real *y,
 #endif
 
 /**
- * @brief Execute typed weighted Simpson integration after dtype dispatch.
+ * @brief Execute weighted Simpson integration after dtype dispatch.
  *
  * @tparam Real The floating-point type of the validated input arrays.
  * @tparam OutT The requested floating-point output type.
@@ -923,13 +920,12 @@ static OutT *weighted_simps_last_axis_parallel(const Real *x, const Real *y,
  * @return The wrapped NumPy output array, or NULL on failure.
  */
 template <typename Real, typename OutT>
-static PyObject *weighted_simps_last_axis_typed(PyArrayObject *xs,
-                                                PyArrayObject *ys,
-                                                PyArrayObject *ws,
-                                                npy_intp ndim, npy_intp *shape,
-                                                npy_intp n,
-                                                npy_intp num_elements,
-                                                int nthreads) {
+static PyObject *weighted_simps_last_axis(PyArrayObject *xs,
+                                          PyArrayObject *ys,
+                                          PyArrayObject *ws, npy_intp ndim,
+                                          npy_intp *shape, npy_intp n,
+                                          npy_intp num_elements,
+                                          int nthreads) {
   const Real *x = data_ptr<const Real>(xs);
   const Real *y = data_ptr<const Real>(ys);
   const Real *w = data_ptr<const Real>(ws);
@@ -1026,20 +1022,20 @@ static PyObject *weighted_simps_last_axis_integration(PyObject *self,
   const npy_intp num_elements = PyArray_SIZE(ys) / n;
   if (input_typenum == NPY_FLOAT32) {
     if (output_typenum == NPY_FLOAT32) {
-      return weighted_simps_last_axis_typed<float, float>(
+      return weighted_simps_last_axis<float, float>(
           xs, ys, ws, ndim, shape, n, num_elements, nthreads);
     }
 
-    return weighted_simps_last_axis_typed<float, double>(
+    return weighted_simps_last_axis<float, double>(
         xs, ys, ws, ndim, shape, n, num_elements, nthreads);
   }
 
   if (output_typenum == NPY_FLOAT32) {
-    return weighted_simps_last_axis_typed<double, float>(
+    return weighted_simps_last_axis<double, float>(
         xs, ys, ws, ndim, shape, n, num_elements, nthreads);
   }
 
-  return weighted_simps_last_axis_typed<double, double>(
+  return weighted_simps_last_axis<double, double>(
       xs, ys, ws, ndim, shape, n, num_elements, nthreads);
 }
 
