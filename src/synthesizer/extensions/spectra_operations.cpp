@@ -16,6 +16,7 @@
 
 /* Local includes */
 #include "cpp_to_python.h"
+#include "python_to_cpp.h"
 #include "timers.h"
 #include "timers_init.h"
 
@@ -39,22 +40,23 @@
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-static void scale_spectra_2d_no_mask_serial(const double *__restrict__ spectra,
-                                            const double *__restrict__ scaling,
-                                            double *out, int nspec, int nlam) {
+template <typename Real, typename OutT>
+static void scale_spectra_2d_no_mask_serial(const Real *__restrict__ spectra,
+                                            const Real *__restrict__ scaling,
+                                            OutT *out, int nspec, int nlam) {
 
   /* Loop over every spectrum in the grid. */
   for (int ispec = 0; ispec < nspec; ispec++) {
 
     /* Cache the row-scale factor so we only read it once. */
-    const double scale = scaling[ispec];
-    const double *in_row = spectra + ispec * nlam;
-    double *out_row = out + ispec * nlam;
+    const Real scale = scaling[ispec];
+    const Real *in_row = spectra + ispec * nlam;
+    OutT *out_row = out + ispec * nlam;
 
     /* Multiply every wavelength by the row factor. */
 #pragma GCC ivdep
     for (int ilam = 0; ilam < nlam; ilam++) {
-      out_row[ilam] = in_row[ilam] * scale;
+      out_row[ilam] = static_cast<OutT>(in_row[ilam] * scale);
     }
   }
 }
@@ -71,28 +73,29 @@ static void scale_spectra_2d_no_mask_serial(const double *__restrict__ spectra,
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-static void scale_spectra_2d_row_mask_serial(const double *__restrict__ spectra,
-                                             const double *__restrict__ scaling,
-                                             const npy_bool *mask, double *out,
+template <typename Real, typename OutT>
+static void scale_spectra_2d_row_mask_serial(const Real *__restrict__ spectra,
+                                             const Real *__restrict__ scaling,
+                                             const npy_bool *mask, OutT *out,
                                              int nspec, int nlam) {
 
   /* Loop over every spectrum in the grid. */
   for (int ispec = 0; ispec < nspec; ispec++) {
-    const double *in_row = spectra + ispec * nlam;
-    double *out_row = out + ispec * nlam;
+    const Real *in_row = spectra + ispec * nlam;
+    OutT *out_row = out + ispec * nlam;
 
     /* Scale masked rows and copy unmasked rows through unchanged. */
     if (mask[ispec]) {
-      const double scale = scaling[ispec];
+      const Real scale = scaling[ispec];
 
 #pragma GCC ivdep
       for (int ilam = 0; ilam < nlam; ilam++) {
-        out_row[ilam] = in_row[ilam] * scale;
+        out_row[ilam] = static_cast<OutT>(in_row[ilam] * scale);
       }
     } else {
 #pragma GCC ivdep
       for (int ilam = 0; ilam < nlam; ilam++) {
-        out_row[ilam] = in_row[ilam];
+        out_row[ilam] = static_cast<OutT>(in_row[ilam]);
       }
     }
   }
@@ -110,21 +113,23 @@ static void scale_spectra_2d_row_mask_serial(const double *__restrict__ spectra,
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-static void scale_spectra_2d_lam_mask_serial(const double *__restrict__ spectra,
-                                             const double *__restrict__ scaling,
+template <typename Real, typename OutT>
+static void scale_spectra_2d_lam_mask_serial(const Real *__restrict__ spectra,
+                                             const Real *__restrict__ scaling,
                                              const npy_bool *lam_mask,
-                                             double *out, int nspec, int nlam) {
+                                             OutT *out, int nspec, int nlam) {
   /* Loop over every spectrum in the grid. */
   for (int ispec = 0; ispec < nspec; ispec++) {
 
     /* Cache the row-scale factor for this row. */
-    const double scale = scaling[ispec];
-    const double *in_row = spectra + ispec * nlam;
-    double *out_row = out + ispec * nlam;
+    const Real scale = scaling[ispec];
+    const Real *in_row = spectra + ispec * nlam;
+    OutT *out_row = out + ispec * nlam;
 
     /* Only scale wavelengths that pass the mask; keep others unchanged. */
     for (int ilam = 0; ilam < nlam; ilam++) {
-      out_row[ilam] = lam_mask[ilam] ? in_row[ilam] * scale : in_row[ilam];
+      out_row[ilam] = lam_mask[ilam] ? static_cast<OutT>(in_row[ilam] * scale)
+                                     : static_cast<OutT>(in_row[ilam]);
     }
   }
 }
@@ -143,26 +148,29 @@ static void scale_spectra_2d_lam_mask_serial(const double *__restrict__ spectra,
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-static void scale_spectra_2d_both_masks_serial(
-    const double *__restrict__ spectra, const double *__restrict__ scaling,
-    const npy_bool *mask, const npy_bool *lam_mask, double *out, int nspec,
-    int nlam) {
+template <typename Real, typename OutT>
+static void scale_spectra_2d_both_masks_serial(const Real *__restrict__ spectra,
+                                               const Real *__restrict__ scaling,
+                                               const npy_bool *mask,
+                                               const npy_bool *lam_mask,
+                                               OutT *out, int nspec, int nlam) {
 
   /* Loop over every spectrum in the grid. */
   for (int ispec = 0; ispec < nspec; ispec++) {
-    const double *in_row = spectra + ispec * nlam;
-    double *out_row = out + ispec * nlam;
+    const Real *in_row = spectra + ispec * nlam;
+    OutT *out_row = out + ispec * nlam;
 
     /* For masked rows apply the wavelength-dependent scale; copy otherwise. */
     if (mask[ispec]) {
-      const double scale = scaling[ispec];
+      const Real scale = scaling[ispec];
 
       for (int ilam = 0; ilam < nlam; ilam++) {
-        out_row[ilam] = lam_mask[ilam] ? in_row[ilam] * scale : in_row[ilam];
+        out_row[ilam] = lam_mask[ilam] ? static_cast<OutT>(in_row[ilam] * scale)
+                                       : static_cast<OutT>(in_row[ilam]);
       }
     } else {
       for (int ilam = 0; ilam < nlam; ilam++) {
-        out_row[ilam] = in_row[ilam];
+        out_row[ilam] = static_cast<OutT>(in_row[ilam]);
       }
     }
   }
@@ -182,9 +190,10 @@ static void scale_spectra_2d_both_masks_serial(
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_spectra_2d_no_mask_omp(const double *__restrict__ spectra,
-                                         const double *__restrict__ scaling,
-                                         double *out, int nspec, int nlam,
+template <typename Real, typename OutT>
+static void scale_spectra_2d_no_mask_omp(const Real *__restrict__ spectra,
+                                         const Real *__restrict__ scaling,
+                                         OutT *out, int nspec, int nlam,
                                          int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
@@ -193,14 +202,14 @@ static void scale_spectra_2d_no_mask_omp(const double *__restrict__ spectra,
   for (int ispec = 0; ispec < nspec; ispec++) {
 
     /* Cache the row-scale factor for this row. */
-    const double scale = scaling[ispec];
-    const double *in_row = spectra + ispec * nlam;
-    double *out_row = out + ispec * nlam;
+    const Real scale = scaling[ispec];
+    const Real *in_row = spectra + ispec * nlam;
+    OutT *out_row = out + ispec * nlam;
 
     /* Multiply every wavelength by the row factor. */
 #pragma omp simd
     for (int ilam = 0; ilam < nlam; ilam++) {
-      out_row[ilam] = in_row[ilam] * scale;
+      out_row[ilam] = static_cast<OutT>(in_row[ilam] * scale);
     }
   }
 }
@@ -219,28 +228,29 @@ static void scale_spectra_2d_no_mask_omp(const double *__restrict__ spectra,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_spectra_2d_row_mask_omp(const double *__restrict__ spectra,
-                                          const double *__restrict__ scaling,
-                                          const npy_bool *mask, double *out,
+template <typename Real, typename OutT>
+static void scale_spectra_2d_row_mask_omp(const Real *__restrict__ spectra,
+                                          const Real *__restrict__ scaling,
+                                          const npy_bool *mask, OutT *out,
                                           int nspec, int nlam, int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
 
   for (int ispec = 0; ispec < nspec; ispec++) {
-    const double *in_row = spectra + ispec * nlam;
-    double *out_row = out + ispec * nlam;
+    const Real *in_row = spectra + ispec * nlam;
+    OutT *out_row = out + ispec * nlam;
 
     /* Scale masked rows and copy unmasked rows through unchanged. */
     if (mask[ispec]) {
-      const double scale = scaling[ispec];
+      const Real scale = scaling[ispec];
 
       for (int ilam = 0; ilam < nlam; ilam++) {
-        out_row[ilam] = in_row[ilam] * scale;
+        out_row[ilam] = static_cast<OutT>(in_row[ilam] * scale);
       }
     } else {
       for (int ilam = 0; ilam < nlam; ilam++) {
-        out_row[ilam] = in_row[ilam];
+        out_row[ilam] = static_cast<OutT>(in_row[ilam]);
       }
     }
   }
@@ -261,9 +271,10 @@ static void scale_spectra_2d_row_mask_omp(const double *__restrict__ spectra,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_spectra_2d_lam_mask_omp(const double *__restrict__ spectra,
-                                          const double *__restrict__ scaling,
-                                          const npy_bool *lam_mask, double *out,
+template <typename Real, typename OutT>
+static void scale_spectra_2d_lam_mask_omp(const Real *__restrict__ spectra,
+                                          const Real *__restrict__ scaling,
+                                          const npy_bool *lam_mask, OutT *out,
                                           int nspec, int nlam, int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
@@ -271,13 +282,14 @@ static void scale_spectra_2d_lam_mask_omp(const double *__restrict__ spectra,
   for (int ispec = 0; ispec < nspec; ispec++) {
 
     /* Cache the row-scale factor for this row. */
-    const double scale = scaling[ispec];
-    const double *in_row = spectra + ispec * nlam;
-    double *out_row = out + ispec * nlam;
+    const Real scale = scaling[ispec];
+    const Real *in_row = spectra + ispec * nlam;
+    OutT *out_row = out + ispec * nlam;
 
     /* Only scale wavelengths that pass the mask; keep others unchanged. */
     for (int ilam = 0; ilam < nlam; ilam++) {
-      out_row[ilam] = lam_mask[ilam] ? in_row[ilam] * scale : in_row[ilam];
+      out_row[ilam] = lam_mask[ilam] ? static_cast<OutT>(in_row[ilam] * scale)
+                                     : static_cast<OutT>(in_row[ilam]);
     }
   }
 }
@@ -297,29 +309,30 @@ static void scale_spectra_2d_lam_mask_omp(const double *__restrict__ spectra,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_spectra_2d_both_masks_omp(const double *__restrict__ spectra,
-                                            const double *__restrict__ scaling,
+template <typename Real, typename OutT>
+static void scale_spectra_2d_both_masks_omp(const Real *__restrict__ spectra,
+                                            const Real *__restrict__ scaling,
                                             const npy_bool *mask,
-                                            const npy_bool *lam_mask,
-                                            double *out, int nspec, int nlam,
-                                            int nthreads) {
+                                            const npy_bool *lam_mask, OutT *out,
+                                            int nspec, int nlam, int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   for (int ispec = 0; ispec < nspec; ispec++) {
-    const double *in_row = spectra + ispec * nlam;
-    double *out_row = out + ispec * nlam;
+    const Real *in_row = spectra + ispec * nlam;
+    OutT *out_row = out + ispec * nlam;
 
     /* For masked rows apply the wavelength-dependent scale; copy otherwise. */
     if (mask[ispec]) {
-      const double scale = scaling[ispec];
+      const Real scale = scaling[ispec];
 
       for (int ilam = 0; ilam < nlam; ilam++) {
-        out_row[ilam] = lam_mask[ilam] ? in_row[ilam] * scale : in_row[ilam];
+        out_row[ilam] = lam_mask[ilam] ? static_cast<OutT>(in_row[ilam] * scale)
+                                       : static_cast<OutT>(in_row[ilam]);
       }
     } else {
       for (int ilam = 0; ilam < nlam; ilam++) {
-        out_row[ilam] = in_row[ilam];
+        out_row[ilam] = static_cast<OutT>(in_row[ilam]);
       }
     }
   }
@@ -339,10 +352,10 @@ static void scale_spectra_2d_both_masks_omp(const double *__restrict__ spectra,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void dispatch_scale_spectra_2d(const double *spectra,
-                                      const double *scaling,
+template <typename Real, typename OutT>
+static void dispatch_scale_spectra_2d(const Real *spectra, const Real *scaling,
                                       const npy_bool *mask,
-                                      const npy_bool *lam_mask, double *out,
+                                      const npy_bool *lam_mask, OutT *out,
                                       int nspec, int nlam, int nthreads) {
 
   /* Collapse the pointer checks once so the dispatch tree reads clearly. */
@@ -411,52 +424,45 @@ static void dispatch_scale_spectra_2d(const double *spectra,
 PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
   (void)self;
 
-  /* Parse the 6-positional+1-keyword argument tuple. */
   PyObject *spectra_obj, *scaling_obj;
   PyObject *mask_obj = Py_None;
   PyObject *lam_mask_obj = Py_None;
   PyObject *out_obj = Py_None;
+  PyObject *out_dtype_obj = NULL;
   int nthreads;
 
-  if (!PyArg_ParseTuple(args, "OOOOi|O", &spectra_obj, &scaling_obj, &mask_obj,
-                        &lam_mask_obj, &nthreads, &out_obj)) {
+  if (!PyArg_ParseTuple(args, "OOOOi|OO", &spectra_obj, &scaling_obj, &mask_obj,
+                        &lam_mask_obj, &nthreads, &out_obj, &out_dtype_obj)) {
     return NULL;
   }
 
-  /* Convert inputs to float64 NumPy array views. */
-  PyArrayObject *np_spectra = (PyArrayObject *)PyArray_FROM_OTF(
-      spectra_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-  PyArrayObject *np_scaling = (PyArrayObject *)PyArray_FROM_OTF(
-      scaling_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-
-  if (np_spectra == NULL || np_scaling == NULL) {
+  /* Convert required inputs to array views (no conversion yet). */
+  PyArrayObject *np_spectra = (PyArrayObject *)PyArray_FromAny(
+      spectra_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
+  PyArrayObject *np_scaling = (PyArrayObject *)PyArray_FromAny(
+      scaling_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
+  if (!np_spectra || !np_scaling) {
     Py_XDECREF(np_spectra);
     Py_XDECREF(np_scaling);
     return NULL;
   }
 
-  /* Convert optional masks to boolean array views. NULL signals no mask. */
+  /* Optional masks handled as bool array views or NULL. */
   PyArrayObject *np_mask = nullptr;
   PyArrayObject *np_lam_mask = nullptr;
-
-  /* Optional masks stay NULL when absent so the C dispatch can branch on a
-   * single pointer check. */
   if (mask_obj != Py_None) {
-    np_mask = (PyArrayObject *)PyArray_FROM_OTF(mask_obj, NPY_BOOL,
-                                                NPY_ARRAY_IN_ARRAY);
-    if (np_mask == NULL) {
+    np_mask = (PyArrayObject *)PyArray_FromAny(mask_obj, NULL, 0, 0,
+                                               NPY_ARRAY_ENSUREARRAY, NULL);
+    if (!np_mask) {
       Py_DECREF(np_spectra);
       Py_DECREF(np_scaling);
       return NULL;
     }
   }
-
-  /* The wavelength mask is optional and gets converted to a boolean array view
-   * when present. */
   if (lam_mask_obj != Py_None) {
-    np_lam_mask = (PyArrayObject *)PyArray_FROM_OTF(lam_mask_obj, NPY_BOOL,
-                                                    NPY_ARRAY_IN_ARRAY);
-    if (np_lam_mask == NULL) {
+    np_lam_mask = (PyArrayObject *)PyArray_FromAny(lam_mask_obj, NULL, 0, 0,
+                                                   NPY_ARRAY_ENSUREARRAY, NULL);
+    if (!np_lam_mask) {
       Py_DECREF(np_spectra);
       Py_DECREF(np_scaling);
       Py_XDECREF(np_mask);
@@ -464,7 +470,7 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     }
   }
 
-  /* Validate shapes before allocating output. */
+  /* Basic shape checks. */
   if (PyArray_NDIM(np_spectra) != 2 || PyArray_NDIM(np_scaling) != 1) {
     PyErr_SetString(PyExc_ValueError,
                     "spectra must be 2D and scaling must be 1D.");
@@ -475,14 +481,10 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Once the basic dimensionality checks pass, cache the array shape for the
-   * remaining validation and dispatch steps. */
   const npy_intp *spectra_dims = PyArray_DIMS(np_spectra);
   const int nspec = static_cast<int>(spectra_dims[0]);
   const int nlam = static_cast<int>(spectra_dims[1]);
 
-  /* The scaling length must match the spectra first dimension so we can apply a
-   * per-spectrum scale factor. */
   if (PyArray_DIMS(np_scaling)[0] != spectra_dims[0]) {
     PyErr_SetString(PyExc_ValueError,
                     "scaling length must match the spectra first dimension.");
@@ -493,8 +495,6 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* The optional masks must be 1D and match the corresponding spectra dimension
-   * so the kernel can apply them correctly. */
   if (np_mask != NULL && (PyArray_NDIM(np_mask) != 1 ||
                           PyArray_DIMS(np_mask)[0] != spectra_dims[0])) {
     PyErr_SetString(PyExc_ValueError,
@@ -506,8 +506,6 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* The wavelength mask must be 1D and match the spectra second dimension so
-   * the kernel can apply it correctly. */
   if (np_lam_mask != NULL &&
       (PyArray_NDIM(np_lam_mask) != 1 ||
        PyArray_DIMS(np_lam_mask)[0] != spectra_dims[1])) {
@@ -521,23 +519,44 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Reuse caller-provided output buffer or allocate a fresh one. */
-  PyArrayObject *np_out = nullptr;
+  /* Resolve input float family and requested out dtype. */
+  PyArrayObject *float_arrays[2] = {np_spectra, np_scaling};
+  const char *float_names[2] = {"spectra", "scaling"};
+  int input_typenum = -1;
+  if (!is_matching_float_dtypes(float_arrays, float_names, 2, &input_typenum)) {
+    Py_DECREF(np_spectra);
+    Py_DECREF(np_scaling);
+    Py_XDECREF(np_mask);
+    Py_XDECREF(np_lam_mask);
+    return NULL;
+  }
 
-  /* If the caller provided an output buffer, convert it to a writable array
-   * view and verify it has the expected shape. */
-  if (out_obj != Py_None) {
-    np_out = (PyArrayObject *)PyArray_FROM_OTF(out_obj, NPY_DOUBLE,
-                                               NPY_ARRAY_INOUT_ARRAY);
-    if (np_out == NULL) {
+  int out_typenum = -1;
+  if (out_dtype_obj != NULL && out_dtype_obj != Py_None) {
+    out_typenum = resolve_output_typenum(out_dtype_obj, "out_dtype");
+    if (out_typenum < 0) {
       Py_DECREF(np_spectra);
       Py_DECREF(np_scaling);
       Py_XDECREF(np_mask);
       Py_XDECREF(np_lam_mask);
       return NULL;
     }
+  }
+  if (out_typenum < 0)
+    out_typenum = input_typenum;
 
-    /* Verify the output buffer has the expected shape. */
+  /* Prepare output array: reuse provided or allocate with requested dtype. */
+  PyArrayObject *np_out = NULL;
+  if (out_obj != Py_None) {
+    np_out = (PyArrayObject *)PyArray_FromAny(
+        out_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY | NPY_ARRAY_WRITEABLE, NULL);
+    if (!np_out) {
+      Py_DECREF(np_spectra);
+      Py_DECREF(np_scaling);
+      Py_XDECREF(np_mask);
+      Py_XDECREF(np_lam_mask);
+      return NULL;
+    }
     if (PyArray_NDIM(np_out) != 2 ||
         PyArray_DIMS(np_out)[0] != spectra_dims[0] ||
         PyArray_DIMS(np_out)[1] != spectra_dims[1]) {
@@ -550,12 +569,23 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
       Py_DECREF(np_out);
       return NULL;
     }
+    if (PyArray_TYPE(np_out) != out_typenum || !PyArray_ISCARRAY(np_out)) {
+      PyErr_SetString(
+          PyExc_ValueError,
+          "out must be a C-contiguous array with the requested out_dtype.");
+      Py_DECREF(np_spectra);
+      Py_DECREF(np_scaling);
+      Py_XDECREF(np_mask);
+      Py_XDECREF(np_lam_mask);
+      Py_DECREF(np_out);
+      return NULL;
+    }
   } else {
-    /* No output buffer was supplied, so allocate one with the same memory
-     * layout as the input spectra. */
-    np_out = (PyArrayObject *)PyArray_NewLikeArray(np_spectra, NPY_KEEPORDER,
-                                                   NULL, 0);
-    if (np_out == NULL) {
+    npy_intp dims[2];
+    dims[0] = spectra_dims[0];
+    dims[1] = spectra_dims[1];
+    np_out = (PyArrayObject *)PyArray_SimpleNew(2, dims, out_typenum);
+    if (!np_out) {
       Py_DECREF(np_spectra);
       Py_DECREF(np_scaling);
       Py_XDECREF(np_mask);
@@ -564,25 +594,49 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     }
   }
 
-  /* Extract the raw C pointers for the kernel. */
-  const double *spectra = static_cast<const double *>(PyArray_DATA(np_spectra));
-  const double *scaling = static_cast<const double *>(PyArray_DATA(np_scaling));
-  double *out = static_cast<double *>(PyArray_DATA(np_out));
-  const npy_bool *mask =
-      np_mask == NULL ? NULL
-                      : static_cast<const npy_bool *>(PyArray_DATA(np_mask));
-  const npy_bool *lam_mask =
-      np_lam_mask == NULL
-          ? NULL
-          : static_cast<const npy_bool *>(PyArray_DATA(np_lam_mask));
-
-  /* Dispatch to the correct mask-specialised kernel. */
+  /* Dispatch to typed kernel. */
   tic("scale_spectra_2d");
-  dispatch_scale_spectra_2d(spectra, scaling, mask, lam_mask, out, nspec, nlam,
-                            nthreads);
+
+  if (input_typenum == NPY_FLOAT32) {
+    const float *spectra = data_ptr<const float>(np_spectra);
+    const float *scaling = data_ptr<const float>(np_scaling);
+    if (out_typenum == NPY_FLOAT32) {
+      float *out = data_ptr<float>(np_out);
+      dispatch_scale_spectra_2d<float, float>(
+          spectra, scaling,
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr,
+          np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr, out,
+          nspec, nlam, nthreads);
+    } else {
+      double *out = data_ptr<double>(np_out);
+      dispatch_scale_spectra_2d<float, double>(
+          spectra, scaling,
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr,
+          np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr, out,
+          nspec, nlam, nthreads);
+    }
+  } else {
+    const double *spectra = data_ptr<const double>(np_spectra);
+    const double *scaling = data_ptr<const double>(np_scaling);
+    if (out_typenum == NPY_FLOAT32) {
+      float *out = data_ptr<float>(np_out);
+      dispatch_scale_spectra_2d<double, float>(
+          spectra, scaling,
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr,
+          np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr, out,
+          nspec, nlam, nthreads);
+    } else {
+      double *out = data_ptr<double>(np_out);
+      dispatch_scale_spectra_2d<double, double>(
+          spectra, scaling,
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr,
+          np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr, out,
+          nspec, nlam, nthreads);
+    }
+  }
+
   toc("scale_spectra_2d");
 
-  /* Release input references. The output reference is passed to the caller. */
   Py_DECREF(np_spectra);
   Py_DECREF(np_scaling);
   Py_XDECREF(np_mask);
@@ -613,22 +667,24 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
  * @param nrows: The number of spectra rows.
  * @param ncols: The number of spectral columns.
  */
-static void attenuate_2d_no_mask_serial(const double *__restrict__ spectra,
-                                        const double *__restrict__ tau_v,
-                                        const double *__restrict__ tau_x_v,
-                                        double *out, int nrows, int ncols) {
+template <typename Real, typename OutT>
+static void attenuate_2d_no_mask_serial(const Real *__restrict__ spectra,
+                                        const Real *__restrict__ tau_v,
+                                        const Real *__restrict__ tau_x_v,
+                                        OutT *out, int nrows, int ncols) {
 
   /* Loop over every row and apply the fused exponential-attenuation chain. */
   for (int irow = 0; irow < nrows; irow++) {
 
     /* Cache the V-band optical depth for this row so we read it once. */
-    const double row_tau = tau_v[irow];
-    const double *in_row = spectra + irow * ncols;
-    double *out_row = out + irow * ncols;
+    const Real row_tau = tau_v[irow];
+    const Real *in_row = spectra + irow * ncols;
+    OutT *out_row = out + irow * ncols;
 
     /* Attenuate every wavelength by exp(-tau_v * tau_x_v). */
     for (int icol = 0; icol < ncols; icol++) {
-      out_row[icol] = in_row[icol] * std::exp(-row_tau * tau_x_v[icol]);
+      out_row[icol] =
+          static_cast<OutT>(in_row[icol] * std::exp(-row_tau * tau_x_v[icol]));
     }
   }
 }
@@ -646,27 +702,29 @@ static void attenuate_2d_no_mask_serial(const double *__restrict__ spectra,
  * @param nrows: The number of spectra rows.
  * @param ncols: The number of spectral columns.
  */
-static void attenuate_2d_with_mask_serial(const double *__restrict__ spectra,
-                                          const double *__restrict__ tau_v,
-                                          const double *__restrict__ tau_x_v,
-                                          const npy_bool *mask, double *out,
+template <typename Real, typename OutT>
+static void attenuate_2d_with_mask_serial(const Real *__restrict__ spectra,
+                                          const Real *__restrict__ tau_v,
+                                          const Real *__restrict__ tau_x_v,
+                                          const npy_bool *mask, OutT *out,
                                           int nrows, int ncols) {
 
   /* Loop over every row and dispatch based on the mask. */
   for (int irow = 0; irow < nrows; irow++) {
-    const double *in_row = spectra + irow * ncols;
-    double *out_row = out + irow * ncols;
+    const Real *in_row = spectra + irow * ncols;
+    OutT *out_row = out + irow * ncols;
 
     /* Attenuate masked rows and copy unmasked rows through unchanged. */
     if (mask[irow]) {
-      const double row_tau = tau_v[irow];
+      const Real row_tau = tau_v[irow];
 
       for (int icol = 0; icol < ncols; icol++) {
-        out_row[icol] = in_row[icol] * std::exp(-row_tau * tau_x_v[icol]);
+        out_row[icol] = static_cast<OutT>(in_row[icol] *
+                                          std::exp(-row_tau * tau_x_v[icol]));
       }
     } else {
       for (int icol = 0; icol < ncols; icol++) {
-        out_row[icol] = in_row[icol];
+        out_row[icol] = static_cast<OutT>(in_row[icol]);
       }
     }
   }
@@ -687,23 +745,25 @@ static void attenuate_2d_with_mask_serial(const double *__restrict__ spectra,
  * @param ncols: The number of spectral columns.
  * @param nthreads: The number of OpenMP threads.
  */
-static void attenuate_2d_no_mask_omp(const double *__restrict__ spectra,
-                                     const double *__restrict__ tau_v,
-                                     const double *__restrict__ tau_x_v,
-                                     double *out, int nrows, int ncols,
+template <typename Real, typename OutT>
+static void attenuate_2d_no_mask_omp(const Real *__restrict__ spectra,
+                                     const Real *__restrict__ tau_v,
+                                     const Real *__restrict__ tau_x_v,
+                                     OutT *out, int nrows, int ncols,
                                      int nthreads) {
 
   /* Split the rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   for (int irow = 0; irow < nrows; irow++) {
     /* Cache the V-band optical depth for this row. */
-    const double row_tau = tau_v[irow];
-    const double *in_row = spectra + irow * ncols;
-    double *out_row = out + irow * ncols;
+    const Real row_tau = tau_v[irow];
+    const Real *in_row = spectra + irow * ncols;
+    OutT *out_row = out + irow * ncols;
 
     /* Attenuate every wavelength by exp(-tau_v * tau_x_v). */
     for (int icol = 0; icol < ncols; icol++) {
-      out_row[icol] = in_row[icol] * std::exp(-row_tau * tau_x_v[icol]);
+      out_row[icol] =
+          static_cast<OutT>(in_row[icol] * std::exp(-row_tau * tau_x_v[icol]));
     }
   }
 }
@@ -722,28 +782,30 @@ static void attenuate_2d_no_mask_omp(const double *__restrict__ spectra,
  * @param ncols: The number of spectral columns.
  * @param nthreads: The number of OpenMP threads.
  */
-static void attenuate_2d_with_mask_omp(const double *__restrict__ spectra,
-                                       const double *__restrict__ tau_v,
-                                       const double *__restrict__ tau_x_v,
-                                       const npy_bool *mask, double *out,
+template <typename Real, typename OutT>
+static void attenuate_2d_with_mask_omp(const Real *__restrict__ spectra,
+                                       const Real *__restrict__ tau_v,
+                                       const Real *__restrict__ tau_x_v,
+                                       const npy_bool *mask, OutT *out,
                                        int nrows, int ncols, int nthreads) {
 
   /* Split the rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   for (int irow = 0; irow < nrows; irow++) {
-    const double *in_row = spectra + irow * ncols;
-    double *out_row = out + irow * ncols;
+    const Real *in_row = spectra + irow * ncols;
+    OutT *out_row = out + irow * ncols;
 
     /* Attenuate masked rows and copy unmasked rows through unchanged. */
     if (mask[irow]) {
-      const double row_tau = tau_v[irow];
+      const Real row_tau = tau_v[irow];
 
       for (int icol = 0; icol < ncols; icol++) {
-        out_row[icol] = in_row[icol] * std::exp(-row_tau * tau_x_v[icol]);
+        out_row[icol] = static_cast<OutT>(in_row[icol] *
+                                          std::exp(-row_tau * tau_x_v[icol]));
       }
     } else {
       for (int icol = 0; icol < ncols; icol++) {
-        out_row[icol] = in_row[icol];
+        out_row[icol] = static_cast<OutT>(in_row[icol]);
       }
     }
   }
@@ -763,9 +825,10 @@ static void attenuate_2d_with_mask_omp(const double *__restrict__ spectra,
  * @param ncols: The number of spectral columns.
  * @param nthreads: The number of OpenMP threads.
  */
-static void dispatch_attenuate_2d(const double *spectra, const double *tau_v,
-                                  const double *tau_x_v, const npy_bool *mask,
-                                  double *out, int nrows, int ncols,
+template <typename Real, typename OutT>
+static void dispatch_attenuate_2d(const Real *spectra, const Real *tau_v,
+                                  const Real *tau_x_v, const npy_bool *mask,
+                                  OutT *out, int nrows, int ncols,
                                   int nthreads) {
 
   /* Attenuation only has one optional mask dimension, so the dispatch tree is
@@ -824,22 +887,21 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
   PyObject *out_obj = Py_None;
   int nthreads;
 
-  if (!PyArg_ParseTuple(args, "OOOOi|O", &spectra_obj, &tau_v_obj, &tau_x_v_obj,
-                        &mask_obj, &nthreads, &out_obj)) {
+  PyObject *out_dtype_obj = NULL;
+  if (!PyArg_ParseTuple(args, "OOOOi|OO", &spectra_obj, &tau_v_obj,
+                        &tau_x_v_obj, &mask_obj, &nthreads, &out_obj,
+                        &out_dtype_obj)) {
     return NULL;
   }
-
-  /* Convert inputs to float64 NumPy array views and unpack optional mask. */
-  PyArrayObject *np_spectra = (PyArrayObject *)PyArray_FROM_OTF(
-      spectra_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-  PyArrayObject *np_tau_v = (PyArrayObject *)PyArray_FROM_OTF(
-      tau_v_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-  PyArrayObject *np_tau_x_v = (PyArrayObject *)PyArray_FROM_OTF(
-      tau_x_v_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-
-  /* If any of the required inputs fail to convert, clean up and return NULL to
-   * signal an error. */
-  if (np_spectra == NULL || np_tau_v == NULL || np_tau_x_v == NULL) {
+  /* Convert inputs to array views (no conversion yet) so we can accept both
+   * float32 and float64 inputs. */
+  PyArrayObject *np_spectra = (PyArrayObject *)PyArray_FromAny(
+      spectra_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
+  PyArrayObject *np_tau_v = (PyArrayObject *)PyArray_FromAny(
+      tau_v_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
+  PyArrayObject *np_tau_x_v = (PyArrayObject *)PyArray_FromAny(
+      tau_x_v_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
+  if (!np_spectra || !np_tau_v || !np_tau_x_v) {
     Py_XDECREF(np_spectra);
     Py_XDECREF(np_tau_v);
     Py_XDECREF(np_tau_x_v);
@@ -847,13 +909,10 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
   }
 
   PyArrayObject *np_mask = nullptr;
-
-  /* Keep the optional mask as NULL when absent so the lower-level dispatch can
-   * recognise the no-mask case cheaply. */
   if (mask_obj != Py_None) {
-    np_mask = (PyArrayObject *)PyArray_FROM_OTF(mask_obj, NPY_BOOL,
-                                                NPY_ARRAY_IN_ARRAY);
-    if (np_mask == NULL) {
+    np_mask = (PyArrayObject *)PyArray_FromAny(mask_obj, NULL, 0, 0,
+                                               NPY_ARRAY_ENSUREARRAY, NULL);
+    if (!np_mask) {
       Py_DECREF(np_spectra);
       Py_DECREF(np_tau_v);
       Py_DECREF(np_tau_x_v);
@@ -861,7 +920,7 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     }
   }
 
-  /* Validate shapes — vectors must match the 2D spectra dimensions. */
+  /* Validate shapes. */
   if (PyArray_NDIM(np_spectra) != 2 || PyArray_NDIM(np_tau_v) != 1 ||
       PyArray_NDIM(np_tau_x_v) != 1) {
     PyErr_SetString(PyExc_ValueError,
@@ -873,8 +932,6 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Cache the spectra shape once and reuse it for the vector checks, output
-   * validation, and final kernel dispatch. */
   const npy_intp *spectra_dims = PyArray_DIMS(np_spectra);
   const int nrows = static_cast<int>(spectra_dims[0]);
   const int ncols = static_cast<int>(spectra_dims[1]);
@@ -890,8 +947,6 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* The optional row mask must be 1D and match the spectra first dimension so
-   * the kernel can apply it correctly. */
   if (np_mask != NULL && (PyArray_NDIM(np_mask) != 1 ||
                           PyArray_DIMS(np_mask)[0] != spectra_dims[0])) {
     PyErr_SetString(PyExc_ValueError,
@@ -903,20 +958,44 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Reuse caller-provided output buffer or allocate a fresh one. */
-  PyArrayObject *np_out = nullptr;
+  /* Resolve input float family and out dtype. */
+  PyArrayObject *float_arrays[3] = {np_spectra, np_tau_v, np_tau_x_v};
+  const char *float_names[3] = {"spectra", "tau_v", "tau_x_v"};
+  int input_typenum = -1;
+  if (!is_matching_float_dtypes(float_arrays, float_names, 3, &input_typenum)) {
+    Py_DECREF(np_spectra);
+    Py_DECREF(np_tau_v);
+    Py_DECREF(np_tau_x_v);
+    Py_XDECREF(np_mask);
+    return NULL;
+  }
 
-  if (out_obj != Py_None) {
-    np_out = (PyArrayObject *)PyArray_FROM_OTF(out_obj, NPY_DOUBLE,
-                                               NPY_ARRAY_INOUT_ARRAY);
-    if (np_out == NULL) {
+  int out_typenum = -1;
+  if (out_dtype_obj != NULL && out_dtype_obj != Py_None) {
+    out_typenum = resolve_output_typenum(out_dtype_obj, "out_dtype");
+    if (out_typenum < 0) {
       Py_DECREF(np_spectra);
       Py_DECREF(np_tau_v);
       Py_DECREF(np_tau_x_v);
       Py_XDECREF(np_mask);
       return NULL;
     }
+  }
+  if (out_typenum < 0)
+    out_typenum = input_typenum;
 
+  /* Prepare output array: reuse provided or allocate with requested dtype. */
+  PyArrayObject *np_out = NULL;
+  if (out_obj != Py_None) {
+    np_out = (PyArrayObject *)PyArray_FromAny(
+        out_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY | NPY_ARRAY_WRITEABLE, NULL);
+    if (!np_out) {
+      Py_DECREF(np_spectra);
+      Py_DECREF(np_tau_v);
+      Py_DECREF(np_tau_x_v);
+      Py_XDECREF(np_mask);
+      return NULL;
+    }
     if (PyArray_NDIM(np_out) != 2 ||
         PyArray_DIMS(np_out)[0] != spectra_dims[0] ||
         PyArray_DIMS(np_out)[1] != spectra_dims[1]) {
@@ -929,12 +1008,23 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
       Py_DECREF(np_out);
       return NULL;
     }
+    if (PyArray_TYPE(np_out) != out_typenum || !PyArray_ISCARRAY(np_out)) {
+      PyErr_SetString(
+          PyExc_ValueError,
+          "out must be a C-contiguous array with the requested out_dtype.");
+      Py_DECREF(np_spectra);
+      Py_DECREF(np_tau_v);
+      Py_DECREF(np_tau_x_v);
+      Py_XDECREF(np_mask);
+      Py_DECREF(np_out);
+      return NULL;
+    }
   } else {
-    /* No reusable output was provided, so mirror the input layout in a fresh
-     * array. */
-    np_out = (PyArrayObject *)PyArray_NewLikeArray(np_spectra, NPY_KEEPORDER,
-                                                   NULL, 0);
-    if (np_out == NULL) {
+    npy_intp dims[2];
+    dims[0] = spectra_dims[0];
+    dims[1] = spectra_dims[1];
+    np_out = (PyArrayObject *)PyArray_SimpleNew(2, dims, out_typenum);
+    if (!np_out) {
       Py_DECREF(np_spectra);
       Py_DECREF(np_tau_v);
       Py_DECREF(np_tau_x_v);
@@ -943,25 +1033,46 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     }
   }
 
-  /* Turn the validated NumPy views into the raw pointers the kernels expect. */
-  const double *spectra = static_cast<const double *>(PyArray_DATA(np_spectra));
-  const double *tau_v = static_cast<const double *>(PyArray_DATA(np_tau_v));
-  const double *tau_x_v = static_cast<const double *>(PyArray_DATA(np_tau_x_v));
-  double *out = static_cast<double *>(PyArray_DATA(np_out));
-  const npy_bool *mask =
-      np_mask == NULL ? NULL
-                      : static_cast<const npy_bool *>(PyArray_DATA(np_mask));
-
-  /* Dispatch to the mask-specialised kernel. */
+  /* Dispatch to typed kernel. */
   tic("apply_separable_attenuation_2d");
-
-  dispatch_attenuate_2d(spectra, tau_v, tau_x_v, mask, out, nrows, ncols,
-                        nthreads);
+  if (input_typenum == NPY_FLOAT32) {
+    const float *spectra = data_ptr<const float>(np_spectra);
+    const float *tau_v = data_ptr<const float>(np_tau_v);
+    const float *tau_x_v = data_ptr<const float>(np_tau_x_v);
+    if (out_typenum == NPY_FLOAT32) {
+      float *out = data_ptr<float>(np_out);
+      dispatch_attenuate_2d<float, float>(
+          spectra, tau_v, tau_x_v,
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr, out, nrows,
+          ncols, nthreads);
+    } else {
+      double *out = data_ptr<double>(np_out);
+      dispatch_attenuate_2d<float, double>(
+          spectra, tau_v, tau_x_v,
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr, out, nrows,
+          ncols, nthreads);
+    }
+  } else {
+    const double *spectra = data_ptr<const double>(np_spectra);
+    const double *tau_v = data_ptr<const double>(np_tau_v);
+    const double *tau_x_v = data_ptr<const double>(np_tau_x_v);
+    if (out_typenum == NPY_FLOAT32) {
+      float *out = data_ptr<float>(np_out);
+      dispatch_attenuate_2d<double, float>(
+          spectra, tau_v, tau_x_v,
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr, out, nrows,
+          ncols, nthreads);
+    } else {
+      double *out = data_ptr<double>(np_out);
+      dispatch_attenuate_2d<double, double>(
+          spectra, tau_v, tau_x_v,
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr, out, nrows,
+          ncols, nthreads);
+    }
+  }
 
   toc("apply_separable_attenuation_2d");
 
-  /* Hand ownership of np_out to Python and clean up the temporary views we
-   * created while validating the inputs. */
   Py_DECREF(np_spectra);
   Py_DECREF(np_tau_v);
   Py_DECREF(np_tau_x_v);
@@ -988,26 +1099,58 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
  * @return Array with each element multiplied by the corresponding vector
  *     entry on the last axis.
  */
+template <typename Real, typename OutT>
+static PyObject *multiply_array_by_vector_1d_typed(PyArrayObject *np_array,
+                                                   PyArrayObject *np_vector,
+                                                   int nthreads,
+                                                   PyArrayObject *np_out) {
+  const npy_intp *array_dims = PyArray_DIMS(np_array);
+  const int array_ndim = PyArray_NDIM(np_array);
+  const int ncols = static_cast<int>(array_dims[array_ndim - 1]);
+  const int nrows = (array_ndim == 1) ? 1 : static_cast<int>(array_dims[0]);
+
+  const Real *array = data_ptr<const Real>(np_array);
+  const Real *vector = data_ptr<const Real>(np_vector);
+  OutT *out = data_ptr<OutT>(np_out);
+
+  tic("multiply_array_by_vector_1d");
+
+#ifdef WITH_OPENMP
+#pragma omp parallel for if (nthreads > 1) num_threads(nthreads)               \
+    schedule(static)
+#endif
+  for (int irow = 0; irow < nrows; irow++) {
+    const Real *in_row = array + (npy_intp)irow * ncols;
+    OutT *out_row = out + (npy_intp)irow * ncols;
+    for (int icol = 0; icol < ncols; icol++) {
+      out_row[icol] = static_cast<OutT>(in_row[icol] * vector[icol]);
+    }
+  }
+
+  toc("multiply_array_by_vector_1d");
+
+  return Py_BuildValue("N", np_out);
+}
+
 PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
   (void)self;
 
-  /* Parse the argument tuple. */
   PyObject *array_obj, *vector_obj;
   PyObject *out_obj = Py_None;
+  PyObject *out_dtype_obj = NULL;
   int nthreads;
 
-  if (!PyArg_ParseTuple(args, "OOi|O", &array_obj, &vector_obj, &nthreads,
-                        &out_obj)) {
+  if (!PyArg_ParseTuple(args, "OOi|OO", &array_obj, &vector_obj, &nthreads,
+                        &out_obj, &out_dtype_obj)) {
     return NULL;
   }
 
-  /* Convert inputs to float64 NumPy array views. */
-  PyArrayObject *np_array = (PyArrayObject *)PyArray_FROM_OTF(
-      array_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-  PyArrayObject *np_vector = (PyArrayObject *)PyArray_FROM_OTF(
-      vector_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-
-  if (np_array == NULL || np_vector == NULL) {
+  /* Convert inputs to array views (no conversion yet). */
+  PyArrayObject *np_array = (PyArrayObject *)PyArray_FromAny(
+      array_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
+  PyArrayObject *np_vector = (PyArrayObject *)PyArray_FromAny(
+      vector_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
+  if (!np_array || !np_vector) {
     Py_XDECREF(np_array);
     Py_XDECREF(np_vector);
     return NULL;
@@ -1023,12 +1166,9 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* The last axis is the one the vector must match, regardless of whether the
-   * input is 1D or 2D. */
   const npy_intp *array_dims = PyArray_DIMS(np_array);
   const int array_ndim = PyArray_NDIM(np_array);
   const int ncols = static_cast<int>(array_dims[array_ndim - 1]);
-
   if (PyArray_DIMS(np_vector)[0] != array_dims[array_ndim - 1]) {
     PyErr_SetString(PyExc_ValueError,
                     "vector length must match the last array dimension.");
@@ -1037,29 +1177,41 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Reuse caller-provided output buffer or allocate a fresh one. */
-  PyArrayObject *np_out = nullptr;
+  /* Resolve input float family. */
+  PyArrayObject *float_arrays[2] = {np_array, np_vector};
+  const char *float_names[2] = {"array", "vector"};
+  int input_typenum = -1;
+  if (!is_matching_float_dtypes(float_arrays, float_names, 2, &input_typenum)) {
+    Py_DECREF(np_array);
+    Py_DECREF(np_vector);
+    return NULL;
+  }
 
-  if (out_obj != Py_None) {
-    np_out = (PyArrayObject *)PyArray_FROM_OTF(out_obj, NPY_DOUBLE,
-                                               NPY_ARRAY_INOUT_ARRAY);
-    if (np_out == NULL) {
+  int out_typenum = -1;
+  if (out_dtype_obj != NULL && out_dtype_obj != Py_None) {
+    out_typenum = resolve_output_typenum(out_dtype_obj, "out_dtype");
+    if (out_typenum < 0) {
       Py_DECREF(np_array);
       Py_DECREF(np_vector);
       return NULL;
     }
+  }
+  if (out_typenum < 0)
+    out_typenum = input_typenum;
 
-    /* Verify shape matches. */
-    bool shape_ok = (PyArray_NDIM(np_out) == array_ndim);
-    if (shape_ok) {
-      for (int d = 0; d < array_ndim; d++) {
-        if (PyArray_DIMS(np_out)[d] != array_dims[d]) {
-          shape_ok = false;
-          break;
-        }
-      }
+  /* Prepare output array: reuse provided or allocate a new one with
+   * out_typenum. */
+  PyArrayObject *np_out = NULL;
+  if (out_obj != Py_None) {
+    np_out = (PyArrayObject *)PyArray_FromAny(
+        out_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY | NPY_ARRAY_WRITEABLE, NULL);
+    if (!np_out) {
+      Py_DECREF(np_array);
+      Py_DECREF(np_vector);
+      return NULL;
     }
-    if (!shape_ok) {
+    /* Verify shape */
+    if (PyArray_NDIM(np_out) != array_ndim) {
       PyErr_SetString(PyExc_ValueError,
                       "out array must have the same shape as input array.");
       Py_DECREF(np_array);
@@ -1067,50 +1219,66 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
       Py_DECREF(np_out);
       return NULL;
     }
+    for (int d = 0; d < array_ndim; d++) {
+      if (PyArray_DIMS(np_out)[d] != array_dims[d]) {
+        PyErr_SetString(PyExc_ValueError,
+                        "out array must have the same shape as input array.");
+        Py_DECREF(np_array);
+        Py_DECREF(np_vector);
+        Py_DECREF(np_out);
+        return NULL;
+      }
+    }
+    if (PyArray_TYPE(np_out) != out_typenum || !PyArray_ISCARRAY(np_out)) {
+      PyErr_SetString(
+          PyExc_ValueError,
+          "out array must be C-contiguous with the requested out_dtype.");
+      Py_DECREF(np_array);
+      Py_DECREF(np_vector);
+      Py_DECREF(np_out);
+      return NULL;
+    }
   } else {
-    /* Allocate a fresh output buffer with the same shape and memory layout as
-     * the input array. */
-    np_out =
-        (PyArrayObject *)PyArray_NewLikeArray(np_array, NPY_KEEPORDER, NULL, 0);
-    if (np_out == NULL) {
+    /* Allocate a new array with the same shape but requested dtype. */
+    npy_intp dims[NPY_MAXDIMS];
+    for (int d = 0; d < array_ndim; d++)
+      dims[d] = array_dims[d];
+    np_out = (PyArrayObject *)PyArray_SimpleNew(array_ndim, dims, out_typenum);
+    if (!np_out) {
       Py_DECREF(np_array);
       Py_DECREF(np_vector);
       return NULL;
     }
   }
 
-  /* Extract the raw C pointers for the kernel. */
-  /* The kernel itself is just a pair of nested loops, so after validation we
-   * only need the raw pointers and row/column counts. */
-  const double *array = static_cast<const double *>(PyArray_DATA(np_array));
-  const double *vector = static_cast<const double *>(PyArray_DATA(np_vector));
-  double *out = static_cast<double *>(PyArray_DATA(np_out));
-  const int nrows = (array_ndim == 1) ? 1 : static_cast<int>(array_dims[0]);
-
-  /* Apply the last-axis scaling in a single pass. */
-  tic("multiply_array_by_vector_1d");
-
-  /* For 1D arrays nrows=1 and the outer loop runs once; for 2D each row
-   * is scaled independently by the same vector. */
-#ifdef WITH_OPENMP
-#pragma omp parallel for if (nthreads > 1) num_threads(nthreads)               \
-    schedule(static)
-#endif
-  for (int irow = 0; irow < nrows; irow++) {
-    const double *in_row = array + irow * ncols;
-    double *out_row = out + irow * ncols;
-
-    for (int icol = 0; icol < ncols; icol++) {
-      out_row[icol] = in_row[icol] * vector[icol];
+  /* Dispatch on input/output precision. */
+  if (input_typenum == NPY_FLOAT32) {
+    if (out_typenum == NPY_FLOAT32) {
+      PyObject *res = multiply_array_by_vector_1d_typed<float, float>(
+          np_array, np_vector, nthreads, np_out);
+      Py_DECREF(np_array);
+      Py_DECREF(np_vector);
+      return res;
     }
+    PyObject *res = multiply_array_by_vector_1d_typed<float, double>(
+        np_array, np_vector, nthreads, np_out);
+    Py_DECREF(np_array);
+    Py_DECREF(np_vector);
+    return res;
+  } else {
+    if (out_typenum == NPY_FLOAT32) {
+      PyObject *res = multiply_array_by_vector_1d_typed<double, float>(
+          np_array, np_vector, nthreads, np_out);
+      Py_DECREF(np_array);
+      Py_DECREF(np_vector);
+      return res;
+    }
+    PyObject *res = multiply_array_by_vector_1d_typed<double, double>(
+        np_array, np_vector, nthreads, np_out);
+    Py_DECREF(np_array);
+    Py_DECREF(np_vector);
+    return res;
   }
-
-  toc("multiply_array_by_vector_1d");
-
-  Py_DECREF(np_array);
-  Py_DECREF(np_vector);
-
-  return Py_BuildValue("N", np_out);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -1134,28 +1302,29 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-static void scale_line_2d_no_mask_serial(const double *__restrict__ lum,
-                                         const double *__restrict__ cont,
-                                         const double *scaling_lum,
-                                         const double *scaling_cont,
-                                         double *out_lum, double *out_cont,
+template <typename Real, typename OutT>
+static void scale_line_2d_no_mask_serial(const Real *__restrict__ lum,
+                                         const Real *__restrict__ cont,
+                                         const Real *scaling_lum,
+                                         const Real *scaling_cont,
+                                         OutT *out_lum, OutT *out_cont,
                                          int nspec, int nlam) {
 
   /* Loop over every spectrum and scale both lum and cont in one pass. */
   for (int i = 0; i < nspec; i++) {
 
     /* Cache both scale factors so we read each once. */
-    const double sl = scaling_lum[i];
-    const double sc = scaling_cont[i];
-    const double *in_lum_row = lum + i * nlam;
-    const double *in_cont_row = cont + i * nlam;
-    double *out_lum_row = out_lum + i * nlam;
-    double *out_cont_row = out_cont + i * nlam;
+    const Real sl = scaling_lum[i];
+    const Real sc = scaling_cont[i];
+    const Real *in_lum_row = lum + i * nlam;
+    const Real *in_cont_row = cont + i * nlam;
+    OutT *out_lum_row = out_lum + i * nlam;
+    OutT *out_cont_row = out_cont + i * nlam;
 
 #pragma GCC ivdep
     for (int j = 0; j < nlam; j++) {
-      out_lum_row[j] = in_lum_row[j] * sl;
-      out_cont_row[j] = in_cont_row[j] * sc;
+      out_lum_row[j] = static_cast<OutT>(in_lum_row[j] * sl);
+      out_cont_row[j] = static_cast<OutT>(in_cont_row[j] * sc);
     }
   }
 }
@@ -1175,32 +1344,35 @@ static void scale_line_2d_no_mask_serial(const double *__restrict__ lum,
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-static void scale_line_2d_row_mask_serial(
-    const double *__restrict__ lum, const double *__restrict__ cont,
-    const double *scaling_lum, const double *scaling_cont, const npy_bool *mask,
-    double *out_lum, double *out_cont, int nspec, int nlam) {
+template <typename Real, typename OutT>
+static void scale_line_2d_row_mask_serial(const Real *__restrict__ lum,
+                                          const Real *__restrict__ cont,
+                                          const Real *scaling_lum,
+                                          const Real *scaling_cont,
+                                          const npy_bool *mask, OutT *out_lum,
+                                          OutT *out_cont, int nspec, int nlam) {
 
   /* Loop over every spectrum and dispatch based on the mask. */
   for (int i = 0; i < nspec; i++) {
-    const double *in_lum_row = lum + i * nlam;
-    const double *in_cont_row = cont + i * nlam;
-    double *out_lum_row = out_lum + i * nlam;
-    double *out_cont_row = out_cont + i * nlam;
+    const Real *in_lum_row = lum + i * nlam;
+    const Real *in_cont_row = cont + i * nlam;
+    OutT *out_lum_row = out_lum + i * nlam;
+    OutT *out_cont_row = out_cont + i * nlam;
 
     /* Scale masked rows and copy unmasked rows through unchanged. */
     if (mask[i]) {
-      const double sl = scaling_lum[i];
-      const double sc = scaling_cont[i];
+      const Real sl = scaling_lum[i];
+      const Real sc = scaling_cont[i];
 #pragma GCC ivdep
       for (int j = 0; j < nlam; j++) {
-        out_lum_row[j] = in_lum_row[j] * sl;
-        out_cont_row[j] = in_cont_row[j] * sc;
+        out_lum_row[j] = static_cast<OutT>(in_lum_row[j] * sl);
+        out_cont_row[j] = static_cast<OutT>(in_cont_row[j] * sc);
       }
     } else {
 #pragma GCC ivdep
       for (int j = 0; j < nlam; j++) {
-        out_lum_row[j] = in_lum_row[j];
-        out_cont_row[j] = in_cont_row[j];
+        out_lum_row[j] = static_cast<OutT>(in_lum_row[j]);
+        out_cont_row[j] = static_cast<OutT>(in_cont_row[j]);
       }
     }
   }
@@ -1222,30 +1394,30 @@ static void scale_line_2d_row_mask_serial(
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-static void scale_line_2d_lam_mask_serial(const double *__restrict__ lum,
-                                          const double *__restrict__ cont,
-                                          const double *scaling_lum,
-                                          const double *scaling_cont,
-                                          const npy_bool *lam_mask,
-                                          double *out_lum, double *out_cont,
-                                          int nspec, int nlam) {
+template <typename Real, typename OutT>
+static void scale_line_2d_lam_mask_serial(
+    const Real *__restrict__ lum, const Real *__restrict__ cont,
+    const Real *scaling_lum, const Real *scaling_cont, const npy_bool *lam_mask,
+    OutT *out_lum, OutT *out_cont, int nspec, int nlam) {
 
   /* Loop over every spectrum. */
   for (int i = 0; i < nspec; i++) {
 
     /* Cache both scale factors for this row. */
-    const double sl = scaling_lum[i];
-    const double sc = scaling_cont[i];
-    const double *in_lum_row = lum + i * nlam;
-    const double *in_cont_row = cont + i * nlam;
-    double *out_lum_row = out_lum + i * nlam;
-    double *out_cont_row = out_cont + i * nlam;
+    const Real sl = scaling_lum[i];
+    const Real sc = scaling_cont[i];
+    const Real *in_lum_row = lum + i * nlam;
+    const Real *in_cont_row = cont + i * nlam;
+    OutT *out_lum_row = out_lum + i * nlam;
+    OutT *out_cont_row = out_cont + i * nlam;
 
     /* Only scale wavelengths that pass the mask; keep others unchanged. */
     for (int j = 0; j < nlam; j++) {
       const bool apply = lam_mask[j];
-      out_lum_row[j] = apply ? in_lum_row[j] * sl : in_lum_row[j];
-      out_cont_row[j] = apply ? in_cont_row[j] * sc : in_cont_row[j];
+      out_lum_row[j] = apply ? static_cast<OutT>(in_lum_row[j] * sl)
+                             : static_cast<OutT>(in_lum_row[j]);
+      out_cont_row[j] = apply ? static_cast<OutT>(in_cont_row[j] * sc)
+                              : static_cast<OutT>(in_cont_row[j]);
     }
   }
 }
@@ -1267,32 +1439,35 @@ static void scale_line_2d_lam_mask_serial(const double *__restrict__ lum,
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
+template <typename Real, typename OutT>
 static void scale_line_2d_both_masks_serial(
-    const double *__restrict__ lum, const double *__restrict__ cont,
-    const double *scaling_lum, const double *scaling_cont, const npy_bool *mask,
-    const npy_bool *lam_mask, double *out_lum, double *out_cont, int nspec,
+    const Real *__restrict__ lum, const Real *__restrict__ cont,
+    const Real *scaling_lum, const Real *scaling_cont, const npy_bool *mask,
+    const npy_bool *lam_mask, OutT *out_lum, OutT *out_cont, int nspec,
     int nlam) {
 
   /* Loop over every spectrum and dispatch based on the row mask. */
   for (int i = 0; i < nspec; i++) {
-    const double *in_lum_row = lum + i * nlam;
-    const double *in_cont_row = cont + i * nlam;
-    double *out_lum_row = out_lum + i * nlam;
-    double *out_cont_row = out_cont + i * nlam;
+    const Real *in_lum_row = lum + i * nlam;
+    const Real *in_cont_row = cont + i * nlam;
+    OutT *out_lum_row = out_lum + i * nlam;
+    OutT *out_cont_row = out_cont + i * nlam;
 
     /* For masked rows apply the wavelength-dependent scale; copy otherwise. */
     if (mask[i]) {
-      const double sl = scaling_lum[i];
-      const double sc = scaling_cont[i];
+      const Real sl = scaling_lum[i];
+      const Real sc = scaling_cont[i];
       for (int j = 0; j < nlam; j++) {
         const bool apply = lam_mask[j];
-        out_lum_row[j] = apply ? in_lum_row[j] * sl : in_lum_row[j];
-        out_cont_row[j] = apply ? in_cont_row[j] * sc : in_cont_row[j];
+        out_lum_row[j] = apply ? static_cast<OutT>(in_lum_row[j] * sl)
+                               : static_cast<OutT>(in_lum_row[j]);
+        out_cont_row[j] = apply ? static_cast<OutT>(in_cont_row[j] * sc)
+                                : static_cast<OutT>(in_cont_row[j]);
       }
     } else {
       for (int j = 0; j < nlam; j++) {
-        out_lum_row[j] = in_lum_row[j];
-        out_cont_row[j] = in_cont_row[j];
+        out_lum_row[j] = static_cast<OutT>(in_lum_row[j]);
+        out_cont_row[j] = static_cast<OutT>(in_cont_row[j]);
       }
     }
   }
@@ -1315,28 +1490,29 @@ static void scale_line_2d_both_masks_serial(
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_line_2d_no_mask_omp(const double *__restrict__ lum,
-                                      const double *__restrict__ cont,
-                                      const double *scaling_lum,
-                                      const double *scaling_cont,
-                                      double *out_lum, double *out_cont,
-                                      int nspec, int nlam, int nthreads) {
+template <typename Real, typename OutT>
+static void scale_line_2d_no_mask_omp(const Real *__restrict__ lum,
+                                      const Real *__restrict__ cont,
+                                      const Real *scaling_lum,
+                                      const Real *scaling_cont, OutT *out_lum,
+                                      OutT *out_cont, int nspec, int nlam,
+                                      int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   for (int i = 0; i < nspec; i++) {
     /* Cache both scale factors for this row. */
-    const double sl = scaling_lum[i];
-    const double sc = scaling_cont[i];
-    const double *in_lum_row = lum + i * nlam;
-    const double *in_cont_row = cont + i * nlam;
-    double *out_lum_row = out_lum + i * nlam;
-    double *out_cont_row = out_cont + i * nlam;
+    const Real sl = scaling_lum[i];
+    const Real sc = scaling_cont[i];
+    const Real *in_lum_row = lum + i * nlam;
+    const Real *in_cont_row = cont + i * nlam;
+    OutT *out_lum_row = out_lum + i * nlam;
+    OutT *out_cont_row = out_cont + i * nlam;
 
 #pragma omp simd
     for (int j = 0; j < nlam; j++) {
-      out_lum_row[j] = in_lum_row[j] * sl;
-      out_cont_row[j] = in_cont_row[j] * sc;
+      out_lum_row[j] = static_cast<OutT>(in_lum_row[j] * sl);
+      out_cont_row[j] = static_cast<OutT>(in_cont_row[j] * sc);
     }
   }
 }
@@ -1357,33 +1533,34 @@ static void scale_line_2d_no_mask_omp(const double *__restrict__ lum,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
+template <typename Real, typename OutT>
 static void scale_line_2d_row_mask_omp(
-    const double *__restrict__ lum, const double *__restrict__ cont,
-    const double *scaling_lum, const double *scaling_cont, const npy_bool *mask,
-    double *out_lum, double *out_cont, int nspec, int nlam, int nthreads) {
+    const Real *__restrict__ lum, const Real *__restrict__ cont,
+    const Real *scaling_lum, const Real *scaling_cont, const npy_bool *mask,
+    OutT *out_lum, OutT *out_cont, int nspec, int nlam, int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   for (int i = 0; i < nspec; i++) {
-    const double *in_lum_row = lum + i * nlam;
-    const double *in_cont_row = cont + i * nlam;
-    double *out_lum_row = out_lum + i * nlam;
-    double *out_cont_row = out_cont + i * nlam;
+    const Real *in_lum_row = lum + i * nlam;
+    const Real *in_cont_row = cont + i * nlam;
+    OutT *out_lum_row = out_lum + i * nlam;
+    OutT *out_cont_row = out_cont + i * nlam;
 
     /* Scale masked rows and copy unmasked rows through unchanged. */
     if (mask[i]) {
-      const double sl = scaling_lum[i];
-      const double sc = scaling_cont[i];
+      const Real sl = scaling_lum[i];
+      const Real sc = scaling_cont[i];
 #pragma omp simd
       for (int j = 0; j < nlam; j++) {
-        out_lum_row[j] = in_lum_row[j] * sl;
-        out_cont_row[j] = in_cont_row[j] * sc;
+        out_lum_row[j] = static_cast<OutT>(in_lum_row[j] * sl);
+        out_cont_row[j] = static_cast<OutT>(in_cont_row[j] * sc);
       }
     } else {
 #pragma omp simd
       for (int j = 0; j < nlam; j++) {
-        out_lum_row[j] = in_lum_row[j];
-        out_cont_row[j] = in_cont_row[j];
+        out_lum_row[j] = static_cast<OutT>(in_lum_row[j]);
+        out_cont_row[j] = static_cast<OutT>(in_cont_row[j]);
       }
     }
   }
@@ -1407,30 +1584,30 @@ static void scale_line_2d_row_mask_omp(
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_line_2d_lam_mask_omp(const double *__restrict__ lum,
-                                       const double *__restrict__ cont,
-                                       const double *scaling_lum,
-                                       const double *scaling_cont,
-                                       const npy_bool *lam_mask,
-                                       double *out_lum, double *out_cont,
-                                       int nspec, int nlam, int nthreads) {
+template <typename Real, typename OutT>
+static void scale_line_2d_lam_mask_omp(
+    const Real *__restrict__ lum, const Real *__restrict__ cont,
+    const Real *scaling_lum, const Real *scaling_cont, const npy_bool *lam_mask,
+    OutT *out_lum, OutT *out_cont, int nspec, int nlam, int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   for (int i = 0; i < nspec; i++) {
     /* Cache both scale factors for this row. */
-    const double sl = scaling_lum[i];
-    const double sc = scaling_cont[i];
-    const double *in_lum_row = lum + i * nlam;
-    const double *in_cont_row = cont + i * nlam;
-    double *out_lum_row = out_lum + i * nlam;
-    double *out_cont_row = out_cont + i * nlam;
+    const Real sl = scaling_lum[i];
+    const Real sc = scaling_cont[i];
+    const Real *in_lum_row = lum + i * nlam;
+    const Real *in_cont_row = cont + i * nlam;
+    OutT *out_lum_row = out_lum + i * nlam;
+    OutT *out_cont_row = out_cont + i * nlam;
 
     /* Only scale wavelengths that pass the mask; keep others unchanged. */
     for (int j = 0; j < nlam; j++) {
       const bool apply = lam_mask[j];
-      out_lum_row[j] = apply ? in_lum_row[j] * sl : in_lum_row[j];
-      out_cont_row[j] = apply ? in_cont_row[j] * sc : in_cont_row[j];
+      out_lum_row[j] = apply ? static_cast<OutT>(in_lum_row[j] * sl)
+                             : static_cast<OutT>(in_lum_row[j]);
+      out_cont_row[j] = apply ? static_cast<OutT>(in_cont_row[j] * sc)
+                              : static_cast<OutT>(in_cont_row[j]);
     }
   }
 }
@@ -1452,39 +1629,92 @@ static void scale_line_2d_lam_mask_omp(const double *__restrict__ lum,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
+template <typename Real, typename OutT>
 static void scale_line_2d_both_masks_omp(
-    const double *__restrict__ lum, const double *__restrict__ cont,
-    const double *scaling_lum, const double *scaling_cont, const npy_bool *mask,
-    const npy_bool *lam_mask, double *out_lum, double *out_cont, int nspec,
+    const Real *__restrict__ lum, const Real *__restrict__ cont,
+    const Real *scaling_lum, const Real *scaling_cont, const npy_bool *mask,
+    const npy_bool *lam_mask, OutT *out_lum, OutT *out_cont, int nspec,
     int nlam, int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   for (int i = 0; i < nspec; i++) {
-    const double *in_lum_row = lum + i * nlam;
-    const double *in_cont_row = cont + i * nlam;
-    double *out_lum_row = out_lum + i * nlam;
-    double *out_cont_row = out_cont + i * nlam;
+    const Real *in_lum_row = lum + i * nlam;
+    const Real *in_cont_row = cont + i * nlam;
+    OutT *out_lum_row = out_lum + i * nlam;
+    OutT *out_cont_row = out_cont + i * nlam;
 
     /* For masked rows apply the wavelength-dependent scale; copy otherwise. */
     if (mask[i]) {
-      const double sl = scaling_lum[i];
-      const double sc = scaling_cont[i];
+      const Real sl = scaling_lum[i];
+      const Real sc = scaling_cont[i];
       for (int j = 0; j < nlam; j++) {
         const bool apply = lam_mask[j];
-        out_lum_row[j] = apply ? in_lum_row[j] * sl : in_lum_row[j];
-        out_cont_row[j] = apply ? in_cont_row[j] * sc : in_cont_row[j];
+        out_lum_row[j] = apply ? static_cast<OutT>(in_lum_row[j] * sl)
+                               : static_cast<OutT>(in_lum_row[j]);
+        out_cont_row[j] = apply ? static_cast<OutT>(in_cont_row[j] * sc)
+                                : static_cast<OutT>(in_cont_row[j]);
       }
     } else {
       for (int j = 0; j < nlam; j++) {
-        out_lum_row[j] = in_lum_row[j];
-        out_cont_row[j] = in_cont_row[j];
+        out_lum_row[j] = static_cast<OutT>(in_lum_row[j]);
+        out_cont_row[j] = static_cast<OutT>(in_cont_row[j]);
       }
     }
   }
 }
 
 #endif /* WITH_OPENMP */
+
+template <typename Real, typename OutT>
+static void dispatch_scale_line_2d(
+    const Real *lum, const Real *cont, const Real *scaling_lum,
+    const Real *scaling_cont, const npy_bool *mask, const npy_bool *lam_mask,
+    OutT *out_lum, OutT *out_cont, int nspec, int nlam, int nthreads) {
+
+  const bool has_mask = (mask != NULL);
+  const bool has_lam_mask = (lam_mask != NULL);
+
+#ifdef WITH_OPENMP
+  if (nthreads > 1) {
+    if (!has_mask && !has_lam_mask) {
+      scale_line_2d_no_mask_omp<Real, OutT>(lum, cont, scaling_lum,
+                                            scaling_cont, out_lum, out_cont,
+                                            nspec, nlam, nthreads);
+    } else if (has_mask && !has_lam_mask) {
+      scale_line_2d_row_mask_omp<Real, OutT>(lum, cont, scaling_lum,
+                                             scaling_cont, mask, out_lum,
+                                             out_cont, nspec, nlam, nthreads);
+    } else if (!has_mask && has_lam_mask) {
+      scale_line_2d_lam_mask_omp<Real, OutT>(lum, cont, scaling_lum,
+                                             scaling_cont, lam_mask, out_lum,
+                                             out_cont, nspec, nlam, nthreads);
+    } else {
+      scale_line_2d_both_masks_omp<Real, OutT>(
+          lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
+          out_cont, nspec, nlam, nthreads);
+    }
+    return;
+  }
+#endif
+
+  if (!has_mask && !has_lam_mask) {
+    scale_line_2d_no_mask_serial<Real, OutT>(
+        lum, cont, scaling_lum, scaling_cont, out_lum, out_cont, nspec, nlam);
+  } else if (has_mask && !has_lam_mask) {
+    scale_line_2d_row_mask_serial<Real, OutT>(lum, cont, scaling_lum,
+                                              scaling_cont, mask, out_lum,
+                                              out_cont, nspec, nlam);
+  } else if (!has_mask && has_lam_mask) {
+    scale_line_2d_lam_mask_serial<Real, OutT>(lum, cont, scaling_lum,
+                                              scaling_cont, lam_mask, out_lum,
+                                              out_cont, nspec, nlam);
+  } else {
+    scale_line_2d_both_masks_serial<Real, OutT>(lum, cont, scaling_lum,
+                                                scaling_cont, mask, lam_mask,
+                                                out_lum, out_cont, nspec, nlam);
+  }
+}
 
 /**
  * @brief Fused lum+cont scaling with per-spectrum factors.
@@ -1516,27 +1746,25 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
   PyObject *out_cont_obj = Py_None;
   int nthreads;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOi|OO", &lum_obj, &cont_obj,
+  PyObject *out_dtype_obj = NULL;
+  if (!PyArg_ParseTuple(args, "OOOOOOi|OOO", &lum_obj, &cont_obj,
                         &scaling_lum_obj, &scaling_cont_obj, &mask_obj,
-                        &lam_mask_obj, &nthreads, &out_lum_obj,
-                        &out_cont_obj)) {
+                        &lam_mask_obj, &nthreads, &out_lum_obj, &out_cont_obj,
+                        &out_dtype_obj)) {
     return NULL;
   }
 
-  /* Convert inputs to float64 NumPy array views. */
-  PyArrayObject *np_lum = (PyArrayObject *)PyArray_FROM_OTF(lum_obj, NPY_DOUBLE,
-                                                            NPY_ARRAY_IN_ARRAY);
-  PyArrayObject *np_cont = (PyArrayObject *)PyArray_FROM_OTF(
-      cont_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-  PyArrayObject *np_scaling_lum = (PyArrayObject *)PyArray_FROM_OTF(
-      scaling_lum_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-  PyArrayObject *np_scaling_cont = (PyArrayObject *)PyArray_FROM_OTF(
-      scaling_cont_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  /* Convert inputs to array views (accept float32 or float64). */
+  PyArrayObject *np_lum = (PyArrayObject *)PyArray_FromAny(
+      lum_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
+  PyArrayObject *np_cont = (PyArrayObject *)PyArray_FromAny(
+      cont_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
+  PyArrayObject *np_scaling_lum = (PyArrayObject *)PyArray_FromAny(
+      scaling_lum_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
+  PyArrayObject *np_scaling_cont = (PyArrayObject *)PyArray_FromAny(
+      scaling_cont_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY, NULL);
 
-  /* If any of the required arrays failed to convert, clean up and
-   * return NULL. */
-  if (np_lum == NULL || np_cont == NULL || np_scaling_lum == NULL ||
-      np_scaling_cont == NULL) {
+  if (!np_lum || !np_cont || !np_scaling_lum || !np_scaling_cont) {
     Py_XDECREF(np_lum);
     Py_XDECREF(np_cont);
     Py_XDECREF(np_scaling_lum);
@@ -1550,9 +1778,9 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
   PyArrayObject *np_lam_mask = nullptr;
 
   if (mask_obj != Py_None) {
-    np_mask = (PyArrayObject *)PyArray_FROM_OTF(mask_obj, NPY_BOOL,
-                                                NPY_ARRAY_IN_ARRAY);
-    if (np_mask == NULL) {
+    np_mask = (PyArrayObject *)PyArray_FromAny(mask_obj, NULL, 0, 0,
+                                               NPY_ARRAY_ENSUREARRAY, NULL);
+    if (!np_mask) {
       Py_DECREF(np_lum);
       Py_DECREF(np_cont);
       Py_DECREF(np_scaling_lum);
@@ -1562,9 +1790,9 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
   }
 
   if (lam_mask_obj != Py_None) {
-    np_lam_mask = (PyArrayObject *)PyArray_FROM_OTF(lam_mask_obj, NPY_BOOL,
-                                                    NPY_ARRAY_IN_ARRAY);
-    if (np_lam_mask == NULL) {
+    np_lam_mask = (PyArrayObject *)PyArray_FromAny(lam_mask_obj, NULL, 0, 0,
+                                                   NPY_ARRAY_ENSUREARRAY, NULL);
+    if (!np_lam_mask) {
       Py_DECREF(np_lum);
       Py_DECREF(np_cont);
       Py_DECREF(np_scaling_lum);
@@ -1644,16 +1872,48 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Allocate or reuse output buffers. */
+  /* Resolve input float family and requested out dtype. */
+  PyArrayObject *float_arrays[4] = {np_lum, np_cont, np_scaling_lum,
+                                    np_scaling_cont};
+  const char *float_names[4] = {"lum", "cont", "scaling_lum", "scaling_cont"};
+  int input_typenum = -1;
+  if (!is_matching_float_dtypes(float_arrays, float_names, 4, &input_typenum)) {
+    Py_DECREF(np_lum);
+    Py_DECREF(np_cont);
+    Py_DECREF(np_scaling_lum);
+    Py_DECREF(np_scaling_cont);
+    Py_XDECREF(np_mask);
+    Py_XDECREF(np_lam_mask);
+    return NULL;
+  }
+
+  int out_typenum = -1;
+  if (out_dtype_obj != NULL && out_dtype_obj != Py_None) {
+    out_typenum = resolve_output_typenum(out_dtype_obj, "out_dtype");
+    if (out_typenum < 0) {
+      Py_DECREF(np_lum);
+      Py_DECREF(np_cont);
+      Py_DECREF(np_scaling_lum);
+      Py_DECREF(np_scaling_cont);
+      Py_XDECREF(np_mask);
+      Py_XDECREF(np_lam_mask);
+      return NULL;
+    }
+  }
+  if (out_typenum < 0)
+    out_typenum = input_typenum;
+
+  /* Allocate or reuse output buffers with the requested dtype. */
   PyArrayObject *np_out_lum = nullptr;
   PyArrayObject *np_out_cont = nullptr;
-
   if (out_lum_obj != Py_None && out_cont_obj != Py_None) {
-    np_out_lum = (PyArrayObject *)PyArray_FROM_OTF(out_lum_obj, NPY_DOUBLE,
-                                                   NPY_ARRAY_INOUT_ARRAY);
-    np_out_cont = (PyArrayObject *)PyArray_FROM_OTF(out_cont_obj, NPY_DOUBLE,
-                                                    NPY_ARRAY_INOUT_ARRAY);
-    if (np_out_lum == NULL || np_out_cont == NULL) {
+    np_out_lum = (PyArrayObject *)PyArray_FromAny(
+        out_lum_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY | NPY_ARRAY_WRITEABLE,
+        NULL);
+    np_out_cont = (PyArrayObject *)PyArray_FromAny(
+        out_cont_obj, NULL, 0, 0, NPY_ARRAY_ENSUREARRAY | NPY_ARRAY_WRITEABLE,
+        NULL);
+    if (!np_out_lum || !np_out_cont) {
       Py_XDECREF(np_out_lum);
       Py_XDECREF(np_out_cont);
       Py_DECREF(np_lum);
@@ -1664,8 +1924,6 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
       Py_XDECREF(np_lam_mask);
       return NULL;
     }
-
-    /* Verify shape matches. */
     if (PyArray_NDIM(np_out_lum) != 2 ||
         PyArray_DIMS(np_out_lum)[0] != lum_dims[0] ||
         PyArray_DIMS(np_out_lum)[1] != lum_dims[1] ||
@@ -1684,14 +1942,29 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
       Py_XDECREF(np_lam_mask);
       return NULL;
     }
+    if (PyArray_TYPE(np_out_lum) != out_typenum ||
+        PyArray_TYPE(np_out_cont) != out_typenum ||
+        !PyArray_ISCARRAY(np_out_lum) || !PyArray_ISCARRAY(np_out_cont)) {
+      PyErr_SetString(
+          PyExc_ValueError,
+          "out arrays must be C-contiguous with the requested out_dtype.");
+      Py_DECREF(np_out_lum);
+      Py_DECREF(np_out_cont);
+      Py_DECREF(np_lum);
+      Py_DECREF(np_cont);
+      Py_DECREF(np_scaling_lum);
+      Py_DECREF(np_scaling_cont);
+      Py_XDECREF(np_mask);
+      Py_XDECREF(np_lam_mask);
+      return NULL;
+    }
   } else {
-    /* If we are not writing in place, allocate matching output arrays for
-     * both the luminosity and continuum buffers. */
-    np_out_lum =
-        (PyArrayObject *)PyArray_NewLikeArray(np_lum, NPY_KEEPORDER, NULL, 0);
-    np_out_cont =
-        (PyArrayObject *)PyArray_NewLikeArray(np_cont, NPY_KEEPORDER, NULL, 0);
-    if (np_out_lum == NULL || np_out_cont == NULL) {
+    npy_intp dims[2];
+    dims[0] = lum_dims[0];
+    dims[1] = lum_dims[1];
+    np_out_lum = (PyArrayObject *)PyArray_SimpleNew(2, dims, out_typenum);
+    np_out_cont = (PyArrayObject *)PyArray_SimpleNew(2, dims, out_typenum);
+    if (!np_out_lum || !np_out_cont) {
       Py_XDECREF(np_out_lum);
       Py_XDECREF(np_out_cont);
       Py_DECREF(np_lum);
@@ -1704,90 +1977,56 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
     }
   }
 
-  /* Extract raw pointers. */
-  /* Convert the validated arrays into the raw pointers the fused kernels use.
-   */
-  const double *lum = static_cast<const double *>(PyArray_DATA(np_lum));
-  const double *cont = static_cast<const double *>(PyArray_DATA(np_cont));
-  const double *scaling_lum =
-      static_cast<const double *>(PyArray_DATA(np_scaling_lum));
-  const double *scaling_cont =
-      static_cast<const double *>(PyArray_DATA(np_scaling_cont));
-  double *out_lum = static_cast<double *>(PyArray_DATA(np_out_lum));
-  double *out_cont = static_cast<double *>(PyArray_DATA(np_out_cont));
-  const npy_bool *mask =
-      np_mask == NULL ? NULL
-                      : static_cast<const npy_bool *>(PyArray_DATA(np_mask));
-  const npy_bool *lam_mask =
-      np_lam_mask == NULL
-          ? NULL
-          : static_cast<const npy_bool *>(PyArray_DATA(np_lam_mask));
-
-  /* Dispatch based on mask combination. */
+  /* Extract raw pointers and dispatch to the typed fused kernel. */
   tic("scale_line_2d");
-
-  /* Collapse the mask presence checks once so the dispatch tree below reads
-   * like a simple table lookup. */
-  const bool has_mask = (mask != NULL);
-  const bool has_lam_mask = (lam_mask != NULL);
-
-  if (nthreads > 1) {
-#ifdef WITH_OPENMP
-    /* Use OpenMP variants when multiple threads are available. */
-    if (!has_mask && !has_lam_mask) {
-      scale_line_2d_no_mask_omp(lum, cont, scaling_lum, scaling_cont, out_lum,
-                                out_cont, nspec, nlam, nthreads);
-    } else if (has_mask && !has_lam_mask) {
-      scale_line_2d_row_mask_omp(lum, cont, scaling_lum, scaling_cont, mask,
-                                 out_lum, out_cont, nspec, nlam, nthreads);
-    } else if (!has_mask && has_lam_mask) {
-      scale_line_2d_lam_mask_omp(lum, cont, scaling_lum, scaling_cont, lam_mask,
-                                 out_lum, out_cont, nspec, nlam, nthreads);
+  if (input_typenum == NPY_FLOAT32) {
+    const float *lum = data_ptr<const float>(np_lum);
+    const float *cont = data_ptr<const float>(np_cont);
+    const float *scaling_lum = data_ptr<const float>(np_scaling_lum);
+    const float *scaling_cont = data_ptr<const float>(np_scaling_cont);
+    const npy_bool *mask =
+        np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr;
+    const npy_bool *lam_mask =
+        np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
+    if (out_typenum == NPY_FLOAT32) {
+      float *out_lum = data_ptr<float>(np_out_lum);
+      float *out_cont = data_ptr<float>(np_out_cont);
+      dispatch_scale_line_2d<float, float>(lum, cont, scaling_lum, scaling_cont,
+                                           mask, lam_mask, out_lum, out_cont,
+                                           nspec, nlam, nthreads);
     } else {
-      scale_line_2d_both_masks_omp(lum, cont, scaling_lum, scaling_cont, mask,
-                                   lam_mask, out_lum, out_cont, nspec, nlam,
-                                   nthreads);
+      double *out_lum = data_ptr<double>(np_out_lum);
+      double *out_cont = data_ptr<double>(np_out_cont);
+      dispatch_scale_line_2d<float, double>(
+          lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
+          out_cont, nspec, nlam, nthreads);
     }
-#else
-    /* OpenMP not available; fall back to the serial variants. */
-    (void)nthreads;
-    if (!has_mask && !has_lam_mask) {
-      scale_line_2d_no_mask_serial(lum, cont, scaling_lum, scaling_cont,
-                                   out_lum, out_cont, nspec, nlam);
-    } else if (has_mask && !has_lam_mask) {
-      scale_line_2d_row_mask_serial(lum, cont, scaling_lum, scaling_cont, mask,
-                                    out_lum, out_cont, nspec, nlam);
-    } else if (!has_mask && has_lam_mask) {
-      scale_line_2d_lam_mask_serial(lum, cont, scaling_lum, scaling_cont,
-                                    lam_mask, out_lum, out_cont, nspec, nlam);
-    } else {
-      scale_line_2d_both_masks_serial(lum, cont, scaling_lum, scaling_cont,
-                                      mask, lam_mask, out_lum, out_cont, nspec,
-                                      nlam);
-    }
-#endif
   } else {
-    /* Single-threaded dispatch — always use serial kernels. */
-    if (!has_mask && !has_lam_mask) {
-      scale_line_2d_no_mask_serial(lum, cont, scaling_lum, scaling_cont,
-                                   out_lum, out_cont, nspec, nlam);
-    } else if (has_mask && !has_lam_mask) {
-      scale_line_2d_row_mask_serial(lum, cont, scaling_lum, scaling_cont, mask,
-                                    out_lum, out_cont, nspec, nlam);
-    } else if (!has_mask && has_lam_mask) {
-      scale_line_2d_lam_mask_serial(lum, cont, scaling_lum, scaling_cont,
-                                    lam_mask, out_lum, out_cont, nspec, nlam);
+    const double *lum = data_ptr<const double>(np_lum);
+    const double *cont = data_ptr<const double>(np_cont);
+    const double *scaling_lum = data_ptr<const double>(np_scaling_lum);
+    const double *scaling_cont = data_ptr<const double>(np_scaling_cont);
+    const npy_bool *mask =
+        np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr;
+    const npy_bool *lam_mask =
+        np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
+    if (out_typenum == NPY_FLOAT32) {
+      float *out_lum = data_ptr<float>(np_out_lum);
+      float *out_cont = data_ptr<float>(np_out_cont);
+      dispatch_scale_line_2d<double, float>(
+          lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
+          out_cont, nspec, nlam, nthreads);
     } else {
-      scale_line_2d_both_masks_serial(lum, cont, scaling_lum, scaling_cont,
-                                      mask, lam_mask, out_lum, out_cont, nspec,
-                                      nlam);
+      double *out_lum = data_ptr<double>(np_out_lum);
+      double *out_cont = data_ptr<double>(np_out_cont);
+      dispatch_scale_line_2d<double, double>(
+          lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
+          out_cont, nspec, nlam, nthreads);
     }
   }
 
   toc("scale_line_2d");
 
-  /* Return the two output arrays and drop every temporary view we created
-   * during parsing and validation. */
   Py_DECREF(np_lum);
   Py_DECREF(np_cont);
   Py_DECREF(np_scaling_lum);
