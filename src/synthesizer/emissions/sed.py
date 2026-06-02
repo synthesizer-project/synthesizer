@@ -29,12 +29,12 @@ from unyt import (
     amu,
     angstrom,
     c,
+    cm,
     erg,
     eV,
     h,
     kb,
     km,
-    pc,
     s,
     unyt_array,
     unyt_quantity,
@@ -43,13 +43,24 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
+from synthesizer.extensions.observed_spectra import compute_fnu
 from synthesizer.extensions.reductions import reduce_particle_spectra
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import (
+    Quantity,
+    accepts,
+    get_array_quantity_view,
+    get_quantity_view,
+)
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.util_funcs import (
+    ensure_array_buffer,
+    get_attr_unit_conversion,
+    get_distance_in_cm,
+)
 
 
 class Sed:
@@ -1104,29 +1115,55 @@ class Sed:
 
         return beta
 
+    @timed("Sed.get_fnu0")
     def get_fnu0(self):
         """Calculate the rest frame spectral flux density.
 
-        Uses a standard distance of 10 pcs.
+        Uses a standard distance of 10 pc.
 
         This will also populate the observed wavelength and frequency arrays
         which in this case are the same as the emitted arrays.
 
         Returns:
             fnu (ndarray):
-                Spectral flux density calcualted at d=10 pc.
+                Spectral flux density calculated at 10 pc.
         """
-        # Get the observed wavelength and frequency arrays
-        self.obslam = self._lam
-        self.obsnu = self._nu
+        # Ensure the arrays are ready to be handed to the C++
+        if self._lnu.dtype != np.float64 or not self._lnu.flags.c_contiguous:
+            self._lnu = np.ascontiguousarray(self._lnu, dtype=np.float64)
+        if self._lam.dtype != np.float64 or not self._lam.flags.c_contiguous:
+            self._lam = np.ascontiguousarray(self._lam, dtype=np.float64)
+        if self._nu.dtype != np.float64 or not self._nu.flags.c_contiguous:
+            self._nu = np.ascontiguousarray(self._nu, dtype=np.float64)
 
-        # Compute the flux SED and apply unit conversions to get to nJy
-        self.fnu = self.lnu / (4 * np.pi * (10 * pc) ** 2)
+        # Set the observed wavelength and frequency
+        self._obslam = self._lam
+        self._obsnu = self._nu
 
-        return self.fnu
+        # Get the conversion factor from luminosity to flux at 10 pc
+        conversion = get_attr_unit_conversion(
+            self.__class__.__dict__["lnu"].unit,
+            self.__class__.__dict__["fnu"].unit * cm**2,
+        ) / (4 * np.pi * get_distance_in_cm() ** 2)
+
+        # Call the threaded C++ function to compute fnu
+        compute_fnu(
+            self._lnu,
+            self._lam,
+            self._nu,
+            1.0,
+            conversion,
+            1,
+            ensure_array_buffer(self, "_fnu", self._lnu),
+            None,
+            None,
+        )
+
+        # Return the fnu with units, without making a copy
+        return get_quantity_view(self, "_fnu")
 
     @timed("Sed.get_fnu")
-    def get_fnu(self, cosmo, z, igm=None):
+    def get_fnu(self, cosmo, z, igm=None, nthreads=1):
         """Calculate the observed frame spectral energy distribution.
 
         This will also populate the observed wavelength and frequency arrays
@@ -1144,10 +1181,12 @@ class Sed:
             igm (igm):
                 The IGM class. e.g. `synthesizer.igm.Inoue14`.
                 Defaults to None.
+            nthreads (int):
+                The number of threads to use for the bulk flux conversion.
 
         Returns:
             fnu (ndarray)
-                Spectral flux density calcualted at d=10 pc
+                Spectral flux density in the observer frame.
 
         """
         # Store the redshift for later use
@@ -1158,30 +1197,69 @@ class Sed:
         if self.redshift == 0:
             return self.get_fnu0()
 
-        # Get the observed wavelength and frequency arrays
-        self.obslam = self._lam * (1.0 + z)
-        self.obsnu = self._nu / (1.0 + z)
+        # Ensure the arrays are ready to be handed to the C++
+        if self._lnu.dtype != np.float64 or not self._lnu.flags.c_contiguous:
+            self._lnu = np.ascontiguousarray(self._lnu, dtype=np.float64)
+        if self._lam.dtype != np.float64 or not self._lam.flags.c_contiguous:
+            self._lam = np.ascontiguousarray(self._lam, dtype=np.float64)
+        if self._nu.dtype != np.float64 or not self._nu.flags.c_contiguous:
+            self._nu = np.ascontiguousarray(self._nu, dtype=np.float64)
+        if self._obslam is None or self._obslam.shape != self._lam.shape:
+            self._obslam = np.empty_like(self._lam)
+        if self._obsnu is None or self._obsnu.shape != self._nu.shape:
+            self._obsnu = np.empty_like(self._nu)
 
-        # Compute the luminosity distance
-        luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
+        # Calculate the observed wavelength and frequency
+        one_plus_z = 1.0 + z
+        luminosity_distance_cm = get_luminosity_distance(cosmo, z).to_value(cm)
+        conversion = (
+            get_attr_unit_conversion(
+                self.__class__.__dict__["lnu"].unit,
+                self.__class__.__dict__["fnu"].unit * cm**2,
+            )
+            * one_plus_z
+            / (4 * np.pi * luminosity_distance_cm**2)
+        )
 
-        # Finally, compute the flux SED and apply unit conversions to get
-        # to nJy
-        self.fnu = self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
+        # Call the threaded C++ function to compute fnu
+        compute_fnu(
+            self._lnu,
+            self._lam,
+            self._nu,
+            one_plus_z,
+            conversion,
+            nthreads,
+            ensure_array_buffer(self, "_fnu", self._lnu),
+            self._obslam,
+            self._obsnu,
+        )
 
         # If we are applying an IGM model apply it
         if igm is not None:
+            # Bypass the Quantity descriptor here so IGM attenuation reuses the
+            # observer-frame wavelength buffer without allocating a new
+            # unit-bearing array wrapper via multiplication.
+            obslam = get_array_quantity_view(
+                self._obslam,
+                self.__class__.__dict__["obslam"].unit,
+            )
+
             # Support bot class references and instantiated objects
             if callable(igm):
-                self._fnu *= igm().get_transmission(z, self.obslam)
+                self._fnu *= igm().get_transmission(z, obslam)
             else:
-                self._fnu *= igm.get_transmission(z, self.obslam)
+                self._fnu *= igm.get_transmission(z, obslam)
 
-        return self.fnu
+        # Return the fnu with units, without making a copy
+        return get_quantity_view(self, "_fnu")
 
     @timed("Sed.get_photo_lnu")
     def get_photo_lnu(
-        self, filters, verbose=True, nthreads=1, integration_method="trapz"
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        integration_method="trapz",
     ):
         """Calculate broadband luminosities using a FilterCollection object.
 
@@ -1244,7 +1322,7 @@ class Sed:
                 Fluxes in each filter in filters.
         """
         # Ensure fluxes actually exist
-        if (self.obslam is None) | (self.fnu is None):
+        if self._obslam is None or self._fnu is None:
             raise ValueError(
                 (
                     "Fluxes not calculated, run `get_fnu` or "

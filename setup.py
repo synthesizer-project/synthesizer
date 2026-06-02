@@ -301,6 +301,17 @@ extensions = [
         include_dirs=include_dirs,
     ),
     create_extension(
+        "synthesizer.extensions.observed_spectra",
+        [
+            "src/synthesizer/extensions/observed_spectra.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
+            "src/synthesizer/extensions/timers.cpp",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
+    create_extension(
         "synthesizer.extensions.integrated_spectra",
         [
             "src/synthesizer/extensions/integrated_spectra.cpp",
