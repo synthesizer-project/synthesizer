@@ -10,7 +10,8 @@
  * generic array integrations and specialised kernel builders. The spacing must
  * be uniform.
  *
- * @tparam Real The floating-point type of the input arrays.
+ * @tparam XReal The floating-point type of the x array.
+ * @tparam YReal The floating-point type of the y array.
  * @tparam OutT The floating-point type of the returned integral.
  *
  * @param x 1D array of x values.
@@ -19,8 +20,8 @@
  *
  * @return The integrated value.
  */
-template <typename Real, typename OutT = Real>
-inline OutT simps_1d(const Real *x, const Real *y, size_t n) {
+template <typename XReal, typename YReal, typename OutT = YReal>
+inline OutT simps_1d(const XReal *x, const YReal *y, size_t n) {
   OutT integral = static_cast<OutT>(0.0);
 
   if (n < 2) {
@@ -59,7 +60,8 @@ inline OutT simps_1d(const Real *x, const Real *y, size_t n) {
 /**
  * @brief Integrate one 1D function using the trapezoidal rule.
  *
- * @tparam Real The floating-point type of the input arrays.
+ * @tparam XReal The floating-point type of the x array.
+ * @tparam YReal The floating-point type of the y array.
  * @tparam OutT The floating-point type of the returned integral.
  *
  * @param x 1D array of x values.
@@ -68,8 +70,8 @@ inline OutT simps_1d(const Real *x, const Real *y, size_t n) {
  *
  * @return The integrated value.
  */
-template <typename Real, typename OutT = Real>
-inline OutT trapz_1d(const Real *x, const Real *y, size_t n) {
+template <typename XReal, typename YReal, typename OutT = YReal>
+inline OutT trapz_1d(const XReal *x, const YReal *y, size_t n) {
   OutT integral = static_cast<OutT>(0.0);
 
   if (n < 2) {

@@ -28,7 +28,8 @@
 /**
  * @brief Serial trapezoidal integration over the final axis.
  *
- * @tparam Real The floating-point type of the input arrays.
+ * @tparam XReal The floating-point type of the x array.
+ * @tparam YReal The floating-point type of the y array.
  * @tparam OutT The floating-point type stored in the returned buffer.
  *
  * @param x 1D integration grid shared by every row of y.
@@ -38,8 +39,8 @@
  *
  * @return Newly allocated output buffer, or NULL on allocation failure.
  */
-template <typename Real, typename OutT>
-static OutT *trapz_last_axis_serial(const Real *x, const Real *y, npy_intp n,
+template <typename XReal, typename YReal, typename OutT>
+static OutT *trapz_last_axis_serial(const XReal *x, const YReal *y, npy_intp n,
                                     npy_intp num_elements) {
   if (num_elements == 0) {
     return new (std::nothrow) OutT[1]();
@@ -51,7 +52,8 @@ static OutT *trapz_last_axis_serial(const Real *x, const Real *y, npy_intp n,
   }
 
   for (npy_intp i = 0; i < num_elements; ++i) {
-    integral[i] = trapz_1d<Real, OutT>(x, y + i * n, static_cast<size_t>(n));
+    integral[i] =
+        trapz_1d<XReal, YReal, OutT>(x, y + i * n, static_cast<size_t>(n));
   }
 
   return integral;
@@ -63,7 +65,8 @@ static OutT *trapz_last_axis_serial(const Real *x, const Real *y, npy_intp n,
  * The work is parallelised over the flattened leading axes so each thread owns
  * independent output elements.
  *
- * @tparam Real The floating-point type of the input arrays.
+ * @tparam XReal The floating-point type of the x array.
+ * @tparam YReal The floating-point type of the y array.
  * @tparam OutT The floating-point type stored in the returned buffer.
  *
  * @param x 1D integration grid shared by every row of y.
@@ -75,9 +78,10 @@ static OutT *trapz_last_axis_serial(const Real *x, const Real *y, npy_intp n,
  * @return Newly allocated output buffer, or NULL on allocation failure.
  */
 #ifdef WITH_OPENMP
-template <typename Real, typename OutT>
-static OutT *trapz_last_axis_parallel(const Real *x, const Real *y, npy_intp n,
-                                      npy_intp num_elements, int nthreads) {
+template <typename XReal, typename YReal, typename OutT>
+static OutT *trapz_last_axis_parallel(const XReal *x, const YReal *y,
+                                      npy_intp n, npy_intp num_elements,
+                                      int nthreads) {
   if (num_elements == 0) {
     return new (std::nothrow) OutT[1]();
   }
@@ -89,7 +93,8 @@ static OutT *trapz_last_axis_parallel(const Real *x, const Real *y, npy_intp n,
 
 #pragma omp parallel for num_threads(nthreads)
   for (npy_intp i = 0; i < num_elements; ++i) {
-    integral[i] = trapz_1d<Real, OutT>(x, y + i * n, static_cast<size_t>(n));
+    integral[i] =
+        trapz_1d<XReal, YReal, OutT>(x, y + i * n, static_cast<size_t>(n));
   }
   return integral;
 }
@@ -127,7 +132,8 @@ static PyArrayObject *wrap_last_axis_result(OutT *result_arr, npy_intp ndim,
 /**
  * @brief Execute trapezoidal integration after dtype dispatch.
  *
- * @tparam Real The floating-point type of the validated input arrays.
+ * @tparam XReal The floating-point type of the x array.
+ * @tparam YReal The floating-point type of the y array.
  * @tparam OutT The requested floating-point output type.
  *
  * @param xs 1D NumPy array containing the integration grid.
@@ -140,24 +146,27 @@ static PyArrayObject *wrap_last_axis_result(OutT *result_arr, npy_intp ndim,
  *
  * @return The wrapped NumPy output array, or NULL on failure.
  */
-template <typename Real, typename OutT>
+template <typename XReal, typename YReal, typename OutT>
 static PyObject *trapz_last_axis(PyArrayObject *xs, PyArrayObject *ys,
                                  npy_intp ndim, npy_intp *shape, npy_intp n,
                                  npy_intp num_elements, int nthreads) {
-  const Real *x = data_ptr<const Real>(xs);
-  const Real *y = data_ptr<const Real>(ys);
+  const XReal *x = data_ptr<const XReal>(xs);
+  const YReal *y = data_ptr<const YReal>(ys);
 
   /* Select the serial or OpenMP kernel once the dtype family is known. */
   OutT *integral;
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
     integral =
-        trapz_last_axis_parallel<Real, OutT>(x, y, n, num_elements, nthreads);
+        trapz_last_axis_parallel<XReal, YReal, OutT>(x, y, n, num_elements,
+                                                     nthreads);
   } else {
-    integral = trapz_last_axis_serial<Real, OutT>(x, y, n, num_elements);
+    integral = trapz_last_axis_serial<XReal, YReal, OutT>(x, y, n,
+                                                          num_elements);
   }
 #else
-  integral = trapz_last_axis_serial<Real, OutT>(x, y, n, num_elements);
+  integral = trapz_last_axis_serial<XReal, YReal, OutT>(x, y, n,
+                                                        num_elements);
 #endif
 
   if (integral == NULL) {
@@ -226,49 +235,60 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  const int input_typenum = promoted_float_typenum(xs_typenum, ys_typenum);
-  PyArrayObject *xs_cast = cast_float_array(xs, input_typenum);
-  PyArrayObject *ys_cast = cast_float_array(ys, input_typenum);
-  if (xs_cast == NULL || ys_cast == NULL) {
-    Py_XDECREF(xs_cast);
-    Py_XDECREF(ys_cast);
-    return NULL;
-  }
-
   /* Resolve the independently requested output dtype. */
   const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
   if (output_typenum < 0) {
     return NULL;
   }
 
-  /* Dispatch to the matching Real/OutT implementation. */
+  /* Dispatch: encode xs/ys/output precision into a 3-bit key. */
   const npy_intp num_elements = PyArray_SIZE(ys) / n;
+  int dispatch_key = ((xs_typenum == NPY_FLOAT64) << 2) |
+                     ((ys_typenum == NPY_FLOAT64) << 1) |
+                     (output_typenum == NPY_FLOAT64);
   PyObject *result;
-  if (input_typenum == NPY_FLOAT32) {
-    if (output_typenum == NPY_FLOAT32) {
-      result = trapz_last_axis<float, float>(xs_cast, ys_cast, ndim, shape, n,
-                                             num_elements, nthreads);
-    } else {
-      result = trapz_last_axis<float, double>(xs_cast, ys_cast, ndim, shape, n,
-                                              num_elements, nthreads);
-    }
-  } else if (output_typenum == NPY_FLOAT32) {
-    result = trapz_last_axis<double, float>(xs_cast, ys_cast, ndim, shape, n,
-                                            num_elements, nthreads);
-  } else {
-    result = trapz_last_axis<double, double>(xs_cast, ys_cast, ndim, shape, n,
-                                             num_elements, nthreads);
+  switch (dispatch_key) {
+    case 0:
+      result = trapz_last_axis<float, float, float>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 1:
+      result = trapz_last_axis<float, float, double>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 2:
+      result = trapz_last_axis<float, double, float>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 3:
+      result = trapz_last_axis<float, double, double>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 4:
+      result = trapz_last_axis<double, float, float>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 5:
+      result = trapz_last_axis<double, float, double>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 6:
+      result = trapz_last_axis<double, double, float>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    default:
+      result = trapz_last_axis<double, double, double>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
   }
-
-  Py_DECREF(xs_cast);
-  Py_DECREF(ys_cast);
   return result;
 }
 
 /**
  * @brief Serial Simpson integration over the final axis.
  *
- * @tparam Real The floating-point type of the input arrays.
+ * @tparam XReal The floating-point type of the x array.
+ * @tparam YReal The floating-point type of the y array.
  * @tparam OutT The floating-point type stored in the returned buffer.
  *
  * @param x 1D integration grid shared by every row of y.
@@ -278,8 +298,8 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
  *
  * @return Newly allocated output buffer, or NULL on allocation failure.
  */
-template <typename Real, typename OutT>
-static OutT *simps_last_axis_serial(const Real *x, const Real *y, npy_intp n,
+template <typename XReal, typename YReal, typename OutT>
+static OutT *simps_last_axis_serial(const XReal *x, const YReal *y, npy_intp n,
                                     npy_intp num_elements) {
   if (num_elements == 0) {
     return new (std::nothrow) OutT[1]();
@@ -291,7 +311,8 @@ static OutT *simps_last_axis_serial(const Real *x, const Real *y, npy_intp n,
   }
 
   for (npy_intp i = 0; i < num_elements; ++i) {
-    integral[i] = simps_1d<Real, OutT>(x, y + i * n, static_cast<size_t>(n));
+    integral[i] =
+        simps_1d<XReal, YReal, OutT>(x, y + i * n, static_cast<size_t>(n));
   }
 
   return integral;
@@ -300,7 +321,8 @@ static OutT *simps_last_axis_serial(const Real *x, const Real *y, npy_intp n,
 /**
  * @brief Parallel Simpson integration over the final axis.
  *
- * @tparam Real The floating-point type of the input arrays.
+ * @tparam XReal The floating-point type of the x array.
+ * @tparam YReal The floating-point type of the y array.
  * @tparam OutT The floating-point type stored in the returned buffer.
  *
  * @param x 1D integration grid shared by every row of y.
@@ -312,9 +334,10 @@ static OutT *simps_last_axis_serial(const Real *x, const Real *y, npy_intp n,
  * @return Newly allocated output buffer, or NULL on allocation failure.
  */
 #ifdef WITH_OPENMP
-template <typename Real, typename OutT>
-static OutT *simps_last_axis_parallel(const Real *x, const Real *y, npy_intp n,
-                                      npy_intp num_elements, int nthreads) {
+template <typename XReal, typename YReal, typename OutT>
+static OutT *simps_last_axis_parallel(const XReal *x, const YReal *y,
+                                      npy_intp n, npy_intp num_elements,
+                                      int nthreads) {
   if (num_elements == 0) {
     return new (std::nothrow) OutT[1]();
   }
@@ -326,7 +349,8 @@ static OutT *simps_last_axis_parallel(const Real *x, const Real *y, npy_intp n,
 
 #pragma omp parallel for num_threads(nthreads)
   for (npy_intp i = 0; i < num_elements; ++i) {
-    integral[i] = simps_1d<Real, OutT>(x, y + i * n, static_cast<size_t>(n));
+    integral[i] =
+        simps_1d<XReal, YReal, OutT>(x, y + i * n, static_cast<size_t>(n));
   }
 
   return integral;
@@ -336,7 +360,8 @@ static OutT *simps_last_axis_parallel(const Real *x, const Real *y, npy_intp n,
 /**
  * @brief Execute Simpson integration after dtype dispatch.
  *
- * @tparam Real The floating-point type of the validated input arrays.
+ * @tparam XReal The floating-point type of the x array.
+ * @tparam YReal The floating-point type of the y array.
  * @tparam OutT The requested floating-point output type.
  *
  * @param xs 1D NumPy array containing the integration grid.
@@ -349,23 +374,26 @@ static OutT *simps_last_axis_parallel(const Real *x, const Real *y, npy_intp n,
  *
  * @return The wrapped NumPy output array, or NULL on failure.
  */
-template <typename Real, typename OutT>
+template <typename XReal, typename YReal, typename OutT>
 static PyObject *simps_last_axis(PyArrayObject *xs, PyArrayObject *ys,
                                  npy_intp ndim, npy_intp *shape, npy_intp n,
                                  npy_intp num_elements, int nthreads) {
-  const Real *x = data_ptr<const Real>(xs);
-  const Real *y = data_ptr<const Real>(ys);
+  const XReal *x = data_ptr<const XReal>(xs);
+  const YReal *y = data_ptr<const YReal>(ys);
 
   OutT *integral;
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
     integral =
-        simps_last_axis_parallel<Real, OutT>(x, y, n, num_elements, nthreads);
+        simps_last_axis_parallel<XReal, YReal, OutT>(x, y, n, num_elements,
+                                                     nthreads);
   } else {
-    integral = simps_last_axis_serial<Real, OutT>(x, y, n, num_elements);
+    integral = simps_last_axis_serial<XReal, YReal, OutT>(x, y, n,
+                                                          num_elements);
   }
 #else
-  integral = simps_last_axis_serial<Real, OutT>(x, y, n, num_elements);
+  integral = simps_last_axis_serial<XReal, YReal, OutT>(x, y, n,
+                                                        num_elements);
 #endif
 
   if (integral == NULL) {
@@ -429,42 +457,52 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  const int input_typenum = promoted_float_typenum(xs_typenum, ys_typenum);
-  PyArrayObject *xs_cast = cast_float_array(xs, input_typenum);
-  PyArrayObject *ys_cast = cast_float_array(ys, input_typenum);
-  if (xs_cast == NULL || ys_cast == NULL) {
-    Py_XDECREF(xs_cast);
-    Py_XDECREF(ys_cast);
-    return NULL;
-  }
-
   /* Resolve the requested output dtype independently from the inputs. */
   const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
   if (output_typenum < 0) {
     return NULL;
   }
 
-  /* Dispatch to the matching Real/OutT implementation. */
+  /* Dispatch: encode xs/ys/output precision into a 3-bit key. */
   const npy_intp num_elements = PyArray_SIZE(ys) / n;
+  int dispatch_key = ((xs_typenum == NPY_FLOAT64) << 2) |
+                     ((ys_typenum == NPY_FLOAT64) << 1) |
+                     (output_typenum == NPY_FLOAT64);
   PyObject *result;
-  if (input_typenum == NPY_FLOAT32) {
-    if (output_typenum == NPY_FLOAT32) {
-      result = simps_last_axis<float, float>(xs_cast, ys_cast, ndim, shape, n,
-                                             num_elements, nthreads);
-    } else {
-      result = simps_last_axis<float, double>(xs_cast, ys_cast, ndim, shape, n,
-                                              num_elements, nthreads);
-    }
-  } else if (output_typenum == NPY_FLOAT32) {
-    result = simps_last_axis<double, float>(xs_cast, ys_cast, ndim, shape, n,
-                                            num_elements, nthreads);
-  } else {
-    result = simps_last_axis<double, double>(xs_cast, ys_cast, ndim, shape, n,
-                                             num_elements, nthreads);
+  switch (dispatch_key) {
+    case 0:
+      result = simps_last_axis<float, float, float>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 1:
+      result = simps_last_axis<float, float, double>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 2:
+      result = simps_last_axis<float, double, float>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 3:
+      result = simps_last_axis<float, double, double>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 4:
+      result = simps_last_axis<double, float, float>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 5:
+      result = simps_last_axis<double, float, double>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 6:
+      result = simps_last_axis<double, double, float>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
+    default:
+      result = simps_last_axis<double, double, double>(
+          xs, ys, ndim, shape, n, num_elements, nthreads);
+      break;
   }
-
-  Py_DECREF(xs_cast);
-  Py_DECREF(ys_cast);
   return result;
 }
 
@@ -720,23 +758,28 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
     return NULL;
   }
 
-  /* Dispatch to the matching Real/OutT implementation. */
+  /* Dispatch: encode input/output precision into a 2-bit key. */
   const npy_intp num_elements = PyArray_SIZE(ys) / n;
+  int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
+                     (output_typenum == NPY_FLOAT64);
   PyObject *result;
-  if (input_typenum == NPY_FLOAT32) {
-    if (output_typenum == NPY_FLOAT32) {
+  switch (dispatch_key) {
+    case 0:
       result = weighted_trapz_last_axis<float, float>(
           xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
-    } else {
+      break;
+    case 1:
       result = weighted_trapz_last_axis<float, double>(
           xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
-    }
-  } else if (output_typenum == NPY_FLOAT32) {
-    result = weighted_trapz_last_axis<double, float>(
-        xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
-  } else {
-    result = weighted_trapz_last_axis<double, double>(
-        xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 2:
+      result = weighted_trapz_last_axis<double, float>(
+          xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
+      break;
+    default:
+      result = weighted_trapz_last_axis<double, double>(
+          xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
+      break;
   }
 
   Py_DECREF(xs_cast);
@@ -1072,23 +1115,28 @@ static PyObject *weighted_simps_last_axis_integration(PyObject *self,
     return NULL;
   }
 
-  /* Dispatch to the matching Real/OutT implementation. */
+  /* Dispatch: encode input/output precision into a 2-bit key. */
   const npy_intp num_elements = PyArray_SIZE(ys) / n;
+  int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
+                     (output_typenum == NPY_FLOAT64);
   PyObject *result;
-  if (input_typenum == NPY_FLOAT32) {
-    if (output_typenum == NPY_FLOAT32) {
+  switch (dispatch_key) {
+    case 0:
       result = weighted_simps_last_axis<float, float>(
           xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
-    } else {
+      break;
+    case 1:
       result = weighted_simps_last_axis<float, double>(
           xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
-    }
-  } else if (output_typenum == NPY_FLOAT32) {
-    result = weighted_simps_last_axis<double, float>(
-        xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
-  } else {
-    result = weighted_simps_last_axis<double, double>(
-        xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
+      break;
+    case 2:
+      result = weighted_simps_last_axis<double, float>(
+          xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
+      break;
+    default:
+      result = weighted_simps_last_axis<double, double>(
+          xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
+      break;
   }
 
   Py_DECREF(xs_cast);
