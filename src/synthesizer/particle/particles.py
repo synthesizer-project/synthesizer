@@ -1031,18 +1031,11 @@ class Particles:
                 "projected and truncated LOS kernel tables are available."
             )
 
-        projected_kernel = np.ascontiguousarray(
-            kernel.get_kernel(), dtype=np.float64
-        )
-        truncated_kernel, _, _ = kernel.get_truncated_los_kernel()
-        truncated_kernel = np.ascontiguousarray(
-            truncated_kernel, dtype=np.float64
-        )
+        projected_kernel = kernel.get_kernel()
+        truncated_kernel = kernel.get_truncated_los_kernel()[0]
 
         # Set up the inputs from this particle instance.
-        pos_i = np.ascontiguousarray(
-            self._coordinates[mask, :], dtype=np.float64
-        )
+        pos_i = self._coordinates[mask, :]
 
         # Set up the kernel inputs to the C function.
         kernel = projected_kernel
@@ -1055,15 +1048,9 @@ class Particles:
         npart_j = other_parts.nparticles
 
         # Set up the inputs from the other particle instance.
-        pos_j = np.ascontiguousarray(
-            other_parts._coordinates, dtype=np.float64
-        )
-        smls = np.ascontiguousarray(
-            other_parts._smoothing_lengths, dtype=np.float64
-        )
-        surf_den_vals = np.ascontiguousarray(
-            getattr(other_parts, attr), dtype=np.float64
-        )
+        pos_j = other_parts._coordinates
+        smls = other_parts._smoothing_lengths
+        surf_den_vals = getattr(other_parts, attr)
 
         return (
             kernel,
@@ -1203,38 +1190,22 @@ class Particles:
         # uses the tabulated coordinate arrays explicitly for trilinear
         # lookup.
         with timer("Particles._prepare_smoothed_los_args.pack_arguments"):
-            overlap_kernel = np.ascontiguousarray(
-                overlap_kernel, dtype=np.float64
-            )
-            q_grid = np.ascontiguousarray(q_grid, dtype=np.float64)
-            u_grid = np.ascontiguousarray(u_grid, dtype=np.float64)
-            eta_grid = np.ascontiguousarray(eta_grid, dtype=np.float64)
             qdim = q_grid.size
             udim = u_grid.size
             etadim = eta_grid.size
 
             # Set up the inputs from this particle instance.
-            pos_i = np.ascontiguousarray(
-                self._coordinates[mask, :], dtype=np.float64
-            )
-            input_smls = np.ascontiguousarray(
-                self._smoothing_lengths[mask], dtype=np.float64
-            )
+            pos_i = self._coordinates[mask, :]
+            input_smls = self._smoothing_lengths[mask]
 
             # Get particle counts.
             npart_i = pos_i.shape[0]
             npart_j = other_parts.nparticles
 
             # Set up the inputs from the other particle instance.
-            pos_j = np.ascontiguousarray(
-                other_parts._coordinates, dtype=np.float64
-            )
-            smls = np.ascontiguousarray(
-                other_parts._smoothing_lengths, dtype=np.float64
-            )
-            surf_den_vals = np.ascontiguousarray(
-                getattr(other_parts, attr), dtype=np.float64
-            )
+            pos_j = other_parts._coordinates
+            smls = other_parts._smoothing_lengths
+            surf_den_vals = getattr(other_parts, attr)
 
         return (
             overlap_kernel,

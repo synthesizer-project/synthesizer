@@ -39,8 +39,8 @@ def _call_kernel_function(kernel_name, r):
         float or np.ndarray:
             The kernel value(s), preserving scalar inputs as scalars.
     """
-    input_array = np.asarray(r, dtype=np.float64)
-    radii = np.ascontiguousarray(np.atleast_1d(input_array).ravel())
+    input_array = np.asarray(r)
+    radii = np.atleast_1d(input_array).ravel()
     values = evaluate_kernel(radii, kernel_name)
 
     if input_array.ndim == 0:
@@ -303,7 +303,7 @@ class Kernel:
         # Get the dimensionless impact-parameter bins and set up the output.
         bins = self._get_bins()
         kernel = compute_projected_kernel(
-            np.ascontiguousarray(bins, dtype=np.float64),
+            bins,
             self.name,
             self.projected_integration_steps,
         )
@@ -478,8 +478,8 @@ class Kernel:
         bins = self._get_bins(self.truncated_q_binsize)
         z_bins = self._get_z_bins()
         kernel = compute_truncated_los_kernel(
-            np.ascontiguousarray(bins, dtype=np.float64),
-            np.ascontiguousarray(z_bins, dtype=np.float64),
+            bins,
+            z_bins,
             self.name,
         )
 
@@ -516,7 +516,7 @@ class Kernel:
 
         # Compute the kernel weights at the sampled points based on their
         # radial coordinates
-        weights = np.ascontiguousarray(self.f(qr), dtype=np.float64)
+        weights = self.f(qr)
 
         return qx, qy, qz, weights
 
@@ -548,16 +548,16 @@ class Kernel:
 
         # Build the overlap kernel
         kernel = compute_overlap_kernel(
-            np.ascontiguousarray(q_grid, dtype=np.float64),
-            np.ascontiguousarray(u_grid, dtype=np.float64),
-            np.ascontiguousarray(eta_grid, dtype=np.float64),
-            np.ascontiguousarray(qx, dtype=np.float64),
-            np.ascontiguousarray(qy, dtype=np.float64),
-            np.ascontiguousarray(qz, dtype=np.float64),
-            np.ascontiguousarray(weights, dtype=np.float64),
-            np.ascontiguousarray(truncated_kernel, dtype=np.float64),
-            np.ascontiguousarray(trunc_q, dtype=np.float64),
-            np.ascontiguousarray(trunc_z, dtype=np.float64),
+            q_grid,
+            u_grid,
+            eta_grid,
+            qx,
+            qy,
+            qz,
+            weights,
+            truncated_kernel,
+            trunc_q,
+            trunc_z,
             q_grid.size,
             u_grid.size,
             eta_grid.size,

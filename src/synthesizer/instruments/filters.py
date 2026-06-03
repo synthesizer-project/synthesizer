@@ -1026,9 +1026,8 @@ class FilterCollection:
         if self.lam is None or self.nfilters == 0:
             return
 
-        trans_2d = np.ascontiguousarray(
-            np.vstack([self.filters[code].t for code in self.filter_codes]),
-            dtype=np.float64,
+        trans_2d = np.vstack(
+            [self.filters[code].t for code in self.filter_codes]
         )
         nu_native = (c / self.lam).to("Hz").value
 

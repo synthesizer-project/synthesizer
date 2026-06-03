@@ -1097,14 +1097,6 @@ class Sed:
             fnu (ndarray):
                 Spectral flux density calculated at 10 pc.
         """
-        # Ensure the arrays are C-contiguous before calling the C extension.
-        if not self._lnu.flags.c_contiguous:
-            self._lnu = np.ascontiguousarray(self._lnu)
-        if not self._lam.flags.c_contiguous:
-            self._lam = np.ascontiguousarray(self._lam)
-        if not self._nu.flags.c_contiguous:
-            self._nu = np.ascontiguousarray(self._nu)
-
         # Set the observed wavelength and frequency
         self._obslam = self._lam
         self._obsnu = self._nu
@@ -1166,13 +1158,6 @@ class Sed:
         if self.redshift == 0:
             return self.get_fnu0()
 
-        # Ensure the arrays are C-contiguous before calling the C extension.
-        if not self._lnu.flags.c_contiguous:
-            self._lnu = np.ascontiguousarray(self._lnu)
-        if not self._lam.flags.c_contiguous:
-            self._lam = np.ascontiguousarray(self._lam)
-        if not self._nu.flags.c_contiguous:
-            self._nu = np.ascontiguousarray(self._nu)
         if self._obslam is None or self._obslam.shape != self._lam.shape:
             self._obslam = np.empty_like(self._lam)
         if self._obsnu is None or self._obsnu.shape != self._nu.shape:

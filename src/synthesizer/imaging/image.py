@@ -1026,9 +1026,9 @@ class Image(ImagingBase):
                 self._resolution,
                 self.npix[0],
                 self.npix[1],
-                np.float64(aperture_radius),
+                aperture_radius,
                 self.arr,
-                np.float64(aperture_cent),
+                aperture_cent,
                 nthreads,
             )
             * self.units
