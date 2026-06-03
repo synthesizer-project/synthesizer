@@ -25,6 +25,7 @@ from tqdm import tqdm
 from synthesizer import (
     GRID_DIR,
     INSTRUMENT_CACHE_DIR,
+    SVO_FILTER_CACHE_DIR,
     TEST_DATA_DIR,
     exceptions,
 )
@@ -62,11 +63,17 @@ def load_synference_data_links():
     return load_database_yaml()["SynferenceData"]
 
 
+def load_svo_filter_cache_links():
+    """Load the SVO filter cache links from the yaml file."""
+    return load_database_yaml()["SVOFilterCache"]
+
+
 # Get the dicts contain the locations of the test and dust data
 TEST_FILES = load_test_data_links()
 DUST_FILES = load_dust_data_links()
 INSTRUMENT_FILES = load_instrument_data_links()
 SYNFERENCE_FILES = load_synference_data_links()
+SVO_FILTER_CACHE_FILES = load_svo_filter_cache_links()
 
 # Combine everything into a nice single dict
 AVAILABLE_FILES = {
@@ -74,6 +81,7 @@ AVAILABLE_FILES = {
     **DUST_FILES,
     **INSTRUMENT_FILES,
     **SYNFERENCE_FILES,
+    **SVO_FILTER_CACHE_FILES,
 }
 
 # Define a translation between instrument file names and their class names
@@ -322,6 +330,17 @@ def download():
         help="Download all available instruments",
     )
 
+    # Add a flag to download the SVO filter cache
+    parser.add_argument(
+        "--svo-filter-cache",
+        action="store_true",
+        help=(
+            "Download the SVO filter cache (stored in "
+            f"{SVO_FILTER_CACHE_DIR}). This avoids hitting the SVO database "
+            "during CI runs."
+        ),
+    )
+
     # Add a flag to go ham and download everything
     parser.add_argument(
         "--all",
@@ -353,6 +372,7 @@ def download():
     agn = args.agn_test_grids
     dust_grid = args.dust_grid
     camels = args.camels_data
+    svo_filter_cache = args.svo_filter_cache
     everything = args.all
     dest = args.destination
     scsam = args.scsam_data
@@ -413,10 +433,49 @@ def download():
     if scsam:
         download_sc_sam_test_data(dest if dest is not None else TEST_DATA_DIR)
 
+    # SVO filter cache?
+    if svo_filter_cache:
+        download_svo_filter_cache(SVO_FILTER_CACHE_DIR)
+
     # All simulation data?
     if all_sim_data:
         download_camels_data(dest if dest is not None else TEST_DATA_DIR)
         download_sc_sam_test_data(dest if dest is not None else TEST_DATA_DIR)
+
+
+def download_svo_filter_cache(destination):
+    """Download and extract the SVO filter cache.
+
+    This downloads a tarball of cached SVO filter responses and extracts
+    them into the destination directory, avoiding repeated requests to
+    the SVO database during CI runs.
+
+    Args:
+        destination (str):
+            The path to the destination directory where the cache should
+            be extracted.
+    """
+    import tarfile
+
+    def _safe_extract(tar, path):
+        """Extract a tarball safely, guarding against path traversal."""
+        if hasattr(tarfile, "DATA_FILTER"):
+            tar.extractall(path=path, filter="data")
+        else:
+            for member in tar.getmembers():
+                member_path = os.path.realpath(os.path.join(path, member.name))
+                if not member_path.startswith(os.path.realpath(path)):
+                    raise exceptions.DownloadError(
+                        f"Unsafe tar member: {member.name}"
+                    )
+                tar.extract(member, path=path)
+
+    for fname in SVO_FILTER_CACHE_FILES:
+        _download(fname, destination)
+        tarball_path = os.path.join(destination, fname)
+        with tarfile.open(tarball_path, "r:gz") as tar:
+            _safe_extract(tar, destination)
+        os.remove(tarball_path)
 
 
 def download_synference_test(destination):

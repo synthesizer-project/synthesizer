@@ -50,6 +50,9 @@ jobs:
         run: |
           # Download the data we need
           synthesizer-download --test-grids --dust-grid --all-sim-data --instruments EuclidNISP
+      - name: Download SVO filter cache
+        run: |
+          synthesizer-download --svo-filter-cache
       - name: Test with pytest
         run: |
           pytest -n auto
