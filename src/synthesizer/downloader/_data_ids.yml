@@ -693,6 +693,10 @@ ProductionGrids:
   maraston24-Tenc40_kroupa-0.1,100_cloudy-c23.01-sps.hdf5:
     file: maraston24-Tenc40_kroupa-0.1,100_cloudy-c23.01-sps.hdf5
     direct_link: https://sussex.box.com/shared/static/c7s1xxltz5a8fo7gi14howlepbfc3aa1.hdf5
+SVOFilterCache:
+  svo_filter_cache.tar.gz:
+    file: svo_filter_cache.tar.gz
+    direct_link: https://sussex.box.com/shared/static/o29i2nytryj2895pkbe25e9825cf5zc6.gz
 SynferenceData:
   BPASS_DenseBasis_v4_final_nsf_0_params.pkl:
     file: BPASS_DenseBasis_v4_final_nsf_0_params.pkl

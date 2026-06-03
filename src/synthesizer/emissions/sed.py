@@ -1624,9 +1624,9 @@ class Sed:
         # Get the unit without making a copy
         units = get_quantity_unit(self, "lnu")
 
-        # For the standard AttenuationLaw implementation with per-row tau_v we
-        # can avoid materialising a full 2D transmission array and instead use
-        # the separable attenuation kernel directly.
+        # For the standard AttenuationLaw-style implementations with per-row
+        # tau_v we can avoid materialising a full 2D transmission array and
+        # instead use the separable attenuation kernel directly.
         # This is the main new fast path: one tau_v per spectrum row plus the
         # stock AttenuationLaw transmission formula means we can keep the work
         # separable as tau_v[row] * tau_x_v[lam].

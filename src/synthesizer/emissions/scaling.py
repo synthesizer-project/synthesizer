@@ -116,10 +116,10 @@ def normalise_scaling_for_units(scaling, units):
 def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
     """Resolve a line scaling into luminosity and continuum factors.
 
-    Line luminosity and continuum carry different physical units, so a single
-    unit-bearing scaling may need to be converted into two different raw
-    arrays. The frequency coordinate is only constructed when we actually need
-    one of those unit conversions.
+    Line luminosity and continuum carry different units (erg/s and erg/s/Hz
+    respectively), so a single unit-bearing scaling may need to be converted
+    into two different raw arrays. The frequency coordinate is only constructed
+    when we actually need one of those unit conversions.
 
     Args:
         scaling (float, np.ndarray, or unyt quantity):

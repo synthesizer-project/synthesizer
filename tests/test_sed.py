@@ -6,6 +6,7 @@ from unyt import Hz, angstrom, cm, erg, nJy, pc, s
 
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emission_models.attenuation import PowerLaw
+from synthesizer.emissions import Sed
 from synthesizer.emissions.sed import Sed, integrate_particle_sed
 from synthesizer.extensions.reductions import reduce_particle_spectra
 
