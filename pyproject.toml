@@ -99,7 +99,7 @@ dependencies = [
 [project.optional-dependencies]
 # Development
 dev = [
-    "ruff==0.11.7",
+    "ruff==0.15.15",
     "pre-commit",
     "nb-clean",
 ]
