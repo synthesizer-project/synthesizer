@@ -21,6 +21,7 @@
 
 /* Local includes */
 #include "cpp_to_python.h"
+#include "python_to_cpp.h"
 #include "index_utils.h"
 #include "timers.h"
 #ifdef ATOMIC_TIMING
@@ -283,16 +284,8 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
 
   const int grid_typenum = grid_props->get_float_typenum();
   const int part_typenum = parts->get_float_typenum();
-  if (grid_typenum != -1 && part_typenum != -1 &&
-      grid_typenum != part_typenum) {
-    PyErr_SetString(PyExc_TypeError,
-                    "[weight_loop_cic]: Grid and particle arrays must share "
-                    "the same floating-point dtype.");
-    return;
-  }
-
-  const int resolved = grid_typenum != -1 ? grid_typenum : part_typenum;
-  int dispatch_key = (resolved == NPY_FLOAT64);
+  const int input_typenum = grid_typenum != -1 ? grid_typenum : part_typenum;
+  int dispatch_key = (input_typenum == NPY_FLOAT64);
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
@@ -487,16 +480,8 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
 
   const int grid_typenum = grid_props->get_float_typenum();
   const int part_typenum = parts->get_float_typenum();
-  if (grid_typenum != -1 && part_typenum != -1 &&
-      grid_typenum != part_typenum) {
-    PyErr_SetString(PyExc_TypeError,
-                    "[weight_loop_ngp]: Grid and particle arrays must share "
-                    "the same floating-point dtype.");
-    return;
-  }
-
-  const int resolved = grid_typenum != -1 ? grid_typenum : part_typenum;
-  int dispatch_key = (resolved == NPY_FLOAT64);
+  const int input_typenum = grid_typenum != -1 ? grid_typenum : part_typenum;
+  int dispatch_key = (input_typenum == NPY_FLOAT64);
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {

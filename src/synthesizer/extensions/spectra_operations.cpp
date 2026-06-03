@@ -1388,7 +1388,8 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
  *
  * This is the serial version of the function for rows without a mask.
  *
- * @tparam Real Floating-point type of the input arrays.
+ * @tparam DataReal Floating-point type of the input lum/cont arrays.
+ * @tparam ScaleReal Floating-point type of the scaling arrays.
  * @tparam OutT Floating-point type of the output arrays.
  *
  * @param lum: Input luminosity array (nspec x nlam).
@@ -1400,11 +1401,11 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-template <typename Real, typename OutT>
-static void scale_line_2d_no_mask_serial(const Real *__restrict__ lum,
-                                         const Real *__restrict__ cont,
-                                         const Real *scaling_lum,
-                                         const Real *scaling_cont,
+template <typename DataReal, typename ScaleReal, typename OutT>
+static void scale_line_2d_no_mask_serial(const DataReal *__restrict__ lum,
+                                         const DataReal *__restrict__ cont,
+                                         const ScaleReal *scaling_lum,
+                                         const ScaleReal *scaling_cont,
                                          OutT *out_lum, OutT *out_cont,
                                          int nspec, int nlam) {
 
@@ -1412,10 +1413,10 @@ static void scale_line_2d_no_mask_serial(const Real *__restrict__ lum,
   for (int i = 0; i < nspec; i++) {
 
     /* Cache both scale factors so we read each once. */
-    const Real sl = scaling_lum[i];
-    const Real sc = scaling_cont[i];
-    const Real *in_lum_row = lum + i * nlam;
-    const Real *in_cont_row = cont + i * nlam;
+    const ScaleReal sl = scaling_lum[i];
+    const ScaleReal sc = scaling_cont[i];
+    const DataReal *in_lum_row = lum + i * nlam;
+    const DataReal *in_cont_row = cont + i * nlam;
     OutT *out_lum_row = out_lum + i * nlam;
     OutT *out_cont_row = out_cont + i * nlam;
 
@@ -1432,7 +1433,8 @@ static void scale_line_2d_no_mask_serial(const Real *__restrict__ lum,
  *
  * This is the serial version of the function for rows with a row mask.
  *
- * @tparam Real Floating-point type of the input arrays.
+ * @tparam DataReal Floating-point type of the input lum/cont arrays.
+ * @tparam ScaleReal Floating-point type of the scaling arrays.
  * @tparam OutT Floating-point type of the output arrays.
  *
  * @param lum: Input luminosity array (nspec x nlam).
@@ -1445,23 +1447,23 @@ static void scale_line_2d_no_mask_serial(const Real *__restrict__ lum,
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-template <typename Real, typename OutT>
+template <typename DataReal, typename ScaleReal, typename OutT>
 static void scale_line_2d_row_mask_serial(
-    const Real *__restrict__ lum, const Real *__restrict__ cont,
-    const Real *scaling_lum, const Real *scaling_cont, const npy_bool *mask,
-    OutT *out_lum, OutT *out_cont, int nspec, int nlam) {
+    const DataReal *__restrict__ lum, const DataReal *__restrict__ cont,
+    const ScaleReal *scaling_lum, const ScaleReal *scaling_cont,
+    const npy_bool *mask, OutT *out_lum, OutT *out_cont, int nspec, int nlam) {
 
   /* Loop over every spectrum and dispatch based on the mask. */
   for (int i = 0; i < nspec; i++) {
-    const Real *in_lum_row = lum + i * nlam;
-    const Real *in_cont_row = cont + i * nlam;
+    const DataReal *in_lum_row = lum + i * nlam;
+    const DataReal *in_cont_row = cont + i * nlam;
     OutT *out_lum_row = out_lum + i * nlam;
     OutT *out_cont_row = out_cont + i * nlam;
 
     /* Scale masked rows and copy unmasked rows through unchanged. */
     if (mask[i]) {
-      const Real sl = scaling_lum[i];
-      const Real sc = scaling_cont[i];
+      const ScaleReal sl = scaling_lum[i];
+      const ScaleReal sc = scaling_cont[i];
 #pragma GCC ivdep
       for (int j = 0; j < nlam; j++) {
         out_lum_row[j] = static_cast<OutT>(in_lum_row[j] * sl);
@@ -1483,7 +1485,8 @@ static void scale_line_2d_row_mask_serial(
  *
  * This is the serial version of the function for rows with a wavelength mask.
  *
- * @tparam Real Floating-point type of the input arrays.
+ * @tparam DataReal Floating-point type of the input lum/cont arrays.
+ * @tparam ScaleReal Floating-point type of the scaling arrays.
  * @tparam OutT Floating-point type of the output arrays.
  *
  * @param lum: Input luminosity array (nspec x nlam).
@@ -1496,11 +1499,11 @@ static void scale_line_2d_row_mask_serial(
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-template <typename Real, typename OutT>
-static void scale_line_2d_lam_mask_serial(const Real *__restrict__ lum,
-                                          const Real *__restrict__ cont,
-                                          const Real *scaling_lum,
-                                          const Real *scaling_cont,
+template <typename DataReal, typename ScaleReal, typename OutT>
+static void scale_line_2d_lam_mask_serial(const DataReal *__restrict__ lum,
+                                          const DataReal *__restrict__ cont,
+                                          const ScaleReal *scaling_lum,
+                                          const ScaleReal *scaling_cont,
                                           const npy_bool *lam_mask,
                                           OutT *out_lum, OutT *out_cont,
                                           int nspec, int nlam) {
@@ -1509,10 +1512,10 @@ static void scale_line_2d_lam_mask_serial(const Real *__restrict__ lum,
   for (int i = 0; i < nspec; i++) {
 
     /* Cache both scale factors for this row. */
-    const Real sl = scaling_lum[i];
-    const Real sc = scaling_cont[i];
-    const Real *in_lum_row = lum + i * nlam;
-    const Real *in_cont_row = cont + i * nlam;
+    const ScaleReal sl = scaling_lum[i];
+    const ScaleReal sc = scaling_cont[i];
+    const DataReal *in_lum_row = lum + i * nlam;
+    const DataReal *in_cont_row = cont + i * nlam;
     OutT *out_lum_row = out_lum + i * nlam;
     OutT *out_cont_row = out_cont + i * nlam;
 
@@ -1533,7 +1536,8 @@ static void scale_line_2d_lam_mask_serial(const Real *__restrict__ lum,
  *
  * This is the serial version of the function for rows with both masks.
  *
- * @tparam Real Floating-point type of the input arrays.
+ * @tparam DataReal Floating-point type of the input lum/cont arrays.
+ * @tparam ScaleReal Floating-point type of the scaling arrays.
  * @tparam OutT Floating-point type of the output arrays.
  *
  * @param lum: Input luminosity array (nspec x nlam).
@@ -1547,24 +1551,24 @@ static void scale_line_2d_lam_mask_serial(const Real *__restrict__ lum,
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-template <typename Real, typename OutT>
+template <typename DataReal, typename ScaleReal, typename OutT>
 static void scale_line_2d_both_masks_serial(
-    const Real *__restrict__ lum, const Real *__restrict__ cont,
-    const Real *scaling_lum, const Real *scaling_cont, const npy_bool *mask,
-    const npy_bool *lam_mask, OutT *out_lum, OutT *out_cont, int nspec,
-    int nlam) {
+    const DataReal *__restrict__ lum, const DataReal *__restrict__ cont,
+    const ScaleReal *scaling_lum, const ScaleReal *scaling_cont,
+    const npy_bool *mask, const npy_bool *lam_mask, OutT *out_lum,
+    OutT *out_cont, int nspec, int nlam) {
 
   /* Loop over every spectrum and dispatch based on the row mask. */
   for (int i = 0; i < nspec; i++) {
-    const Real *in_lum_row = lum + i * nlam;
-    const Real *in_cont_row = cont + i * nlam;
+    const DataReal *in_lum_row = lum + i * nlam;
+    const DataReal *in_cont_row = cont + i * nlam;
     OutT *out_lum_row = out_lum + i * nlam;
     OutT *out_cont_row = out_cont + i * nlam;
 
     /* For masked rows apply the wavelength-dependent scale; copy otherwise. */
     if (mask[i]) {
-      const Real sl = scaling_lum[i];
-      const Real sc = scaling_cont[i];
+      const ScaleReal sl = scaling_lum[i];
+      const ScaleReal sc = scaling_cont[i];
       for (int j = 0; j < nlam; j++) {
         const bool apply = lam_mask[j];
         out_lum_row[j] = apply ? static_cast<OutT>(in_lum_row[j] * sl)
@@ -1588,7 +1592,8 @@ static void scale_line_2d_both_masks_serial(
  *
  * This is the parallel version of the function for rows without a mask.
  *
- * @tparam Real Floating-point type of the input arrays.
+ * @tparam DataReal Floating-point type of the input lum/cont arrays.
+ * @tparam ScaleReal Floating-point type of the scaling arrays.
  * @tparam OutT Floating-point type of the output arrays.
  *
  * @param lum: Input luminosity array (nspec x nlam).
@@ -1601,22 +1606,22 @@ static void scale_line_2d_both_masks_serial(
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-template <typename Real, typename OutT>
-static void scale_line_2d_no_mask_omp(const Real *__restrict__ lum,
-                                      const Real *__restrict__ cont,
-                                      const Real *scaling_lum,
-                                      const Real *scaling_cont, OutT *out_lum,
-                                      OutT *out_cont, int nspec, int nlam,
-                                      int nthreads) {
+template <typename DataReal, typename ScaleReal, typename OutT>
+static void scale_line_2d_no_mask_omp(const DataReal *__restrict__ lum,
+                                      const DataReal *__restrict__ cont,
+                                      const ScaleReal *scaling_lum,
+                                      const ScaleReal *scaling_cont,
+                                      OutT *out_lum, OutT *out_cont, int nspec,
+                                      int nlam, int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   for (int i = 0; i < nspec; i++) {
     /* Cache both scale factors for this row. */
-    const Real sl = scaling_lum[i];
-    const Real sc = scaling_cont[i];
-    const Real *in_lum_row = lum + i * nlam;
-    const Real *in_cont_row = cont + i * nlam;
+    const ScaleReal sl = scaling_lum[i];
+    const ScaleReal sc = scaling_cont[i];
+    const DataReal *in_lum_row = lum + i * nlam;
+    const DataReal *in_cont_row = cont + i * nlam;
     OutT *out_lum_row = out_lum + i * nlam;
     OutT *out_cont_row = out_cont + i * nlam;
 
@@ -1633,7 +1638,8 @@ static void scale_line_2d_no_mask_omp(const Real *__restrict__ lum,
  *
  * This is the parallel version of the function for rows with a row mask.
  *
- * @tparam Real Floating-point type of the input arrays.
+ * @tparam DataReal Floating-point type of the input lum/cont arrays.
+ * @tparam ScaleReal Floating-point type of the scaling arrays.
  * @tparam OutT Floating-point type of the output arrays.
  *
  * @param lum: Input luminosity array (nspec x nlam).
@@ -1647,24 +1653,25 @@ static void scale_line_2d_no_mask_omp(const Real *__restrict__ lum,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-template <typename Real, typename OutT>
+template <typename DataReal, typename ScaleReal, typename OutT>
 static void scale_line_2d_row_mask_omp(
-    const Real *__restrict__ lum, const Real *__restrict__ cont,
-    const Real *scaling_lum, const Real *scaling_cont, const npy_bool *mask,
-    OutT *out_lum, OutT *out_cont, int nspec, int nlam, int nthreads) {
+    const DataReal *__restrict__ lum, const DataReal *__restrict__ cont,
+    const ScaleReal *scaling_lum, const ScaleReal *scaling_cont,
+    const npy_bool *mask, OutT *out_lum, OutT *out_cont, int nspec, int nlam,
+    int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   for (int i = 0; i < nspec; i++) {
-    const Real *in_lum_row = lum + i * nlam;
-    const Real *in_cont_row = cont + i * nlam;
+    const DataReal *in_lum_row = lum + i * nlam;
+    const DataReal *in_cont_row = cont + i * nlam;
     OutT *out_lum_row = out_lum + i * nlam;
     OutT *out_cont_row = out_cont + i * nlam;
 
     /* Scale masked rows and copy unmasked rows through unchanged. */
     if (mask[i]) {
-      const Real sl = scaling_lum[i];
-      const Real sc = scaling_cont[i];
+      const ScaleReal sl = scaling_lum[i];
+      const ScaleReal sc = scaling_cont[i];
 #pragma omp simd
       for (int j = 0; j < nlam; j++) {
         out_lum_row[j] = static_cast<OutT>(in_lum_row[j] * sl);
@@ -1687,7 +1694,8 @@ static void scale_line_2d_row_mask_omp(
  * This is the parallel version of the function for rows with a wavelength
  * mask.
  *
- * @tparam Real Floating-point type of the input arrays.
+ * @tparam DataReal Floating-point type of the input lum/cont arrays.
+ * @tparam ScaleReal Floating-point type of the scaling arrays.
  * @tparam OutT Floating-point type of the output arrays.
  *
  * @param lum: Input luminosity array (nspec x nlam).
@@ -1701,23 +1709,23 @@ static void scale_line_2d_row_mask_omp(
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-template <typename Real, typename OutT>
-static void scale_line_2d_lam_mask_omp(const Real *__restrict__ lum,
-                                       const Real *__restrict__ cont,
-                                       const Real *scaling_lum,
-                                       const Real *scaling_cont,
-                                       const npy_bool *lam_mask, OutT *out_lum,
-                                       OutT *out_cont, int nspec, int nlam,
-                                       int nthreads) {
+template <typename DataReal, typename ScaleReal, typename OutT>
+static void scale_line_2d_lam_mask_omp(const DataReal *__restrict__ lum,
+                                       const DataReal *__restrict__ cont,
+                                       const ScaleReal *scaling_lum,
+                                       const ScaleReal *scaling_cont,
+                                       const npy_bool *lam_mask,
+                                       OutT *out_lum, OutT *out_cont,
+                                       int nspec, int nlam, int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   for (int i = 0; i < nspec; i++) {
     /* Cache both scale factors for this row. */
-    const Real sl = scaling_lum[i];
-    const Real sc = scaling_cont[i];
-    const Real *in_lum_row = lum + i * nlam;
-    const Real *in_cont_row = cont + i * nlam;
+    const ScaleReal sl = scaling_lum[i];
+    const ScaleReal sc = scaling_cont[i];
+    const DataReal *in_lum_row = lum + i * nlam;
+    const DataReal *in_cont_row = cont + i * nlam;
     OutT *out_lum_row = out_lum + i * nlam;
     OutT *out_cont_row = out_cont + i * nlam;
 
@@ -1737,7 +1745,8 @@ static void scale_line_2d_lam_mask_omp(const Real *__restrict__ lum,
  *
  * This is the parallel version of the function for rows with both masks.
  *
- * @tparam Real Floating-point type of the input arrays.
+ * @tparam DataReal Floating-point type of the input lum/cont arrays.
+ * @tparam ScaleReal Floating-point type of the scaling arrays.
  * @tparam OutT Floating-point type of the output arrays.
  *
  * @param lum: Input luminosity array (nspec x nlam).
@@ -1752,25 +1761,25 @@ static void scale_line_2d_lam_mask_omp(const Real *__restrict__ lum,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-template <typename Real, typename OutT>
+template <typename DataReal, typename ScaleReal, typename OutT>
 static void scale_line_2d_both_masks_omp(
-    const Real *__restrict__ lum, const Real *__restrict__ cont,
-    const Real *scaling_lum, const Real *scaling_cont, const npy_bool *mask,
-    const npy_bool *lam_mask, OutT *out_lum, OutT *out_cont, int nspec,
-    int nlam, int nthreads) {
+    const DataReal *__restrict__ lum, const DataReal *__restrict__ cont,
+    const ScaleReal *scaling_lum, const ScaleReal *scaling_cont,
+    const npy_bool *mask, const npy_bool *lam_mask, OutT *out_lum,
+    OutT *out_cont, int nspec, int nlam, int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   for (int i = 0; i < nspec; i++) {
-    const Real *in_lum_row = lum + i * nlam;
-    const Real *in_cont_row = cont + i * nlam;
+    const DataReal *in_lum_row = lum + i * nlam;
+    const DataReal *in_cont_row = cont + i * nlam;
     OutT *out_lum_row = out_lum + i * nlam;
     OutT *out_cont_row = out_cont + i * nlam;
 
     /* For masked rows apply the wavelength-dependent scale; copy otherwise. */
     if (mask[i]) {
-      const Real sl = scaling_lum[i];
-      const Real sc = scaling_cont[i];
+      const ScaleReal sl = scaling_lum[i];
+      const ScaleReal sc = scaling_cont[i];
       for (int j = 0; j < nlam; j++) {
         const bool apply = lam_mask[j];
         out_lum_row[j] = apply ? static_cast<OutT>(in_lum_row[j] * sl)
@@ -1789,11 +1798,12 @@ static void scale_line_2d_both_masks_omp(
 
 #endif /* WITH_OPENMP */
 
-template <typename Real, typename OutT>
+template <typename DataReal, typename ScaleReal, typename OutT>
 static void dispatch_scale_line_2d(
-    const Real *lum, const Real *cont, const Real *scaling_lum,
-    const Real *scaling_cont, const npy_bool *mask, const npy_bool *lam_mask,
-    OutT *out_lum, OutT *out_cont, int nspec, int nlam, int nthreads) {
+    const DataReal *lum, const DataReal *cont, const ScaleReal *scaling_lum,
+    const ScaleReal *scaling_cont, const npy_bool *mask,
+    const npy_bool *lam_mask, OutT *out_lum, OutT *out_cont, int nspec,
+    int nlam, int nthreads) {
 
   const bool has_mask = (mask != NULL);
   const bool has_lam_mask = (lam_mask != NULL);
@@ -1801,19 +1811,19 @@ static void dispatch_scale_line_2d(
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
     if (!has_mask && !has_lam_mask) {
-      scale_line_2d_no_mask_omp<Real, OutT>(lum, cont, scaling_lum,
-                                            scaling_cont, out_lum, out_cont,
-                                            nspec, nlam, nthreads);
+      scale_line_2d_no_mask_omp<DataReal, ScaleReal, OutT>(
+          lum, cont, scaling_lum, scaling_cont, out_lum, out_cont, nspec, nlam,
+          nthreads);
     } else if (has_mask && !has_lam_mask) {
-      scale_line_2d_row_mask_omp<Real, OutT>(lum, cont, scaling_lum,
-                                             scaling_cont, mask, out_lum,
-                                             out_cont, nspec, nlam, nthreads);
+      scale_line_2d_row_mask_omp<DataReal, ScaleReal, OutT>(
+          lum, cont, scaling_lum, scaling_cont, mask, out_lum, out_cont, nspec,
+          nlam, nthreads);
     } else if (!has_mask && has_lam_mask) {
-      scale_line_2d_lam_mask_omp<Real, OutT>(lum, cont, scaling_lum,
-                                             scaling_cont, lam_mask, out_lum,
-                                             out_cont, nspec, nlam, nthreads);
+      scale_line_2d_lam_mask_omp<DataReal, ScaleReal, OutT>(
+          lum, cont, scaling_lum, scaling_cont, lam_mask, out_lum, out_cont,
+          nspec, nlam, nthreads);
     } else {
-      scale_line_2d_both_masks_omp<Real, OutT>(
+      scale_line_2d_both_masks_omp<DataReal, ScaleReal, OutT>(
           lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
           out_cont, nspec, nlam, nthreads);
     }
@@ -1822,18 +1832,18 @@ static void dispatch_scale_line_2d(
 #endif
 
   if (!has_mask && !has_lam_mask) {
-    scale_line_2d_no_mask_serial<Real, OutT>(
+    scale_line_2d_no_mask_serial<DataReal, ScaleReal, OutT>(
         lum, cont, scaling_lum, scaling_cont, out_lum, out_cont, nspec, nlam);
   } else if (has_mask && !has_lam_mask) {
-    scale_line_2d_row_mask_serial<Real, OutT>(lum, cont, scaling_lum,
-                                              scaling_cont, mask, out_lum,
-                                              out_cont, nspec, nlam);
+    scale_line_2d_row_mask_serial<DataReal, ScaleReal, OutT>(
+        lum, cont, scaling_lum, scaling_cont, mask, out_lum, out_cont, nspec,
+        nlam);
   } else if (!has_mask && has_lam_mask) {
-    scale_line_2d_lam_mask_serial<Real, OutT>(lum, cont, scaling_lum,
-                                              scaling_cont, lam_mask, out_lum,
-                                              out_cont, nspec, nlam);
+    scale_line_2d_lam_mask_serial<DataReal, ScaleReal, OutT>(
+        lum, cont, scaling_lum, scaling_cont, lam_mask, out_lum, out_cont,
+        nspec, nlam);
   } else {
-    scale_line_2d_both_masks_serial<Real, OutT>(
+    scale_line_2d_both_masks_serial<DataReal, ScaleReal, OutT>(
         lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
         out_cont, nspec, nlam);
   }
@@ -2000,13 +2010,26 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Resolve input float family and requested out dtype. */
-  PyArrayObject *float_arrays[4] = {np_lum, np_cont, np_scaling_lum,
-                                    np_scaling_cont};
-  const char *float_names[4] = {"lum", "cont", "scaling_lum", "scaling_cont"};
-  int input_typenum = -1;
-  if (!is_matching_float_dtypes(float_arrays, float_names, 4,
-                                &input_typenum)) {
+  /* Resolve float families for data, scaling, and output dtype. */
+  int data_typenum = -1;
+  PyArrayObject *data_arrays[2] = {np_lum, np_cont};
+  const char *data_names[2] = {"lum", "cont"};
+  if (!is_matching_float_dtypes(data_arrays, data_names, 2,
+                                &data_typenum)) {
+    Py_DECREF(np_lum);
+    Py_DECREF(np_cont);
+    Py_DECREF(np_scaling_lum);
+    Py_DECREF(np_scaling_cont);
+    Py_XDECREF(np_mask);
+    Py_XDECREF(np_lam_mask);
+    return NULL;
+  }
+
+  int scale_typenum = -1;
+  PyArrayObject *scale_arrays[2] = {np_scaling_lum, np_scaling_cont};
+  const char *scale_names[2] = {"scaling_lum", "scaling_cont"};
+  if (!is_matching_float_dtypes(scale_arrays, scale_names, 2,
+                                &scale_typenum)) {
     Py_DECREF(np_lum);
     Py_DECREF(np_cont);
     Py_DECREF(np_scaling_lum);
@@ -2029,7 +2052,7 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
       return NULL;
     }
   }
-  if (out_typenum < 0) out_typenum = input_typenum;
+  if (out_typenum < 0) out_typenum = data_typenum;
 
   /* Allocate or reuse output buffers with the requested dtype.
    * TODO: Remove coercion by default. */
@@ -2108,9 +2131,11 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
 
   tic("scale_line_2d");
 
-  /* Dispatch: encode input/output precision into a 2-bit key. */
+  /* Dispatch: encode data/scale/output precision into a 3-bit key. */
   int dispatch_key =
-      ((input_typenum == NPY_FLOAT64) << 1) | (out_typenum == NPY_FLOAT64);
+      ((data_typenum == NPY_FLOAT64) << 2) |
+      ((scale_typenum == NPY_FLOAT64) << 1) |
+      (out_typenum == NPY_FLOAT64);
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
@@ -2125,7 +2150,7 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
           np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
       float *out_lum = data_ptr<float>(np_out_lum);
       float *out_cont = data_ptr<float>(np_out_cont);
-      dispatch_scale_line_2d<float, float>(
+      dispatch_scale_line_2d<float, float, float>(
           lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
           out_cont, nspec, nlam, nthreads);
       break;
@@ -2141,12 +2166,76 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
           np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
       double *out_lum = data_ptr<double>(np_out_lum);
       double *out_cont = data_ptr<double>(np_out_cont);
-      dispatch_scale_line_2d<float, double>(
+      dispatch_scale_line_2d<float, float, double>(
           lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
           out_cont, nspec, nlam, nthreads);
       break;
     }
     case 2: {
+      const float *lum = data_ptr<const float>(np_lum);
+      const float *cont = data_ptr<const float>(np_cont);
+      const double *scaling_lum = data_ptr<const double>(np_scaling_lum);
+      const double *scaling_cont = data_ptr<const double>(np_scaling_cont);
+      const npy_bool *mask =
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr;
+      const npy_bool *lam_mask =
+          np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
+      float *out_lum = data_ptr<float>(np_out_lum);
+      float *out_cont = data_ptr<float>(np_out_cont);
+      dispatch_scale_line_2d<float, double, float>(
+          lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
+          out_cont, nspec, nlam, nthreads);
+      break;
+    }
+    case 3: {
+      const float *lum = data_ptr<const float>(np_lum);
+      const float *cont = data_ptr<const float>(np_cont);
+      const double *scaling_lum = data_ptr<const double>(np_scaling_lum);
+      const double *scaling_cont = data_ptr<const double>(np_scaling_cont);
+      const npy_bool *mask =
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr;
+      const npy_bool *lam_mask =
+          np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
+      double *out_lum = data_ptr<double>(np_out_lum);
+      double *out_cont = data_ptr<double>(np_out_cont);
+      dispatch_scale_line_2d<float, double, double>(
+          lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
+          out_cont, nspec, nlam, nthreads);
+      break;
+    }
+    case 4: {
+      const double *lum = data_ptr<const double>(np_lum);
+      const double *cont = data_ptr<const double>(np_cont);
+      const float *scaling_lum = data_ptr<const float>(np_scaling_lum);
+      const float *scaling_cont = data_ptr<const float>(np_scaling_cont);
+      const npy_bool *mask =
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr;
+      const npy_bool *lam_mask =
+          np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
+      float *out_lum = data_ptr<float>(np_out_lum);
+      float *out_cont = data_ptr<float>(np_out_cont);
+      dispatch_scale_line_2d<double, float, float>(
+          lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
+          out_cont, nspec, nlam, nthreads);
+      break;
+    }
+    case 5: {
+      const double *lum = data_ptr<const double>(np_lum);
+      const double *cont = data_ptr<const double>(np_cont);
+      const float *scaling_lum = data_ptr<const float>(np_scaling_lum);
+      const float *scaling_cont = data_ptr<const float>(np_scaling_cont);
+      const npy_bool *mask =
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr;
+      const npy_bool *lam_mask =
+          np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
+      double *out_lum = data_ptr<double>(np_out_lum);
+      double *out_cont = data_ptr<double>(np_out_cont);
+      dispatch_scale_line_2d<double, float, double>(
+          lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
+          out_cont, nspec, nlam, nthreads);
+      break;
+    }
+    case 6: {
       const double *lum = data_ptr<const double>(np_lum);
       const double *cont = data_ptr<const double>(np_cont);
       const double *scaling_lum = data_ptr<const double>(np_scaling_lum);
@@ -2157,7 +2246,7 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
           np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
       float *out_lum = data_ptr<float>(np_out_lum);
       float *out_cont = data_ptr<float>(np_out_cont);
-      dispatch_scale_line_2d<double, float>(
+      dispatch_scale_line_2d<double, double, float>(
           lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
           out_cont, nspec, nlam, nthreads);
       break;
@@ -2173,7 +2262,7 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
           np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
       double *out_lum = data_ptr<double>(np_out_lum);
       double *out_cont = data_ptr<double>(np_out_cont);
-      dispatch_scale_line_2d<double, double>(
+      dispatch_scale_line_2d<double, double, double>(
           lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
           out_cont, nspec, nlam, nthreads);
       break;
