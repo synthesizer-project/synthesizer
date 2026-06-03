@@ -689,27 +689,28 @@ static PyObject *compute_photometry_integration(PyObject *self,
     return NULL;
   }
 
-  if (input_typenum == NPY_FLOAT32) {
-    if (output_typenum == NPY_FLOAT32) {
-      return compute_photometry_integration_impl<float, float>(
-          np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
-          np_starts, np_ends, nthreads, integration_method);
-    }
+  int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
+                     (output_typenum == NPY_FLOAT64);
 
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0:
+    return compute_photometry_integration_impl<float, float>(
+        np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
+        np_starts, np_ends, nthreads, integration_method);
+  case 1:
     return compute_photometry_integration_impl<float, double>(
         np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
         np_starts, np_ends, nthreads, integration_method);
-  }
-
-  if (output_typenum == NPY_FLOAT32) {
+  case 2:
     return compute_photometry_integration_impl<double, float>(
         np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
         np_starts, np_ends, nthreads, integration_method);
+  default:
+    return compute_photometry_integration_impl<double, double>(
+        np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
+        np_starts, np_ends, nthreads, integration_method);
   }
-
-  return compute_photometry_integration_impl<double, double>(
-      np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
-      np_starts, np_ends, nthreads, integration_method);
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */

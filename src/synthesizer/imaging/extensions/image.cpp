@@ -681,14 +681,20 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   }
 
   PyObject *result = NULL;
-  if (input_typenum == NPY_FLOAT32) {
+  int dispatch_key = (input_typenum == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0:
     result = make_img_impl<float>(res, npix_x, npix_y, npart, threshold, kdim,
                                   nimgs, nthreads, np_pix_values,
                                   np_smoothing_lengths, np_pos, np_kernel);
-  } else {
+    break;
+  default:
     result = make_img_impl<double>(res, npix_x, npix_y, npart, threshold, kdim,
                                    nimgs, nthreads, np_pix_values,
                                    np_smoothing_lengths, np_pos, np_kernel);
+    break;
   }
 
   return result;

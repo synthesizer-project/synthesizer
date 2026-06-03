@@ -460,12 +460,18 @@ static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
   }
 
   PyObject *result = NULL;
-  if (input_typenum == NPY_FLOAT32) {
+  int dispatch_key = (input_typenum == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0:
     result = calculate_circular_overlap_impl<float>(res, nx, ny, r, np_img,
                                                     np_cent, nthreads);
-  } else {
+    break;
+  default:
     result = calculate_circular_overlap_impl<double>(res, nx, ny, r, np_img,
                                                      np_cent, nthreads);
+    break;
   }
 
   toc("calculate_circular_overlap");

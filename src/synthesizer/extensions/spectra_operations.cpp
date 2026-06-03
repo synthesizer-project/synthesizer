@@ -624,44 +624,57 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     }
   }
 
-  /* Dispatch to typed kernel. */
   tic("scale_spectra_2d");
 
-  if (input_typenum == NPY_FLOAT32) {
-    const float *spectra = data_ptr<const float>(np_spectra);
-    const float *scaling = data_ptr<const float>(np_scaling);
-    if (out_typenum == NPY_FLOAT32) {
+  /* Dispatch: encode input/output precision into a 2-bit key. */
+  int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
+                     (out_typenum == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0: {
+      const float *spectra = data_ptr<const float>(np_spectra);
+      const float *scaling = data_ptr<const float>(np_scaling);
       float *out = data_ptr<float>(np_out);
       dispatch_scale_spectra_2d<float, float>(
           spectra, scaling,
           np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr,
           np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr, out,
           nspec, nlam, nthreads);
-    } else {
+      break;
+    }
+  case 1: {
+      const float *spectra = data_ptr<const float>(np_spectra);
+      const float *scaling = data_ptr<const float>(np_scaling);
       double *out = data_ptr<double>(np_out);
       dispatch_scale_spectra_2d<float, double>(
           spectra, scaling,
           np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr,
           np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr, out,
           nspec, nlam, nthreads);
+      break;
     }
-  } else {
-    const double *spectra = data_ptr<const double>(np_spectra);
-    const double *scaling = data_ptr<const double>(np_scaling);
-    if (out_typenum == NPY_FLOAT32) {
+  case 2: {
+      const double *spectra = data_ptr<const double>(np_spectra);
+      const double *scaling = data_ptr<const double>(np_scaling);
       float *out = data_ptr<float>(np_out);
       dispatch_scale_spectra_2d<double, float>(
           spectra, scaling,
           np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr,
           np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr, out,
           nspec, nlam, nthreads);
-    } else {
+      break;
+    }
+  default: {
+      const double *spectra = data_ptr<const double>(np_spectra);
+      const double *scaling = data_ptr<const double>(np_scaling);
       double *out = data_ptr<double>(np_out);
       dispatch_scale_spectra_2d<double, double>(
           spectra, scaling,
           np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr,
           np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr, out,
           nspec, nlam, nthreads);
+      break;
     }
   }
 
@@ -1082,41 +1095,57 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     }
   }
 
-  /* Dispatch to typed kernel. */
   tic("apply_separable_attenuation_2d");
-  if (input_typenum == NPY_FLOAT32) {
-    const float *spectra = data_ptr<const float>(np_spectra);
-    const float *tau_v = data_ptr<const float>(np_tau_v);
-    const float *tau_x_v = data_ptr<const float>(np_tau_x_v);
-    if (out_typenum == NPY_FLOAT32) {
+
+  /* Dispatch: encode input/output precision into a 2-bit key. */
+  int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
+                     (out_typenum == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0: {
+      const float *spectra = data_ptr<const float>(np_spectra);
+      const float *tau_v = data_ptr<const float>(np_tau_v);
+      const float *tau_x_v = data_ptr<const float>(np_tau_x_v);
       float *out = data_ptr<float>(np_out);
       dispatch_attenuate_2d<float, float>(
           spectra, tau_v, tau_x_v,
           np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr, out, nrows,
           ncols, nthreads);
-    } else {
+      break;
+    }
+  case 1: {
+      const float *spectra = data_ptr<const float>(np_spectra);
+      const float *tau_v = data_ptr<const float>(np_tau_v);
+      const float *tau_x_v = data_ptr<const float>(np_tau_x_v);
       double *out = data_ptr<double>(np_out);
       dispatch_attenuate_2d<float, double>(
           spectra, tau_v, tau_x_v,
           np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr, out, nrows,
           ncols, nthreads);
+      break;
     }
-  } else {
-    const double *spectra = data_ptr<const double>(np_spectra);
-    const double *tau_v = data_ptr<const double>(np_tau_v);
-    const double *tau_x_v = data_ptr<const double>(np_tau_x_v);
-    if (out_typenum == NPY_FLOAT32) {
+  case 2: {
+      const double *spectra = data_ptr<const double>(np_spectra);
+      const double *tau_v = data_ptr<const double>(np_tau_v);
+      const double *tau_x_v = data_ptr<const double>(np_tau_x_v);
       float *out = data_ptr<float>(np_out);
       dispatch_attenuate_2d<double, float>(
           spectra, tau_v, tau_x_v,
           np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr, out, nrows,
           ncols, nthreads);
-    } else {
+      break;
+    }
+  default: {
+      const double *spectra = data_ptr<const double>(np_spectra);
+      const double *tau_v = data_ptr<const double>(np_tau_v);
+      const double *tau_x_v = data_ptr<const double>(np_tau_x_v);
       double *out = data_ptr<double>(np_out);
       dispatch_attenuate_2d<double, double>(
           spectra, tau_v, tau_x_v,
           np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr, out, nrows,
           ncols, nthreads);
+      break;
     }
   }
 
@@ -1305,33 +1334,40 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
     }
   }
 
-  /* Dispatch on input/output precision. */
-  if (input_typenum == NPY_FLOAT32) {
-    if (out_typenum == NPY_FLOAT32) {
+  /* Dispatch: encode input/output precision into a 2-bit key. */
+  int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
+                     (out_typenum == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0: {
       PyObject *res = multiply_array_by_vector_1d_typed<float, float>(
           np_array, np_vector, nthreads, np_out);
       Py_DECREF(np_array);
       Py_DECREF(np_vector);
       return res;
     }
-    PyObject *res = multiply_array_by_vector_1d_typed<float, double>(
-        np_array, np_vector, nthreads, np_out);
-    Py_DECREF(np_array);
-    Py_DECREF(np_vector);
-    return res;
-  } else {
-    if (out_typenum == NPY_FLOAT32) {
+  case 1: {
+      PyObject *res = multiply_array_by_vector_1d_typed<float, double>(
+          np_array, np_vector, nthreads, np_out);
+      Py_DECREF(np_array);
+      Py_DECREF(np_vector);
+      return res;
+    }
+  case 2: {
       PyObject *res = multiply_array_by_vector_1d_typed<double, float>(
           np_array, np_vector, nthreads, np_out);
       Py_DECREF(np_array);
       Py_DECREF(np_vector);
       return res;
     }
-    PyObject *res = multiply_array_by_vector_1d_typed<double, double>(
-        np_array, np_vector, nthreads, np_out);
-    Py_DECREF(np_array);
-    Py_DECREF(np_vector);
-    return res;
+  default: {
+      PyObject *res = multiply_array_by_vector_1d_typed<double, double>(
+          np_array, np_vector, nthreads, np_out);
+      Py_DECREF(np_array);
+      Py_DECREF(np_vector);
+      return res;
+    }
   }
 }
 
@@ -2058,51 +2094,77 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
     }
   }
 
-  /* Extract raw pointers and dispatch to the typed fused kernel. */
   tic("scale_line_2d");
-  if (input_typenum == NPY_FLOAT32) {
-    const float *lum = data_ptr<const float>(np_lum);
-    const float *cont = data_ptr<const float>(np_cont);
-    const float *scaling_lum = data_ptr<const float>(np_scaling_lum);
-    const float *scaling_cont = data_ptr<const float>(np_scaling_cont);
-    const npy_bool *mask =
-        np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr;
-    const npy_bool *lam_mask =
-        np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
-    if (out_typenum == NPY_FLOAT32) {
+
+  /* Dispatch: encode input/output precision into a 2-bit key. */
+  int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
+                     (out_typenum == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0: {
+      const float *lum = data_ptr<const float>(np_lum);
+      const float *cont = data_ptr<const float>(np_cont);
+      const float *scaling_lum = data_ptr<const float>(np_scaling_lum);
+      const float *scaling_cont = data_ptr<const float>(np_scaling_cont);
+      const npy_bool *mask =
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr;
+      const npy_bool *lam_mask =
+          np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
       float *out_lum = data_ptr<float>(np_out_lum);
       float *out_cont = data_ptr<float>(np_out_cont);
       dispatch_scale_line_2d<float, float>(lum, cont, scaling_lum, scaling_cont,
                                            mask, lam_mask, out_lum, out_cont,
                                            nspec, nlam, nthreads);
-    } else {
+      break;
+    }
+  case 1: {
+      const float *lum = data_ptr<const float>(np_lum);
+      const float *cont = data_ptr<const float>(np_cont);
+      const float *scaling_lum = data_ptr<const float>(np_scaling_lum);
+      const float *scaling_cont = data_ptr<const float>(np_scaling_cont);
+      const npy_bool *mask =
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr;
+      const npy_bool *lam_mask =
+          np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
       double *out_lum = data_ptr<double>(np_out_lum);
       double *out_cont = data_ptr<double>(np_out_cont);
       dispatch_scale_line_2d<float, double>(
           lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
           out_cont, nspec, nlam, nthreads);
+      break;
     }
-  } else {
-    const double *lum = data_ptr<const double>(np_lum);
-    const double *cont = data_ptr<const double>(np_cont);
-    const double *scaling_lum = data_ptr<const double>(np_scaling_lum);
-    const double *scaling_cont = data_ptr<const double>(np_scaling_cont);
-    const npy_bool *mask =
-        np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr;
-    const npy_bool *lam_mask =
-        np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
-    if (out_typenum == NPY_FLOAT32) {
+  case 2: {
+      const double *lum = data_ptr<const double>(np_lum);
+      const double *cont = data_ptr<const double>(np_cont);
+      const double *scaling_lum = data_ptr<const double>(np_scaling_lum);
+      const double *scaling_cont = data_ptr<const double>(np_scaling_cont);
+      const npy_bool *mask =
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr;
+      const npy_bool *lam_mask =
+          np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
       float *out_lum = data_ptr<float>(np_out_lum);
       float *out_cont = data_ptr<float>(np_out_cont);
       dispatch_scale_line_2d<double, float>(
           lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
           out_cont, nspec, nlam, nthreads);
-    } else {
+      break;
+    }
+  default: {
+      const double *lum = data_ptr<const double>(np_lum);
+      const double *cont = data_ptr<const double>(np_cont);
+      const double *scaling_lum = data_ptr<const double>(np_scaling_lum);
+      const double *scaling_cont = data_ptr<const double>(np_scaling_cont);
+      const npy_bool *mask =
+          np_mask ? data_ptr<const npy_bool>(np_mask) : nullptr;
+      const npy_bool *lam_mask =
+          np_lam_mask ? data_ptr<const npy_bool>(np_lam_mask) : nullptr;
       double *out_lum = data_ptr<double>(np_out_lum);
       double *out_cont = data_ptr<double>(np_out_cont);
       dispatch_scale_line_2d<double, double>(
           lum, cont, scaling_lum, scaling_cont, mask, lam_mask, out_lum,
           out_cont, nspec, nlam, nthreads);
+      break;
     }
   }
 

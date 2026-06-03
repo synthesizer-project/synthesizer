@@ -257,24 +257,24 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Dispatch to the matching Real/OutT reduction path. */
-  if (input_typenum == NPY_FLOAT32) {
-    if (output_typenum == NPY_FLOAT32) {
-      return reduce_particle_spectra_impl<float, float>(np_part_spectra,
-                                                        nthreads);
-    }
+  int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
+                     (output_typenum == NPY_FLOAT64);
 
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0:
+    return reduce_particle_spectra_impl<float, float>(np_part_spectra,
+                                                      nthreads);
+  case 1:
     return reduce_particle_spectra_impl<float, double>(np_part_spectra,
                                                        nthreads);
-  }
-
-  if (output_typenum == NPY_FLOAT32) {
+  case 2:
     return reduce_particle_spectra_impl<double, float>(np_part_spectra,
                                                        nthreads);
+  default:
+    return reduce_particle_spectra_impl<double, double>(np_part_spectra,
+                                                        nthreads);
   }
-
-  return reduce_particle_spectra_impl<double, double>(np_part_spectra,
-                                                      nthreads);
 }
 
 template void reduce_spectra<float, float>(float *, const float *, int, int,

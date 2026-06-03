@@ -1143,12 +1143,20 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /* Allocate the particle spectra in the requested output precision. */
   PyArrayObject *np_part_spectra = NULL;
-  if (output_typenum == NPY_FLOAT32) {
-    np_part_spectra = (PyArrayObject *)PyArray_ZEROS(2, np_part_dims,
-                                                     NPY_FLOAT32, 0);
-  } else {
-    np_part_spectra = (PyArrayObject *)PyArray_ZEROS(2, np_part_dims,
-                                                     NPY_FLOAT64, 0);
+  {
+    int dispatch_key = (output_typenum == NPY_FLOAT64);
+
+    /* Dispatch: call the matching typed kernel based on the dispatch key. */
+    switch (dispatch_key) {
+    case 0:
+      np_part_spectra = (PyArrayObject *)PyArray_ZEROS(2, np_part_dims,
+                                                        NPY_FLOAT32, 0);
+      break;
+    default:
+      np_part_spectra = (PyArrayObject *)PyArray_ZEROS(2, np_part_dims,
+                                                        NPY_FLOAT64, 0);
+      break;
+    }
   }
   if (np_part_spectra == NULL) {
     delete part_props;
@@ -1161,48 +1169,70 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
   if (strcmp(method, "cic") == 0) {
-    if (input_typenum == NPY_FLOAT32 && output_typenum == NPY_FLOAT32) {
-      spectra_loop_cic<float, float>(
-          grid_props, part_props,
-          static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-          has_lam_mask);
-    } else if (input_typenum == NPY_FLOAT32) {
-      spectra_loop_cic<float, double>(
-          grid_props, part_props,
-          static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-          has_lam_mask);
-    } else if (output_typenum == NPY_FLOAT32) {
-      spectra_loop_cic<double, float>(
-          grid_props, part_props,
-          static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-          has_lam_mask);
-    } else {
-      spectra_loop_cic<double, double>(
-          grid_props, part_props,
-          static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-          has_lam_mask);
+    {
+      int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
+                         (output_typenum == NPY_FLOAT64);
+
+      /* Dispatch: call the matching typed kernel based on the dispatch key. */
+      switch (dispatch_key) {
+      case 0:
+        spectra_loop_cic<float, float>(
+            grid_props, part_props,
+            static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+            has_lam_mask);
+        break;
+      case 1:
+        spectra_loop_cic<float, double>(
+            grid_props, part_props,
+            static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+            has_lam_mask);
+        break;
+      case 2:
+        spectra_loop_cic<double, float>(
+            grid_props, part_props,
+            static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+            has_lam_mask);
+        break;
+      default:
+        spectra_loop_cic<double, double>(
+            grid_props, part_props,
+            static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+            has_lam_mask);
+        break;
+      }
     }
   } else if (strcmp(method, "ngp") == 0) {
-    if (input_typenum == NPY_FLOAT32 && output_typenum == NPY_FLOAT32) {
-      spectra_loop_ngp<float, float>(
-          grid_props, part_props,
-          static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-          has_lam_mask);
-    } else if (input_typenum == NPY_FLOAT32) {
-      spectra_loop_ngp<float, double>(
-          grid_props, part_props,
-          static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-          has_lam_mask);
-    } else if (output_typenum == NPY_FLOAT32) {
-      spectra_loop_ngp<double, float>(
-          grid_props, part_props,
-          static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-          has_lam_mask);
-    } else {
-      spectra_loop_ngp<double, double>(
-          grid_props, part_props,
-          static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-          has_lam_mask);
+    {
+      int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
+                         (output_typenum == NPY_FLOAT64);
+
+      /* Dispatch: call the matching typed kernel based on the dispatch key. */
+      switch (dispatch_key) {
+      case 0:
+        spectra_loop_ngp<float, float>(
+            grid_props, part_props,
+            static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+            has_lam_mask);
+        break;
+      case 1:
+        spectra_loop_ngp<float, double>(
+            grid_props, part_props,
+            static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+            has_lam_mask);
+        break;
+      case 2:
+        spectra_loop_ngp<double, float>(
+            grid_props, part_props,
+            static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+            has_lam_mask);
+        break;
+      default:
+        spectra_loop_ngp<double, double>(
+            grid_props, part_props,
+            static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+            has_lam_mask);
+        break;
+      }
     }
   } else {
     PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",

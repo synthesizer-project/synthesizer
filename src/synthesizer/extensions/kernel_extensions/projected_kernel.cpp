@@ -175,16 +175,20 @@ PyObject *compute_projected_kernel(PyObject *self, PyObject *args) {
 
   /* Validate the dtype and dispatch to the correct instantiation. */
   const int input_typenum = PyArray_TYPE(np_q_grid);
-  if (input_typenum == NPY_FLOAT32) {
+  /* Dispatch: encode input precision into a 1-bit key. */
+  int dispatch_key = (input_typenum == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0:
     return compute_projected_kernel_impl<float>(self, np_q_grid, kernel_name,
                                                 nsteps);
-  }
-  if (input_typenum == NPY_FLOAT64) {
+  case 1:
     return compute_projected_kernel_impl<double>(self, np_q_grid, kernel_name,
                                                  nsteps);
+  default:
+    PyErr_SetString(PyExc_TypeError,
+                    "q_grid must be float32 or float64.");
+    return NULL;
   }
-
-  PyErr_SetString(PyExc_TypeError,
-                  "q_grid must be float32 or float64.");
-  return NULL;
 }

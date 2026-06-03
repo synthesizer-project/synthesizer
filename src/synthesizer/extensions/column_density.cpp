@@ -746,17 +746,21 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  if (input_typenum == NPY_FLOAT32) {
+  int dispatch_key = (input_typenum == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0:
     return compute_column_density_impl<float>(
         self, np_kernel, np_truncated_kernel, np_pos_i, np_pos_j, np_smls,
         np_surf_den_val, npart_i, npart_j, kdim, trunc_qdim, zdim, threshold,
         force_loop, min_count, nthreads);
+  default:
+    return compute_column_density_impl<double>(
+        self, np_kernel, np_truncated_kernel, np_pos_i, np_pos_j, np_smls,
+        np_surf_den_val, npart_i, npart_j, kdim, trunc_qdim, zdim, threshold,
+        force_loop, min_count, nthreads);
   }
-
-  return compute_column_density_impl<double>(
-      self, np_kernel, np_truncated_kernel, np_pos_i, np_pos_j, np_smls,
-      np_surf_den_val, npart_i, npart_j, kdim, trunc_qdim, zdim, threshold,
-      force_loop, min_count, nthreads);
 }
 
 /**
@@ -1428,17 +1432,21 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  if (input_typenum == NPY_FLOAT32) {
+  int dispatch_key = (input_typenum == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0:
     return compute_column_density_smoothed_impl<float>(
         self, np_overlap_kernel, np_q_grid, np_u_grid, np_eta_grid, np_pos_i,
         np_input_smls, np_pos_j, np_smls, np_surf_den_val, npart_i, npart_j,
         qdim, udim, etadim, threshold, force_loop, min_count, nthreads);
+  default:
+    return compute_column_density_smoothed_impl<double>(
+        self, np_overlap_kernel, np_q_grid, np_u_grid, np_eta_grid, np_pos_i,
+        np_input_smls, np_pos_j, np_smls, np_surf_den_val, npart_i, npart_j,
+        qdim, udim, etadim, threshold, force_loop, min_count, nthreads);
   }
-
-  return compute_column_density_smoothed_impl<double>(
-      self, np_overlap_kernel, np_q_grid, np_u_grid, np_eta_grid, np_pos_i,
-      np_input_smls, np_pos_j, np_smls, np_surf_den_val, npart_i, npart_j,
-      qdim, udim, etadim, threshold, force_loop, min_count, nthreads);
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */

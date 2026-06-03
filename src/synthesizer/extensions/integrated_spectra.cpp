@@ -287,11 +287,19 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   /* Get existing grid weights or allocate new ones in the shared input
    * precision. */
   void *grid_weights = NULL;
-  if (input_typenum == NPY_FLOAT32) {
-    grid_weights = static_cast<void *>(grid_props->get_grid_weights<float>());
-  } else {
-    grid_weights =
-        static_cast<void *>(grid_props->get_grid_weights<double>());
+  {
+    int dispatch_key = (input_typenum == NPY_FLOAT64);
+
+    /* Dispatch: call the matching typed kernel based on the dispatch key. */
+    switch (dispatch_key) {
+    case 0:
+      grid_weights = static_cast<void *>(grid_props->get_grid_weights<float>());
+      break;
+    default:
+      grid_weights =
+          static_cast<void *>(grid_props->get_grid_weights<double>());
+      break;
+    }
   }
   RETURN_IF_PYERR();
 
@@ -316,16 +324,25 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
   /* Compute the integrated SED. */
   PyArrayObject *np_spectra = NULL;
-  if (input_typenum == NPY_FLOAT32) {
-    if (output_typenum == NPY_FLOAT32) {
+  {
+    int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
+                       (output_typenum == NPY_FLOAT64);
+
+    /* Dispatch: call the matching typed kernel based on the dispatch key. */
+    switch (dispatch_key) {
+    case 0:
       np_spectra = get_spectra<float, float>(grid_props, nthreads);
-    } else {
+      break;
+    case 1:
       np_spectra = get_spectra<float, double>(grid_props, nthreads);
+      break;
+    case 2:
+      np_spectra = get_spectra<double, float>(grid_props, nthreads);
+      break;
+    default:
+      np_spectra = get_spectra<double, double>(grid_props, nthreads);
+      break;
     }
-  } else if (output_typenum == NPY_FLOAT32) {
-    np_spectra = get_spectra<double, float>(grid_props, nthreads);
-  } else {
-    np_spectra = get_spectra<double, double>(grid_props, nthreads);
   }
 
   if (np_spectra == NULL) {

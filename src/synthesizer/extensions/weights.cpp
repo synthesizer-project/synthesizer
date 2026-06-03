@@ -292,13 +292,19 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
   }
 
   const int resolved = grid_typenum != -1 ? grid_typenum : part_typenum;
-  if (resolved == NPY_FLOAT32) {
+  int dispatch_key = (resolved == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0:
     weight_loop_cic<float>(grid_props, parts, out_size,
                            static_cast<float *>(out), nthreads);
-  } else {
+    break;
+  default:
     /* Default to float64 for backwards compatibility. */
     weight_loop_cic<double>(grid_props, parts, out_size,
                             static_cast<double *>(out), nthreads);
+    break;
   }
 }
 
@@ -489,12 +495,18 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
   }
 
   const int resolved = grid_typenum != -1 ? grid_typenum : part_typenum;
-  if (resolved == NPY_FLOAT32) {
+  int dispatch_key = (resolved == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0:
     weight_loop_ngp<float, float>(grid_props, parts, out_size,
                                   static_cast<float *>(out), nthreads);
-  } else {
+    break;
+  default:
     weight_loop_ngp<double, double>(grid_props, parts, out_size,
                                     static_cast<double *>(out), nthreads);
+    break;
   }
 }
 

@@ -356,14 +356,22 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   double *spectra_f64 = NULL;
   float *part_spectra_f32 = NULL;
   double *part_spectra_f64 = NULL;
-  if (output_typenum == NPY_FLOAT32) {
-    spectra_f32 = new (std::nothrow) float[grid_props->nlam]();
-    part_spectra_f32 =
-        new (std::nothrow) float[npart * grid_props->nlam]();
-  } else {
-    spectra_f64 = new (std::nothrow) double[grid_props->nlam]();
-    part_spectra_f64 =
-        new (std::nothrow) double[npart * grid_props->nlam]();
+  {
+    int dispatch_key = (output_typenum == NPY_FLOAT64);
+
+    /* Dispatch: call the matching typed kernel based on the dispatch key. */
+    switch (dispatch_key) {
+    case 0:
+      spectra_f32 = new (std::nothrow) float[grid_props->nlam]();
+      part_spectra_f32 =
+          new (std::nothrow) float[npart * grid_props->nlam]();
+      break;
+    default:
+      spectra_f64 = new (std::nothrow) double[grid_props->nlam]();
+      part_spectra_f64 =
+          new (std::nothrow) double[npart * grid_props->nlam]();
+      break;
+    }
   }
 
   if ((output_typenum == NPY_FLOAT32 &&
@@ -386,32 +394,43 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
 
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
-  if (input_typenum == NPY_FLOAT32 && output_typenum == NPY_FLOAT32) {
-    compute_doppler_particle_seds_impl<float, float>(
-        grid_props, part_props, part_spectra_f32, nthreads,
-        static_cast<float>(c), method);
-    RETURN_IF_PYERR();
-    reduce_spectra<float>(spectra_f32, part_spectra_f32, nlam, npart,
-                          nthreads);
-  } else if (input_typenum == NPY_FLOAT32) {
-    compute_doppler_particle_seds_impl<float, double>(
-        grid_props, part_props, part_spectra_f64, nthreads,
-        static_cast<float>(c), method);
-    RETURN_IF_PYERR();
-    reduce_spectra<double>(spectra_f64, part_spectra_f64, nlam, npart,
-                           nthreads);
-  } else if (output_typenum == NPY_FLOAT32) {
-    compute_doppler_particle_seds_impl<double, float>(
-        grid_props, part_props, part_spectra_f32, nthreads, c, method);
-    RETURN_IF_PYERR();
-    reduce_spectra<float>(spectra_f32, part_spectra_f32, nlam, npart,
-                          nthreads);
-  } else {
-    compute_doppler_particle_seds_impl<double, double>(
-        grid_props, part_props, part_spectra_f64, nthreads, c, method);
-    RETURN_IF_PYERR();
-    reduce_spectra<double>(spectra_f64, part_spectra_f64, nlam, npart,
-                           nthreads);
+  {
+    int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
+                       (output_typenum == NPY_FLOAT64);
+
+    /* Dispatch: call the matching typed kernel based on the dispatch key. */
+    switch (dispatch_key) {
+    case 0:
+      compute_doppler_particle_seds_impl<float, float>(
+          grid_props, part_props, part_spectra_f32, nthreads,
+          static_cast<float>(c), method);
+      RETURN_IF_PYERR();
+      reduce_spectra<float>(spectra_f32, part_spectra_f32, nlam, npart,
+                            nthreads);
+      break;
+    case 1:
+      compute_doppler_particle_seds_impl<float, double>(
+          grid_props, part_props, part_spectra_f64, nthreads,
+          static_cast<float>(c), method);
+      RETURN_IF_PYERR();
+      reduce_spectra<double>(spectra_f64, part_spectra_f64, nlam, npart,
+                             nthreads);
+      break;
+    case 2:
+      compute_doppler_particle_seds_impl<double, float>(
+          grid_props, part_props, part_spectra_f32, nthreads, c, method);
+      RETURN_IF_PYERR();
+      reduce_spectra<float>(spectra_f32, part_spectra_f32, nlam, npart,
+                            nthreads);
+      break;
+    default:
+      compute_doppler_particle_seds_impl<double, double>(
+          grid_props, part_props, part_spectra_f64, nthreads, c, method);
+      RETURN_IF_PYERR();
+      reduce_spectra<double>(spectra_f64, part_spectra_f64, nlam, npart,
+                             nthreads);
+      break;
+    }
   }
   RETURN_IF_PYERR();
 
@@ -422,22 +441,38 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   /* Construct the particle spectra output numpy array. */
   npy_intp np_dims[2] = {npart, nlam};
   PyArrayObject *out_part_spectra = NULL;
-  if (output_typenum == NPY_FLOAT32) {
-    out_part_spectra = wrap_array_to_numpy<float>(2, np_dims, part_spectra_f32);
-  } else {
-    out_part_spectra =
-        wrap_array_to_numpy<double>(2, np_dims, part_spectra_f64);
+  {
+    int dispatch_key = (output_typenum == NPY_FLOAT64);
+
+    /* Dispatch: call the matching typed kernel based on the dispatch key. */
+    switch (dispatch_key) {
+    case 0:
+      out_part_spectra = wrap_array_to_numpy<float>(2, np_dims, part_spectra_f32);
+      break;
+    default:
+      out_part_spectra =
+          wrap_array_to_numpy<double>(2, np_dims, part_spectra_f64);
+      break;
+    }
   }
 
   /* Construct the integrated spectra output numpy array. */
   npy_intp np_dims_int[1] = {nlam};
   PyArrayObject *out_integrated_spectra = NULL;
-  if (output_typenum == NPY_FLOAT32) {
-    out_integrated_spectra =
-        wrap_array_to_numpy<float>(1, np_dims_int, spectra_f32);
-  } else {
-    out_integrated_spectra =
-        wrap_array_to_numpy<double>(1, np_dims_int, spectra_f64);
+  {
+    int dispatch_key = (output_typenum == NPY_FLOAT64);
+
+    /* Dispatch: call the matching typed kernel based on the dispatch key. */
+    switch (dispatch_key) {
+    case 0:
+      out_integrated_spectra =
+          wrap_array_to_numpy<float>(1, np_dims_int, spectra_f32);
+      break;
+    default:
+      out_integrated_spectra =
+          wrap_array_to_numpy<double>(1, np_dims_int, spectra_f64);
+      break;
+    }
   }
 
   /* Construct the output tuple. */

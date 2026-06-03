@@ -283,108 +283,127 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
   const npy_intp nelem = PyArray_SIZE(np_lnu);
   tic("compute_fnu");
 
-  /* Dispatch on the shared input dtype and requested output dtype. The typed
-   * kernels then operate on raw contiguous buffers directly. */
-  if (input_typenum == NPY_FLOAT32) {
-    const float *lnu = data_ptr<float>(np_lnu);
-    if (grid_typenum == NPY_FLOAT32) {
+  /* Dispatch: encode input/grid/output precision into a 3-bit key. */
+  int dispatch_key = ((input_typenum == NPY_FLOAT64) << 2) |
+                     ((grid_typenum == NPY_FLOAT64) << 1) |
+                     (out_typenum == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+  case 0: {
+      const float *lnu = data_ptr<float>(np_lnu);
       const float *lam = data_ptr<float>(np_lam);
       const float *nu = data_ptr<float>(np_nu);
-
-      if (out_typenum == NPY_FLOAT32) {
-        float *fnu_out = data_ptr<float>(np_fnu_out);
-        float *obslam_out =
-            np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
-        float *obsnu_out =
-            np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
-        compute_fnu_kernel<float, float, float>(
-            lnu, lam, nu, static_cast<float>(one_plus_z),
-            static_cast<float>(conversion), nthreads, fnu_out, obslam_out,
-            obsnu_out, nelem, nlam);
-      } else {
-        double *fnu_out = data_ptr<double>(np_fnu_out);
-        float *obslam_out =
-            np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
-        float *obsnu_out =
-            np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
-        compute_fnu_kernel<float, double, float>(
-            lnu, lam, nu, static_cast<float>(one_plus_z),
-            static_cast<float>(conversion), nthreads, fnu_out, obslam_out,
-            obsnu_out, nelem, nlam);
-      }
-    } else {
-      const double *lam = data_ptr<double>(np_lam);
-      const double *nu = data_ptr<double>(np_nu);
-
-      if (out_typenum == NPY_FLOAT32) {
-        float *fnu_out = data_ptr<float>(np_fnu_out);
-        double *obslam_out =
-            np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
-        double *obsnu_out =
-            np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
-        compute_fnu_kernel<float, float, double>(
-            lnu, lam, nu, one_plus_z, static_cast<float>(conversion), nthreads,
-            fnu_out, obslam_out, obsnu_out, nelem, nlam);
-      } else {
-        double *fnu_out = data_ptr<double>(np_fnu_out);
-        double *obslam_out =
-            np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
-        double *obsnu_out =
-            np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
-        compute_fnu_kernel<float, double, double>(
-            lnu, lam, nu, one_plus_z, static_cast<float>(conversion), nthreads,
-            fnu_out, obslam_out, obsnu_out, nelem, nlam);
-      }
-    }
-  } else {
-    const double *lnu = data_ptr<double>(np_lnu);
-    if (grid_typenum == NPY_FLOAT32) {
+      float *fnu_out = data_ptr<float>(np_fnu_out);
+      float *obslam_out =
+          np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
+      float *obsnu_out =
+          np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
+      compute_fnu_kernel<float, float, float>(
+          lnu, lam, nu, static_cast<float>(one_plus_z),
+          static_cast<float>(conversion), nthreads, fnu_out, obslam_out,
+          obsnu_out, nelem, nlam);
+      break;
+  }
+  case 1: {
+      const float *lnu = data_ptr<float>(np_lnu);
       const float *lam = data_ptr<float>(np_lam);
       const float *nu = data_ptr<float>(np_nu);
-
-      if (out_typenum == NPY_FLOAT32) {
-        float *fnu_out = data_ptr<float>(np_fnu_out);
-        float *obslam_out =
-            np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
-        float *obsnu_out =
-            np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
-        compute_fnu_kernel<double, float, float>(
-            lnu, lam, nu, static_cast<float>(one_plus_z), conversion, nthreads,
-            fnu_out, obslam_out, obsnu_out, nelem, nlam);
-      } else {
-        double *fnu_out = data_ptr<double>(np_fnu_out);
-        float *obslam_out =
-            np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
-        float *obsnu_out =
-            np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
-        compute_fnu_kernel<double, double, float>(
-            lnu, lam, nu, static_cast<float>(one_plus_z), conversion, nthreads,
-            fnu_out, obslam_out, obsnu_out, nelem, nlam);
-      }
-    } else {
+      double *fnu_out = data_ptr<double>(np_fnu_out);
+      float *obslam_out =
+          np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
+      float *obsnu_out =
+          np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
+      compute_fnu_kernel<float, double, float>(
+          lnu, lam, nu, static_cast<float>(one_plus_z),
+          static_cast<float>(conversion), nthreads, fnu_out, obslam_out,
+          obsnu_out, nelem, nlam);
+      break;
+  }
+  case 2: {
+      const float *lnu = data_ptr<float>(np_lnu);
       const double *lam = data_ptr<double>(np_lam);
       const double *nu = data_ptr<double>(np_nu);
-
-      if (out_typenum == NPY_FLOAT32) {
-        float *fnu_out = data_ptr<float>(np_fnu_out);
-        double *obslam_out =
-            np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
-        double *obsnu_out =
-            np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
-        compute_fnu_kernel<double, float, double>(
-            lnu, lam, nu, one_plus_z, conversion, nthreads, fnu_out, obslam_out,
-            obsnu_out, nelem, nlam);
-      } else {
-        double *fnu_out = data_ptr<double>(np_fnu_out);
-        double *obslam_out =
-            np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
-        double *obsnu_out =
-            np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
-        compute_fnu_kernel<double, double, double>(
-            lnu, lam, nu, one_plus_z, conversion, nthreads, fnu_out, obslam_out,
-            obsnu_out, nelem, nlam);
-      }
-    }
+      float *fnu_out = data_ptr<float>(np_fnu_out);
+      double *obslam_out =
+          np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
+      double *obsnu_out =
+          np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
+      compute_fnu_kernel<float, float, double>(
+          lnu, lam, nu, one_plus_z, static_cast<float>(conversion), nthreads,
+          fnu_out, obslam_out, obsnu_out, nelem, nlam);
+      break;
+  }
+  case 3: {
+      const float *lnu = data_ptr<float>(np_lnu);
+      const double *lam = data_ptr<double>(np_lam);
+      const double *nu = data_ptr<double>(np_nu);
+      double *fnu_out = data_ptr<double>(np_fnu_out);
+      double *obslam_out =
+          np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
+      double *obsnu_out =
+          np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
+      compute_fnu_kernel<float, double, double>(
+          lnu, lam, nu, one_plus_z, static_cast<float>(conversion), nthreads,
+          fnu_out, obslam_out, obsnu_out, nelem, nlam);
+      break;
+  }
+  case 4: {
+      const double *lnu = data_ptr<double>(np_lnu);
+      const float *lam = data_ptr<float>(np_lam);
+      const float *nu = data_ptr<float>(np_nu);
+      float *fnu_out = data_ptr<float>(np_fnu_out);
+      float *obslam_out =
+          np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
+      float *obsnu_out =
+          np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
+      compute_fnu_kernel<double, float, float>(
+          lnu, lam, nu, static_cast<float>(one_plus_z), conversion, nthreads,
+          fnu_out, obslam_out, obsnu_out, nelem, nlam);
+      break;
+  }
+  case 5: {
+      const double *lnu = data_ptr<double>(np_lnu);
+      const float *lam = data_ptr<float>(np_lam);
+      const float *nu = data_ptr<float>(np_nu);
+      double *fnu_out = data_ptr<double>(np_fnu_out);
+      float *obslam_out =
+          np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
+      float *obsnu_out =
+          np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
+      compute_fnu_kernel<double, double, float>(
+          lnu, lam, nu, static_cast<float>(one_plus_z), conversion, nthreads,
+          fnu_out, obslam_out, obsnu_out, nelem, nlam);
+      break;
+  }
+  case 6: {
+      const double *lnu = data_ptr<double>(np_lnu);
+      const double *lam = data_ptr<double>(np_lam);
+      const double *nu = data_ptr<double>(np_nu);
+      float *fnu_out = data_ptr<float>(np_fnu_out);
+      double *obslam_out =
+          np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
+      double *obsnu_out =
+          np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
+      compute_fnu_kernel<double, float, double>(
+          lnu, lam, nu, one_plus_z, conversion, nthreads, fnu_out, obslam_out,
+          obsnu_out, nelem, nlam);
+      break;
+  }
+  default: {
+      const double *lnu = data_ptr<double>(np_lnu);
+      const double *lam = data_ptr<double>(np_lam);
+      const double *nu = data_ptr<double>(np_nu);
+      double *fnu_out = data_ptr<double>(np_fnu_out);
+      double *obslam_out =
+          np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
+      double *obsnu_out =
+          np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
+      compute_fnu_kernel<double, double, double>(
+          lnu, lam, nu, one_plus_z, conversion, nthreads, fnu_out, obslam_out,
+          obsnu_out, nelem, nlam);
+      break;
+  }
   }
 
   toc("compute_fnu");
