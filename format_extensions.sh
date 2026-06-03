@@ -8,15 +8,29 @@
 
 set -euo pipefail
 
+REQUIRED_VERSION="22.1.4"
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 CLANG_FORMAT="${CLANG_FORMAT:-clang-format}"
 
 if ! command -v "$CLANG_FORMAT" &>/dev/null; then
-  echo "Error: $CLANG_FORMAT not found. Install it with: brew install clang-format"
+  echo "Error: $CLANG_FORMAT not found."
+  echo "Install clang-format $REQUIRED_VERSION with:"
+  echo "  brew install clang-format"
+  echo "  pip install clang-format==$REQUIRED_VERSION"
   exit 1
 fi
 
+VERSION=$("$CLANG_FORMAT" --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 echo "Using $("$CLANG_FORMAT" --version)"
+
+if [[ "$VERSION" != "$REQUIRED_VERSION" ]]; then
+  echo "Warning: expected clang-format $REQUIRED_VERSION, got $VERSION."
+  echo "Install the correct version with:"
+  echo "  brew install clang-format"
+  echo "  pip install clang-format==$REQUIRED_VERSION"
+  echo "Or set CLANG_FORMAT to point to a specific binary."
+fi
 
 EXTENSIONS_DIRS=(
   "$HERE/src/synthesizer/extensions"
