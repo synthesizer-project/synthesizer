@@ -948,8 +948,14 @@ class Combination:
             in_lines = lines
 
         template = in_lines[this_model._combine_labels[0]]
-        out_luminosity = np.zeros_like(template._luminosity)
-        out_continuum = np.zeros_like(template._continuum)
+        out_luminosity = np.zeros(
+            template._luminosity.shape,
+            dtype=template._luminosity.dtype,
+        )
+        out_continuum = np.zeros(
+            template._continuum.shape,
+            dtype=template._continuum.dtype,
+        )
 
         # Combine raw arrays directly and construct one LineCollection at the
         # end to avoid repeated constructor and metadata work in hot loops.

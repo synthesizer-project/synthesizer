@@ -273,14 +273,33 @@ def load_CAMELS_IllustrisTNG(
     # Calculate ages at snapshot redshift
     ages = (universe_age - _ages).to("yr").value
 
-    # Ensure all star particle arrays share a common float dtype to avoid
-    # mixed-precision errors in the C extension weight / spectra kernels.
+    # Ensure all particle arrays share a common float dtype to avoid
+    # mixed-precision errors in the C extension kernels.
     common_dtype = np.result_type(
-        masses, imasses, ages, metallicity, s_oxygen, s_hydrogen, coods, hsml
+        masses,
+        imasses,
+        ages,
+        metallicity,
+        s_oxygen,
+        s_hydrogen,
+        coods,
+        hsml,
+        g_masses,
+        g_metals,
+        g_coods,
+        g_hsml,
     )
-    metallicity = metallicity.astype(common_dtype)
-    s_oxygen = s_oxygen.astype(common_dtype)
-    s_hydrogen = s_hydrogen.astype(common_dtype)
+    masses = masses.astype(common_dtype, copy=False)
+    imasses = imasses.astype(common_dtype, copy=False)
+    metallicity = metallicity.astype(common_dtype, copy=False)
+    s_oxygen = s_oxygen.astype(common_dtype, copy=False)
+    s_hydrogen = s_hydrogen.astype(common_dtype, copy=False)
+    coods = coods.astype(common_dtype, copy=False)
+    hsml = hsml.astype(common_dtype, copy=False)
+    g_masses = g_masses.astype(common_dtype, copy=False)
+    g_metals = g_metals.astype(common_dtype, copy=False)
+    g_coods = g_coods.astype(common_dtype, copy=False)
+    g_hsml = g_hsml.astype(common_dtype, copy=False)
 
     return _load_CAMELS(
         lens=lens,

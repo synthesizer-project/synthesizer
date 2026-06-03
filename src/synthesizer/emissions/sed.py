@@ -1629,6 +1629,12 @@ class Sed:
                 self.lam,
                 **dust_curve_kwargs,
             )
+            # Ensure the attenuation arrays share dtype with the spectra.
+            spec_dtype = self._lnu.dtype
+            if isinstance(tau_v, np.ndarray) and tau_v.dtype != spec_dtype:
+                tau_v = tau_v.astype(spec_dtype, copy=False)
+            if tau_x_v.dtype != spec_dtype:
+                tau_x_v = tau_x_v.astype(spec_dtype, copy=False)
             # The kernel both attenuates and respects the optional row mask, so
             # we avoid ever materialising the full transmission matrix.
             out = apply_separable_attenuation_2d(
@@ -1647,6 +1653,14 @@ class Sed:
         transmission = dust_curve.get_transmission(
             tau_v, self.lam, **dust_curve_kwargs
         )
+
+        # Ensure the transmission dtype matches the spectra dtype.
+        spec_dtype = self._lnu.dtype
+        if (
+            isinstance(transmission, np.ndarray)
+            and transmission.dtype != spec_dtype
+        ):
+            transmission = transmission.astype(spec_dtype, copy=False)
 
         # When attenuation reduces to a per-row transmission curve we can use
         # the dedicated 2D scaling kernel with mask support. This applies when
