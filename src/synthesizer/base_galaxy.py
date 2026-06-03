@@ -1213,6 +1213,7 @@ class BaseGalaxy:
         covering_fraction=None,
         mask=None,
         verbose=True,
+        out_dtype=np.float64,
         **kwargs,
     ):
         """Generate lines as described by the emission model.
@@ -1267,6 +1268,8 @@ class BaseGalaxy:
                       a particular model.
             verbose (bool):
                 Are we talking?
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted line arrays.
             kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -1288,6 +1291,7 @@ class BaseGalaxy:
             covering_fraction=covering_fraction,
             mask=mask,
             verbose=verbose,
+            out_dtype=out_dtype,
             **kwargs,
         )
 

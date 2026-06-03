@@ -652,6 +652,7 @@ class Sed:
             self._nu,
             self._lnu,
             method="trapz",
+            out_dtype=self._lnu.dtype,
         )
 
         # Return the bolometric luminosity with units
@@ -746,6 +747,7 @@ class Sed:
             self._lnu,
             nthreads=nthreads,
             method=integration_method,
+            out_dtype=self._lnu.dtype,
         )
         return integral * self.lnu.units * self.nu.units
 

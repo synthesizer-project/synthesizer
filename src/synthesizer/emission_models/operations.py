@@ -190,6 +190,7 @@ class Extraction:
         verbose,
         nthreads,
         grid_assignment_method,
+        out_dtype,
     ):
         """Extract lines from the grid.
 
@@ -212,6 +213,8 @@ class Extraction:
                 The method to use when assigning particles to the grid.
                 Options are 'cic' (cloud-in-cell) and 'ngp' (nearest
                 grid point).
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned line arrays.
 
         Returns:
             dict:
@@ -327,6 +330,7 @@ class Extraction:
             grid_assignment_method=grid_assignment_method,
             nthreads=nthreads,
             do_grid_check=False,
+            out_dtype=out_dtype,
         )
 
         # Cache the model on the emitter
