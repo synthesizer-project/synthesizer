@@ -63,12 +63,9 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
     cp->loc[0] = c->loc[0];
     cp->loc[1] = c->loc[1];
     cp->loc[2] = c->loc[2];
-    if (ip & 4)
-      cp->loc[0] += cp->width;
-    if (ip & 2)
-      cp->loc[1] += cp->width;
-    if (ip & 1)
-      cp->loc[2] += cp->width;
+    if (ip & 4) cp->loc[0] += cp->width;
+    if (ip & 2) cp->loc[1] += cp->width;
+    if (ip & 1) cp->loc[2] += cp->width;
     cp->split = 0;
     cp->part_count = 0;
     cp->max_sml_squ = 0;
@@ -157,19 +154,22 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
       struct particle *pp = &cp->particles[ipart];
 
       if (pp->pos[0] < cp->loc[0] || pp->pos[0] > cp->loc[0] + cp->width) {
-        printf("Error: Particle outside cell bounds in x (c->loc[0] = %f, "
-               "c->loc[0] + c->width = %f, pp->pos[0] = %f)!\n",
-               cp->loc[0], cp->loc[0] + cp->width, pp->pos[0]);
+        printf(
+            "Error: Particle outside cell bounds in x (c->loc[0] = %f, "
+            "c->loc[0] + c->width = %f, pp->pos[0] = %f)!\n",
+            cp->loc[0], cp->loc[0] + cp->width, pp->pos[0]);
       }
       if (pp->pos[1] < cp->loc[1] || pp->pos[1] > cp->loc[1] + cp->width) {
-        printf("Error: Particle outside cell bounds in y (c->loc[1] = %f, "
-               "c->loc[1] + c->width = %f, pp->pos[1] = %f)!\n",
-               cp->loc[1], cp->loc[1] + cp->width, pp->pos[1]);
+        printf(
+            "Error: Particle outside cell bounds in y (c->loc[1] = %f, "
+            "c->loc[1] + c->width = %f, pp->pos[1] = %f)!\n",
+            cp->loc[1], cp->loc[1] + cp->width, pp->pos[1]);
       }
       if (pp->pos[2] < cp->loc[2] || pp->pos[2] > cp->loc[2] + cp->width) {
-        printf("Error: Particle outside cell bounds in z (c->loc[2] = %f, "
-               "c->loc[2] + c->width = %f, pp->pos[2] = %f)!\n",
-               cp->loc[2], cp->loc[2] + cp->width, pp->pos[2]);
+        printf(
+            "Error: Particle outside cell bounds in z (c->loc[2] = %f, "
+            "c->loc[2] + c->width = %f, pp->pos[2] = %f)!\n",
+            cp->loc[2], cp->loc[2] + cp->width, pp->pos[2]);
       }
     }
   }
@@ -247,16 +247,15 @@ static void construct_particles(struct particle *particles, const double *pos,
   /* Get the cell width based on the bounds we have found. Note that
    * we are assuming a cubic domain so the maximum width is the width. */
   double width = bounds[1] - bounds[0];
-  if (bounds[3] - bounds[2] > width)
-    width = bounds[3] - bounds[2];
-  if (bounds[5] - bounds[4] > width)
-    width = bounds[5] - bounds[4];
+  if (bounds[3] - bounds[2] > width) width = bounds[3] - bounds[2];
+  if (bounds[5] - bounds[4] > width) width = bounds[5] - bounds[4];
 
   /* Include a small buffer on the width. */
   width *= 1.0001;
 
   /* Get the geometric mid point. */
-  double mid[3] = {0.5 * (bounds[0] + bounds[1]), 0.5 * (bounds[2] + bounds[3]),
+  double mid[3] = {0.5 * (bounds[0] + bounds[1]),
+                   0.5 * (bounds[2] + bounds[3]),
                    0.5 * (bounds[4] + bounds[5])};
 
   /* Recalculate the bounds using the width and midpoint. */
@@ -370,8 +369,8 @@ void cleanup_cell_tree(struct cell *c) {
  */
 double min_projected_dist2(struct cell *c, double x, double y) {
 
-  /* Get the minimum separation along each axis (if the point is within the cell
-   * along an axis then the separation should be 0). */
+  /* Get the minimum separation along each axis (if the point is within the
+   * cell along an axis then the separation should be 0). */
   double dx = 0;
   double dy = 0;
   if (!(x > c->loc[0] && x < c->loc[0] + c->width)) {

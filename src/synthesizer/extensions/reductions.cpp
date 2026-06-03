@@ -66,7 +66,7 @@ static void reduce_spectra_parallel(double *spectra, double *part_spectra,
       spectra[ilam] += part_spectra_row[ilam];
     }
   }
-#else // OpenMP < 4.5 or no array reduction support
+#else  // OpenMP < 4.5 or no array reduction support
 #pragma omp parallel num_threads(nthreads)
   {
     // Thread-local accumulation to avoid false sharing and atomics
@@ -86,7 +86,7 @@ static void reduce_spectra_parallel(double *spectra, double *part_spectra,
       }
     }
   }
-#endif // WITH_OPENMP
+#endif  // WITH_OPENMP
 }
 #endif
 
@@ -165,7 +165,8 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
 
   /* Validate that we have a two-dimensional array with shape
    * (npart, nlam). This helper is intentionally specialised to the common
-   * per-particle spectra reduction case used by the Python operations layer. */
+   * per-particle spectra reduction case used by the Python operations layer.
+   */
   if (PyArray_NDIM(np_part_spectra) != 2) {
     Py_DECREF(np_part_spectra);
     PyErr_SetString(PyExc_ValueError,
@@ -215,20 +216,19 @@ static PyMethodDef ReductionMethods[] = {
 /* Make this importable. */
 static struct PyModuleDef moduledef = {
     PyModuleDef_HEAD_INIT,
-    "reductions",                              /* m_name */
+    "reductions",                             /* m_name */
     "A module containing spectra reductions", /* m_doc */
-    -1,                                         /* m_size */
-    ReductionMethods,                           /* m_methods */
-    NULL,                                       /* m_reload */
-    NULL,                                       /* m_traverse */
-    NULL,                                       /* m_clear */
-    NULL,                                       /* m_free */
+    -1,                                       /* m_size */
+    ReductionMethods,                         /* m_methods */
+    NULL,                                     /* m_reload */
+    NULL,                                     /* m_traverse */
+    NULL,                                     /* m_clear */
+    NULL,                                     /* m_free */
 };
 
 PyMODINIT_FUNC PyInit_reductions(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);
