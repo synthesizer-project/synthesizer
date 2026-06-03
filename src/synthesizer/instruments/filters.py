@@ -38,6 +38,7 @@ from unyt import Hz, angstrom, c, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer._version import __version__
+from synthesizer.data.initialise import get_svo_filter_cache_dir
 from synthesizer.extensions.photometry import compute_photometry
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
@@ -1995,6 +1996,47 @@ class Filter:
             f"{self.instrument}.{self.filter_}"
         )
 
+        # Check the SVO filter cache to avoid unnecessary requests.
+        cache_key = self.filter_code.replace("/", "_")
+        cache_dir = get_svo_filter_cache_dir()
+        cache_file = cache_dir / f"{cache_key}.hdf5"
+        if cache_file.exists():
+            try:
+                with h5py.File(cache_file, "r") as f:
+                    self.original_lam = f["wavelength"][:]
+                    self.original_t = f["transmission"][:]
+                    self.svo_url = f.attrs["svo_url"]
+                if isinstance(self._lam, np.ndarray):
+                    self._interpolate_wavelength()
+                else:
+                    self.lam = self.original_lam
+                    self.t = self.original_t
+                return
+            except Exception:
+                pass  # Corrupt cache; fall through to HTTP request
+
+        # Check the CI HDF5 cache (a single file with all filters).
+        ci_cache_file = cache_dir / "ci_svo_filter_cache.hdf5"
+        if ci_cache_file.exists():
+            try:
+                with h5py.File(ci_cache_file, "r") as f:
+                    grp_key = cache_key
+                    if grp_key in f:
+                        self.original_lam = f[grp_key]["wavelength"][:]
+                        self.original_t = f[grp_key]["transmission"][:]
+                        attr_key = f"{grp_key}_svo_url"
+                        if attr_key in f.attrs:
+                            self.svo_url = f.attrs[attr_key]
+                if self.original_lam is not None:
+                    if isinstance(self._lam, np.ndarray):
+                        self._interpolate_wavelength()
+                    else:
+                        self.lam = self.original_lam
+                        self.t = self.original_t
+                    return
+            except Exception:
+                pass  # Corrupt CI cache; fall through to HTTP request
+
         # Make a request for the data and handle a failure more informatively
         try:
             with urllib.request.urlopen(self.svo_url) as f:
@@ -2050,6 +2092,16 @@ class Filter:
         self.original_t = np.array(
             [float(child.findall("TD")[1].text) for child in data]
         )
+
+        # Cache the response for future use.
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            with h5py.File(cache_file, "w") as f:
+                f.create_dataset("wavelength", data=self.original_lam)
+                f.create_dataset("transmission", data=self.original_t)
+                f.attrs["svo_url"] = self.svo_url
+        except Exception:
+            pass  # Cache write failure is non-fatal
 
         # If a new wavelength grid is provided, interpolate
         # the transmission curve on to that grid
