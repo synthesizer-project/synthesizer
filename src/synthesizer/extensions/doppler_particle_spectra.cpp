@@ -38,10 +38,10 @@
  * Note: binary search returns the index of the upper bin of those that
  * straddle the given lambda.
  *
- * @tparam Real The floating-point type.
+ * @tparam SpecReal The spectral floating-point type.
  */
-template <typename Real>
-int get_upper_lam_bin(Real lambda, const Real *grid_wavelengths, int nlam) {
+template <typename SpecReal>
+int get_upper_lam_bin(SpecReal lambda, const SpecReal *grid_wavelengths, int nlam) {
   return binary_search(0, nlam - 1, grid_wavelengths, lambda);
 }
 
@@ -59,7 +59,8 @@ int get_upper_lam_bin(Real lambda, const Real *grid_wavelengths, int nlam) {
  * single accumulation per wavelength, matching the pattern used in the
  * non-shifted CIC path.
  *
- * @tparam Real The floating-point type.
+ * @tparam PartReal The particle floating-point type.
+ * @tparam SpecReal The spectral floating-point type.
  * @tparam OutT The floating-point type stored in the output.
  *
  * @param grid_props: A struct containing the properties along each grid axis.
@@ -69,17 +70,17 @@ int get_upper_lam_bin(Real lambda, const Real *grid_wavelengths, int nlam) {
  * @param nthreads: The number of threads to use.
  * @param c: speed of light.
  */
-template <typename Real, typename OutT>
+template <typename PartReal, typename SpecReal, typename OutT>
 static void compute_doppler_particle_seds_impl(GridProps *grid_props,
                                                Particles *part_props,
                                                OutT *part_spectra,
-                                               int nthreads, Real c,
+                                               int nthreads, PartReal c,
                                                const char *method) {
   const int ndim = grid_props->ndim;
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   const size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const Real *wavelength = grid_props->get_lam<Real>();
-  const Real *__restrict grid_spectra = grid_props->get_spectra<Real>();
+  const SpecReal *wavelength = grid_props->get_lam<SpecReal>();
+  const SpecReal *__restrict grid_spectra = grid_props->get_spectra<SpecReal>();
 
   if (strcmp(method, "cic") == 0) {
     const int ncells = 1 << ndim;
@@ -106,9 +107,9 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
 #pragma omp parallel num_threads(nthreads > 1 ? nthreads : 1) if (nthreads > 1)
 #endif
     {
-      std::vector<Real> shifted_wavelengths(nlam);
+      std::vector<SpecReal> shifted_wavelengths(nlam);
       std::vector<int> mapped_indices(nlam);
-      std::vector<const Real *> cell_spectra_ptrs(ncells);
+      std::vector<const SpecReal *> cell_spectra_ptrs(ncells);
       std::vector<OutT> cell_weights(ncells);
 
 #ifdef WITH_OPENMP
@@ -130,30 +131,30 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
           continue;
         }
 
-        const Real vel = part_props->get_vel_at<Real>(p);
-        const Real shift_factor = static_cast<Real>(1) + vel / c;
+        const PartReal vel = part_props->get_vel_at<PartReal>(p);
+        const PartReal shift_factor = static_cast<PartReal>(1) + vel / c;
         for (size_t il = 0; il < nlam; ++il) {
-          const Real lam_s = wavelength[il] * shift_factor;
+          const SpecReal lam_s = wavelength[il] * static_cast<SpecReal>(shift_factor);
           shifted_wavelengths[il] = lam_s;
           mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
         }
 
-        const Real w_p = part_props->get_weight_at<Real>(p);
+        const PartReal w_p = part_props->get_weight_at<PartReal>(p);
         std::array<int, MAX_GRID_NDIM> part_indices;
-        std::array<Real, MAX_GRID_NDIM> axis_fracs;
-        get_part_ind_frac_cic<Real>(part_indices, axis_fracs, grid_props,
-                                    part_props, p);
+        std::array<PartReal, MAX_GRID_NDIM> axis_fracs;
+        get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props,
+                                        part_props, p);
         const int base_lin = get_flat_index(part_indices, dims.data(), ndim);
 
         int nvalid_cells = 0;
         for (int ic = 0; ic < ncells; ++ic) {
           const auto &sc = subcells[ic];
-          Real frac = static_cast<Real>(1);
+          PartReal frac = static_cast<PartReal>(1);
           for (int d = 0; d < ndim; ++d) {
             frac *= sc.offs[d] ? axis_fracs[d]
-                               : (static_cast<Real>(1) - axis_fracs[d]);
+                               : (static_cast<PartReal>(1) - axis_fracs[d]);
           }
-          if (frac == static_cast<Real>(0)) {
+          if (frac == static_cast<PartReal>(0)) {
             continue;
           }
 
@@ -179,7 +180,7 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
             continue;
           }
 
-          const Real lam_s = shifted_wavelengths[il];
+          const SpecReal lam_s = shifted_wavelengths[il];
           const OutT frac_s =
               static_cast<OutT>((lam_s - wavelength[ils - 1]) /
                                 (wavelength[ils] - wavelength[ils - 1]));
@@ -196,7 +197,7 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
 #pragma omp parallel num_threads(nthreads > 1 ? nthreads : 1) if (nthreads > 1)
 #endif
     {
-      std::vector<Real> shifted_wavelengths(nlam);
+      std::vector<SpecReal> shifted_wavelengths(nlam);
       std::vector<int> mapped_indices(nlam);
 
 #ifdef WITH_OPENMP
@@ -218,20 +219,20 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
           continue;
         }
 
-        const Real vel = part_props->get_vel_at<Real>(p);
-        const Real shift_factor = static_cast<Real>(1) + vel / c;
+        const PartReal vel = part_props->get_vel_at<PartReal>(p);
+        const PartReal shift_factor = static_cast<PartReal>(1) + vel / c;
         for (size_t il = 0; il < nlam; ++il) {
-          const Real lam_s = wavelength[il] * shift_factor;
+          const SpecReal lam_s = wavelength[il] * static_cast<SpecReal>(shift_factor);
           shifted_wavelengths[il] = lam_s;
           mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
         }
 
         const OutT weight =
-            static_cast<OutT>(part_props->get_weight_at<Real>(p));
+            static_cast<OutT>(part_props->get_weight_at<PartReal>(p));
         std::array<int, MAX_GRID_NDIM> part_indices;
-        get_part_inds_ngp<Real>(part_indices, grid_props, part_props, p);
+        get_part_inds_ngp<PartReal>(part_indices, grid_props, part_props, p);
         const int grid_ind = get_flat_index(part_indices, dims.data(), ndim);
-        const Real *__restrict cell_spectra =
+        const SpecReal *__restrict cell_spectra =
             grid_spectra + static_cast<size_t>(grid_ind) * nlam;
         OutT *__restrict p_spec = part_spectra + p * nlam;
 
@@ -246,7 +247,7 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
             continue;
           }
 
-          const Real shifted_lambda = shifted_wavelengths[ilam];
+          const SpecReal shifted_lambda = shifted_wavelengths[ilam];
           const OutT frac_shifted = static_cast<OutT>(
               (shifted_lambda - wavelength[ilam_shifted - 1]) /
               (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]));
@@ -330,17 +331,6 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
 
   const int grid_typenum = grid_props->get_float_typenum();
   const int part_typenum = part_props->get_float_typenum();
-  if (grid_typenum != -1 && part_typenum != -1 &&
-      grid_typenum != part_typenum) {
-    PyErr_SetString(
-        PyExc_TypeError,
-        "Grid and particle arrays must share the same floating-point dtype.");
-    delete part_props;
-    delete grid_props;
-    return NULL;
-  }
-
-  const int input_typenum = grid_typenum != -1 ? grid_typenum : part_typenum;
   const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
   if (output_typenum < 0) {
     delete part_props;
@@ -393,13 +383,14 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
   {
-    int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
+    int dispatch_key = ((part_typenum == NPY_FLOAT64) << 2) |
+                       ((grid_typenum == NPY_FLOAT64) << 1) |
                        (output_typenum == NPY_FLOAT64);
 
     /* Dispatch: call the matching typed kernel based on the dispatch key. */
     switch (dispatch_key) {
       case 0:
-        compute_doppler_particle_seds_impl<float, float>(
+        compute_doppler_particle_seds_impl<float, float, float>(
             grid_props, part_props, part_spectra_f32, nthreads,
             static_cast<float>(c), method);
         RETURN_IF_PYERR();
@@ -407,7 +398,7 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
                               nthreads);
         break;
       case 1:
-        compute_doppler_particle_seds_impl<float, double>(
+        compute_doppler_particle_seds_impl<float, float, double>(
             grid_props, part_props, part_spectra_f64, nthreads,
             static_cast<float>(c), method);
         RETURN_IF_PYERR();
@@ -415,14 +406,44 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
                                nthreads);
         break;
       case 2:
-        compute_doppler_particle_seds_impl<double, float>(
+        compute_doppler_particle_seds_impl<float, double, float>(
+            grid_props, part_props, part_spectra_f32, nthreads,
+            static_cast<float>(c), method);
+        RETURN_IF_PYERR();
+        reduce_spectra<float>(spectra_f32, part_spectra_f32, nlam, npart,
+                              nthreads);
+        break;
+      case 3:
+        compute_doppler_particle_seds_impl<float, double, double>(
+            grid_props, part_props, part_spectra_f64, nthreads,
+            static_cast<float>(c), method);
+        RETURN_IF_PYERR();
+        reduce_spectra<double>(spectra_f64, part_spectra_f64, nlam, npart,
+                               nthreads);
+        break;
+      case 4:
+        compute_doppler_particle_seds_impl<double, float, float>(
+            grid_props, part_props, part_spectra_f32, nthreads, c, method);
+        RETURN_IF_PYERR();
+        reduce_spectra<float>(spectra_f32, part_spectra_f32, nlam, npart,
+                              nthreads);
+        break;
+      case 5:
+        compute_doppler_particle_seds_impl<double, float, double>(
+            grid_props, part_props, part_spectra_f64, nthreads, c, method);
+        RETURN_IF_PYERR();
+        reduce_spectra<double>(spectra_f64, part_spectra_f64, nlam, npart,
+                               nthreads);
+        break;
+      case 6:
+        compute_doppler_particle_seds_impl<double, double, float>(
             grid_props, part_props, part_spectra_f32, nthreads, c, method);
         RETURN_IF_PYERR();
         reduce_spectra<float>(spectra_f32, part_spectra_f32, nlam, npart,
                               nthreads);
         break;
       default:
-        compute_doppler_particle_seds_impl<double, double>(
+        compute_doppler_particle_seds_impl<double, double, double>(
             grid_props, part_props, part_spectra_f64, nthreads, c, method);
         RETURN_IF_PYERR();
         reduce_spectra<double>(spectra_f64, part_spectra_f64, nlam, npart,
