@@ -177,13 +177,15 @@ def test_integration_precision_combinations_agree_with_float64_reference(
 @pytest.mark.parametrize(
     "extension_function", [trapz_last_axis, simps_last_axis]
 )
-def test_integration_rejects_mismatched_precision_families(extension_function):
-    """Integration should reject mixed float32/float64 input families."""
+def test_integration_accepts_mismatched_precision_families(extension_function):
+    """Integration should handle mixed float32/float64 inputs."""
     xs = np.linspace(0.0, 1.0, 32, dtype=np.float32)
     ys = np.ones((4, 32), dtype=np.float64)
 
-    with pytest.raises(TypeError, match="same floating-point dtype"):
-        extension_function(xs, ys, 1, np.float32)
+    result = extension_function(xs, ys, 1, np.float32)
+
+    assert result.dtype == np.float32
+    np.testing.assert_allclose(result, np.ones(4, dtype=np.float32))
 
 
 @pytest.mark.parametrize("method", ["trapz", "simps"])
