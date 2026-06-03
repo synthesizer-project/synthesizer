@@ -87,4 +87,4 @@ inline OutT trapz_1d(const XReal *x, const YReal *y, size_t n) {
   return integral;
 }
 
-#endif // INTEGRATION_H_
+#endif  // INTEGRATION_H_

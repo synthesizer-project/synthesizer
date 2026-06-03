@@ -19,18 +19,18 @@ const char *typenum_to_string(int typenum) {
 
   /* Map the NumPy typenum to a readable string for Python errors. */
   switch (typenum) {
-  case NPY_FLOAT32:
-    return "float32";
-  case NPY_FLOAT64:
-    return "float64";
-  case NPY_INT32:
-    return "int32";
-  case NPY_INT64:
-    return "int64";
-  case NPY_BOOL:
-    return "bool";
-  default:
-    return "unsupported dtype";
+    case NPY_FLOAT32:
+      return "float32";
+    case NPY_FLOAT64:
+      return "float64";
+    case NPY_INT32:
+      return "int32";
+    case NPY_INT64:
+      return "int64";
+    case NPY_BOOL:
+      return "bool";
+    default:
+      return "unsupported dtype";
   }
 }
 

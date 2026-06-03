@@ -26,7 +26,8 @@
 template <typename Real>
 static inline Real uniform(const Real r) {
   if (r < static_cast<Real>(1.0)) {
-    return static_cast<Real>(1.0) / (static_cast<Real>(4.0 / 3.0) * static_cast<Real>(M_PI));
+    return static_cast<Real>(1.0) /
+           (static_cast<Real>(4.0 / 3.0) * static_cast<Real>(M_PI));
   }
   return static_cast<Real>(0.0);
 }
@@ -44,8 +45,8 @@ static inline Real sph_anarchy(const Real r) {
   if (r <= static_cast<Real>(1.0)) {
     const Real one_minus_r = static_cast<Real>(1.0) - r;
     return static_cast<Real>(21.0 / (2.0 * M_PI)) *
-           (one_minus_r * one_minus_r * one_minus_r *
-            one_minus_r * (static_cast<Real>(1.0) + static_cast<Real>(4.0) * r));
+           (one_minus_r * one_minus_r * one_minus_r * one_minus_r *
+            (static_cast<Real>(1.0) + static_cast<Real>(4.0) * r));
   }
   return static_cast<Real>(0.0);
 }
@@ -85,7 +86,8 @@ template <typename Real>
 static inline Real cubic(const Real r) {
   if (r < static_cast<Real>(0.5)) {
     return static_cast<Real>(2.546479089470) +
-           static_cast<Real>(15.278874536822) * (r - static_cast<Real>(1.0)) * r * r;
+           static_cast<Real>(15.278874536822) * (r - static_cast<Real>(1.0)) *
+               r * r;
   }
   if (r < static_cast<Real>(1.0)) {
     const Real one_minus_r = static_cast<Real>(1.0) - r;

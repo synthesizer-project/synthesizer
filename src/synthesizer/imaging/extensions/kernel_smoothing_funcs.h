@@ -145,8 +145,8 @@ inline Real compute_kernel_norm(const Real *kernel, int kdim, Real threshold) {
     Real avg = static_cast<Real>(0.5) * (w0 + w1);
     /* Integrate 2π q K(q) dq via trapezoid; ∫q dq over [q0,q1] =
      * 0.5(q1^2-q0^2) */
-    Real seg = static_cast<Real>(2.0 * M_PI) * avg *
-               static_cast<Real>(0.5) * (q1 * q1 - q0 * q0);
+    Real seg = static_cast<Real>(2.0 * M_PI) * avg * static_cast<Real>(0.5) *
+               (q1 * q1 - q0 * q0);
     integral += seg;
     if (q0 < threshold) {
       Real q1c = q1;
@@ -199,9 +199,9 @@ inline bool kernel_fully_inside_pixel(const struct particle<Real> *part,
   return (dx_left >= static_cast<Real>(0.0) &&
           dx_right >= static_cast<Real>(0.0) &&
           dy_bottom >= static_cast<Real>(0.0) &&
-          dy_top >= static_cast<Real>(0.0) &&
-          dx_left >= kernel_radius && dx_right >= kernel_radius &&
-          dy_bottom >= kernel_radius && dy_top >= kernel_radius);
+          dy_top >= static_cast<Real>(0.0) && dx_left >= kernel_radius &&
+          dx_right >= kernel_radius && dy_bottom >= kernel_radius &&
+          dy_top >= kernel_radius);
 }
 
 /**
@@ -229,7 +229,7 @@ inline Real pixel_inside_kernel_contribution(Real pix_x_min, Real pix_y_min,
                                              Real threshold) {
 
   /* Use a small fixed grid to sample the pixel area (fast, deterministic). */
-  const int grid = 3; // 3x3 samples
+  const int grid = 3;  // 3x3 samples
   Real sum = static_cast<Real>(0.0);
 
   for (int si = 0; si < grid; si++) {
@@ -280,8 +280,8 @@ inline Real pixel_kernel_partial_overlap_contribution(
 
   /* Adaptive sampling based on smoothing length.
    * Minimum 4 samples per axis, increase for small smoothing lengths. */
-  int n_sub = std::max(4, static_cast<int>(ceil(static_cast<Real>(2.0) * res /
-                                                part->sml)));
+  int n_sub = std::max(
+      4, static_cast<int>(ceil(static_cast<Real>(2.0) * res / part->sml)));
 
   Real kvalue_sum = static_cast<Real>(0.0);
   int n_samples = 0;

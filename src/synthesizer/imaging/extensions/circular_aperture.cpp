@@ -20,6 +20,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "../../extensions/numpy_init.h"
+
 #include <Python.h>
 
 /* Local includes */
@@ -36,8 +37,8 @@
 #endif
 
 /**
- * @brief Calculates the square root of a number, treating small negative values
- * as zero.
+ * @brief Calculates the square root of a number, treating small negative
+ * values as zero.
  *
  * @tparam Real The floating-point type.
  * @param x - The input value.
@@ -99,8 +100,8 @@ static Real area_triangle(Real x1, Real y1, Real x2, Real y2, Real x3,
 }
 
 /**
- * @brief Core function for calculating the area of overlap between a circle and
- * a rectangle.
+ * @brief Core function for calculating the area of overlap between a circle
+ * and a rectangle.
  *
  * @tparam Real The floating-point type.
  * @param xmin, ymin - Lower-left corner of the rectangle.
@@ -159,7 +160,8 @@ static Real circular_overlap_core(Real xmin, Real ymin, Real xmax, Real ymax,
 }
 
 /**
- * @brief Calculates the exact area of overlap between a circle and a rectangle.
+ * @brief Calculates the exact area of overlap between a circle and a
+ * rectangle.
  *
  * @tparam Real The floating-point type.
  * @param xmin, ymin - Lower-left corner of the pixel.
@@ -173,16 +175,16 @@ static Real circular_overlap_single_exact(Real pix_xmin, Real pix_ymin,
                                           Real r) {
   if (static_cast<Real>(0.0) <= pix_xmin) {
     if (static_cast<Real>(0.0) <= pix_ymin) {
-      return circular_overlap_core<Real>(pix_xmin, pix_ymin, pix_xmax, pix_ymax,
-                                         r);
+      return circular_overlap_core<Real>(pix_xmin, pix_ymin, pix_xmax,
+                                         pix_ymax, r);
     } else if (static_cast<Real>(0.0) >= pix_ymax) {
       return circular_overlap_core<Real>(-pix_ymax, pix_xmin, -pix_ymin,
                                          pix_xmax, r);
     } else {
       return circular_overlap_single_exact<Real>(pix_xmin, pix_ymin, pix_xmax,
                                                  static_cast<Real>(0.0), r) +
-             circular_overlap_single_exact<Real>(pix_xmin, static_cast<Real>(0.0),
-                                                 pix_xmax, pix_ymax, r);
+             circular_overlap_single_exact<Real>(
+                 pix_xmin, static_cast<Real>(0.0), pix_xmax, pix_ymax, r);
     }
   } else if (static_cast<Real>(0.0) >= pix_xmax) {
     if (static_cast<Real>(0.0) <= pix_ymin) {
@@ -194,23 +196,21 @@ static Real circular_overlap_single_exact(Real pix_xmin, Real pix_ymin,
     } else {
       return circular_overlap_single_exact<Real>(pix_xmin, pix_ymin, pix_xmax,
                                                  static_cast<Real>(0.0), r) +
-             circular_overlap_single_exact<Real>(pix_xmin, static_cast<Real>(0.0),
-                                                 pix_xmax, pix_ymax, r);
+             circular_overlap_single_exact<Real>(
+                 pix_xmin, static_cast<Real>(0.0), pix_xmax, pix_ymax, r);
     }
   } else {
     if (static_cast<Real>(0.0) <= pix_ymin) {
-      return circular_overlap_single_exact<Real>(pix_xmin, pix_ymin,
-                                                 static_cast<Real>(0.0),
-                                                 pix_ymax, r) +
-             circular_overlap_single_exact<Real>(static_cast<Real>(0.0), pix_ymin,
-                                                 pix_xmax, pix_ymax, r);
+      return circular_overlap_single_exact<Real>(
+                 pix_xmin, pix_ymin, static_cast<Real>(0.0), pix_ymax, r) +
+             circular_overlap_single_exact<Real>(
+                 static_cast<Real>(0.0), pix_ymin, pix_xmax, pix_ymax, r);
     }
     if (static_cast<Real>(0.0) >= pix_ymax) {
-      return circular_overlap_single_exact<Real>(pix_xmin, pix_ymin,
-                                                 static_cast<Real>(0.0),
-                                                 pix_ymax, r) +
-             circular_overlap_single_exact<Real>(static_cast<Real>(0.0), pix_ymin,
-                                                 pix_xmax, pix_ymax, r);
+      return circular_overlap_single_exact<Real>(
+                 pix_xmin, pix_ymin, static_cast<Real>(0.0), pix_ymax, r) +
+             circular_overlap_single_exact<Real>(
+                 static_cast<Real>(0.0), pix_ymin, pix_xmax, pix_ymax, r);
     } else {
       return circular_overlap_single_exact<Real>(pix_xmin, pix_ymin,
                                                  static_cast<Real>(0.0),
@@ -218,9 +218,9 @@ static Real circular_overlap_single_exact(Real pix_xmin, Real pix_ymin,
              circular_overlap_single_exact<Real>(static_cast<Real>(0.0),
                                                  pix_ymin, pix_xmax,
                                                  static_cast<Real>(0.0), r) +
-             circular_overlap_single_exact<Real>(pix_xmin, static_cast<Real>(0.0),
-                                                 static_cast<Real>(0.0),
-                                                 pix_ymax, r) +
+             circular_overlap_single_exact<Real>(
+                 pix_xmin, static_cast<Real>(0.0), static_cast<Real>(0.0),
+                 pix_ymax, r) +
              circular_overlap_single_exact<Real>(static_cast<Real>(0.0),
                                                  static_cast<Real>(0.0),
                                                  pix_xmax, pix_ymax, r);
@@ -268,8 +268,8 @@ static Real calculate_overlap_serial(const double res, const double xmin,
       if (d < r - pixel_radius) {
         frac = 1.0;
       } else if (d < r + pixel_radius) {
-        frac = circular_overlap_single_exact<double>(pxmin, pymin, pxmax, pymax,
-                                                     r) /
+        frac = circular_overlap_single_exact<double>(pxmin, pymin, pxmax,
+                                                     pymax, r) /
                (res * res);
       } else {
         /* Nothing to do, pixel is outside the aperture. */
@@ -299,8 +299,8 @@ static Real calculate_overlap_serial(const double res, const double xmin,
 template <typename Real>
 static Real calculate_overlap_omp(const double res, const double xmin,
                                   const double ymin, const double r,
-                                  const int nx, const int ny,
-                                  const Real *img, const double pixel_radius,
+                                  const int nx, const int ny, const Real *img,
+                                  const double pixel_radius,
                                   const int nthreads) {
 
   /* Define the signal in aperture. */
@@ -308,7 +308,7 @@ static Real calculate_overlap_omp(const double res, const double xmin,
 
   /* Loop over pixels and accumalate the pixel weight mulitiplied by pixel
    * values. */
-#pragma omp parallel for num_threads(nthreads) reduction(+ : signal)           \
+#pragma omp parallel for num_threads(nthreads) reduction(+ : signal) \
     schedule(dynamic)
   for (int i = 0; i < nx; i++) {
     double pxmin = xmin + i * res;
@@ -325,8 +325,8 @@ static Real calculate_overlap_omp(const double res, const double xmin,
       if (d < r - pixel_radius) {
         frac = 1.0;
       } else if (d < r + pixel_radius) {
-        frac = circular_overlap_single_exact<double>(pxmin, pymin, pxmax, pymax,
-                                                     r) /
+        frac = circular_overlap_single_exact<double>(pxmin, pymin, pxmax,
+                                                     pymax, r) /
                (res * res);
       } else {
         /* Nothing to do, pixel is outside the aperture. */
@@ -464,14 +464,14 @@ static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
-  case 0:
-    result = calculate_circular_overlap_impl<float>(res, nx, ny, r, np_img,
-                                                    np_cent, nthreads);
-    break;
-  default:
-    result = calculate_circular_overlap_impl<double>(res, nx, ny, r, np_img,
-                                                     np_cent, nthreads);
-    break;
+    case 0:
+      result = calculate_circular_overlap_impl<float>(res, nx, ny, r, np_img,
+                                                      np_cent, nthreads);
+      break;
+    default:
+      result = calculate_circular_overlap_impl<double>(res, nx, ny, r, np_img,
+                                                       np_cent, nthreads);
+      break;
   }
 
   toc("calculate_circular_overlap");
@@ -488,7 +488,7 @@ static PyMethodDef CircularOverlapMethods[] = {
 /* Define the module */
 static struct PyModuleDef circularoverlapmodule = {
     PyModuleDef_HEAD_INIT,
-    "circular_aperture", // name of module
+    "circular_aperture",  // name of module
     "Module for calculating the overlap area between a circle and a pixel "
     "grid.",
     -1,
@@ -505,8 +505,7 @@ PyMODINIT_FUNC PyInit_circular_aperture(void) {
     return NULL;
   }
   PyObject *m = PyModule_Create(&circularoverlapmodule);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
 #ifdef ATOMIC_TIMING
   if (import_toc_capsule() < 0) {
     Py_DECREF(m);

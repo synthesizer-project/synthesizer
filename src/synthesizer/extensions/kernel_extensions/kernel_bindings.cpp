@@ -6,8 +6,8 @@
  * evaluation function to Python.
  *****************************************************************************/
 
-#include "kernels.h"
 #include "kernel_functions.h"
+#include "kernels.h"
 
 /**
  * @brief Templated implementation of kernel evaluation.
@@ -15,8 +15,7 @@
  * @tparam Real The floating-point type (float or double).
  */
 template <typename Real>
-static PyObject *evaluate_kernel_impl(PyObject *self,
-                                      PyArrayObject *np_radii,
+static PyObject *evaluate_kernel_impl(PyObject *self, PyArrayObject *np_radii,
                                       const char *kernel_name) {
   (void)self;
 
@@ -32,8 +31,7 @@ static PyObject *evaluate_kernel_impl(PyObject *self,
   }
 
   const int ndim = static_cast<int>(PyArray_DIM(np_radii, 0));
-  const int typenum =
-      std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
+  const int typenum = std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
   npy_intp dims[1] = {ndim};
   PyArrayObject *np_values =
       (PyArrayObject *)PyArray_ZEROS(1, dims, typenum, 0);
@@ -87,14 +85,13 @@ PyObject *evaluate_kernel(PyObject *self, PyObject *args) {
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
-  case 0:
-    return evaluate_kernel_impl<float>(self, np_radii, kernel_name);
-  case 1:
-    return evaluate_kernel_impl<double>(self, np_radii, kernel_name);
-  default:
-    PyErr_SetString(PyExc_TypeError,
-                    "radii must be float32 or float64.");
-    return NULL;
+    case 0:
+      return evaluate_kernel_impl<float>(self, np_radii, kernel_name);
+    case 1:
+      return evaluate_kernel_impl<double>(self, np_radii, kernel_name);
+    default:
+      PyErr_SetString(PyExc_TypeError, "radii must be float32 or float64.");
+      return NULL;
   }
 }
 

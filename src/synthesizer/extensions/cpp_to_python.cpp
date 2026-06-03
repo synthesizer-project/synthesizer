@@ -1,8 +1,8 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "numpy_init.h"
-
 #include "cpp_to_python.h"
+
+#include "numpy_init.h"
 
 /**
  * @brief Resolve and validate a requested floating-point output dtype.
@@ -16,7 +16,8 @@ int resolve_output_typenum(PyObject *dtype_obj, const char *argument_name) {
 
   PyArray_Descr *descr = NULL;
 
-  /* Let NumPy parse dtype-like objects such as np.float32 or np.dtype("f4"). */
+  /* Let NumPy parse dtype-like objects such as np.float32 or np.dtype("f4").
+   */
   if (!PyArray_DescrConverter(dtype_obj, &descr)) {
     PyErr_Format(PyExc_TypeError,
                  "%s must be a NumPy dtype or floating-point type.",
@@ -44,8 +45,8 @@ int resolve_output_typenum(PyObject *dtype_obj, const char *argument_name) {
  * @param obj  The Python object to check (e.g. from argument parsing).
  * @param name Optional name to include in the error message.
  *
- * @return nullptr if obj is Py_None, or a PyArrayObject* if it's a valid array.
- * Returns nullptr and sets a Python error if the type is invalid.
+ * @return nullptr if obj is Py_None, or a PyArrayObject* if it's a valid
+ * array. Returns nullptr and sets a Python error if the type is invalid.
  */
 PyArrayObject *array_or_none(PyObject *obj, const char *name) {
   if (obj == Py_None) {

@@ -13,14 +13,15 @@
  * Serial and parallel (OpenMP) versions are provided for each method. The
  * parallel versions use OpenMP parallel-for over (entry, filter) pairs to
  * maximize available parallelism and improve load balancing, especially for
- * small numbers of entries. Each work item is independent so no synchronization
- * is required.
+ * small numbers of entries. Each work item is independent so no
+ * synchronization is required.
  *****************************************************************************/
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+
 #include <Python.h>
 
 /* C/C++ includes */
@@ -53,7 +54,8 @@
  *                         transmission.
  * @param inv_denominator: Precomputed 1.0 / denominator for this filter.
  */
-template <typename Real, typename OutT> struct FilterWork {
+template <typename Real, typename OutT>
+struct FilterWork {
   npy_intp filter_index;
   const Real *weights;
   npy_int64 start;
@@ -82,10 +84,10 @@ template <typename Real, typename OutT> struct FilterWork {
  * @return A vector of FilterWork descriptors for active filters only.
  */
 template <typename Real, typename OutT>
-static std::vector<FilterWork<Real, OutT>>
-build_filter_work(const Real *weight_matrix, const Real *denominators,
-                  const npy_int64 *starts, const npy_int64 *ends,
-                  npy_intp wavelength_count, npy_intp nfilters) {
+static std::vector<FilterWork<Real, OutT>> build_filter_work(
+    const Real *weight_matrix, const Real *denominators,
+    const npy_int64 *starts, const npy_int64 *ends, npy_intp wavelength_count,
+    npy_intp nfilters) {
 
   /* Pre-allocate space for up to nfilters entries. */
   std::vector<FilterWork<Real, OutT>> work;
@@ -166,13 +168,13 @@ static OutT *compute_photometry_trapz_serial(
       OutT numerator = static_cast<OutT>(0.0);
       for (npy_int64 wavelength = work.start; wavelength < work.end - 1;
            ++wavelength) {
-        numerator +=
-            static_cast<OutT>(0.5) *
-            static_cast<OutT>(x_values[wavelength + 1] - x_values[wavelength]) *
-            (static_cast<OutT>(spectrum[wavelength + 1]) *
-                 static_cast<OutT>(work.weights[wavelength + 1]) +
-             static_cast<OutT>(spectrum[wavelength]) *
-                 static_cast<OutT>(work.weights[wavelength]));
+        numerator += static_cast<OutT>(0.5) *
+                     static_cast<OutT>(x_values[wavelength + 1] -
+                                       x_values[wavelength]) *
+                     (static_cast<OutT>(spectrum[wavelength + 1]) *
+                          static_cast<OutT>(work.weights[wavelength + 1]) +
+                      static_cast<OutT>(spectrum[wavelength]) *
+                          static_cast<OutT>(work.weights[wavelength]));
       }
 
       /* Divide by the precomputed denominator and store directly in
@@ -424,7 +426,8 @@ static OutT *compute_photometry_simps_parallel(
       const npy_int64 k = work.start + 2 * pair_index;
       numerator +=
           static_cast<OutT>(x_values[k + 2] - x_values[k]) *
-          (static_cast<OutT>(spectrum[k]) * static_cast<OutT>(work.weights[k]) +
+          (static_cast<OutT>(spectrum[k]) *
+               static_cast<OutT>(work.weights[k]) +
            static_cast<OutT>(4.0) * static_cast<OutT>(spectrum[k + 1]) *
                static_cast<OutT>(work.weights[k + 1]) +
            static_cast<OutT>(spectrum[k + 2]) *
@@ -680,7 +683,8 @@ static PyObject *compute_photometry_integration(PyObject *self,
                                    np_weight_matrix, np_denominators};
   const char *float_names[] = {"xs", "spectra", "weights", "denominators"};
   int input_typenum = -1;
-  if (!is_matching_float_dtypes(float_arrays, float_names, 4, &input_typenum)) {
+  if (!is_matching_float_dtypes(float_arrays, float_names, 4,
+                                &input_typenum)) {
     return NULL;
   }
 
@@ -689,27 +693,27 @@ static PyObject *compute_photometry_integration(PyObject *self,
     return NULL;
   }
 
-  int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
-                     (output_typenum == NPY_FLOAT64);
+  int dispatch_key =
+      ((input_typenum == NPY_FLOAT64) << 1) | (output_typenum == NPY_FLOAT64);
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
-  case 0:
-    return compute_photometry_integration_impl<float, float>(
-        np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
-        np_starts, np_ends, nthreads, integration_method);
-  case 1:
-    return compute_photometry_integration_impl<float, double>(
-        np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
-        np_starts, np_ends, nthreads, integration_method);
-  case 2:
-    return compute_photometry_integration_impl<double, float>(
-        np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
-        np_starts, np_ends, nthreads, integration_method);
-  default:
-    return compute_photometry_integration_impl<double, double>(
-        np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
-        np_starts, np_ends, nthreads, integration_method);
+    case 0:
+      return compute_photometry_integration_impl<float, float>(
+          np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
+          np_starts, np_ends, nthreads, integration_method);
+    case 1:
+      return compute_photometry_integration_impl<float, double>(
+          np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
+          np_starts, np_ends, nthreads, integration_method);
+    case 2:
+      return compute_photometry_integration_impl<double, float>(
+          np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
+          np_starts, np_ends, nthreads, integration_method);
+    default:
+      return compute_photometry_integration_impl<double, double>(
+          np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
+          np_starts, np_ends, nthreads, integration_method);
   }
 }
 
@@ -737,8 +741,7 @@ static struct PyModuleDef photometrymodule = {
 
 PyMODINIT_FUNC PyInit_photometry(void) {
   PyObject *m = PyModule_Create(&photometrymodule);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

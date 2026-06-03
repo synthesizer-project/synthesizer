@@ -161,8 +161,7 @@ static inline void get_geometric_interp_index(const Real value,
 template <typename Real>
 static inline Real get_truncated_kernel_value(const Real *kernel,
                                               const int kdim, const int zdim,
-                                              const Real q,
-                                              const Real z) {
+                                              const Real q, const Real z) {
 
   /* Early exit for outside the projected kernel support. */
   if (q < static_cast<Real>(0.0) || q >= static_cast<Real>(1.0)) {
@@ -170,8 +169,8 @@ static inline Real get_truncated_kernel_value(const Real *kernel,
   }
 
   /* Clamp the LOS coordinate to the tabulated support range. */
-  const Real clamped_z = std::max(static_cast<Real>(-1.0),
-                                  std::min(static_cast<Real>(1.0), z));
+  const Real clamped_z =
+      std::max(static_cast<Real>(-1.0), std::min(static_cast<Real>(1.0), z));
 
   /* Locate the interpolation cell in projected separation. */
   const Real scaled_q = q * static_cast<Real>(kdim - 1);
@@ -226,8 +225,8 @@ static inline Real get_truncated_kernel_value(const Real *kernel,
  *   boundary.
  *
  * Interpolation inside the table uses standard CIC / trilinear weights.
- * Because the tabulated q and u axes are uniform and the eta axis is uniform in
- * log-space, the interpolation cell is located with direct index arithmetic
+ * Because the tabulated q and u axes are uniform and the eta axis is uniform
+ * in log-space, the interpolation cell is located with direct index arithmetic
  * rather than generic binary searches.
  *
  * @tparam Real The floating-point type (float or double).
@@ -245,11 +244,10 @@ static inline Real get_truncated_kernel_value(const Real *kernel,
  * @return The interpolated overlap-kernel value.
  */
 template <typename Real>
-static inline Real
-get_overlap_kernel_value(const Real *kernel, const Real *q_grid,
-                         const Real *u_grid, const Real *eta_grid,
-                         const int qdim, const int udim, const int etadim,
-                         const Real q, const Real u, const Real eta) {
+static inline Real get_overlap_kernel_value(
+    const Real *kernel, const Real *q_grid, const Real *u_grid,
+    const Real *eta_grid, const int qdim, const int udim, const int etadim,
+    const Real q, const Real u, const Real eta) {
 
   /* Outside the projected or LOS support there is no contribution. */
   if (q < static_cast<Real>(0.0) || q >= static_cast<Real>(1.0) ||
@@ -306,4 +304,4 @@ get_overlap_kernel_value(const Real *kernel, const Real *q_grid,
   /* Finally interpolate along the projected-separation direction. */
   return c0 + q_frac * (c1 - c0);
 }
-#endif // KERNEL_UTILS_H_
+#endif  // KERNEL_UTILS_H_

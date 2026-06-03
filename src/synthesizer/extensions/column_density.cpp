@@ -13,6 +13,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+
 #include <Python.h>
 
 /* Local includes. */
@@ -58,12 +59,11 @@
 template <typename Real>
 static void los_loop_serial(const Real *pos_i, const Real *pos_j,
                             const Real *smls, const Real *surf_den_vals,
-                            const Real *kernel,
-                            const Real *truncated_kernel,
+                            const Real *kernel, const Real *truncated_kernel,
                             Real *surf_dens, const int npart_i,
                             const int npart_j, const int kdim,
-                            const int trunc_qdim,
-                            const int zdim, const Real threshold) {
+                            const int trunc_qdim, const int zdim,
+                            const Real threshold) {
 
   /* Loop over particle postions. */
   for (int i = 0; i < npart_i; i++) {
@@ -97,8 +97,7 @@ static void los_loop_serial(const Real *pos_i, const Real *pos_j,
 
       /* Early skip if the star's line of sight doesn't fall in the gas
        * particles kernel. */
-      if (b > (threshold * sml))
-        continue;
+      if (b > (threshold * sml)) continue;
 
       /* Find fraction of smoothing length. */
       Real q = b / sml;
@@ -154,11 +153,9 @@ static void los_loop_serial(const Real *pos_i, const Real *pos_j,
 template <typename Real>
 static void los_loop_omp(const Real *pos_i, const Real *pos_j,
                          const Real *smls, const Real *surf_den_vals,
-                         const Real *kernel,
-                         const Real *truncated_kernel, Real *surf_dens,
-                         const int npart_i, const int npart_j,
-                         const int kdim, const int trunc_qdim,
-                         const int zdim,
+                         const Real *kernel, const Real *truncated_kernel,
+                         Real *surf_dens, const int npart_i, const int npart_j,
+                         const int kdim, const int trunc_qdim, const int zdim,
                          const Real threshold, const int nthreads) {
 
   /* How many particles should each thread get? */
@@ -212,8 +209,7 @@ static void los_loop_omp(const Real *pos_i, const Real *pos_j,
 
         /* Early skip if the star's line of sight doesn't fall in the gas
          * particles kernel. */
-        if (b > (threshold * sml))
-          continue;
+        if (b > (threshold * sml)) continue;
 
         /* Find fraction of smoothing length. */
         Real q = b / sml;
@@ -253,7 +249,8 @@ static void los_loop_omp(const Real *pos_i, const Real *pos_j,
  *
  * This is a wrapper function which will call the correct version of the
  * function to compute the line of sight surface densities for each particle
- * based on whether or not OpenMP is available and the number of threads to use.
+ * based on whether or not OpenMP is available and the number of threads to
+ * use.
  *
  * @tparam Real The floating-point type (float or double).
  * @param pos_i The positions of the star particles.
@@ -274,13 +271,12 @@ static void los_loop_omp(const Real *pos_i, const Real *pos_j,
  * @param nthreads The number of threads to use.
  */
 template <typename Real>
-static void los_loop(const Real *pos_i, const Real *pos_j,
-                     const Real *smls, const Real *surf_den_vals,
-                     const Real *kernel, const Real *truncated_kernel,
-                     Real *surf_dens, const int npart_i, const int npart_j,
-                     const int kdim, const int trunc_qdim,
-                     const int zdim, const Real threshold,
-                     const int nthreads) {
+static void los_loop(const Real *pos_i, const Real *pos_j, const Real *smls,
+                     const Real *surf_den_vals, const Real *kernel,
+                     const Real *truncated_kernel, Real *surf_dens,
+                     const int npart_i, const int npart_j, const int kdim,
+                     const int trunc_qdim, const int zdim,
+                     const Real threshold, const int nthreads) {
 
   tic("los_loop");
 
@@ -333,9 +329,8 @@ static void los_loop(const Real *pos_i, const Real *pos_j,
  *        cumulative LOS contributions for inside-kernel paths.
  */
 template <typename Real>
-static Real calculate_los_recursive(struct cell<Real> *c, Real x,
-                                    Real y, Real z,
-                                    Real threshold, int kdim,
+static Real calculate_los_recursive(struct cell<Real> *c, Real x, Real y,
+                                    Real z, Real threshold, int kdim,
                                     int trunc_qdim, int zdim,
                                     const Real *kernel,
                                     const Real *truncated_kernel) {
@@ -368,9 +363,9 @@ static Real calculate_los_recursive(struct cell<Real> *c, Real x,
       }
 
       /* Recurse... */
-      surf_dens += calculate_los_recursive<Real>(
-          cp, x, y, z, threshold, kdim, trunc_qdim, zdim, kernel,
-          truncated_kernel);
+      surf_dens += calculate_los_recursive<Real>(cp, x, y, z, threshold, kdim,
+                                                 trunc_qdim, zdim, kernel,
+                                                 truncated_kernel);
     }
 
   } else {
@@ -452,17 +447,16 @@ static Real calculate_los_recursive(struct cell<Real> *c, Real x,
  */
 template <typename Real>
 static void los_tree_serial(struct cell<Real> *root, const Real *pos_i,
-                            const Real *kernel,
-                            const Real *truncated_kernel, Real *surf_dens,
-                            const int npart_i, const int kdim,
+                            const Real *kernel, const Real *truncated_kernel,
+                            Real *surf_dens, const int npart_i, const int kdim,
                             const int trunc_qdim, const int zdim,
                             const Real threshold) {
 
   /* Loop over the particles we are calculating the surface density for. */
   for (int i = 0; i < npart_i; i++) {
 
-      /* Start at the root. We'll recurse through the tree to the leaves
-       * skipping all cells out of range of this particle. */
+    /* Start at the root. We'll recurse through the tree to the leaves
+     * skipping all cells out of range of this particle. */
     surf_dens[i] = calculate_los_recursive<Real>(
         root, pos_i[i * 3], pos_i[i * 3 + 1], pos_i[i * 3 + 2], threshold,
         kdim, trunc_qdim, zdim, kernel, truncated_kernel);
@@ -497,9 +491,8 @@ static void los_tree_serial(struct cell<Real> *root, const Real *pos_i,
 #ifdef WITH_OPENMP
 template <typename Real>
 static void los_tree_omp(struct cell<Real> *root, const Real *pos_i,
-                         const Real *kernel,
-                         const Real *truncated_kernel, Real *surf_dens,
-                         const int npart_i, const int kdim,
+                         const Real *kernel, const Real *truncated_kernel,
+                         Real *surf_dens, const int npart_i, const int kdim,
                          const int trunc_qdim, const int zdim,
                          const Real threshold, const int nthreads) {
 
@@ -548,7 +541,8 @@ static void los_tree_omp(struct cell<Real> *root, const Real *pos_i,
  *
  * This is a wrapper function which will call the correct version of the
  * function to compute the line of sight surface densities for each particle
- * based on whether or not OpenMP is available and the number of threads to use.
+ * based on whether or not OpenMP is available and the number of threads to
+ * use.
  *
  * @tparam Real The floating-point type (float or double).
  * @param root The root of the tree.
@@ -572,8 +566,7 @@ static void los_tree(struct cell<Real> *root, const Real *pos_i,
                      const Real *kernel, const Real *truncated_kernel,
                      Real *surf_dens, const int npart_i, const int kdim,
                      const int trunc_qdim, const int zdim,
-                     const Real threshold,
-                     const int nthreads) {
+                     const Real threshold, const int nthreads) {
 
   tic("los_tree");
 
@@ -632,8 +625,7 @@ static PyObject *compute_column_density_impl(
     return NULL;
   }
 
-  const int typenum =
-      std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
+  const int typenum = std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
   npy_intp np_dims[1] = {npart_i};
   PyArrayObject *np_surf_dens =
       (PyArrayObject *)PyArray_ZEROS(1, np_dims, typenum, 0);
@@ -644,9 +636,9 @@ static PyObject *compute_column_density_impl(
   Real *surf_dens = static_cast<Real *>(PyArray_DATA(np_surf_dens));
 
   if (force_loop || npart_j < min_count) {
-    los_loop<Real>(pos_i, pos_j, smls, surf_den_val, kernel,
-                   truncated_kernel, surf_dens, npart_i, npart_j, kdim,
-                   trunc_qdim, zdim, threshold, nthreads);
+    los_loop<Real>(pos_i, pos_j, smls, surf_den_val, kernel, truncated_kernel,
+                   surf_dens, npart_i, npart_j, kdim, trunc_qdim, zdim,
+                   threshold, nthreads);
 
     return Py_BuildValue("N", np_surf_dens);
   }
@@ -694,11 +686,10 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   PyArrayObject *np_kernel, *np_truncated_kernel, *np_pos_i, *np_pos_j,
       *np_smls, *np_surf_den_val;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOiiiiidiii", &np_kernel,
-                         &np_truncated_kernel, &np_pos_i, &np_pos_j, &np_smls,
-                         &np_surf_den_val, &npart_i, &npart_j, &kdim,
-                         &trunc_qdim, &zdim, &threshold, &force_loop,
-                         &min_count, &nthreads))
+  if (!PyArg_ParseTuple(
+          args, "OOOOOOiiiiidiii", &np_kernel, &np_truncated_kernel, &np_pos_i,
+          &np_pos_j, &np_smls, &np_surf_den_val, &npart_i, &npart_j, &kdim,
+          &trunc_qdim, &zdim, &threshold, &force_loop, &min_count, &nthreads))
     return NULL;
 
   tic("compute_column_density");
@@ -736,10 +727,11 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   }
 
   /* Validate that all float arrays share the same dtype and dispatch. */
-  PyArrayObject *float_arrays[] = {np_kernel, np_truncated_kernel, np_pos_i,
-                                   np_pos_j, np_smls, np_surf_den_val};
+  PyArrayObject *float_arrays[] = {np_kernel, np_truncated_kernel,
+                                   np_pos_i,  np_pos_j,
+                                   np_smls,   np_surf_den_val};
   const char *float_names[] = {"kernel", "truncated_kernel", "pos_i", "pos_j",
-                               "smls", "surf_den_val"};
+                               "smls",   "surf_den_val"};
   int input_typenum = -1;
   if (!is_matching_float_dtypes(float_arrays, float_names, 6,
                                 &input_typenum)) {
@@ -750,16 +742,16 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
-  case 0:
-    return compute_column_density_impl<float>(
-        self, np_kernel, np_truncated_kernel, np_pos_i, np_pos_j, np_smls,
-        np_surf_den_val, npart_i, npart_j, kdim, trunc_qdim, zdim, threshold,
-        force_loop, min_count, nthreads);
-  default:
-    return compute_column_density_impl<double>(
-        self, np_kernel, np_truncated_kernel, np_pos_i, np_pos_j, np_smls,
-        np_surf_den_val, npart_i, npart_j, kdim, trunc_qdim, zdim, threshold,
-        force_loop, min_count, nthreads);
+    case 0:
+      return compute_column_density_impl<float>(
+          self, np_kernel, np_truncated_kernel, np_pos_i, np_pos_j, np_smls,
+          np_surf_den_val, npart_i, npart_j, kdim, trunc_qdim, zdim, threshold,
+          force_loop, min_count, nthreads);
+    default:
+      return compute_column_density_impl<double>(
+          self, np_kernel, np_truncated_kernel, np_pos_i, np_pos_j, np_smls,
+          np_surf_den_val, npart_i, npart_j, kdim, trunc_qdim, zdim, threshold,
+          force_loop, min_count, nthreads);
   }
 }
 
@@ -769,8 +761,8 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
  * Each input/source particle pair is mapped onto the precomputed overlap table
  * `G(q, u, eta)` and contributes exactly once.
  *
- * The runtime pair coordinates are defined using the support radii of the input
- * and source particles:
+ * The runtime pair coordinates are defined using the support radii of the
+ * input and source particles:
  *
  *   q   = b / (R_i + R_j)
  *   u   = (z_i - z_j) / (R_i + R_j)
@@ -803,11 +795,11 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
  */
 template <typename Real>
 static inline Real calculate_smoothed_pair_contribution(
-    const Real xi, const Real yi, const Real zi, const Real hi,
-    const Real xj, const Real yj, const Real zj, const Real hj,
-    const Real surf_den_val, const Real *overlap_kernel,
-    const Real *q_grid, const Real *u_grid, const Real *eta_grid,
-    const int qdim, const int udim, const int etadim, const Real threshold) {
+    const Real xi, const Real yi, const Real zi, const Real hi, const Real xj,
+    const Real yj, const Real zj, const Real hj, const Real surf_den_val,
+    const Real *overlap_kernel, const Real *q_grid, const Real *u_grid,
+    const Real *eta_grid, const int qdim, const int udim, const int etadim,
+    const Real threshold) {
 
   /* Reject pathological zero-support pairs before doing any further work. */
   if (hj <= static_cast<Real>(0.0)) {
@@ -885,8 +877,8 @@ template <typename Real>
 static Real calculate_los_recursive_smoothed(
     struct cell<Real> *c, const Real xi, const Real yi, const Real zi,
     const Real hi, const Real *overlap_kernel, const Real *q_grid,
-    const Real *u_grid, const Real *eta_grid, const int qdim,
-    const int udim, const int etadim, const Real threshold) {
+    const Real *u_grid, const Real *eta_grid, const int qdim, const int udim,
+    const int etadim, const Real threshold) {
 
   /* The input-particle support radius is fixed along this traversal. */
   const Real support_i = threshold * hi;
@@ -950,8 +942,9 @@ static Real calculate_los_recursive_smoothed(
 /**
  * @brief Compute smoothed-input LOS surface densities with a loop.
  *
- * For each input particle we loop over source particles, reject non-overlapping
- * pairs, interpolate the overlap table once, and apply the source prefactor.
+ * For each input particle we loop over source particles, reject
+ * non-overlapping pairs, interpolate the overlap table once, and apply the
+ * source prefactor.
  *
  * @tparam Real The floating-point type (float or double).
  * @param pos_i The positions of the input particles.
@@ -974,11 +967,10 @@ static Real calculate_los_recursive_smoothed(
 template <typename Real>
 static void los_loop_smoothed_serial(
     const Real *pos_i, const Real *input_smls, const Real *pos_j,
-    const Real *smls, const Real *surf_den_vals,
-    const Real *overlap_kernel, const Real *q_grid, const Real *u_grid,
-    const Real *eta_grid, Real *surf_dens, const int npart_i,
-    const int npart_j, const int qdim, const int udim, const int etadim,
-    const Real threshold) {
+    const Real *smls, const Real *surf_den_vals, const Real *overlap_kernel,
+    const Real *q_grid, const Real *u_grid, const Real *eta_grid,
+    Real *surf_dens, const int npart_i, const int npart_j, const int qdim,
+    const int udim, const int etadim, const Real threshold) {
 
   /* Loop over the input particles. */
   for (int i = 0; i < npart_i; i++) {
@@ -1028,11 +1020,11 @@ static void los_loop_smoothed_serial(
 template <typename Real>
 static void los_loop_smoothed_omp(
     const Real *pos_i, const Real *input_smls, const Real *pos_j,
-    const Real *smls, const Real *surf_den_vals,
-    const Real *overlap_kernel, const Real *q_grid, const Real *u_grid,
-    const Real *eta_grid, Real *surf_dens, const int npart_i,
-    const int npart_j, const int qdim, const int udim, const int etadim,
-    const Real threshold, const int nthreads) {
+    const Real *smls, const Real *surf_den_vals, const Real *overlap_kernel,
+    const Real *q_grid, const Real *u_grid, const Real *eta_grid,
+    Real *surf_dens, const int npart_i, const int npart_j, const int qdim,
+    const int udim, const int etadim, const Real threshold,
+    const int nthreads) {
 
   int nparti_per_thread = npart_i / nthreads;
 
@@ -1044,11 +1036,10 @@ static void los_loop_smoothed_omp(
 
     Real *surf_dens_thread = new Real[end - start]();
 
-    los_loop_smoothed_serial<Real>(&pos_i[start * 3], &input_smls[start],
-                                   pos_j, smls, surf_den_vals, overlap_kernel,
-                                   q_grid, u_grid, eta_grid, surf_dens_thread,
-                                   end - start, npart_j, qdim, udim, etadim,
-                                   threshold);
+    los_loop_smoothed_serial<Real>(
+        &pos_i[start * 3], &input_smls[start], pos_j, smls, surf_den_vals,
+        overlap_kernel, q_grid, u_grid, eta_grid, surf_dens_thread,
+        end - start, npart_j, qdim, udim, etadim, threshold);
 
 #pragma omp critical
     {
@@ -1087,11 +1078,11 @@ template <typename Real>
 static void los_loop_smoothed(const Real *pos_i, const Real *input_smls,
                               const Real *pos_j, const Real *smls,
                               const Real *surf_den_vals,
-                              const Real *overlap_kernel,
-                              const Real *q_grid, const Real *u_grid,
-                              const Real *eta_grid, Real *surf_dens,
-                              const int npart_i, const int npart_j,
-                              const int qdim, const int udim, const int etadim,
+                              const Real *overlap_kernel, const Real *q_grid,
+                              const Real *u_grid, const Real *eta_grid,
+                              Real *surf_dens, const int npart_i,
+                              const int npart_j, const int qdim,
+                              const int udim, const int etadim,
                               const Real threshold, const int nthreads) {
 
   tic("Loop surface density calculation with smoothed inputs");
@@ -1110,10 +1101,10 @@ static void los_loop_smoothed(const Real *pos_i, const Real *input_smls,
   }
 #else
   (void)nthreads;
-  los_loop_smoothed_serial<Real>(pos_i, input_smls, pos_j, smls,
-                                 surf_den_vals, overlap_kernel, q_grid, u_grid,
-                                 eta_grid, surf_dens, npart_i, npart_j, qdim,
-                                 udim, etadim, threshold);
+  los_loop_smoothed_serial<Real>(pos_i, input_smls, pos_j, smls, surf_den_vals,
+                                 overlap_kernel, q_grid, u_grid, eta_grid,
+                                 surf_dens, npart_i, npart_j, qdim, udim,
+                                 etadim, threshold);
 #endif
 
   toc("Loop surface density calculation with smoothed inputs");
@@ -1145,8 +1136,8 @@ template <typename Real>
 static void los_tree_smoothed_serial(
     struct cell<Real> *root, const Real *pos_i, const Real *input_smls,
     const Real *overlap_kernel, const Real *q_grid, const Real *u_grid,
-    const Real *eta_grid, Real *surf_dens, const int npart_i,
-    const int qdim, const int udim, const int etadim, const Real threshold) {
+    const Real *eta_grid, Real *surf_dens, const int npart_i, const int qdim,
+    const int udim, const int etadim, const Real threshold) {
 
   for (int i = 0; i < npart_i; i++) {
     surf_dens[i] = calculate_los_recursive_smoothed<Real>(
@@ -1196,10 +1187,10 @@ static void los_tree_smoothed_omp(struct cell<Real> *root, const Real *pos_i,
 
     Real *surf_dens_thread = new Real[end - start]();
 
-    los_tree_smoothed_serial<Real>(root, &pos_i[start * 3],
-                                   &input_smls[start], overlap_kernel, q_grid,
-                                   u_grid, eta_grid, surf_dens_thread,
-                                   end - start, qdim, udim, etadim, threshold);
+    los_tree_smoothed_serial<Real>(root, &pos_i[start * 3], &input_smls[start],
+                                   overlap_kernel, q_grid, u_grid, eta_grid,
+                                   surf_dens_thread, end - start, qdim, udim,
+                                   etadim, threshold);
 
 #pragma omp critical
     {
@@ -1234,12 +1225,11 @@ static void los_tree_smoothed_omp(struct cell<Real> *root, const Real *pos_i,
 template <typename Real>
 static void los_tree_smoothed(struct cell<Real> *root, const Real *pos_i,
                               const Real *input_smls,
-                              const Real *overlap_kernel,
-                              const Real *q_grid, const Real *u_grid,
-                              const Real *eta_grid, Real *surf_dens,
-                              const int npart_i, const int qdim, const int udim,
-                              const int etadim, const Real threshold,
-                              const int nthreads) {
+                              const Real *overlap_kernel, const Real *q_grid,
+                              const Real *u_grid, const Real *eta_grid,
+                              Real *surf_dens, const int npart_i,
+                              const int qdim, const int udim, const int etadim,
+                              const Real threshold, const int nthreads) {
 
   tic("Recursive surface density calculation with smoothed inputs");
 
@@ -1270,13 +1260,13 @@ static void los_tree_smoothed(struct cell<Real> *root, const Real *pos_i,
  */
 template <typename Real>
 static PyObject *compute_column_density_smoothed_impl(
-    PyObject *self, PyArrayObject *np_overlap_kernel,
-    PyArrayObject *np_q_grid, PyArrayObject *np_u_grid,
-    PyArrayObject *np_eta_grid, PyArrayObject *np_pos_i,
-    PyArrayObject *np_input_smls, PyArrayObject *np_pos_j,
-    PyArrayObject *np_smls, PyArrayObject *np_surf_den_val, int npart_i,
-    int npart_j, int qdim, int udim, int etadim, double threshold_double,
-    int force_loop, int min_count, int nthreads) {
+    PyObject *self, PyArrayObject *np_overlap_kernel, PyArrayObject *np_q_grid,
+    PyArrayObject *np_u_grid, PyArrayObject *np_eta_grid,
+    PyArrayObject *np_pos_i, PyArrayObject *np_input_smls,
+    PyArrayObject *np_pos_j, PyArrayObject *np_smls,
+    PyArrayObject *np_surf_den_val, int npart_i, int npart_j, int qdim,
+    int udim, int etadim, double threshold_double, int force_loop,
+    int min_count, int nthreads) {
 
   (void)self;
 
@@ -1300,8 +1290,7 @@ static PyObject *compute_column_density_smoothed_impl(
     return NULL;
   }
 
-  const int typenum =
-      std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
+  const int typenum = std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
   npy_intp np_dims[1] = {npart_i};
   PyArrayObject *np_surf_dens =
       (PyArrayObject *)PyArray_ZEROS(1, np_dims, typenum, 0);
@@ -1312,7 +1301,8 @@ static PyObject *compute_column_density_smoothed_impl(
   Real *surf_dens = static_cast<Real *>(PyArray_DATA(np_surf_dens));
 
   /* No point constructing a source tree if there are too few source particles
-   * to justify it, or if we have explicitly been asked to use the loop path. */
+   * to justify it, or if we have explicitly been asked to use the loop path.
+   */
   if (force_loop || npart_j < min_count) {
 
     /* Use the simple pairwise loop over input and source particles. */
@@ -1419,13 +1409,11 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
 
   /* Validate that all float arrays share the same dtype and dispatch. */
   PyArrayObject *float_arrays[] = {
-      np_overlap_kernel, np_q_grid,       np_u_grid,
-      np_eta_grid,       np_pos_i,        np_input_smls,
-      np_pos_j,          np_smls,         np_surf_den_val};
-  const char *float_names[] = {
-      "overlap_kernel", "q_grid",     "u_grid",       "eta_grid",
-      "pos_i",          "input_smls", "pos_j",        "smls",
-      "surf_den_val"};
+      np_overlap_kernel, np_q_grid, np_u_grid, np_eta_grid,    np_pos_i,
+      np_input_smls,     np_pos_j,  np_smls,   np_surf_den_val};
+  const char *float_names[] = {"overlap_kernel", "q_grid", "u_grid",
+                               "eta_grid",       "pos_i",  "input_smls",
+                               "pos_j",          "smls",   "surf_den_val"};
   int input_typenum = -1;
   if (!is_matching_float_dtypes(float_arrays, float_names, 9,
                                 &input_typenum)) {
@@ -1436,16 +1424,16 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
-  case 0:
-    return compute_column_density_smoothed_impl<float>(
-        self, np_overlap_kernel, np_q_grid, np_u_grid, np_eta_grid, np_pos_i,
-        np_input_smls, np_pos_j, np_smls, np_surf_den_val, npart_i, npart_j,
-        qdim, udim, etadim, threshold, force_loop, min_count, nthreads);
-  default:
-    return compute_column_density_smoothed_impl<double>(
-        self, np_overlap_kernel, np_q_grid, np_u_grid, np_eta_grid, np_pos_i,
-        np_input_smls, np_pos_j, np_smls, np_surf_den_val, npart_i, npart_j,
-        qdim, udim, etadim, threshold, force_loop, min_count, nthreads);
+    case 0:
+      return compute_column_density_smoothed_impl<float>(
+          self, np_overlap_kernel, np_q_grid, np_u_grid, np_eta_grid, np_pos_i,
+          np_input_smls, np_pos_j, np_smls, np_surf_den_val, npart_i, npart_j,
+          qdim, udim, etadim, threshold, force_loop, min_count, nthreads);
+    default:
+      return compute_column_density_smoothed_impl<double>(
+          self, np_overlap_kernel, np_q_grid, np_u_grid, np_eta_grid, np_pos_i,
+          np_input_smls, np_pos_j, np_smls, np_surf_den_val, npart_i, npart_j,
+          qdim, udim, etadim, threshold, force_loop, min_count, nthreads);
   }
 }
 
@@ -1474,8 +1462,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_column_density(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

@@ -10,6 +10,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+
 #include <Python.h>
 
 /* Local includes */
@@ -23,7 +24,7 @@
  * This is used to hold the particle properties and mass.
  */
 class Particles {
-public:
+ public:
   /* The number of particles. */
   int npart;
 
@@ -49,63 +50,76 @@ public:
   int get_float_typenum() const;
 
   /* Accessors for validated float32/float64 arrays. */
-  template <typename Real> const Real *get_weights() const {
+  template <typename Real>
+  const Real *get_weights() const {
     return data_ptr<const Real>(np_weights_);
   }
 
-  template <typename Real> const Real *get_velocities() const {
-    if (np_velocities_ == NULL || reinterpret_cast<PyObject *>(np_velocities_) == Py_None) {
+  template <typename Real>
+  const Real *get_velocities() const {
+    if (np_velocities_ == NULL ||
+        reinterpret_cast<PyObject *>(np_velocities_) == Py_None) {
       return NULL;
     }
     return data_ptr<const Real>(np_velocities_);
   }
 
-  template <typename Real> const Real *get_part_props(int idim) const {
+  template <typename Real>
+  const Real *get_part_props(int idim) const {
     PyArrayObject *np_part_arr =
         (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
     if (np_part_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError,
-                      "[Particles::get_part_props]: Failed to extract part_arr.");
+      PyErr_SetString(
+          PyExc_ValueError,
+          "[Particles::get_part_props]: Failed to extract part_arr.");
       return NULL;
     }
     return data_ptr<const Real>(np_part_arr);
   }
 
-  template <typename Real> Real get_weight_at(int pind) const {
+  template <typename Real>
+  Real get_weight_at(int pind) const {
     if (pind < 0 || pind >= npart) {
-      PyErr_Format(PyExc_IndexError,
-                   "[Particles::get_weight_at]: Index (%d) out of bounds for weights. "
-                   "Valid range is [0, %d).",
-                   pind, npart);
+      PyErr_Format(
+          PyExc_IndexError,
+          "[Particles::get_weight_at]: Index (%d) out of bounds for weights. "
+          "Valid range is [0, %d).",
+          pind, npart);
       return static_cast<Real>(0);
     }
     return get_weights<Real>()[pind];
   }
 
-  template <typename Real> Real get_vel_at(int pind) const {
-    if (np_velocities_ == NULL || reinterpret_cast<PyObject *>(np_velocities_) == Py_None) {
-      PyErr_SetString(PyExc_ValueError,
-                      "[Particles::get_vel_at]: Velocities were not provided.");
+  template <typename Real>
+  Real get_vel_at(int pind) const {
+    if (np_velocities_ == NULL ||
+        reinterpret_cast<PyObject *>(np_velocities_) == Py_None) {
+      PyErr_SetString(
+          PyExc_ValueError,
+          "[Particles::get_vel_at]: Velocities were not provided.");
       return static_cast<Real>(0);
     }
 
     if (pind < 0 || pind >= npart) {
-      PyErr_Format(PyExc_IndexError,
-                   "[Particles::get_vel_at]: Index (%d) out of bounds for velocities. "
-                   "Valid range is [0, %d).",
-                   pind, npart);
+      PyErr_Format(
+          PyExc_IndexError,
+          "[Particles::get_vel_at]: Index (%d) out of bounds for velocities. "
+          "Valid range is [0, %d).",
+          pind, npart);
       return static_cast<Real>(0);
     }
 
     return get_velocities<Real>()[pind];
   }
 
-  template <typename Real> Real get_part_prop_at(int idim, int pind) const {
+  template <typename Real>
+  Real get_part_prop_at(int idim, int pind) const {
     PyArrayObject *np_part_arr =
         (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
     if (np_part_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError,
-                      "[Particles::get_part_prop_at]: Failed to extract part_arr.");
+      PyErr_SetString(
+          PyExc_ValueError,
+          "[Particles::get_part_prop_at]: Failed to extract part_arr.");
       return static_cast<Real>(0);
     }
 
@@ -116,7 +130,8 @@ public:
 
     if (pind < 0 || pind >= npart) {
       PyErr_Format(PyExc_IndexError,
-                   "[Particles::get_part_prop_at]: Index (%d) out of bounds for particle properties. "
+                   "[Particles::get_part_prop_at]: Index (%d) out of bounds "
+                   "for particle properties. "
                    "Valid range is [0, %d).",
                    pind, npart);
       return static_cast<Real>(0);
@@ -150,4 +165,4 @@ public:
   int float_typenum_ = -1;
 };
 
-#endif // PART_PROPS_H_
+#endif  // PART_PROPS_H_

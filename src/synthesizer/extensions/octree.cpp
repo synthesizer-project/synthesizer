@@ -66,12 +66,9 @@ static void populate_cell_tree_recursive(struct cell<Real> *c, int *ncells,
     cp->loc[0] = c->loc[0];
     cp->loc[1] = c->loc[1];
     cp->loc[2] = c->loc[2];
-    if (ip & 4)
-      cp->loc[0] += cp->width;
-    if (ip & 2)
-      cp->loc[1] += cp->width;
-    if (ip & 1)
-      cp->loc[2] += cp->width;
+    if (ip & 4) cp->loc[0] += cp->width;
+    if (ip & 2) cp->loc[1] += cp->width;
+    if (ip & 1) cp->loc[2] += cp->width;
     cp->split = 0;
     cp->part_count = 0;
     cp->max_sml_squ = static_cast<Real>(0.0);
@@ -160,22 +157,25 @@ static void populate_cell_tree_recursive(struct cell<Real> *c, int *ncells,
       struct particle<Real> *pp = &cp->particles[ipart];
 
       if (pp->pos[0] < cp->loc[0] || pp->pos[0] > cp->loc[0] + cp->width) {
-        printf("Error: Particle outside cell bounds in x (c->loc[0] = %f, "
-               "c->loc[0] + c->width = %f, pp->pos[0] = %f)!\n",
-               (double)cp->loc[0], (double)(cp->loc[0] + cp->width),
-               (double)pp->pos[0]);
+        printf(
+            "Error: Particle outside cell bounds in x (c->loc[0] = %f, "
+            "c->loc[0] + c->width = %f, pp->pos[0] = %f)!\n",
+            (double)cp->loc[0], (double)(cp->loc[0] + cp->width),
+            (double)pp->pos[0]);
       }
       if (pp->pos[1] < cp->loc[1] || pp->pos[1] > cp->loc[1] + cp->width) {
-        printf("Error: Particle outside cell bounds in y (c->loc[1] = %f, "
-               "c->loc[1] + c->width = %f, pp->pos[1] = %f)!\n",
-               (double)cp->loc[1], (double)(cp->loc[1] + cp->width),
-               (double)pp->pos[1]);
+        printf(
+            "Error: Particle outside cell bounds in y (c->loc[1] = %f, "
+            "c->loc[1] + c->width = %f, pp->pos[1] = %f)!\n",
+            (double)cp->loc[1], (double)(cp->loc[1] + cp->width),
+            (double)pp->pos[1]);
       }
       if (pp->pos[2] < cp->loc[2] || pp->pos[2] > cp->loc[2] + cp->width) {
-        printf("Error: Particle outside cell bounds in z (c->loc[2] = %f, "
-               "c->loc[2] + c->width = %f, pp->pos[2] = %f)!\n",
-               (double)cp->loc[2], (double)(cp->loc[2] + cp->width),
-               (double)pp->pos[2]);
+        printf(
+            "Error: Particle outside cell bounds in z (c->loc[2] = %f, "
+            "c->loc[2] + c->width = %f, pp->pos[2] = %f)!\n",
+            (double)cp->loc[2], (double)(cp->loc[2] + cp->width),
+            (double)pp->pos[2]);
       }
     }
   }
@@ -225,12 +225,9 @@ static void construct_particles(struct particle<Real> *particles,
   tic("construct_particles");
 
   /* Create an array to hold the bounds of the particle distribution. */
-  Real bounds[6] = {std::numeric_limits<Real>::max(),
-                    static_cast<Real>(0.0),
-                    std::numeric_limits<Real>::max(),
-                    static_cast<Real>(0.0),
-                    std::numeric_limits<Real>::max(),
-                    static_cast<Real>(0.0)};
+  Real bounds[6] = {std::numeric_limits<Real>::max(), static_cast<Real>(0.0),
+                    std::numeric_limits<Real>::max(), static_cast<Real>(0.0),
+                    std::numeric_limits<Real>::max(), static_cast<Real>(0.0)};
 
   /* Loop over gas particles and associate them with the root. We could
    * just attach the pointer but we already need to find the maximum sml in
@@ -262,10 +259,8 @@ static void construct_particles(struct particle<Real> *particles,
   /* Get the cell width based on the bounds we have found. Note that
    * we are assuming a cubic domain so the maximum width is the width. */
   Real width = bounds[1] - bounds[0];
-  if (bounds[3] - bounds[2] > width)
-    width = bounds[3] - bounds[2];
-  if (bounds[5] - bounds[4] > width)
-    width = bounds[5] - bounds[4];
+  if (bounds[3] - bounds[2] > width) width = bounds[3] - bounds[2];
+  if (bounds[5] - bounds[4] > width) width = bounds[5] - bounds[4];
 
   /* Include a small buffer on the width. */
   width *= static_cast<Real>(1.0001);
@@ -393,8 +388,8 @@ void cleanup_cell_tree(struct cell<Real> *c) {
 template <typename Real>
 Real min_projected_dist2(struct cell<Real> *c, Real x, Real y) {
 
-  /* Get the minimum separation along each axis (if the point is within the cell
-   * along an axis then the separation should be 0). */
+  /* Get the minimum separation along each axis (if the point is within the
+   * cell along an axis then the separation should be 0). */
   Real dx = static_cast<Real>(0.0);
   Real dy = static_cast<Real>(0.0);
   if (!(x > c->loc[0] && x < c->loc[0] + c->width)) {
@@ -413,7 +408,8 @@ template void construct_cell_tree<float>(const float *, const float *,
                                          struct cell<float> *, int, int, int);
 template void construct_cell_tree<double>(const double *, const double *,
                                           const double *, const int,
-                                          struct cell<double> *, int, int, int);
+                                          struct cell<double> *, int, int,
+                                          int);
 template void cleanup_cell_tree<float>(struct cell<float> *);
 template void cleanup_cell_tree<double>(struct cell<double> *);
 template float min_projected_dist2<float>(struct cell<float> *, float, float);

@@ -75,4 +75,4 @@ void cleanup_cell_tree(struct cell<Real> *c);
 template <typename Real>
 Real min_projected_dist2(struct cell<Real> *c, Real x, Real y);
 
-#endif // OCTREE_H_
+#endif  // OCTREE_H_

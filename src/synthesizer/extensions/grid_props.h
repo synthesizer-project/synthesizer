@@ -11,6 +11,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+
 #include <Python.h>
 
 /* Local includes */
@@ -27,7 +28,7 @@ constexpr int MAX_GRID_NDIM = 10;
 
 class GridProps {
 
-public:
+ public:
   /* The number of dimensions. */
   int ndim;
 
@@ -47,7 +48,8 @@ public:
             PyObject *axis_names_tuple = NULL);
 
   /* Index handlers for indexing the grid properties. */
-  int ravel_grid_index(const std::array<int, MAX_GRID_NDIM> &multi_index) const;
+  int ravel_grid_index(
+      const std::array<int, MAX_GRID_NDIM> &multi_index) const;
   std::array<int, MAX_GRID_NDIM> unravel_grid_index(int index) const;
   int ravel_spectra_index(const std::array<int, MAX_GRID_NDIM> &multi_index,
                           int ilam) const;
@@ -65,19 +67,22 @@ public:
   double get_grid_weight_at(int ind) const;
 
   /* Accessors for validated float32/float64 arrays. */
-  template <typename Real> const Real *get_spectra() const {
+  template <typename Real>
+  const Real *get_spectra() const {
     static_assert(std::is_same_v<Real, float> || std::is_same_v<Real, double>,
                   "GridProps supports only float32 and float64 arrays.");
     return data_ptr<const Real>(np_spectra_);
   }
 
-  template <typename Real> const Real *get_lam() const {
+  template <typename Real>
+  const Real *get_lam() const {
     static_assert(std::is_same_v<Real, float> || std::is_same_v<Real, double>,
                   "GridProps supports only float32 and float64 arrays.");
     return data_ptr<const Real>(np_lam_);
   }
 
-  template <typename Real> const Real *get_axis(int idim) const {
+  template <typename Real>
+  const Real *get_axis(int idim) const {
     static_assert(std::is_same_v<Real, float> || std::is_same_v<Real, double>,
                   "GridProps supports only float32 and float64 arrays.");
     if (idim < 0 || idim >= ndim) {
@@ -116,7 +121,8 @@ public:
     return axes;
   }
 
-  template <typename Real> Real *get_grid_weights() {
+  template <typename Real>
+  Real *get_grid_weights() {
     static_assert(std::is_same_v<Real, float> || std::is_same_v<Real, double>,
                   "GridProps supports only float32 and float64 arrays.");
     constexpr int typenum =
@@ -132,8 +138,8 @@ public:
     for (int i = 0; i < ndim; i++) {
       np_dims_weights[i] = dims[i];
     }
-    np_grid_weights_ = (PyArrayObject *)PyArray_ZEROS(
-        ndim, np_dims_weights, typenum, 0);
+    np_grid_weights_ =
+        (PyArrayObject *)PyArray_ZEROS(ndim, np_dims_weights, typenum, 0);
     if (np_grid_weights_ == NULL) {
       return NULL;
     }
@@ -157,7 +163,7 @@ public:
   /* Do we need to populate the grid weights? */
   bool need_grid_weights() const;
 
-private:
+ private:
   /* The spectra array. */
   PyArrayObject *np_spectra_;
 
@@ -193,4 +199,4 @@ private:
 };
 #pragma omp end declare target
 
-#endif // GRID_PROPS_H_
+#endif  // GRID_PROPS_H_

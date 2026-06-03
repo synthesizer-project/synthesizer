@@ -6,8 +6,8 @@
  * the source kernel at a given dimensionless impact parameter.
  *****************************************************************************/
 
-#include "kernels.h"
 #include "kernel_functions.h"
+#include "kernels.h"
 
 #include <vector>
 
@@ -119,8 +119,7 @@ static PyObject *compute_projected_kernel_impl(PyObject *self,
   }
 
   const int qdim = static_cast<int>(PyArray_DIM(np_q_grid, 0));
-  const int typenum =
-      std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
+  const int typenum = std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
   npy_intp dims[1] = {qdim};
   PyArrayObject *np_kernel =
       (PyArrayObject *)PyArray_ZEROS(1, dims, typenum, 0);
@@ -157,14 +156,13 @@ PyObject *compute_projected_kernel(PyObject *self, PyObject *args) {
   const char *kernel_name;
   int nsteps;
 
-  if (!PyArg_ParseTuple(args, "O!si", &PyArray_Type, &np_q_grid,
-                         &kernel_name, &nsteps)) {
+  if (!PyArg_ParseTuple(args, "O!si", &PyArray_Type, &np_q_grid, &kernel_name,
+                        &nsteps)) {
     return NULL;
   }
 
   if (nsteps <= 0) {
-    PyErr_SetString(PyExc_ValueError,
-                  "nsteps must be a positive integer.");
+    PyErr_SetString(PyExc_ValueError, "nsteps must be a positive integer.");
     return NULL;
   }
 
@@ -180,15 +178,14 @@ PyObject *compute_projected_kernel(PyObject *self, PyObject *args) {
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
-  case 0:
-    return compute_projected_kernel_impl<float>(self, np_q_grid, kernel_name,
-                                                nsteps);
-  case 1:
-    return compute_projected_kernel_impl<double>(self, np_q_grid, kernel_name,
-                                                 nsteps);
-  default:
-    PyErr_SetString(PyExc_TypeError,
-                    "q_grid must be float32 or float64.");
-    return NULL;
+    case 0:
+      return compute_projected_kernel_impl<float>(self, np_q_grid, kernel_name,
+                                                  nsteps);
+    case 1:
+      return compute_projected_kernel_impl<double>(self, np_q_grid,
+                                                   kernel_name, nsteps);
+    default:
+      PyErr_SetString(PyExc_TypeError, "q_grid must be float32 or float64.");
+      return NULL;
   }
 }

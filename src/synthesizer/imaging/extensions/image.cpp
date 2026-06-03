@@ -18,6 +18,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "../../extensions/numpy_init.h"
+
 #include <Python.h>
 
 /* Local includes. */
@@ -82,7 +83,7 @@ struct weighted_cell {
 template <typename Real>
 inline bool compare_by_cost(const weighted_cell<Real> &a,
                             const weighted_cell<Real> &b) {
-  return a.cost > b.cost; // Descending order
+  return a.cost > b.cost;  // Descending order
 }
 
 /**
@@ -91,9 +92,8 @@ inline bool compare_by_cost(const weighted_cell<Real> &a,
  * @tparam Real The floating-point type.
  */
 template <typename Real>
-static std::vector<weighted_cell<Real>>
-build_balanced_work_list(struct cell<Real> *root, int nthreads,
-                         double balance_tolerance = 2.0) {
+static std::vector<weighted_cell<Real>> build_balanced_work_list(
+    struct cell<Real> *root, int nthreads, double balance_tolerance = 2.0) {
 
   tic("build_balanced_work_list");
 
@@ -101,7 +101,7 @@ build_balanced_work_list(struct cell<Real> *root, int nthreads,
   work_list.emplace_back(root);
 
   int target_cells =
-      std::max(2 * nthreads, 8); // At least 2x threads, minimum 8
+      std::max(2 * nthreads, 8);  // At least 2x threads, minimum 8
 
   while (true) {
     // Calculate statistics
@@ -112,8 +112,7 @@ build_balanced_work_list(struct cell<Real> *root, int nthreads,
     for (const auto &wc : work_list) {
       total_cost += wc.cost;
       max_cost = std::max(max_cost, wc.cost);
-      if (wc.can_subdivide)
-        subdividable_cells++;
+      if (wc.can_subdivide) subdividable_cells++;
     }
 
     double avg_cost = total_cost / work_list.size();
@@ -130,16 +129,13 @@ build_balanced_work_list(struct cell<Real> *root, int nthreads,
     }
 
     // Find the most expensive cell that can be subdivided
-    auto most_expensive =
-        std::max_element(work_list.begin(), work_list.end(),
-                         [](const weighted_cell<Real> &a,
-                            const weighted_cell<Real> &b) {
-                           if (!a.can_subdivide && b.can_subdivide)
-                             return true;
-                           if (a.can_subdivide && !b.can_subdivide)
-                             return false;
-                           return a.cost < b.cost;
-                         });
+    auto most_expensive = std::max_element(
+        work_list.begin(), work_list.end(),
+        [](const weighted_cell<Real> &a, const weighted_cell<Real> &b) {
+          if (!a.can_subdivide && b.can_subdivide) return true;
+          if (a.can_subdivide && !b.can_subdivide) return false;
+          return a.cost < b.cost;
+        });
 
     if (!most_expensive->can_subdivide) {
       printf("  No more cells can be subdivided\n");
@@ -207,8 +203,8 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
 
       /* Recurse... */
       populate_pixel_recursive<Real>(cp, threshold, kdim, kernel, norm_factor,
-                                     npart, out, nimgs, pix_values, res, npix_x,
-                                     npix_y);
+                                     npart, out, nimgs, pix_values, res,
+                                     npix_x, npix_y);
     }
 
   } else {
@@ -227,7 +223,8 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
      * ensure we capture all affected pixels. */
     Real buffer = max_kernel_radius + static_cast<Real>(res);
 
-    /* Calculate the world coordinate bounds of the region this cell affects. */
+    /* Calculate the world coordinate bounds of the region this cell affects.
+     */
     Real x_min_world = c->loc[0] - buffer;
     Real x_max_world = c->loc[0] + c->width + buffer;
     Real y_min_world = c->loc[1] - buffer;
@@ -257,7 +254,8 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
     /* Unpack the particles from this leaf cell. */
     struct particle<Real> *parts = c->particles;
 
-    /* Loop over the particles adding their contribution to the local buffer. */
+    /* Loop over the particles adding their contribution to the local buffer.
+     */
     for (int p = 0; p < c->part_count; p++) {
 
       /* Get the particle. */
@@ -269,7 +267,8 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
 
       /* How many pixels do we need to walk out in the kernel? (with a
        * buffer of 1 pixel to ensure we cover the kernel). */
-      int delta_pix = (int)ceil(part->sml * threshold / static_cast<Real>(res)) + 1;
+      int delta_pix =
+          (int)ceil(part->sml * threshold / static_cast<Real>(res)) + 1;
 
       /* Loop over the pixels in the kernel. */
       for (int ii = -delta_pix; ii <= delta_pix; ii++) {
@@ -297,10 +296,11 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
 
           /* Fast path: kernel wholly inside this pixel. */
           Real kvalue;
-          if (kernel_fully_inside_pixel<Real>(
-                  part, pix_x_min, pix_x_max, pix_y_min, pix_y_max,
-                  kernel_radius)) {
-            kvalue = static_cast<Real>(1.0); /* Entire kernel mass inside this pixel */
+          if (kernel_fully_inside_pixel<Real>(part, pix_x_min, pix_x_max,
+                                              pix_y_min, pix_y_max,
+                                              kernel_radius)) {
+            kvalue = static_cast<Real>(
+                1.0); /* Entire kernel mass inside this pixel */
           } else {
             /* Determine overlap of kernel and pixel. */
             Real q_min, q_max, q_center;
@@ -338,7 +338,8 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
           if (local_i >= 0 && local_i < local_width && local_j >= 0 &&
               local_j < local_height) {
 
-            /* Loop over images and add the contribution to the local buffer. */
+            /* Loop over images and add the contribution to the local buffer.
+             */
             for (int nimg = 0; nimg < nimgs; nimg++) {
               int local_idx =
                   local_i * local_height * nimgs + local_j * nimgs + nimg;
@@ -414,14 +415,11 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
  */
 #ifdef WITH_OPENMP
 template <typename Real>
-void populate_smoothed_image_parallel(const Real *pix_values,
-                                      const Real *kernel, const double res,
-                                      const int npix_x, const int npix_y,
-                                      const int npart, const Real threshold,
-                                      const int kdim, Real norm_factor,
-                                      Real *img, const int nimgs,
-                                      struct cell<Real> *root,
-                                      const int nthreads) {
+void populate_smoothed_image_parallel(
+    const Real *pix_values, const Real *kernel, const double res,
+    const int npix_x, const int npix_y, const int npart, const Real threshold,
+    const int kdim, Real norm_factor, Real *img, const int nimgs,
+    struct cell<Real> *root, const int nthreads) {
 
   /* Build a balanced work list. */
   std::vector<weighted_cell<Real>> work_list =
@@ -469,13 +467,12 @@ void populate_smoothed_image_parallel(const Real *pix_values,
  * @param root: The root of the tree.
  */
 template <typename Real>
-void populate_smoothed_image_serial(const Real *pix_values,
-                                    const Real *kernel, const double res,
-                                    const int npix_x, const int npix_y,
-                                    const int npart, const Real threshold,
-                                    const int kdim, Real norm_factor,
-                                    Real *img, const int nimgs,
-                                    struct cell<Real> *root) {
+void populate_smoothed_image_serial(const Real *pix_values, const Real *kernel,
+                                    const double res, const int npix_x,
+                                    const int npix_y, const int npart,
+                                    const Real threshold, const int kdim,
+                                    Real norm_factor, Real *img,
+                                    const int nimgs, struct cell<Real> *root) {
 
   /* Build a balanced work list (this isn't really necessary in serial,
    * but it keeps the code consistent with the parallel version and has
@@ -535,10 +532,9 @@ void populate_smoothed_image(const Real *pix_values, const Real *kernel,
   if (nthreads > 1) {
 
     /* Populate the image in parallel. */
-    populate_smoothed_image_parallel<Real>(pix_values, kernel, res, npix_x,
-                                           npix_y, npart, threshold, kdim,
-                                           norm_factor, img, nimgs, root,
-                                           nthreads);
+    populate_smoothed_image_parallel<Real>(
+        pix_values, kernel, res, npix_x, npix_y, npart, threshold, kdim,
+        norm_factor, img, nimgs, root, nthreads);
 
   } else {
 
@@ -552,8 +548,8 @@ void populate_smoothed_image(const Real *pix_values, const Real *kernel,
 
   /* If we don't have OpenMP call the serial version. */
   populate_smoothed_image_serial<Real>(pix_values, kernel, res, npix_x, npix_y,
-                                       npart, threshold, kdim, norm_factor, img,
-                                       nimgs, root);
+                                       npart, threshold, kdim, norm_factor,
+                                       img, nimgs, root);
 #endif
 
   toc("populate_smoothed_image");
@@ -606,8 +602,7 @@ static PyObject *make_img_impl(double res, int npix_x, int npix_y, int npart,
   tic("make_img.create_output_array");
 
   /* Create the zeroed image numpy array. */
-  const int typenum =
-      std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
+  const int typenum = std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
   npy_intp np_img_dims[3] = {npix_x, npix_y, nimgs};
   PyArrayObject *np_img =
       (PyArrayObject *)PyArray_ZEROS(3, np_img_dims, typenum, 0);
@@ -670,8 +665,8 @@ PyObject *make_img(PyObject *self, PyObject *args) {
     return NULL;
 
   /* Validate that all float arrays share the same dtype and dispatch. */
-  PyArrayObject *float_arrays[] = {np_pix_values, np_smoothing_lengths,
-                                   np_pos, np_kernel};
+  PyArrayObject *float_arrays[] = {np_pix_values, np_smoothing_lengths, np_pos,
+                                   np_kernel};
   const char *float_names[] = {"pix_values", "smoothing_lengths", "pos",
                                "kernel"};
   int input_typenum = -1;
@@ -685,16 +680,16 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
-  case 0:
-    result = make_img_impl<float>(res, npix_x, npix_y, npart, threshold, kdim,
-                                  nimgs, nthreads, np_pix_values,
-                                  np_smoothing_lengths, np_pos, np_kernel);
-    break;
-  default:
-    result = make_img_impl<double>(res, npix_x, npix_y, npart, threshold, kdim,
-                                   nimgs, nthreads, np_pix_values,
-                                   np_smoothing_lengths, np_pos, np_kernel);
-    break;
+    case 0:
+      result = make_img_impl<float>(res, npix_x, npix_y, npart, threshold,
+                                    kdim, nimgs, nthreads, np_pix_values,
+                                    np_smoothing_lengths, np_pos, np_kernel);
+      break;
+    default:
+      result = make_img_impl<double>(res, npix_x, npix_y, npart, threshold,
+                                     kdim, nimgs, nthreads, np_pix_values,
+                                     np_smoothing_lengths, np_pos, np_kernel);
+      break;
   }
 
   return result;
@@ -721,8 +716,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_image(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

@@ -4,6 +4,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+
 #include <Python.h>
 #include <cstdint>
 #include <memory>
@@ -12,30 +13,36 @@
  * @brief Map a C++ scalar type onto its NumPy typenum.
  *
  * This template is used by the header-only array wrapping helpers to infer the
- * NumPy dtype that should back the returned array when the caller does not pass
- * an explicit typenum.
+ * NumPy dtype that should back the returned array when the caller does not
+ * pass an explicit typenum.
  *
  * @tparam T The C++ scalar type to map.
  */
-template <typename T> struct NumpyTypenum;
+template <typename T>
+struct NumpyTypenum;
 
-template <> struct NumpyTypenum<float> {
+template <>
+struct NumpyTypenum<float> {
   static constexpr int typenum = NPY_FLOAT32;
 };
 
-template <> struct NumpyTypenum<double> {
+template <>
+struct NumpyTypenum<double> {
   static constexpr int typenum = NPY_FLOAT64;
 };
 
-template <> struct NumpyTypenum<int32_t> {
+template <>
+struct NumpyTypenum<int32_t> {
   static constexpr int typenum = NPY_INT32;
 };
 
-template <> struct NumpyTypenum<int64_t> {
+template <>
+struct NumpyTypenum<int64_t> {
   static constexpr int typenum = NPY_INT64;
 };
 
-template <> struct NumpyTypenum<uint8_t> {
+template <>
+struct NumpyTypenum<uint8_t> {
   static constexpr int typenum = NPY_UINT8;
 };
 
@@ -149,10 +156,9 @@ int resolve_output_typenum(PyObject *dtype_obj,
 
 PyArrayObject *array_or_none(PyObject *obj, const char *name = "argument");
 
-#define RETURN_IF_PYERR()                                                      \
-  do {                                                                         \
-    if (PyErr_Occurred())                                                      \
-      return nullptr;                                                          \
+#define RETURN_IF_PYERR()                 \
+  do {                                    \
+    if (PyErr_Occurred()) return nullptr; \
   } while (0)
 
-#endif // CPP_TO_PYTHON_H
+#endif  // CPP_TO_PYTHON_H

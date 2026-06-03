@@ -11,6 +11,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+
 #include <Python.h>
 
 /* Prototypes for Python-to-C++ boundary helpers. */
@@ -34,7 +35,8 @@ bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
  * @param np_arr: The NumPy array.
  * @return Typed pointer to the underlying buffer.
  */
-template <typename T> inline T *data_ptr(PyArrayObject *np_arr) {
+template <typename T>
+inline T *data_ptr(PyArrayObject *np_arr) {
   return static_cast<T *>(PyArray_DATA(np_arr));
 }
 
@@ -45,8 +47,9 @@ template <typename T> inline T *data_ptr(PyArrayObject *np_arr) {
  * @param np_arr: The NumPy array.
  * @return Typed const pointer to the underlying buffer.
  */
-template <typename T> inline const T *data_ptr(const PyArrayObject *np_arr) {
+template <typename T>
+inline const T *data_ptr(const PyArrayObject *np_arr) {
   return static_cast<const T *>(PyArray_DATA(np_arr));
 }
 
-#endif // PYTHON_TO_CPP_H
+#endif  // PYTHON_TO_CPP_H

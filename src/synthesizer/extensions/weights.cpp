@@ -132,8 +132,8 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
  * @tparam OutT The floating-point type stored in the output buffer.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A class containing the particle properties.
- * @param out_size: The size of the output array. (This will be allocated within
- *                  this function.)
+ * @param out_size: The size of the output array. (This will be allocated
+ * within this function.)
  * @param out: The output array.
  * @param nthreads: The number of threads to use.
  */
@@ -147,7 +147,7 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
   const int ndim = grid_props->ndim;
 
   /* Set the sub cell constants we'll use below. */
-  const int num_sub_cells = 1 << ndim; // 2^ndim
+  const int num_sub_cells = 1 << ndim;  // 2^ndim
   std::array<int, MAX_GRID_NDIM> sub_dims;
   for (int i = 0; i < ndim; i++) {
     sub_dims[i] = 2;
@@ -175,8 +175,7 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
     const int tid = omp_get_thread_num();
     const int start = tid * npart_per_thread;
     int end = start + npart_per_thread;
-    if (end > parts->npart)
-      end = parts->npart;
+    if (end > parts->npart) end = parts->npart;
 
     /* Allocate a local output array to avoid races. */
     std::vector<OutT> local_out_arr(out_size, static_cast<OutT>(0));
@@ -260,7 +259,8 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    weight_loop_cic_omp<Real, OutT>(grid_props, parts, out_size, out, nthreads);
+    weight_loop_cic_omp<Real, OutT>(grid_props, parts, out_size, out,
+                                    nthreads);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
@@ -296,15 +296,15 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
-  case 0:
-    weight_loop_cic<float>(grid_props, parts, out_size,
-                           static_cast<float *>(out), nthreads);
-    break;
-  default:
-    /* Default to float64 for backwards compatibility. */
-    weight_loop_cic<double>(grid_props, parts, out_size,
-                            static_cast<double *>(out), nthreads);
-    break;
+    case 0:
+      weight_loop_cic<float>(grid_props, parts, out_size,
+                             static_cast<float *>(out), nthreads);
+      break;
+    default:
+      /* Default to float64 for backwards compatibility. */
+      weight_loop_cic<double>(grid_props, parts, out_size,
+                              static_cast<double *>(out), nthreads);
+      break;
   }
 }
 
@@ -463,7 +463,8 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    weight_loop_ngp_omp<Real, OutT>(grid_props, parts, out_size, out, nthreads);
+    weight_loop_ngp_omp<Real, OutT>(grid_props, parts, out_size, out,
+                                    nthreads);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
@@ -499,14 +500,14 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
-  case 0:
-    weight_loop_ngp<float, float>(grid_props, parts, out_size,
-                                  static_cast<float *>(out), nthreads);
-    break;
-  default:
-    weight_loop_ngp<double, double>(grid_props, parts, out_size,
-                                    static_cast<double *>(out), nthreads);
-    break;
+    case 0:
+      weight_loop_ngp<float, float>(grid_props, parts, out_size,
+                                    static_cast<float *>(out), nthreads);
+      break;
+    default:
+      weight_loop_ngp<double, double>(grid_props, parts, out_size,
+                                      static_cast<double *>(out), nthreads);
+      break;
   }
 }
 
@@ -527,5 +528,3 @@ template void weight_loop_ngp<double, float>(GridProps *, Particles *, int,
                                              float *, const int);
 template void weight_loop_ngp<double, double>(GridProps *, Particles *, int,
                                               double *, const int);
-
-

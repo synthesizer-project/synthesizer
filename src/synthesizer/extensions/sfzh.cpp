@@ -13,6 +13,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+
 #include <Python.h>
 
 /* Local includes */
@@ -90,8 +91,8 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Default to the shared input precision family, or float64 if neither has any
-   * float arrays. */
+  /* Default to the shared input precision family, or float64 if neither has
+   * any float arrays. */
   const int input_typenum = grid_typenum != -1 ? grid_typenum : part_typenum;
   int output_typenum = input_typenum;
   if (out_dtype != Py_None) {
@@ -110,12 +111,12 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
     /* Dispatch: call the matching typed kernel based on the dispatch key. */
     switch (dispatch_key) {
-    case 0:
-      sfzh = static_cast<void *>(grid_props->get_grid_weights<float>());
-      break;
-    default:
-      sfzh = static_cast<void *>(grid_props->get_grid_weights<double>());
-      break;
+      case 0:
+        sfzh = static_cast<void *>(grid_props->get_grid_weights<float>());
+        break;
+      default:
+        sfzh = static_cast<void *>(grid_props->get_grid_weights<double>());
+        break;
     }
   }
   RETURN_IF_PYERR();
@@ -129,22 +130,24 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
       /* Dispatch: call the matching typed kernel based on the dispatch key. */
       switch (dispatch_key) {
-      case 0:
-        weight_loop_cic<float, float>(grid_props, parts, grid_props->size,
-                                      static_cast<float *>(sfzh), nthreads);
-        break;
-      case 1:
-        weight_loop_cic<float, double>(grid_props, parts, grid_props->size,
-                                       static_cast<double *>(sfzh), nthreads);
-        break;
-      case 2:
-        weight_loop_cic<double, float>(grid_props, parts, grid_props->size,
-                                       static_cast<float *>(sfzh), nthreads);
-        break;
-      default:
-        weight_loop_cic<double, double>(grid_props, parts, grid_props->size,
-                                        static_cast<double *>(sfzh), nthreads);
-        break;
+        case 0:
+          weight_loop_cic<float, float>(grid_props, parts, grid_props->size,
+                                        static_cast<float *>(sfzh), nthreads);
+          break;
+        case 1:
+          weight_loop_cic<float, double>(grid_props, parts, grid_props->size,
+                                         static_cast<double *>(sfzh),
+                                         nthreads);
+          break;
+        case 2:
+          weight_loop_cic<double, float>(grid_props, parts, grid_props->size,
+                                         static_cast<float *>(sfzh), nthreads);
+          break;
+        default:
+          weight_loop_cic<double, double>(grid_props, parts, grid_props->size,
+                                          static_cast<double *>(sfzh),
+                                          nthreads);
+          break;
       }
     }
   } else if (strcmp(method, "ngp") == 0) {
@@ -154,22 +157,24 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
       /* Dispatch: call the matching typed kernel based on the dispatch key. */
       switch (dispatch_key) {
-      case 0:
-        weight_loop_ngp<float, float>(grid_props, parts, grid_props->size,
-                                      static_cast<float *>(sfzh), nthreads);
-        break;
-      case 1:
-        weight_loop_ngp<float, double>(grid_props, parts, grid_props->size,
-                                       static_cast<double *>(sfzh), nthreads);
-        break;
-      case 2:
-        weight_loop_ngp<double, float>(grid_props, parts, grid_props->size,
-                                       static_cast<float *>(sfzh), nthreads);
-        break;
-      default:
-        weight_loop_ngp<double, double>(grid_props, parts, grid_props->size,
-                                        static_cast<double *>(sfzh), nthreads);
-        break;
+        case 0:
+          weight_loop_ngp<float, float>(grid_props, parts, grid_props->size,
+                                        static_cast<float *>(sfzh), nthreads);
+          break;
+        case 1:
+          weight_loop_ngp<float, double>(grid_props, parts, grid_props->size,
+                                         static_cast<double *>(sfzh),
+                                         nthreads);
+          break;
+        case 2:
+          weight_loop_ngp<double, float>(grid_props, parts, grid_props->size,
+                                         static_cast<float *>(sfzh), nthreads);
+          break;
+        default:
+          weight_loop_ngp<double, double>(grid_props, parts, grid_props->size,
+                                          static_cast<double *>(sfzh),
+                                          nthreads);
+          break;
       }
     }
   } else {
@@ -194,10 +199,10 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
-static PyMethodDef SFZHMethods[] = {{"compute_sfzh", (PyCFunction)compute_sfzh,
-                                     METH_VARARGS,
-                                     "Method for calculating the SFZH."},
-                                    {NULL, NULL, 0, NULL}};
+static PyMethodDef SFZHMethods[] = {
+    {"compute_sfzh", (PyCFunction)compute_sfzh, METH_VARARGS,
+     "Method for calculating the SFZH."},
+    {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */
 static struct PyModuleDef moduledef = {
@@ -214,8 +219,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_sfzh(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

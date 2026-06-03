@@ -4,11 +4,12 @@
  * This module builds the 3D overlap kernel table G(q, u, eta) used by the
  * smoothed-input LOS path. The table encodes the line-of-sight overlap between
  * an input (smoothing-length h_i) and source (smoothing-length h_j) kernel
- * as a function of projected separation, LOS offset, and smoothing-length ratio.
+ * as a function of projected separation, LOS offset, and smoothing-length
+ * ratio.
  *****************************************************************************/
 
-#include "kernels.h"
 #include "kernel_functions.h"
+#include "kernels.h"
 
 /**
  * @brief Evaluate the overlap kernel table for smoothed LOS calculations.
@@ -60,13 +61,14 @@ template <typename Real>
 static void build_overlap_kernel_table(
     Real *overlap_kernel, const Real *q_grid, const Real *u_grid,
     const Real *eta_grid, const Real *sample_x, const Real *sample_y,
-    const Real *sample_z, const Real *sample_weights,
-    const Real weight_sum, const Real *truncated_kernel, const int qdim,
-    const int udim, const int etadim, const int nsample, const int trunc_qdim,
+    const Real *sample_z, const Real *sample_weights, const Real weight_sum,
+    const Real *truncated_kernel, const int qdim, const int udim,
+    const int etadim, const int nsample, const int trunc_qdim,
     const int trunc_zdim, const int nthreads) {
 
 #ifdef WITH_OPENMP
-#pragma omp parallel for num_threads(nthreads) schedule(static) if (nthreads > 1)
+#pragma omp parallel for num_threads(nthreads) \
+    schedule(static) if (nthreads > 1)
 #endif
   for (int ieta = 0; ieta < etadim; ieta++) {
     const Real eta = eta_grid[ieta];
@@ -132,15 +134,14 @@ static PyObject *compute_overlap_kernel_impl(PyObject *self, PyObject *args) {
       *np_sample_y, *np_sample_z, *np_sample_weights, *np_truncated_kernel,
       *np_trunc_q, *np_trunc_z;
 
-  if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!iiiiiii", &PyArray_Type,
-                        &np_q_grid, &PyArray_Type, &np_u_grid, &PyArray_Type,
-                        &np_eta_grid, &PyArray_Type, &np_sample_x,
-                        &PyArray_Type, &np_sample_y, &PyArray_Type,
-                        &np_sample_z, &PyArray_Type, &np_sample_weights,
-                        &PyArray_Type, &np_truncated_kernel, &PyArray_Type,
-                        &np_trunc_q, &PyArray_Type, &np_trunc_z, &qdim,
-                        &udim, &etadim, &nsample, &trunc_qdim, &trunc_zdim,
-                        &nthreads)) {
+  if (!PyArg_ParseTuple(
+          args, "O!O!O!O!O!O!O!O!O!O!iiiiiii", &PyArray_Type, &np_q_grid,
+          &PyArray_Type, &np_u_grid, &PyArray_Type, &np_eta_grid,
+          &PyArray_Type, &np_sample_x, &PyArray_Type, &np_sample_y,
+          &PyArray_Type, &np_sample_z, &PyArray_Type, &np_sample_weights,
+          &PyArray_Type, &np_truncated_kernel, &PyArray_Type, &np_trunc_q,
+          &PyArray_Type, &np_trunc_z, &qdim, &udim, &etadim, &nsample,
+          &trunc_qdim, &trunc_zdim, &nthreads)) {
     return NULL;
   }
 
@@ -162,8 +163,7 @@ static PyObject *compute_overlap_kernel_impl(PyObject *self, PyObject *args) {
     return NULL;
   }
   if (PyArray_NDIM(np_truncated_kernel) != 2) {
-    PyErr_SetString(PyExc_ValueError,
-                    "truncated_kernel must be a 2D array.");
+    PyErr_SetString(PyExc_ValueError, "truncated_kernel must be a 2D array.");
     return NULL;
   }
 
@@ -189,13 +189,11 @@ static PyObject *compute_overlap_kernel_impl(PyObject *self, PyObject *args) {
 
   /* Validate dimensions match the declared sizes. */
   if (static_cast<int>(PyArray_DIM(np_q_grid, 0)) != qdim) {
-    PyErr_SetString(PyExc_ValueError,
-                    "q_grid dimension does not match qdim");
+    PyErr_SetString(PyExc_ValueError, "q_grid dimension does not match qdim");
     return NULL;
   }
   if (static_cast<int>(PyArray_DIM(np_u_grid, 0)) != udim) {
-    PyErr_SetString(PyExc_ValueError,
-                    "u_grid dimension does not match udim");
+    PyErr_SetString(PyExc_ValueError, "u_grid dimension does not match udim");
     return NULL;
   }
   if (static_cast<int>(PyArray_DIM(np_eta_grid, 0)) != etadim) {
@@ -225,8 +223,9 @@ static PyObject *compute_overlap_kernel_impl(PyObject *self, PyObject *args) {
   }
   if (static_cast<int>(PyArray_DIM(np_truncated_kernel, 0)) != trunc_qdim ||
       static_cast<int>(PyArray_DIM(np_truncated_kernel, 1)) != trunc_zdim) {
-    PyErr_SetString(PyExc_ValueError,
-                    "truncated_kernel dimensions do not match trunc_qdim x trunc_zdim");
+    PyErr_SetString(
+        PyExc_ValueError,
+        "truncated_kernel dimensions do not match trunc_qdim x trunc_zdim");
     return NULL;
   }
   if (static_cast<int>(PyArray_DIM(np_trunc_q, 0)) != trunc_qdim) {
@@ -247,8 +246,7 @@ static PyObject *compute_overlap_kernel_impl(PyObject *self, PyObject *args) {
   (void)trunc_q;
   (void)trunc_z;
 
-  const int typenum =
-      std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
+  const int typenum = std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
   npy_intp dims[3] = {qdim, udim, etadim};
   PyArrayObject *np_overlap_kernel =
       (PyArrayObject *)PyArray_ZEROS(3, dims, typenum, 0);
@@ -256,8 +254,7 @@ static PyObject *compute_overlap_kernel_impl(PyObject *self, PyObject *args) {
     PyErr_NoMemory();
     return NULL;
   }
-  Real *overlap_kernel =
-      static_cast<Real *>(PyArray_DATA(np_overlap_kernel));
+  Real *overlap_kernel = static_cast<Real *>(PyArray_DATA(np_overlap_kernel));
 
   /* Precompute the total sampled input-kernel weight once so each table cell
    * can convert its weighted sum into a proper kernel-weighted average. */
@@ -269,8 +266,8 @@ static PyObject *compute_overlap_kernel_impl(PyObject *self, PyObject *args) {
   tic("Evaluating overlap kernel table");
   build_overlap_kernel_table<Real>(
       overlap_kernel, q_grid, u_grid, eta_grid, sample_x, sample_y, sample_z,
-      sample_weights, weight_sum, truncated_kernel, qdim, udim, etadim, nsample,
-      trunc_qdim, trunc_zdim, nthreads);
+      sample_weights, weight_sum, truncated_kernel, qdim, udim, etadim,
+      nsample, trunc_qdim, trunc_zdim, nthreads);
   toc("Evaluating overlap kernel table");
 
   return Py_BuildValue("N", np_overlap_kernel);
@@ -308,13 +305,13 @@ PyObject *compute_overlap_kernel(PyObject *self, PyObject *args) {
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
-  case 0:
-    return compute_overlap_kernel_impl<float>(self, args);
-  case 1:
-    return compute_overlap_kernel_impl<double>(self, args);
-  default:
-    PyErr_SetString(PyExc_TypeError,
-                    "Overlap kernel arrays must be float32 or float64.");
-    return NULL;
+    case 0:
+      return compute_overlap_kernel_impl<float>(self, args);
+    case 1:
+      return compute_overlap_kernel_impl<double>(self, args);
+    default:
+      PyErr_SetString(PyExc_TypeError,
+                      "Overlap kernel arrays must be float32 or float64.");
+      return NULL;
   }
 }

@@ -15,6 +15,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+
 #include <Python.h>
 
 /* Local includes */
@@ -34,8 +35,8 @@
  * @brief Find nearest wavelength bin for a given lambda, in a given wavelength
  * array. Used by the spectra loop functions when considering doppler shift
  *
- * Note: binary search returns the index of the upper bin of those that straddle
- * the given lambda.
+ * Note: binary search returns the index of the upper bin of those that
+ * straddle the given lambda.
  *
  * @tparam Real The floating-point type.
  */
@@ -44,10 +45,10 @@ int get_upper_lam_bin(Real lambda, const Real *grid_wavelengths, int nlam) {
   return binary_search(0, nlam - 1, grid_wavelengths, lambda);
 }
 
-
 /**
  * @brief This calculates particle spectra using a cloud in cell approach.
- * This is the parallel version of the function that accounts for Doppler shift.
+ * This is the parallel version of the function that accounts for Doppler
+ * shift.
  *
  * Each thread allocates its shift‐mapping buffers once and reuses them for
  * every particle, and all sub‐cell index math is hoisted out of the particle
@@ -117,9 +118,8 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
           thread_count;
       const int tid = omp_get_thread_num();
       const size_t start_idx = tid * nparts_per_thread;
-      const size_t end_idx =
-          std::min(static_cast<size_t>(part_props->npart),
-                   start_idx + nparts_per_thread);
+      const size_t end_idx = std::min(static_cast<size_t>(part_props->npart),
+                                      start_idx + nparts_per_thread);
 #else
       const size_t start_idx = 0;
       const size_t end_idx = static_cast<size_t>(part_props->npart);
@@ -169,9 +169,8 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
         for (size_t il = 0; il < nlam; ++il) {
           OutT total = static_cast<OutT>(0);
           for (int icell = 0; icell < nvalid_cells; ++icell) {
-            total = std::fma(
-                static_cast<OutT>(cell_spectra_ptrs[icell][il]),
-                cell_weights[icell], total);
+            total = std::fma(static_cast<OutT>(cell_spectra_ptrs[icell][il]),
+                             cell_weights[icell], total);
           }
 
           const int ils = mapped_indices[il];
@@ -181,9 +180,9 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
           }
 
           const Real lam_s = shifted_wavelengths[il];
-          const OutT frac_s = static_cast<OutT>(
-              (lam_s - wavelength[ils - 1]) /
-              (wavelength[ils] - wavelength[ils - 1]));
+          const OutT frac_s =
+              static_cast<OutT>((lam_s - wavelength[ils - 1]) /
+                                (wavelength[ils] - wavelength[ils - 1]));
           p_spec[ils - 1] += (static_cast<OutT>(1) - frac_s) * total;
           p_spec[ils] += frac_s * total;
         }
@@ -207,9 +206,8 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
           thread_count;
       const int tid = omp_get_thread_num();
       const size_t start_idx = tid * nparts_per_thread;
-      const size_t end_idx =
-          std::min(static_cast<size_t>(part_props->npart),
-                   start_idx + nparts_per_thread);
+      const size_t end_idx = std::min(static_cast<size_t>(part_props->npart),
+                                      start_idx + nparts_per_thread);
 #else
       const size_t start_idx = 0;
       const size_t end_idx = static_cast<size_t>(part_props->npart);
@@ -311,12 +309,11 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOiiisiOOOO|O", &np_grid_spectra,
-                        &np_lam, &grid_tuple, &part_tuple, &np_part_mass,
+  if (!PyArg_ParseTuple(args, "OOOOOOOiiisiOOOO|O", &np_grid_spectra, &np_lam,
+                        &grid_tuple, &part_tuple, &np_part_mass,
                         &np_velocities, &np_ndims, &ndim, &npart, &nlam,
                         &method, &nthreads, &py_c, &np_mask, &np_lam_mask,
-                        &out_dtype,
-                        &prop_names)) {
+                        &out_dtype, &prop_names)) {
     return NULL;
   }
 
@@ -327,17 +324,17 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   RETURN_IF_PYERR();
 
   /* Create the object that holds the particle properties. */
-  Particles *part_props =
-      new Particles(np_part_mass, np_velocities, np_mask, part_tuple,
-                    prop_names, npart);
+  Particles *part_props = new Particles(np_part_mass, np_velocities, np_mask,
+                                        part_tuple, prop_names, npart);
   RETURN_IF_PYERR();
 
   const int grid_typenum = grid_props->get_float_typenum();
   const int part_typenum = part_props->get_float_typenum();
   if (grid_typenum != -1 && part_typenum != -1 &&
       grid_typenum != part_typenum) {
-    PyErr_SetString(PyExc_TypeError,
-                    "Grid and particle arrays must share the same floating-point dtype.");
+    PyErr_SetString(
+        PyExc_TypeError,
+        "Grid and particle arrays must share the same floating-point dtype.");
     delete part_props;
     delete grid_props;
     return NULL;
@@ -361,16 +358,16 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
 
     /* Dispatch: call the matching typed kernel based on the dispatch key. */
     switch (dispatch_key) {
-    case 0:
-      spectra_f32 = new (std::nothrow) float[grid_props->nlam]();
-      part_spectra_f32 =
-          new (std::nothrow) float[npart * grid_props->nlam]();
-      break;
-    default:
-      spectra_f64 = new (std::nothrow) double[grid_props->nlam]();
-      part_spectra_f64 =
-          new (std::nothrow) double[npart * grid_props->nlam]();
-      break;
+      case 0:
+        spectra_f32 = new (std::nothrow) float[grid_props->nlam]();
+        part_spectra_f32 =
+            new (std::nothrow) float[npart * grid_props->nlam]();
+        break;
+      default:
+        spectra_f64 = new (std::nothrow) double[grid_props->nlam]();
+        part_spectra_f64 =
+            new (std::nothrow) double[npart * grid_props->nlam]();
+        break;
     }
   }
 
@@ -378,7 +375,8 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
        (spectra_f32 == NULL || part_spectra_f32 == NULL)) ||
       (output_typenum == NPY_FLOAT64 &&
        (spectra_f64 == NULL || part_spectra_f64 == NULL))) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for spectra.");
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for spectra.");
     delete part_props;
     delete grid_props;
     delete[] spectra_f32;
@@ -400,36 +398,36 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
 
     /* Dispatch: call the matching typed kernel based on the dispatch key. */
     switch (dispatch_key) {
-    case 0:
-      compute_doppler_particle_seds_impl<float, float>(
-          grid_props, part_props, part_spectra_f32, nthreads,
-          static_cast<float>(c), method);
-      RETURN_IF_PYERR();
-      reduce_spectra<float>(spectra_f32, part_spectra_f32, nlam, npart,
-                            nthreads);
-      break;
-    case 1:
-      compute_doppler_particle_seds_impl<float, double>(
-          grid_props, part_props, part_spectra_f64, nthreads,
-          static_cast<float>(c), method);
-      RETURN_IF_PYERR();
-      reduce_spectra<double>(spectra_f64, part_spectra_f64, nlam, npart,
-                             nthreads);
-      break;
-    case 2:
-      compute_doppler_particle_seds_impl<double, float>(
-          grid_props, part_props, part_spectra_f32, nthreads, c, method);
-      RETURN_IF_PYERR();
-      reduce_spectra<float>(spectra_f32, part_spectra_f32, nlam, npart,
-                            nthreads);
-      break;
-    default:
-      compute_doppler_particle_seds_impl<double, double>(
-          grid_props, part_props, part_spectra_f64, nthreads, c, method);
-      RETURN_IF_PYERR();
-      reduce_spectra<double>(spectra_f64, part_spectra_f64, nlam, npart,
-                             nthreads);
-      break;
+      case 0:
+        compute_doppler_particle_seds_impl<float, float>(
+            grid_props, part_props, part_spectra_f32, nthreads,
+            static_cast<float>(c), method);
+        RETURN_IF_PYERR();
+        reduce_spectra<float>(spectra_f32, part_spectra_f32, nlam, npart,
+                              nthreads);
+        break;
+      case 1:
+        compute_doppler_particle_seds_impl<float, double>(
+            grid_props, part_props, part_spectra_f64, nthreads,
+            static_cast<float>(c), method);
+        RETURN_IF_PYERR();
+        reduce_spectra<double>(spectra_f64, part_spectra_f64, nlam, npart,
+                               nthreads);
+        break;
+      case 2:
+        compute_doppler_particle_seds_impl<double, float>(
+            grid_props, part_props, part_spectra_f32, nthreads, c, method);
+        RETURN_IF_PYERR();
+        reduce_spectra<float>(spectra_f32, part_spectra_f32, nlam, npart,
+                              nthreads);
+        break;
+      default:
+        compute_doppler_particle_seds_impl<double, double>(
+            grid_props, part_props, part_spectra_f64, nthreads, c, method);
+        RETURN_IF_PYERR();
+        reduce_spectra<double>(spectra_f64, part_spectra_f64, nlam, npart,
+                               nthreads);
+        break;
     }
   }
   RETURN_IF_PYERR();
@@ -446,13 +444,14 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
 
     /* Dispatch: call the matching typed kernel based on the dispatch key. */
     switch (dispatch_key) {
-    case 0:
-      out_part_spectra = wrap_array_to_numpy<float>(2, np_dims, part_spectra_f32);
-      break;
-    default:
-      out_part_spectra =
-          wrap_array_to_numpy<double>(2, np_dims, part_spectra_f64);
-      break;
+      case 0:
+        out_part_spectra =
+            wrap_array_to_numpy<float>(2, np_dims, part_spectra_f32);
+        break;
+      default:
+        out_part_spectra =
+            wrap_array_to_numpy<double>(2, np_dims, part_spectra_f64);
+        break;
     }
   }
 
@@ -464,14 +463,14 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
 
     /* Dispatch: call the matching typed kernel based on the dispatch key. */
     switch (dispatch_key) {
-    case 0:
-      out_integrated_spectra =
-          wrap_array_to_numpy<float>(1, np_dims_int, spectra_f32);
-      break;
-    default:
-      out_integrated_spectra =
-          wrap_array_to_numpy<double>(1, np_dims_int, spectra_f64);
-      break;
+      case 0:
+        out_integrated_spectra =
+            wrap_array_to_numpy<float>(1, np_dims_int, spectra_f32);
+        break;
+      default:
+        out_integrated_spectra =
+            wrap_array_to_numpy<double>(1, np_dims_int, spectra_f64);
+        break;
     }
   }
 
@@ -507,8 +506,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_doppler_particle_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

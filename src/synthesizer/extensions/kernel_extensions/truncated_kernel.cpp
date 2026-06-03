@@ -2,9 +2,9 @@
  * Truncated LOS kernel table builder.
  *
  * This module builds the 2D truncated LOS kernel lookup table used when the
- * input particle lies inside the source kernel. The table stores the cumulative
- * foreground LOS integral as a function of projected separation and truncation
- * coordinate.
+ * input particle lies inside the source kernel. The table stores the
+ * cumulative foreground LOS integral as a function of projected separation and
+ * truncation coordinate.
  *****************************************************************************/
 
 #include "kernel_functions.h"
@@ -29,7 +29,8 @@
 template <typename Real>
 static void build_truncated_los_kernel(Real *kernel, const Real *q_grid,
                                        const Real *z_grid, const int qdim,
-                                       const int zdim, kernel_func<Real> func) {
+                                       const int zdim,
+                                       kernel_func<Real> func) {
 #ifdef WITH_OPENMP
 #pragma omp parallel for schedule(static)
 #endif
@@ -57,7 +58,8 @@ static void build_truncated_los_kernel(Real *kernel, const Real *q_grid,
 
       /* Walk along the LOS grid once and accumulate the cumulative foreground
        * contribution directly into the output table. */
-      cumulative += static_cast<Real>(0.5) * (prev_value + value) * (z - prev_z);
+      cumulative +=
+          static_cast<Real>(0.5) * (prev_value + value) * (z - prev_z);
       kernel[iq * zdim + iz] = cumulative;
 
       prev_value = value;
@@ -105,8 +107,7 @@ static PyObject *compute_truncated_los_kernel_impl(PyObject *self,
     return NULL;
   }
 
-  const int typenum =
-      std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
+  const int typenum = std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
   npy_intp dims[2] = {qdim, zdim};
   PyArrayObject *np_kernel =
       (PyArrayObject *)PyArray_ZEROS(2, dims, typenum, 0);
@@ -140,8 +141,8 @@ PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
   PyArrayObject *np_q_grid, *np_z_grid;
   const char *kernel_name;
 
-  if (!PyArg_ParseTuple(args, "O!O!s", &PyArray_Type, &np_q_grid, &PyArray_Type,
-                        &np_z_grid, &kernel_name)) {
+  if (!PyArg_ParseTuple(args, "O!O!s", &PyArray_Type, &np_q_grid,
+                        &PyArray_Type, &np_z_grid, &kernel_name)) {
     return NULL;
   }
 
@@ -164,15 +165,15 @@ PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
-  case 0:
-    return compute_truncated_los_kernel_impl<float>(self, np_q_grid,
-                                                    np_z_grid, kernel_name);
-  case 1:
-    return compute_truncated_los_kernel_impl<double>(self, np_q_grid,
-                                                     np_z_grid, kernel_name);
-  default:
-    PyErr_SetString(PyExc_TypeError,
-                    "q_grid and z_grid must be float32 or float64.");
-    return NULL;
+    case 0:
+      return compute_truncated_los_kernel_impl<float>(self, np_q_grid,
+                                                      np_z_grid, kernel_name);
+    case 1:
+      return compute_truncated_los_kernel_impl<double>(self, np_q_grid,
+                                                       np_z_grid, kernel_name);
+    default:
+      PyErr_SetString(PyExc_TypeError,
+                      "q_grid and z_grid must be float32 or float64.");
+      return NULL;
   }
 }

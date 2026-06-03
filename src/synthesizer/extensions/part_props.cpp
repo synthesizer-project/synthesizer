@@ -22,13 +22,16 @@ class GridProps;
  * @param np_weights: The numpy array holding the particle weights.
  * @param np_velocities: The numpy array holding the particle velocities.
  * @param np_mask: The numpy array holding the particle mask.
- * @param part_tuple: The tuple of numpy arrays holding the particle properties.
+ * @param part_tuple: The tuple of numpy arrays holding the particle
+ * properties.
  */
 Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
                      PyArrayObject *np_mask, PyObject *part_tuple,
                      PyObject *part_names_tuple, int npart_)
-    : np_weights_(np_weights), np_velocities_(np_velocities),
-      np_mask_(np_mask), part_tuple_(part_tuple) {
+    : np_weights_(np_weights),
+      np_velocities_(np_velocities),
+      np_mask_(np_mask),
+      part_tuple_(part_tuple) {
 
   tic("Particles.__init__");
 
@@ -41,7 +44,8 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
   const char *float_names[MAX_GRID_NDIM + 2] = {NULL};
   int float_count = 0;
 
-  if (np_weights_ != NULL && reinterpret_cast<PyObject *>(np_weights_) != Py_None) {
+  if (np_weights_ != NULL &&
+      reinterpret_cast<PyObject *>(np_weights_) != Py_None) {
     float_arrays[float_count] = np_weights_;
     float_names[float_count] = "weights";
     float_count++;
@@ -60,12 +64,14 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
       PyObject *item = PyTuple_GetItem(part_tuple_, i);
       if (item == NULL) {
         PyErr_SetString(PyExc_ValueError,
-                        "[Particles::Particles]: Failed to extract particle property array.");
+                        "[Particles::Particles]: Failed to extract particle "
+                        "property array.");
         return;
       }
       if (!PyArray_Check(item)) {
         PyErr_SetString(PyExc_TypeError,
-                        "[Particles::Particles]: Particle properties must be numpy arrays.");
+                        "[Particles::Particles]: Particle properties must be "
+                        "numpy arrays.");
         return;
       }
       PyArrayObject *np_part_arr = reinterpret_cast<PyArrayObject *>(item);

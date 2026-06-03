@@ -16,6 +16,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+
 #include <Python.h>
 
 /* Local includes */
@@ -313,8 +314,8 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
 #ifdef WITH_OPENMP
 template <typename Real, typename OutT>
 static void spectra_loop_cic_with_lam_mask_omp(
-    GridProps *grid_props, Particles *parts, OutT *part_spectra,
-    int nthreads, const std::vector<int> &good_lams) {
+    GridProps *grid_props, Particles *parts, OutT *part_spectra, int nthreads,
+    const std::vector<int> &good_lams) {
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
@@ -399,8 +400,7 @@ static void spectra_loop_cic_with_lam_mask_omp(
         }
 
         /* Define the weighted contribution from this cell. */
-        const OutT weight =
-            static_cast<OutT>(frac) * static_cast<OutT>(w_p);
+        const OutT weight = static_cast<OutT>(frac) * static_cast<OutT>(w_p);
 
         /* Compute grid cell index via base + precomputed offset */
         const int grid_ind = base_linidx + sc.linoff;
@@ -418,9 +418,9 @@ static void spectra_loop_cic_with_lam_mask_omp(
         const int ilam = good_lams[jl];
         OutT spec_val = static_cast<OutT>(0);
         for (int icell = 0; icell < nvalid_cells; icell++) {
-          spec_val = std::fma(
-              static_cast<OutT>(cell_spectra_ptrs[icell][ilam]),
-              cell_weights[icell], spec_val);
+          spec_val =
+              std::fma(static_cast<OutT>(cell_spectra_ptrs[icell][ilam]),
+                       cell_weights[icell], spec_val);
         }
         part_spec[ilam] = spec_val;
       }
@@ -531,8 +531,7 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
         }
 
         /* Define the weighted contribution from this cell. */
-        const OutT weight =
-            static_cast<OutT>(frac) * static_cast<OutT>(w_p);
+        const OutT weight = static_cast<OutT>(frac) * static_cast<OutT>(w_p);
 
         /* Compute grid cell index via base + precomputed offset */
         const int grid_ind = base_linidx + sc.linoff;
@@ -549,9 +548,9 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
       for (size_t ilam = 0; ilam < nlam; ilam++) {
         OutT spec_val = static_cast<OutT>(0);
         for (int icell = 0; icell < nvalid_cells; icell++) {
-          spec_val = std::fma(
-              static_cast<OutT>(cell_spectra_ptrs[icell][ilam]),
-              cell_weights[icell], spec_val);
+          spec_val =
+              std::fma(static_cast<OutT>(cell_spectra_ptrs[icell][ilam]),
+                       cell_weights[icell], spec_val);
         }
         part_spec[ilam] = spec_val;
       }
@@ -628,8 +627,8 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    spectra_loop_cic_omp<Real, OutT>(grid_props, parts, part_spectra,
-                                     nthreads, has_lam_mask);
+    spectra_loop_cic_omp<Real, OutT>(grid_props, parts, part_spectra, nthreads,
+                                     has_lam_mask);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
@@ -686,7 +685,8 @@ static void spectra_loop_ngp_with_lam_mask_serial(
     /* Get the weight's index. */
     std::array<int, MAX_GRID_NDIM> part_indices;
     get_part_inds_ngp<Real>(part_indices, grid_props, parts, p);
-    const int grid_ind = get_flat_index(part_indices, dims.data(), grid_props->ndim);
+    const int grid_ind =
+        get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
     /* Get the weight of this particle. */
     const OutT weight = static_cast<OutT>(parts->get_weight_at<Real>(p));
@@ -742,7 +742,8 @@ static void spectra_loop_ngp_no_lam_mask_serial(GridProps *grid_props,
     /* Get the weight's index. */
     std::array<int, MAX_GRID_NDIM> part_indices;
     get_part_inds_ngp<Real>(part_indices, grid_props, parts, p);
-    const int grid_ind = get_flat_index(part_indices, dims.data(), grid_props->ndim);
+    const int grid_ind =
+        get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
     /* Get the weight of this particle. */
     const OutT weight = static_cast<OutT>(parts->get_weight_at<Real>(p));
@@ -817,8 +818,8 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
 #ifdef WITH_OPENMP
 template <typename Real, typename OutT>
 static void spectra_loop_ngp_with_lam_mask_omp(
-    GridProps *grid_props, Particles *parts, OutT *part_spectra,
-    int nthreads, const std::vector<int> &good_lams) {
+    GridProps *grid_props, Particles *parts, OutT *part_spectra, int nthreads,
+    const std::vector<int> &good_lams) {
   /* Unpack the grid properties. */
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
@@ -1043,8 +1044,8 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    spectra_loop_ngp_omp<Real, OutT>(grid_props, parts, part_spectra,
-                                     nthreads, has_lam_mask);
+    spectra_loop_ngp_omp<Real, OutT>(grid_props, parts, part_spectra, nthreads,
+                                     has_lam_mask);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
@@ -1098,31 +1099,33 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOpO|O", &np_grid_spectra,
-                        &grid_tuple, &part_tuple, &np_part_mass, &np_ndims,
-                        &ndim, &npart, &nlam, &method, &nthreads, &np_mask,
-                        &np_lam_mask, &has_lam_mask, &out_dtype,
-                        &prop_names)) {
+  if (!PyArg_ParseTuple(
+          args, "OOOOOiiisiOOpO|O", &np_grid_spectra, &grid_tuple, &part_tuple,
+          &np_part_mass, &np_ndims, &ndim, &npart, &nlam, &method, &nthreads,
+          &np_mask, &np_lam_mask, &has_lam_mask, &out_dtype, &prop_names)) {
     return NULL;
   }
 
   /* Extract the grid struct. */
-  GridProps *grid_props = new GridProps(np_grid_spectra, grid_tuple,
-                                        /*np_lam*/ nullptr, np_lam_mask, nlam,
-                                        /*np_grid_weights*/ nullptr,
-                                        prop_names);
+  GridProps *grid_props =
+      new GridProps(np_grid_spectra, grid_tuple,
+                    /*np_lam*/ nullptr, np_lam_mask, nlam,
+                    /*np_grid_weights*/ nullptr, prop_names);
   RETURN_IF_PYERR();
 
   /* Create the object that holds the particle properties. */
-  Particles *part_props = new Particles(np_part_mass, /*np_velocities*/ NULL,
-                                        np_mask, part_tuple, prop_names, npart);
+  Particles *part_props =
+      new Particles(np_part_mass, /*np_velocities*/ NULL, np_mask, part_tuple,
+                    prop_names, npart);
   RETURN_IF_PYERR();
 
   const int grid_typenum = grid_props->get_float_typenum();
   const int part_typenum = part_props->get_float_typenum();
-  if (grid_typenum != -1 && part_typenum != -1 && grid_typenum != part_typenum) {
-    PyErr_SetString(PyExc_TypeError,
-                    "Grid and particle arrays must share the same floating-point dtype.");
+  if (grid_typenum != -1 && part_typenum != -1 &&
+      grid_typenum != part_typenum) {
+    PyErr_SetString(
+        PyExc_TypeError,
+        "Grid and particle arrays must share the same floating-point dtype.");
     delete part_props;
     delete grid_props;
     return NULL;
@@ -1148,14 +1151,14 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
     /* Dispatch: call the matching typed kernel based on the dispatch key. */
     switch (dispatch_key) {
-    case 0:
-      np_part_spectra = (PyArrayObject *)PyArray_ZEROS(2, np_part_dims,
-                                                        NPY_FLOAT32, 0);
-      break;
-    default:
-      np_part_spectra = (PyArrayObject *)PyArray_ZEROS(2, np_part_dims,
-                                                        NPY_FLOAT64, 0);
-      break;
+      case 0:
+        np_part_spectra =
+            (PyArrayObject *)PyArray_ZEROS(2, np_part_dims, NPY_FLOAT32, 0);
+        break;
+      default:
+        np_part_spectra =
+            (PyArrayObject *)PyArray_ZEROS(2, np_part_dims, NPY_FLOAT64, 0);
+        break;
     }
   }
   if (np_part_spectra == NULL) {
@@ -1175,30 +1178,30 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
       /* Dispatch: call the matching typed kernel based on the dispatch key. */
       switch (dispatch_key) {
-      case 0:
-        spectra_loop_cic<float, float>(
-            grid_props, part_props,
-            static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-            has_lam_mask);
-        break;
-      case 1:
-        spectra_loop_cic<float, double>(
-            grid_props, part_props,
-            static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-            has_lam_mask);
-        break;
-      case 2:
-        spectra_loop_cic<double, float>(
-            grid_props, part_props,
-            static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-            has_lam_mask);
-        break;
-      default:
-        spectra_loop_cic<double, double>(
-            grid_props, part_props,
-            static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-            has_lam_mask);
-        break;
+        case 0:
+          spectra_loop_cic<float, float>(
+              grid_props, part_props,
+              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 1:
+          spectra_loop_cic<float, double>(
+              grid_props, part_props,
+              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 2:
+          spectra_loop_cic<double, float>(
+              grid_props, part_props,
+              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        default:
+          spectra_loop_cic<double, double>(
+              grid_props, part_props,
+              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
       }
     }
   } else if (strcmp(method, "ngp") == 0) {
@@ -1208,30 +1211,30 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
       /* Dispatch: call the matching typed kernel based on the dispatch key. */
       switch (dispatch_key) {
-      case 0:
-        spectra_loop_ngp<float, float>(
-            grid_props, part_props,
-            static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-            has_lam_mask);
-        break;
-      case 1:
-        spectra_loop_ngp<float, double>(
-            grid_props, part_props,
-            static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-            has_lam_mask);
-        break;
-      case 2:
-        spectra_loop_ngp<double, float>(
-            grid_props, part_props,
-            static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-            has_lam_mask);
-        break;
-      default:
-        spectra_loop_ngp<double, double>(
-            grid_props, part_props,
-            static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-            has_lam_mask);
-        break;
+        case 0:
+          spectra_loop_ngp<float, float>(
+              grid_props, part_props,
+              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 1:
+          spectra_loop_ngp<float, double>(
+              grid_props, part_props,
+              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 2:
+          spectra_loop_ngp<double, float>(
+              grid_props, part_props,
+              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        default:
+          spectra_loop_ngp<double, double>(
+              grid_props, part_props,
+              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
       }
     }
   } else {
@@ -1274,8 +1277,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_particle_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

@@ -13,6 +13,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+
 #include <Python.h>
 
 /**
@@ -40,21 +41,19 @@ static inline Real *extract_data(PyArrayObject *np_arr, const char *name) {
 
   const int expected_type =
       std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
-  const char *type_name =
-      std::is_same_v<Real, float> ? "float32" : "float64";
+  const char *type_name = std::is_same_v<Real, float> ? "float32" : "float64";
 
   if (PyArray_TYPE(np_arr) != expected_type) {
     char error_msg[120];
-    snprintf(error_msg, sizeof(error_msg),
-             "%s must be a %s array.", name, type_name);
+    snprintf(error_msg, sizeof(error_msg), "%s must be a %s array.", name,
+             type_name);
     PyErr_SetString(PyExc_TypeError, error_msg);
     return NULL;
   }
 
   if (!PyArray_IS_C_CONTIGUOUS(np_arr)) {
     char error_msg[120];
-    snprintf(error_msg, sizeof(error_msg),
-             "%s must be C-contiguous.", name);
+    snprintf(error_msg, sizeof(error_msg), "%s must be C-contiguous.", name);
     PyErr_SetString(PyExc_ValueError, error_msg);
     return NULL;
   }
@@ -180,14 +179,14 @@ static inline T get_at(PyArrayObject *np_arr, npy_intp ind,
     expected_type = NPY_FLOAT64;
     type_name = "float64";
   } else {
-    PyErr_Format(PyExc_TypeError,
-                 "[get_at]: Unsupported type for array '%s'.", name);
+    PyErr_Format(PyExc_TypeError, "[get_at]: Unsupported type for array '%s'.",
+                 name);
     return T(0);
   }
 
   if (PyArray_TYPE(np_arr) != expected_type) {
-    PyErr_Format(PyExc_TypeError,
-                 "[get_at]: Array '%s' must be of type %s.", name, type_name);
+    PyErr_Format(PyExc_TypeError, "[get_at]: Array '%s' must be of type %s.",
+                 name, type_name);
     return T(0);
   }
 
@@ -203,8 +202,8 @@ static inline T get_at(PyArrayObject *np_arr, npy_intp ind,
     const T *data_ptr = static_cast<const T *>(PyArray_DATA(np_arr));
     return data_ptr[ind];
   } else {
-    PyErr_Format(PyExc_ValueError,
-                 "[get_at]: Array '%s' must be contiguous.", name);
+    PyErr_Format(PyExc_ValueError, "[get_at]: Array '%s' must be contiguous.",
+                 name);
     return T(0);
   }
 }
@@ -215,4 +214,4 @@ npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name);
 const npy_int64 *extract_index_array(PyArrayObject *np_arr, const char *name);
 double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
 
-#endif // PROPERTY_FUNCS_H_
+#endif  // PROPERTY_FUNCS_H_

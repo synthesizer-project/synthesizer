@@ -14,6 +14,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+
 #include <Python.h>
 
 /* Local includes */
@@ -74,8 +75,7 @@ static PyArrayObject *get_spectra_serial(GridProps *grid_props) {
       const Real weight = grid_weights[grid_ind];
 
       /* Skip zero weight cells. */
-      if (weight <= 0)
-        continue;
+      if (weight <= 0) continue;
 
       /* Get the grid spectra value at this index and wavelength. */
       const size_t spec_ind = static_cast<size_t>(grid_ind) * nlam + ilam;
@@ -157,8 +157,7 @@ static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
         const Real weight = grid_weights[grid_ind];
 
         /* Skip zero weight cells. */
-        if (weight <= 0)
-          continue;
+        if (weight <= 0) continue;
 
         /* Get the grid spectra value at this index and wavelength. */
         const size_t spec_ind =
@@ -246,11 +245,10 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOOO|O", &np_grid_spectra,
-                        &grid_tuple, &part_tuple, &np_part_mass, &np_ndims,
-                        &ndim, &npart, &nlam, &method, &nthreads,
-                        &np_grid_weights, &np_mask, &np_lam_mask, &out_dtype,
-                        &prop_names))
+  if (!PyArg_ParseTuple(
+          args, "OOOOOiiisiOOOO|O", &np_grid_spectra, &grid_tuple, &part_tuple,
+          &np_part_mass, &np_ndims, &ndim, &npart, &nlam, &method, &nthreads,
+          &np_grid_weights, &np_mask, &np_lam_mask, &out_dtype, &prop_names))
     return NULL;
 
   /* Extract the grid struct. */
@@ -260,17 +258,20 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
   RETURN_IF_PYERR();
 
   /* Create the object that holds the particle properties. */
-  Particles *part_props = new Particles(np_part_mass, /*np_velocities*/ NULL,
-                                        np_mask, part_tuple, prop_names, npart);
+  Particles *part_props =
+      new Particles(np_part_mass, /*np_velocities*/ NULL, np_mask, part_tuple,
+                    prop_names, npart);
   RETURN_IF_PYERR();
 
   /* Validate that grid and particle arrays share one floating precision
    * family, then resolve the independently requested output dtype. */
   const int grid_typenum = grid_props->get_float_typenum();
   const int part_typenum = part_props->get_float_typenum();
-  if (grid_typenum != -1 && part_typenum != -1 && grid_typenum != part_typenum) {
-    PyErr_SetString(PyExc_TypeError,
-                    "Grid and particle arrays must share the same floating-point dtype.");
+  if (grid_typenum != -1 && part_typenum != -1 &&
+      grid_typenum != part_typenum) {
+    PyErr_SetString(
+        PyExc_TypeError,
+        "Grid and particle arrays must share the same floating-point dtype.");
     delete grid_props;
     delete part_props;
     return NULL;
@@ -292,13 +293,14 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
     /* Dispatch: call the matching typed kernel based on the dispatch key. */
     switch (dispatch_key) {
-    case 0:
-      grid_weights = static_cast<void *>(grid_props->get_grid_weights<float>());
-      break;
-    default:
-      grid_weights =
-          static_cast<void *>(grid_props->get_grid_weights<double>());
-      break;
+      case 0:
+        grid_weights =
+            static_cast<void *>(grid_props->get_grid_weights<float>());
+        break;
+      default:
+        grid_weights =
+            static_cast<void *>(grid_props->get_grid_weights<double>());
+        break;
     }
   }
   RETURN_IF_PYERR();
@@ -330,18 +332,18 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
     /* Dispatch: call the matching typed kernel based on the dispatch key. */
     switch (dispatch_key) {
-    case 0:
-      np_spectra = get_spectra<float, float>(grid_props, nthreads);
-      break;
-    case 1:
-      np_spectra = get_spectra<float, double>(grid_props, nthreads);
-      break;
-    case 2:
-      np_spectra = get_spectra<double, float>(grid_props, nthreads);
-      break;
-    default:
-      np_spectra = get_spectra<double, double>(grid_props, nthreads);
-      break;
+      case 0:
+        np_spectra = get_spectra<float, float>(grid_props, nthreads);
+        break;
+      case 1:
+        np_spectra = get_spectra<float, double>(grid_props, nthreads);
+        break;
+      case 2:
+        np_spectra = get_spectra<double, float>(grid_props, nthreads);
+        break;
+      default:
+        np_spectra = get_spectra<double, double>(grid_props, nthreads);
+        break;
     }
   }
 
@@ -385,8 +387,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_integrated_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

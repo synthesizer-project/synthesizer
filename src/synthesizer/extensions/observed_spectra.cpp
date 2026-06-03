@@ -5,7 +5,8 @@
  * This fills observer-frame wavelength, frequency, and flux buffers in place
  * so Python callers can avoid large temporary array allocations on the hot
  * path.
- * ************************************************************************** */
+ * **************************************************************************
+ */
 /* Standard includes */
 #include <cmath>
 #include <memory>
@@ -37,8 +38,8 @@
  *     nlam).
  * @param lam: The input rest-frame wavelength grid, shape (nlam).
  * @param nu: The input rest-frame frequency grid, shape (nlam).
- * @param one_plus_z: The redshift factor (1 + z) to apply to the wavelength and
- *      frequency grids.
+ * @param one_plus_z: The redshift factor (1 + z) to apply to the wavelength
+ * and frequency grids.
  * @param conversion: The flux conversion factor to apply to the luminosity
  *     density spectra to convert to flux density. This should already include
  *     the (1 + z) factor for the bandwidth compression, so the kernel just
@@ -56,9 +57,9 @@
  * @param obsnu_out: The preallocated output array for the observer-frame
  *     frequency grid, shape (nlam). Must be writable and have the same length
  *     as nu. Can be NULL if the caller does not need this output.
- * @param nelem: The total number of elements in the spectra arrays (the product
- *     of all dimensions of lnu). This is used to drive the parallel loop for
- *     the flux conversion.
+ * @param nelem: The total number of elements in the spectra arrays (the
+ * product of all dimensions of lnu). This is used to drive the parallel loop
+ * for the flux conversion.
  * @param nlam: The number of wavelength/frequency bins (the size of the last
  *     dimension of lnu and the length of lam/nu). This is used to drive the
  *     loops for populating the observer-frame grids.
@@ -70,7 +71,7 @@ static void compute_fnu_kernel(const Real *lnu, const GridT *lam,
                                GridT *obslam_out, GridT *obsnu_out,
                                npy_intp nelem, npy_intp nlam) {
 #ifdef WITH_OPENMP
-#pragma omp parallel for if (nthreads > 1) num_threads(nthreads)               \
+#pragma omp parallel for if (nthreads > 1) num_threads(nthreads) \
     schedule(static)
 #endif
   for (npy_intp idx = 0; idx < nelem; idx++) {
@@ -90,9 +91,9 @@ static void compute_fnu_kernel(const Real *lnu, const GridT *lam,
  * validation.
  *
  * This parses the Python-level inputs, validates them, and dispatches to the
- * correct typed kernel based on the input/output dtypes. The output arrays must
- * already be allocated by the caller and have the correct shape and memory
- * layout; no copying or allocation is done in Python.
+ * correct typed kernel based on the input/output dtypes. The output arrays
+ * must already be allocated by the caller and have the correct shape and
+ * memory layout; no copying or allocation is done in Python.
  */
 PyObject *compute_fnu(PyObject *self, PyObject *args) {
   /* We do not need the module instance argument. */
@@ -232,8 +233,7 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  if (out_typenum < 0)
-    out_typenum = input_typenum;
+  if (out_typenum < 0) out_typenum = input_typenum;
 
   /* Ensure the provided outputs match the requested dtype and memory layout so
    * the typed kernels can use raw pointer arithmetic safely. */
@@ -290,7 +290,7 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
-  case 0: {
+    case 0: {
       const float *lnu = data_ptr<float>(np_lnu);
       const float *lam = data_ptr<float>(np_lam);
       const float *nu = data_ptr<float>(np_nu);
@@ -304,8 +304,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
           static_cast<float>(conversion), nthreads, fnu_out, obslam_out,
           obsnu_out, nelem, nlam);
       break;
-  }
-  case 1: {
+    }
+    case 1: {
       const float *lnu = data_ptr<float>(np_lnu);
       const float *lam = data_ptr<float>(np_lam);
       const float *nu = data_ptr<float>(np_nu);
@@ -319,8 +319,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
           static_cast<float>(conversion), nthreads, fnu_out, obslam_out,
           obsnu_out, nelem, nlam);
       break;
-  }
-  case 2: {
+    }
+    case 2: {
       const float *lnu = data_ptr<float>(np_lnu);
       const double *lam = data_ptr<double>(np_lam);
       const double *nu = data_ptr<double>(np_nu);
@@ -333,8 +333,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
           lnu, lam, nu, one_plus_z, static_cast<float>(conversion), nthreads,
           fnu_out, obslam_out, obsnu_out, nelem, nlam);
       break;
-  }
-  case 3: {
+    }
+    case 3: {
       const float *lnu = data_ptr<float>(np_lnu);
       const double *lam = data_ptr<double>(np_lam);
       const double *nu = data_ptr<double>(np_nu);
@@ -347,8 +347,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
           lnu, lam, nu, one_plus_z, static_cast<float>(conversion), nthreads,
           fnu_out, obslam_out, obsnu_out, nelem, nlam);
       break;
-  }
-  case 4: {
+    }
+    case 4: {
       const double *lnu = data_ptr<double>(np_lnu);
       const float *lam = data_ptr<float>(np_lam);
       const float *nu = data_ptr<float>(np_nu);
@@ -361,8 +361,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
           lnu, lam, nu, static_cast<float>(one_plus_z), conversion, nthreads,
           fnu_out, obslam_out, obsnu_out, nelem, nlam);
       break;
-  }
-  case 5: {
+    }
+    case 5: {
       const double *lnu = data_ptr<double>(np_lnu);
       const float *lam = data_ptr<float>(np_lam);
       const float *nu = data_ptr<float>(np_nu);
@@ -375,8 +375,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
           lnu, lam, nu, static_cast<float>(one_plus_z), conversion, nthreads,
           fnu_out, obslam_out, obsnu_out, nelem, nlam);
       break;
-  }
-  case 6: {
+    }
+    case 6: {
       const double *lnu = data_ptr<double>(np_lnu);
       const double *lam = data_ptr<double>(np_lam);
       const double *nu = data_ptr<double>(np_nu);
@@ -389,8 +389,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
           lnu, lam, nu, one_plus_z, conversion, nthreads, fnu_out, obslam_out,
           obsnu_out, nelem, nlam);
       break;
-  }
-  default: {
+    }
+    default: {
       const double *lnu = data_ptr<double>(np_lnu);
       const double *lam = data_ptr<double>(np_lam);
       const double *nu = data_ptr<double>(np_nu);
@@ -403,12 +403,13 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
           lnu, lam, nu, one_plus_z, conversion, nthreads, fnu_out, obslam_out,
           obsnu_out, nelem, nlam);
       break;
-  }
+    }
   }
 
   toc("compute_fnu");
 
-  /* Release the temporary array references now that the kernel has finished. */
+  /* Release the temporary array references now that the kernel has finished.
+   */
   Py_DECREF(np_lnu);
   Py_DECREF(np_lam);
   Py_DECREF(np_nu);
@@ -439,8 +440,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_observed_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
 
   /* Import the NumPy C API before any ndarray helpers are used. */
   if (numpy_import() < 0) {

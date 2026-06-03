@@ -9,6 +9,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+
 #include <Python.h>
 
 /* Local includes */
@@ -27,7 +28,8 @@
  * and grid weights.
  *
  * @param np_spectra: The numpy array containing the spectra data.
- * @param axes_tuple: A tuple containing numpy arrays for each axis of the grid.
+ * @param axes_tuple: A tuple containing numpy arrays for each axis of the
+ * grid.
  * @param np_lam: The numpy array containing the wavelength data.
  * @param np_lam_mask: The numpy array containing the wavelength mask.
  * @param nlam: The number of wavelength elements.
@@ -40,8 +42,11 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
                      PyArrayObject *np_lam, PyArrayObject *np_lam_mask,
                      const int nlam, PyArrayObject *np_grid_weights,
                      PyObject *axis_names_tuple)
-    : nlam(nlam), np_spectra_(np_spectra), axes_tuple_(axes_tuple),
-      np_lam_(np_lam), np_lam_mask_(np_lam_mask),
+    : nlam(nlam),
+      np_spectra_(np_spectra),
+      axes_tuple_(axes_tuple),
+      np_lam_(np_lam),
+      np_lam_mask_(np_lam_mask),
       np_grid_weights_(np_grid_weights) {
 
   tic("GridProps.__init__");
@@ -73,7 +78,8 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
   const char *float_names[MAX_GRID_NDIM + 3] = {NULL};
   int float_count = 0;
 
-  if (np_spectra_ != NULL && reinterpret_cast<PyObject *>(np_spectra_) != Py_None) {
+  if (np_spectra_ != NULL &&
+      reinterpret_cast<PyObject *>(np_spectra_) != Py_None) {
     float_arrays[float_count] = np_spectra_;
     float_names[float_count] = "grid_spectra";
     float_count++;
@@ -212,7 +218,7 @@ int GridProps::ravel_spectra_index(
   for (int i = 0; i < ndim; i++) {
     full_index[i] = multi_index[i];
   }
-  full_index[ndim] = ilam; // Set the wavelength index
+  full_index[ndim] = ilam;  // Set the wavelength index
 
   return get_flat_index(full_index, spectra_dims_.data(), ndim + 1);
 }
@@ -223,11 +229,11 @@ int GridProps::ravel_spectra_index(
  *
  * @param index: The flat index to convert.
  *
- * @return An array of N-dimensional indices corresponding to the flat index and
- * the wavelength index.
+ * @return An array of N-dimensional indices corresponding to the flat index
+ * and the wavelength index.
  */
-std::array<int, MAX_GRID_NDIM + 1>
-GridProps::unravel_spectra_index(int index) const {
+std::array<int, MAX_GRID_NDIM + 1> GridProps::unravel_spectra_index(
+    int index) const {
   std::array<int, MAX_GRID_NDIM + 1> indices = {0};
   get_indices_from_flat(index, ndim + 1, spectra_dims_, indices);
   return indices;
@@ -394,7 +400,7 @@ double *GridProps::get_grid_weights() {
   /* If we already have grid weights, return them. */
   if (has_grid_weights()) {
     grid_weights_ = static_cast<void *>(PyArray_DATA(np_grid_weights_));
-    need_grid_weights_ = false; // We don't need to populate them.
+    need_grid_weights_ = false;  // We don't need to populate them.
     return static_cast<double *>(grid_weights_);
   }
 
@@ -483,8 +489,9 @@ bool GridProps::lam_is_masked(int ind) const {
 bool GridProps::need_grid_weights() const {
   /* Check we have a grid to populate weights for. */
   if (!has_grid_weights()) {
-    PyErr_SetString(PyExc_ValueError, "[GridProps::need_grid_weights]: "
-                                      "Grid weights have not been allocated.");
+    PyErr_SetString(PyExc_ValueError,
+                    "[GridProps::need_grid_weights]: "
+                    "Grid weights have not been allocated.");
     return false;
   }
 

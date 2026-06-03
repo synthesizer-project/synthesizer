@@ -21,6 +21,7 @@
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
 #include "numpy_init.h"
+
 #include <Python.h>
 
 /* Local includes */
@@ -93,7 +94,7 @@ static void reduce_spectra_parallel(OutT *spectra, const Real *part_spectra,
       spectra[ilam] += static_cast<OutT>(part_spectra_row[ilam]);
     }
   }
-#else // OpenMP < 4.5 or no array reduction support
+#else  // OpenMP < 4.5 or no array reduction support
 #pragma omp parallel num_threads(nthreads)
   {
     std::vector<OutT> local(nlam, static_cast<OutT>(0.0));
@@ -111,7 +112,7 @@ static void reduce_spectra_parallel(OutT *spectra, const Real *part_spectra,
       }
     }
   }
-#endif // WITH_OPENMP
+#endif  // WITH_OPENMP
 }
 #endif
 
@@ -235,7 +236,8 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
 
   /* Validate that we have a two-dimensional array with shape
    * (npart, nlam). This helper is intentionally specialised to the common
-   * per-particle spectra reduction case used by the Python operations layer. */
+   * per-particle spectra reduction case used by the Python operations layer.
+   */
   if (PyArray_NDIM(np_part_spectra) != 2) {
     PyErr_SetString(PyExc_ValueError,
                     "part_spectra must be a 2D NumPy array.");
@@ -257,23 +259,23 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
-                     (output_typenum == NPY_FLOAT64);
+  int dispatch_key =
+      ((input_typenum == NPY_FLOAT64) << 1) | (output_typenum == NPY_FLOAT64);
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
-  case 0:
-    return reduce_particle_spectra_impl<float, float>(np_part_spectra,
-                                                      nthreads);
-  case 1:
-    return reduce_particle_spectra_impl<float, double>(np_part_spectra,
-                                                       nthreads);
-  case 2:
-    return reduce_particle_spectra_impl<double, float>(np_part_spectra,
-                                                       nthreads);
-  default:
-    return reduce_particle_spectra_impl<double, double>(np_part_spectra,
+    case 0:
+      return reduce_particle_spectra_impl<float, float>(np_part_spectra,
                                                         nthreads);
+    case 1:
+      return reduce_particle_spectra_impl<float, double>(np_part_spectra,
+                                                         nthreads);
+    case 2:
+      return reduce_particle_spectra_impl<double, float>(np_part_spectra,
+                                                         nthreads);
+    default:
+      return reduce_particle_spectra_impl<double, double>(np_part_spectra,
+                                                          nthreads);
   }
 }
 
@@ -296,14 +298,14 @@ static PyMethodDef ReductionMethods[] = {
 /* Make this importable. */
 static struct PyModuleDef moduledef = {
     PyModuleDef_HEAD_INIT,
-    "reductions",                              /* m_name */
+    "reductions",                                    /* m_name */
     "A module containing spectra reduction kernels", /* m_doc */
-    -1,                                         /* m_size */
-    ReductionMethods,                           /* m_methods */
-    NULL,                                       /* m_reload */
-    NULL,                                       /* m_traverse */
-    NULL,                                       /* m_clear */
-    NULL,                                       /* m_free */
+    -1,                                              /* m_size */
+    ReductionMethods,                                /* m_methods */
+    NULL,                                            /* m_reload */
+    NULL,                                            /* m_traverse */
+    NULL,                                            /* m_clear */
+    NULL,                                            /* m_free */
 };
 
 PyMODINIT_FUNC PyInit_reductions(void) {
@@ -315,8 +317,7 @@ PyMODINIT_FUNC PyInit_reductions(void) {
 
   /* Create the Python module only after the NumPy API is ready. */
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
 #ifdef ATOMIC_TIMING
   /* Import the shared timing capsule when atomic timing is enabled. */
   if (import_toc_capsule() < 0) {
