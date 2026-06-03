@@ -28,7 +28,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import psutil
-
 from synthesizer.extensions.doppler_particle_spectra import (
     compute_part_seds_with_vel_shift,
 )
@@ -222,34 +221,6 @@ def profile_doppler_particle_spectra_memory_scaling(
     csv_path = (
         output_dir / f"{basename}_doppler_particle_spectra_memory_scaling.csv"
     )
-    plot_path = (
-        output_dir / f"{basename}_doppler_particle_spectra_memory_scaling.png"
-    )
-
-    results = []
-    for particle_count in nparticles:
-        print(
-            "Profiling Doppler particle spectra memory for "
-            f"nparticles={particle_count}"
-        )
-
-        inputs_by_dtype = {}
-        for input_name, input_dtype in PRECISIONS.items():
-            inputs_by_dtype[input_name] = make_synthetic_inputs(
-                particle_count, ngrid, nlam, input_dtype, rng
-            )
-
-        for method in methods:
-            for input_name in PRECISIONS:
-                for output_name, output_dtype in PRECISIONS.items():
-                    result = _sample_doppler_spectra(
-                        method,
-                        inputs_by_dtype[input_name],
-                        output_dtype,
-                        nthreads,
-                        repeats,
-                        sample_freq,
-                    )
     plot_path = (
         output_dir / f"{basename}_doppler_particle_spectra_memory_scaling.png"
     )

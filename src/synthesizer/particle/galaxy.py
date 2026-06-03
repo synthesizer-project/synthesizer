@@ -532,6 +532,7 @@ class Galaxy(BaseGalaxy):
         force_loop=0,
         min_count=100,
         nthreads=1,
+        out_dtype=np.float64,
     ):
         """Calculate the LOS optical depth for each star particle.
 
@@ -576,6 +577,9 @@ class Galaxy(BaseGalaxy):
                 will be performed with a brute force loop.
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            out_dtype (np.dtype):
+                The floating-point dtype for the output optical depth array.
+                Default is np.float64.
         """
         # Ensure we have stars and gas
         if self.stars is None:
@@ -609,10 +613,10 @@ class Galaxy(BaseGalaxy):
 
         # Apply the mask if provided
         if mask is not None:
-            tau_vs = np.zeros(self.stars.nparticles)
+            tau_vs = np.zeros(self.stars.nparticles, dtype=out_dtype)
             tau_vs[mask] = tau_v
         else:
-            tau_vs = tau_v
+            tau_vs = np.array(tau_v, dtype=out_dtype, copy=True)
 
         # Store the result in self.stars
         setattr(self.stars, tau_v_attr, tau_vs)
@@ -631,6 +635,7 @@ class Galaxy(BaseGalaxy):
         force_loop=0,
         min_count=100,
         nthreads=1,
+        out_dtype=np.float64,
     ):
         """Calculate the LOS optical depth for each black hole particle.
 
@@ -676,6 +681,9 @@ class Galaxy(BaseGalaxy):
                 will be performed with a brute force loop.
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            out_dtype (np.dtype):
+                The floating-point dtype for the output optical depth array.
+                Default is np.float64.
         """
         # Ensure we have black holes and gas
         if self.black_holes is None:
@@ -702,20 +710,20 @@ class Galaxy(BaseGalaxy):
             force_loop=force_loop,
             min_count=min_count,
             nthreads=nthreads,
-        )
+        )  # Msun / Mpc**2
 
         # Finalise the calculation
         tau_v = kappa * unyt_to_ndview(los_dustsds, Msun / pc**2)
 
         # Apply the mask if provided
         if mask is not None:
-            tau_vs = np.zeros(self.black_holes.nbh)
+            tau_vs = np.zeros(self.black_holes.nparticles, dtype=out_dtype)
             tau_vs[mask] = tau_v
         else:
-            tau_vs = tau_v
+            tau_vs = np.array(tau_v, dtype=out_dtype, copy=True)
 
         # Store the result in self.black_holes
-        setattr(self.black_holes, "tau_v", tau_vs)
+        setattr(self.black_holes, tau_v_attr, tau_vs)
 
         return tau_v
 

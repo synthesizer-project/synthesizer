@@ -411,6 +411,9 @@ double *GridProps::get_grid_weights() {
   }
   np_grid_weights_ =
       (PyArrayObject *)PyArray_ZEROS(ndim, np_dims_weights, NPY_DOUBLE, 0);
+  if (np_grid_weights_ == NULL) {
+    return NULL;
+  }
   grid_weights_ = static_cast<void *>(PyArray_DATA(np_grid_weights_));
   RETURN_IF_PYERR();
 

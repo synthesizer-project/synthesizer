@@ -1447,6 +1447,7 @@ class Pipeline:
                     tau_v_attr=op_kwargs["tau_v_attr"],
                     as_points=op_kwargs["as_points"],
                     nthreads=self.nthreads,
+                    out_dtype=self._los_optical_depths_out_dtype,
                 )
             if (
                 galaxy.black_holes is not None
@@ -1460,6 +1461,7 @@ class Pipeline:
                     tau_v_attr=op_kwargs["tau_v_attr"],
                     as_points=op_kwargs["as_points"],
                     nthreads=self.nthreads,
+                    out_dtype=self._los_optical_depths_out_dtype,
                 )
 
         # Count how many optical depths we have generated (1 per particle) and

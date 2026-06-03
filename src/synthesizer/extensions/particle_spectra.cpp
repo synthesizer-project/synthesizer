@@ -5,7 +5,7 @@
 /* C includes */
 #include <algorithm>
 #include <array>
-#include <math.h>
+#include <cmath>
 #include <new>
 #include <stdio.h>
 #include <stdlib.h>

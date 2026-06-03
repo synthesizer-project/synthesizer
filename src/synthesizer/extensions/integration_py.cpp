@@ -123,7 +123,6 @@ static PyArrayObject *wrap_last_axis_result(OutT *result_arr, npy_intp ndim,
   PyArrayObject *result =
       wrap_array_to_numpy<OutT>(ndim - 1, result_shape, result_arr);
   if (result == NULL) {
-    delete[] result_arr;
     return NULL;
   }
 

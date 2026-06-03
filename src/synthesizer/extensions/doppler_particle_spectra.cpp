@@ -353,14 +353,16 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
     /* Dispatch: call the matching typed kernel based on the dispatch key. */
     switch (dispatch_key) {
       case 0:
-        spectra_f32 = new (std::nothrow) float[grid_props->nlam]();
-        part_spectra_f32 =
-            new (std::nothrow) float[npart * grid_props->nlam]();
+        spectra_f32 =
+            new (std::nothrow) float[static_cast<size_t>(grid_props->nlam)]();
+        part_spectra_f32 = new (std::nothrow) float[static_cast<size_t>(npart) *
+                                                     grid_props->nlam]();
         break;
       default:
-        spectra_f64 = new (std::nothrow) double[grid_props->nlam]();
-        part_spectra_f64 =
-            new (std::nothrow) double[npart * grid_props->nlam]();
+        spectra_f64 =
+            new (std::nothrow) double[static_cast<size_t>(grid_props->nlam)]();
+        part_spectra_f64 = new (std::nothrow) double[static_cast<size_t>(npart) *
+                                                     grid_props->nlam]();
         break;
     }
   }

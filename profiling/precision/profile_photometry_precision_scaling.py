@@ -173,18 +173,25 @@ def profile_photometry_precision_scaling(
 
         spectra_by_dtype = {}
         nu_by_dtype = {}
+
+        base_spectra = make_synthetic_spectra(
+            particle_count,
+            nlam,
+            np.float64,
+            rng,
+        )
+        base_nu = np.array(
+            (c / grid.lam).to("Hz").value,
+            dtype=np.float64,
+            order="C",
+            copy=True,
+        )
         for input_name, input_dtype in PRECISIONS.items():
-            spectra_by_dtype[input_name] = make_synthetic_spectra(
-                particle_count,
-                nlam,
-                input_dtype,
-                rng,
+            spectra_by_dtype[input_name] = np.array(
+                base_spectra, dtype=input_dtype, order="C", copy=True
             )
             nu_by_dtype[input_name] = np.array(
-                (c / grid.lam).to("Hz").value,
-                dtype=input_dtype,
-                order="C",
-                copy=True,
+                base_nu, dtype=input_dtype, order="C", copy=True
             )
 
         for input_name, _input_dtype in PRECISIONS.items():
