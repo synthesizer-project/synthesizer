@@ -506,7 +506,14 @@ class BaseGalaxy:
             if len(lst) > 1:
                 self.spectra[key] = sum(lst)
 
-    def get_photo_lnu(self, filters, verbose=True, nthreads=1, limit_to=None):
+    def get_photo_lnu(
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        limit_to=None,
+        out_dtype=np.float32,
+    ):
         """Calculate luminosity photometry using a FilterCollection object.
 
         Photometry is calculated in spectral luminosity density units.
@@ -523,6 +530,8 @@ class BaseGalaxy:
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             PhotometryCollection:
@@ -569,6 +578,7 @@ class BaseGalaxy:
                 verbose,
                 nthreads=nthreads,
                 limit_to=star_labels,
+                out_dtype=out_dtype,
             )
 
             # If we have particle spectra do that too (not applicable to
@@ -579,6 +589,7 @@ class BaseGalaxy:
                     verbose,
                     nthreads=nthreads,
                     limit_to=part_star_labels,
+                    out_dtype=out_dtype,
                 )
 
         # Get black hole photometry
@@ -588,6 +599,7 @@ class BaseGalaxy:
                 verbose,
                 nthreads=nthreads,
                 limit_to=bh_labels,
+                out_dtype=out_dtype,
             )
 
             # If we have particle spectra do that too (not applicable to
@@ -598,6 +610,7 @@ class BaseGalaxy:
                     verbose,
                     nthreads=nthreads,
                     limit_to=part_bh_labels,
+                    out_dtype=out_dtype,
                 )
 
         # Get the combined photometry
@@ -607,9 +620,17 @@ class BaseGalaxy:
                 filters,
                 verbose,
                 nthreads=nthreads,
+                out_dtype=out_dtype,
             )
 
-    def get_photo_fnu(self, filters, verbose=True, nthreads=1, limit_to=None):
+    def get_photo_fnu(
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        limit_to=None,
+        out_dtype=np.float32,
+    ):
         """Calculate flux photometry using a FilterCollection object.
 
         Photometry is calculated in spectral flux density units.
@@ -626,6 +647,8 @@ class BaseGalaxy:
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             PhotometryCollection:
@@ -672,6 +695,7 @@ class BaseGalaxy:
                 verbose,
                 nthreads=nthreads,
                 limit_to=star_labels,
+                out_dtype=out_dtype,
             )
 
             # If we have particle spectra do that too (not applicable to
@@ -682,6 +706,7 @@ class BaseGalaxy:
                     verbose,
                     nthreads=nthreads,
                     limit_to=part_star_labels,
+                    out_dtype=out_dtype,
                 )
 
         # Get black hole photometry
@@ -691,6 +716,7 @@ class BaseGalaxy:
                 verbose,
                 nthreads=nthreads,
                 limit_to=bh_labels,
+                out_dtype=out_dtype,
             )
 
             # If we have particle spectra do that too (not applicable to
@@ -701,6 +727,7 @@ class BaseGalaxy:
                     verbose,
                     nthreads=nthreads,
                     limit_to=part_bh_labels,
+                    out_dtype=out_dtype,
                 )
 
         # Get the combined photometry
@@ -710,6 +737,7 @@ class BaseGalaxy:
                 filters,
                 verbose,
                 nthreads=nthreads,
+                out_dtype=out_dtype,
             )
 
     def get_surviving_mass(self, grid: Grid, **kwargs):

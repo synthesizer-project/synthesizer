@@ -2355,6 +2355,7 @@ class Pipeline:
                 filters=instruments.all_filters,
                 nthreads=self.nthreads,
                 limit_to=model_label,
+                out_dtype=self._photometry_luminosities_out_dtype,
             )
 
         # Count the number of photometric luminosities we have generated
@@ -2483,6 +2484,7 @@ class Pipeline:
                 filters=instruments.all_filters,
                 nthreads=self.nthreads,
                 limit_to=model_label,
+                out_dtype=self._photometry_fluxes_out_dtype,
             )
 
         # Count the number of photometric fluxes we have generated

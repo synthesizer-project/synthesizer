@@ -494,6 +494,7 @@ class Particles:
         verbose=True,
         nthreads=1,
         limit_to=None,
+        out_dtype=np.float32,
     ):
         """Calculate luminosity photometry using a FilterCollection object.
 
@@ -509,6 +510,8 @@ class Particles:
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             photo_lnu (dict): A dictionary of rest frame broadband
@@ -522,7 +525,9 @@ class Particles:
             # Create the photometry collection and store it in the object
             self.particle_photo_lnu[label] = self.particle_spectra[
                 label
-            ].get_photo_lnu(filters, verbose, nthreads=nthreads)
+            ].get_photo_lnu(
+                filters, verbose, nthreads=nthreads, out_dtype=out_dtype
+            )
 
         return self.particle_photo_lnu
 
@@ -532,6 +537,7 @@ class Particles:
         verbose=True,
         nthreads=1,
         limit_to=None,
+        out_dtype=np.float32,
     ):
         """Calculate flux photometry using a FilterCollection object.
 
@@ -547,6 +553,8 @@ class Particles:
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             dict: A dictionary of fluxes in each filter in filters.
@@ -559,7 +567,9 @@ class Particles:
             # Create the photometry collection and store it in the object
             self.particle_photo_fnu[label] = self.particle_spectra[
                 label
-            ].get_photo_fnu(filters, verbose, nthreads=nthreads)
+            ].get_photo_fnu(
+                filters, verbose, nthreads=nthreads, out_dtype=out_dtype
+            )
 
         return self.particle_photo_fnu
 

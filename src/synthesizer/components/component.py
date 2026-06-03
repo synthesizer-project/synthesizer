@@ -279,7 +279,14 @@ class Component(ABC):
         # avoid any issues with 0s
         return (10 * pc).to(kpc)
 
-    def get_photo_lnu(self, filters, verbose=True, nthreads=1, limit_to=None):
+    def get_photo_lnu(
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        limit_to=None,
+        out_dtype=np.float32,
+    ):
         """Calculate luminosity photometry using a FilterCollection object.
 
         Args:
@@ -294,6 +301,8 @@ class Component(ABC):
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             photo_lnu (dict):
@@ -309,11 +318,19 @@ class Component(ABC):
                 filters,
                 verbose,
                 nthreads=nthreads,
+                out_dtype=out_dtype,
             )
 
         return self.photo_lnu
 
-    def get_photo_fnu(self, filters, verbose=True, nthreads=1, limit_to=None):
+    def get_photo_fnu(
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        limit_to=None,
+        out_dtype=np.float32,
+    ):
         """Calculate flux photometry using a FilterCollection object.
 
         Args:
@@ -328,6 +345,8 @@ class Component(ABC):
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             dict:
@@ -343,6 +362,7 @@ class Component(ABC):
                 filters,
                 verbose,
                 nthreads=nthreads,
+                out_dtype=out_dtype,
             )
 
         return self.photo_fnu

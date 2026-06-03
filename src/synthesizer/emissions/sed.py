@@ -1229,6 +1229,7 @@ class Sed:
         verbose=True,
         nthreads=1,
         integration_method="trapz",
+        out_dtype=np.float32,
     ):
         """Calculate broadband luminosities using a FilterCollection object.
 
@@ -1243,6 +1244,8 @@ class Sed:
             integration_method (str):
                 The integration method used to calculate the luminosities over
                 the filter profile. Options include "trapz" and "simps".
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             (PhotometryCollection):
@@ -1254,6 +1257,7 @@ class Sed:
             nu=self._nu,
             nthreads=nthreads,
             integration_method=integration_method,
+            out_dtype=out_dtype,
         )
 
         # Create the photometry collection and store it in the object
@@ -1270,7 +1274,12 @@ class Sed:
 
     @timed("Sed.get_photo_fnu")
     def get_photo_fnu(
-        self, filters, verbose=True, nthreads=1, integration_method="trapz"
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        integration_method="trapz",
+        out_dtype=np.float32,
     ):
         """Calculate broadband fluxes using a FilterCollection object.
 
@@ -1285,6 +1294,8 @@ class Sed:
             integration_method (str):
                 The integration method used to calculate the fluxes over the
                 filter profile. Options include "trapz" and "simps".
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             (PhotometryCollection):
@@ -1306,6 +1317,7 @@ class Sed:
             nu=self._obsnu,
             nthreads=nthreads,
             integration_method=integration_method,
+            out_dtype=out_dtype,
         )
 
         # Create the photometry collection and store it in the object

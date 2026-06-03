@@ -279,7 +279,7 @@ double GridProps::get_spectra_at(int grid_ind, int ilam) const {
   int spectra_index = ravel_spectra_index(unraveled_ind, ilam);
 
   /* Return the value at the spectra index. */
-  return get_double_at(np_spectra_, spectra_index, "spectra");
+  return get_at<double>(np_spectra_, spectra_index, "spectra");
 }
 
 /**
@@ -369,7 +369,7 @@ double GridProps::get_axis_at(int idim, int ind) const {
     return -1.0;
   }
 
-  return get_double_at(np_axis_arr, ind, array_name);
+  return get_at<double>(np_axis_arr, ind, array_name);
 }
 
 /**

@@ -18,9 +18,8 @@
 /**
  * @brief Extract typed floating-point data from a numpy array.
  *
- * Templated replacement for extract_data_double. Accepts both float32
- * and float64 arrays and returns a typed pointer matching the requested
- * Real type.
+ * Accepts both float32 and float64 arrays and returns a typed pointer
+ * matching the requested Real type.
  *
  * @tparam Real The floating-point type (float or double).
  * @param np_arr The numpy array to extract.
@@ -68,49 +67,6 @@ static inline Real *extract_data(PyArrayObject *np_arr, const char *name) {
     return NULL;
   }
   return data;
-}
-
-/**
- * @brief Get a double value at a specific index in a numpy array.
- *
- * This function assumes the numpy array is of type float64 and contiguous.
- * If the array is not of type float64, it will raise a TypeError.
- * If the index is out of bounds, it will raise an IndexError.
- *
- * @param np_arr: The numpy array to access.
- * @param ind: The index to access.
- * @param array_name: A descriptive name for the array, used in errors.
- * @return The double value at the specified index.
- */
-static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind,
-                                   const char *array_name) {
-  const char *name = array_name == NULL ? "array" : array_name;
-
-  if (PyArray_TYPE(np_arr) != NPY_FLOAT64) {
-    PyErr_Format(PyExc_TypeError,
-                 "[get_double_at]: Array '%s' must be of type float64.",
-                 name);
-    return 0.0;
-  }
-
-  if (ind < 0 || ind >= PyArray_SIZE(np_arr)) {
-    PyErr_Format(PyExc_IndexError,
-                 "[get_double_at]: Index (%ld) out of bounds for array '%s'. "
-                 "Valid range is [0, %ld).",
-                 ind, name, PyArray_SIZE(np_arr));
-    return 0.0;
-  }
-
-  if (PyArray_ISCONTIGUOUS(np_arr)) {
-    const double *data_ptr = static_cast<const double *>(PyArray_DATA(np_arr));
-    return data_ptr[ind];
-  } else {
-    PyErr_Format(PyExc_ValueError,
-                 "[get_double_at]: Array '%s' must be contiguous to use "
-                 "get_double_at.",
-                 name);
-    return 0.0;
-  }
 }
 
 /**
@@ -201,8 +157,8 @@ static inline npy_bool get_bool_at(PyArrayObject *np_arr, npy_intp ind,
 /**
  * @brief Get a typed value at a specific index in a numpy array.
  *
- * Templated replacement for get_double_at. Accepts float32 or float64
- * arrays and returns the value at the given index as the requested type.
+ * Accepts float32 or float64 arrays and returns the value at the given
+ * index as the requested type.
  *
  * @tparam T The floating-point type (float or double).
  * @param np_arr The numpy array to access.
@@ -254,7 +210,6 @@ static inline T get_at(PyArrayObject *np_arr, npy_intp ind,
 }
 
 /* Prototypes */
-double *extract_data_double(PyArrayObject *np_arr, const char *name);
 int *extract_data_int(PyArrayObject *np_arr, const char *name);
 npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name);
 const npy_int64 *extract_index_array(PyArrayObject *np_arr, const char *name);

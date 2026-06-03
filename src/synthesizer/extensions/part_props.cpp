@@ -221,7 +221,7 @@ double *Particles::get_part_props(int idim) const {
  * @return The weight of the particle at the given index.
  */
 double Particles::get_weight_at(int pind) const {
-  return get_double_at(np_weights_, pind, "weights");
+  return get_at<double>(np_weights_, pind, "weights");
 }
 
 /**
@@ -231,7 +231,7 @@ double Particles::get_weight_at(int pind) const {
  * @return The velocity of the particle at the given index.
  */
 double Particles::get_vel_at(int pind) const {
-  return get_double_at(np_velocities_, pind, "velocities");
+  return get_at<double>(np_velocities_, pind, "velocities");
 }
 
 /**
@@ -290,10 +290,10 @@ double Particles::get_part_prop_at(int idim, int pind) const {
   /* If we have a size 1 array then we have a fixed scalar value. In this case
    * we return the first element. */
   if (PyArray_SIZE(np_part_arr) == 1) {
-    return get_double_at(np_part_arr, 0, array_name);
+    return get_at<double>(np_part_arr, 0, array_name);
   }
 
-  return get_double_at(np_part_arr, pind, array_name);
+  return get_at<double>(np_part_arr, pind, array_name);
 }
 
 /**

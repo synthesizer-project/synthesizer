@@ -381,7 +381,7 @@ static PyObject *calculate_circular_overlap_impl(double res, int nx, int ny,
 
   /* Unpack the image and centre from the numpy array. */
   const Real *img = extract_data<Real>(np_img, "img");
-  const double *cent = extract_data_double(np_cent, "cent");
+  const double *cent = extract_data<double>(np_cent, "cent");
 
   if (img == NULL || cent == NULL) {
     return NULL;
