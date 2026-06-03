@@ -20,6 +20,13 @@ repos:
       # Run the formatter.
       - id: ruff-format
 
+  # Formatting for C++ files.
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v22.1.4
+    hooks:
+      - id: clang-format
+        types_or: [c, c++]
+
   # Sanitise Jupyter notebooks.
   - repo: https://github.com/srstevenson/nb-clean
     rev: 4.0.1
