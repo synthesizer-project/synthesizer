@@ -53,7 +53,8 @@ static void spectra_loop_cic_with_lam_mask_serial(
   const int ndim = grid_props->ndim;
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const SpecReal *__restrict grid_spectra = grid_props->get_spectra<SpecReal>();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -100,8 +101,8 @@ static void spectra_loop_cic_with_lam_mask_serial(
     const PartReal w_p = parts->get_weight_at<PartReal>(p);
     std::array<int, MAX_GRID_NDIM> part_indices;
     std::array<PartReal, MAX_GRID_NDIM> axis_fracs;
-    get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props, parts,
-                                p);
+    get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props,
+                                    parts, p);
     const int base_linidx = get_flat_index(part_indices, dims.data(), ndim);
 
     /* Loop over sub-cells collecting their weighted contributions. */
@@ -168,7 +169,8 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
   const int ndim = grid_props->ndim;
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const SpecReal *__restrict grid_spectra = grid_props->get_spectra<SpecReal>();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -215,8 +217,8 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
     const PartReal w_p = parts->get_weight_at<PartReal>(p);
     std::array<int, MAX_GRID_NDIM> part_indices;
     std::array<PartReal, MAX_GRID_NDIM> axis_fracs;
-    get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props, parts,
-                                p);
+    get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props,
+                                    parts, p);
     const int base_linidx = get_flat_index(part_indices, dims.data(), ndim);
 
     /* Loop over sub-cells collecting their weighted contributions. */
@@ -280,8 +282,8 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
                                     OutT *part_spectra, bool has_lam_mask) {
   /* If there is no wavelength mask, use the branch-free contiguous loop. */
   if (!has_lam_mask) {
-    spectra_loop_cic_no_lam_mask_serial<PartReal, SpecReal, OutT>(grid_props, parts,
-                                                    part_spectra);
+    spectra_loop_cic_no_lam_mask_serial<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra);
     return;
   }
 
@@ -295,8 +297,8 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
     }
   }
 
-  spectra_loop_cic_with_lam_mask_serial<PartReal, SpecReal, OutT>(grid_props, parts,
-                                                    part_spectra, good_lams);
+  spectra_loop_cic_with_lam_mask_serial<PartReal, SpecReal, OutT>(
+      grid_props, parts, part_spectra, good_lams);
 }
 
 /**
@@ -324,7 +326,8 @@ static void spectra_loop_cic_with_lam_mask_omp(
   const int ndim = grid_props->ndim;
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const SpecReal *__restrict grid_spectra = grid_props->get_spectra<SpecReal>();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
   const int ncells = 1 << ndim;
 
   /* Get and cast the number of particles. */
@@ -384,8 +387,8 @@ static void spectra_loop_cic_with_lam_mask_omp(
       const PartReal w_p = parts->get_weight_at<PartReal>(p);
       std::array<int, MAX_GRID_NDIM> part_indices;
       std::array<PartReal, MAX_GRID_NDIM> axis_fracs;
-      get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props, parts,
-                                  p);
+      get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props,
+                                      parts, p);
       const int base_linidx = get_flat_index(part_indices, dims.data(), ndim);
 
       /* Loop over sub-cells collecting their weighted contributions. */
@@ -396,8 +399,9 @@ static void spectra_loop_cic_with_lam_mask_omp(
         /* Compute the CIC fraction */
         double frac = 1.0;
         for (int idim = 0; idim < ndim; idim++) {
-          frac *= sc.offs[idim] ? axis_fracs[idim]
-                                : (static_cast<PartReal>(1) - axis_fracs[idim]);
+          frac *= sc.offs[idim]
+                      ? axis_fracs[idim]
+                      : (static_cast<PartReal>(1) - axis_fracs[idim]);
         }
         if (frac == static_cast<PartReal>(0)) {
           continue;
@@ -456,7 +460,8 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
   const int ndim = grid_props->ndim;
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const SpecReal *__restrict grid_spectra = grid_props->get_spectra<SpecReal>();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
   const int ncells = 1 << ndim;
 
   /* Get and cast the number of particles. */
@@ -516,8 +521,8 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
       const PartReal w_p = parts->get_weight_at<PartReal>(p);
       std::array<int, MAX_GRID_NDIM> part_indices;
       std::array<PartReal, MAX_GRID_NDIM> axis_fracs;
-      get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props, parts,
-                                  p);
+      get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props,
+                                      parts, p);
       const int base_linidx = get_flat_index(part_indices, dims.data(), ndim);
 
       /* Loop over sub-cells collecting their weighted contributions. */
@@ -528,8 +533,9 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
         /* Compute the CIC fraction */
         double frac = 1.0;
         for (int idim = 0; idim < ndim; idim++) {
-          frac *= sc.offs[idim] ? axis_fracs[idim]
-                                : (static_cast<PartReal>(1) - axis_fracs[idim]);
+          frac *= sc.offs[idim]
+                      ? axis_fracs[idim]
+                      : (static_cast<PartReal>(1) - axis_fracs[idim]);
         }
         if (frac == static_cast<PartReal>(0)) {
           continue;
@@ -585,8 +591,8 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
                                  bool has_lam_mask) {
   /* If there is no wavelength mask, use the branch-free contiguous loop. */
   if (!has_lam_mask) {
-    spectra_loop_cic_no_lam_mask_omp<PartReal, SpecReal, OutT>(grid_props, parts,
-                                                 part_spectra, nthreads);
+    spectra_loop_cic_no_lam_mask_omp<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra, nthreads);
     return;
   }
 
@@ -634,13 +640,13 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    spectra_loop_cic_omp<PartReal, SpecReal, OutT>(grid_props, parts, part_spectra, nthreads,
-                                     has_lam_mask);
+    spectra_loop_cic_omp<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra, nthreads, has_lam_mask);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    spectra_loop_cic_serial<PartReal, SpecReal, OutT>(grid_props, parts, part_spectra,
-                                        has_lam_mask);
+    spectra_loop_cic_serial<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra, has_lam_mask);
   }
 
 #else
@@ -648,8 +654,8 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  spectra_loop_cic_serial<PartReal, SpecReal, OutT>(grid_props, parts, part_spectra,
-                                      has_lam_mask);
+  spectra_loop_cic_serial<PartReal, SpecReal, OutT>(
+      grid_props, parts, part_spectra, has_lam_mask);
 
 #endif
   toc("spectra_loop_cic");
@@ -677,7 +683,8 @@ static void spectra_loop_ngp_with_lam_mask_serial(
   /* Unpack the grid properties. */
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const SpecReal *__restrict grid_spectra = grid_props->get_spectra<SpecReal>();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -735,7 +742,8 @@ static void spectra_loop_ngp_no_lam_mask_serial(GridProps *grid_props,
   /* Unpack the grid properties. */
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const SpecReal *__restrict grid_spectra = grid_props->get_spectra<SpecReal>();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -791,8 +799,8 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
                                     OutT *part_spectra, bool has_lam_mask) {
   /* If there is no wavelength mask, use the branch-free contiguous loop. */
   if (!has_lam_mask) {
-    spectra_loop_ngp_no_lam_mask_serial<PartReal, SpecReal, OutT>(grid_props, parts,
-                                                    part_spectra);
+    spectra_loop_ngp_no_lam_mask_serial<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra);
     return;
   }
 
@@ -806,8 +814,8 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
     }
   }
 
-  spectra_loop_ngp_with_lam_mask_serial<PartReal, SpecReal, OutT>(grid_props, parts,
-                                                    part_spectra, good_lams);
+  spectra_loop_ngp_with_lam_mask_serial<PartReal, SpecReal, OutT>(
+      grid_props, parts, part_spectra, good_lams);
 }
 
 /**
@@ -834,7 +842,8 @@ static void spectra_loop_ngp_with_lam_mask_omp(
   /* Unpack the grid properties. */
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const SpecReal *__restrict grid_spectra = grid_props->get_spectra<SpecReal>();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -924,7 +933,8 @@ static void spectra_loop_ngp_no_lam_mask_omp(GridProps *grid_props,
   /* Unpack the grid properties. */
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const SpecReal *__restrict grid_spectra = grid_props->get_spectra<SpecReal>();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -1008,8 +1018,8 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
                                  bool has_lam_mask) {
   /* If there is no wavelength mask, use the branch-free contiguous loop. */
   if (!has_lam_mask) {
-    spectra_loop_ngp_no_lam_mask_omp<PartReal, SpecReal, OutT>(grid_props, parts,
-                                                 part_spectra, nthreads);
+    spectra_loop_ngp_no_lam_mask_omp<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra, nthreads);
     return;
   }
 
@@ -1058,13 +1068,13 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    spectra_loop_ngp_omp<PartReal, SpecReal, OutT>(grid_props, parts, part_spectra, nthreads,
-                                     has_lam_mask);
+    spectra_loop_ngp_omp<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra, nthreads, has_lam_mask);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    spectra_loop_ngp_serial<PartReal, SpecReal, OutT>(grid_props, parts, part_spectra,
-                                        has_lam_mask);
+    spectra_loop_ngp_serial<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra, has_lam_mask);
   }
 
 #else
@@ -1072,8 +1082,8 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  spectra_loop_ngp_serial<PartReal, SpecReal, OutT>(grid_props, parts, part_spectra,
-                                      has_lam_mask);
+  spectra_loop_ngp_serial<PartReal, SpecReal, OutT>(
+      grid_props, parts, part_spectra, has_lam_mask);
 
 #endif
   toc("spectra_loop_ngp");

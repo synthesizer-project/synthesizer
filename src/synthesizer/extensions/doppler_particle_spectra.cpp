@@ -41,7 +41,8 @@
  * @tparam SpecReal The spectral floating-point type.
  */
 template <typename SpecReal>
-int get_upper_lam_bin(SpecReal lambda, const SpecReal *grid_wavelengths, int nlam) {
+int get_upper_lam_bin(SpecReal lambda, const SpecReal *grid_wavelengths,
+                      int nlam) {
   return binary_search(0, nlam - 1, grid_wavelengths, lambda);
 }
 
@@ -80,7 +81,8 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   const size_t nlam = static_cast<size_t>(grid_props->nlam);
   const SpecReal *wavelength = grid_props->get_lam<SpecReal>();
-  const SpecReal *__restrict grid_spectra = grid_props->get_spectra<SpecReal>();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
 
   if (strcmp(method, "cic") == 0) {
     const int ncells = 1 << ndim;
@@ -134,7 +136,8 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
         const PartReal vel = part_props->get_vel_at<PartReal>(p);
         const PartReal shift_factor = static_cast<PartReal>(1) + vel / c;
         for (size_t il = 0; il < nlam; ++il) {
-          const SpecReal lam_s = wavelength[il] * static_cast<SpecReal>(shift_factor);
+          const SpecReal lam_s =
+              wavelength[il] * static_cast<SpecReal>(shift_factor);
           shifted_wavelengths[il] = lam_s;
           mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
         }
@@ -222,7 +225,8 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
         const PartReal vel = part_props->get_vel_at<PartReal>(p);
         const PartReal shift_factor = static_cast<PartReal>(1) + vel / c;
         for (size_t il = 0; il < nlam; ++il) {
-          const SpecReal lam_s = wavelength[il] * static_cast<SpecReal>(shift_factor);
+          const SpecReal lam_s =
+              wavelength[il] * static_cast<SpecReal>(shift_factor);
           shifted_wavelengths[il] = lam_s;
           mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
         }

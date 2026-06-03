@@ -55,8 +55,10 @@ static PyArrayObject *get_spectra_serial(GridProps *grid_props) {
   }
 
   /* Get raw pointers to the grid arrays. */
-  const SpecReal *__restrict grid_spectra = grid_props->get_spectra<SpecReal>();
-  const WeightReal *__restrict grid_weights = grid_props->get_grid_weights<WeightReal>();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
+  const WeightReal *__restrict grid_weights =
+      grid_props->get_grid_weights<WeightReal>();
   RETURN_IF_PYERR();
 
   const size_t nlam = static_cast<size_t>(grid_props->nlam);
@@ -118,8 +120,10 @@ static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
   }
 
   /* Get raw pointers to the grid arrays. */
-  const SpecReal *__restrict grid_spectra = grid_props->get_spectra<SpecReal>();
-  const WeightReal *__restrict grid_weights = grid_props->get_grid_weights<WeightReal>();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
+  const WeightReal *__restrict grid_weights =
+      grid_props->get_grid_weights<WeightReal>();
   RETURN_IF_PYERR();
 
   const size_t nlam = static_cast<size_t>(grid_props->nlam);
@@ -199,13 +203,15 @@ static PyArrayObject *get_spectra(GridProps *grid_props, int nthreads) {
   /* Do we have multiple threads to do the reduction on to the spectra? */
   PyArrayObject *np_spectra;
   if (nthreads > 1) {
-    np_spectra = get_spectra_omp<SpecReal, WeightReal, OutT>(grid_props, nthreads);
+    np_spectra =
+        get_spectra_omp<SpecReal, WeightReal, OutT>(grid_props, nthreads);
   } else {
     np_spectra = get_spectra_serial<SpecReal, WeightReal, OutT>(grid_props);
   }
 #else
   /* We can't do the reduction in parallel without OpenMP. */
-  PyArrayObject *np_spectra = get_spectra_serial<SpecReal, WeightReal, OutT>(grid_props);
+  PyArrayObject *np_spectra =
+      get_spectra_serial<SpecReal, WeightReal, OutT>(grid_props);
 #endif
 
   toc("get_spectra");
@@ -339,14 +345,30 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
 
     /* Dispatch: call the matching typed kernel based on the dispatch key. */
     switch (dispatch_key) {
-      case 0: np_spectra = get_spectra<float, float, float>(grid_props, nthreads); break;
-      case 1: np_spectra = get_spectra<float, float, double>(grid_props, nthreads); break;
-      case 2: np_spectra = get_spectra<float, double, float>(grid_props, nthreads); break;
-      case 3: np_spectra = get_spectra<float, double, double>(grid_props, nthreads); break;
-      case 4: np_spectra = get_spectra<double, float, float>(grid_props, nthreads); break;
-      case 5: np_spectra = get_spectra<double, float, double>(grid_props, nthreads); break;
-      case 6: np_spectra = get_spectra<double, double, float>(grid_props, nthreads); break;
-      default: np_spectra = get_spectra<double, double, double>(grid_props, nthreads); break;
+      case 0:
+        np_spectra = get_spectra<float, float, float>(grid_props, nthreads);
+        break;
+      case 1:
+        np_spectra = get_spectra<float, float, double>(grid_props, nthreads);
+        break;
+      case 2:
+        np_spectra = get_spectra<float, double, float>(grid_props, nthreads);
+        break;
+      case 3:
+        np_spectra = get_spectra<float, double, double>(grid_props, nthreads);
+        break;
+      case 4:
+        np_spectra = get_spectra<double, float, float>(grid_props, nthreads);
+        break;
+      case 5:
+        np_spectra = get_spectra<double, float, double>(grid_props, nthreads);
+        break;
+      case 6:
+        np_spectra = get_spectra<double, double, float>(grid_props, nthreads);
+        break;
+      default:
+        np_spectra = get_spectra<double, double, double>(grid_props, nthreads);
+        break;
     }
   }
 

@@ -21,8 +21,8 @@
 
 /* Local includes */
 #include "cpp_to_python.h"
-#include "python_to_cpp.h"
 #include "index_utils.h"
+#include "python_to_cpp.h"
 #include "timers.h"
 #ifdef ATOMIC_TIMING
 #include "timers_init.h"

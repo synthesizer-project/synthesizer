@@ -1654,11 +1654,13 @@ static void scale_line_2d_no_mask_omp(const DataReal *__restrict__ lum,
  * @param nthreads: The number of OpenMP threads.
  */
 template <typename DataReal, typename ScaleReal, typename OutT>
-static void scale_line_2d_row_mask_omp(
-    const DataReal *__restrict__ lum, const DataReal *__restrict__ cont,
-    const ScaleReal *scaling_lum, const ScaleReal *scaling_cont,
-    const npy_bool *mask, OutT *out_lum, OutT *out_cont, int nspec, int nlam,
-    int nthreads) {
+static void scale_line_2d_row_mask_omp(const DataReal *__restrict__ lum,
+                                       const DataReal *__restrict__ cont,
+                                       const ScaleReal *scaling_lum,
+                                       const ScaleReal *scaling_cont,
+                                       const npy_bool *mask, OutT *out_lum,
+                                       OutT *out_cont, int nspec, int nlam,
+                                       int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
@@ -1714,9 +1716,9 @@ static void scale_line_2d_lam_mask_omp(const DataReal *__restrict__ lum,
                                        const DataReal *__restrict__ cont,
                                        const ScaleReal *scaling_lum,
                                        const ScaleReal *scaling_cont,
-                                       const npy_bool *lam_mask,
-                                       OutT *out_lum, OutT *out_cont,
-                                       int nspec, int nlam, int nthreads) {
+                                       const npy_bool *lam_mask, OutT *out_lum,
+                                       OutT *out_cont, int nspec, int nlam,
+                                       int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
@@ -1799,11 +1801,13 @@ static void scale_line_2d_both_masks_omp(
 #endif /* WITH_OPENMP */
 
 template <typename DataReal, typename ScaleReal, typename OutT>
-static void dispatch_scale_line_2d(
-    const DataReal *lum, const DataReal *cont, const ScaleReal *scaling_lum,
-    const ScaleReal *scaling_cont, const npy_bool *mask,
-    const npy_bool *lam_mask, OutT *out_lum, OutT *out_cont, int nspec,
-    int nlam, int nthreads) {
+static void dispatch_scale_line_2d(const DataReal *lum, const DataReal *cont,
+                                   const ScaleReal *scaling_lum,
+                                   const ScaleReal *scaling_cont,
+                                   const npy_bool *mask,
+                                   const npy_bool *lam_mask, OutT *out_lum,
+                                   OutT *out_cont, int nspec, int nlam,
+                                   int nthreads) {
 
   const bool has_mask = (mask != NULL);
   const bool has_lam_mask = (lam_mask != NULL);
@@ -2014,8 +2018,7 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
   int data_typenum = -1;
   PyArrayObject *data_arrays[2] = {np_lum, np_cont};
   const char *data_names[2] = {"lum", "cont"};
-  if (!is_matching_float_dtypes(data_arrays, data_names, 2,
-                                &data_typenum)) {
+  if (!is_matching_float_dtypes(data_arrays, data_names, 2, &data_typenum)) {
     Py_DECREF(np_lum);
     Py_DECREF(np_cont);
     Py_DECREF(np_scaling_lum);
@@ -2132,10 +2135,9 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
   tic("scale_line_2d");
 
   /* Dispatch: encode data/scale/output precision into a 3-bit key. */
-  int dispatch_key =
-      ((data_typenum == NPY_FLOAT64) << 2) |
-      ((scale_typenum == NPY_FLOAT64) << 1) |
-      (out_typenum == NPY_FLOAT64);
+  int dispatch_key = ((data_typenum == NPY_FLOAT64) << 2) |
+                     ((scale_typenum == NPY_FLOAT64) << 1) |
+                     (out_typenum == NPY_FLOAT64);
 
   /* Dispatch: call the matching typed kernel based on the dispatch key. */
   switch (dispatch_key) {
