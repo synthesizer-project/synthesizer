@@ -31,6 +31,9 @@
 /**
  * @brief Compute the integrated spectra from the grid weights.
  *
+ * @tparam Real The floating-point type of the input spectra array.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: The grid properties.
  *
  * @return The integrated spectra.
@@ -88,6 +91,9 @@ static PyArrayObject *get_spectra_serial(GridProps *grid_props) {
 
 /**
  * @brief Compute the integrated spectra from the grid weights.
+ *
+ * @tparam Real The floating-point type of the input spectra array.
+ * @tparam OutT The floating-point type stored in the output buffer.
  *
  * @param grid_props: The grid properties.
  * @param nthreads: The number of threads to use.
@@ -173,6 +179,9 @@ static PyArrayObject *get_spectra_omp(GridProps *grid_props, int nthreads) {
 
 /**
  * @brief Compute the integrated spectra from the grid weights.
+ *
+ * @tparam Real The floating-point type of the input spectra array.
+ * @tparam OutT The floating-point type stored in the output buffer.
  *
  * @param grid_props: The grid properties.
  * @param grid_weights: The grid weights computed from the particles.

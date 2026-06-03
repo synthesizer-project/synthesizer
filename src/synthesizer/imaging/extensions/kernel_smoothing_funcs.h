@@ -22,6 +22,7 @@
  * from the center, `q`, it starts from the precomputed kernel look up table
  * and refines this value using linear interpolation.
  *
+ * @tparam Real The floating-point type.
  * @param q The distance from the center, normalized by the smoothing length.
  * @param kernel The precomputed kernel look up table.
  * @param kdim The dimension of the kernel (number of entries in the kernel
@@ -62,6 +63,7 @@ inline Real interpolate_kernel(Real q, const Real *kernel, int kdim,
  * to a pixel, which are used to determine if/how the pixel overlaps with the
  * particle's kernel.
  *
+ * @tparam Real The floating-point type.
  * @param part_x Particle x position.
  * @param part_y Particle y position.
  * @param pix_x_min Pixel minimum x coordinate.
@@ -120,6 +122,7 @@ inline void calculate_pixel_kernel_overlap(Real part_x, Real part_y,
  * the truncated kernel integral (up to threshold), allowing us to rescale
  * kernel values to ensure flux conservation when using a finite support.
  *
+ * @tparam Real The floating-point type.
  * @param kernel The precomputed kernel look up table.
  * @param kdim The dimension of the kernel array.
  * @param threshold The threshold value for kernel truncation.
@@ -171,6 +174,7 @@ inline Real compute_kernel_norm(const Real *kernel, int kdim, Real threshold) {
 /**
  * @brief Check if the entire kernel support lies within the pixel.
  *
+ * @tparam Real The floating-point type.
  * @param part Pointer to the particle.
  * @param pix_x_min Pixel minimum x coordinate.
  * @param pix_x_max Pixel maximum x coordinate.
@@ -206,6 +210,7 @@ inline bool kernel_fully_inside_pixel(const struct particle<Real> *part,
  * When the pixel is wholly contained within the kernel support, we evaluate
  * the kernel using a 3x3 grid and apply proper SPH normalization.
  *
+ * @tparam Real The floating-point type.
  * @param pix_x_min Pixel minimum x coordinate.
  * @param pix_y_min Pixel minimum y coordinate.
  * @param res Pixel resolution.
@@ -257,6 +262,7 @@ inline Real pixel_inside_kernel_contribution(Real pix_x_min, Real pix_y_min,
  * sampling to accurately integrate the kernel contribution over the pixel
  * area.
  *
+ * @tparam Real The floating-point type.
  * @param part Pointer to the particle.
  * @param pix_x_min Pixel minimum x coordinate.
  * @param pix_y_min Pixel minimum y coordinate.

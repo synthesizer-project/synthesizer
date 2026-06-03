@@ -39,6 +39,7 @@
  * @brief Calculates the square root of a number, treating small negative values
  * as zero.
  *
+ * @tparam Real The floating-point type.
  * @param x - The input value.
  * @return The square root of x if x >= 0, otherwise 0.
  */
@@ -54,6 +55,7 @@ static Real floor_sqrt(Real x) {
 /**
  * @brief Calculates the Euclidean distance between two points in a 2D plane.
  *
+ * @tparam Real The floating-point type.
  * @param x1, y1 - Coordinates of the first point.
  * @param x2, y2 - Coordinates of the second point.
  * @return The Euclidean distance between the two points.
@@ -67,6 +69,7 @@ static Real distance(Real x1, Real y1, Real x2, Real y2) {
  * @brief Calculates the area of a circular arc defined by two points on the
  * circle's perimeter.
  *
+ * @tparam Real The floating-point type.
  * @param x1, y1 - Coordinates of the first point on the circle's perimeter.
  * @param x2, y2 - Coordinates of the second point on the circle's perimeter.
  * @param r - Radius of the circle.
@@ -82,6 +85,7 @@ static Real area_arc(Real x1, Real y1, Real x2, Real y2, Real r) {
 /**
  * @brief Calculates the area of a triangle given its three vertices.
  *
+ * @tparam Real The floating-point type.
  * @param x1, y1 - Coordinates of the first vertex.
  * @param x2, y2 - Coordinates of the second vertex.
  * @param x3, y3 - Coordinates of the third vertex.
@@ -98,6 +102,7 @@ static Real area_triangle(Real x1, Real y1, Real x2, Real y2, Real x3,
  * @brief Core function for calculating the area of overlap between a circle and
  * a rectangle.
  *
+ * @tparam Real The floating-point type.
  * @param xmin, ymin - Lower-left corner of the rectangle.
  * @param xmax, ymax - Upper-right corner of the rectangle.
  * @param r - Radius of the circle.
@@ -156,6 +161,7 @@ static Real circular_overlap_core(Real xmin, Real ymin, Real xmax, Real ymax,
 /**
  * @brief Calculates the exact area of overlap between a circle and a rectangle.
  *
+ * @tparam Real The floating-point type.
  * @param xmin, ymin - Lower-left corner of the pixel.
  * @param xmax, ymax - Upper-right corner of the pixel.
  * @param r - Radius of the circle.
@@ -225,6 +231,7 @@ static Real circular_overlap_single_exact(Real pix_xmin, Real pix_ymin,
 /**
  * @brief Calculates the signal inside the aperture in serial.
  *
+ * @tparam Real The floating-point type.
  * @param res - Pixel resolution.
  * @param xmin, ymin - Lower-left corner of the image.
  * @param r - Radius of the aperture.
@@ -278,6 +285,7 @@ static Real calculate_overlap_serial(const double res, const double xmin,
 /**
  * @brief Calculates the signal inside the aperture in parallel.
  *
+ * @tparam Real The floating-point type.
  * @param res - Pixel resolution.
  * @param xmin, ymin - Lower-left corner of the image.
  * @param r - Radius of the aperture.
@@ -334,6 +342,7 @@ static Real calculate_overlap_omp(const double res, const double xmin,
 /**
  * @brief Calculates the signal inside the aperture.
  *
+ * @tparam Real The floating-point type.
  * @param res - Pixel resolution.
  * @param r - Radius of the aperture.
  * @param nx, ny - Image dimensions.

@@ -128,6 +128,7 @@ static void los_loop_serial(const Real *pos_i, const Real *pos_j,
  * particles and the gas particles. This will be used when the number of gas
  * particles is small enough that making a tree is pointless.
  *
+ * @tparam Real The floating-point type.
  * @param pos_i The positions of the particles to compute the surface
  *             densities for (e.g. star particles).
  * @param pos_j The positions of the particles to compute the surface

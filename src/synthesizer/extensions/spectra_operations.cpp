@@ -34,6 +34,9 @@
  *
  * This is the serial version of the function for rows without a mask.
  *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
+ *
  * @param spectra: The input 2D spectra array (nspec x nlam).
  * @param scaling: The per-spectrum scaling vector (nspec).
  * @param out: The pre-allocated output buffer (nspec x nlam).
@@ -65,6 +68,9 @@ static void scale_spectra_2d_no_mask_serial(const Real *__restrict__ spectra,
  * @brief This calculates per-spectrum row scaling with a 1D row mask.
  *
  * This is the serial version of the function for rows with a row mask.
+ *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
  *
  * @param spectra: The input 2D spectra array (nspec x nlam).
  * @param scaling: The per-spectrum scaling vector (nspec).
@@ -106,6 +112,9 @@ static void scale_spectra_2d_row_mask_serial(const Real *__restrict__ spectra,
  *
  * This is the serial version of the function for rows with a wavelength mask.
  *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
+ *
  * @param spectra: The input 2D spectra array (nspec x nlam).
  * @param scaling: The per-spectrum scaling vector (nspec).
  * @param lam_mask: 1D boolean wavelength mask (nlam).
@@ -139,6 +148,9 @@ static void scale_spectra_2d_lam_mask_serial(const Real *__restrict__ spectra,
  *        a wavelength mask.
  *
  * This is the serial version of the function for rows with both masks.
+ *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
  *
  * @param spectra: The input 2D spectra array (nspec x nlam).
  * @param scaling: The per-spectrum scaling vector (nspec).
@@ -183,6 +195,9 @@ static void scale_spectra_2d_both_masks_serial(const Real *__restrict__ spectra,
  *
  * This is the parallel version of the function for rows without a mask.
  *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
+ *
  * @param spectra: The input 2D spectra array (nspec x nlam).
  * @param scaling: The per-spectrum scaling vector (nspec).
  * @param out: The pre-allocated output buffer (nspec x nlam).
@@ -219,6 +234,9 @@ static void scale_spectra_2d_no_mask_omp(const Real *__restrict__ spectra,
  *        OpenMP.
  *
  * This is the parallel version of the function for rows with a row mask.
+ *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
  *
  * @param spectra: The input 2D spectra array (nspec x nlam).
  * @param scaling: The per-spectrum scaling vector (nspec).
@@ -263,6 +281,9 @@ static void scale_spectra_2d_row_mask_omp(const Real *__restrict__ spectra,
  * This is the parallel version of the function for rows with a wavelength
  * mask.
  *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
+ *
  * @param spectra: The input 2D spectra array (nspec x nlam).
  * @param scaling: The per-spectrum scaling vector (nspec).
  * @param lam_mask: 1D boolean wavelength mask (nlam).
@@ -299,6 +320,9 @@ static void scale_spectra_2d_lam_mask_omp(const Real *__restrict__ spectra,
  *        OpenMP.
  *
  * This is the parallel version of the function for rows with both masks.
+ *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
  *
  * @param spectra: The input 2D spectra array (nspec x nlam).
  * @param scaling: The per-spectrum scaling vector (nspec).
@@ -342,6 +366,9 @@ static void scale_spectra_2d_both_masks_omp(const Real *__restrict__ spectra,
 
 /**
  * @brief Dispatch per-spectrum row scaling to the correct kernel.
+ *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
  *
  * @param spectra: Input spectra array (nspec x nlam).
  * @param scaling: Per-spectrum scaling vector (nspec).
@@ -663,6 +690,9 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
  * Computes out[irow, icol] = spectra[irow, icol] * exp(-tau_v[irow]
  * * tau_x_v[icol]) in a single fused pass.
  *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
+ *
  * @param spectra: The input 2D spectra array (nrows x ncols).
  * @param tau_v: 1D V-band optical depth per row (nrows).
  * @param tau_x_v: 1D extinction curve per column (ncols).
@@ -696,6 +726,9 @@ static void attenuate_2d_no_mask_serial(const Real *__restrict__ spectra,
  * @brief This applies separable attenuation with a 1D row mask.
  *
  * This is the serial version of the function for rows with a row mask.
+ *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
  *
  * @param spectra: The input 2D spectra array (nrows x ncols).
  * @param tau_v: 1D V-band optical depth per row (nrows).
@@ -740,6 +773,9 @@ static void attenuate_2d_with_mask_serial(const Real *__restrict__ spectra,
  *
  * This is the parallel version of the function for rows without a mask.
  *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
+ *
  * @param spectra: The input 2D spectra array (nrows x ncols).
  * @param tau_v: 1D V-band optical depth per row (nrows).
  * @param tau_x_v: 1D extinction curve per column (ncols).
@@ -775,6 +811,9 @@ static void attenuate_2d_no_mask_omp(const Real *__restrict__ spectra,
  * @brief This applies separable attenuation with a row mask using OpenMP.
  *
  * This is the parallel version of the function for rows with a row mask.
+ *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
  *
  * @param spectra: The input 2D spectra array (nrows x ncols).
  * @param tau_v: 1D V-band optical depth per row (nrows).
@@ -818,6 +857,9 @@ static void attenuate_2d_with_mask_omp(const Real *__restrict__ spectra,
 
 /**
  * @brief Dispatch separable attenuation to the correct kernel.
+ *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
  *
  * @param spectra: Input spectra array (nrows x ncols).
  * @param tau_v: 1D V-band optical depth per row (nrows).
@@ -1098,6 +1140,9 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
 /**
  * @brief Multiply a 1D or 2D array by a 1D vector over the last axis.
  *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
+ *
  * @param array_obj: 1D or 2D float64 ndarray.
  * @param vector_obj: 1D float64 ndarray matching the last array dimension.
  * @param nthreads: Number of OpenMP threads.
@@ -1302,6 +1347,9 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
  *
  * This is the serial version of the function for rows without a mask.
  *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
+ *
  * @param lum: Input luminosity array (nspec x nlam).
  * @param cont: Input continuum array (nspec x nlam).
  * @param scaling_lum: Per-spectrum luminosity factor (nspec).
@@ -1342,6 +1390,9 @@ static void scale_line_2d_no_mask_serial(const Real *__restrict__ lum,
  * @brief This calculates fused lum+cont row scaling with a 1D row mask.
  *
  * This is the serial version of the function for rows with a row mask.
+ *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
  *
  * @param lum: Input luminosity array (nspec x nlam).
  * @param cont: Input continuum array (nspec x nlam).
@@ -1393,6 +1444,9 @@ static void scale_line_2d_row_mask_serial(const Real *__restrict__ lum,
  *
  * This is the serial version of the function for rows with a wavelength mask.
  *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
+ *
  * @param lum: Input luminosity array (nspec x nlam).
  * @param cont: Input continuum array (nspec x nlam).
  * @param scaling_lum: Per-spectrum luminosity factor (nspec).
@@ -1436,6 +1490,9 @@ static void scale_line_2d_lam_mask_serial(
  *        and a wavelength mask.
  *
  * This is the serial version of the function for rows with both masks.
+ *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
  *
  * @param lum: Input luminosity array (nspec x nlam).
  * @param cont: Input continuum array (nspec x nlam).
@@ -1489,6 +1546,9 @@ static void scale_line_2d_both_masks_serial(
  *
  * This is the parallel version of the function for rows without a mask.
  *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
+ *
  * @param lum: Input luminosity array (nspec x nlam).
  * @param cont: Input continuum array (nspec x nlam).
  * @param scaling_lum: Per-spectrum luminosity factor (nspec).
@@ -1530,6 +1590,9 @@ static void scale_line_2d_no_mask_omp(const Real *__restrict__ lum,
  * @brief This calculates fused lum+cont scaling with a row mask using OpenMP.
  *
  * This is the parallel version of the function for rows with a row mask.
+ *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
  *
  * @param lum: Input luminosity array (nspec x nlam).
  * @param cont: Input continuum array (nspec x nlam).
@@ -1582,6 +1645,9 @@ static void scale_line_2d_row_mask_omp(
  * This is the parallel version of the function for rows with a wavelength
  * mask.
  *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
+ *
  * @param lum: Input luminosity array (nspec x nlam).
  * @param cont: Input continuum array (nspec x nlam).
  * @param scaling_lum: Per-spectrum luminosity factor (nspec).
@@ -1625,6 +1691,9 @@ static void scale_line_2d_lam_mask_omp(
  * @brief This calculates fused lum+cont scaling with both masks using OpenMP.
  *
  * This is the parallel version of the function for rows with both masks.
+ *
+ * @tparam Real Floating-point type of the input arrays.
+ * @tparam OutT Floating-point type of the output arrays.
  *
  * @param lum: Input luminosity array (nspec x nlam).
  * @param cont: Input continuum array (nspec x nlam).

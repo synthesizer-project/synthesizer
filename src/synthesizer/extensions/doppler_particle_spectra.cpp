@@ -36,6 +36,8 @@
  *
  * Note: binary search returns the index of the upper bin of those that straddle
  * the given lambda.
+ *
+ * @tparam Real The floating-point type.
  */
 template <typename Real>
 int get_upper_lam_bin(Real lambda, const Real *grid_wavelengths, int nlam) {
@@ -55,6 +57,9 @@ int get_upper_lam_bin(Real lambda, const Real *grid_wavelengths, int nlam) {
  * reducing the outer loop over cells from ncells × nlam scatter-writes to a
  * single accumulation per wavelength, matching the pattern used in the
  * non-shifted CIC path.
+ *
+ * @tparam Real The floating-point type.
+ * @tparam OutT The floating-point type stored in the output.
  *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.

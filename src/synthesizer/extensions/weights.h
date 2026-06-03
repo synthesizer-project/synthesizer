@@ -20,6 +20,7 @@
  * @brief Performs a binary search for the index of an array corresponding to
  * a value.
  *
+ * @tparam Real The floating-point type.
  * @param low: The initial low index (probably beginning of array).
  * @param high: The initial high index (probably size of array).
  * @param arr: The array to search in.
@@ -56,6 +57,7 @@ static inline int binary_search(int low, int high, const Real *arr,
  * This will also calculate the fractions of the particle's mass in each grid
  * cell. (Unnecessary for NGP, but required for CIC.)
  *
+ * @tparam Real The floating-point type.
  * @param part_indices: The output array of base (lower) grid indices.
  * @param axis_fracs: The output array of fractional distances to upper grid
  * cell.
@@ -126,6 +128,7 @@ get_part_ind_frac_cic(std::array<int, MAX_GRID_NDIM> &part_indices,
  *
  * For each axis, this finds the grid point closest to the particle's position.
  *
+ * @tparam Real The floating-point type.
  * @param part_indices: The output array of nearest grid point indices.
  * @param grid_props: The properties of the grid.
  * @param part_props: The properties of the particle.

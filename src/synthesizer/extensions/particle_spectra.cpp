@@ -35,6 +35,9 @@
  *
  * This is the serial version of the function for grids with a wavelength mask.
  *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
@@ -147,6 +150,9 @@ static void spectra_loop_cic_with_lam_mask_serial(
  * This is the serial version of the function for grids without a wavelength
  * mask.
  *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
@@ -257,6 +263,9 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
  * This is the serial wrapper which dispatches to the masked or unmasked
  * wavelength implementation.
  *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
@@ -291,6 +300,9 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
  *
  * This is the parallel version of the function for grids with a wavelength
  * mask.
+ *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
  *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
@@ -422,6 +434,9 @@ static void spectra_loop_cic_with_lam_mask_omp(
  * This is the parallel version of the function for grids without a wavelength
  * mask.
  *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
@@ -550,6 +565,9 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
  * This is the parallel wrapper which dispatches to the masked or unmasked
  * wavelength implementation.
  *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
@@ -587,6 +605,9 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
  *
  * This is a wrapper which calls the correct function based on the number of
  * threads requested and whether OpenMP is available.
+ *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
  *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
@@ -633,6 +654,9 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
  *        approach.
  *
  * This is the serial version of the function for grids with a wavelength mask.
+ *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
  *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
@@ -688,6 +712,9 @@ static void spectra_loop_ngp_with_lam_mask_serial(
  * This is the serial version of the function for grids without a wavelength
  * mask.
  *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
@@ -740,6 +767,9 @@ static void spectra_loop_ngp_no_lam_mask_serial(GridProps *grid_props,
  * This is the serial wrapper which dispatches to the masked or unmasked
  * wavelength implementation.
  *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
@@ -774,6 +804,9 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
  *
  * This is the parallel version of the function for grids with a wavelength
  * mask.
+ *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
  *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
@@ -862,6 +895,9 @@ static void spectra_loop_ngp_with_lam_mask_omp(
  * This is the parallel version of the function for grids without a wavelength
  * mask.
  *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
@@ -943,6 +979,9 @@ static void spectra_loop_ngp_no_lam_mask_omp(GridProps *grid_props,
  * This is the parallel wrapper which dispatches to the masked or unmasked
  * wavelength implementation.
  *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
@@ -981,6 +1020,9 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
  *
  * This is a wrapper which calls the correct function based on the number of
  * threads requested and whether OpenMP is available.
+ *
+ * @tparam Real The floating-point type of the input data.
+ * @tparam OutT The floating-point type stored in the output buffer.
  *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.

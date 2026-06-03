@@ -18,6 +18,7 @@
 /**
  * @brief Evaluate the uniform kernel at a dimensionless radius.
  *
+ * @tparam Real The floating-point type.
  * @param r The dimensionless radius.
  *
  * @return The kernel value.
@@ -33,6 +34,7 @@ static inline Real uniform(const Real r) {
 /**
  * @brief Evaluate the SPH Anarchy kernel at a dimensionless radius.
  *
+ * @tparam Real The floating-point type.
  * @param r The dimensionless radius.
  *
  * @return The kernel value.
@@ -51,6 +53,7 @@ static inline Real sph_anarchy(const Real r) {
 /**
  * @brief Evaluate the Gadget-2 kernel at a dimensionless radius.
  *
+ * @tparam Real The floating-point type.
  * @param r The dimensionless radius.
  *
  * @return The kernel value.
@@ -73,6 +76,7 @@ static inline Real gadget_2(const Real r) {
 /**
  * @brief Evaluate the cubic kernel at a dimensionless radius.
  *
+ * @tparam Real The floating-point type.
  * @param r The dimensionless radius.
  *
  * @return The kernel value.
@@ -97,6 +101,7 @@ static inline Real cubic(const Real r) {
  * This is the SPHENIX quartic spline from Borrow et al. (2022), rescaled from
  * support radius 5h/2 to the public convention where the support radius is 1.
  *
+ * @tparam Real The floating-point type.
  * @param r The dimensionless radius.
  *
  * @return The kernel value.
@@ -128,6 +133,7 @@ static inline Real quartic(const Real r) {
 /**
  * @brief Evaluate the quintic kernel at a dimensionless radius.
  *
+ * @tparam Real The floating-point type.
  * @param r The dimensionless radius.
  *
  * @return The kernel value.

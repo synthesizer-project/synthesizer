@@ -30,6 +30,7 @@ bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
  * Callers are expected to validate dtype and contiguity before using this
  * helper.
  *
+ * @tparam T The scalar type of the NumPy array buffer.
  * @param np_arr: The NumPy array.
  * @return Typed pointer to the underlying buffer.
  */
@@ -40,6 +41,7 @@ template <typename T> inline T *data_ptr(PyArrayObject *np_arr) {
 /**
  * @brief Extract a typed const pointer from a validated NumPy array.
  *
+ * @tparam T The scalar type of the NumPy array buffer.
  * @param np_arr: The NumPy array.
  * @return Typed const pointer to the underlying buffer.
  */

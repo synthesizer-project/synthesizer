@@ -36,6 +36,7 @@
  * smoothing length. Scaling the sampled coordinates by `eta = h_i / h_j`
  * performs that change of units before the truncated lookup is evaluated.
  *
+ * @tparam Real The floating-point type.
  * @param overlap_kernel The output overlap table stored as `(q, u, eta)` in
  *        row-major order.
  * @param q_grid The overlap-table q-axis.

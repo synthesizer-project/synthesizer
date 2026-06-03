@@ -72,6 +72,7 @@ struct weighted_cell {
  * It is used to sort the cells in descending order of cost,
  * so that the most expensive cells are processed first.
  *
+ * @tparam Real The floating-point type.
  * @param a First weighted cell to compare
  * @param b Second weighted cell to compare
  *
@@ -86,6 +87,8 @@ inline bool compare_by_cost(const weighted_cell<Real> &a,
 
 /**
  * @brief Build balanced work list using adaptive subdivision
+ *
+ * @tparam Real The floating-point type.
  */
 template <typename Real>
 static std::vector<weighted_cell<Real>>
@@ -171,6 +174,7 @@ build_balanced_work_list(struct cell<Real> *root, int nthreads,
  * leaves the particles themselves will be checked to see if their SPH kernel
  * overlaps with the line of sight of the star particle.
  *
+ * @tparam Real The floating-point type.
  * @param c The cell to calculate the surface densities for.
  * @param pix_x The x position of the pixel.
  * @param pix_y The y position of the pixel.
@@ -391,6 +395,7 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
  * across threads, and then it will populate the image by recursively
  * processing each cell in the partitioned work list.
  *
+ * @tparam Real The floating-point type.
  * @param pix_values: The particle data to be sorted into pixels
  *                   (luminosity/flux/mass etc.).
  * @param kernel: The kernel data (integrated along the z axis and softed by
@@ -448,6 +453,7 @@ void populate_smoothed_image_parallel(const Real *pix_values,
  * image by calculating the contribution of each particle to the pixels
  * in the image.
  *
+ * @tparam Real The floating-point type.
  * @param pix_values: The particle data to be sorted into pixels
  *                    (luminosity/flux/mass etc.).
  * @param kernel: The kernel data (integrated along the z axis and softed by
@@ -496,6 +502,7 @@ void populate_smoothed_image_serial(const Real *pix_values,
  * populate the image based on whether or not OpenMP is available and the
  * number of threads to use.
  *
+ * @tparam Real The floating-point type.
  * @param pix_values: The particle data to be sorted into pixels
  *                    (luminosity/flux/mass etc.).
  * @param kernel: The kernel data (integrated along the z axis and softed by
@@ -554,6 +561,8 @@ void populate_smoothed_image(const Real *pix_values, const Real *kernel,
 
 /**
  * @brief Templated implementation of make_img.
+ *
+ * @tparam Real The floating-point type.
  */
 template <typename Real>
 static PyObject *make_img_impl(double res, int npix_x, int npix_y, int npart,

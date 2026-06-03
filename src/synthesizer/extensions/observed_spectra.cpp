@@ -29,6 +29,10 @@
  * array, while the observer-frame wavelength and frequency grids are populated
  * from the one-dimensional emitted grids.
  *
+ * @tparam Real The floating-point type for computation.
+ * @tparam OutT The floating-point type stored in the output.
+ * @tparam GridT The floating-point type of the grid data.
+ *
  * @param lnu: The input rest-frame luminosity density spectra, shape (...,
  *     nlam).
  * @param lam: The input rest-frame wavelength grid, shape (nlam).

@@ -41,6 +41,8 @@
  * weight across 2^ndim neighboring grid cells based on its fractional
  * distance along each axis.
  *
+ * @tparam Real The floating-point type of the input arrays.
+ * @tparam OutT The floating-point type stored in the output buffer.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A class containing the particle properties.
  * @param out: The output array. Must have been allocated to grid size.
@@ -126,6 +128,8 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
  * Each thread accumulates weights into a private local buffer, which is added
  * into the global output array at the end of the thread’s execution.
  *
+ * @tparam Real The floating-point type of the input arrays.
+ * @tparam OutT The floating-point type stored in the output buffer.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A class containing the particle properties.
  * @param out_size: The size of the output array. (This will be allocated within
@@ -235,6 +239,8 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
  * This is a wrapper which calls the correct function based on the number of
  * threads requested and whether OpenMP is available.
  *
+ * @tparam Real The floating-point type of the input arrays.
+ * @tparam OutT The floating-point type stored in the output buffer.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param out_size: The size of the output array. (This will be allocated
@@ -302,6 +308,8 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
  *
  * This is the serial version of the function.
  *
+ * @tparam Real The floating-point type of the input arrays.
+ * @tparam OutT The floating-point type stored in the output buffer.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param out: The output array.
@@ -348,6 +356,8 @@ static void weight_loop_ngp_serial(GridProps *grid_props, Particles *parts,
  * Each thread accumulates weights into a private local buffer, which is added
  * into the global output array at the end of the thread’s execution.
  *
+ * @tparam Real The floating-point type of the input arrays.
+ * @tparam OutT The floating-point type stored in the output buffer.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param out_size: The size of the output array. (This will be allocated
@@ -426,6 +436,8 @@ static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
  * This is a wrapper which calls the correct function based on the number of
  * threads requested and whether OpenMP is available.
  *
+ * @tparam Real The floating-point type of the input arrays.
+ * @tparam OutT The floating-point type stored in the output buffer.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param out_size: The size of the output array. (This will be allocated
