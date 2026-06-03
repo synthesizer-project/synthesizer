@@ -76,6 +76,60 @@ bool is_float32_or_float64(PyArrayObject *np_arr, const char *name) {
 }
 
 /**
+ * @brief Check whether a NumPy typenum is one of the supported float dtypes.
+ *
+ * This is the low-level predicate behind the shared mixed-precision boundary
+ * helpers. We currently support only float32 and float64 extension inputs.
+ *
+ * @param typenum: The NumPy typenum to validate.
+ *
+ * @return True if the typenum is float32 or float64, false otherwise.
+ */
+bool is_supported_float_typenum(int typenum) {
+  return typenum == NPY_FLOAT32 || typenum == NPY_FLOAT64;
+}
+
+/**
+ * @brief Choose the promoted floating-point typenum for two inputs.
+ *
+ * This follows the extension boundary promotion rule used for mixed float32 /
+ * float64 inputs: if either input is float64, the promoted dtype is float64;
+ * otherwise float32 is preserved.
+ *
+ * @param lhs: The first NumPy typenum.
+ * @param rhs: The second NumPy typenum.
+ *
+ * @return The promoted NumPy typenum.
+ */
+int promoted_float_typenum(int lhs, int rhs) {
+  return (lhs == NPY_FLOAT64 || rhs == NPY_FLOAT64) ? NPY_FLOAT64
+                                                    : NPY_FLOAT32;
+}
+
+/**
+ * @brief Return an array view or cast copy with the requested float typenum.
+ *
+ * If the input already has the requested dtype, this returns the original
+ * array with its reference count incremented. Otherwise it returns a new NumPy
+ * array produced by ``PyArray_Cast``. Callers always own the returned
+ * reference and must decref it.
+ *
+ * @param array: The NumPy array to reuse or cast.
+ * @param typenum: The requested float32/float64 NumPy typenum.
+ *
+ * @return A new owned reference to an array with the requested dtype, or NULL
+ *         if casting fails.
+ */
+PyArrayObject *cast_float_array(PyArrayObject *array, int typenum) {
+  if (PyArray_TYPE(array) == typenum) {
+    Py_INCREF(array);
+    return array;
+  }
+
+  return (PyArrayObject *)PyArray_Cast(array, typenum);
+}
+
+/**
  * @brief Check whether a list of arrays share one floating-point dtype.
  *
  * This helper enforces the initial precision contract used by the migrated

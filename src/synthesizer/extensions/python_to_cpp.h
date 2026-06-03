@@ -17,6 +17,9 @@
 const char *typenum_to_string(int typenum);
 bool is_c_contiguous(PyArrayObject *np_arr, const char *name);
 bool is_float32_or_float64(PyArrayObject *np_arr, const char *name);
+bool is_supported_float_typenum(int typenum);
+int promoted_float_typenum(int lhs, int rhs);
+PyArrayObject *cast_float_array(PyArrayObject *array, int typenum);
 bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
                               int count, int *resolved_typenum);
 
