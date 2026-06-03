@@ -148,6 +148,30 @@ def get_instrument_dir() -> Path:
     return get_base_dir() / "instrument_cache"
 
 
+def get_svo_filter_cache_dir() -> Path:
+    """Get the Synthesizer SVO filter cache directory path.
+
+    This function returns the path to the Synthesizer SVO filter cache
+    directory, which stores cached SVO filter responses to avoid
+    repeated requests to the SVO database.
+    """
+    # First check if we have an environment variable set
+    if "SYNTHESIZER_SVO_FILTER_CACHE" in os.environ:
+        return Path(os.environ["SYNTHESIZER_SVO_FILTER_CACHE"])
+
+    # Otherwise, use the base directory
+    return get_base_dir() / "svo_filter_cache"
+
+
+def svo_filter_cache_exists() -> bool:
+    """Check if the SVO filter cache directory exists.
+
+    This function checks if the SVO filter cache directory, as defined by
+    get_svo_filter_cache_dir(), exists on the filesystem.
+    """
+    return get_svo_filter_cache_dir().exists()
+
+
 def instrument_cache_exists() -> bool:
     """Check if the Synthesizer instrument cache directory exists.
 
@@ -247,6 +271,7 @@ class SynthesizerInitializer:
         self.grids_dir = get_grids_dir()
         self.test_data_dir = get_test_data_dir()
         self.instrument_cache_dir = get_instrument_dir()
+        self.svo_filter_cache_dir = get_svo_filter_cache_dir()
 
         # Initialize status dictionary for each step
         keys = [
@@ -254,6 +279,7 @@ class SynthesizerInitializer:
             "data_dir",
             "grids",
             "instrument_cache",
+            "svo_filter_cache",
             "test_data",
             "units_file",
             "ids_file",
@@ -404,6 +430,7 @@ class SynthesizerInitializer:
         self._make_dir(self.data_dir, "data_dir")
         self._make_dir(self.grids_dir, "grids")
         self._make_dir(self.instrument_cache_dir, "instrument_cache")
+        self._make_dir(self.svo_filter_cache_dir, "svo_filter_cache")
         self._make_dir(self.test_data_dir, "test_data")
 
         # Copy the default units to their user facing location
@@ -447,6 +474,11 @@ class SynthesizerInitializer:
                 "Instrument cache directory:",
                 self.instrument_cache_dir,
             ),
+            (
+                "svo_filter_cache",
+                "SVO filter cache directory:",
+                self.svo_filter_cache_dir,
+            ),
             ("test_data", "Test data directory:", self.test_data_dir),
         ]
 
@@ -465,6 +497,7 @@ class SynthesizerInitializer:
             ("SYNTHESIZER_DATA_DIR", self.data_dir),
             ("SYNTHESIZER_GRID_DIR", self.grids_dir),
             ("SYNTHESIZER_INSTRUMENT_CACHE", self.instrument_cache_dir),
+            ("SYNTHESIZER_SVO_FILTER_CACHE", self.svo_filter_cache_dir),
             ("SYNTHESIZER_TEST_DATA_DIR", self.test_data_dir),
         ]
 
@@ -531,6 +564,7 @@ def synth_initialise(verbose=True) -> None:
         and grids_dir_exists()
         and testdata_dir_exists()
         and instrument_cache_exists()
+        and svo_filter_cache_exists()
         and default_units_exists()
     )
 
@@ -598,3 +632,7 @@ def synth_clear_data() -> None:
         initializer._remove_dir(initializer.instrument_cache_dir)
     except Exception as e:
         print(f"Failed to clear Synthesizer instrument cache directory: {e}")
+    try:
+        initializer._remove_dir(initializer.svo_filter_cache_dir)
+    except Exception as e:
+        print(f"Failed to clear Synthesizer SVO filter cache directory: {e}")

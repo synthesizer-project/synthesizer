@@ -35,6 +35,7 @@ def clear_env(monkeypatch):
         "SYNTHESIZER_GRID_DIR",
         "SYNTHESIZER_TEST_DATA_DIR",
         "SYNTHESIZER_INSTRUMENT_CACHE",
+        "SYNTHESIZER_SVO_FILTER_CACHE",
     ]:
         monkeypatch.delenv(var, raising=False)
     yield
@@ -44,6 +45,7 @@ def clear_env(monkeypatch):
         "SYNTHESIZER_GRID_DIR",
         "SYNTHESIZER_TEST_DATA_DIR",
         "SYNTHESIZER_INSTRUMENT_CACHE",
+        "SYNTHESIZER_SVO_FILTER_CACHE",
     ]:
         monkeypatch.delenv(var, raising=False)
 
@@ -261,6 +263,7 @@ class TestInitializerMethods:
             ("data_dir", "data_dir"),
             ("grids_dir", "grids"),
             ("instrument_cache_dir", "instrument_cache"),
+            ("svo_filter_cache_dir", "svo_filter_cache"),
             ("test_data_dir", "test_data"),
         ]:
             path = getattr(init, attr)
@@ -285,6 +288,7 @@ class TestInitializerMethods:
             "grids_dir",
             "test_data_dir",
             "instrument_cache_dir",
+            "svo_filter_cache_dir",
         ):
             p = getattr(init, attr)
             p.mkdir(parents=True, exist_ok=True)
