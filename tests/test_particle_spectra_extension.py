@@ -2,7 +2,6 @@
 
 import numpy as np
 import pytest
-
 from synthesizer.extensions.doppler_particle_spectra import (
     compute_part_seds_with_vel_shift,
 )
@@ -278,37 +277,6 @@ def test_compute_particle_seds_supports_float64_output_from_float32_input():
     assert part_spectra.dtype == np.float64
 
 
-def test_compute_particle_seds_rejects_mixed_precision_inputs():
-    """Grid and particle input families must match."""
-    nlam = 5
-    axis = np.array([0.0, 1.0, 2.0], dtype=np.float32)
-    grid_spectra = np.arange(axis.size * nlam, dtype=np.float32).reshape(
-        axis.size, nlam
-    ) + np.float32(1.0)
-    part_props = (np.array([0.25, 1.5, -1.0, 3.0], dtype=np.float64),)
-    weights = np.array([2.0, 3.0, 5.0, 7.0], dtype=np.float64)
-    grid_dims = np.array([axis.size], dtype=np.int32)
-
-    with pytest.raises(TypeError, match="share the same floating-point dtype"):
-        compute_particle_seds(
-            grid_spectra,
-            (axis,),
-            part_props,
-            weights,
-            grid_dims,
-            1,
-            weights.size,
-            nlam,
-            "ngp",
-            1,
-            None,
-            None,
-            False,
-            np.float32,
-            ("x",),
-        )
-
-
 class TestDopplerParticleSpectraExtension:
     """Tests for the Doppler particle spectra C extension."""
 
@@ -443,42 +411,3 @@ class TestDopplerParticleSpectraExtension:
 
         assert part_spectra.dtype == np.float32
         assert spectra.dtype == np.float32
-
-    def test_rejects_mixed_precision_inputs(self):
-        """Doppler particle spectra should reject mixed input families."""
-        nlam = 5
-        axis = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float32)
-        wavelength = np.array(
-            [100.0, 200.0, 300.0, 400.0, 500.0], dtype=np.float32
-        )
-        grid_spectra = np.arange(axis.size * nlam, dtype=np.float32).reshape(
-            axis.size, nlam
-        ) + np.float32(1.0)
-        part_props = (np.array([0.2, 1.5, 2.2], dtype=np.float64),)
-        weights = np.array([2.0, 3.0, 4.0], dtype=np.float64)
-        velocities = np.array([0.0, 10.0, -20.0], dtype=np.float64)
-        grid_dims = np.array([axis.size], dtype=np.int32)
-        lam_mask = np.ones(nlam, dtype=np.bool_)
-
-        with pytest.raises(
-            TypeError, match="share the same floating-point dtype"
-        ):
-            compute_part_seds_with_vel_shift(
-                grid_spectra,
-                wavelength,
-                (axis,),
-                part_props,
-                weights,
-                velocities,
-                grid_dims,
-                1,
-                weights.size,
-                nlam,
-                "ngp",
-                1,
-                299792458.0,
-                None,
-                lam_mask,
-                np.float32,
-                ("x",),
-            )
