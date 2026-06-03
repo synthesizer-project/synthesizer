@@ -291,14 +291,17 @@ static PyObject *compute_overlap_kernel_impl(PyObject *self, PyObject *args) {
 PyObject *compute_overlap_kernel(PyObject *self, PyObject *args) {
   (void)self;
 
-  /* Check the dtype of the first array to determine precision. All float
-   * arrays are expected to share the same dtype. */
-  PyArrayObject *np_q_grid;
-  if (!PyArg_ParseTuple(args, "O!", &PyArray_Type, &np_q_grid)) {
+  /* Check the dtype of the first array to determine precision without fully
+   * parsing the tuple (the impl will do that). */
+  PyObject *first_arg = PyTuple_GetItem(args, 0);
+  if (first_arg == NULL) {
     return NULL;
   }
-
-  const int input_typenum = PyArray_TYPE(np_q_grid);
+  if (!PyArray_Check(first_arg)) {
+    PyErr_SetString(PyExc_TypeError, "First argument must be a numpy array.");
+    return NULL;
+  }
+  const int input_typenum = PyArray_TYPE((PyArrayObject *)first_arg);
   if (input_typenum == NPY_FLOAT32) {
     return compute_overlap_kernel_impl<float>(self, args);
   }

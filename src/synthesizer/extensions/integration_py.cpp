@@ -218,12 +218,20 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Enforce one shared floating precision family for this integration call. */
-  PyArrayObject *float_arrays[] = {xs, ys};
-  const char *float_names[] = {"xs", "ys"};
-  int input_typenum = -1;
-  if (!is_matching_float_dtypes(float_arrays, float_names, 2,
-                                &input_typenum)) {
+  const int xs_typenum = PyArray_TYPE(xs);
+  const int ys_typenum = PyArray_TYPE(ys);
+  if (!is_supported_float_typenum(xs_typenum) ||
+      !is_supported_float_typenum(ys_typenum)) {
+    PyErr_SetString(PyExc_TypeError, "xs and ys must be float32 or float64.");
+    return NULL;
+  }
+
+  const int input_typenum = promoted_float_typenum(xs_typenum, ys_typenum);
+  PyArrayObject *xs_cast = cast_float_array(xs, input_typenum);
+  PyArrayObject *ys_cast = cast_float_array(ys, input_typenum);
+  if (xs_cast == NULL || ys_cast == NULL) {
+    Py_XDECREF(xs_cast);
+    Py_XDECREF(ys_cast);
     return NULL;
   }
 
@@ -235,23 +243,26 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
 
   /* Dispatch to the matching Real/OutT implementation. */
   const npy_intp num_elements = PyArray_SIZE(ys) / n;
+  PyObject *result;
   if (input_typenum == NPY_FLOAT32) {
     if (output_typenum == NPY_FLOAT32) {
-      return trapz_last_axis<float, float>(xs, ys, ndim, shape, n,
-                                           num_elements, nthreads);
+      result = trapz_last_axis<float, float>(xs_cast, ys_cast, ndim, shape, n,
+                                             num_elements, nthreads);
+    } else {
+      result = trapz_last_axis<float, double>(xs_cast, ys_cast, ndim, shape, n,
+                                              num_elements, nthreads);
     }
-
-    return trapz_last_axis<float, double>(xs, ys, ndim, shape, n,
-                                          num_elements, nthreads);
+  } else if (output_typenum == NPY_FLOAT32) {
+    result = trapz_last_axis<double, float>(xs_cast, ys_cast, ndim, shape, n,
+                                            num_elements, nthreads);
+  } else {
+    result = trapz_last_axis<double, double>(xs_cast, ys_cast, ndim, shape, n,
+                                             num_elements, nthreads);
   }
 
-  if (output_typenum == NPY_FLOAT32) {
-    return trapz_last_axis<double, float>(xs, ys, ndim, shape, n,
-                                          num_elements, nthreads);
-  }
-
-  return trapz_last_axis<double, double>(xs, ys, ndim, shape, n,
-                                         num_elements, nthreads);
+  Py_DECREF(xs_cast);
+  Py_DECREF(ys_cast);
+  return result;
 }
 
 /**
@@ -410,12 +421,20 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Validate the shared floating precision family before entering typed code. */
-  PyArrayObject *float_arrays[] = {xs, ys};
-  const char *float_names[] = {"xs", "ys"};
-  int input_typenum = -1;
-  if (!is_matching_float_dtypes(float_arrays, float_names, 2,
-                                &input_typenum)) {
+  const int xs_typenum = PyArray_TYPE(xs);
+  const int ys_typenum = PyArray_TYPE(ys);
+  if (!is_supported_float_typenum(xs_typenum) ||
+      !is_supported_float_typenum(ys_typenum)) {
+    PyErr_SetString(PyExc_TypeError, "xs and ys must be float32 or float64.");
+    return NULL;
+  }
+
+  const int input_typenum = promoted_float_typenum(xs_typenum, ys_typenum);
+  PyArrayObject *xs_cast = cast_float_array(xs, input_typenum);
+  PyArrayObject *ys_cast = cast_float_array(ys, input_typenum);
+  if (xs_cast == NULL || ys_cast == NULL) {
+    Py_XDECREF(xs_cast);
+    Py_XDECREF(ys_cast);
     return NULL;
   }
 
@@ -427,23 +446,26 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
 
   /* Dispatch to the matching Real/OutT implementation. */
   const npy_intp num_elements = PyArray_SIZE(ys) / n;
+  PyObject *result;
   if (input_typenum == NPY_FLOAT32) {
     if (output_typenum == NPY_FLOAT32) {
-      return simps_last_axis<float, float>(xs, ys, ndim, shape, n,
-                                           num_elements, nthreads);
+      result = simps_last_axis<float, float>(xs_cast, ys_cast, ndim, shape, n,
+                                             num_elements, nthreads);
+    } else {
+      result = simps_last_axis<float, double>(xs_cast, ys_cast, ndim, shape, n,
+                                              num_elements, nthreads);
     }
-
-    return simps_last_axis<float, double>(xs, ys, ndim, shape, n,
-                                          num_elements, nthreads);
+  } else if (output_typenum == NPY_FLOAT32) {
+    result = simps_last_axis<double, float>(xs_cast, ys_cast, ndim, shape, n,
+                                            num_elements, nthreads);
+  } else {
+    result = simps_last_axis<double, double>(xs_cast, ys_cast, ndim, shape, n,
+                                             num_elements, nthreads);
   }
 
-  if (output_typenum == NPY_FLOAT32) {
-    return simps_last_axis<double, float>(xs, ys, ndim, shape, n,
-                                          num_elements, nthreads);
-  }
-
-  return simps_last_axis<double, double>(xs, ys, ndim, shape, n,
-                                         num_elements, nthreads);
+  Py_DECREF(xs_cast);
+  Py_DECREF(ys_cast);
+  return result;
 }
 
 /**
@@ -669,12 +691,26 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
     return NULL;
   }
 
-  /* xs, ys, and weights must all share one contiguous floating dtype. */
-  PyArrayObject *float_arrays[] = {xs, ys, ws};
-  const char *float_names[] = {"xs", "ys", "weights"};
-  int input_typenum = -1;
-  if (!is_matching_float_dtypes(float_arrays, float_names, 3,
-                                &input_typenum)) {
+  const int xs_typenum = PyArray_TYPE(xs);
+  const int ys_typenum = PyArray_TYPE(ys);
+  const int ws_typenum = PyArray_TYPE(ws);
+  if (!is_supported_float_typenum(xs_typenum) ||
+      !is_supported_float_typenum(ys_typenum) ||
+      !is_supported_float_typenum(ws_typenum)) {
+    PyErr_SetString(PyExc_TypeError,
+                    "xs, ys, and weights must be float32 or float64.");
+    return NULL;
+  }
+
+  int input_typenum = promoted_float_typenum(xs_typenum, ys_typenum);
+  input_typenum = promoted_float_typenum(input_typenum, ws_typenum);
+  PyArrayObject *xs_cast = cast_float_array(xs, input_typenum);
+  PyArrayObject *ys_cast = cast_float_array(ys, input_typenum);
+  PyArrayObject *ws_cast = cast_float_array(ws, input_typenum);
+  if (xs_cast == NULL || ys_cast == NULL || ws_cast == NULL) {
+    Py_XDECREF(xs_cast);
+    Py_XDECREF(ys_cast);
+    Py_XDECREF(ws_cast);
     return NULL;
   }
 
@@ -686,23 +722,27 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
 
   /* Dispatch to the matching Real/OutT implementation. */
   const npy_intp num_elements = PyArray_SIZE(ys) / n;
+  PyObject *result;
   if (input_typenum == NPY_FLOAT32) {
     if (output_typenum == NPY_FLOAT32) {
-      return weighted_trapz_last_axis<float, float>(
-          xs, ys, ws, ndim, shape, n, num_elements, nthreads);
+      result = weighted_trapz_last_axis<float, float>(
+          xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
+    } else {
+      result = weighted_trapz_last_axis<float, double>(
+          xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
     }
-
-    return weighted_trapz_last_axis<float, double>(
-        xs, ys, ws, ndim, shape, n, num_elements, nthreads);
+  } else if (output_typenum == NPY_FLOAT32) {
+    result = weighted_trapz_last_axis<double, float>(
+        xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
+  } else {
+    result = weighted_trapz_last_axis<double, double>(
+        xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
   }
 
-  if (output_typenum == NPY_FLOAT32) {
-    return weighted_trapz_last_axis<double, float>(
-        xs, ys, ws, ndim, shape, n, num_elements, nthreads);
-  }
-
-  return weighted_trapz_last_axis<double, double>(
-      xs, ys, ws, ndim, shape, n, num_elements, nthreads);
+  Py_DECREF(xs_cast);
+  Py_DECREF(ys_cast);
+  Py_DECREF(ws_cast);
+  return result;
 }
 
 /**
@@ -1003,12 +1043,26 @@ static PyObject *weighted_simps_last_axis_integration(PyObject *self,
     return NULL;
   }
 
-  /* xs, ys, and weights must all share one contiguous floating dtype. */
-  PyArrayObject *float_arrays[] = {xs, ys, ws};
-  const char *float_names[] = {"xs", "ys", "weights"};
-  int input_typenum = -1;
-  if (!is_matching_float_dtypes(float_arrays, float_names, 3,
-                                &input_typenum)) {
+  const int xs_typenum = PyArray_TYPE(xs);
+  const int ys_typenum = PyArray_TYPE(ys);
+  const int ws_typenum = PyArray_TYPE(ws);
+  if (!is_supported_float_typenum(xs_typenum) ||
+      !is_supported_float_typenum(ys_typenum) ||
+      !is_supported_float_typenum(ws_typenum)) {
+    PyErr_SetString(PyExc_TypeError,
+                    "xs, ys, and weights must be float32 or float64.");
+    return NULL;
+  }
+
+  int input_typenum = promoted_float_typenum(xs_typenum, ys_typenum);
+  input_typenum = promoted_float_typenum(input_typenum, ws_typenum);
+  PyArrayObject *xs_cast = cast_float_array(xs, input_typenum);
+  PyArrayObject *ys_cast = cast_float_array(ys, input_typenum);
+  PyArrayObject *ws_cast = cast_float_array(ws, input_typenum);
+  if (xs_cast == NULL || ys_cast == NULL || ws_cast == NULL) {
+    Py_XDECREF(xs_cast);
+    Py_XDECREF(ys_cast);
+    Py_XDECREF(ws_cast);
     return NULL;
   }
 
@@ -1020,23 +1074,27 @@ static PyObject *weighted_simps_last_axis_integration(PyObject *self,
 
   /* Dispatch to the matching Real/OutT implementation. */
   const npy_intp num_elements = PyArray_SIZE(ys) / n;
+  PyObject *result;
   if (input_typenum == NPY_FLOAT32) {
     if (output_typenum == NPY_FLOAT32) {
-      return weighted_simps_last_axis<float, float>(
-          xs, ys, ws, ndim, shape, n, num_elements, nthreads);
+      result = weighted_simps_last_axis<float, float>(
+          xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
+    } else {
+      result = weighted_simps_last_axis<float, double>(
+          xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
     }
-
-    return weighted_simps_last_axis<float, double>(
-        xs, ys, ws, ndim, shape, n, num_elements, nthreads);
+  } else if (output_typenum == NPY_FLOAT32) {
+    result = weighted_simps_last_axis<double, float>(
+        xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
+  } else {
+    result = weighted_simps_last_axis<double, double>(
+        xs_cast, ys_cast, ws_cast, ndim, shape, n, num_elements, nthreads);
   }
 
-  if (output_typenum == NPY_FLOAT32) {
-    return weighted_simps_last_axis<double, float>(
-        xs, ys, ws, ndim, shape, n, num_elements, nthreads);
-  }
-
-  return weighted_simps_last_axis<double, double>(
-      xs, ys, ws, ndim, shape, n, num_elements, nthreads);
+  Py_DECREF(xs_cast);
+  Py_DECREF(ys_cast);
+  Py_DECREF(ws_cast);
+  return result;
 }
 
 static PyMethodDef IntegrationMethods[] = {
