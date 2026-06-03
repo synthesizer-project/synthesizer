@@ -273,6 +273,15 @@ def load_CAMELS_IllustrisTNG(
     # Calculate ages at snapshot redshift
     ages = (universe_age - _ages).to("yr").value
 
+    # Ensure all star particle arrays share a common float dtype to avoid
+    # mixed-precision errors in the C extension weight / spectra kernels.
+    common_dtype = np.result_type(
+        masses, imasses, ages, metallicity, s_oxygen, s_hydrogen, coods, hsml
+    )
+    metallicity = metallicity.astype(common_dtype)
+    s_oxygen = s_oxygen.astype(common_dtype)
+    s_hydrogen = s_hydrogen.astype(common_dtype)
+
     return _load_CAMELS(
         lens=lens,
         imasses=imasses,
