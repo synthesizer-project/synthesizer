@@ -2027,13 +2027,12 @@ class Filter:
                         attr_key = f"{grp_key}_svo_url"
                         if attr_key in f.attrs:
                             self.svo_url = f.attrs[attr_key]
-                if self.original_lam is not None:
-                    if isinstance(self._lam, np.ndarray):
-                        self._interpolate_wavelength()
-                    else:
-                        self.lam = self.original_lam
-                        self.t = self.original_t
-                    return
+                        if isinstance(self._lam, np.ndarray):
+                            self._interpolate_wavelength()
+                        else:
+                            self.lam = self.original_lam
+                            self.t = self.original_t
+                        return
             except Exception:
                 pass  # Corrupt CI cache; fall through to HTTP request
 

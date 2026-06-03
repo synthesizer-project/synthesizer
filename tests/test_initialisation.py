@@ -35,6 +35,7 @@ def clear_env(monkeypatch):
         "SYNTHESIZER_GRID_DIR",
         "SYNTHESIZER_TEST_DATA_DIR",
         "SYNTHESIZER_INSTRUMENT_CACHE",
+        "SYNTHESIZER_SVO_FILTER_CACHE",
     ]:
         monkeypatch.delenv(var, raising=False)
     yield
@@ -44,6 +45,7 @@ def clear_env(monkeypatch):
         "SYNTHESIZER_GRID_DIR",
         "SYNTHESIZER_TEST_DATA_DIR",
         "SYNTHESIZER_INSTRUMENT_CACHE",
+        "SYNTHESIZER_SVO_FILTER_CACHE",
     ]:
         monkeypatch.delenv(var, raising=False)
 

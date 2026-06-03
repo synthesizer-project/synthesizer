@@ -457,11 +457,24 @@ def download_svo_filter_cache(destination):
     """
     import tarfile
 
+    def _safe_extract(tar, path):
+        """Extract a tarball safely, guarding against path traversal."""
+        if hasattr(tarfile, "DATA_FILTER"):
+            tar.extractall(path=path, filter="data")
+        else:
+            for member in tar.getmembers():
+                member_path = os.path.realpath(os.path.join(path, member.name))
+                if not member_path.startswith(os.path.realpath(path)):
+                    raise exceptions.DownloadError(
+                        f"Unsafe tar member: {member.name}"
+                    )
+                tar.extract(member, path=path)
+
     for fname in SVO_FILTER_CACHE_FILES:
         _download(fname, destination)
         tarball_path = os.path.join(destination, fname)
         with tarfile.open(tarball_path, "r:gz") as tar:
-            tar.extractall(path=destination)
+            _safe_extract(tar, destination)
         os.remove(tarball_path)
 
 
