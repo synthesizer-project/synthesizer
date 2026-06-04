@@ -43,7 +43,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.operation_timers import timed
-from synthesizer.utils.util_funcs import as_contiguous
+from synthesizer.utils.util_funcs import as_contiguous, convert_array_dtype
 
 
 class Grid:
@@ -113,6 +113,7 @@ class Grid:
         ignore_lines=False,
         new_lam=None,
         lam_lims=(),
+        use_precision=None,
     ):
         """Initialise the grid object.
 
@@ -139,6 +140,9 @@ class Grid:
                 A tuple of the lower and upper wavelength limits to truncate
                 the grid to (i.e. (lower_lam, upper_lam)). If new_lam is
                 provided these limits will be ignored.
+            use_precision (np.dtype/type/None):
+                If provided, coerce the loaded grid arrays to either
+                ``np.float32`` or ``np.float64`` in place before returning.
         """
         # Get the grid file path data
         self.grid_dir = ""
@@ -211,6 +215,12 @@ class Grid:
                 + self.available_spectra_emissions
             )
         )
+
+        # If a precision has been passed we need to coerce everything
+        # on the grid to this precision. We do this inplace at this point
+        # because we want to modify self
+        if use_precision is not None:
+            self.convert_precision(use_precision, inplace=True)
 
     def _ensure_axis_data_contiguous(self):
         """Ensure stored axis arrays are contiguous."""
@@ -786,6 +796,86 @@ class Grid:
             lams = unyt_array(lams, lam_units).to(angstrom)
 
         return lines, lams
+
+    def convert_precision(self, precision, inplace=False):
+        """Convert loaded grid arrays to a single floating precision.
+
+        Args:
+            precision (np.dtype/type):
+                Target precision. Must resolve to ``np.float32`` or
+                ``np.float64``.
+            inplace (bool):
+                Whether to modify the current grid in place or return a new
+                grid object. Defaults to False.
+
+        Returns:
+            Grid/None:
+                If inplace=False, returns a new Grid object with converted
+                precision. If inplace=True, returns None and modifies the
+                current grid.
+        """
+        # Get the target dtype and check it's valid
+        dtype = np.dtype(precision)
+        if dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
+            raise ValueError(
+                "precision must be either np.float32 or np.float64"
+            )
+
+        # Resolve whether we are modifying inplace or returning a new grid
+        grid = self if inplace else copy.deepcopy(self)
+
+        # Convert all the grid axis arrays to the target precision
+        for axis_name in grid.axes:
+            grid._axes_values[axis_name] = convert_array_dtype(
+                grid._axes_values[axis_name], dtype
+            )
+
+        # Convert all the extraction axis arrays to the target precision
+        # (helpful arrays that handle log10 conversions of the axes for us)
+        for axis_name in grid._extract_axes:
+            grid._extract_axes_values[axis_name] = convert_array_dtype(
+                grid._extract_axes_values[axis_name], dtype
+            )
+
+        # Convert the wavelengths to the target precision, safe if we don't
+        # have spectra
+        grid.lam = convert_array_dtype(grid.lam, dtype)
+
+        # Convert the line wavelengths to the target precision, safe if we
+        # don't have lines
+        grid.line_lams = convert_array_dtype(grid.line_lams, dtype)
+
+        # Convert all the spectra to the target precision
+        for spectra_id in grid.spectra:
+            grid.spectra[spectra_id] = convert_array_dtype(
+                grid.spectra[spectra_id], dtype
+            )
+
+        # Convert all the line luminosities and continuums to the target
+        for line_id in grid.line_lums:
+            grid.line_lums[line_id] = convert_array_dtype(
+                grid.line_lums[line_id], dtype
+            )
+        for line_id in grid.line_conts:
+            grid.line_conts[line_id] = convert_array_dtype(
+                grid.line_conts[line_id], dtype
+            )
+
+        # Convert the ionising luminosities to the target precision if we
+        # have them
+        if hasattr(grid, "log10_specific_ionising_lum"):
+            for ion in grid.log10_specific_ionising_lum:
+                grid.log10_specific_ionising_lum[ion] = convert_array_dtype(
+                    grid.log10_specific_ionising_lum[ion], dtype
+                )
+
+        # Convert the stellar fraction to the target precision, safe if we
+        # don't have it
+        grid._stellar_frac = convert_array_dtype(grid._stellar_frac, dtype)
+
+        # If we created a new grid object return it
+        if not inplace:
+            return grid
 
     @accepts(new_lam=angstrom)
     @timed("Grid.interp_spectra")
