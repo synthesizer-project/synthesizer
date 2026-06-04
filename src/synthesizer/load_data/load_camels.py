@@ -51,6 +51,7 @@ def _load_CAMELS(
     centre,
     s_hsml=None,
     dtm=0.3,
+    dtype=np.float64,
 ):
     """Load CAMELS galaxies into a galaxy object.
 
@@ -92,6 +93,10 @@ def _load_CAMELS(
             as required (e.g. can be centre of mass)
         dtm (float):
             dust-to-metals ratio to apply to all particles
+        dtype (type):
+            The numpy dtype to cast arrays to after unit
+            multiplication. Needed because unyt unit multiplication
+            (e.g. ``* Msun``) can promote lower-precision dtypes.
 
     Returns:
         galaxies (object):
@@ -111,24 +116,24 @@ def _load_CAMELS(
             smoothing_lengths = s_hsml[b:e] * kpc
 
         galaxies[i].load_stars(
-            initial_masses=imasses[b:e] * Msun,
-            ages=ages[b:e] * yr,
-            metallicities=metallicities[b:e],
-            s_oxygen=s_oxygen[b:e],
-            s_hydrogen=s_hydrogen[b:e],
-            coordinates=coods[b:e, :] * kpc,
-            current_masses=masses[b:e] * Msun,
+            initial_masses=(imasses[b:e] * Msun).astype(dtype),
+            ages=(ages[b:e] * yr).astype(dtype),
+            metallicities=metallicities[b:e].astype(dtype),
+            s_oxygen=s_oxygen[b:e].astype(dtype),
+            s_hydrogen=s_hydrogen[b:e].astype(dtype),
+            coordinates=(coods[b:e, :] * kpc).astype(dtype),
+            current_masses=(masses[b:e] * Msun).astype(dtype),
             smoothing_lengths=smoothing_lengths,
         )
 
     begin, end = get_begin_end_pointers(lens[:, 0])
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i].load_gas(
-            coordinates=g_coods[b:e] * kpc,
-            masses=g_masses[b:e] * Msun,
-            metallicities=g_metallicities[b:e],
+            coordinates=(g_coods[b:e] * kpc).astype(dtype),
+            masses=(g_masses[b:e] * Msun).astype(dtype),
+            metallicities=g_metallicities[b:e].astype(dtype),
             star_forming=star_forming[b:e],
-            smoothing_lengths=g_hsml[b:e] * kpc,
+            smoothing_lengths=(g_hsml[b:e] * kpc).astype(dtype),
             dust_to_metal_ratio=dtm,
         )
 
@@ -145,7 +150,7 @@ def load_CAMELS_IllustrisTNG(
     physical=True,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
-    dtype=np.float32,
+    dtype=np.float64,
     **kwargs,
 ):
     """Load CAMELS-IllustrisTNG galaxies.
@@ -172,8 +177,9 @@ def load_CAMELS_IllustrisTNG(
             Scale factor resolution of the age lookup
         dtype (type):
             The numpy dtype to cast all numerical particle arrays to.
-            Defaults to np.float32 to reduce memory and avoid
-            mixed-precision issues in downstream kernels.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
         **kwargs (dict):
             Additional keyword arguments to pass to the
             `_load_CAMELS` function.
@@ -311,6 +317,7 @@ def load_CAMELS_IllustrisTNG(
         redshift=redshift,
         centre=pos,
         dtm=dtm,
+        dtype=dtype,
     )
 
 
@@ -323,7 +330,7 @@ def load_CAMELS_Astrid(
     physical=True,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
-    dtype=np.float32,
+    dtype=np.float64,
     **kwargs,
 ):
     """Load CAMELS-Astrid galaxies.
@@ -348,8 +355,9 @@ def load_CAMELS_Astrid(
             Scale factor resolution of the age lookup
         dtype (type):
             The numpy dtype to cast all numerical particle arrays to.
-            Defaults to np.float32 to reduce memory and avoid
-            mixed-precision issues in downstream kernels.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
         **kwargs (dict):
             Additional keyword arguments to pass to the
             `_load_CAMELS` function.
@@ -452,6 +460,7 @@ def load_CAMELS_Astrid(
         star_forming=star_forming,
         dtm=dtm,
         centre=pos,
+        dtype=dtype,
     )
 
 
@@ -464,7 +473,7 @@ def load_CAMELS_Simba(
     physical=True,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
-    dtype=np.float32,
+    dtype=np.float64,
     **kwargs,
 ):
     """Load CAMELS-SIMBA galaxies.
@@ -489,8 +498,9 @@ def load_CAMELS_Simba(
             Scale factor resolution of the age lookup
         dtype (type):
             The numpy dtype to cast all numerical particle arrays to.
-            Defaults to np.float32 to reduce memory and avoid
-            mixed-precision issues in downstream kernels.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
         **kwargs (dict):
             Additional keyword arguments to pass to the
             `_load_CAMELS` function.
@@ -593,6 +603,7 @@ def load_CAMELS_Simba(
         star_forming=star_forming,
         dtm=dtm,
         centre=pos,
+        dtype=dtype,
     )
 
 
@@ -607,7 +618,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
     num_threads=-1,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
-    dtype=np.float32,
+    dtype=np.float64,
     **kwargs,
 ):
     """Load CAMELS-Swift-EAGLE galaxies.
@@ -639,8 +650,9 @@ def load_CAMELS_SwiftEAGLE_subfind(
             Scale factor resolution of the age lookup
         dtype (type):
             The numpy dtype to cast all numerical particle arrays to.
-            Defaults to np.float32 to reduce memory and avoid
-            mixed-precision issues in downstream kernels.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
         **kwargs (dict):
             Additional keyword arguments to pass to the
             `_load_CAMELS` function.
@@ -821,13 +833,13 @@ def load_CAMELS_SwiftEAGLE_subfind(
             smoothing_lengths = sh_hsml * Mpc
 
         gal.load_stars(
-            initial_masses=sh_imasses * Msun,
+            initial_masses=(sh_imasses * Msun).astype(dtype),
             ages=sh_ages * yr,
             metallicities=sh_metallicity,
             s_oxygen=s_oxygen,
             s_hydrogen=s_hydrogen,
             coordinates=sh_coods * Mpc,
-            current_masses=sh_masses * Msun,
+            current_masses=(sh_masses * Msun).astype(dtype),
             smoothing_lengths=smoothing_lengths,
         )
 
@@ -855,7 +867,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
 
             gal.load_gas(
                 coordinates=sh_g_coods * Mpc,
-                masses=sh_g_masses * Msun,
+                masses=(sh_g_masses * Msun).astype(dtype),
                 metallicities=sh_g_metals,
                 star_forming=star_forming,
                 smoothing_lengths=sh_g_hsml * Mpc,
