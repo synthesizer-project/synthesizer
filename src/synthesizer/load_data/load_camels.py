@@ -145,6 +145,7 @@ def load_CAMELS_IllustrisTNG(
     physical=True,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
+    dtype=np.float32,
     **kwargs,
 ):
     """Load CAMELS-IllustrisTNG galaxies.
@@ -169,6 +170,10 @@ def load_CAMELS_IllustrisTNG(
             Create a lookup table for ages
         age_lookup_delta_a (float):
             Scale factor resolution of the age lookup
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float32 to reduce memory and avoid
+            mixed-precision issues in downstream kernels.
         **kwargs (dict):
             Additional keyword arguments to pass to the
             `_load_CAMELS` function.
@@ -273,33 +278,20 @@ def load_CAMELS_IllustrisTNG(
     # Calculate ages at snapshot redshift
     ages = (universe_age - _ages).to("yr").value
 
-    # Ensure all particle arrays share a common float dtype to avoid
-    # mixed-precision errors in the C extension kernels.
-    common_dtype = np.result_type(
-        masses,
-        imasses,
-        ages,
-        metallicity,
-        s_oxygen,
-        s_hydrogen,
-        coods,
-        hsml,
-        g_masses,
-        g_metals,
-        g_coods,
-        g_hsml,
-    )
-    masses = masses.astype(common_dtype, copy=False)
-    imasses = imasses.astype(common_dtype, copy=False)
-    metallicity = metallicity.astype(common_dtype, copy=False)
-    s_oxygen = s_oxygen.astype(common_dtype, copy=False)
-    s_hydrogen = s_hydrogen.astype(common_dtype, copy=False)
-    coods = coods.astype(common_dtype, copy=False)
-    hsml = hsml.astype(common_dtype, copy=False)
-    g_masses = g_masses.astype(common_dtype, copy=False)
-    g_metals = g_metals.astype(common_dtype, copy=False)
-    g_coods = g_coods.astype(common_dtype, copy=False)
-    g_hsml = g_hsml.astype(common_dtype, copy=False)
+    # Cast all particle arrays to a common (user-controlled) dtype to avoid
+    # mixed-precision errors in downstream kernels.
+    masses = masses.astype(dtype, copy=False)
+    imasses = imasses.astype(dtype, copy=False)
+    ages = ages.astype(dtype, copy=False)
+    metallicity = metallicity.astype(dtype, copy=False)
+    s_oxygen = s_oxygen.astype(dtype, copy=False)
+    s_hydrogen = s_hydrogen.astype(dtype, copy=False)
+    coods = coods.astype(dtype, copy=False)
+    hsml = hsml.astype(dtype, copy=False)
+    g_masses = g_masses.astype(dtype, copy=False)
+    g_metals = g_metals.astype(dtype, copy=False)
+    g_coods = g_coods.astype(dtype, copy=False)
+    g_hsml = g_hsml.astype(dtype, copy=False)
 
     return _load_CAMELS(
         lens=lens,
@@ -331,6 +323,7 @@ def load_CAMELS_Astrid(
     physical=True,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
+    dtype=np.float32,
     **kwargs,
 ):
     """Load CAMELS-Astrid galaxies.
@@ -353,6 +346,10 @@ def load_CAMELS_Astrid(
             Create a lookup table for ages
         age_lookup_delta_a (float):
             Scale factor resolution of the age lookup
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float32 to reduce memory and avoid
+            mixed-precision issues in downstream kernels.
         **kwargs (dict):
             Additional keyword arguments to pass to the
             `_load_CAMELS` function.
@@ -424,6 +421,20 @@ def load_CAMELS_Astrid(
         g_hsml *= scale_factor
         pos *= scale_factor
 
+    # Cast all particle arrays to a common (user-controlled) dtype to avoid
+    # mixed-precision errors in downstream kernels.
+    masses = masses.astype(dtype, copy=False)
+    imasses = imasses.astype(dtype, copy=False)
+    ages = ages.astype(dtype, copy=False)
+    metallicity = metallicity.astype(dtype, copy=False)
+    s_oxygen = s_oxygen.astype(dtype, copy=False)
+    s_hydrogen = s_hydrogen.astype(dtype, copy=False)
+    coods = coods.astype(dtype, copy=False)
+    g_masses = g_masses.astype(dtype, copy=False)
+    g_metals = g_metals.astype(dtype, copy=False)
+    g_coods = g_coods.astype(dtype, copy=False)
+    g_hsml = g_hsml.astype(dtype, copy=False)
+
     return _load_CAMELS(
         redshift=redshift,
         lens=lens,
@@ -453,6 +464,7 @@ def load_CAMELS_Simba(
     physical=True,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
+    dtype=np.float32,
     **kwargs,
 ):
     """Load CAMELS-SIMBA galaxies.
@@ -475,6 +487,10 @@ def load_CAMELS_Simba(
             Create a lookup table for ages
         age_lookup_delta_a (float):
             Scale factor resolution of the age lookup
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float32 to reduce memory and avoid
+            mixed-precision issues in downstream kernels.
         **kwargs (dict):
             Additional keyword arguments to pass to the
             `_load_CAMELS` function.
@@ -546,6 +562,20 @@ def load_CAMELS_Simba(
         g_hsml *= scale_factor
         pos *= scale_factor
 
+    # Cast all particle arrays to a common (user-controlled) dtype to avoid
+    # mixed-precision errors in downstream kernels.
+    masses = masses.astype(dtype, copy=False)
+    imasses = imasses.astype(dtype, copy=False)
+    ages = ages.astype(dtype, copy=False)
+    metallicity = metallicity.astype(dtype, copy=False)
+    s_oxygen = s_oxygen.astype(dtype, copy=False)
+    s_hydrogen = s_hydrogen.astype(dtype, copy=False)
+    coods = coods.astype(dtype, copy=False)
+    g_masses = g_masses.astype(dtype, copy=False)
+    g_metals = g_metals.astype(dtype, copy=False)
+    g_coods = g_coods.astype(dtype, copy=False)
+    g_hsml = g_hsml.astype(dtype, copy=False)
+
     return _load_CAMELS(
         redshift=redshift,
         lens=lens,
@@ -577,6 +607,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
     num_threads=-1,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
+    dtype=np.float32,
     **kwargs,
 ):
     """Load CAMELS-Swift-EAGLE galaxies.
@@ -606,6 +637,10 @@ def load_CAMELS_SwiftEAGLE_subfind(
             Create a lookup table for ages
         age_lookup_delta_a (int):
             Scale factor resolution of the age lookup
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float32 to reduce memory and avoid
+            mixed-precision issues in downstream kernels.
         **kwargs (dict):
             Additional keyword arguments to pass to the
             `_load_CAMELS` function.
@@ -703,6 +738,20 @@ def load_CAMELS_SwiftEAGLE_subfind(
 
     # Calculate ages at snapshot redshift
     ages = (universe_age - _ages).to("yr").value
+
+    # Cast all particle arrays to a common (user-controlled) dtype to avoid
+    # mixed-precision errors in downstream kernels.
+    masses = masses.astype(dtype, copy=False)
+    imasses = imasses.astype(dtype, copy=False)
+    ages = ages.astype(dtype, copy=False)
+    metallicity = metallicity.astype(dtype, copy=False)
+    _metals = _metals.astype(dtype, copy=False)
+    coods = coods.astype(dtype, copy=False)
+    hsml = hsml.astype(dtype, copy=False)
+    g_masses = g_masses.astype(dtype, copy=False)
+    g_metals = g_metals.astype(dtype, copy=False)
+    g_coods = g_coods.astype(dtype, copy=False)
+    g_hsml = g_hsml.astype(dtype, copy=False)
 
     def swifteagle_particle_assignment(
         idx,
