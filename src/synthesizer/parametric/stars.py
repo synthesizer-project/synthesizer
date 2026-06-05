@@ -212,19 +212,19 @@ class Stars(StarsComponent):
         if issubclass(type(sf_hist), SFHCommon):
             self.sf_hist_func = sf_hist  # a SFH function
             self.sf_hist = None
-            instant_sf = None
+            self.instant_sf = None
         elif isinstance(sf_hist, (unyt_quantity, float)):
-            instant_sf = sf_hist  # an instantaneous SFH
+            self.instant_sf = sf_hist  # an instantaneous SFH
             self.sf_hist_func = None
             self.sf_hist = None
         elif isinstance(sf_hist, (unyt_array, np.ndarray)):
             self.sf_hist = sf_hist  # a numpy array
             self.sf_hist_func = None
-            instant_sf = None
+            self.instant_sf = None
         elif sf_hist is None:
             self.sf_hist = None  # we must have been passed a SFZH
             self.sf_hist_func = None
-            instant_sf = None
+            self.instant_sf = None
         else:
             raise exceptions.InconsistentArguments(
                 f"Unrecognised sf_hist type ({type(sf_hist)}! This should be"
@@ -236,19 +236,19 @@ class Stars(StarsComponent):
         if issubclass(type(metal_dist), ZDistCommon):
             self.metal_dist_func = metal_dist  # a ZDist function
             self.metal_dist = None
-            instant_metallicity = None
+            self.instant_metallicity = None
         elif isinstance(metal_dist, (unyt_quantity, float, np.floating)):
-            instant_metallicity = metal_dist  # an instantaneous SFH
+            self.instant_metallicity = metal_dist  # an instantaneous SFH
             self.metal_dist_func = None
             self.metal_dist = None
         elif isinstance(metal_dist, (unyt_array, np.ndarray)):
             self.metal_dist = metal_dist  # a numpy array
             self.metal_dist_func = None
-            instant_metallicity = None
+            self.instant_metallicity = None
         elif metal_dist is None:
             self.metal_dist = None  # we must have been passed a SFZH
             self.metal_dist_func = None
-            instant_metallicity = None
+            self.instant_metallicity = None
         else:
             raise exceptions.InconsistentArguments(
                 f"Unrecognised metal_dist type ({type(metal_dist)}! This "
@@ -316,7 +316,7 @@ class Stars(StarsComponent):
             self.sfzh = np.zeros((len(log10ages), len(metallicities)))
 
             # Compute the SFZH grid
-            self._get_sfzh(instant_sf, instant_metallicity)
+            self._make_sfzh()
 
         if np.any(~np.isfinite(self.sfzh)):
             raise exceptions.InconsistentArguments(
@@ -351,11 +351,177 @@ class Stars(StarsComponent):
             # Irregular
             self.metallicity_grid_type = None
 
-    @accepts(
-        instant_sf=yr,
-    )
-    @timed("ParametricStars._get_sfzh")
-    def _get_sfzh(self, instant_sf, instant_metallicity):
+    # @accepts(age_offset=yr.in_base("galactic"))
+    @timed("ParametricStars._create_sfzh")
+    def _create_sfzh(self, age_offset=0 * yr):
+        """Compute the SFZH for all possible combinations of input.
+
+        If functions are passed for sf_hist_func and metal_dist_func then
+        the SFH and ZH arrays are computed first.
+
+        Args:
+            age_offset (unyt_quantity):
+                The offset to apply to the age grid when calculating the SFZH
+
+        """
+        # Hide imports to avoid cyclic imports
+        from synthesizer.particle import Stars as ParticleStars
+
+        # If no units assume unit system
+        if self.instant_sf is not None and not isinstance(
+            self.instant_sf, unyt_quantity
+        ):
+            self.instant_sf *= self.ages.units
+
+        # If arrays are passed for the SFH and ZH we can just use those
+        if self.sf_hist is not None and self.metal_dist is not None:
+            sf_hist = self.sf_hist
+            metal_dist = self.metal_dist
+        else:
+            sf_hist = None
+            metal_dist = None
+
+        # A delta function for metallicity is a special case
+        # equivalent to instant_metallicity = metal_dist_func.metallicity
+        if self.metal_dist_func is not None:
+            if self.metal_dist_func.name == "DeltaConstant":
+                self.instant_metallicity = (
+                    self.metal_dist_func.get_metallicity()
+                )
+
+        # If both are instantaneous then we can do the whole SFZH in one go
+        if (
+            self.instant_sf is not None
+            and self.instant_metallicity is not None
+        ):
+            inst_stars = ParticleStars(
+                # We can just use a single star with mass 1 Msun here, the
+                # normalisation will be applied later based on the initial
+                # mass or surviving mass if provided, or the total mass of
+                # the SFZH grid otherwise
+                initial_masses=np.array([1.0]) * Msun,
+                ages=np.array(
+                    [
+                        self.instant_sf.to("yr").value
+                        + age_offset.to("yr").value
+                    ]
+                )
+                * yr,
+                metallicities=np.array([self.instant_metallicity]),
+            )
+
+            # Compute the SFZH grid in one go, this will be a delta function
+            # in both age and metallicity so will just populate a single bin
+            # but this is the most straightforward way to do it
+            sfzh = inst_stars.get_sfzh(
+                self.log10ages,
+                self.metallicities,
+                grid_assignment_method="cic",
+            ).sfzh
+
+            # Project the SFZH to get the 1D SFH and ZH, this is a bit
+            # redundant but it means we can use the same code for all
+            # the different cases downstream
+            sf_hist = np.sum(sfzh, axis=1)
+            metal_dist = np.sum(sfzh, axis=0)
+
+            # Since we are not normalising the things here we can just
+            # return the SFZH, SFH and ZH at this point and skip the
+            # rest of the code which is really just for normalisation and
+            # checking consistency of the SFH and ZH arrays with the SFZH grid.
+            return sfzh, sf_hist, metal_dist
+
+        # Handle the instantaneous SFH case
+        elif self.instant_sf is not None and self.instant_metallicity is None:
+            inst_stars = ParticleStars(
+                # We can just use a single star with mass 1 Msun here, the
+                # normalisation will be applied later based on the initial
+                # mass or surviving mass if provided, or the total mass of
+                # the SFZH grid otherwise
+                initial_masses=np.array([1.0]) * Msun,
+                ages=np.array(
+                    [
+                        self.instant_sf.to("yr").value
+                        + age_offset.to("yr").value
+                    ]
+                )
+                * yr,
+                metallicities=np.array([0]),  # this is a dummy value
+            )
+
+            # Create SFH array
+            sf_hist = inst_stars.get_sfh(self.log10ages)
+
+        # Handle the instantaneous ZH case
+        elif self.instant_metallicity is not None and self.instant_sf is None:
+            inst_stars = ParticleStars(
+                # We can just use a single star with mass 1 Msun here, the
+                # normalisation will be applied later based on the initial
+                # mass or surviving mass if provided, or the total mass of
+                # the SFZH grid otherwise
+                initial_masses=np.array([1.0]) * Msun,
+                ages=np.array([age_offset.to("yr").value])
+                * yr,  # this is a dummy value
+                metallicities=np.array([self.instant_metallicity]),
+            )
+
+            # Create metal distribution array
+            metal_dist = inst_stars.get_metal_dist(self.metallicities)
+
+        # Calculate SFH from function if necessary
+        if self.sf_hist_func is not None and sf_hist is None:
+            # Set up SFH array
+            sf_hist = np.zeros(self.ages.size)
+
+            # Loop over age bins calculating the amount of mass in each bin
+            min_age = 0
+            for ia, age in enumerate(self.ages[:-1]):
+                max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
+                sf = integrate.quad(
+                    self.sf_hist_func.get_sfr,
+                    min_age + age_offset.to("yr").value,
+                    max_age + age_offset.to("yr").value,
+                )[0]
+                sf_hist[ia] = sf
+                min_age = max_age
+
+        # Calculate ZH from function if necessary
+        if self.metal_dist_func is not None and metal_dist is None:
+            # Set up ZH array
+            metal_dist = np.zeros(self.metallicities.size)
+            # Loop over metallicity bins calculating the amount of mass in
+            # each bin
+            min_metal = 0
+            for imetal, metal in enumerate(self.metallicities[:-1]):
+                max_metal = np.mean(
+                    [
+                        self.metallicities[imetal + 1],
+                        self.metallicities[imetal],
+                    ]
+                )
+                sf = integrate.quad(
+                    self.metal_dist_func.get_dist_weight, min_metal, max_metal
+                )[0]
+                metal_dist[imetal] = sf
+                min_metal = max_metal
+
+        # Ensure that by this point we have an array for SFH and ZH
+        if sf_hist is None or metal_dist is None:
+            raise exceptions.InconsistentArguments(
+                "A method for defining both the SFH and ZH must be provided!\n"
+                "For each either an instantaneous"
+                " value, a SFH/ZH object, or an array must be passed"
+            )
+
+        # Finally, calculate the SFZH grid based on the above calculations
+        sfzh = sf_hist[:, np.newaxis] * metal_dist
+
+        return sfzh, sf_hist, metal_dist
+
+    @timed("ParametricStars._make_sfzh")
+    def _make_sfzh(
+        self,
+    ):
         """Compute the SFZH for all possible combinations of input.
 
         If functions are passed for sf_hist_func and metal_dist_func then
@@ -371,165 +537,60 @@ class Stars(StarsComponent):
                 stellar populating a single ZH bin. Note, this must be the
                 metallicity itself, not the log10(metallicity).
         """
-        # Hide imports to avoid cyclic imports
-        from synthesizer.particle import Stars as ParticleStars
-
-        # If no units assume unit system
-        if instant_sf is not None and not isinstance(
-            instant_sf, unyt_quantity
-        ):
-            instant_sf *= self.ages.units
-
-        # A delta function for metallicity is a special case
-        # equivalent to instant_metallicity = metal_dist_func.metallicity
-        if self.metal_dist_func is not None:
-            if self.metal_dist_func.name == "DeltaConstant":
-                instant_metallicity = self.metal_dist_func.get_metallicity()
-
-        # If both are instantaneous then we can do the whole SFZH in one go
-        if instant_sf is not None and instant_metallicity is not None:
-            inst_stars = ParticleStars(
-                # We can just use a single star with mass 1 Msun here, the
-                # normalisation will be applied later based on the initial
-                # mass or surviving mass if provided, or the total mass of
-                # the SFZH grid otherwise
-                initial_masses=np.array([1.0]) * Msun,
-                ages=np.array([instant_sf.to("yr").value]) * yr,
-                metallicities=np.array([instant_metallicity]),
-            )
-
-            # Compute the SFZH grid in one go, this will be a delta function
-            # in both age and metallicity so will just populate a single bin
-            # but this is the most straightforward way to do it
-            self.sfzh = inst_stars.get_sfzh(
-                self.log10ages,
-                self.metallicities,
-                grid_assignment_method="cic",
-            ).sfzh
-
-            # Project the SFZH to get the 1D SFH and ZH, this is a bit
-            # redundant but it means we can use the same code for all
-            # the different cases downstream
-            self.sf_hist = np.sum(self.sfzh, axis=1)
-            self.metal_dist = np.sum(self.sfzh, axis=0)
-
-            # Note, we could exit here, however we may still want to apply
-            # a normalisation based on the initial mass or surviving mass, so
-            # we need to continue with the rest of the code to do that if
-            # necessary
-
-        # Handle the instantaneous SFH case
-        elif instant_sf is not None and instant_metallicity is None:
-            inst_stars = ParticleStars(
-                # We can just use a single star with mass 1 Msun here, the
-                # normalisation will be applied later based on the initial
-                # mass or surviving mass if provided, or the total mass of
-                # the SFZH grid otherwise
-                initial_masses=np.array([1.0]) * Msun,
-                ages=np.array([instant_sf.to("yr").value]) * yr,
-                metallicities=np.array([0]),  # this is a dummy value
-            )
-
-            # Create SFH array
-            self.sf_hist = inst_stars.get_sfh(self.log10ages)
-
-        # Handle the instantaneous ZH case
-        elif instant_metallicity is not None and instant_sf is None:
-            inst_stars = ParticleStars(
-                # We can just use a single star with mass 1 Msun here, the
-                # normalisation will be applied later based on the initial
-                # mass or surviving mass if provided, or the total mass of
-                # the SFZH grid otherwise
-                initial_masses=np.array([1.0]) * Msun,
-                ages=np.array([0]) * yr,  # this is a dummy value
-                metallicities=np.array([instant_metallicity]),
-            )
-
-            # Create metal distribution array
-            self.metal_dist = inst_stars.get_metal_dist(self.metallicities)
-
-        # Calculate SFH from function if necessary
-        if self.sf_hist_func is not None and self.sf_hist is None:
-            # Set up SFH array
-            self.sf_hist = np.zeros(self.ages.size)
-
-            # Loop over age bins calculating the amount of mass in each bin
-            min_age = 0
-            for ia, age in enumerate(self.ages[:-1]):
-                max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
-                sf = integrate.quad(
-                    self.sf_hist_func.get_sfr,
-                    min_age,
-                    max_age,
-                )[0]
-                self.sf_hist[ia] = sf
-                min_age = max_age
-
-        # Calculate ZH from function if necessary
-        if self.metal_dist_func is not None and self.metal_dist is None:
-            # Set up ZH array
-            self.metal_dist = np.zeros(self.metallicities.size)
-
-            # Loop over metallicity bins calculating the amount of mass in
-            # each bin
-            min_metal = 0
-            for imetal, metal in enumerate(self.metallicities[:-1]):
-                max_metal = np.mean(
-                    [
-                        self.metallicities[imetal + 1],
-                        self.metallicities[imetal],
-                    ]
-                )
-                sf = integrate.quad(
-                    self.metal_dist_func.get_dist_weight, min_metal, max_metal
-                )[0]
-                self.metal_dist[imetal] = sf
-                min_metal = max_metal
-
-        # Ensure that by this point we have an array for SFH and ZH
-        if self.sf_hist is None or self.metal_dist is None:
-            raise exceptions.InconsistentArguments(
-                "A method for defining both the SFH and ZH must be provided!\n"
-                "For each either an instantaneous"
-                " value, a SFH/ZH object, or an array must be passed"
-            )
-
-        # Finally, calculate the SFZH grid based on the above calculations
-        self.sfzh = self.sf_hist[:, np.newaxis] * self.metal_dist
+        # Compute the SFZH grid based on the input parameters and store it as
+        # an attribute, this also returns the SFH and ZH arrays which we store
+        # as attributes for convenience
+        sfzh, sf_hist, metal_dist = self._create_sfzh()
 
         # Normalise the SFZH grid if needs be
         if self.surviving_mass is not None:
             self.sfzh_normalisation = (
                 self._surviving_mass / self.stellar_fraction
-            ) / np.sum(self.sfzh)
-            self.sfzh *= self.sfzh_normalisation
+            ) / np.sum(sfzh)
+            self.sfzh = sfzh * self.sfzh_normalisation
 
             # now calculate the initial mass
             self.initial_mass = np.sum(self.sfzh) * Msun
 
-            # now apply the normalisation to the SFH and ZH arrays for
-            # consistency
-            self.sf_hist /= np.sum(self.sf_hist)
-            self.sf_hist *= self.initial_mass
-            self.metal_dist /= np.sum(self.metal_dist)
-            self.metal_dist *= self.initial_mass
-
         elif self.initial_mass is not None:
-            self.sfzh_normalisation = self._initial_mass / np.sum(self.sfzh)
-            self.sfzh *= self.sfzh_normalisation
-
-            # now apply the normalisation to the SFH and ZH arrays for
-            # consistency
-            self.sf_hist *= self.sfzh_normalisation
-            self.metal_dist *= self.sfzh_normalisation
+            self.sfzh_normalisation = self._initial_mass / np.sum(sfzh)
+            self.sfzh = sfzh * self.sfzh_normalisation
 
         else:
-            # Otherwise calculate the total initial mass
-            self.initial_mass = np.sum(self.sfzh) * Msun
+            # Otherwise calculate the total initial mass by just summing the
+            # SFZH grid
+            self.sfzh = sfzh
+            self.initial_mass = np.sum(sfzh) * Msun
 
         # Ensure sf_hist and metal_dist reflect the rescaled sfzh
         self.sf_hist = np.sum(self.sfzh, axis=1)
         self.metal_dist = np.sum(self.sfzh, axis=0)
+
+    # @accepts(age_offset=yr.in_base("galactic"))
+    def get_stars_at_earier_time(self, age_offset):
+        """Get a new Stars object representing the population at age_offset.
+
+        This is done by applying a lookback time to the age grid and then
+        remapping the SFZH onto the new grid using a particle Stars object to
+        perform the remapping.
+
+        Args:
+            age_offset (unyt_quantity):
+                The offset to apply to the age grid.
+
+        Returns:
+            Stars: New Stars object on the requested grid.
+        """
+        # Calculate the initial mass at the earlier time
+        initial_mass_at_age = self.calculate_initial_mass_at_age(
+            self, age_offset
+        )
+
+        # Calculate the new SFZH grid at the earlier time
+        sfzh, _, _ = self._create_sfzh(age_offset)
+
+        # Create a new Stars object with the new SFZH grid and initial mass
+        return Stars(sfzh=sfzh, initial_mass=initial_mass_at_age)
 
     @timed("Stars.get_mask")
     def get_mask(
