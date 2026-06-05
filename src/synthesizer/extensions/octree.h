@@ -66,4 +66,4 @@ void construct_cell_tree(const double *pos, const double *sml,
 void cleanup_cell_tree(struct cell *c);
 double min_projected_dist2(struct cell *c, double x, double y);
 
-#endif // OCTREE_H_
+#endif  // OCTREE_H_

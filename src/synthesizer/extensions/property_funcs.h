@@ -11,8 +11,9 @@
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "numpy_init.h"
 #include <Python.h>
+
+#include "numpy_init.h"
 
 /**
  * @brief Get a double value at a specific index in a numpy array.
@@ -32,8 +33,7 @@ static inline double get_double_at(PyArrayObject *np_arr, npy_intp ind,
 
   if (PyArray_TYPE(np_arr) != NPY_FLOAT64) {
     PyErr_Format(PyExc_TypeError,
-                 "[get_double_at]: Array '%s' must be of type float64.",
-                 name);
+                 "[get_double_at]: Array '%s' must be of type float64.", name);
     return 0.0;
   }
 
@@ -149,4 +149,4 @@ npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name);
 const npy_int64 *extract_index_array(PyArrayObject *np_arr, const char *name);
 double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
 
-#endif // PROPERTY_FUNCS_H_
+#endif  // PROPERTY_FUNCS_H_

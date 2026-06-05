@@ -71,10 +71,9 @@ static void scale_spectra_2d_no_mask_serial(const double *__restrict__ spectra,
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-static void scale_spectra_2d_row_mask_serial(const double *__restrict__ spectra,
-                                             const double *__restrict__ scaling,
-                                             const npy_bool *mask, double *out,
-                                             int nspec, int nlam) {
+static void scale_spectra_2d_row_mask_serial(
+    const double *__restrict__ spectra, const double *__restrict__ scaling,
+    const npy_bool *mask, double *out, int nspec, int nlam) {
 
   /* Loop over every spectrum in the grid. */
   for (int ispec = 0; ispec < nspec; ispec++) {
@@ -110,10 +109,9 @@ static void scale_spectra_2d_row_mask_serial(const double *__restrict__ spectra,
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-static void scale_spectra_2d_lam_mask_serial(const double *__restrict__ spectra,
-                                             const double *__restrict__ scaling,
-                                             const npy_bool *lam_mask,
-                                             double *out, int nspec, int nlam) {
+static void scale_spectra_2d_lam_mask_serial(
+    const double *__restrict__ spectra, const double *__restrict__ scaling,
+    const npy_bool *lam_mask, double *out, int nspec, int nlam) {
   /* Loop over every spectrum in the grid. */
   for (int ispec = 0; ispec < nspec; ispec++) {
 
@@ -263,8 +261,9 @@ static void scale_spectra_2d_row_mask_omp(const double *__restrict__ spectra,
  */
 static void scale_spectra_2d_lam_mask_omp(const double *__restrict__ spectra,
                                           const double *__restrict__ scaling,
-                                          const npy_bool *lam_mask, double *out,
-                                          int nspec, int nlam, int nthreads) {
+                                          const npy_bool *lam_mask,
+                                          double *out, int nspec, int nlam,
+                                          int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
@@ -481,8 +480,8 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
   const int nspec = static_cast<int>(spectra_dims[0]);
   const int nlam = static_cast<int>(spectra_dims[1]);
 
-  /* The scaling length must match the spectra first dimension so we can apply a
-   * per-spectrum scale factor. */
+  /* The scaling length must match the spectra first dimension so we can apply
+   * a per-spectrum scale factor. */
   if (PyArray_DIMS(np_scaling)[0] != spectra_dims[0]) {
     PyErr_SetString(PyExc_ValueError,
                     "scaling length must match the spectra first dimension.");
@@ -493,8 +492,8 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* The optional masks must be 1D and match the corresponding spectra dimension
-   * so the kernel can apply them correctly. */
+  /* The optional masks must be 1D and match the corresponding spectra
+   * dimension so the kernel can apply them correctly. */
   if (np_mask != NULL && (PyArray_NDIM(np_mask) != 1 ||
                           PyArray_DIMS(np_mask)[0] != spectra_dims[0])) {
     PyErr_SetString(PyExc_ValueError,
@@ -565,8 +564,10 @@ PyObject *scale_spectra_2d(PyObject *self, PyObject *args) {
   }
 
   /* Extract the raw C pointers for the kernel. */
-  const double *spectra = static_cast<const double *>(PyArray_DATA(np_spectra));
-  const double *scaling = static_cast<const double *>(PyArray_DATA(np_scaling));
+  const double *spectra =
+      static_cast<const double *>(PyArray_DATA(np_spectra));
+  const double *scaling =
+      static_cast<const double *>(PyArray_DATA(np_scaling));
   double *out = static_cast<double *>(PyArray_DATA(np_out));
   const npy_bool *mask =
       np_mask == NULL ? NULL
@@ -824,8 +825,8 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
   PyObject *out_obj = Py_None;
   int nthreads;
 
-  if (!PyArg_ParseTuple(args, "OOOOi|O", &spectra_obj, &tau_v_obj, &tau_x_v_obj,
-                        &mask_obj, &nthreads, &out_obj)) {
+  if (!PyArg_ParseTuple(args, "OOOOi|O", &spectra_obj, &tau_v_obj,
+                        &tau_x_v_obj, &mask_obj, &nthreads, &out_obj)) {
     return NULL;
   }
 
@@ -943,10 +944,13 @@ PyObject *apply_separable_attenuation_2d(PyObject *self, PyObject *args) {
     }
   }
 
-  /* Turn the validated NumPy views into the raw pointers the kernels expect. */
-  const double *spectra = static_cast<const double *>(PyArray_DATA(np_spectra));
+  /* Turn the validated NumPy views into the raw pointers the kernels expect.
+   */
+  const double *spectra =
+      static_cast<const double *>(PyArray_DATA(np_spectra));
   const double *tau_v = static_cast<const double *>(PyArray_DATA(np_tau_v));
-  const double *tau_x_v = static_cast<const double *>(PyArray_DATA(np_tau_x_v));
+  const double *tau_x_v =
+      static_cast<const double *>(PyArray_DATA(np_tau_x_v));
   double *out = static_cast<double *>(PyArray_DATA(np_out));
   const npy_bool *mask =
       np_mask == NULL ? NULL
@@ -1070,8 +1074,8 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
   } else {
     /* Allocate a fresh output buffer with the same shape and memory layout as
      * the input array. */
-    np_out =
-        (PyArrayObject *)PyArray_NewLikeArray(np_array, NPY_KEEPORDER, NULL, 0);
+    np_out = (PyArrayObject *)PyArray_NewLikeArray(np_array, NPY_KEEPORDER,
+                                                   NULL, 0);
     if (np_out == NULL) {
       Py_DECREF(np_array);
       Py_DECREF(np_vector);
@@ -1093,7 +1097,7 @@ PyObject *multiply_array_by_vector_1d(PyObject *self, PyObject *args) {
   /* For 1D arrays nrows=1 and the outer loop runs once; for 2D each row
    * is scaled independently by the same vector. */
 #ifdef WITH_OPENMP
-#pragma omp parallel for if (nthreads > 1) num_threads(nthreads)               \
+#pragma omp parallel for if (nthreads > 1) num_threads(nthreads) \
     schedule(static)
 #endif
   for (int irow = 0; irow < nrows; irow++) {
@@ -1175,10 +1179,13 @@ static void scale_line_2d_no_mask_serial(const double *__restrict__ lum,
  * @param nspec: The number of spectra rows.
  * @param nlam: The number of wavelength bins.
  */
-static void scale_line_2d_row_mask_serial(
-    const double *__restrict__ lum, const double *__restrict__ cont,
-    const double *scaling_lum, const double *scaling_cont, const npy_bool *mask,
-    double *out_lum, double *out_cont, int nspec, int nlam) {
+static void scale_line_2d_row_mask_serial(const double *__restrict__ lum,
+                                          const double *__restrict__ cont,
+                                          const double *scaling_lum,
+                                          const double *scaling_cont,
+                                          const npy_bool *mask,
+                                          double *out_lum, double *out_cont,
+                                          int nspec, int nlam) {
 
   /* Loop over every spectrum and dispatch based on the mask. */
   for (int i = 0; i < nspec; i++) {
@@ -1269,9 +1276,9 @@ static void scale_line_2d_lam_mask_serial(const double *__restrict__ lum,
  */
 static void scale_line_2d_both_masks_serial(
     const double *__restrict__ lum, const double *__restrict__ cont,
-    const double *scaling_lum, const double *scaling_cont, const npy_bool *mask,
-    const npy_bool *lam_mask, double *out_lum, double *out_cont, int nspec,
-    int nlam) {
+    const double *scaling_lum, const double *scaling_cont,
+    const npy_bool *mask, const npy_bool *lam_mask, double *out_lum,
+    double *out_cont, int nspec, int nlam) {
 
   /* Loop over every spectrum and dispatch based on the row mask. */
   for (int i = 0; i < nspec; i++) {
@@ -1357,10 +1364,13 @@ static void scale_line_2d_no_mask_omp(const double *__restrict__ lum,
  * @param nlam: The number of wavelength bins.
  * @param nthreads: The number of OpenMP threads.
  */
-static void scale_line_2d_row_mask_omp(
-    const double *__restrict__ lum, const double *__restrict__ cont,
-    const double *scaling_lum, const double *scaling_cont, const npy_bool *mask,
-    double *out_lum, double *out_cont, int nspec, int nlam, int nthreads) {
+static void scale_line_2d_row_mask_omp(const double *__restrict__ lum,
+                                       const double *__restrict__ cont,
+                                       const double *scaling_lum,
+                                       const double *scaling_cont,
+                                       const npy_bool *mask, double *out_lum,
+                                       double *out_cont, int nspec, int nlam,
+                                       int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
@@ -1454,9 +1464,9 @@ static void scale_line_2d_lam_mask_omp(const double *__restrict__ lum,
  */
 static void scale_line_2d_both_masks_omp(
     const double *__restrict__ lum, const double *__restrict__ cont,
-    const double *scaling_lum, const double *scaling_cont, const npy_bool *mask,
-    const npy_bool *lam_mask, double *out_lum, double *out_cont, int nspec,
-    int nlam, int nthreads) {
+    const double *scaling_lum, const double *scaling_cont,
+    const npy_bool *mask, const npy_bool *lam_mask, double *out_lum,
+    double *out_cont, int nspec, int nlam, int nthreads) {
 
   /* Split the spectra rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
@@ -1524,8 +1534,8 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
   }
 
   /* Convert inputs to float64 NumPy array views. */
-  PyArrayObject *np_lum = (PyArrayObject *)PyArray_FROM_OTF(lum_obj, NPY_DOUBLE,
-                                                            NPY_ARRAY_IN_ARRAY);
+  PyArrayObject *np_lum = (PyArrayObject *)PyArray_FROM_OTF(
+      lum_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
   PyArrayObject *np_cont = (PyArrayObject *)PyArray_FROM_OTF(
       cont_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
   PyArrayObject *np_scaling_lum = (PyArrayObject *)PyArray_FROM_OTF(
@@ -1576,7 +1586,8 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
 
   /* Validate shapes. */
   if (PyArray_NDIM(np_lum) != 2 || PyArray_NDIM(np_cont) != 2 ||
-      PyArray_NDIM(np_scaling_lum) != 1 || PyArray_NDIM(np_scaling_cont) != 1) {
+      PyArray_NDIM(np_scaling_lum) != 1 ||
+      PyArray_NDIM(np_scaling_cont) != 1) {
     PyErr_SetString(PyExc_ValueError,
                     "lum and cont must be 2D, scalings must be 1D.");
     Py_DECREF(np_lum);
@@ -1588,14 +1599,16 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Cache the common shape information once so the later checks stay simple. */
+  /* Cache the common shape information once so the later checks stay simple.
+   */
   const npy_intp *lum_dims = PyArray_DIMS(np_lum);
   const npy_intp *cont_dims = PyArray_DIMS(np_cont);
   const int nspec = static_cast<int>(lum_dims[0]);
   const int nlam = static_cast<int>(lum_dims[1]);
 
   if (cont_dims[0] != lum_dims[0] || cont_dims[1] != lum_dims[1]) {
-    PyErr_SetString(PyExc_ValueError, "lum and cont must have the same shape.");
+    PyErr_SetString(PyExc_ValueError,
+                    "lum and cont must have the same shape.");
     Py_DECREF(np_lum);
     Py_DECREF(np_cont);
     Py_DECREF(np_scaling_lum);
@@ -1618,8 +1631,8 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  if (np_mask != NULL &&
-      (PyArray_NDIM(np_mask) != 1 || PyArray_DIMS(np_mask)[0] != lum_dims[0])) {
+  if (np_mask != NULL && (PyArray_NDIM(np_mask) != 1 ||
+                          PyArray_DIMS(np_mask)[0] != lum_dims[0])) {
     PyErr_SetString(PyExc_ValueError,
                     "mask must be a 1D bool array matching rows.");
     Py_DECREF(np_lum);
@@ -1741,8 +1754,9 @@ PyObject *scale_line_2d(PyObject *self, PyObject *args) {
       scale_line_2d_row_mask_omp(lum, cont, scaling_lum, scaling_cont, mask,
                                  out_lum, out_cont, nspec, nlam, nthreads);
     } else if (!has_mask && has_lam_mask) {
-      scale_line_2d_lam_mask_omp(lum, cont, scaling_lum, scaling_cont, lam_mask,
-                                 out_lum, out_cont, nspec, nlam, nthreads);
+      scale_line_2d_lam_mask_omp(lum, cont, scaling_lum, scaling_cont,
+                                 lam_mask, out_lum, out_cont, nspec, nlam,
+                                 nthreads);
     } else {
       scale_line_2d_both_masks_omp(lum, cont, scaling_lum, scaling_cont, mask,
                                    lam_mask, out_lum, out_cont, nspec, nlam,
@@ -1831,8 +1845,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_spectra_operations(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

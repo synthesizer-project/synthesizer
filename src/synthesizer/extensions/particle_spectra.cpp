@@ -3,19 +3,21 @@
  * Calculates weights on an arbitrary dimensional grid given the mass.
  *****************************************************************************/
 /* C includes */
-#include <algorithm>
-#include <array>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <algorithm>
+#include <array>
 #include <vector>
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "numpy_init.h"
 #include <Python.h>
+
+#include "numpy_init.h"
 
 /* Local includes */
 #include "cpp_to_python.h"
@@ -1018,23 +1020,24 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOp|O", &np_grid_spectra,
-                        &grid_tuple, &part_tuple, &np_part_mass, &np_ndims,
-                        &ndim, &npart, &nlam, &method, &nthreads, &np_mask,
-                        &np_lam_mask, &has_lam_mask, &prop_names)) {
+  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOp|O", &np_grid_spectra, &grid_tuple,
+                        &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
+                        &nlam, &method, &nthreads, &np_mask, &np_lam_mask,
+                        &has_lam_mask, &prop_names)) {
     return NULL;
   }
 
   /* Extract the grid struct. */
-  GridProps *grid_props = new GridProps(np_grid_spectra, grid_tuple,
-                                        /*np_lam*/ nullptr, np_lam_mask, nlam,
-                                        /*np_grid_weights*/ nullptr,
-                                        prop_names);
+  GridProps *grid_props =
+      new GridProps(np_grid_spectra, grid_tuple,
+                    /*np_lam*/ nullptr, np_lam_mask, nlam,
+                    /*np_grid_weights*/ nullptr, prop_names);
   RETURN_IF_PYERR();
 
   /* Create the object that holds the particle properties. */
-  Particles *part_props = new Particles(np_part_mass, /*np_velocities*/ NULL,
-                                        np_mask, part_tuple, prop_names, npart);
+  Particles *part_props =
+      new Particles(np_part_mass, /*np_velocities*/ NULL, np_mask, part_tuple,
+                    prop_names, npart);
   RETURN_IF_PYERR();
 
   tic("compute_particle_seds.setup_output_arrays");
@@ -1094,8 +1097,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_particle_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

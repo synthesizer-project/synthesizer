@@ -46,6 +46,11 @@ jobs:
         with:
           version: 0.15.15
           args: "format --check --diff"
+      - name: Check C++ formatting with clang-format
+        run: |
+          pip install "clang-format==22.1.4"
+          ./format_extensions.sh --check
+        shell: bash
       - name: Download test data
         run: |
           # Download the data we need

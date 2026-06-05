@@ -1,5 +1,6 @@
 /******************************************************************************
- * A C module containing a simple function to check if ATOMIC_TIMING is enabled.
+ * A C module containing a simple function to check if ATOMIC_TIMING is
+ * enabled.
  *****************************************************************************/
 #include <Python.h>
 
