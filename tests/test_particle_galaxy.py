@@ -222,7 +222,7 @@ def test_particle_galaxy_combines_additive_child_outputs():
             )
         }
         child.images_lnu["inst"] = _make_image_collection(scale)
-        child.data_cubes_lnu = {"cube": _make_cube(scale)}
+        child.data_cubes_lnu = {"inst": {"cube": _make_cube(scale)}}
 
         if child.stars is not None:
             stellar_scale += scale
@@ -262,7 +262,9 @@ def test_particle_galaxy_combines_additive_child_outputs():
         np.array([2 * total_scale, 3 * total_scale]),
     )
     assert np.sum(galaxy.images_lnu["inst"]["filter_a"].arr) == 4 * total_scale
-    assert np.sum(galaxy.data_cubes_lnu["cube"].arr) == 8 * total_scale
+    assert np.sum(galaxy.data_cubes_lnu["inst"]["cube"].arr) == (
+        8 * total_scale
+    )
 
     np.testing.assert_allclose(
         galaxy.stars.spectra["stellar"].lnu.value,
