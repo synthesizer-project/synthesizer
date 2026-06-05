@@ -107,8 +107,10 @@ class Stars(StarsComponent):
     initial_mass = Quantity("mass")
     surviving_mass = Quantity("mass")
 
-    @accepts(initial_mass=Msun.in_base("galactic"))
-    @accepts(surviving_mass=Msun.in_base("galactic"))
+    @accepts(
+        surviving_mass=Msun.in_base("galactic"),
+        initial_mass=Msun.in_base("galactic"),
+    )
     @timed("ParametricStars.__init__")
     def __init__(
         self,
