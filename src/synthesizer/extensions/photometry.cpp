@@ -13,15 +13,16 @@
  * Serial and parallel (OpenMP) versions are provided for each method. The
  * parallel versions use OpenMP parallel-for over (entry, filter) pairs to
  * maximize available parallelism and improve load balancing, especially for
- * small numbers of entries. Each work item is independent so no synchronization
- * is required.
+ * small numbers of entries. Each work item is independent so no
+ * synchronization is required.
  *****************************************************************************/
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "numpy_init.h"
 #include <Python.h>
+
+#include "numpy_init.h"
 
 /* C/C++ includes */
 #include <cstring>
@@ -78,10 +79,12 @@ struct FilterWork {
  *
  * @return A vector of FilterWork descriptors for active filters only.
  */
-static std::vector<FilterWork>
-build_filter_work(const double *weight_matrix, const double *denominators,
-                  const npy_int64 *starts, const npy_int64 *ends,
-                  npy_intp wavelength_count, npy_intp nfilters) {
+static std::vector<FilterWork> build_filter_work(const double *weight_matrix,
+                                                 const double *denominators,
+                                                 const npy_int64 *starts,
+                                                 const npy_int64 *ends,
+                                                 npy_intp wavelength_count,
+                                                 npy_intp nfilters) {
 
   /* Pre-allocate space for up to nfilters entries. */
   std::vector<FilterWork> work;
@@ -125,7 +128,8 @@ build_filter_work(const double *weight_matrix, const double *denominators,
  * Results are written directly in filter-major layout.
  *
  * @param x_values:         1D wavelength/frequency grid.
- * @param spectra_values:   Flattened spectra, shape (nentries, wavelength_count).
+ * @param spectra_values:   Flattened spectra, shape (nentries,
+ * wavelength_count).
  * @param filter_work:      Vector of active filter descriptors.
  * @param wavelength_count: Number of wavelength/frequency samples.
  * @param nentries:         Number of spectra (entries).
@@ -160,10 +164,9 @@ static double *compute_photometry_trapz_serial(
       double numerator = 0.0;
       for (npy_int64 wavelength = work.start; wavelength < work.end - 1;
            ++wavelength) {
-        numerator +=
-            0.5 * (x_values[wavelength + 1] - x_values[wavelength]) *
-            (spectrum[wavelength + 1] * work.weights[wavelength + 1] +
-             spectrum[wavelength] * work.weights[wavelength]);
+        numerator += 0.5 * (x_values[wavelength + 1] - x_values[wavelength]) *
+                     (spectrum[wavelength + 1] * work.weights[wavelength + 1] +
+                      spectrum[wavelength] * work.weights[wavelength]);
       }
 
       /* Divide by the precomputed denominator and store directly in
@@ -188,7 +191,8 @@ static double *compute_photometry_trapz_serial(
  * Results are written directly in filter-major layout.
  *
  * @param x_values:         1D wavelength/frequency grid.
- * @param spectra_values:   Flattened spectra, shape (nentries, wavelength_count).
+ * @param spectra_values:   Flattened spectra, shape (nentries,
+ * wavelength_count).
  * @param filter_work:      Vector of active filter descriptors.
  * @param wavelength_count: Number of wavelength/frequency samples.
  * @param nentries:         Number of spectra (entries).
@@ -232,12 +236,11 @@ static double *compute_photometry_simps_serial(
       double numerator = 0.0;
       for (npy_int64 pair_index = 0; pair_index < npairs; ++pair_index) {
         const npy_int64 k = work.start + 2 * pair_index;
-        numerator +=
-            (x_values[k + 2] - x_values[k]) *
-            (spectrum[k] * work.weights[k] +
-             4.0 * spectrum[k + 1] * work.weights[k + 1] +
-             spectrum[k + 2] * work.weights[k + 2]) /
-            6.0;
+        numerator += (x_values[k + 2] - x_values[k]) *
+                     (spectrum[k] * work.weights[k] +
+                      4.0 * spectrum[k + 1] * work.weights[k + 1] +
+                      spectrum[k + 2] * work.weights[k + 2]) /
+                     6.0;
       }
 
       /* If there is a leftover interval, add a trapezoidal step. */
@@ -269,7 +272,8 @@ static double *compute_photometry_simps_serial(
  * still exploit thread-level parallelism across filters.
  *
  * @param x_values:         1D wavelength/frequency grid.
- * @param spectra_values:   Flattened spectra, shape (nentries, wavelength_count).
+ * @param spectra_values:   Flattened spectra, shape (nentries,
+ * wavelength_count).
  * @param filter_work:      Vector of active filter descriptors.
  * @param wavelength_count: Number of wavelength/frequency samples.
  * @param nentries:         Number of spectra (entries).
@@ -317,10 +321,9 @@ static double *compute_photometry_trapz_parallel(
     double numerator = 0.0;
     for (npy_int64 wavelength = work.start; wavelength < work.end - 1;
          ++wavelength) {
-      numerator +=
-          0.5 * (x_values[wavelength + 1] - x_values[wavelength]) *
-          (spectrum[wavelength + 1] * work.weights[wavelength + 1] +
-           spectrum[wavelength] * work.weights[wavelength]);
+      numerator += 0.5 * (x_values[wavelength + 1] - x_values[wavelength]) *
+                   (spectrum[wavelength + 1] * work.weights[wavelength + 1] +
+                    spectrum[wavelength] * work.weights[wavelength]);
     }
 
     /* Write directly to the output. Each work_idx maps to a unique
@@ -341,7 +344,8 @@ static double *compute_photometry_trapz_parallel(
  * each work item writes to a unique output location.
  *
  * @param x_values:         1D wavelength/frequency grid.
- * @param spectra_values:   Flattened spectra, shape (nentries, wavelength_count).
+ * @param spectra_values:   Flattened spectra, shape (nentries,
+ * wavelength_count).
  * @param filter_work:      Vector of active filter descriptors.
  * @param wavelength_count: Number of wavelength/frequency samples.
  * @param nentries:         Number of spectra (entries).
@@ -396,21 +400,20 @@ static double *compute_photometry_simps_parallel(
     double numerator = 0.0;
     for (npy_int64 pair_index = 0; pair_index < npairs; ++pair_index) {
       const npy_int64 k = work.start + 2 * pair_index;
-      numerator +=
-          (x_values[k + 2] - x_values[k]) *
-          (spectrum[k] * work.weights[k] +
-           4.0 * spectrum[k + 1] * work.weights[k + 1] +
-           spectrum[k + 2] * work.weights[k + 2]) /
-          6.0;
+      numerator += (x_values[k + 2] - x_values[k]) *
+                   (spectrum[k] * work.weights[k] +
+                    4.0 * spectrum[k + 1] * work.weights[k + 1] +
+                    spectrum[k + 2] * work.weights[k + 2]) /
+                   6.0;
     }
 
     /* If there is a leftover interval, add a trapezoidal step. */
     if (has_tail) {
       const npy_int64 k0 = work.end - 2;
       const npy_int64 k1 = work.end - 1;
-      numerator += 0.5 * (x_values[k1] - x_values[k0]) *
-                   (spectrum[k1] * work.weights[k1] +
-                    spectrum[k0] * work.weights[k0]);
+      numerator +=
+          0.5 * (x_values[k1] - x_values[k0]) *
+          (spectrum[k1] * work.weights[k1] + spectrum[k0] * work.weights[k0]);
     }
 
     /* Write directly to the output. Each work_idx maps to a unique
@@ -435,7 +438,8 @@ static double *compute_photometry_simps_parallel(
  *   - xs      (ndarray):  1D wavelength/frequency grid, shape (nlam,).
  *   - ys      (ndarray):  ND spectra array; wavelength on the last axis.
  *   - ws      (ndarray):  2D filter weight matrix, shape (nfilters, nlam).
- *   - dens    (ndarray):  1D precomputed filter denominators, shape (nfilters,).
+ *   - dens    (ndarray):  1D precomputed filter denominators, shape
+ * (nfilters,).
  *   - starts  (ndarray):  1D start indices per filter, shape (nfilters,).
  *   - ends    (ndarray):  1D end indices per filter, shape (nfilters,).
  *   - nthreads (int):     Number of OpenMP threads requested.
@@ -443,7 +447,8 @@ static double *compute_photometry_simps_parallel(
  *
  * @return A numpy array of shape (nfilters, *leading_spectrum_shape).
  */
-static PyObject *compute_photometry_integration(PyObject *self, PyObject *args) {
+static PyObject *compute_photometry_integration(PyObject *self,
+                                                PyObject *args) {
 
   /* We don't need the self argument but it has to be there. Tell the
    * compiler we don't care. */
@@ -563,9 +568,8 @@ static PyObject *compute_photometry_integration(PyObject *self, PyObject *args) 
   }
 
   /* Build the compact work descriptors for active filters. */
-  const std::vector<FilterWork> filter_work =
-      build_filter_work(weight_matrix, denominators, starts, ends,
-                        wavelength_count, nfilters);
+  const std::vector<FilterWork> filter_work = build_filter_work(
+      weight_matrix, denominators, starts, ends, wavelength_count, nfilters);
 
   /* Dispatch to the appropriate kernel. */
   double *result_array = NULL;
@@ -599,13 +603,13 @@ static PyObject *compute_photometry_integration(PyObject *self, PyObject *args) 
 
   /* We don't have OpenMP, just call the serial version. */
   if (use_trapz) {
-    result_array = compute_photometry_trapz_serial(
-        x_values, spectra_values, filter_work, wavelength_count, nentries,
-        nfilters);
+    result_array =
+        compute_photometry_trapz_serial(x_values, spectra_values, filter_work,
+                                        wavelength_count, nentries, nfilters);
   } else {
-    result_array = compute_photometry_simps_serial(
-        x_values, spectra_values, filter_work, wavelength_count, nentries,
-        nfilters);
+    result_array =
+        compute_photometry_simps_serial(x_values, spectra_values, filter_work,
+                                        wavelength_count, nentries, nfilters);
   }
 #endif
 
@@ -648,20 +652,19 @@ static PyMethodDef PhotometryMethods[] = {
 /* Make this importable. */
 static struct PyModuleDef photometrymodule = {
     PyModuleDef_HEAD_INIT,
-    "photometry",                                          /* m_name */
+    "photometry",                                            /* m_name */
     "A module for batched broadband photometry integration", /* m_doc */
-    -1,                                                    /* m_size */
-    PhotometryMethods,                                     /* m_methods */
-    NULL,                                                  /* m_reload */
-    NULL,                                                  /* m_traverse */
-    NULL,                                                  /* m_clear */
-    NULL,                                                  /* m_free */
+    -1,                                                      /* m_size */
+    PhotometryMethods,                                       /* m_methods */
+    NULL,                                                    /* m_reload */
+    NULL,                                                    /* m_traverse */
+    NULL,                                                    /* m_clear */
+    NULL,                                                    /* m_free */
 };
 
 PyMODINIT_FUNC PyInit_photometry(void) {
   PyObject *m = PyModule_Create(&photometrymodule);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

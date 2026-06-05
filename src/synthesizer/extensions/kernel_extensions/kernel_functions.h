@@ -40,7 +40,7 @@ static inline double sph_anarchy(const double r) {
   if (r <= 1.0) {
     const double one_minus_r = 1.0 - r;
     return (21.0 / (2.0 * M_PI)) * (one_minus_r * one_minus_r * one_minus_r *
-                                     one_minus_r * (1.0 + 4.0 * r));
+                                    one_minus_r * (1.0 + 4.0 * r));
   }
   return 0.0;
 }
@@ -99,8 +99,7 @@ static inline double quartic(const double r) {
     const double a = 2.5 - q;
     const double b = 1.5 - q;
     const double c = 0.5 - q;
-    return norm * (a * a * a * a - 5.0 * b * b * b * b +
-                   10.0 * c * c * c * c);
+    return norm * (a * a * a * a - 5.0 * b * b * b * b + 10.0 * c * c * c * c);
   }
   if (q < 1.5) {
     const double a = 2.5 - q;
@@ -123,9 +122,8 @@ static inline double quartic(const double r) {
  */
 static inline double quintic(const double r) {
   if (r < 0.333333333) {
-    return 27.0 *
-           (6.4457752 * r * r * r * r * (1.0 - r) - 1.4323945 * r * r +
-            0.17507044);
+    return 27.0 * (6.4457752 * r * r * r * r * (1.0 - r) - 1.4323945 * r * r +
+                   0.17507044);
   }
   if (r < 0.666666667) {
     return 27.0 *

@@ -3,14 +3,16 @@
 
 /* Standard includes */
 #include <stdlib.h>
+
 #include <string>
 #include <vector>
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "numpy_init.h"
 #include <Python.h>
+
+#include "numpy_init.h"
 
 /* Local includes */
 #include "property_funcs.h"
@@ -22,7 +24,7 @@
  * This is used to hold the particle properties and mass.
  */
 class Particles {
-public:
+ public:
   /* The number of particles. */
   int npart;
 
@@ -54,7 +56,7 @@ public:
   /* Is a particle masked? */
   bool part_is_masked(int pind) const;
 
-private:
+ private:
   /* The numpy array holding the particle weights (e.g. initial mass for
    * SPS grid weighting). */
   PyArrayObject *np_weights_;
@@ -79,4 +81,4 @@ void get_particle_indices_and_fracs(GridProps *grid_props, Particles *parts,
 void get_particle_indices(GridProps *grid_props, Particles *parts,
                           int nthreads = 1);
 
-#endif // PART_PROPS_H_
+#endif  // PART_PROPS_H_

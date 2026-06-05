@@ -218,7 +218,7 @@ inline double pixel_inside_kernel_contribution(double pix_x_min,
                                                double threshold) {
 
   /* Use a small fixed grid to sample the pixel area (fast, deterministic). */
-  const int grid = 3; // 3x3 samples
+  const int grid = 3;  // 3x3 samples
   double sum = 0.0;
 
   for (int si = 0; si < grid; si++) {

@@ -19,8 +19,9 @@
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "../../extensions/numpy_init.h"
 #include <Python.h>
+
+#include "../../extensions/numpy_init.h"
 
 /* Local includes */
 #include "../../extensions/property_funcs.h"
@@ -35,8 +36,8 @@
 #endif
 
 /**
- * @brief Calculates the square root of a number, treating small negative values
- * as zero.
+ * @brief Calculates the square root of a number, treating small negative
+ * values as zero.
  *
  * @param x - The input value.
  * @return The square root of x if x >= 0, otherwise 0.
@@ -89,8 +90,8 @@ static double area_triangle(double x1, double y1, double x2, double y2,
 }
 
 /**
- * @brief Core function for calculating the area of overlap between a circle and
- * a rectangle.
+ * @brief Core function for calculating the area of overlap between a circle
+ * and a rectangle.
  *
  * @param xmin, ymin - Lower-left corner of the rectangle.
  * @param xmax, ymax - Upper-right corner of the rectangle.
@@ -147,7 +148,8 @@ static double circular_overlap_core(double xmin, double ymin, double xmax,
 }
 
 /**
- * @brief Calculates the exact area of overlap between a circle and a rectangle.
+ * @brief Calculates the exact area of overlap between a circle and a
+ * rectangle.
  *
  * @param xmin, ymin - Lower-left corner of the pixel.
  * @param xmax, ymax - Upper-right corner of the pixel.
@@ -161,7 +163,8 @@ static double circular_overlap_single_exact(double pix_xmin, double pix_ymin,
     if (0.0 <= pix_ymin) {
       return circular_overlap_core(pix_xmin, pix_ymin, pix_xmax, pix_ymax, r);
     } else if (0.0 >= pix_ymax) {
-      return circular_overlap_core(-pix_ymax, pix_xmin, -pix_ymin, pix_xmax, r);
+      return circular_overlap_core(-pix_ymax, pix_xmin, -pix_ymin, pix_xmax,
+                                   r);
     } else {
       return circular_overlap_single_exact(pix_xmin, pix_ymin, pix_xmax, 0.0,
                                            r) +
@@ -170,7 +173,8 @@ static double circular_overlap_single_exact(double pix_xmin, double pix_ymin,
     }
   } else if (0.0 >= pix_xmax) {
     if (0.0 <= pix_ymin) {
-      return circular_overlap_core(-pix_xmax, pix_ymin, -pix_xmin, pix_ymax, r);
+      return circular_overlap_core(-pix_xmax, pix_ymin, -pix_xmin, pix_ymax,
+                                   r);
     } else if (0.0 >= pix_ymax) {
       return circular_overlap_core(-pix_xmax, -pix_ymax, -pix_xmin, -pix_ymin,
                                    r);
@@ -277,7 +281,7 @@ static double calculate_overlap_omp(const double res, const double xmin,
 
   /* Loop over pixels and accumalate the pixel weight mulitiplied by pixel
    * values. */
-#pragma omp parallel for num_threads(nthreads) reduction(+ : signal)           \
+#pragma omp parallel for num_threads(nthreads) reduction(+ : signal) \
     schedule(dynamic)
   for (int i = 0; i < nx; i++) {
     double pxmin = xmin + i * res;
@@ -409,7 +413,7 @@ static PyMethodDef CircularOverlapMethods[] = {
 /* Define the module */
 static struct PyModuleDef circularoverlapmodule = {
     PyModuleDef_HEAD_INIT,
-    "circular_aperture", // name of module
+    "circular_aperture",  // name of module
     "Module for calculating the overlap area between a circle and a pixel "
     "grid.",
     -1,
@@ -426,8 +430,7 @@ PyMODINIT_FUNC PyInit_circular_aperture(void) {
     return NULL;
   }
   PyObject *m = PyModule_Create(&circularoverlapmodule);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
 #ifdef ATOMIC_TIMING
   if (import_toc_capsule() < 0) {
     Py_DECREF(m);
