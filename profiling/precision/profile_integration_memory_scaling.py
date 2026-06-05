@@ -244,17 +244,25 @@ def plot_results(results, output_path):
     """Plot RSS above baseline against % progress for each precision pair."""
     methods = sorted({row["method"] for row in results})
     nentries_values = sorted({row["nentries"] for row in results})
-    all_deltas = [row["delta_mib"] for row in results]
-    max_delta = max(all_deltas, default=0.0)
-
     figure, axes = plt.subplots(
         len(nentries_values),
         len(methods),
         figsize=(6 * len(methods), 3.5 * len(nentries_values)),
         squeeze=False,
         sharex=True,
-        sharey=True,
     )
+
+    row_max_delta = {
+        nentries: max(
+            (
+                row["delta_mib"]
+                for row in results
+                if row["nentries"] == nentries
+            ),
+            default=0.0,
+        )
+        for nentries in nentries_values
+    }
 
     for row_index, nentries in enumerate(nentries_values):
         for col_index, method in enumerate(methods):
@@ -292,7 +300,11 @@ def plot_results(results, output_path):
                 axis.set_xlabel("Progress through benchmark (%)")
 
             axis.grid(True, alpha=0.3)
-            upper_limit = max_delta * 1.05 if max_delta > 0.0 else 1.0
+            upper_limit = (
+                row_max_delta[nentries] * 1.05
+                if row_max_delta[nentries] > 0.0
+                else 1.0
+            )
             axis.set_ylim(0.0, upper_limit)
 
     axes[0][-1].legend(loc="best", fontsize=9)
