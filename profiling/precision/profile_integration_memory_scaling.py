@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import logging
 import subprocess
 import sys
 import tempfile
@@ -38,6 +39,8 @@ from synthesizer.extensions.integration import (
     simps_last_axis,
     trapz_last_axis,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 plt.rcParams["font.family"] = "DejaVu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -194,7 +197,21 @@ def _run_worker_subprocess(
     ]
 
     try:
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        try:
+            subprocess.run(command, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as error:
+            LOGGER.error(
+                "Worker subprocess failed for %s %s -> %s at nentries=%s\n"
+                "stdout:\n%s\n"
+                "stderr:\n%s",
+                method,
+                input_dtype_name,
+                output_dtype_name,
+                nentries,
+                error.stdout,
+                error.stderr,
+            )
+            raise
         with result_path.open() as handle:
             return json.load(handle)
     finally:

@@ -19,9 +19,11 @@ int resolve_output_typenum(PyObject *dtype_obj, const char *argument_name) {
   /* Let NumPy parse dtype-like objects such as np.float32 or np.dtype("f4").
    */
   if (!PyArray_DescrConverter(dtype_obj, &descr)) {
-    PyErr_Format(PyExc_TypeError,
-                 "%s must be a NumPy dtype or floating-point type.",
-                 argument_name);
+    if (!PyErr_Occurred()) {
+      PyErr_Format(PyExc_TypeError,
+                   "%s must be a NumPy dtype or floating-point type.",
+                   argument_name);
+    }
     return -1;
   }
 

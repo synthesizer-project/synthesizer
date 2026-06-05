@@ -232,6 +232,9 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
     PyErr_SetString(PyExc_TypeError, "xs and ys must be float32 or float64.");
     return NULL;
   }
+  if (!is_c_contiguous(xs, "xs") || !is_c_contiguous(ys, "ys")) {
+    return NULL;
+  }
 
   /* Resolve the independently requested output dtype. */
   const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
@@ -452,6 +455,9 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
   if (!is_supported_float_typenum(xs_typenum) ||
       !is_supported_float_typenum(ys_typenum)) {
     PyErr_SetString(PyExc_TypeError, "xs and ys must be float32 or float64.");
+    return NULL;
+  }
+  if (!is_c_contiguous(xs, "xs") || !is_c_contiguous(ys, "ys")) {
     return NULL;
   }
 
@@ -734,6 +740,10 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
                     "xs, ys, and weights must be float32 or float64.");
     return NULL;
   }
+  if (!is_c_contiguous(xs, "xs") || !is_c_contiguous(ys, "ys") ||
+      !is_c_contiguous(ws, "weights")) {
+    return NULL;
+  }
 
   int input_typenum = promoted_float_typenum(xs_typenum, ys_typenum);
   input_typenum = promoted_float_typenum(input_typenum, ws_typenum);
@@ -750,6 +760,9 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
   /* Resolve the independently requested output dtype. */
   const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
   if (output_typenum < 0) {
+    Py_DECREF(xs_cast);
+    Py_DECREF(ys_cast);
+    Py_DECREF(ws_cast);
     return NULL;
   }
 
@@ -1080,6 +1093,10 @@ static PyObject *weighted_simps_last_axis_integration(PyObject *self,
                     "xs, ys, and weights must be float32 or float64.");
     return NULL;
   }
+  if (!is_c_contiguous(xs, "xs") || !is_c_contiguous(ys, "ys") ||
+      !is_c_contiguous(ws, "weights")) {
+    return NULL;
+  }
 
   int input_typenum = promoted_float_typenum(xs_typenum, ys_typenum);
   input_typenum = promoted_float_typenum(input_typenum, ws_typenum);
@@ -1096,6 +1113,9 @@ static PyObject *weighted_simps_last_axis_integration(PyObject *self,
   /* Resolve the independently requested output dtype. */
   const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
   if (output_typenum < 0) {
+    Py_DECREF(xs_cast);
+    Py_DECREF(ys_cast);
+    Py_DECREF(ws_cast);
     return NULL;
   }
 
