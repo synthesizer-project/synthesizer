@@ -44,12 +44,20 @@ jobs:
           cat build_synth.log
       - uses: astral-sh/ruff-action@v3 # Lint with Ruff
         with:
-          version: 0.11.7
+          version: 0.15.15
           args: "format --check --diff"
+      - name: Check C++ formatting with clang-format
+        run: |
+          pip install "clang-format==22.1.4"
+          ./format_extensions.sh --check
+        shell: bash
       - name: Download test data
         run: |
           # Download the data we need
           synthesizer-download --test-grids --dust-grid --all-sim-data --instruments EuclidNISP
+      - name: Download SVO filter cache
+        run: |
+          synthesizer-download --svo-filter-cache
       - name: Test with pytest
         run: |
           pytest -n auto

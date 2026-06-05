@@ -7,6 +7,7 @@ from synthesizer.data.initialise import (
     get_data_dir,
     get_grids_dir,
     get_instrument_dir,
+    get_svo_filter_cache_dir,
     get_test_data_dir,
     synth_initialise,
 )
@@ -22,6 +23,7 @@ DATA_DIR = get_data_dir()
 GRID_DIR = get_grids_dir()
 TEST_DATA_DIR = get_test_data_dir()
 INSTRUMENT_CACHE_DIR = get_instrument_dir()
+SVO_FILTER_CACHE_DIR = get_svo_filter_cache_dir()
 
 
 # Make a version available at the top level
@@ -62,4 +64,5 @@ __all__ = [
     "GRID_DIR",
     "TEST_DATA_DIR",
     "INSTRUMENT_CACHE_DIR",
+    "SVO_FILTER_CACHE_DIR",
 ]

@@ -29,12 +29,12 @@ from unyt import (
     amu,
     angstrom,
     c,
+    cm,
     erg,
     eV,
     h,
     kb,
     km,
-    pc,
     s,
     unyt_array,
     unyt_quantity,
@@ -43,13 +43,35 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
+from synthesizer.emissions.scaling import (
+    normalise_scaling_for_units,
+    scale_inplace,
+    scale_to_quantity,
+)
+from synthesizer.extensions.observed_spectra import compute_fnu
 from synthesizer.extensions.reductions import reduce_particle_spectra
+from synthesizer.extensions.spectra_operations import (
+    apply_separable_attenuation_2d,
+    multiply_array_by_vector_1d,
+    scale_spectra_2d,
+)
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import (
+    Quantity,
+    accepts,
+    get_array_quantity_view,
+    get_quantity_unit,
+    get_quantity_view,
+)
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.util_funcs import (
+    ensure_array_buffer,
+    get_attr_unit_conversion,
+    get_distance_in_cm,
+)
 
 
 class Sed:
@@ -363,7 +385,15 @@ class Sed:
             return self
         return self.__add__(second_sed)
 
-    def scale(self, scaling, inplace=False, mask=None, lam_mask=None):
+    @timed("Sed.scale")
+    def scale(
+        self,
+        scaling,
+        inplace=False,
+        mask=None,
+        lam_mask=None,
+        nthreads=1,
+    ):
         """Scale the lnu of the Sed object.
 
         Note: only acts on the rest frame spectra. To get the
@@ -371,7 +401,7 @@ class Sed:
         Sed object.
 
         Args:
-            scaling (float):
+            scaling (float, np.ndarray, or unyt quantity):
                 The scaling to apply to lnu.
             inplace (bool):
                 If True, the Sed object is modified in place. If False, a new
@@ -382,97 +412,45 @@ class Sed:
                 axis.
             lam_mask (array-like, bool):
                 A mask for the wavelength array to apply the scaling to.
+            nthreads (int):
+                The number of threads to use for compatible scaling kernels.
 
         Returns:
             Sed
                 A new instance of Sed with scaled lnu.
         """
-        # If we have units make sure they are ok and then strip them
-        if isinstance(scaling, (unyt_array, unyt_quantity)):
-            if self.lnu.units.dimensions != scaling.units.dimensions:
-                raise exceptions.InconsistentMultiplication(
-                    f"Incompatible units {self.lnu.units} and {scaling.units}"
-                )
-            else:
-                scaling = scaling.to(self.lnu.units)
-                scaling = scaling.value
+        # Get the units without making a copy
+        units = get_quantity_unit(self, "lnu")
 
-        # Unpack the array's we'll need during scaling
-        lnu = self._lnu.copy()
-        units = self.lnu.units
+        # Get the scaling based on the units we just unpacked. Safe for
+        # unitless scaling
+        scaling = normalise_scaling_for_units(scaling, units)
 
-        # If we have a wavelength mask apply it now
-        if lam_mask is not None:
-            lnu = lnu[..., lam_mask]
-
-        # Handle a scalar scaling factor
-        if np.isscalar(scaling):
-            if mask is not None:
-                lnu[mask] *= scaling
-            else:
-                lnu *= scaling
-
-        # Handle a multi-element array scaling factor as long as it matches
-        # the shape of the lnu array up to the dimensions of the scaling array
-        elif isinstance(scaling, np.ndarray) and len(scaling.shape) < len(
-            self.shape
-        ):
-            # We need to expand the scaling array to match the lnu array
-            expand_axes = tuple(range(len(scaling.shape), len(self.shape)))
-            new_scaling = np.ones(self.shape) * np.expand_dims(
-                scaling, axis=expand_axes
+        # If we are scaling in place we can write directly into the existing
+        # buffer, avoiding an allocation of a new array. The shared scaling
+        # helpers handle the dispatch to the compatible kernels for us.
+        if inplace:
+            scale_inplace(
+                self._lnu,
+                scaling,
+                mask=mask,
+                lam_mask=lam_mask,
+                nthreads=nthreads,
             )
+            return self
 
-            # Apply the scaling
-            if mask is not None:
-                lnu[mask] *= new_scaling[mask]
-            else:
-                lnu *= new_scaling
+        # Otherwise we need to create a new array with the scaled values and
+        # return a new Sed object
+        new_lnu = scale_to_quantity(
+            self._lnu,
+            scaling,
+            units,
+            mask=mask,
+            lam_mask=lam_mask,
+            nthreads=nthreads,
+        )
 
-        # If the scaling array is the same shape as the lnu array then we can
-        # just multiply them together
-        elif isinstance(scaling, np.ndarray) and scaling.shape == self.shape:
-            if mask is not None:
-                lnu[mask] *= scaling[mask]
-            else:
-                lnu *= scaling
-
-        # Ok, if we have an array but the shapes don't match then we need to
-        # create a new array where each element of the scaling array is
-        # multipled by the whole lnu array producing a new lnu array of
-        # shape (scaling.shape + lnu.shape)
-        elif isinstance(scaling, np.ndarray):
-            lnu = scaling[..., np.newaxis] * lnu
-
-            # Masks are not supported in this case
-            if mask is not None:
-                raise exceptions.InconsistentMultiplication(
-                    "Masking is not supported for scaling arrays"
-                    " with different shapes"
-                )
-
-        # Otherwise, we've been handed a bad scaling factor
-        else:
-            out_str = f"Incompatible scaling factor with type {type(scaling)} "
-            if hasattr(scaling, "shape"):
-                out_str += f"and shape {scaling.shape} (expected {self.shape})"
-            else:
-                out_str += f"and value {scaling}"
-            raise exceptions.InconsistentMultiplication(out_str)
-
-        # Now complete the calculation if we need to
-        if lam_mask is not None:
-            new_lnu = self.lnu.copy()
-            new_lnu[..., lam_mask] = lnu
-        else:
-            new_lnu = lnu * units
-
-        # Return a new Sed object if we aren't scaling inplace
-        if not inplace:
-            return Sed(self.lam, lnu=new_lnu)
-
-        self._lnu = new_lnu
-        return self
+        return Sed(self.lam, lnu=new_lnu)
 
     def __mul__(self, scaling):
         """Scale the lnu of the Sed object.
@@ -500,11 +478,11 @@ class Sed:
         As above but for x * scaling.
 
         Note: only acts on the rest frame spectra. To get the
-        scaled fnu get_fnu must be called on the newly
-        scaled Sed object.
+        scaled fnu get_fnu must be called on the newly scaled
+        Sed object.
 
         Args:
-            scaling (float):
+            scaling (float, np.ndarray, or unyt quantity):
                 The scaling to apply to lnu.
 
         Returns:
@@ -1104,29 +1082,55 @@ class Sed:
 
         return beta
 
+    @timed("Sed.get_fnu0")
     def get_fnu0(self):
         """Calculate the rest frame spectral flux density.
 
-        Uses a standard distance of 10 pcs.
+        Uses a standard distance of 10 pc.
 
         This will also populate the observed wavelength and frequency arrays
         which in this case are the same as the emitted arrays.
 
         Returns:
             fnu (ndarray):
-                Spectral flux density calcualted at d=10 pc.
+                Spectral flux density calculated at 10 pc.
         """
-        # Get the observed wavelength and frequency arrays
-        self.obslam = self._lam
-        self.obsnu = self._nu
+        # Ensure the arrays are ready to be handed to the C++
+        if self._lnu.dtype != np.float64 or not self._lnu.flags.c_contiguous:
+            self._lnu = np.ascontiguousarray(self._lnu, dtype=np.float64)
+        if self._lam.dtype != np.float64 or not self._lam.flags.c_contiguous:
+            self._lam = np.ascontiguousarray(self._lam, dtype=np.float64)
+        if self._nu.dtype != np.float64 or not self._nu.flags.c_contiguous:
+            self._nu = np.ascontiguousarray(self._nu, dtype=np.float64)
 
-        # Compute the flux SED and apply unit conversions to get to nJy
-        self.fnu = self.lnu / (4 * np.pi * (10 * pc) ** 2)
+        # Set the observed wavelength and frequency
+        self._obslam = self._lam
+        self._obsnu = self._nu
 
-        return self.fnu
+        # Get the conversion factor from luminosity to flux at 10 pc
+        conversion = get_attr_unit_conversion(
+            self.__class__.__dict__["lnu"].unit,
+            self.__class__.__dict__["fnu"].unit * cm**2,
+        ) / (4 * np.pi * get_distance_in_cm() ** 2)
+
+        # Call the threaded C++ function to compute fnu
+        compute_fnu(
+            self._lnu,
+            self._lam,
+            self._nu,
+            1.0,
+            conversion,
+            1,
+            ensure_array_buffer(self, "_fnu", self._lnu),
+            None,
+            None,
+        )
+
+        # Return the fnu with units, without making a copy
+        return get_quantity_view(self, "_fnu")
 
     @timed("Sed.get_fnu")
-    def get_fnu(self, cosmo, z, igm=None):
+    def get_fnu(self, cosmo, z, igm=None, nthreads=1):
         """Calculate the observed frame spectral energy distribution.
 
         This will also populate the observed wavelength and frequency arrays
@@ -1144,10 +1148,12 @@ class Sed:
             igm (igm):
                 The IGM class. e.g. `synthesizer.igm.Inoue14`.
                 Defaults to None.
+            nthreads (int):
+                The number of threads to use for the bulk flux conversion.
 
         Returns:
             fnu (ndarray)
-                Spectral flux density calcualted at d=10 pc
+                Spectral flux density in the observer frame.
 
         """
         # Store the redshift for later use
@@ -1158,30 +1164,69 @@ class Sed:
         if self.redshift == 0:
             return self.get_fnu0()
 
-        # Get the observed wavelength and frequency arrays
-        self.obslam = self._lam * (1.0 + z)
-        self.obsnu = self._nu / (1.0 + z)
+        # Ensure the arrays are ready to be handed to the C++
+        if self._lnu.dtype != np.float64 or not self._lnu.flags.c_contiguous:
+            self._lnu = np.ascontiguousarray(self._lnu, dtype=np.float64)
+        if self._lam.dtype != np.float64 or not self._lam.flags.c_contiguous:
+            self._lam = np.ascontiguousarray(self._lam, dtype=np.float64)
+        if self._nu.dtype != np.float64 or not self._nu.flags.c_contiguous:
+            self._nu = np.ascontiguousarray(self._nu, dtype=np.float64)
+        if self._obslam is None or self._obslam.shape != self._lam.shape:
+            self._obslam = np.empty_like(self._lam)
+        if self._obsnu is None or self._obsnu.shape != self._nu.shape:
+            self._obsnu = np.empty_like(self._nu)
 
-        # Compute the luminosity distance
-        luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
+        # Calculate the observed wavelength and frequency
+        one_plus_z = 1.0 + z
+        luminosity_distance_cm = get_luminosity_distance(cosmo, z).to_value(cm)
+        conversion = (
+            get_attr_unit_conversion(
+                self.__class__.__dict__["lnu"].unit,
+                self.__class__.__dict__["fnu"].unit * cm**2,
+            )
+            * one_plus_z
+            / (4 * np.pi * luminosity_distance_cm**2)
+        )
 
-        # Finally, compute the flux SED and apply unit conversions to get
-        # to nJy
-        self.fnu = self.lnu * (1.0 + z) / (4 * np.pi * luminosity_distance**2)
+        # Call the threaded C++ function to compute fnu
+        compute_fnu(
+            self._lnu,
+            self._lam,
+            self._nu,
+            one_plus_z,
+            conversion,
+            nthreads,
+            ensure_array_buffer(self, "_fnu", self._lnu),
+            self._obslam,
+            self._obsnu,
+        )
 
         # If we are applying an IGM model apply it
         if igm is not None:
+            # Bypass the Quantity descriptor here so IGM attenuation reuses the
+            # observer-frame wavelength buffer without allocating a new
+            # unit-bearing array wrapper via multiplication.
+            obslam = get_array_quantity_view(
+                self._obslam,
+                self.__class__.__dict__["obslam"].unit,
+            )
+
             # Support bot class references and instantiated objects
             if callable(igm):
-                self._fnu *= igm().get_transmission(z, self.obslam)
+                self._fnu *= igm().get_transmission(z, obslam)
             else:
-                self._fnu *= igm.get_transmission(z, self.obslam)
+                self._fnu *= igm.get_transmission(z, obslam)
 
-        return self.fnu
+        # Return the fnu with units, without making a copy
+        return get_quantity_view(self, "_fnu")
 
     @timed("Sed.get_photo_lnu")
     def get_photo_lnu(
-        self, filters, verbose=True, nthreads=1, integration_method="trapz"
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        integration_method="trapz",
     ):
         """Calculate broadband luminosities using a FilterCollection object.
 
@@ -1244,7 +1289,7 @@ class Sed:
                 Fluxes in each filter in filters.
         """
         # Ensure fluxes actually exist
-        if (self.obslam is None) | (self.fnu is None):
+        if self._obslam is None or self._fnu is None:
             raise ValueError(
                 (
                     "Fluxes not calculated, run `get_fnu` or "
@@ -1485,11 +1530,13 @@ class Sed:
             )
         return self.get_resampled_sed(new_lam=instrument.lam)
 
+    @timed("Sed.apply_attenuation")
     def apply_attenuation(
         self,
         tau_v=None,
         dust_curve=None,
         mask=None,
+        nthreads=1,
         **dust_curve_kwargs,
     ):
         """Apply attenuation to spectra.
@@ -1505,6 +1552,8 @@ class Sed:
                 A mask array with an entry for each spectra. Masked out
                 spectra will be ignored when applying the attenuation. Only
                 applicable for Sed's holding an (N, Nlam) array.
+            nthreads (int):
+                The number of threads to use for compatible array kernels.
             dust_curve_kwargs (dict):
                 A dictionary of extra parameters set at runtime on the
                 attenuation model.
@@ -1514,9 +1563,16 @@ class Sed:
                 A new Sed containing the rest frame spectra of self attenuated
                 by the transmission defined from tau_v and the dust curve.
         """
+        # Avoid cyclic imports.
+        from synthesizer.emission_models.transformers.dust_attenuation import (
+            AttenuationLaw,
+        )
+
+        # Ensure we have a dust curve
         if dust_curve is None:
             raise exceptions.MissingArgument("dust_curve must be provided")
 
+        # Ensure we have tau_v if the dust curve requires it
         if tau_v is None and "tau_v" in getattr(
             dust_curve, "_required_params", ()
         ):
@@ -1551,25 +1607,112 @@ class Sed:
                     f"({tau_v.shape}, {self._lnu.shape})"
                 )
 
-        # Compute the transmission
+        # Get the unit without making a copy
+        units = get_quantity_unit(self, "lnu")
+
+        # For the standard AttenuationLaw-style implementations with per-row
+        # tau_v we can avoid materialising a full 2D transmission array and
+        # instead use the separable attenuation kernel directly.
+        # This is the main new fast path: one tau_v per spectrum row plus the
+        # stock AttenuationLaw transmission formula means we can keep the work
+        # separable as tau_v[row] * tau_x_v[lam].
+        if (
+            self._lnu.ndim == 2
+            and isinstance(tau_v, np.ndarray)
+            and tau_v.ndim == 1
+            and tau_v.shape[0] == self._lnu.shape[0]
+            and type(dust_curve).get_transmission
+            is AttenuationLaw.get_transmission
+        ):
+            # Ask the dust law for just the wavelength part of the attenuation
+            # so the kernel can combine it with tau_v on the fly.
+            tau_x_v = dust_curve.get_extinction_curve(
+                self.lam,
+                **dust_curve_kwargs,
+            )
+            # The kernel both attenuates and respects the optional row mask, so
+            # we avoid ever materialising the full transmission matrix.
+            out = apply_separable_attenuation_2d(
+                self._lnu,
+                tau_v,
+                tau_x_v,
+                mask,
+                nthreads,
+            )
+            return Sed(
+                self.lam,
+                lnu=get_array_quantity_view(out, units),
+            )
+
+        # Compute the transmission for the remaining generic cases.
         transmission = dust_curve.get_transmission(
             tau_v, self.lam, **dust_curve_kwargs
         )
 
-        # Get a copy of the rest frame spectra, we need to avoid
-        # modifying the original
-        spectra = np.copy(self._lnu)
+        # When attenuation reduces to a per-row transmission curve we can use
+        # the dedicated 2D scaling kernel with mask support. This applies when
+        # the 1D transmission matches the first array dimension (one factor per
+        # row).
+        if (
+            self._lnu.ndim == 2
+            and isinstance(transmission, np.ndarray)
+            and transmission.ndim == 1
+            and transmission.shape[0] == self._lnu.shape[0]
+            and mask is not None
+        ):
+            # Here the transmission is really one factor per spectrum row, so
+            # we reuse the same masked row-scaling kernel as Sed.scale.
+            out = scale_spectra_2d(
+                self._lnu,
+                transmission,
+                mask,
+                None,
+                nthreads,
+            )
+            return Sed(
+                self.lam,
+                lnu=get_array_quantity_view(out, units),
+            )
 
-        # Apply the transmission curve to the rest frame spectra with or
-        # without applying a mask
+        # If we don't have a row mask but the transmission is still wavelength-
+        # only we can use the dedicated 1D scaling kernel instead
+        if (
+            self._lnu.ndim == 2
+            and isinstance(transmission, np.ndarray)
+            and transmission.ndim == 1
+        ):
+            # This is the wavelength-only case: every row sees the same vector,
+            # so the last-axis multiply kernel is the natural fit.
+            out = multiply_array_by_vector_1d(
+                self._lnu,
+                transmission,
+                nthreads,
+            )
+            return Sed(
+                self.lam,
+                lnu=get_array_quantity_view(out, units),
+            )
+
+        # If neither fast path applies we fall back to NumPy broadcasting.
+        # We need a copy here so we don't modify the original
+        out = np.copy(self._lnu)
+
+        # Apply the transmission with or without a mask
         if mask is None:
-            spectra *= transmission
+            out *= transmission
         elif transmission.ndim > 1:
-            spectra[mask] *= transmission[mask]
+            # A full transmission matrix already lines up with the row mask, so
+            # we can mask both arrays in parallel.
+            out[mask] *= transmission[mask]
         else:
-            spectra[mask] *= transmission
+            # Otherwise the transmission is shared across rows and NumPy will
+            # broadcast it over the masked subset.
+            out[mask] *= transmission
 
-        return Sed(self.lam, lnu=spectra * self.lnu.units)
+        return Sed(
+            self.lam,
+            lnu=get_array_quantity_view(out, units),
+        )
 
     @accepts(ionisation_energy=eV)
     def calculate_ionising_photon_production_rate(

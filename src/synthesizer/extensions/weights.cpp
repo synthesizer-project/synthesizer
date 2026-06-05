@@ -8,12 +8,13 @@
  * When compiled into another extension, PyInit_weights is dead code.
  *****************************************************************************/
 /* C includes */
-#include <array>
 #include <math.h>
-#include <new>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <array>
+#include <new>
 #include <vector>
 
 /* Python includes */
@@ -129,8 +130,8 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
  *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A class containing the particle properties.
- * @param out_size: The size of the output array. (This will be allocated within
- *                  this function.)
+ * @param out_size: The size of the output array. (This will be allocated
+ * within this function.)
  * @param out: The output array.
  * @param nthreads: The number of threads to use.
  */
@@ -146,7 +147,7 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
   const int ndim = grid_props->ndim;
 
   /* Set the sub cell constants we'll use below. */
-  const int num_sub_cells = 1 << ndim; // 2^ndim
+  const int num_sub_cells = 1 << ndim;  // 2^ndim
   std::array<int, MAX_GRID_NDIM> sub_dims;
   for (int i = 0; i < ndim; i++) {
     sub_dims[i] = 2;
@@ -174,8 +175,7 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
     const int tid = omp_get_thread_num();
     const int start = tid * npart_per_thread;
     int end = start + npart_per_thread;
-    if (end > parts->npart)
-      end = parts->npart;
+    if (end > parts->npart) end = parts->npart;
 
     /* Allocate a local output array to avoid races. */
     std::vector<double> local_out_arr(out_size, 0.0);
@@ -489,7 +489,8 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
 
   /* Allocate the sfzh array to output. */
   double *grid_weights = new (std::nothrow) double[grid_props->size]();
-  /* If allocation failed, clean up and return nullptr to propagate the MemoryError. */
+  /* If allocation failed, clean up and return nullptr to propagate the
+   * MemoryError. */
   if (grid_weights == nullptr) {
     PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
     delete part_props;
@@ -509,7 +510,8 @@ PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
                     nthreads);
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method.");
-    /* Clean up all allocated memory before returning nullptr to propagate the ValueError. */
+    /* Clean up all allocated memory before returning nullptr to propagate the
+     * ValueError. */
     delete part_props;
     delete grid_props;
     delete[] grid_weights;
@@ -560,8 +562,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_weights(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

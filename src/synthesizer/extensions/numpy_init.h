@@ -14,4 +14,4 @@
 /* Declare init function. */
 int numpy_import();
 
-#endif // NUMPY_INIT_H_
+#endif  // NUMPY_INIT_H_

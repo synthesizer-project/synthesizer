@@ -183,6 +183,21 @@ class TestImagingGeometry:
         with pytest.raises(exceptions.InconsistentArguments):
             img.set_npix(5.5)  # not int/tuple
 
+    def test_nonfinite_npix_raises_before_cast(self):
+        """Test non-finite image sizes are rejected before int casting."""
+        with pytest.raises(exceptions.InconsistentArguments, match="finite"):
+            DummyImaging(resolution=1 * kpc, fov=np.inf * kpc)
+
+    def test_oversized_npix_raises_before_cast(self):
+        """Test oversized image sizes are rejected before int overflow."""
+        with pytest.raises(exceptions.InconsistentArguments, match="exceed"):
+            DummyImaging(resolution=1 * kpc, fov=1e12 * kpc)
+
+    def test_subpixel_fov_can_round_to_zero_npix(self):
+        """Test existing sub-pixel FOV rounding behavior is preserved."""
+        img = DummyImaging(resolution=1 * kpc, fov=0.1 * kpc)
+        assert np.array_equal(img.npix, np.array([0, 0], dtype=np.int32))
+
 
 class TestImageCreation:
     """Test suite for Image class instantiation and basic operations."""

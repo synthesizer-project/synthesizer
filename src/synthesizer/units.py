@@ -120,6 +120,63 @@ def unit_is_compatible(value, unit):
     )
 
 
+def get_array_quantity_view(values, unit):
+    """Wrap a raw ndarray in units without copying data.
+
+    Args:
+        values (np.ndarray):
+            Raw array buffer to wrap.
+        unit (unyt.Unit):
+            Unit to attach to ``values``.
+
+    Returns:
+        unyt_array:
+            Unit-bearing view of ``values``.
+    """
+    return unyt_array(values, unit, bypass_validation=True)
+
+
+def get_quantity_unit(obj, attr_name):
+    """Get a Quantity descriptor unit without materialising the array.
+
+    Args:
+        obj (object):
+            Object whose class defines the Quantity descriptor.
+        attr_name (str):
+            Public descriptor name, e.g. ``"lnu"``.
+
+    Returns:
+        unyt.Unit:
+            Unit attached to the descriptor.
+    """
+    for cls in type(obj).__mro__:
+        if attr_name in cls.__dict__:
+            return cls.__dict__[attr_name].unit
+
+    raise AttributeError(
+        f"{type(obj).__name__} has no Quantity descriptor named {attr_name}."
+    )
+
+
+def get_quantity_view(obj, attr_name):
+    """Wrap a raw ndarray attribute in units without copying data.
+
+    Args:
+        obj (object):
+            Object holding the raw ndarray attribute and the corresponding
+            Quantity descriptor on its class.
+        attr_name (str):
+            Private ndarray attribute name, e.g. ``"_fnu"``.
+
+    Returns:
+        unyt_array:
+            Unit-bearing view of the raw ndarray data.
+    """
+    values = getattr(obj, attr_name)
+    unit = obj.__class__.__dict__[attr_name[1:]].unit
+    return unyt_array(values, unit, bypass_validation=True)
+
+
 class DefaultUnits:
     """The DefaultUnits class is a container for the default unit system.
 

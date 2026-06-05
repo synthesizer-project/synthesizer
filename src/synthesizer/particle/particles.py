@@ -713,15 +713,25 @@ class Particles:
 
         self.center = com
 
-    def calculate_smoothing_lengths(self, **kwargs):
+    def calculate_smoothing_lengths(self, source_coords=None, **kwargs):
         """Calculate smoothing lengths of particles and assign.
 
         Calls utility function directly, see
         `synthesizer.particle.utils.calculate_smoothing_lengths`
         for a full list of accepted arguments.
+
+        Args:
+            source_coords (unyt_array, optional):
+                Coordinates to query against when calculating smoothing
+                lengths. If None, the particle coordinates are used.
+            **kwargs (dict):
+                Additional keyword arguments passed to
+                `calculate_smoothing_lengths`.
         """
         self.smoothing_lengths = calculate_smoothing_lengths(
-            coordinates=self.coordinates, **kwargs
+            coordinates=self.coordinates,
+            source_coords=source_coords,
+            **kwargs,
         )
 
     def get_radii(self):

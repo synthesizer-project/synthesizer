@@ -3,22 +3,24 @@
  *****************************************************************************/
 
 /* C includes. */
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <iostream>
-#include <math.h>
 #include <numeric>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <vector>
 
 /* Python includes. */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "../../extensions/numpy_init.h"
 #include <Python.h>
+
+#include "../../extensions/numpy_init.h"
 
 /* Local includes. */
 #include "../../extensions/cpp_to_python.h"
@@ -77,15 +79,14 @@ struct weighted_cell {
  *         false otherwise.
  */
 inline bool compare_by_cost(const weighted_cell &a, const weighted_cell &b) {
-  return a.cost > b.cost; // Descending order
+  return a.cost > b.cost;  // Descending order
 }
 
 /**
  * @brief Build balanced work list using adaptive subdivision
  */
-static std::vector<weighted_cell>
-build_balanced_work_list(struct cell *root, int nthreads,
-                         double balance_tolerance = 2.0) {
+static std::vector<weighted_cell> build_balanced_work_list(
+    struct cell *root, int nthreads, double balance_tolerance = 2.0) {
 
   tic("build_balanced_work_list");
 
@@ -93,7 +94,7 @@ build_balanced_work_list(struct cell *root, int nthreads,
   work_list.emplace_back(root);
 
   int target_cells =
-      std::max(2 * nthreads, 8); // At least 2x threads, minimum 8
+      std::max(2 * nthreads, 8);  // At least 2x threads, minimum 8
 
   while (true) {
     // Calculate statistics
@@ -104,8 +105,7 @@ build_balanced_work_list(struct cell *root, int nthreads,
     for (const auto &wc : work_list) {
       total_cost += wc.cost;
       max_cost = std::max(max_cost, wc.cost);
-      if (wc.can_subdivide)
-        subdividable_cells++;
+      if (wc.can_subdivide) subdividable_cells++;
     }
 
     double avg_cost = total_cost / work_list.size();
@@ -188,8 +188,9 @@ build_balanced_work_list(struct cell *root, int nthreads,
  */
 static void populate_pixel_recursive(const struct cell *c, double threshold,
                                      int kdim, const double *kernel,
-                                     double norm_factor, int npart, double *out,
-                                     int nimgs, const double *pix_values,
+                                     double norm_factor, int npart,
+                                     double *out, int nimgs,
+                                     const double *pix_values,
                                      const double res, const int npix_x,
                                      const int npix_y) {
 
@@ -226,7 +227,8 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
      * ensure we capture all affected pixels. */
     double buffer = max_kernel_radius + res;
 
-    /* Calculate the world coordinate bounds of the region this cell affects. */
+    /* Calculate the world coordinate bounds of the region this cell affects.
+     */
     double x_min_world = c->loc[0] - buffer;
     double x_max_world = c->loc[0] + c->width + buffer;
     double y_min_world = c->loc[1] - buffer;
@@ -255,7 +257,8 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
     /* Unpack the particles from this leaf cell. */
     struct particle *parts = c->particles;
 
-    /* Loop over the particles adding their contribution to the local buffer. */
+    /* Loop over the particles adding their contribution to the local buffer.
+     */
     for (int p = 0; p < c->part_count; p++) {
 
       /* Get the particle. */
@@ -333,11 +336,13 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
           if (local_i >= 0 && local_i < local_width && local_j >= 0 &&
               local_j < local_height) {
 
-            /* Loop over images and add the contribution to the local buffer. */
+            /* Loop over images and add the contribution to the local buffer.
+             */
             for (int nimg = 0; nimg < nimgs; nimg++) {
               int local_idx =
                   local_i * local_height * nimgs + local_j * nimgs + nimg;
-              if (local_idx >= 0 && static_cast<size_t>(local_idx) < local_img.size()) {
+              if (local_idx >= 0 &&
+                  static_cast<size_t>(local_idx) < local_img.size()) {
                 local_img[local_idx] +=
                     kvalue * pix_values[part->index * nimgs + nimg];
               }
@@ -536,9 +541,9 @@ void populate_smoothed_image(const double *pix_values, const double *kernel,
   (void)nthreads;
 
   /* If we don't have OpenMP call the serial version. */
-  populate_smoothed_image_serial(pix_values, kernel, res, npix_x, npix_y, npart,
-                                 threshold, kdim, norm_factor, img, nimgs,
-                                 root);
+  populate_smoothed_image_serial(pix_values, kernel, res, npix_x, npix_y,
+                                 npart, threshold, kdim, norm_factor, img,
+                                 nimgs, root);
 #endif
 
   toc("populate_smoothed_image");
@@ -658,8 +663,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_image(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

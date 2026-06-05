@@ -28,6 +28,7 @@ Contents
    advanced/advanced
    notebook_examples/cookbook
    auto_examples/index
+   faq/faq
    publications/publications
    API
 
