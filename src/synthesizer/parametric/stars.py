@@ -315,7 +315,6 @@ class Stars(StarsComponent):
             else:
                 # Otherwise calculate the total initial mass
                 self._initial_mass = np.sum(self.sfzh)
-                self.initial_mass = self._initial_mass * Msun
 
             # Project the SFZH to get the 1D SFH
             self.sf_hist = np.sum(self.sfzh, axis=1)
