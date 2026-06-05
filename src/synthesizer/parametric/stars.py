@@ -398,6 +398,10 @@ class Stars(StarsComponent):
         # If both are instantaneous then we can do the whole SFZH in one go
         if instant_sf is not None and instant_metallicity is not None:
             inst_stars = ParticleStars(
+                # We can just use a single star with mass 1 Msun here, the
+                # normalisation will be applied later based on the initial
+                # mass or surviving mass if provided, or the total mass of
+                # the SFZH grid otherwise
                 initial_masses=np.array([1.0]) * Msun,
                 ages=np.array(
                     [
@@ -432,6 +436,10 @@ class Stars(StarsComponent):
         # Handle the instantaneous SFH case
         elif instant_sf is not None and instant_metallicity is None:
             inst_stars = ParticleStars(
+                # We can just use a single star with mass 1 Msun here, the
+                # normalisation will be applied later based on the initial
+                # mass or surviving mass if provided, or the total mass of
+                # the SFZH grid otherwise
                 initial_masses=np.array([1.0]) * Msun,
                 ages=np.array(
                     [
@@ -449,6 +457,10 @@ class Stars(StarsComponent):
         # Handle the instantaneous ZH case
         elif instant_metallicity is not None and instant_sf is None:
             inst_stars = ParticleStars(
+                # We can just use a single star with mass 1 Msun here, the
+                # normalisation will be applied later based on the initial
+                # mass or surviving mass if provided, or the total mass of
+                # the SFZH grid otherwise
                 initial_masses=np.array([1.0]) * Msun,
                 ages=np.array([self.age_offset.to("yr").value])
                 * yr,  # this is a dummy value
