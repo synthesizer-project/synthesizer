@@ -24,7 +24,8 @@ static PyObject *check_openmp(PyObject *self, PyObject *args) {
 }
 
 static PyMethodDef OpenMPMethods[] = {
-    {"check_openmp", check_openmp, METH_VARARGS, "Check if OpenMP is enabled."},
+    {"check_openmp", check_openmp, METH_VARARGS,
+     "Check if OpenMP is enabled."},
     {NULL, NULL, 0, NULL}};
 
 static struct PyModuleDef openmpmodule = {

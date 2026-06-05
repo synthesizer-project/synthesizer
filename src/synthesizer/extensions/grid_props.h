@@ -2,15 +2,17 @@
 #define GRID_PROPS_H_
 
 /* Standard includes */
-#include <array>
 #include <stdlib.h>
+
+#include <array>
 #include <string>
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "numpy_init.h"
 #include <Python.h>
+
+#include "numpy_init.h"
 
 /* Local includes */
 #include "property_funcs.h"
@@ -24,7 +26,7 @@ constexpr int MAX_GRID_NDIM = 10;
 
 class GridProps {
 
-public:
+ public:
   /* The number of dimensions. */
   int ndim;
 
@@ -44,7 +46,8 @@ public:
             PyObject *axis_names_tuple = NULL);
 
   /* Index handlers for indexing the grid properties. */
-  int ravel_grid_index(const std::array<int, MAX_GRID_NDIM> &multi_index) const;
+  int ravel_grid_index(
+      const std::array<int, MAX_GRID_NDIM> &multi_index) const;
   std::array<int, MAX_GRID_NDIM> unravel_grid_index(int index) const;
   int ravel_spectra_index(const std::array<int, MAX_GRID_NDIM> &multi_index,
                           int ilam) const;
@@ -70,7 +73,7 @@ public:
   /* Do we need to populate the grid weights? */
   bool need_grid_weights() const;
 
-private:
+ private:
   /* The spectra array. */
   PyArrayObject *np_spectra_;
 
@@ -103,4 +106,4 @@ private:
 };
 #pragma omp end declare target
 
-#endif // GRID_PROPS_H_
+#endif  // GRID_PROPS_H_

@@ -12,8 +12,9 @@
 /* Python headers. */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "numpy_init.h"
 #include <Python.h>
+
+#include "numpy_init.h"
 
 /* Local includes. */
 #include "cpp_to_python.h"
@@ -56,10 +57,9 @@
 static void los_loop_serial(const double *pos_i, const double *pos_j,
                             const double *smls, const double *surf_den_vals,
                             const double *kernel,
-                            const double *truncated_kernel,
-                            double *surf_dens, const int npart_i,
-                            const int npart_j, const int kdim,
-                            const int trunc_qdim,
+                            const double *truncated_kernel, double *surf_dens,
+                            const int npart_i, const int npart_j,
+                            const int kdim, const int trunc_qdim,
                             const int zdim, const double threshold) {
 
   /* Loop over particle postions. */
@@ -94,8 +94,7 @@ static void los_loop_serial(const double *pos_i, const double *pos_j,
 
       /* Early skip if the star's line of sight doesn't fall in the gas
        * particles kernel. */
-      if (b > (threshold * sml))
-        continue;
+      if (b > (threshold * sml)) continue;
 
       /* Find fraction of smoothing length. */
       double q = b / sml;
@@ -105,8 +104,8 @@ static void los_loop_serial(const double *pos_i, const double *pos_j,
       double kvalue = 0.0;
       if (z < (zj + threshold * sml)) {
         const double z_trunc = (z - zj) / (threshold * sml);
-        kvalue = get_truncated_kernel_value(
-            truncated_kernel, trunc_qdim, zdim, q / threshold, z_trunc);
+        kvalue = get_truncated_kernel_value(truncated_kernel, trunc_qdim, zdim,
+                                            q / threshold, z_trunc);
       } else {
         kvalue = get_kernel_value(kernel, kdim, q / threshold);
       }
@@ -149,11 +148,10 @@ static void los_loop_serial(const double *pos_i, const double *pos_j,
 #ifdef WITH_OPENMP
 static void los_loop_omp(const double *pos_i, const double *pos_j,
                          const double *smls, const double *surf_den_vals,
-                         const double *kernel,
-                         const double *truncated_kernel, double *surf_dens,
-                         const int npart_i, const int npart_j,
-                         const int kdim, const int trunc_qdim,
-                         const int zdim,
+                         const double *kernel, const double *truncated_kernel,
+                         double *surf_dens, const int npart_i,
+                         const int npart_j, const int kdim,
+                         const int trunc_qdim, const int zdim,
                          const double threshold, const int nthreads) {
 
   /* How many particles should each thread get? */
@@ -207,8 +205,7 @@ static void los_loop_omp(const double *pos_i, const double *pos_j,
 
         /* Early skip if the star's line of sight doesn't fall in the gas
          * particles kernel. */
-        if (b > (threshold * sml))
-          continue;
+        if (b > (threshold * sml)) continue;
 
         /* Find fraction of smoothing length. */
         double q = b / sml;
@@ -218,8 +215,8 @@ static void los_loop_omp(const double *pos_i, const double *pos_j,
         double kvalue = 0.0;
         if (z < (zj + threshold * sml)) {
           const double z_trunc = (z - zj) / (threshold * sml);
-          kvalue = get_truncated_kernel_value(
-              truncated_kernel, trunc_qdim, zdim, q / threshold, z_trunc);
+          kvalue = get_truncated_kernel_value(truncated_kernel, trunc_qdim,
+                                              zdim, q / threshold, z_trunc);
         } else {
           kvalue = get_kernel_value(kernel, kdim, q / threshold);
         }
@@ -248,7 +245,8 @@ static void los_loop_omp(const double *pos_i, const double *pos_j,
  *
  * This is a wrapper function which will call the correct version of the
  * function to compute the line of sight surface densities for each particle
- * based on whether or not OpenMP is available and the number of threads to use.
+ * based on whether or not OpenMP is available and the number of threads to
+ * use.
  *
  * @param pos_i The positions of the star particles.
  * @param pos_j The positions of the gas particles.
@@ -271,9 +269,8 @@ static void los_loop(const double *pos_i, const double *pos_j,
                      const double *smls, const double *surf_den_vals,
                      const double *kernel, const double *truncated_kernel,
                      double *surf_dens, const int npart_i, const int npart_j,
-                     const int kdim, const int trunc_qdim,
-                     const int zdim, const double threshold,
-                     const int nthreads) {
+                     const int kdim, const int trunc_qdim, const int zdim,
+                     const double threshold, const int nthreads) {
 
   tic("los_loop");
 
@@ -282,8 +279,8 @@ static void los_loop(const double *pos_i, const double *pos_j,
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
     los_loop_omp(pos_i, pos_j, smls, surf_den_vals, kernel, truncated_kernel,
-                 surf_dens, npart_i, npart_j, kdim, trunc_qdim, zdim, threshold,
-                 nthreads);
+                 surf_dens, npart_i, npart_j, kdim, trunc_qdim, zdim,
+                 threshold, nthreads);
   } else {
     los_loop_serial(pos_i, pos_j, smls, surf_den_vals, kernel,
                     truncated_kernel, surf_dens, npart_i, npart_j, kdim,
@@ -295,9 +292,9 @@ static void los_loop(const double *pos_i, const double *pos_j,
   (void)nthreads;
 
   /* If we don't have OpenMP call the serial version. */
-  los_loop_serial(pos_i, pos_j, smls, surf_den_vals, kernel,
-                  truncated_kernel, surf_dens, npart_i, npart_j, kdim,
-                  trunc_qdim, zdim, threshold);
+  los_loop_serial(pos_i, pos_j, smls, surf_den_vals, kernel, truncated_kernel,
+                  surf_dens, npart_i, npart_j, kdim, trunc_qdim, zdim,
+                  threshold);
 
 #endif
   toc("los_loop");
@@ -338,7 +335,8 @@ static double calculate_los_recursive(struct cell *c, const double x,
 
   /* Early exit if the projected distance between cells is more than the
    * maximum smoothing length in the cell. */
-  if (c->max_sml_squ * (threshold * threshold) < min_projected_dist2(c, x, y)) {
+  if (c->max_sml_squ * (threshold * threshold) <
+      min_projected_dist2(c, x, y)) {
     return 0;
   }
 
@@ -358,9 +356,9 @@ static double calculate_los_recursive(struct cell *c, const double x,
       }
 
       /* Recurse... */
-      surf_dens += calculate_los_recursive(
-          cp, x, y, z, threshold, kdim, trunc_qdim, zdim, kernel,
-          truncated_kernel);
+      surf_dens +=
+          calculate_los_recursive(cp, x, y, z, threshold, kdim, trunc_qdim,
+                                  zdim, kernel, truncated_kernel);
     }
 
   } else {
@@ -402,8 +400,8 @@ static double calculate_los_recursive(struct cell *c, const double x,
       double kvalue = 0.0;
       if (z < (part->pos[2] + threshold * part->sml)) {
         const double z_trunc = (z - part->pos[2]) / (threshold * part->sml);
-        kvalue = get_truncated_kernel_value(
-            truncated_kernel, trunc_qdim, zdim, q / threshold, z_trunc);
+        kvalue = get_truncated_kernel_value(truncated_kernel, trunc_qdim, zdim,
+                                            q / threshold, z_trunc);
       } else {
         kvalue = get_kernel_value(kernel, kdim, q / threshold);
       }
@@ -449,8 +447,8 @@ static void los_tree_serial(struct cell *root, const double *pos_i,
   /* Loop over the particles we are calculating the surface density for. */
   for (int i = 0; i < npart_i; i++) {
 
-      /* Start at the root. We'll recurse through the tree to the leaves
-       * skipping all cells out of range of this particle. */
+    /* Start at the root. We'll recurse through the tree to the leaves
+     * skipping all cells out of range of this particle. */
     surf_dens[i] = calculate_los_recursive(
         root, pos_i[i * 3], pos_i[i * 3 + 1], pos_i[i * 3 + 2], threshold,
         kdim, trunc_qdim, zdim, kernel, truncated_kernel);
@@ -483,9 +481,8 @@ static void los_tree_serial(struct cell *root, const double *pos_i,
  */
 #ifdef WITH_OPENMP
 static void los_tree_omp(struct cell *root, const double *pos_i,
-                         const double *kernel,
-                         const double *truncated_kernel, double *surf_dens,
-                         const int npart_i, const int kdim,
+                         const double *kernel, const double *truncated_kernel,
+                         double *surf_dens, const int npart_i, const int kdim,
                          const int trunc_qdim, const int zdim,
                          const double threshold, const int nthreads) {
 
@@ -534,7 +531,8 @@ static void los_tree_omp(struct cell *root, const double *pos_i,
  *
  * This is a wrapper function which will call the correct version of the
  * function to compute the line of sight surface densities for each particle
- * based on whether or not OpenMP is available and the number of threads to use.
+ * based on whether or not OpenMP is available and the number of threads to
+ * use.
  *
  * @param root The root of the tree.
  * @param pos_i The positions of the star particles.
@@ -556,8 +554,7 @@ static void los_tree(struct cell *root, const double *pos_i,
                      const double *kernel, const double *truncated_kernel,
                      double *surf_dens, const int npart_i, const int kdim,
                      const int trunc_qdim, const int zdim,
-                     const double threshold,
-                     const int nthreads) {
+                     const double threshold, const int nthreads) {
 
   tic("los_tree");
 
@@ -613,11 +610,10 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   PyArrayObject *np_kernel, *np_truncated_kernel, *np_pos_i, *np_pos_j,
       *np_smls, *np_surf_den_val;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOiiiiidiii", &np_kernel,
-                         &np_truncated_kernel, &np_pos_i, &np_pos_j, &np_smls,
-                         &np_surf_den_val, &npart_i, &npart_j, &kdim,
-                         &trunc_qdim, &zdim, &threshold, &force_loop,
-                         &min_count, &nthreads))
+  if (!PyArg_ParseTuple(
+          args, "OOOOOOiiiiidiii", &np_kernel, &np_truncated_kernel, &np_pos_i,
+          &np_pos_j, &np_smls, &np_surf_den_val, &npart_i, &npart_j, &kdim,
+          &trunc_qdim, &zdim, &threshold, &force_loop, &min_count, &nthreads))
     return NULL;
 
   tic("compute_column_density");
@@ -722,8 +718,8 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
  * Each input/source particle pair is mapped onto the precomputed overlap table
  * `G(q, u, eta)` and contributes exactly once.
  *
- * The runtime pair coordinates are defined using the support radii of the input
- * and source particles:
+ * The runtime pair coordinates are defined using the support radii of the
+ * input and source particles:
  *
  *   q   = b / (R_i + R_j)
  *   u   = (z_i - z_j) / (R_i + R_j)
@@ -898,8 +894,9 @@ static double calculate_los_recursive_smoothed(
 /**
  * @brief Compute smoothed-input LOS surface densities with a loop.
  *
- * For each input particle we loop over source particles, reject non-overlapping
- * pairs, interpolate the overlap table once, and apply the source prefactor.
+ * For each input particle we loop over source particles, reject
+ * non-overlapping pairs, interpolate the overlap table once, and apply the
+ * source prefactor.
  *
  * @param pos_i The positions of the input particles.
  * @param input_smls The smoothing lengths of the input particles.
@@ -988,10 +985,10 @@ static void los_loop_smoothed_omp(
 
     double *surf_dens_thread = new double[end - start]();
 
-    los_loop_smoothed_serial(&pos_i[start * 3], &input_smls[start], pos_j, smls,
-                             surf_den_vals, overlap_kernel, q_grid, u_grid,
-                             eta_grid, surf_dens_thread, end - start, npart_j,
-                             qdim, udim, etadim, threshold);
+    los_loop_smoothed_serial(&pos_i[start * 3], &input_smls[start], pos_j,
+                             smls, surf_den_vals, overlap_kernel, q_grid,
+                             u_grid, eta_grid, surf_dens_thread, end - start,
+                             npart_j, qdim, udim, etadim, threshold);
 
 #pragma omp critical
     {
@@ -1171,9 +1168,9 @@ static void los_tree_smoothed(struct cell *root, const double *pos_i,
                               const double *overlap_kernel,
                               const double *q_grid, const double *u_grid,
                               const double *eta_grid, double *surf_dens,
-                              const int npart_i, const int qdim, const int udim,
-                              const int etadim, const double threshold,
-                              const int nthreads) {
+                              const int npart_i, const int qdim,
+                              const int udim, const int etadim,
+                              const double threshold, const int nthreads) {
 
   tic("Recursive surface density calculation with smoothed inputs");
 
@@ -1289,7 +1286,8 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
   double *surf_dens = static_cast<double *>(PyArray_DATA(np_surf_dens));
 
   /* No point constructing a source tree if there are too few source particles
-   * to justify it, or if we have explicitly been asked to use the loop path. */
+   * to justify it, or if we have explicitly been asked to use the loop path.
+   */
   if (force_loop || npart_j < min_count) {
 
     /* Use the simple pairwise loop over input and source particles. */
@@ -1320,8 +1318,8 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
   /* Calculate the smoothed LOS surface densities using the tree. */
   tic("Dispatching smoothed LOS tree path");
   los_tree_smoothed(root, pos_i, input_smls, overlap_kernel, q_grid, u_grid,
-                    eta_grid, surf_dens, npart_i, qdim, udim, etadim, threshold,
-                    nthreads);
+                    eta_grid, surf_dens, npart_i, qdim, udim, etadim,
+                    threshold, nthreads);
   toc("Dispatching smoothed LOS tree path");
 
   /* Clean up the source-particle cell tree. */
@@ -1359,8 +1357,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_column_density(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

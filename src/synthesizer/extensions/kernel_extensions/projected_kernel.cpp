@@ -6,10 +6,10 @@
  * the source kernel at a given dimensionless impact parameter.
  *****************************************************************************/
 
-#include "kernels.h"
-#include "kernel_functions.h"
-
 #include <vector>
+
+#include "kernel_functions.h"
+#include "kernels.h"
 
 /**
  * @brief Integrate the projected LOS kernel at one impact parameter.
@@ -111,14 +111,13 @@ PyObject *compute_projected_kernel(PyObject *self, PyObject *args) {
   const char *kernel_name;
   int nsteps;
 
-  if (!PyArg_ParseTuple(args, "O!si", &PyArray_Type, &np_q_grid,
-                        &kernel_name, &nsteps)) {
+  if (!PyArg_ParseTuple(args, "O!si", &PyArray_Type, &np_q_grid, &kernel_name,
+                        &nsteps)) {
     return NULL;
   }
 
   if (nsteps <= 0) {
-    PyErr_SetString(PyExc_ValueError,
-                  "nsteps must be a positive integer.");
+    PyErr_SetString(PyExc_ValueError, "nsteps must be a positive integer.");
     return NULL;
   }
 

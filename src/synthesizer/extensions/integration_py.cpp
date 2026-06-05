@@ -3,9 +3,11 @@
  *****************************************************************************/
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "numpy_init.h"
-#include <cmath>
 #include <Python.h>
+
+#include <cmath>
+
+#include "numpy_init.h"
 
 #ifdef WITH_OPENMP
 #include <omp.h>
@@ -304,8 +306,8 @@ static double *weighted_trapz_last_axis_serial(double *x, double *y, double *w,
  * @brief Parallel weighted trapezoidal integration over the final axis.
  */
 #ifdef WITH_OPENMP
-static double *weighted_trapz_last_axis_parallel(double *x, double *y, double *w,
-                                                 npy_intp n,
+static double *weighted_trapz_last_axis_parallel(double *x, double *y,
+                                                 double *w, npy_intp n,
                                                  npy_intp num_elements,
                                                  int nthreads) {
   if (num_elements == 0) {
@@ -482,10 +484,11 @@ static double *weighted_simps_last_axis_serial(double *x, double *y, double *w,
         continue;
       }
 
-      num += (h0 + h1) / 6.0 *
-             ((2.0 - h1 / h0) * y[i * n + k] * w[k] +
-              ((h0 + h1) * (h0 + h1) / (h0 * h1)) * y[i * n + k + 1] * w[k + 1] +
-              (2.0 - h0 / h1) * y[i * n + k + 2] * w[k + 2]);
+      num +=
+          (h0 + h1) / 6.0 *
+          ((2.0 - h1 / h0) * y[i * n + k] * w[k] +
+           ((h0 + h1) * (h0 + h1) / (h0 * h1)) * y[i * n + k + 1] * w[k + 1] +
+           (2.0 - h0 / h1) * y[i * n + k + 2] * w[k + 2]);
     }
     if ((n - 1) % 2 != 0) {
       num += 0.5 * (x[n - 1] - x[n - 2]) *
@@ -501,8 +504,8 @@ static double *weighted_simps_last_axis_serial(double *x, double *y, double *w,
  * @brief Parallel weighted Simpson integration over the final axis.
  */
 #ifdef WITH_OPENMP
-static double *weighted_simps_last_axis_parallel(double *x, double *y, double *w,
-                                                 npy_intp n,
+static double *weighted_simps_last_axis_parallel(double *x, double *y,
+                                                 double *w, npy_intp n,
                                                  npy_intp num_elements,
                                                  int nthreads) {
   if (num_elements == 0) {
@@ -553,10 +556,11 @@ static double *weighted_simps_last_axis_parallel(double *x, double *y, double *w
         continue;
       }
 
-      num += (h0 + h1) / 6.0 *
-             ((2.0 - h1 / h0) * y[i * n + k] * w[k] +
-              ((h0 + h1) * (h0 + h1) / (h0 * h1)) * y[i * n + k + 1] * w[k + 1] +
-              (2.0 - h0 / h1) * y[i * n + k + 2] * w[k + 2]);
+      num +=
+          (h0 + h1) / 6.0 *
+          ((2.0 - h1 / h0) * y[i * n + k] * w[k] +
+           ((h0 + h1) * (h0 + h1) / (h0 * h1)) * y[i * n + k + 1] * w[k + 1] +
+           (2.0 - h0 / h1) * y[i * n + k + 2] * w[k + 2]);
     }
     if ((n - 1) % 2 != 0) {
       num += 0.5 * (x[n - 1] - x[n - 2]) *
@@ -669,16 +673,15 @@ static PyMethodDef IntegrationMethods[] = {
      METH_VARARGS, "Weighted Simpson integration with OpenMP"},
     {NULL, NULL, 0, NULL}};
 
-static struct PyModuleDef integrationmodule = {
-    PyModuleDef_HEAD_INIT,
-    "integration",
-    NULL,
-    -1,
-    IntegrationMethods,
-    NULL,
-    NULL,
-    NULL,
-    NULL};
+static struct PyModuleDef integrationmodule = {PyModuleDef_HEAD_INIT,
+                                               "integration",
+                                               NULL,
+                                               -1,
+                                               IntegrationMethods,
+                                               NULL,
+                                               NULL,
+                                               NULL,
+                                               NULL};
 
 PyMODINIT_FUNC PyInit_integration(void) {
   if (numpy_import() < 0) {
@@ -686,8 +689,7 @@ PyMODINIT_FUNC PyInit_integration(void) {
     return NULL;
   }
   PyObject *m = PyModule_Create(&integrationmodule);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
 #ifdef ATOMIC_TIMING
   if (import_toc_capsule() < 0) {
     Py_DECREF(m);

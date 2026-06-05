@@ -11,7 +11,7 @@ repos:
   # Linting and formatting for Python.
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.11.7
+    rev: v0.15.15
     hooks:
       # Run the linter.
       - id: ruff
@@ -19,6 +19,13 @@ repos:
           - --fix
       # Run the formatter.
       - id: ruff-format
+
+  # Formatting for C++ files.
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v22.1.4
+    hooks:
+      - id: clang-format
+        types_or: [c, c++]
 
   # Sanitise Jupyter notebooks.
   - repo: https://github.com/srstevenson/nb-clean

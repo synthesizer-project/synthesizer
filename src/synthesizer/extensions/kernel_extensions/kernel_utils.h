@@ -215,8 +215,8 @@ static inline double get_truncated_kernel_value(const double *kernel,
  *   boundary.
  *
  * Interpolation inside the table uses standard CIC / trilinear weights.
- * Because the tabulated q and u axes are uniform and the eta axis is uniform in
- * log-space, the interpolation cell is located with direct index arithmetic
+ * Because the tabulated q and u axes are uniform and the eta axis is uniform
+ * in log-space, the interpolation cell is located with direct index arithmetic
  * rather than generic binary searches.
  *
  * @param kernel The overlap kernel table.
@@ -232,11 +232,10 @@ static inline double get_truncated_kernel_value(const double *kernel,
  *
  * @return The interpolated overlap-kernel value.
  */
-static inline double
-get_overlap_kernel_value(const double *kernel, const double *q_grid,
-                         const double *u_grid, const double *eta_grid,
-                         const int qdim, const int udim, const int etadim,
-                         const double q, const double u, const double eta) {
+static inline double get_overlap_kernel_value(
+    const double *kernel, const double *q_grid, const double *u_grid,
+    const double *eta_grid, const int qdim, const int udim, const int etadim,
+    const double q, const double u, const double eta) {
 
   /* Outside the projected or LOS support there is no contribution. */
   if (q < 0.0 || q >= 1.0 || u <= -1.0) {
@@ -292,4 +291,4 @@ get_overlap_kernel_value(const double *kernel, const double *q_grid,
   /* Finally interpolate along the projected-separation direction. */
   return c0 + q_frac * (c1 - c0);
 }
-#endif // KERNEL_UTILS_H_
+#endif  // KERNEL_UTILS_H_
