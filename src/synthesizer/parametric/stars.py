@@ -110,7 +110,6 @@ class Stars(StarsComponent):
     @accepts(
         surviving_mass=Msun.in_base("galactic"),
         initial_mass=Msun.in_base("galactic"),
-        age_offset=yr.in_base("galactic"),
     )
     @timed("ParametricStars.__init__")
     def __init__(
@@ -126,7 +125,6 @@ class Stars(StarsComponent):
         metal_dist=None,
         fesc=None,
         fesc_ly_alpha=None,
-        age_offset=0 * yr,
         **kwargs,
     ):
         """Initialise the parametric stellar population.
@@ -182,12 +180,6 @@ class Stars(StarsComponent):
                 The escape fraction of incident radiation from the stars.
             fesc_ly_alpha (float):
                 The escape fraction of Ly-alpha radiation from the stars.
-            age_offset (unyt_quantity/float):
-                An offset to apply to the age grid. This is useful for
-                applying a formation time to the stellar population, i.e.
-                the age grid will be shifted by this amount to reflect the
-                fact that the stars formed at some time in the past and are
-                not all formed at t=0.
             **kwargs (dict):
                 Arbitrary keyword arguments to be set as attributes on the
                 Stars instance.
@@ -267,9 +259,6 @@ class Stars(StarsComponent):
         # Store the total initial stellar mass
         self.initial_mass = initial_mass
         self.surviving_mass = surviving_mass
-
-        # Store the age offset
-        self.age_offset = age_offset
 
         # Raise exception if both initial mass and surviving mass are
         # provided, this is not physically consistent and we don't want to
@@ -362,7 +351,9 @@ class Stars(StarsComponent):
             # Irregular
             self.metallicity_grid_type = None
 
-    @accepts(instant_sf=yr)
+    @accepts(
+        instant_sf=yr,
+    )
     @timed("ParametricStars._get_sfzh")
     def _get_sfzh(self, instant_sf, instant_metallicity):
         """Compute the SFZH for all possible combinations of input.
@@ -403,13 +394,7 @@ class Stars(StarsComponent):
                 # mass or surviving mass if provided, or the total mass of
                 # the SFZH grid otherwise
                 initial_masses=np.array([1.0]) * Msun,
-                ages=np.array(
-                    [
-                        instant_sf.to("yr").value
-                        + self.age_offset.to("yr").value
-                    ]
-                )
-                * yr,
+                ages=np.array([instant_sf.to("yr").value]) * yr,
                 metallicities=np.array([instant_metallicity]),
             )
 
@@ -441,13 +426,7 @@ class Stars(StarsComponent):
                 # mass or surviving mass if provided, or the total mass of
                 # the SFZH grid otherwise
                 initial_masses=np.array([1.0]) * Msun,
-                ages=np.array(
-                    [
-                        instant_sf.to("yr").value
-                        + self.age_offset.to("yr").value
-                    ]
-                )
-                * yr,
+                ages=np.array([instant_sf.to("yr").value]) * yr,
                 metallicities=np.array([0]),  # this is a dummy value
             )
 
@@ -462,8 +441,7 @@ class Stars(StarsComponent):
                 # mass or surviving mass if provided, or the total mass of
                 # the SFZH grid otherwise
                 initial_masses=np.array([1.0]) * Msun,
-                ages=np.array([self.age_offset.to("yr").value])
-                * yr,  # this is a dummy value
+                ages=np.array([0]) * yr,  # this is a dummy value
                 metallicities=np.array([instant_metallicity]),
             )
 
@@ -481,8 +459,8 @@ class Stars(StarsComponent):
                 max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
                 sf = integrate.quad(
                     self.sf_hist_func.get_sfr,
-                    min_age + self.age_offset.to("yr").value,
-                    max_age + self.age_offset.to("yr").value,
+                    min_age,
+                    max_age,
                 )[0]
                 self.sf_hist[ia] = sf
                 min_age = max_age
