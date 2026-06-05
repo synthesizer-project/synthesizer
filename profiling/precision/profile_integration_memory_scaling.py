@@ -55,22 +55,22 @@ METHODS = {
 
 def make_synthetic_inputs(nentries, nlam, dtype, rng):
     """Create contiguous synthetic inputs for last-axis integration."""
-    xs = np.linspace(0.0, 10.0, nlam, dtype=np.float64)
+    xs = np.linspace(dtype(0.0), dtype(10.0), nlam, dtype=dtype)
 
-    phases = rng.uniform(0.0, np.pi, size=(nentries, 1))
-    amplitudes = rng.uniform(0.5, 2.0, size=(nentries, 1))
-    frequencies = rng.uniform(0.5, 2.5, size=(nentries, 1))
-    continuum = np.linspace(0.8, 1.2, nlam, dtype=np.float64)[None, :]
+    phases = rng.uniform(0.0, np.pi, size=(nentries, 1)).astype(dtype)
+    amplitudes = rng.uniform(0.5, 2.0, size=(nentries, 1)).astype(dtype)
+    frequencies = rng.uniform(0.5, 2.5, size=(nentries, 1)).astype(dtype)
+    continuum = np.linspace(dtype(0.8), dtype(1.2), nlam, dtype=dtype)[None, :]
 
     ys = (
         amplitudes * np.sin(frequencies * xs[None, :] + phases)
-        + 0.1 * continuum
-        + 0.05 * np.cos(0.5 * xs[None, :])
+        + dtype(0.1) * continuum
+        + dtype(0.05) * np.cos(dtype(0.5) * xs[None, :])
     )
 
     return {
-        "xs": np.array(xs, dtype=dtype, order="C", copy=True),
-        "ys": np.array(ys, dtype=dtype, order="C", copy=True),
+        "xs": np.array(xs, dtype=dtype, order="C", copy=False),
+        "ys": np.array(ys, dtype=dtype, order="C", copy=False),
     }
 
 
@@ -245,15 +245,7 @@ def plot_results(results, output_path):
     methods = sorted({row["method"] for row in results})
     nentries_values = sorted({row["nentries"] for row in results})
     all_deltas = [row["delta_mib"] for row in results]
-    positive_deltas = [delta for delta in all_deltas if delta > 0.0]
     max_delta = max(all_deltas, default=0.0)
-    min_positive_delta = min(positive_deltas, default=None)
-
-    use_symlog = (
-        min_positive_delta is not None
-        and max_delta > 0.0
-        and max_delta / min_positive_delta > 100.0
-    )
 
     figure, axes = plt.subplots(
         len(nentries_values),
@@ -300,15 +292,8 @@ def plot_results(results, output_path):
                 axis.set_xlabel("Progress through benchmark (%)")
 
             axis.grid(True, alpha=0.3)
-
-            if use_symlog:
-                axis.set_yscale(
-                    "symlog",
-                    linthresh=max(1.0, min_positive_delta),
-                )
-            else:
-                upper_limit = max_delta * 1.05 if max_delta > 0.0 else 1.0
-                axis.set_ylim(0.0, upper_limit)
+            upper_limit = max_delta * 1.05 if max_delta > 0.0 else 1.0
+            axis.set_ylim(0.0, upper_limit)
 
     axes[0][-1].legend(loc="best", fontsize=9)
     figure.suptitle("Integration Memory Scaling")
