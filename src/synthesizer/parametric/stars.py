@@ -110,6 +110,7 @@ class Stars(StarsComponent):
     @accepts(
         surviving_mass=Msun.in_base("galactic"),
         initial_mass=Msun.in_base("galactic"),
+        age_offset=yr.in_base("galactic"),
     )
     @timed("ParametricStars.__init__")
     def __init__(
