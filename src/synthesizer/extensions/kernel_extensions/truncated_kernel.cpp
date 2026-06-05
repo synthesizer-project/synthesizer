@@ -2,9 +2,9 @@
  * Truncated LOS kernel table builder.
  *
  * This module builds the 2D truncated LOS kernel lookup table used when the
- * input particle lies inside the source kernel. The table stores the cumulative
- * foreground LOS integral as a function of projected separation and truncation
- * coordinate.
+ * input particle lies inside the source kernel. The table stores the
+ * cumulative foreground LOS integral as a function of projected separation and
+ * truncation coordinate.
  *****************************************************************************/
 
 #include "kernel_functions.h"
@@ -82,8 +82,8 @@ PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
   PyArrayObject *np_q_grid, *np_z_grid;
   const char *kernel_name;
 
-  if (!PyArg_ParseTuple(args, "O!O!s", &PyArray_Type, &np_q_grid, &PyArray_Type,
-                        &np_z_grid, &kernel_name)) {
+  if (!PyArg_ParseTuple(args, "O!O!s", &PyArray_Type, &np_q_grid,
+                        &PyArray_Type, &np_z_grid, &kernel_name)) {
     return NULL;
   }
 
@@ -107,16 +107,16 @@ PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-const int qdim = static_cast<int>(PyArray_DIM(np_q_grid, 0));
+  const int qdim = static_cast<int>(PyArray_DIM(np_q_grid, 0));
   const int zdim = static_cast<int>(PyArray_DIM(np_z_grid, 0));
   if (qdim == 0) {
     PyErr_SetString(PyExc_ValueError,
-                  "q_grid must contain at least one element.");
+                    "q_grid must contain at least one element.");
     return NULL;
   }
   if (zdim == 0) {
     PyErr_SetString(PyExc_ValueError,
-                  "z_grid must contain at least one element.");
+                    "z_grid must contain at least one element.");
     return NULL;
   }
 

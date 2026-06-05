@@ -22,13 +22,16 @@ class GridProps;
  * @param np_weights: The numpy array holding the particle weights.
  * @param np_velocities: The numpy array holding the particle velocities.
  * @param np_mask: The numpy array holding the particle mask.
- * @param part_tuple: The tuple of numpy arrays holding the particle properties.
+ * @param part_tuple: The tuple of numpy arrays holding the particle
+ * properties.
  */
 Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
                      PyArrayObject *np_mask, PyObject *part_tuple,
                      PyObject *part_names_tuple, int npart_)
-    : np_weights_(np_weights), np_velocities_(np_velocities),
-      np_mask_(np_mask), part_tuple_(part_tuple) {
+    : np_weights_(np_weights),
+      np_velocities_(np_velocities),
+      np_mask_(np_mask),
+      part_tuple_(part_tuple) {
 
   tic("Particles.__init__");
 

@@ -13,14 +13,15 @@
  *     their own init time and cache the raw function pointer in timers.h.
  *   - At runtime, timers.h calls the cached pointer directly (no GIL).
  *****************************************************************************/
+#include "timers.h"
+
 #include <Python.h>
+
 #include <atomic>
 #include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include "timers.h"
 
 /**
  * @brief Structure to hold timing data for a single operation.
@@ -41,8 +42,7 @@ struct OperationTimingData {
   /**
    * @brief Default constructor.
    */
-  OperationTimingData()
-      : cumulative_time(0.0), call_count(0), source("") {}
+  OperationTimingData() : cumulative_time(0.0), call_count(0), source("") {}
 
   /**
    * @brief Constructor with source specification.
@@ -61,8 +61,8 @@ struct OperationTimingData {
    */
   void add_time(double value) {
     double old_val = cumulative_time.load(std::memory_order_relaxed);
-    while (!cumulative_time.compare_exchange_weak(
-        old_val, old_val + value, std::memory_order_relaxed)) {
+    while (!cumulative_time.compare_exchange_weak(old_val, old_val + value,
+                                                  std::memory_order_relaxed)) {
       // Retry if another thread modified it
     }
   }
@@ -102,8 +102,10 @@ struct ActiveTimer {
   double accumulated_exclusive;
 
   ActiveTimer(const char *op, const char *src, double now)
-      : operation(op == nullptr ? "" : op), source(src == nullptr ? "" : src),
-        resume_time(now), accumulated_exclusive(0.0) {}
+      : operation(op == nullptr ? "" : op),
+        source(src == nullptr ? "" : src),
+        resume_time(now),
+        accumulated_exclusive(0.0) {}
 };
 
 /**
@@ -221,8 +223,7 @@ extern "C" void toc_stop(const char *msg, const char *source) {
 static PyObject *py_tic(PyObject *self, PyObject *args) {
   (void)self;
   char *msg;
-  if (!PyArg_ParseTuple(args, "s", &msg))
-    return NULL;
+  if (!PyArg_ParseTuple(args, "s", &msg)) return NULL;
 #ifdef ATOMIC_TIMING
   tic_start(msg, "Python");
 #endif
@@ -244,8 +245,7 @@ static PyObject *py_tic(PyObject *self, PyObject *args) {
 static PyObject *py_toc(PyObject *self, PyObject *args) {
   (void)self;
   char *msg;
-  if (!PyArg_ParseTuple(args, "s", &msg))
-    return NULL;
+  if (!PyArg_ParseTuple(args, "s", &msg)) return NULL;
 #ifdef ATOMIC_TIMING
   toc_stop(msg, "Python");
 #endif
@@ -286,8 +286,7 @@ static PyObject *py_get_operation_names(PyObject *self, PyObject *args) {
 static PyObject *py_get_operation_timings(PyObject *self, PyObject *args) {
   (void)self;
   const char *operation;
-  if (!PyArg_ParseTuple(args, "s", &operation))
-    return NULL;
+  if (!PyArg_ParseTuple(args, "s", &operation)) return NULL;
 
   std::lock_guard<std::mutex> lock(timings_mutex);
   // Find operation in map
@@ -317,8 +316,7 @@ static PyObject *py_get_operation_timings(PyObject *self, PyObject *args) {
 static PyObject *py_get_operation_source(PyObject *self, PyObject *args) {
   (void)self;
   const char *operation;
-  if (!PyArg_ParseTuple(args, "s", &operation))
-    return NULL;
+  if (!PyArg_ParseTuple(args, "s", &operation)) return NULL;
 
   std::lock_guard<std::mutex> lock(timings_mutex);
   // Find operation in map
@@ -370,8 +368,7 @@ static PyObject *py_test_toc_from_c(PyObject *self, PyObject *args) {
 #ifdef ATOMIC_TIMING
   char *msg;
   double elapsed_time;
-  if (!PyArg_ParseTuple(args, "sd", &msg, &elapsed_time))
-    return NULL;
+  if (!PyArg_ParseTuple(args, "sd", &msg, &elapsed_time)) return NULL;
 
   toc_accumulate(msg, elapsed_time, "C");
 #else
@@ -382,8 +379,7 @@ static PyObject *py_test_toc_from_c(PyObject *self, PyObject *args) {
 
 /* Module method table */
 static PyMethodDef TimerMethods[] = {
-    {"tic", py_tic, METH_VARARGS,
-     "Start a timer for a named operation."},
+    {"tic", py_tic, METH_VARARGS, "Start a timer for a named operation."},
     {"toc", py_toc, METH_VARARGS,
      "Stop a named timer and accumulate timing data."},
     {"get_operation_names", py_get_operation_names, METH_NOARGS,
@@ -404,7 +400,7 @@ static PyMethodDef TimerMethods[] = {
 /* Module definition */
 static struct PyModuleDef timermodule = {
     PyModuleDef_HEAD_INIT,
-    "timers",                             /* name of module */
+    "timers",                              /* name of module */
     "A module containing timer functions", /* module documentation */
     -1,                                    /* m_size */
     TimerMethods,                          /* m_methods */
@@ -417,8 +413,7 @@ static struct PyModuleDef timermodule = {
 /* Module initialization function */
 PyMODINIT_FUNC PyInit_timers(void) {
   PyObject *m = PyModule_Create(&timermodule);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
 
 #ifdef ATOMIC_TIMING
   /* Expose timer start callback for C++ extensions. */
@@ -448,8 +443,8 @@ PyMODINIT_FUNC PyInit_timers(void) {
   }
 
   /* Keep exposing toc_accumulate for testing helpers. */
-  PyObject *acc_capsule = PyCapsule_New((void *)toc_accumulate,
-                                        TOC_ACCUMULATE_CAPSULE_NAME, NULL);
+  PyObject *acc_capsule =
+      PyCapsule_New((void *)toc_accumulate, TOC_ACCUMULATE_CAPSULE_NAME, NULL);
   if (acc_capsule == NULL) {
     Py_DECREF(m);
     return NULL;

@@ -3,11 +3,12 @@
 
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "numpy_init.h"
-
 #include <Python.h>
+
 #include <cstdint>
 #include <memory>
+
+#include "numpy_init.h"
 
 /**
  * @brief Map a C++ scalar type onto its NumPy typenum.
