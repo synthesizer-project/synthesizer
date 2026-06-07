@@ -106,6 +106,7 @@ class Stars(StarsComponent):
     # Define quantities
     initial_mass = Quantity("mass")
     surviving_mass = Quantity("mass")
+    age_offset = Quantity("time")
 
     @accepts(
         surviving_mass=Msun.in_base("galactic"),
@@ -301,11 +302,7 @@ class Stars(StarsComponent):
         if sfzh is not None:
             # Store the SFZH grid
             self.sfzh = sfzh
-
         else:
-            # Set up the array ready for the calculation
-            self.sfzh = np.zeros((len(log10ages), len(metallicities)))
-
             # Compute the SFZH grid
             self.sfzh = self._create_sfzh()
 
@@ -327,21 +324,20 @@ class Stars(StarsComponent):
         if self.surviving_mass is not None:
             self.sfzh_normalisation = (
                 self._surviving_mass / self.stellar_fraction
-            ) / np.sum(sfzh)
-            self.sfzh = sfzh * self.sfzh_normalisation
+            ) / np.sum(self.sfzh)
+            self.sfzh *= self.sfzh_normalisation
 
             # now calculate the initial mass
             self.initial_mass = np.sum(self.sfzh) * Msun
 
         elif self.initial_mass is not None:
-            self.sfzh_normalisation = self._initial_mass / np.sum(sfzh)
-            self.sfzh = sfzh * self.sfzh_normalisation
+            self.sfzh_normalisation = self._initial_mass / np.sum(self.sfzh)
+            self.sfzh *= self.sfzh_normalisation
 
         else:
             # Otherwise calculate the total initial mass by just summing the
             # SFZH grid
-            self.sfzh = sfzh
-            self.initial_mass = np.sum(sfzh) * Msun
+            self.initial_mass = np.sum(self.sfzh) * Msun
 
         # Ensure sf_hist and metal_dist reflect the rescaled sfzh
         self.sf_hist = np.sum(self.sfzh, axis=1)
@@ -374,9 +370,9 @@ class Stars(StarsComponent):
             # Irregular
             self.metallicity_grid_type = None
 
-    @accepts(age_offset=yr.in_base("galactic"))
+    # @accepts(age_offset=yr.in_base("galactic"))
     @timed("ParametricStars._create_sfzh")
-    def _create_sfzh(self, age_offset=0 * yr):
+    def _create_sfzh(self, age_offset=0 * yr, reset_sf_hist_metal_dist=False):
         """Compute the SFZH for all possible combinations of input.
 
         If functions are passed for sf_hist_func and metal_dist_func then
@@ -385,6 +381,14 @@ class Stars(StarsComponent):
         Args:
             age_offset (unyt_quantity):
                 The offset to apply to the age grid when calculating the SFZH
+            reset_sf_hist_metal_dist:
+                Flag whether to reset the sf_hist and metal_dist arrays to
+                None before calculating the SFZH. This is needed when
+                calculating the SFZH at an earlier time to ensure that if the
+                SFH and ZH are defined by functions then they are recalculated
+                based on the age offset, otherwise the original sf_hist and
+                metal_dist arrays would be used which would not be correct for
+                the new age grid.
 
         """
         # Hide imports to avoid cyclic imports
@@ -401,6 +405,10 @@ class Stars(StarsComponent):
             sf_hist = self.sf_hist
             metal_dist = self.metal_dist
         else:
+            sf_hist = None
+            metal_dist = None
+
+        if reset_sf_hist_metal_dist:
             sf_hist = None
             metal_dist = None
 
@@ -452,7 +460,7 @@ class Stars(StarsComponent):
             # return the SFZH, SFH and ZH at this point and skip the
             # rest of the code which is really just for normalisation and
             # checking consistency of the SFH and ZH arrays with the SFZH grid.
-            return sfzh, sf_hist, metal_dist
+            return sfzh
 
         # Handle the instantaneous SFH case
         elif self.instant_sf is not None and self.instant_metallicity is None:
@@ -483,8 +491,7 @@ class Stars(StarsComponent):
                 # mass or surviving mass if provided, or the total mass of
                 # the SFZH grid otherwise
                 initial_masses=np.array([1.0]) * Msun,
-                ages=np.array([age_offset.to("yr").value])
-                * yr,  # this is a dummy value
+                ages=np.array([0.0]) * yr,  # this is a dummy value
                 metallicities=np.array([self.instant_metallicity]),
             )
 
@@ -537,12 +544,10 @@ class Stars(StarsComponent):
             )
 
         # Finally, calculate the SFZH grid based on the above calculations
-        sfzh = sf_hist[:, np.newaxis] * metal_dist
+        return sf_hist[:, np.newaxis] * metal_dist
 
-        return sfzh
-
-    @accepts(age_offset=yr.in_base("galactic"))
-    def get_at_earier_time(self, age_offset):
+    # @accepts(age_offset=yr.in_base("galactic"))
+    def get_at_earlier_time(self, age_offset=age_offset):
         """Get a new Stars object representing the population at age_offset.
 
         This is done by applying a lookback time to the age grid and then
@@ -557,15 +562,20 @@ class Stars(StarsComponent):
             Stars: New Stars object on the requested grid.
         """
         # Calculate the initial mass at the earlier time
-        initial_mass_at_age = self.calculate_initial_mass_at_age(
-            self, age_offset
-        )
+        initial_mass_at_age = self.calculate_initial_mass_at_age(age_offset)
 
         # Calculate the new SFZH grid at the earlier time
-        sfzh = self._create_sfzh(age_offset)
+        sfzh = self._create_sfzh(
+            age_offset=age_offset, reset_sf_hist_metal_dist=True
+        )
 
         # Create a new Stars object with the new SFZH grid and initial mass
-        return Stars(sfzh=sfzh, initial_mass=initial_mass_at_age)
+        return Stars(
+            self.log10ages,
+            self.metallicities,
+            sfzh=sfzh,
+            initial_mass=initial_mass_at_age,
+        )
 
     @timed("Stars.get_mask")
     def get_mask(
