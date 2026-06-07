@@ -88,6 +88,49 @@ class TestGridInitialization:
         assert len(grid.line_lums) == 0
         assert len(grid.line_conts) == 0
 
+    def test_grid_with_use_precision(self, test_grid_name):
+        """Test Grid initialization with precision coercion."""
+        grid = Grid(test_grid_name, use_precision=np.float32)
+
+        assert grid.lam.dtype == np.float32
+        for axis in grid.axes:
+            assert grid._axes_values[axis].dtype == np.float32
+
+        for spectra in grid.spectra.values():
+            assert spectra.dtype == np.float32
+
+        if grid.has_lines:
+            assert grid.line_lams.dtype == np.float32
+            for line_lum in grid.line_lums.values():
+                assert line_lum.dtype == np.float32
+            for line_cont in grid.line_conts.values():
+                assert line_cont.dtype == np.float32
+
+    def test_grid_convert_precision_returns_new_grid(self, test_grid):
+        """Test precision conversion returns a new Grid by default."""
+        converted = test_grid.convert_precision(np.float32)
+
+        assert converted is not test_grid
+        assert converted.lam.dtype == np.float32
+        assert test_grid.lam.dtype != np.float32
+
+        for spectra in converted.spectra.values():
+            assert spectra.dtype == np.float32
+
+    def test_grid_convert_precision_inplace(self, test_grid_name):
+        """Test in-place precision conversion."""
+        grid = Grid(test_grid_name)
+        grid.convert_precision(np.float32, inplace=True)
+
+        assert grid.lam.dtype == np.float32
+        for axis in grid.axes:
+            assert grid._axes_values[axis].dtype == np.float32
+
+    def test_grid_convert_precision_invalid_dtype(self, test_grid):
+        """Test invalid precision raises a clear error."""
+        with pytest.raises(ValueError, match="precision must be either"):
+            test_grid.convert_precision(np.int32)
+
 
 class TestGridAxes:
     """Tests for Grid axis handling and attribute access."""
