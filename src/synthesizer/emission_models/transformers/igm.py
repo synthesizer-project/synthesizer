@@ -17,7 +17,6 @@ from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.exceptions import UnimplementedFunctionality
 from synthesizer.units import accepts
 from synthesizer.utils import sigmoid
-from synthesizer.utils.operation_timers import timed
 
 # Define the path to the data files
 filepath = os.path.abspath(__file__)
@@ -100,7 +99,6 @@ class IGMBase(Transformer):
 
         return fig, ax
 
-    @timed("IGMBase._transform")
     def _transform(
         self,
         emission,
@@ -121,7 +119,7 @@ class IGMBase(Transformer):
             lam_mask (np.ndarray): The wavelength mask to apply to the
                 emission.
             nthreads (int):
-                The number of threads to use for compatible Sed scaling.
+                The number of threads to use for compatible scaling kernels.
 
         Returns:
             Line/Sed: The transformed emission.

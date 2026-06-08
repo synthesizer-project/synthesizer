@@ -20,9 +20,8 @@ from synthesizer.emission_models.extractors.extractor import (
 )
 from synthesizer.emission_models.utils import cache_model_params
 from synthesizer.emissions import LineCollection, Sed, integrate_particle_sed
-from synthesizer.emissions.utils import get_array_quantity_view
 from synthesizer.grid import Template
-from synthesizer.utils.operation_timers import timed, timer
+from synthesizer.utils.operation_timers import timer
 
 
 class Extraction:
@@ -67,7 +66,6 @@ class Extraction:
         # peculiar velocities? (Particle Only!)
         self._use_vel_shift = vel_shift
 
-    @timed("Extraction._extract_spectra")
     def _extract_spectra(
         self,
         this_model,
@@ -397,7 +395,6 @@ class Generation:
         # Attach the emission generation model
         self._generator = generator
 
-    @timed("Generation._generate_spectra")
     def _generate_spectra(
         self,
         this_model,
@@ -682,7 +679,6 @@ class Transformation:
             else self._apply_to.label
         )
 
-    @timed("Transformation._transform_emission")
     def _transform_emission(
         self,
         this_model,
@@ -719,76 +715,68 @@ class Transformation:
             dict:
                 The dictionary of spectra.
         """
-        with timer("Transformation._transform_emission.lookup_input"):
-            # Get the spectra to apply dust to
-            if this_model.per_particle:
-                apply_to = particle_emissions[this_model._apply_to_label]
-            else:
-                apply_to = emissions[this_model._apply_to_label]
+        # Get the spectra to apply dust to
+        if this_model.per_particle:
+            apply_to = particle_emissions[this_model._apply_to_label]
+        else:
+            apply_to = emissions[this_model._apply_to_label]
 
         # If we have a LineColleciton and a lam_mask, we need to translate
         # the nlam lam_mask into an nlines lam_mask
-        with timer("Transformation._transform_emission.build_lam_mask"):
-            if (
-                isinstance(apply_to, LineCollection)
-                and this_model._lam_mask is not None
-            ):
-                # Get the line wavelengths
-                line_lams = apply_to.lam
+        if (
+            isinstance(apply_to, LineCollection)
+            and this_model._lam_mask is not None
+        ):
+            # Get the line wavelengths
+            line_lams = apply_to.lam
 
-                # Get the indices that would bin the lines into the
-                # spectra grid wavelength array
-                raw_indices = np.digitize(
-                    line_lams,
-                    lam,
-                    right=False,
-                )
-
-                # Translate these indices into a mask
-                lam_mask = np.zeros(apply_to.nlines, dtype=bool)
-                for i, raw in enumerate(raw_indices):
-                    # Skip lines outside the grid: raw == 0 (below first edge)
-                    # or raw == nlam (at/above last edge)
-                    if raw == 0 or raw == lam.size:
-                        continue
-                    grid_ix = raw - 1
-                    if this_model._lam_mask[grid_ix]:
-                        lam_mask[i] = True
-
-            else:
-                # Otherwise we can just use the lam_mask as is
-                lam_mask = this_model.lam_mask
-
-        with timer("Transformation._transform_emission.apply_transform"):
-            # Apply the transform to the emission
-            emission = self.transformer._transform(
-                apply_to,
-                emitter,
-                this_model,
-                this_mask if this_model.per_particle else None,
-                lam_mask,
-                nthreads=nthreads,
+            # Get the indices that would bin the lines into the
+            # spectra grid wavelength array
+            raw_indices = np.digitize(
+                line_lams,
+                lam,
+                right=False,
             )
 
-        with timer("Transformation._transform_emission.cache_model"):
-            # Cache the model on the emitter
-            cache_model_params(this_model, emitter)
+            # Translate these indices into a mask
+            lam_mask = np.zeros(apply_to.nlines, dtype=bool)
+            for i, raw in enumerate(raw_indices):
+                # Skip lines outside the grid: raw == 0 (below first edge)
+                # or raw == nlam (at/above last edge)
+                if raw == 0 or raw == lam.size:
+                    continue
+                grid_ix = raw - 1
+                if this_model._lam_mask[grid_ix]:
+                    lam_mask[i] = True
+
+        else:
+            # Otherwise we can just use the lam_mask as is
+            lam_mask = this_model.lam_mask
+
+        # Apply the transform to the emission
+        emission = self.transformer._transform(
+            apply_to,
+            emitter,
+            this_model,
+            this_mask if this_model.per_particle else None,
+            lam_mask,
+            nthreads=nthreads,
+        )
+
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
 
         # Store the spectra in the right place (integrating if we need to)
-        with timer("Transformation._transform_emission.store_output"):
-            if this_model.per_particle:
-                particle_emissions[this_model.label] = emission
-                if isinstance(emission, Sed):
-                    with timer(
-                        "Transformation._transform_emission.integrate_particles"
-                    ):
-                        emissions[this_model.label] = integrate_particle_sed(
-                            emission, nthreads
-                        )
-                else:
-                    emissions[this_model.label] = emission.sum()
+        if this_model.per_particle:
+            particle_emissions[this_model.label] = emission
+            if isinstance(emission, Sed):
+                emissions[this_model.label] = integrate_particle_sed(
+                    emission, nthreads
+                )
             else:
-                emissions[this_model.label] = emission
+                emissions[this_model.label] = emission.sum()
+        else:
+            emissions[this_model.label] = emission
 
         return emissions, particle_emissions
 
@@ -842,7 +830,6 @@ class Combination:
             for model in self._combine
         ]
 
-    @timed("Combination._combine_spectra")
     def _combine_spectra(
         self,
         emission_model,
@@ -873,75 +860,50 @@ class Combination:
             dict:
                 The dictionary of spectra.
         """
-        combine_labels = this_model._combine_labels
-
-        with timer("Combination._combine_spectra.initialise_output"):
-            if this_model.per_particle:
-                in_spectra = particle_spectra
-            else:
-                in_spectra = spectra
-
-            template = in_spectra[combine_labels[0]]
-            template_lnu = template._lnu
-
-        with timer("Combination._combine_spectra.accumulate"):
-            if this_model.per_particle and template_lnu.ndim == 2:
-                from synthesizer.extensions.reductions import (
-                    combine_spectra_list_2d,
+        # Create an empty spectra to add to
+        if this_model.per_particle:
+            out_spec = Sed(
+                emission_model.lam,
+                lnu=np.zeros_like(
+                    particle_spectra[this_model._combine_labels[0]]._lnu
                 )
+                * erg
+                / s
+                / Hz,
+            )
+        else:
+            out_spec = Sed(
+                emission_model.lam,
+                lnu=np.zeros_like(spectra[this_model._combine_labels[0]]._lnu)
+                * erg
+                / s
+                / Hz,
+            )
 
-                input_lnu = [
-                    in_spectra[label]._lnu for label in combine_labels
+        # Combine the spectra
+        for combine_label in this_model._combine_labels:
+            if this_model.per_particle:
+                nan_mask = np.isnan(particle_spectra[combine_label]._lnu)
+                out_spec._lnu[~nan_mask] += particle_spectra[
+                    combine_label
+                ]._lnu[~nan_mask]
+            else:
+                nan_mask = np.isnan(spectra[combine_label]._lnu)
+                out_spec._lnu[~nan_mask] += spectra[combine_label]._lnu[
+                    ~nan_mask
                 ]
 
-                with timer("Combination._combine_spectra.c_kernel"):
-                    combined_lnu = combine_spectra_list_2d(
-                        input_lnu,
-                        nthreads,
-                    )
-
-                with timer("Combination._combine_spectra.wrap_sed"):
-                    out_spec = Sed(
-                        emission_model.lam,
-                        lnu=get_array_quantity_view(
-                            combined_lnu, erg / s / Hz
-                        ),
-                    )
-            else:
-                initial_lnu = np.array(template_lnu, copy=True)
-                np.nan_to_num(initial_lnu, copy=False)
-                out_spec = Sed(
-                    emission_model.lam,
-                    lnu=get_array_quantity_view(initial_lnu, erg / s / Hz),
-                )
-                out_lnu = out_spec._lnu
-
-                with timer("Combination._combine_spectra.python_fallback"):
-                    # Seed from the first spectrum so subsequent work only
-                    # processes the remaining inputs.
-                    for combine_label in combine_labels[1:]:
-                        combine_lnu = in_spectra[combine_label]._lnu
-                        np.add(
-                            out_lnu,
-                            combine_lnu,
-                            out=out_lnu,
-                            where=~np.isnan(combine_lnu),
-                        )
-
-        with timer("Combination._combine_spectra.cache_model"):
-            # Cache the model on the emitter
-            cache_model_params(this_model, emitter)
+        # Cache the model on the emitter
+        cache_model_params(this_model, emitter)
 
         # Store the spectra in the right place (integrating if we need to)
-        with timer("Combination._combine_spectra.store_output"):
-            if this_model.per_particle:
-                particle_spectra[this_model.label] = out_spec
-                with timer("Combination._combine_spectra.integrate_particles"):
-                    spectra[this_model.label] = integrate_particle_sed(
-                        out_spec, nthreads
-                    )
-            else:
-                spectra[this_model.label] = out_spec
+        if this_model.per_particle:
+            particle_spectra[this_model.label] = out_spec
+            spectra[this_model.label] = integrate_particle_sed(
+                out_spec, nthreads
+            )
+        else:
+            spectra[this_model.label] = out_spec
 
         return spectra, particle_spectra
 

@@ -3,19 +3,21 @@
  * Calculates weights on an arbitrary dimensional grid given the mass.
  *****************************************************************************/
 /* C includes */
-#include <array>
 #include <math.h>
-#include <new>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <array>
+#include <new>
 #include <vector>
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "numpy_init.h"
 #include <Python.h>
+
+#include "numpy_init.h"
 
 /* Local includes */
 #include "cpp_to_python.h"
@@ -34,8 +36,8 @@
  * @brief Find nearest wavelength bin for a given lambda, in a given wavelength
  * array. Used by the spectra loop functions when considering doppler shift
  *
- * Note: binary search returns the index of the upper bin of those that straddle
- * the given lambda.
+ * Note: binary search returns the index of the upper bin of those that
+ * straddle the given lambda.
  */
 int get_upper_lam_bin(double lambda, double *grid_wavelengths, int nlam) {
   return binary_search(0, nlam - 1, grid_wavelengths, lambda);
@@ -132,8 +134,7 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
         frac *= sc.offs[d] ? parts->grid_fracs[p * ndim + d]
                            : (1.0 - parts->grid_fracs[p * ndim + d]);
       }
-      if (frac == 0.0)
-        continue;
+      if (frac == 0.0) continue;
 
       /* Flattened grid index */
       const int grid_i = base_lin + sc.linoff;
@@ -149,8 +150,8 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
       /* Accumulate the contribution from all valid cells */
       double total = 0.0;
       for (int icell = 0; icell < nvalid_cells; icell++) {
-        total = std::fma(cell_spectra_ptrs[icell][il],
-                         cell_weights[icell], total);
+        total =
+            std::fma(cell_spectra_ptrs[icell][il], cell_weights[icell], total);
       }
 
       const int ils = mapped_indices[il];
@@ -173,7 +174,8 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
 
 /**
  * @brief This calculates particle spectra using a cloud in cell approach.
- * This is the parallel version of the function that accounts for Doppler shift.
+ * This is the parallel version of the function that accounts for Doppler
+ * shift.
  *
  * Each thread allocates its shift‐mapping buffers once and reuses them for
  * every particle, and all sub‐cell index math is hoisted out of the particle
@@ -193,8 +195,9 @@ static void shifted_spectra_loop_cic_serial(GridProps *grid_props,
  */
 #ifdef WITH_OPENMP
 static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
-                                         Particles *parts, double *part_spectra,
-                                         int nthreads, const double c) {
+                                         Particles *parts,
+                                         double *part_spectra, int nthreads,
+                                         const double c) {
 
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
@@ -287,8 +290,7 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
           frac *= sc.offs[d] ? parts->grid_fracs[p * ndim + d]
                              : (1.0 - parts->grid_fracs[p * ndim + d]);
         }
-        if (frac == 0.0)
-          continue;
+        if (frac == 0.0) continue;
 
         /* Flattened grid index */
         const int grid_i = base_lin + sc.linoff;
@@ -303,8 +305,8 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
         /* Accumulate contributions from all valid cells */
         double total = 0.0;
         for (int icell = 0; icell < nvalid_cells; icell++) {
-          total = std::fma(cell_spectra_ptrs[icell][il],
-                           cell_weights[icell], total);
+          total = std::fma(cell_spectra_ptrs[icell][il], cell_weights[icell],
+                           total);
         }
 
         const int ils = mapped_indices[il];
@@ -327,7 +329,8 @@ static void shifted_spectra_loop_cic_omp(GridProps *grid_props,
 
       /* Copy the entire spectrum at once into the output array. */
       for (size_t il = 0; il < nlam; ++il) {
-        local_part_spectra[(p - start_idx) * nlam + il] = this_part_spectra[il];
+        local_part_spectra[(p - start_idx) * nlam + il] =
+            this_part_spectra[il];
       }
 
       /* Reset the local spectra for this particle. */
@@ -485,8 +488,9 @@ static void shifted_spectra_loop_ngp_serial(GridProps *grid_props,
  */
 #ifdef WITH_OPENMP
 static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
-                                         Particles *parts, double *part_spectra,
-                                         int nthreads, const double c) {
+                                         Particles *parts,
+                                         double *part_spectra, int nthreads,
+                                         const double c) {
 
   /* Unpack the grid properties. */
   size_t nlam = static_cast<size_t>(grid_props->nlam);
@@ -565,7 +569,8 @@ static void shifted_spectra_loop_ngp_omp(GridProps *grid_props,
         /* Compute the fraction of the shifted wavelength between the two
          * closest wavelength elements. */
         double frac_shifted = 0.0;
-        if (ilam_shifted > 0 && static_cast<size_t>(ilam_shifted) <= nlam - 1) {
+        if (ilam_shifted > 0 &&
+            static_cast<size_t>(ilam_shifted) <= nlam - 1) {
           frac_shifted =
               (shifted_lambda - wavelength[ilam_shifted - 1]) /
               (wavelength[ilam_shifted] - wavelength[ilam_shifted - 1]);
@@ -677,8 +682,8 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOiiisiOOO|O", &np_grid_spectra,
-                        &np_lam, &grid_tuple, &part_tuple, &np_part_mass,
+  if (!PyArg_ParseTuple(args, "OOOOOOOiiisiOOO|O", &np_grid_spectra, &np_lam,
+                        &grid_tuple, &part_tuple, &np_part_mass,
                         &np_velocities, &np_ndims, &ndim, &npart, &nlam,
                         &method, &nthreads, &py_c, &np_mask, &np_lam_mask,
                         &prop_names)) {
@@ -692,24 +697,21 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   RETURN_IF_PYERR();
 
   /* Create the object that holds the particle properties. */
-  Particles *part_props =
-      new Particles(np_part_mass, np_velocities, np_mask, part_tuple,
-                    prop_names, npart);
+  Particles *part_props = new Particles(np_part_mass, np_velocities, np_mask,
+                                        part_tuple, prop_names, npart);
   RETURN_IF_PYERR();
 
   /* Allocate the spectra. */
   double *spectra = new (std::nothrow) double[grid_props->nlam]();
-  double *part_spectra =
-      new (std::nothrow) double[npart * grid_props->nlam]();
+  double *part_spectra = new (std::nothrow) double[npart * grid_props->nlam]();
 
   if (spectra == NULL || part_spectra == NULL) {
-    PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for spectra.");
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate memory for spectra.");
     delete part_props;
     delete grid_props;
-    if (spectra)
-      delete[] spectra;
-    if (part_spectra)
-      delete[] part_spectra;
+    if (spectra) delete[] spectra;
+    if (part_spectra) delete[] part_spectra;
     return NULL;
   }
 
@@ -721,13 +723,16 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
   if (strcmp(method, "cic") == 0) {
-    shifted_spectra_loop_cic(grid_props, part_props, part_spectra, nthreads, c);
+    shifted_spectra_loop_cic(grid_props, part_props, part_spectra, nthreads,
+                             c);
   } else if (strcmp(method, "ngp") == 0) {
-    shifted_spectra_loop_ngp(grid_props, part_props, part_spectra, nthreads, c);
+    shifted_spectra_loop_ngp(grid_props, part_props, part_spectra, nthreads,
+                             c);
   } else {
     PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",
                  method);
-    /* Clean up all allocated memory before returning NULL to propagate the ValueError. */
+    /* Clean up all allocated memory before returning NULL to propagate the
+     * ValueError. */
     delete part_props;
     delete grid_props;
     delete[] spectra;
@@ -785,8 +790,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_doppler_particle_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

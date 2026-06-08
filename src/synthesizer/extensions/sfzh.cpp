@@ -3,17 +3,19 @@
  * Calculates weights on an arbitrary dimensional grid given the mass.
  *****************************************************************************/
 /* C includes */
-#include <array>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <array>
+
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "numpy_init.h"
 #include <Python.h>
+
+#include "numpy_init.h"
 
 /* Local includes */
 #include "cpp_to_python.h"
@@ -101,10 +103,10 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
-static PyMethodDef SFZHMethods[] = {{"compute_sfzh", (PyCFunction)compute_sfzh,
-                                     METH_VARARGS,
-                                     "Method for calculating the SFZH."},
-                                    {NULL, NULL, 0, NULL}};
+static PyMethodDef SFZHMethods[] = {
+    {"compute_sfzh", (PyCFunction)compute_sfzh, METH_VARARGS,
+     "Method for calculating the SFZH."},
+    {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */
 static struct PyModuleDef moduledef = {
@@ -121,8 +123,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_sfzh(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

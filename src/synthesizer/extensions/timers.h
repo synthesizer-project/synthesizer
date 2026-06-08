@@ -27,6 +27,7 @@
 #define TIMERS_H_
 
 #include <time.h>
+
 #include <chrono>
 
 #ifdef WITH_OPENMP
@@ -37,12 +38,12 @@ inline double get_wall_time() {
 #if defined(CLOCK_MONOTONIC)
   struct timespec ts;
   if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
-    return static_cast<double>(ts.tv_sec)
-           + static_cast<double>(ts.tv_nsec) * 1.0e-9;
+    return static_cast<double>(ts.tv_sec) +
+           static_cast<double>(ts.tv_nsec) * 1.0e-9;
   }
 #endif
   auto now = std::chrono::steady_clock::now().time_since_epoch();
-  return std::chrono::duration_cast<std::chrono::duration<double>>(now)
+  return std::chrono::duration_cast<std::chrono::duration<double> >(now)
       .count();
 }
 #define GET_TIME() get_wall_time()
@@ -64,15 +65,13 @@ typedef void (*timer_stop_fn)(const char *, const char *);
 /** PyCapsule name for the timer start function pointer.
  *  Defined here (once) so timers.cpp and timers_init.h both use the
  *  same string. */
-#define TIC_START_CAPSULE_NAME                                                 \
-  "synthesizer.extensions.timers._tic_start"
+#define TIC_START_CAPSULE_NAME "synthesizer.extensions.timers._tic_start"
 
 /** PyCapsule name for the timer stop function pointer. */
-#define TOC_STOP_CAPSULE_NAME                                                  \
-  "synthesizer.extensions.timers._toc_stop"
+#define TOC_STOP_CAPSULE_NAME "synthesizer.extensions.timers._toc_stop"
 
 /** PyCapsule name for the accumulation helper function pointer. */
-#define TOC_ACCUMULATE_CAPSULE_NAME                                            \
+#define TOC_ACCUMULATE_CAPSULE_NAME \
   "synthesizer.extensions.timers._toc_accumulate"
 
 /**

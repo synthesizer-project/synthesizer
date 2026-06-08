@@ -830,6 +830,95 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 "model is not compatible with this attribute."
             )
 
+    def set_attribute_overload(self, attr_str, overload_str):
+        """Redirect a model attribute to read a different attribute.
+
+        This function is useful for redirecting get_param to read a different
+        attribute from the one the model would expect. This is particularly,
+        useful when redirecting a grid axis to read from a different attribute
+        on the emitter.
+
+        For example, if we have a grid that contains "ages" and "metallicities"
+        axes but we want to instead use "special_ages" and
+        "special_metallicities" attributes on the emitter, we can use this
+        function which will cause get_param to first attempt to extract
+        "ages" and "metallicities" from the model, see the overload_str
+        string, recurse and attempt to extract "special_ages" and
+        "special_metallicities" from the model, find they are not there, and
+        then look for "special_ages" and "special_metallicities" on the
+        emitter and return them.
+
+        This same behaviour can be achieved by passing kwargs at init but
+        this function enables retroactive redirection, especially useful when
+        using premade models.
+
+        Args:
+            attr_str (str): The attribute to redirect.
+            overload_str (str): The attribute to redirect to.
+        """
+        # Ensure we don't already have an override. Previously this checked
+        # hasattr(self, attr_str) which is incorrect because that tests for a
+        # property/attribute name on the object rather than whether an overload
+        # has already been stored in fixed_parameters. Use membership in the
+        # fixed_parameters dict so attempting to set the same overload twice
+        # raises an error and reports the existing value.
+        if attr_str in self.fixed_parameters:
+            raise exceptions.InconsistentArguments(
+                f"Cannot overload attribute {attr_str} on model {self.label}. "
+                f"{attr_str} is already set on the model "
+                f"{self.fixed_parameters[attr_str]}. "
+            )
+
+        # Store the overload in the fixed parameters dictionary so it will be
+        # picked up by get_param when trying to access attr_str
+        self.fixed_parameters[attr_str] = overload_str
+
+    def set_fixed_parameter(self, param_name, value):
+        """Set a fixed parameter.
+
+        This method will set a fixed parameter on the model. This parameter
+        will take precedence over any parameter of the same name on an
+        emitter.
+
+        When get_param is called to access a parameter, it will first check
+        the fixed_parameters dictionary on the model, prior to looking for
+        the parameter on the emitter.
+
+        Args:
+            param_name (str): The name of the parameter to fix.
+            value (Any): The value to fix the parameter to.
+        """
+        # Ensure we don't already have an override for this parameter
+        if param_name in self.fixed_parameters:
+            raise exceptions.InconsistentArguments(
+                f"Cannot set fixed parameter {param_name} on model "
+                f"{self.label} to {value}. This parameter is already fixed "
+                f"to {self.fixed_parameters[param_name]}."
+            )
+
+        self.fixed_parameters[param_name] = value
+
+    def clear_fixed_parameter(self, param_name):
+        """Clear a fixed parameter.
+
+        This method will clear a fixed parameter on the model, allowing
+        get_param to access the parameter on the emitter again.
+
+        Args:
+            param_name (str): The name of the parameter to clear.
+        """
+        if param_name in self.fixed_parameters:
+            del self.fixed_parameters[param_name]
+        else:
+            raise exceptions.InconsistentArguments(
+                f"Cannot clear fixed parameter {param_name} on model "
+                f"{self.label}. This parameter is not currently fixed."
+            )
+
+    def clear_fixed_parameters(self):
+        """Clear all fixed parameters on the model."""
+        self.fixed_parameters = {}
+
     @property
     def grid(self):
         """Get the Grid object used for extraction."""
@@ -2562,13 +2651,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Before we do anything else, check that we have the emitters needed by
         # the active models in the queued execution graph.
-        with timer("EmissionModel._get_spectra.validate_emitters"):
-            for model in queue.models.values():
-                if emitters.get(model.emitter, None) is None:
-                    raise exceptions.InconsistentArguments(
-                        f"Missing emitter '{model.emitter}' required by "
-                        f"active EmissionModel '{model.label}'."
-                    )
+        for model in queue.models.values():
+            if emitters.get(model.emitter, None) is None:
+                raise exceptions.InconsistentArguments(
+                    f"Missing emitter '{model.emitter}' required by active "
+                    f"EmissionModel '{model.label}'."
+                )
 
         # Get any existing spectra we are reusing
         with timer("EmissionModel._get_spectra.get_existing_emissions"):
@@ -2582,15 +2670,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Execute the full model closure by processing each ready model once.
         while len(queue) > 0:
-            with timer("EmissionModel._get_spectra.pop_model"):
-                this_model = queue.pop()
+            this_model = queue.pop()
             label = this_model.label
 
             # Reused or externally supplied emissions still need to unlock the
             # graph, but they do not need to be regenerated.
             if label in spectra:
-                with timer("EmissionModel._get_spectra.reuse_existing"):
-                    queue.done(this_model, spectra, particle_spectra)
+                queue.done(this_model, spectra, particle_spectra)
                 continue
 
             # Active queued models must always have a matching emitter.
@@ -2604,28 +2690,26 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             emitter = emitters[this_model.emitter]
 
             # Build the combined mask once for operations that use it.
-            with timer("EmissionModel._get_spectra.build_mask"):
-                this_mask = None
-                for mask_dict in this_model.masks:
-                    this_mask = emitter.get_mask(
-                        **mask_dict,
-                        mask=this_mask,
-                        attr_override_obj=this_model,
-                    )
+            this_mask = None
+            for mask_dict in this_model.masks:
+                this_mask = emitter.get_mask(
+                    **mask_dict,
+                    mask=this_mask,
+                    attr_override_obj=this_model,
+                )
 
             # Dispatch to the appropriate operation for this model.
             if this_model._is_extracting:
                 try:
-                    with timer("EmissionModel._get_spectra.extract_branch"):
-                        spectra, particle_spectra = self._extract_spectra(
-                            this_model,
-                            emitters,
-                            spectra,
-                            particle_spectra,
-                            verbose=verbose,
-                            nthreads=nthreads,
-                            grid_assignment_method=(grid_assignment_method),
-                        )
+                    spectra, particle_spectra = self._extract_spectra(
+                        this_model,
+                        emitters,
+                        spectra,
+                        particle_spectra,
+                        verbose=verbose,
+                        nthreads=nthreads,
+                        grid_assignment_method=grid_assignment_method,
+                    )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {label}")
@@ -2636,15 +2720,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_combining:
                 try:
-                    with timer("EmissionModel._get_spectra.combine_branch"):
-                        spectra, particle_spectra = self._combine_spectra(
-                            emission_model,
-                            spectra,
-                            particle_spectra,
-                            this_model,
-                            emitter,
-                            nthreads,
-                        )
+                    spectra, particle_spectra = self._combine_spectra(
+                        emission_model,
+                        spectra,
+                        particle_spectra,
+                        this_model,
+                        emitter,
+                        nthreads,
+                    )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -2655,18 +2738,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_transforming:
                 try:
-                    with timer("EmissionModel._get_spectra.transform_branch"):
-                        spectra, particle_spectra = (
-                            this_model._transform_emission(
-                                this_model,
-                                spectra,
-                                particle_spectra,
-                                emitter,
-                                this_mask,
-                                self.lam,
-                                nthreads,
-                            )
-                        )
+                    spectra, particle_spectra = this_model._transform_emission(
+                        this_model,
+                        spectra,
+                        particle_spectra,
+                        emitter,
+                        this_mask,
+                        self.lam,
+                        nthreads,
+                    )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -2677,16 +2757,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_generating:
                 try:
-                    with timer("EmissionModel._get_spectra.generate_branch"):
-                        spectra, particle_spectra = self._generate_spectra(
-                            this_model,
-                            emission_model,
-                            spectra,
-                            particle_spectra,
-                            self.lam,
-                            emitter,
-                            nthreads,
-                        )
+                    spectra, particle_spectra = self._generate_spectra(
+                        this_model,
+                        emission_model,
+                        spectra,
+                        particle_spectra,
+                        self.lam,
+                        emitter,
+                        nthreads,
+                    )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -2697,79 +2776,90 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
 
             # Apply any requested scaling after the model has been generated.
-            with timer("EmissionModel._get_spectra.scale_outputs"):
-                for scaler in this_model.scale_by:
-                    if scaler is None:
-                        continue
-                    if hasattr(emitter, scaler):
-                        # Ok, the emitter has this scaler, get it
-                        scaler_arr = getattr(emitter, f"_{scaler}", None)
-                        if scaler_arr is None:
-                            scaler_arr = getattr(emitter, scaler)
+            for scaler in this_model.scale_by:
+                if scaler is None:
+                    continue
+                if hasattr(emitter, scaler):
+                    # Ok, the emitter has this scaler, get it
+                    scaler_arr = getattr(emitter, f"_{scaler}", None)
+                    if scaler_arr is None:
+                        scaler_arr = getattr(emitter, scaler)
 
-                        # Ensure we can actually multiply the spectra by it
-                        if (
-                            scaler_arr.ndim == 1
-                            and spectra[label].shape[0] != scaler_arr.shape[0]
-                        ):
-                            raise exceptions.InconsistentArguments(
-                                f"Can't scale a spectra with shape "
-                                f"{spectra[label].shape} by an array of "
-                                f"shape {scaler_arr.shape}. Did you mean to "
-                                "make particle spectra?"
-                            )
-                        elif (
-                            scaler_arr.ndim == spectra[label].ndim
-                            and scaler_arr.shape != spectra[label].shape
-                        ):
-                            raise exceptions.InconsistentArguments(
-                                f"Can't scale a spectra with shape "
-                                f"{spectra[label].shape} by an array of "
-                                f"shape {scaler_arr.shape}. Did you mean to "
-                                "make particle spectra?"
-                            )
-
-                        # Scale the spectra by this attribute
-                        if this_model.per_particle:
-                            particle_spectra[label] *= scaler_arr
-                        spectra[label]._lnu *= scaler_arr
-                    elif scaler in spectra:
-                        # Compute the scaling against another generated
-                        # spectrum.
-                        if this_model.per_particle:
-                            scaling = (
-                                particle_spectra[scaler].bolometric_luminosity
-                                / particle_spectra[label].bolometric_luminosity
-                            ).value
-                        else:
-                            scaling = (
-                                spectra[scaler].bolometric_luminosity
-                                / spectra[label].bolometric_luminosity
-                            ).value
-
-                        # Scale the spectra (handling 1D and 2D cases)
-                        if this_model.per_particle:
-                            particle_spectra[label] *= scaling[:, None]
-                        spectra[label]._lnu *= scaling
-                    else:
+                    # Ensure we can actually multiply the spectra by it
+                    if (
+                        scaler_arr.ndim == 1
+                        and spectra[label].shape[0] != scaler_arr.shape[0]
+                    ):
                         raise exceptions.InconsistentArguments(
-                            f"Can't scale spectra by {scaler}."
+                            f"Can't scale a spectra with shape "
+                            f"{spectra[label].shape} by an array of "
+                            f"shape {scaler_arr.shape}. Did you mean to "
+                            "make particle spectra?"
+                        )
+                    elif (
+                        scaler_arr.ndim == spectra[label].ndim
+                        and scaler_arr.shape != spectra[label].shape
+                    ):
+                        raise exceptions.InconsistentArguments(
+                            f"Can't scale a spectra with shape "
+                            f"{spectra[label].shape} by an array of "
+                            f"shape {scaler_arr.shape}. Did you mean to "
+                            "make particle spectra?"
                         )
 
+                    # Scale the spectra by this attribute
+                    if this_model.per_particle:
+                        particle_spectra[label].scale(
+                            scaler_arr,
+                            inplace=True,
+                            nthreads=nthreads,
+                        )
+                    spectra[label].scale(
+                        scaler_arr,
+                        inplace=True,
+                        nthreads=nthreads,
+                    )
+                elif scaler in spectra:
+                    # Compute the scaling against another generated spectrum.
+                    if this_model.per_particle:
+                        scaling = (
+                            particle_spectra[scaler].bolometric_luminosity
+                            / particle_spectra[label].bolometric_luminosity
+                        ).value
+                    else:
+                        scaling = (
+                            spectra[scaler].bolometric_luminosity
+                            / spectra[label].bolometric_luminosity
+                        ).value
+
+                    # Scale the spectra (handling 1D and 2D cases)
+                    if this_model.per_particle:
+                        particle_spectra[label].scale(
+                            scaling,
+                            inplace=True,
+                            nthreads=nthreads,
+                        )
+                    spectra[label].scale(
+                        scaling,
+                        inplace=True,
+                        nthreads=nthreads,
+                    )
+                else:
+                    raise exceptions.InconsistentArguments(
+                        f"Can't scale spectra by {scaler}."
+                    )
+
             # Unlock downstream models and delete expired unsaved emissions.
-            with timer("EmissionModel._get_spectra.queue_done"):
-                queue.done(this_model, spectra, particle_spectra)
+            queue.done(this_model, spectra, particle_spectra)
 
         # Ensure the dependency graph was fully traversed before returning.
-        with timer("EmissionModel._get_spectra.assert_finished"):
-            queue.assert_finished()
+        queue.assert_finished()
 
         # Apply any post processing functions to the surviving emissions.
-        with timer("EmissionModel._get_spectra.post_processing"):
-            for func in self._post_processing:
-                spectra = func(spectra, emitters, self)
-                if len(particle_spectra) > 0:
-                    particle_spectra = func(particle_spectra, emitters, self)
+        for func in self._post_processing:
+            spectra = func(spectra, emitters, self)
+            if len(particle_spectra) > 0:
+                particle_spectra = func(particle_spectra, emitters, self)
 
         return spectra, particle_spectra
 

@@ -129,6 +129,24 @@ def test_thermal_broadening_transformer_uses_fixed_parameters():
     assert broadened.lnu.max() < sed.lnu.max()
 
 
+def test_doppler_broadening_transformer_warns_unused_nthreads():
+    sed = make_line_sed()
+    model = DummyModel(sigma_v=300.0 * km / s)
+    transformer = DopplerBroadening()
+
+    with pytest.warns(RuntimeWarning, match="accepts nthreads"):
+        transformer._transform(sed, None, model, None, None, nthreads=4)
+
+
+def test_thermal_broadening_transformer_warns_unused_nthreads():
+    sed = make_line_sed()
+    model = DummyModel(temperature=1.0e6 * K)
+    transformer = ThermalBroadening()
+
+    with pytest.warns(RuntimeWarning, match="accepts nthreads"):
+        transformer._transform(sed, None, model, None, None, nthreads=4)
+
+
 def test_broadening_transformer_rejects_lam_mask():
     sed = make_line_sed()
     model = DummyModel(sigma_v=300.0 * km / s)

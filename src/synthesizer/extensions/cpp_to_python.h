@@ -3,13 +3,16 @@
 
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include "numpy_init.h"
 #include <Python.h>
+
 #include <cstdint>
 #include <memory>
 
+#include "numpy_init.h"
+
 // Typenum mapping template (declare only)
-template <typename T> struct NumpyTypenum;
+template <typename T>
+struct NumpyTypenum;
 
 // Main wrapper functions (declarations only)
 
@@ -29,10 +32,9 @@ PyArrayObject *wrap_array_to_numpy(int ndim, npy_intp *dims,
 
 PyArrayObject *array_or_none(PyObject *obj, const char *name = "argument");
 
-#define RETURN_IF_PYERR()                                                      \
-  do {                                                                         \
-    if (PyErr_Occurred())                                                      \
-      return nullptr;                                                          \
+#define RETURN_IF_PYERR()                 \
+  do {                                    \
+    if (PyErr_Occurred()) return nullptr; \
   } while (0)
 
-#endif // CPP_TO_PYTHON_H
+#endif  // CPP_TO_PYTHON_H

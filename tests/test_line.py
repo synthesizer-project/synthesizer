@@ -45,10 +45,6 @@ class NoTauDustCurve(AttenuationLaw):
         """Return a constant transmission independent of tau_v."""
         return np.full(np.atleast_1d(lam).shape, self.transmission)
 
-    def get_tau(self, lam):
-        """Return the optical depth matching the fixed transmission."""
-        return np.full(np.atleast_1d(lam).shape, -np.log(self.transmission))
-
 
 class TestLineCollectionInitialization:
     """Test LineCollection initialization and basic properties."""
@@ -253,6 +249,46 @@ class TestLineCollectionOperations:
             f"{scaled_lines.continuum.value} !="
             f" {expected_cont}"
         )
+
+    def test_scaling_multidim_threaded(self, multi_dimension_line_collection):
+        """Test threaded scaling for a multidimensional line collection."""
+        lines = multi_dimension_line_collection
+        scaling = np.array([2.0, 3.0])
+
+        scaled_lines = lines.scale(scaling, nthreads=2)
+
+        np.testing.assert_allclose(
+            scaled_lines.luminosity.value,
+            lines.luminosity.value * scaling[:, None],
+        )
+        np.testing.assert_allclose(
+            scaled_lines.continuum.value,
+            lines.continuum.value * scaling[:, None],
+        )
+
+    def test_scaling_multidim_accepts_list_masks(
+        self, multi_dimension_line_collection
+    ):
+        """List masks should behave the same as ndarray masks."""
+        lines = multi_dimension_line_collection
+        scaling = np.array([2.0, 3.0])
+        mask = [True, False]
+        lam_mask = [True, False, True]
+
+        scaled_lines = lines.scale(
+            scaling,
+            mask=mask,
+            lam_mask=lam_mask,
+            nthreads=2,
+        )
+
+        expected_lum = lines.luminosity.value.copy()
+        expected_cont = lines.continuum.value.copy()
+        expected_lum[np.ix_(mask, lam_mask)] *= scaling[mask][:, None]
+        expected_cont[np.ix_(mask, lam_mask)] *= scaling[mask][:, None]
+
+        np.testing.assert_allclose(scaled_lines.luminosity.value, expected_lum)
+        np.testing.assert_allclose(scaled_lines.continuum.value, expected_cont)
 
     def test_addition(self, simple_line_collection):
         """Test adding line collections."""
@@ -544,50 +580,30 @@ class TestLineCollectionManipulation:
             lines.continuum * 0.25,
         )
 
-    def test_multidim_scaling_with_row_vector(
+    def test_apply_attenuation_multidim_uses_separable_row_kernel(
         self, multi_dimension_line_collection
     ):
-        """Multidimensional line scaling should broadcast per-row factors."""
+        """Row-wise attenuation should match direct broadcasting."""
         lines = multi_dimension_line_collection
-        scaling = np.array([2.0, 3.0])
-
-        scaled_lines = lines.scale(scaling)
-
-        np.testing.assert_allclose(
-            scaled_lines.luminosity.value,
-            lines.luminosity.value * scaling[:, None],
-        )
-        np.testing.assert_allclose(
-            scaled_lines.continuum.value,
-            lines.continuum.value * scaling[:, None],
-        )
-
-    def test_multidim_apply_attenuation_with_mask(
-        self, multi_dimension_line_collection
-    ):
-        """Attenuation should only affect the selected line rows."""
-        lines = multi_dimension_line_collection
-        dust_curve = NoTauDustCurve(transmission=0.25)
+        tau_v = np.array([0.1, 0.2])
         mask = np.array([True, False])
+        dust_curve = PowerLaw(slope=-0.7)
 
-        attenuated_lines = lines.apply_attenuation(
+        attenuated = lines.apply_attenuation(
+            tau_v=tau_v,
             dust_curve=dust_curve,
             mask=mask,
+            nthreads=2,
         )
 
+        transmission = dust_curve.get_transmission(tau_v, lines.lam)
         expected_lum = lines.luminosity.value.copy()
         expected_cont = lines.continuum.value.copy()
-        expected_lum[0] *= 0.25
-        expected_cont[0] *= 0.25
+        expected_lum[mask] *= transmission[mask]
+        expected_cont[mask] *= transmission[mask]
 
-        np.testing.assert_allclose(
-            attenuated_lines.luminosity.value,
-            expected_lum,
-        )
-        np.testing.assert_allclose(
-            attenuated_lines.continuum.value,
-            expected_cont,
-        )
+        np.testing.assert_allclose(attenuated.luminosity.value, expected_lum)
+        np.testing.assert_allclose(attenuated.continuum.value, expected_cont)
 
     def test_get_blended_lines(self, line_ratio_collection):
         """Test blending lines based on wavelength bins."""

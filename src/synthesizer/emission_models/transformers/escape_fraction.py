@@ -32,7 +32,6 @@ import numpy as np
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.synth_warnings import warn
-from synthesizer.utils.operation_timers import timed
 
 
 class ProcessedFraction(Transformer):
@@ -78,7 +77,6 @@ class ProcessedFraction(Transformer):
         """Return a string representation of the ProcessedFraction object."""
         return f"ProcessedFraction(fesc_attrs={self._required_params})"
 
-    @timed("ProcessedFraction._transform")
     def _transform(
         self,
         emission,
@@ -102,7 +100,7 @@ class ProcessedFraction(Transformer):
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
             nthreads (int):
-                The number of threads to use for compatible Sed scaling.
+                The number of threads to use for compatible scaling kernels.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -181,7 +179,6 @@ class EscapedFraction(Transformer):
         """Return a string representation of the EscapedFraction object."""
         return f"EscapedFraction(fesc_attrs={self._required_params})"
 
-    @timed("EscapedFraction._transform")
     def _transform(
         self,
         emission,
@@ -205,7 +202,7 @@ class EscapedFraction(Transformer):
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
             nthreads (int):
-                The number of threads to use for compatible Sed scaling.
+                The number of threads to use for compatible scaling kernels.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -285,7 +282,6 @@ class CoveringFraction(Transformer):
         """Return a string representation of the CoveringFraction object."""
         return f"CoveringFraction(covering_attrs={self._required_params})"
 
-    @timed("CoveringFraction._transform")
     def _transform(
         self,
         emission,
@@ -309,7 +305,7 @@ class CoveringFraction(Transformer):
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
             nthreads (int):
-                The number of threads to use for compatible Sed scaling.
+                The number of threads to use for compatible scaling kernels.
 
         Returns:
             Line/Sed: The transformed emission.
@@ -389,7 +385,6 @@ class EscapingFraction(Transformer):
         """Return a string representation of the EscapingFraction object."""
         return f"EscapingFraction(covering_attrs={self._required_params})"
 
-    @timed("EscapingFraction._transform")
     def _transform(
         self,
         emission,
@@ -413,7 +408,7 @@ class EscapingFraction(Transformer):
             lam_mask (np.ndarray):
                 The wavelength mask to apply to the emission.
             nthreads (int):
-                The number of threads to use for compatible Sed scaling.
+                The number of threads to use for compatible scaling kernels.
 
         Returns:
             Line/Sed: The transformed emission.

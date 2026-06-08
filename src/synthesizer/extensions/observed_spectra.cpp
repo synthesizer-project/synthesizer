@@ -1,11 +1,12 @@
-/******************************************************************************
+/* ****************************************************************************
  * C extension to convert rest-frame luminosity density spectra into
  * observer-frame flux density spectra.
  *
  * This fills observer-frame wavelength, frequency, and flux buffers in place
  * so Python callers can avoid large temporary array allocations on the hot
  * path.
- *****************************************************************************/
+ * **************************************************************************
+ */
 /* Standard includes */
 #include <cmath>
 
@@ -116,17 +117,16 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
 
   /* Reject any inputs that would force an implicit conversion or copy in the
    * kernel so the hot path only ever sees float64 C-contiguous buffers. */
-  if (PyArray_TYPE(np_lnu) != NPY_DOUBLE || PyArray_TYPE(np_lam) != NPY_DOUBLE ||
+  if (PyArray_TYPE(np_lnu) != NPY_DOUBLE ||
+      PyArray_TYPE(np_lam) != NPY_DOUBLE ||
       PyArray_TYPE(np_nu) != NPY_DOUBLE ||
-      PyArray_TYPE(np_fnu_out) != NPY_DOUBLE ||
-      !PyArray_ISCARRAY_RO(np_lnu) || !PyArray_ISCARRAY_RO(np_lam) ||
-      !PyArray_ISCARRAY_RO(np_nu) || !PyArray_ISCARRAY(np_fnu_out) ||
-      (np_obslam_out != NULL &&
-       (PyArray_TYPE(np_obslam_out) != NPY_DOUBLE ||
-        !PyArray_ISCARRAY(np_obslam_out))) ||
-      (np_obsnu_out != NULL &&
-       (PyArray_TYPE(np_obsnu_out) != NPY_DOUBLE ||
-        !PyArray_ISCARRAY(np_obsnu_out)))) {
+      PyArray_TYPE(np_fnu_out) != NPY_DOUBLE || !PyArray_ISCARRAY_RO(np_lnu) ||
+      !PyArray_ISCARRAY_RO(np_lam) || !PyArray_ISCARRAY_RO(np_nu) ||
+      !PyArray_ISCARRAY(np_fnu_out) ||
+      (np_obslam_out != NULL && (PyArray_TYPE(np_obslam_out) != NPY_DOUBLE ||
+                                 !PyArray_ISCARRAY(np_obslam_out))) ||
+      (np_obsnu_out != NULL && (PyArray_TYPE(np_obsnu_out) != NPY_DOUBLE ||
+                                !PyArray_ISCARRAY(np_obsnu_out)))) {
     Py_DECREF(np_lnu);
     Py_DECREF(np_lam);
     Py_DECREF(np_nu);
@@ -210,9 +210,10 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
   double *lam = static_cast<double *>(PyArray_DATA(np_lam));
   double *nu = static_cast<double *>(PyArray_DATA(np_nu));
   double *fnu_out = static_cast<double *>(PyArray_DATA(np_fnu_out));
-  double *obslam_out = np_obslam_out == NULL
-                           ? NULL
-                           : static_cast<double *>(PyArray_DATA(np_obslam_out));
+  double *obslam_out =
+      np_obslam_out == NULL
+          ? NULL
+          : static_cast<double *>(PyArray_DATA(np_obslam_out));
   double *obsnu_out = np_obsnu_out == NULL
                           ? NULL
                           : static_cast<double *>(PyArray_DATA(np_obsnu_out));
@@ -224,7 +225,8 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
   tic("compute_fnu");
 
 #ifdef WITH_OPENMP
-#pragma omp parallel for if(nthreads > 1) num_threads(nthreads) schedule(static)
+#pragma omp parallel for if (nthreads > 1) num_threads(nthreads) \
+    schedule(static)
 #endif
   for (npy_intp idx = 0; idx < nelem; idx++) {
     fnu_out[idx] = lnu[idx] * conversion;
@@ -270,8 +272,7 @@ static struct PyModuleDef moduledef = {
 
 PyMODINIT_FUNC PyInit_observed_spectra(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
 
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");

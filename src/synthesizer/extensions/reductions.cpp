@@ -1,6 +1,5 @@
 /* Standard includes */
 #include <cmath>
-#include <vector>
 
 /* Python includes */
 #include <Python.h>
@@ -23,6 +22,7 @@
  */
 static void reduce_spectra_serial(double *spectra, double *part_spectra,
                                   int nlam, int npart) {
+
   /* Cast npart to size_t for safety in the loop. */
   size_t npart_size = static_cast<size_t>(npart);
 
@@ -39,9 +39,10 @@ static void reduce_spectra_serial(double *spectra, double *part_spectra,
   }
 }
 
-#ifdef WITH_OPENMP
 /**
- * @brief Reduce Npart spectra to integrated spectra in parallel.
+ * @brief Reduce Npart spectra to integrated spectra.
+ *
+ * This is a parallel version of the function.
  *
  * @param spectra: The output array to accumulate the spectra.
  * @param part_spectra: The per-particle spectra array.
@@ -49,8 +50,10 @@ static void reduce_spectra_serial(double *spectra, double *part_spectra,
  * @param npart: The number of particles.
  * @param nthreads: The number of threads to use.
  */
+#ifdef WITH_OPENMP
 static void reduce_spectra_parallel(double *spectra, double *part_spectra,
                                     int nlam, int npart, int nthreads) {
+
   /* Cast npart to size_t for safety in the loop. */
   size_t npart_size = static_cast<size_t>(npart);
 
@@ -63,17 +66,19 @@ static void reduce_spectra_parallel(double *spectra, double *part_spectra,
       spectra[ilam] += part_spectra_row[ilam];
     }
   }
-#else // OpenMP < 4.5 or no array reduction support
+#else  // OpenMP < 4.5 or no array reduction support
 #pragma omp parallel num_threads(nthreads)
   {
+    // Thread-local accumulation to avoid false sharing and atomics
     std::vector<double> local(nlam, 0.0);
 #pragma omp for nowait schedule(static)
-    for (size_t p = 0; p < npart_size; p++) {
+    for (size_t p = 0; p < npart; p++) {
       double *__restrict part_spectra_row = part_spectra + p * nlam;
       for (int ilam = 0; ilam < nlam; ilam++) {
         local[ilam] += part_spectra_row[ilam];
       }
     }
+    // Merge
 #pragma omp critical
     {
       for (int ilam = 0; ilam < nlam; ilam++) {
@@ -81,7 +86,7 @@ static void reduce_spectra_parallel(double *spectra, double *part_spectra,
       }
     }
   }
-#endif // WITH_OPENMP
+#endif  // WITH_OPENMP
 }
 #endif
 
@@ -100,6 +105,7 @@ static void reduce_spectra_parallel(double *spectra, double *part_spectra,
  */
 void reduce_spectra(double *spectra, double *part_spectra, int nlam, int npart,
                     int nthreads) {
+
   tic("reduce_spectra");
   if (nthreads > 1) {
 #ifdef WITH_OPENMP
@@ -159,7 +165,8 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
 
   /* Validate that we have a two-dimensional array with shape
    * (npart, nlam). This helper is intentionally specialised to the common
-   * per-particle spectra reduction case used by the Python operations layer. */
+   * per-particle spectra reduction case used by the Python operations layer.
+   */
   if (PyArray_NDIM(np_part_spectra) != 2) {
     Py_DECREF(np_part_spectra);
     PyErr_SetString(PyExc_ValueError,
@@ -199,145 +206,29 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
   return Py_BuildValue("N", np_spectra);
 }
 
-/**
- * @brief Combine a sequence of same-shaped 2D spectra arrays, skipping NaNs.
- */
-PyObject *combine_spectra_list_2d(PyObject *self, PyObject *args) {
-  (void)self;
-
-  PyObject *spectra_seq_obj;
-  int nthreads;
-
-  if (!PyArg_ParseTuple(args, "Oi", &spectra_seq_obj, &nthreads)) {
-    return NULL;
-  }
-
-  PyObject *seq = PySequence_Fast(
-      spectra_seq_obj, "spectra_list must be a sequence of 2D arrays.");
-  if (seq == NULL) {
-    return NULL;
-  }
-
-  const Py_ssize_t nspectra = PySequence_Fast_GET_SIZE(seq);
-  if (nspectra < 1) {
-    Py_DECREF(seq);
-    PyErr_SetString(PyExc_ValueError,
-                    "spectra_list must contain at least one array.");
-    return NULL;
-  }
-
-  std::vector<PyArrayObject *> arrays;
-  arrays.reserve(nspectra);
-
-  for (Py_ssize_t i = 0; i < nspectra; i++) {
-    PyObject *item = PySequence_Fast_GET_ITEM(seq, i);
-    PyArrayObject *arr = (PyArrayObject *)PyArray_FROM_OTF(
-        item, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-    if (arr == NULL) {
-      for (PyArrayObject *loaded : arrays) {
-        Py_DECREF(loaded);
-      }
-      Py_DECREF(seq);
-      return NULL;
-    }
-    if (PyArray_NDIM(arr) != 2) {
-      for (PyArrayObject *loaded : arrays) {
-        Py_DECREF(loaded);
-      }
-      Py_DECREF(arr);
-      Py_DECREF(seq);
-      PyErr_SetString(PyExc_ValueError,
-                      "All spectra arrays must be 2D float64 arrays.");
-      return NULL;
-    }
-    arrays.push_back(arr);
-  }
-
-  const npy_intp *template_dims = PyArray_DIMS(arrays[0]);
-  const int nspec = static_cast<int>(template_dims[0]);
-  const int nlam = static_cast<int>(template_dims[1]);
-  for (Py_ssize_t i = 1; i < nspectra; i++) {
-    const npy_intp *dims = PyArray_DIMS(arrays[i]);
-    if (dims[0] != template_dims[0] || dims[1] != template_dims[1]) {
-      for (PyArrayObject *loaded : arrays) {
-        Py_DECREF(loaded);
-      }
-      Py_DECREF(seq);
-      PyErr_SetString(PyExc_ValueError,
-                      "All spectra arrays must have identical 2D shapes.");
-      return NULL;
-    }
-  }
-
-  PyArrayObject *np_out = (PyArrayObject *)PyArray_ZEROS(
-      2, const_cast<npy_intp *>(template_dims), NPY_DOUBLE, 0);
-  if (np_out == NULL) {
-    for (PyArrayObject *loaded : arrays) {
-      Py_DECREF(loaded);
-    }
-    Py_DECREF(seq);
-    return NULL;
-  }
-
-  std::vector<double *> spectra_ptrs;
-  spectra_ptrs.reserve(nspectra);
-  for (PyArrayObject *arr : arrays) {
-    spectra_ptrs.push_back(static_cast<double *>(PyArray_DATA(arr)));
-  }
-  double *out = static_cast<double *>(PyArray_DATA(np_out));
-  const int nelem = nspec * nlam;
-
-  tic("combine_spectra_list_2d");
-
-#ifdef WITH_OPENMP
-#pragma omp parallel for if(nthreads > 1) num_threads(nthreads) schedule(static)
-#endif
-  for (int idx = 0; idx < nelem; idx++) {
-    double total = 0.0;
-    for (Py_ssize_t ispec = 0; ispec < nspectra; ispec++) {
-      const double value = spectra_ptrs[ispec][idx];
-      if (!std::isnan(value)) {
-        total += value;
-      }
-    }
-    out[idx] = total;
-  }
-
-  toc("combine_spectra_list_2d");
-
-  for (PyArrayObject *arr : arrays) {
-    Py_DECREF(arr);
-  }
-  Py_DECREF(seq);
-  return Py_BuildValue("N", np_out);
-}
-
+/* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef ReductionMethods[] = {
     {"reduce_particle_spectra", (PyCFunction)reduce_particle_spectra,
      METH_VARARGS,
      "Method for reducing per-particle spectra to an integrated spectrum."},
-    {"combine_spectra_list_2d", (PyCFunction)combine_spectra_list_2d,
-     METH_VARARGS,
-     "Combine same-shaped 2D spectra arrays while skipping NaNs."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */
 static struct PyModuleDef moduledef = {
     PyModuleDef_HEAD_INIT,
-    "reductions",                     /* m_name */
+    "reductions",                             /* m_name */
     "A module containing spectra reductions", /* m_doc */
-    -1,
-    ReductionMethods,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
+    -1,                                       /* m_size */
+    ReductionMethods,                         /* m_methods */
+    NULL,                                     /* m_reload */
+    NULL,                                     /* m_traverse */
+    NULL,                                     /* m_clear */
+    NULL,                                     /* m_free */
 };
 
 PyMODINIT_FUNC PyInit_reductions(void) {
   PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL)
-    return NULL;
+  if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);

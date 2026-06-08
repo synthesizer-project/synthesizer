@@ -2,26 +2,31 @@
 
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
+#include "cpp_to_python.h"
 #include "numpy_init.h"
 
-#include "cpp_to_python.h"
-
 // Map C++ type T to NumPy typenum at compile time
-template <typename T> struct NumpyTypenum;
+template <typename T>
+struct NumpyTypenum;
 
-template <> struct NumpyTypenum<float> {
+template <>
+struct NumpyTypenum<float> {
   static constexpr int typenum = NPY_FLOAT32;
 };
-template <> struct NumpyTypenum<double> {
+template <>
+struct NumpyTypenum<double> {
   static constexpr int typenum = NPY_FLOAT64;
 };
-template <> struct NumpyTypenum<int32_t> {
+template <>
+struct NumpyTypenum<int32_t> {
   static constexpr int typenum = NPY_INT32;
 };
-template <> struct NumpyTypenum<int64_t> {
+template <>
+struct NumpyTypenum<int64_t> {
   static constexpr int typenum = NPY_INT64;
 };
-template <> struct NumpyTypenum<uint8_t> {
+template <>
+struct NumpyTypenum<uint8_t> {
   static constexpr int typenum = NPY_UINT8;
 };
 
@@ -80,7 +85,7 @@ PyArrayObject *wrap_array_to_numpy(int ndim, npy_intp *dims, T *buffer) {
 template <typename T>
 PyArrayObject *wrap_array_to_numpy(int ndim, npy_intp *dims,
                                    std::unique_ptr<T[]> &&ptr) {
-  T *raw = ptr.release(); // transfer ownership
+  T *raw = ptr.release();  // transfer ownership
   return wrap_array_to_numpy<T>(ndim, dims, raw);
 }
 
@@ -91,14 +96,14 @@ template PyArrayObject *wrap_array_to_numpy<int32_t>(int, npy_intp *,
                                                      int32_t *);
 template PyArrayObject *wrap_array_to_numpy<int64_t>(int, npy_intp *,
                                                      int64_t *);
-template PyArrayObject *
-wrap_array_to_numpy<double>(int, npy_intp *, std::unique_ptr<double[]> &&);
-template PyArrayObject *wrap_array_to_numpy<float>(int, npy_intp *,
-                                                   std::unique_ptr<float[]> &&);
-template PyArrayObject *
-wrap_array_to_numpy<int32_t>(int, npy_intp *, std::unique_ptr<int32_t[]> &&);
-template PyArrayObject *
-wrap_array_to_numpy<int64_t>(int, npy_intp *, std::unique_ptr<int64_t[]> &&);
+template PyArrayObject *wrap_array_to_numpy<double>(
+    int, npy_intp *, std::unique_ptr<double[]> &&);
+template PyArrayObject *wrap_array_to_numpy<float>(
+    int, npy_intp *, std::unique_ptr<float[]> &&);
+template PyArrayObject *wrap_array_to_numpy<int32_t>(
+    int, npy_intp *, std::unique_ptr<int32_t[]> &&);
+template PyArrayObject *wrap_array_to_numpy<int64_t>(
+    int, npy_intp *, std::unique_ptr<int64_t[]> &&);
 
 /**
  * @brief Check that the given PyObject* is either None or a NumPy array.
