@@ -370,9 +370,8 @@ class Stars(StarsComponent):
             # Irregular
             self.metallicity_grid_type = None
 
-    # @accepts(age_offset=yr.in_base("galactic"))
     @timed("ParametricStars._create_sfzh")
-    def _get_sfzh(self, age_offset=0 * yr, reset_sf_hist_metal_dist=False):
+    def _get_sfzh(self, age_offset=None):
         """Compute the SFZH for all possible combinations of input.
 
         If functions are passed for sf_hist_func and metal_dist_func then
@@ -381,15 +380,6 @@ class Stars(StarsComponent):
         Args:
             age_offset (unyt_quantity):
                 The offset to apply to the age grid when calculating the SFZH
-            reset_sf_hist_metal_dist:
-                Flag whether to reset the sf_hist and metal_dist arrays to
-                None before calculating the SFZH. This is needed when
-                calculating the SFZH at an earlier time to ensure that if the
-                SFH and ZH are defined by functions then they are recalculated
-                based on the age offset, otherwise the original sf_hist and
-                metal_dist arrays would be used which would not be correct for
-                the new age grid.
-
         """
         # Hide imports to avoid cyclic imports
         from synthesizer.particle import Stars as ParticleStars
@@ -408,15 +398,19 @@ class Stars(StarsComponent):
             sf_hist = None
             metal_dist = None
 
-        if reset_sf_hist_metal_dist:
+        # If we have been given an age offset then we need to reset the
+        # sf_hist and metal_dist to None so that they are recalculated
+        if age_offset is not None:
             sf_hist = None
             metal_dist = None
+        else:
+            age_offset = 0.0 * yr
 
         # A delta function for metallicity is a special case
         # equivalent to instant_metallicity = metal_dist_func.metallicity
         if self.metal_dist_func is not None:
             if self.metal_dist_func.name == "DeltaConstant":
-                self.instant_metallicity = (
+                self._instant_metallicity = (
                     self.metal_dist_func.get_metallicity()
                 )
 
@@ -496,7 +490,7 @@ class Stars(StarsComponent):
                 # the SFZH grid otherwise
                 initial_masses=np.array([1.0]) * Msun,
                 ages=np.array([0.0]) * yr,  # this is a dummy value
-                metallicities=np.array([self.instant_metallicity]),
+                metallicities=np.array([self._instant_metallicity]),
             )
 
             # Create metal distribution array
@@ -569,9 +563,7 @@ class Stars(StarsComponent):
         initial_mass_at_age = self.calculate_initial_mass_at_age(age_offset)
 
         # Calculate the new SFZH grid at the earlier time
-        sfzh = self._create_sfzh(
-            age_offset=age_offset, reset_sf_hist_metal_dist=True
-        )
+        sfzh = self._get_sfzh(age_offset=age_offset)
 
         # Create a new Stars object with the new SFZH grid and initial mass
         return Stars(
