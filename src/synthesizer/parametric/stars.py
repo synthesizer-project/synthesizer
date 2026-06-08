@@ -213,19 +213,19 @@ class Stars(StarsComponent):
         if issubclass(type(sf_hist), SFHCommon):
             self.sf_hist_func = sf_hist  # a SFH function
             self.sf_hist = None
-            self.instant_sf = None
+            self._instant_sf = None
         elif isinstance(sf_hist, (unyt_quantity, float)):
-            self.instant_sf = sf_hist  # an instantaneous SFH
+            self._instant_sf = sf_hist  # an instantaneous SFH
             self.sf_hist_func = None
             self.sf_hist = None
         elif isinstance(sf_hist, (unyt_array, np.ndarray)):
             self.sf_hist = sf_hist  # a numpy array
             self.sf_hist_func = None
-            self.instant_sf = None
+            self._instant_sf = None
         elif sf_hist is None:
             self.sf_hist = None  # we must have been passed a SFZH
             self.sf_hist_func = None
-            self.instant_sf = None
+            self._instant_sf = None
         else:
             raise exceptions.InconsistentArguments(
                 f"Unrecognised sf_hist type ({type(sf_hist)}! This should be"
@@ -237,19 +237,19 @@ class Stars(StarsComponent):
         if issubclass(type(metal_dist), ZDistCommon):
             self.metal_dist_func = metal_dist  # a ZDist function
             self.metal_dist = None
-            self.instant_metallicity = None
+            self._instant_metallicity = None
         elif isinstance(metal_dist, (unyt_quantity, float, np.floating)):
-            self.instant_metallicity = metal_dist  # an instantaneous SFH
+            self._instant_metallicity = metal_dist  # an instantaneous SFH
             self.metal_dist_func = None
             self.metal_dist = None
         elif isinstance(metal_dist, (unyt_array, np.ndarray)):
             self.metal_dist = metal_dist  # a numpy array
             self.metal_dist_func = None
-            self.instant_metallicity = None
+            self._instant_metallicity = None
         elif metal_dist is None:
             self.metal_dist = None  # we must have been passed a SFZH
             self.metal_dist_func = None
-            self.instant_metallicity = None
+            self._instant_metallicity = None
         else:
             raise exceptions.InconsistentArguments(
                 f"Unrecognised metal_dist type ({type(metal_dist)}! This "
@@ -304,7 +304,7 @@ class Stars(StarsComponent):
             self.sfzh = sfzh
         else:
             # Compute the SFZH grid
-            self.sfzh = self._create_sfzh()
+            self.sfzh = self._get_sfzh()
 
         # Check the SFZH grid doesn't contain any NaN or Inf values, this can
         # happen if the SFH or ZH functions return NaN or Inf values for some
@@ -395,10 +395,10 @@ class Stars(StarsComponent):
         from synthesizer.particle import Stars as ParticleStars
 
         # If no units assume unit system
-        if self.instant_sf is not None and not isinstance(
-            self.instant_sf, unyt_quantity
+        if self._instant_sf is not None and not isinstance(
+            self._instant_sf, unyt_quantity
         ):
-            self.instant_sf *= self.ages.units
+            self._instant_sf *= self.ages.units
 
         # If arrays are passed for the SFH and ZH we can just use those
         if self.sf_hist is not None and self.metal_dist is not None:
@@ -422,8 +422,8 @@ class Stars(StarsComponent):
 
         # If both are instantaneous then we can do the whole SFZH in one go
         if (
-            self.instant_sf is not None
-            and self.instant_metallicity is not None
+            self._instant_sf is not None
+            and self._instant_metallicity is not None
         ):
             inst_stars = ParticleStars(
                 # We can just use a single star with mass 1 Msun here, the
@@ -433,12 +433,12 @@ class Stars(StarsComponent):
                 initial_masses=np.array([1.0]) * Msun,
                 ages=np.array(
                     [
-                        self.instant_sf.to("yr").value
+                        self._instant_sf.to("yr").value
                         + age_offset.to("yr").value
                     ]
                 )
                 * yr,
-                metallicities=np.array([self.instant_metallicity]),
+                metallicities=np.array([self._instant_metallicity]),
             )
 
             # Compute the SFZH grid in one go, this will be a delta function
@@ -463,7 +463,9 @@ class Stars(StarsComponent):
             return sfzh
 
         # Handle the instantaneous SFH case
-        elif self.instant_sf is not None and self.instant_metallicity is None:
+        elif (
+            self._instant_sf is not None and self._instant_metallicity is None
+        ):
             inst_stars = ParticleStars(
                 # We can just use a single star with mass 1 Msun here, the
                 # normalisation will be applied later based on the initial
@@ -472,7 +474,7 @@ class Stars(StarsComponent):
                 initial_masses=np.array([1.0]) * Msun,
                 ages=np.array(
                     [
-                        self.instant_sf.to("yr").value
+                        self._instant_sf.to("yr").value
                         + age_offset.to("yr").value
                     ]
                 )
@@ -484,7 +486,9 @@ class Stars(StarsComponent):
             sf_hist = inst_stars.get_sfh(self.log10ages)
 
         # Handle the instantaneous ZH case
-        elif self.instant_metallicity is not None and self.instant_sf is None:
+        elif (
+            self._instant_metallicity is not None and self._instant_sf is None
+        ):
             inst_stars = ParticleStars(
                 # We can just use a single star with mass 1 Msun here, the
                 # normalisation will be applied later based on the initial
