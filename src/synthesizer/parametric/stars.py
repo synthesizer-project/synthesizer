@@ -278,6 +278,16 @@ class Stars(StarsComponent):
                 "provided to get the stellar_fraction for rescaling the SFZH!"
             )
 
+        # Raise exception if we have been given the surviving mass and grid
+        # but that grid doesn't have a stellar_fraction attribute
+        if self.surviving_mass is not None and grid is not None:
+            if not hasattr(grid, "stellar_fraction"):
+                raise exceptions.InconsistentArguments(
+                    "If surviving_mass is specified then a Grid object with a"
+                    "stellar_fraction attribute must be provided to rescale"
+                    "the SFZH!"
+                )
+
         # Get the stellar fraction from the grid if we have been given a
         # surviving mass, this is needed to rescale the SFZH to obey the
         # surviving mass constraint. This is the fraction of the initial mass
