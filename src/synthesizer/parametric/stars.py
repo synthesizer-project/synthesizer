@@ -544,7 +544,7 @@ class Stars(StarsComponent):
         # Finally, calculate the SFZH grid based on the above calculations
         return sf_hist[:, np.newaxis] * metal_dist
 
-    # @accepts(age_offset=yr.in_base("galactic"))
+    @accepts(age_offset=yr)
     def get_at_earlier_time(self, age_offset=age_offset):
         """Get a new Stars object representing the population at age_offset.
 
