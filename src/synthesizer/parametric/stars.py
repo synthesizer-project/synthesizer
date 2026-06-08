@@ -372,7 +372,7 @@ class Stars(StarsComponent):
 
     # @accepts(age_offset=yr.in_base("galactic"))
     @timed("ParametricStars._create_sfzh")
-    def _create_sfzh(self, age_offset=0 * yr, reset_sf_hist_metal_dist=False):
+    def _get_sfzh(self, age_offset=0 * yr, reset_sf_hist_metal_dist=False):
         """Compute the SFZH for all possible combinations of input.
 
         If functions are passed for sf_hist_func and metal_dist_func then
