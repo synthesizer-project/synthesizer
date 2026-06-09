@@ -362,7 +362,7 @@ class Gas(Particles, Component):
             mask = validate_mask(mask, n_orig)
 
             # Split all the relevant arrays by the mask
-            masked, unmasked = split_by_mask(
+            to_resample, no_resample = split_by_mask(
                 mask,
                 coordinates=coordinates,
                 smoothing_lengths=smoothing_lengths,
@@ -377,9 +377,9 @@ class Gas(Particles, Component):
                 **custom,
             )
         else:
-            # Create dummies for the masked and unmasked cases so we can
+            # Create dummies for the to_resample and no_resample cases so we
             # proceed cleanly
-            masked = (
+            to_resample = (
                 coordinates,
                 smoothing_lengths,
                 masses,
@@ -391,16 +391,16 @@ class Gas(Particles, Component):
                 softening_lengths,
                 dust_masses,
             ) + tuple(custom[name] for name in self._custom_attr_names)
-            unmasked = None
+            no_resample = None
 
         # Early exit if we have no particles to resample
-        if masked[0].shape[0] == 0:
+        if to_resample[0].shape[0] == 0:
             return deepcopy(self)
 
         # Start with the coordinates
         new_coords = resample_coordinates(
-            coordinates=masked[0],
-            smoothing_lengths=masked[1],
+            coordinates=to_resample[0],
+            smoothing_lengths=to_resample[1],
             kernel=kernel,
             resample_factor=resample_factor,
             seed=seed,
@@ -409,7 +409,7 @@ class Gas(Particles, Component):
         # If we have velocities we can resample those too
         if velocities is not None:
             new_vels = resample_velocities(
-                velocities=masked[4],
+                velocities=to_resample[4],
                 resample_factor=resample_factor,
                 velocity_dispersion=velocity_dispersion,
                 seed=seed,
@@ -420,26 +420,26 @@ class Gas(Particles, Component):
         # Resample the smoothing lengths (this is the last array which is
         # independent of the resampling modes
         new_sml = resample_smoothing_lengths(
-            smoothing_lengths=masked[1],
+            smoothing_lengths=to_resample[1],
             resample_factor=resample_factor,
         )
 
         # Now handle the attributes which can have a range of resampling modes
         new_masses = resample_by_mode(
-            masked[2],
+            to_resample[2],
             attr_modes.get("masses", "proportional"),
             resample_factor,
             rng,
         )
         new_metallicities = resample_by_mode(
-            masked[3],
+            to_resample[3],
             attr_modes.get("metallicities", "duplicated"),
             resample_factor,
             rng,
         )
         if star_forming is not None:
             new_star_forming = resample_by_mode(
-                masked[5],
+                to_resample[5],
                 attr_modes.get("star_forming", "duplicated"),
                 resample_factor,
                 rng,
@@ -448,7 +448,7 @@ class Gas(Particles, Component):
             new_star_forming = None
         if dust_masses is not None:
             new_dust_masses = resample_by_mode(
-                masked[9],
+                to_resample[9],
                 attr_modes.get("dust_masses", "proportional"),
                 resample_factor,
                 rng,
@@ -460,7 +460,7 @@ class Gas(Particles, Component):
         # each particle, if it's a single value we just keep it as-is
         if tau_v is not None and hasattr(tau_v, "shape") and tau_v.ndim >= 1:
             new_tau_v = resample_by_mode(
-                masked[7],
+                to_resample[7],
                 attr_modes.get("tau_v", "duplicated"),
                 resample_factor,
                 rng,
@@ -476,7 +476,7 @@ class Gas(Particles, Component):
             and softening_lengths.ndim >= 1
         ):
             new_softening = resample_by_mode(
-                masked[8],
+                to_resample[8],
                 attr_modes.get("softening_lengths", "duplicated"),
                 resample_factor,
                 rng,
@@ -492,7 +492,7 @@ class Gas(Particles, Component):
             and dust_to_metal_ratio.ndim >= 1
         ):
             new_dust_to_metal_ratio = resample_by_mode(
-                masked[6],
+                to_resample[6],
                 attr_modes.get("dust_to_metal_ratio", "duplicated"),
                 resample_factor,
                 rng,
@@ -504,26 +504,28 @@ class Gas(Particles, Component):
         # resampled according to the attr_modes dict
         new_custom = {
             self._custom_attr_names[i]: resample_by_mode(
-                masked[10 + i],
+                to_resample[10 + i],
                 attr_modes.get(self._custom_attr_names[i], "duplicated"),
                 resample_factor,
                 rng,
             )
             for i in range(len(custom))
-            if masked[10 + i] is not None
+            if to_resample[10 + i] is not None
         }
 
-        # Combine any unmasked particles back in with the resampled ones
-        if unmasked is not None:
-            new_coords = combine_arrays(new_coords, unmasked[0])
-            new_sml = combine_arrays(new_sml, unmasked[1])
-            new_masses = combine_arrays(new_masses, unmasked[2])
-            new_metallicities = combine_arrays(new_metallicities, unmasked[3])
+        # Combine any no_resample particles back in with the resampled ones
+        if no_resample is not None:
+            new_coords = combine_arrays(new_coords, no_resample[0])
+            new_sml = combine_arrays(new_sml, no_resample[1])
+            new_masses = combine_arrays(new_masses, no_resample[2])
+            new_metallicities = combine_arrays(
+                new_metallicities, no_resample[3]
+            )
             if velocities is not None:
-                new_vels = combine_arrays(new_vels, unmasked[4])
+                new_vels = combine_arrays(new_vels, no_resample[4])
             if star_forming is not None:
                 new_star_forming = combine_arrays(
-                    new_star_forming, unmasked[5]
+                    new_star_forming, no_resample[5]
                 )
             if (
                 dust_to_metal_ratio is not None
@@ -531,27 +533,29 @@ class Gas(Particles, Component):
                 and dust_to_metal_ratio.ndim >= 1
             ):
                 new_dust_to_metal_ratio = combine_arrays(
-                    new_dust_to_metal_ratio, unmasked[6]
+                    new_dust_to_metal_ratio, no_resample[6]
                 )
             if (
                 tau_v is not None
                 and hasattr(tau_v, "shape")
                 and tau_v.ndim >= 1
             ):
-                new_tau_v = combine_arrays(new_tau_v, unmasked[7])
+                new_tau_v = combine_arrays(new_tau_v, no_resample[7])
             if (
                 softening_lengths is not None
                 and hasattr(softening_lengths, "shape")
                 and softening_lengths.ndim >= 1
             ):
-                new_softening = combine_arrays(new_softening, unmasked[8])
+                new_softening = combine_arrays(new_softening, no_resample[8])
             if dust_masses is not None:
-                new_dust_masses = combine_arrays(new_dust_masses, unmasked[9])
+                new_dust_masses = combine_arrays(
+                    new_dust_masses, no_resample[9]
+                )
             for i in range(len(custom)):
                 name = self._custom_attr_names[i]
                 if name in new_custom:
                     new_custom[name] = combine_arrays(
-                        new_custom[name], unmasked[10 + i]
+                        new_custom[name], no_resample[10 + i]
                     )
 
         # Create the new Gas object with all the resampled attributes
