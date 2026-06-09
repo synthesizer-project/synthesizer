@@ -1,0 +1,9 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+ColumnLimit: 79
+KeepEmptyLinesAtTheStartOfBlocks: true
+PenaltyBreakAssignment: 2
+DerivePointerAlignment: false
+PointerAlignment: Right
+...

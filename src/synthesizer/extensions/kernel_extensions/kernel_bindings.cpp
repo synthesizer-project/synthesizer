@@ -6,8 +6,8 @@
  * evaluation function to Python.
  *****************************************************************************/
 
-#include "kernels.h"
 #include "kernel_functions.h"
+#include "kernels.h"
 
 /**
  * @brief Evaluate a named kernel on a 1D radius array.

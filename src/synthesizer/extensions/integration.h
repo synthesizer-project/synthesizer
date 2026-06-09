@@ -29,4 +29,4 @@ double simps_1d(const double *x, const double *y, size_t n);
  */
 double trapz_1d(const double *x, const double *y, size_t n);
 
-#endif // INTEGRATION_H_
+#endif  // INTEGRATION_H_

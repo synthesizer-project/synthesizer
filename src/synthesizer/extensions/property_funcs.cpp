@@ -5,8 +5,9 @@
 
 /* C headers. */
 #include <Python.h>
-#include <iostream>
 #include <string.h>
+
+#include <iostream>
 
 /* Header */
 #include "property_funcs.h"
@@ -36,8 +37,7 @@ double *extract_data_double(PyArrayObject *np_arr, const char *name) {
 
   if (!PyArray_IS_C_CONTIGUOUS(np_arr)) {
     char error_msg[120];
-    snprintf(error_msg, sizeof(error_msg),
-             "%s must be C-contiguous.", name);
+    snprintf(error_msg, sizeof(error_msg), "%s must be C-contiguous.", name);
     PyErr_SetString(PyExc_ValueError, error_msg);
     return NULL;
   }
