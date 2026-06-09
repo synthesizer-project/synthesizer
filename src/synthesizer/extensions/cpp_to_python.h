@@ -103,7 +103,6 @@ PyArrayObject *wrap_array_to_numpy(int ndim, npy_intp *dims, int typenum,
   if (PyArray_SetBaseObject(arr, capsule) < 0) {
     Py_DECREF(arr);
     Py_DECREF(capsule);
-    delete[] buffer;
     return nullptr;
   }
 
