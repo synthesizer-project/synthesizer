@@ -56,7 +56,15 @@ class Stars(StarsComponent):
             The array of metallicitities defining the metallicity axes of
             the SFZH.
         initial_mass (unyt_quantity/float)
-            The total initial stellar mass.
+            The total initial stellar mass. This is the total mass of stars
+            formed, i.e. the integral of the SFH over time, and is not the
+            same as the surviving mass which accounts for stellar evolution.
+        surviving_mass (unyt_quantity/float):
+            The total surviving stellar mass. This is the total mass of stars
+            currently alive, i.e. the integral of the SFH over time weighted
+            by the fraction of stars that survive to each age, and is not the
+            same as the initial mass which does not account for stellar
+            evolution.
         morphology (morphology.* e.g. Sersic2D)
             An instance of one of the morphology classes describing the
             stellar population's morphology. This can be any of the family
@@ -97,14 +105,20 @@ class Stars(StarsComponent):
 
     # Define quantities
     initial_mass = Quantity("mass")
+    surviving_mass = Quantity("mass")
 
-    @accepts(initial_mass=Msun.in_base("galactic"))
+    @accepts(
+        surviving_mass=Msun.in_base("galactic"),
+        initial_mass=Msun.in_base("galactic"),
+    )
     @timed("ParametricStars.__init__")
     def __init__(
         self,
         log10ages,
         metallicities,
         initial_mass=None,
+        surviving_mass=None,
+        grid=None,
         morphology=None,
         sfzh=None,
         sf_hist=None,
@@ -133,6 +147,13 @@ class Stars(StarsComponent):
             initial_mass (unyt_quantity/float):
                 The total initial stellar mass. If provided the SFZH grid will
                 be rescaled to obey this total mass.
+            surviving_mass (unyt_quantity/float):
+                The total surviving stellar mass. If provided the SFZH grid
+                will be rescaled to obey this total mass.
+            grid (Grid):
+                A synthesizer Grid object. This is only used to provide
+                stellar_fraction when initialising using a surviving mass, and
+                is ignored if surviving_mass is not provided.
             morphology (morphology.* e.g. Sersic2D):
                 An instance of one of the morphology classes describing the
                 stellar population's morphology. This can be any of the family
@@ -237,6 +258,43 @@ class Stars(StarsComponent):
 
         # Store the total initial stellar mass
         self.initial_mass = initial_mass
+        self.surviving_mass = surviving_mass
+
+        # Raise exception if both initial mass and surviving mass are
+        # provided, this is not physically consistent and we don't want to
+        # guess which one the user meant to provide
+        if self.surviving_mass is not None and self.initial_mass is not None:
+            raise exceptions.InconsistentArguments(
+                "Cannot specify both initial_mass and surviving_mass! Please"
+                " specify only one of these or neither."
+            )
+
+        # Raise exception if surviving mass is provided but no grid is
+        # provided, we need the stellar fraction from the grid to rescale
+        # the SFZH to obey the surviving mass
+        if self.surviving_mass is not None and grid is None:
+            raise exceptions.InconsistentArguments(
+                "If surviving_mass is specified then a Grid object must be "
+                "provided to get the stellar_fraction for rescaling the SFZH!"
+            )
+
+        # Raise exception if we have been given the surviving mass and grid
+        # but that grid doesn't have a stellar_fraction attribute
+        if self.surviving_mass is not None and grid is not None:
+            if not hasattr(grid, "stellar_fraction"):
+                raise exceptions.InconsistentArguments(
+                    "If surviving_mass is specified then a Grid object with a"
+                    "stellar_fraction attribute must be provided to rescale"
+                    "the SFZH!"
+                )
+
+        # Get the stellar fraction from the grid if we have been given a
+        # surviving mass, this is needed to rescale the SFZH to obey the
+        # surviving mass constraint. This is the fraction of the initial mass
+        # that survives to the present day, and is used to calculate the
+        # initial mass from the surviving mass.
+        if self.surviving_mass is not None and grid is not None:
+            self.stellar_fraction = grid.stellar_fraction
 
         # If we have been handed an explict SFZH grid we can ignore all the
         # calculation methods
@@ -303,7 +361,9 @@ class Stars(StarsComponent):
             # Irregular
             self.metallicity_grid_type = None
 
-    @accepts(instant_sf=yr)
+    @accepts(
+        instant_sf=yr,
+    )
     @timed("ParametricStars._get_sfzh")
     def _get_sfzh(self, instant_sf, instant_metallicity):
         """Compute the SFZH for all possible combinations of input.
@@ -339,28 +399,43 @@ class Stars(StarsComponent):
         # If both are instantaneous then we can do the whole SFZH in one go
         if instant_sf is not None and instant_metallicity is not None:
             inst_stars = ParticleStars(
-                initial_masses=np.array([self._initial_mass]) * Msun,
+                # We can just use a single star with mass 1 Msun here, the
+                # normalisation will be applied later based on the initial
+                # mass or surviving mass if provided, or the total mass of
+                # the SFZH grid otherwise
+                initial_masses=np.array([1.0]) * Msun,
                 ages=np.array([instant_sf.to("yr").value]) * yr,
                 metallicities=np.array([instant_metallicity]),
             )
 
-            # Compute the SFZH grid
+            # Compute the SFZH grid in one go, this will be a delta function
+            # in both age and metallicity so will just populate a single bin
+            # but this is the most straightforward way to do it
             self.sfzh = inst_stars.get_sfzh(
                 self.log10ages,
                 self.metallicities,
                 grid_assignment_method="cic",
             ).sfzh
 
-            # Compute the SFH and ZH arrays
+            # Project the SFZH to get the 1D SFH and ZH, this is a bit
+            # redundant but it means we can use the same code for all
+            # the different cases downstream
             self.sf_hist = np.sum(self.sfzh, axis=1)
             self.metal_dist = np.sum(self.sfzh, axis=0)
 
-            return
+            # Note, we could exit here, however we may still want to apply
+            # a normalisation based on the initial mass or surviving mass, so
+            # we need to continue with the rest of the code to do that if
+            # necessary
 
         # Handle the instantaneous SFH case
         elif instant_sf is not None and instant_metallicity is None:
             inst_stars = ParticleStars(
-                initial_masses=np.array([self._initial_mass]) * Msun,
+                # We can just use a single star with mass 1 Msun here, the
+                # normalisation will be applied later based on the initial
+                # mass or surviving mass if provided, or the total mass of
+                # the SFZH grid otherwise
+                initial_masses=np.array([1.0]) * Msun,
                 ages=np.array([instant_sf.to("yr").value]) * yr,
                 metallicities=np.array([0]),  # this is a dummy value
             )
@@ -371,7 +446,11 @@ class Stars(StarsComponent):
         # Handle the instantaneous ZH case
         elif instant_metallicity is not None and instant_sf is None:
             inst_stars = ParticleStars(
-                initial_masses=np.array([self._initial_mass]) * Msun,
+                # We can just use a single star with mass 1 Msun here, the
+                # normalisation will be applied later based on the initial
+                # mass or surviving mass if provided, or the total mass of
+                # the SFZH grid otherwise
+                initial_masses=np.array([1.0]) * Msun,
                 ages=np.array([0]) * yr,  # this is a dummy value
                 metallicities=np.array([instant_metallicity]),
             )
@@ -389,20 +468,16 @@ class Stars(StarsComponent):
             for ia, age in enumerate(self.ages[:-1]):
                 max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
                 sf = integrate.quad(
-                    self.sf_hist_func.get_sfr, min_age, max_age
+                    self.sf_hist_func.get_sfr,
+                    min_age,
+                    max_age,
                 )[0]
                 self.sf_hist[ia] = sf
                 min_age = max_age
 
-            # Normalise SFH array
-            self.sf_hist /= np.sum(self.sf_hist)
-
-            # Multiply by initial stellar mass
-            self.sf_hist *= self._initial_mass
-
-        # Calculate SFH from function if necessary
+        # Calculate ZH from function if necessary
         if self.metal_dist_func is not None and self.metal_dist is None:
-            # Set up SFH array
+            # Set up ZH array
             self.metal_dist = np.zeros(self.metallicities.size)
 
             # Loop over metallicity bins calculating the amount of mass in
@@ -421,12 +496,6 @@ class Stars(StarsComponent):
                 self.metal_dist[imetal] = sf
                 min_metal = max_metal
 
-            # Normalise ZH array
-            self.metal_dist /= np.sum(self.metal_dist)
-
-            # Multiply by initial stellar mass
-            self.metal_dist *= self._initial_mass
-
         # Ensure that by this point we have an array for SFH and ZH
         if self.sf_hist is None or self.metal_dist is None:
             raise exceptions.InconsistentArguments(
@@ -439,11 +508,31 @@ class Stars(StarsComponent):
         self.sfzh = self.sf_hist[:, np.newaxis] * self.metal_dist
 
         # Normalise the SFZH grid if needs be
-        if self.initial_mass is not None:
-            self.sfzh /= np.sum(self.sfzh)
+        if self.surviving_mass is not None:
+            self.sfzh_normalisation = (
+                self._surviving_mass / self.stellar_fraction
+            ) / np.sum(self.sfzh)
+            self.sfzh *= self.sfzh_normalisation
 
-            # ... and multiply it by the initial mass of stars
-            self.sfzh *= self._initial_mass
+            # now calculate the initial mass
+            self.initial_mass = np.sum(self.sfzh) * Msun
+
+            # now apply the normalisation to the SFH and ZH arrays for
+            # consistency
+            self.sf_hist /= np.sum(self.sf_hist)
+            self.sf_hist *= self.initial_mass
+            self.metal_dist /= np.sum(self.metal_dist)
+            self.metal_dist *= self.initial_mass
+
+        elif self.initial_mass is not None:
+            self.sfzh_normalisation = self._initial_mass / np.sum(self.sfzh)
+            self.sfzh *= self.sfzh_normalisation
+
+            # now apply the normalisation to the SFH and ZH arrays for
+            # consistency
+            self.sf_hist *= self.sfzh_normalisation
+            self.metal_dist *= self.sfzh_normalisation
+
         else:
             # Otherwise calculate the total initial mass
             self.initial_mass = np.sum(self.sfzh) * Msun
