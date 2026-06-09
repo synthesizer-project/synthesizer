@@ -685,6 +685,21 @@ class Particles:
             # Sum the spectra
             self.spectra[key] = sed.sum()
 
+    def spatially_resample(self, *args, **kwargs):
+        """Resample particles spatially.
+
+        This is an abstract method. Subclasses (Gas, Stars) must override
+        it with a concrete implementation.
+
+        Raises:
+            NotImplementedError: always.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not implement "
+            "spatially_resample. "
+            "See Gas.spatially_resample or Stars.spatially_resample."
+        )
+
     def __str__(self):
         """Return a string representation of the particle object.
 
