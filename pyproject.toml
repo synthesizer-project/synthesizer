@@ -90,7 +90,6 @@ dependencies = [
   "tqdm",
   "requests",
   "pathos",
-  "statsmodels",
   "pympler",
   "platformdirs",
 ]
