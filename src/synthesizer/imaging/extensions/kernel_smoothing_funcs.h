@@ -169,6 +169,7 @@ inline double compute_kernel_norm(const double *kernel, int kdim,
 /**
  * @brief Check if the entire kernel support lies within the pixel.
  *
+ * @tparam ParticleT The particle type (must have pos[0], pos[1], sml).
  * @param part Pointer to the particle.
  * @param pix_x_min Pixel minimum x coordinate.
  * @param pix_x_max Pixel maximum x coordinate.
@@ -178,10 +179,10 @@ inline double compute_kernel_norm(const double *kernel, int kdim,
  *
  * @return True if kernel is fully inside pixel, false otherwise.
  */
-inline bool kernel_fully_inside_pixel(const struct particle *part,
-                                      double pix_x_min, double pix_x_max,
-                                      double pix_y_min, double pix_y_max,
-                                      double kernel_radius) {
+template <typename ParticleT>
+inline bool kernel_fully_inside_pixel(const ParticleT *part, double pix_x_min,
+                                      double pix_x_max, double pix_y_min,
+                                      double pix_y_max, double kernel_radius) {
   /* Particle must be inside the pixel, and the kernel radius must not cross
    * any pixel edge. */
   double dx_left = part->pos[0] - pix_x_min;
@@ -201,6 +202,7 @@ inline bool kernel_fully_inside_pixel(const struct particle *part,
  * When the pixel is wholly contained within the kernel support, we evaluate
  * the kernel using a 3x3 grid and apply proper SPH normalization.
  *
+ * @tparam ParticleT The particle type (must have pos[0], pos[1], sml).
  * @param pix_x_min Pixel minimum x coordinate.
  * @param pix_y_min Pixel minimum y coordinate.
  * @param res Pixel resolution.
@@ -211,9 +213,10 @@ inline bool kernel_fully_inside_pixel(const struct particle *part,
  *
  * @return The kernel contribution value (normalized).
  */
+template <typename ParticleT>
 inline double pixel_inside_kernel_contribution(double pix_x_min,
                                                double pix_y_min, double res,
-                                               const struct particle *part,
+                                               const ParticleT *part,
                                                const double *kernel, int kdim,
                                                double threshold) {
 
@@ -247,6 +250,7 @@ inline double pixel_inside_kernel_contribution(double pix_x_min,
  * sampling to accurately integrate the kernel contribution over the pixel
  * area.
  *
+ * @tparam ParticleT The particle type (must have pos[0], pos[1], sml).
  * @param part Pointer to the particle.
  * @param pix_x_min Pixel minimum x coordinate.
  * @param pix_y_min Pixel minimum y coordinate.
@@ -257,8 +261,9 @@ inline double pixel_inside_kernel_contribution(double pix_x_min,
  *
  * @return The kernel contribution value (normalized).
  */
+template <typename ParticleT>
 inline double pixel_kernel_partial_overlap_contribution(
-    const struct particle *part, double pix_x_min, double pix_y_min,
+    const ParticleT *part, double pix_x_min, double pix_y_min,
     const double *kernel, int kdim, double threshold, double res) {
 
   /* Adaptive sampling based on smoothing length.

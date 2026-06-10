@@ -24,6 +24,7 @@ from synthesizer.conversions import (
     spatial_to_angular_at_z,
 )
 from synthesizer.imaging.extensions.image import make_img
+from synthesizer.imaging.extensions.image_quadtree import make_img_quadtree
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
 from synthesizer.utils import (
@@ -474,6 +475,174 @@ def _generate_images_particle_hist(
     return imgs
 
 
+@timed("_generate_image_particle_quadtree")
+def _generate_image_particle_quadtree(
+    img,
+    signal,
+    cent_coords,
+    smoothing_lengths,
+    kernel,
+    kernel_threshold,
+    nthreads,
+    normalisation=None,
+):
+    """Generate a smoothed image for a particle emitter using a quadtree.
+
+    Uses a 2D quadtree for pixel-centric rendering with area integration.
+    Each pixel queries the quadtree once and computes the exact pixel-kernel
+    overlap integral using the same algorithm as the octree backend.
+
+    Args:
+        img (Image):
+            The image object to populate with the image.
+        signal (unyt_array of float):
+            The signal of each particle to be sorted into pixels.
+        cent_coords (unyt_array of float):
+            The centred coordinates of the particles. These will be
+            converted to the image resolution units and shifted to fall
+            in the range [0, FOV].
+        smoothing_lengths (unyt_array of float):
+            The smoothing lengths of the particles.
+        kernel (np.ndarray or Kernel):
+            The kernel lookup table, or a ``Kernel`` instance to extract
+            it from.
+        kernel_threshold (float):
+            The threshold for the kernel. Particles with a kernel value
+            below this threshold are included in the image.
+        nthreads (int):
+            The number of threads to use when smoothing the image.
+        normalisation (unyt_quantity of float):
+            The optional normalisation to apply to the image.
+
+    Returns:
+        Image: The smoothed image.
+    """
+    with timer("_generate_image_particle_quadtree.setup"):
+        # Avoid cyclic imports
+        from synthesizer.imaging import Image
+
+        # Ensure the signal is a 1D array and is a compatible size with the
+        # coordinates and smoothing lengths
+        if signal.ndim != 1:
+            raise exceptions.InconsistentArguments(
+                "Signal must be a 1D array for a smoothed image"
+                f" (got {signal.ndim})."
+            )
+        if signal.size != cent_coords.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Signal and coordinates must be the same size"
+                f" for a smoothed image (got {signal.size} and "
+                f"{cent_coords.shape[0]})."
+            )
+        if signal.size != smoothing_lengths.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Signal and smoothing lengths must be the same size"
+                f" for a smoothed image (got {signal.size} and "
+                f"{smoothing_lengths.shape[0]})."
+            )
+        if cent_coords.shape[0] != smoothing_lengths.shape[0]:
+            raise exceptions.InconsistentArguments(
+                "Coordinates and smoothing lengths must be the same size"
+                f" for a smoothed image (got {cent_coords.shape[0]} and "
+                f"{smoothing_lengths.shape[0]})."
+            )
+
+        # Ensure the coordinates are compatible with the fov/resolution
+        if not unit_is_compatible(cent_coords, img.resolution.units):
+            raise exceptions.InconsistentArguments(
+                "Coordinates must be compatible with the image resolution "
+                f"units (got {cent_coords.units} and {img.resolution.units})."
+            )
+
+        # Ensure the smoothing lengths are compatible with the fov/resolution
+        if not unit_is_compatible(smoothing_lengths, img.resolution.units):
+            raise exceptions.InconsistentArguments(
+                "Smoothing lengths must be compatible with the image "
+                f"resolution units (got {smoothing_lengths.units} and "
+                f"{img.resolution.units})."
+            )
+
+        # Ensure coordinates have been centred
+        _validate_centered_coordinates(cent_coords)
+
+        # Get the spatial units we'll work with
+        spatial_units = img.resolution.units
+
+        # Unpack the image properties we need
+        fov = img.fov.to_value(spatial_units)
+        res = img.resolution.to_value(spatial_units)
+
+        # Shift the centred coordinates by half the FOV
+        _coords = cent_coords.to(spatial_units).value
+        _coords[:, 0] += fov[0] / 2.0
+        _coords[:, 1] += fov[1] / 2.0
+        _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
+
+        # Apply normalisation to original signal if needed
+        if normalisation is not None:
+            signal = signal.copy()
+            signal *= normalisation.value
+
+    # Convert the public kernel input into the lookup array used by the
+    # smoothing backend.
+    kernel_arr = _standardize_sph_kernel(kernel)
+
+    # Extract x and y coordinate arrays (the quadtree backend expects
+    # contiguous (npart,) arrays, not an interleaved (npart, 3) array).
+    pos_x = ensure_array_c_compatible_double(
+        np.ascontiguousarray(_coords[:, 0])
+    )
+    pos_y = ensure_array_c_compatible_double(
+        np.ascontiguousarray(_coords[:, 1])
+    )
+    # Stack into (npart, 2) for the C extension.
+    pos_2d = np.column_stack((pos_x, pos_y))
+    pos_2d = ensure_array_c_compatible_double(pos_2d)
+
+    # Get the (npix_x, npix_y, Nimg) array of images
+    imgs_arr = make_img_quadtree(
+        ensure_array_c_compatible_double(signal),
+        ensure_array_c_compatible_double(_smoothing_lengths),
+        pos_2d,
+        kernel_arr,
+        res,
+        img.npix[0],
+        img.npix[1],
+        cent_coords.shape[0],
+        kernel_threshold,
+        kernel_arr.size,
+        1,
+        nthreads,
+    )
+
+    # Store the image array into the image object
+    img.arr = imgs_arr[:, :, 0]
+    img.units = (
+        signal.units
+        if isinstance(signal, (unyt_quantity, unyt_array))
+        else None
+    )
+
+    # Apply the normalisation if needed
+    if normalisation is not None:
+        with timer("_generate_image_particle_quadtree.normalise"):
+            norm_img = Image(resolution=img.resolution, fov=img.fov)
+            norm_img = _generate_image_particle_quadtree(
+                norm_img,
+                signal=normalisation,
+                cent_coords=cent_coords,
+                smoothing_lengths=smoothing_lengths,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+            )
+
+            # Normalise the image by the normalisation property
+            img.arr /= norm_img.arr
+
+    return img
+
+
 @timed("_generate_image_particle_smoothed")
 def _generate_image_particle_smoothed(
     img,
@@ -484,6 +653,7 @@ def _generate_image_particle_smoothed(
     kernel_threshold,
     nthreads,
     normalisation=None,
+    backend="octree",
 ):
     """Generate smoothed images for a particle emitter.
 
@@ -510,10 +680,28 @@ def _generate_image_particle_smoothed(
             only applies to particle imaging.
         normalisation (unyt_quantity of float):
             The optional normalisation to apply to the image.
+        backend (str):
+            The rendering backend to use. "octree" (default) uses the
+            existing particle-centric octree approach. "quadtree" uses
+            the new pixel-centric quadtree approach.
 
     Returns:
         Image: The smoothed image.
     """
+    # Dispatch to quadtree backend if requested.
+    if backend == "quadtree":
+        return _generate_image_particle_quadtree(
+            img,
+            signal,
+            cent_coords=cent_coords,
+            smoothing_lengths=smoothing_lengths,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            normalisation=normalisation,
+        )
+
+    # Existing octree path below.
     with timer("_generate_image_particle_smoothed.setup"):
         # Avoid cyclic imports
         from synthesizer.imaging import Image
@@ -627,6 +815,7 @@ def _generate_image_particle_smoothed(
                 kernel=kernel,
                 kernel_threshold=kernel_threshold,
                 nthreads=nthreads,
+                backend="octree",
             )
 
             # Normalise the image by the normalisation property
@@ -646,6 +835,7 @@ def _generate_images_particle_smoothed(
     kernel_threshold,
     nthreads,
     normalisations=None,
+    backend="octree",
 ):
     """Generate smoothed images for a particle emitter.
 
@@ -678,6 +868,10 @@ def _generate_images_particle_smoothed(
             The normalisations to use for the images. The keys must match the
             labels of the signals. If not provided, normalisation is set to
             None.
+        backend (str):
+            The rendering backend to use. "octree" (default) uses the
+            existing particle-centric octree approach. "quadtree" uses
+            the new pixel-centric quadtree approach.
 
     Returns:
         ImageCollection: An image collection containing the smoothed images.
@@ -771,21 +965,51 @@ def _generate_images_particle_smoothed(
     # smoothing backend.
     kernel_arr = _standardize_sph_kernel(kernel)
 
-    # Get the (Nimg, npix_x, npix_y) array of images
-    imgs_arr = make_img(
-        ensure_array_c_compatible_double(signals),
-        ensure_array_c_compatible_double(_smoothing_lengths),
-        ensure_array_c_compatible_double(_coords),
-        kernel_arr,
-        res,
-        imgs.npix[0],
-        imgs.npix[1],
-        cent_coords.shape[0],
-        kernel_threshold,
-        kernel_arr.size,
-        signals.shape[1],
-        nthreads,
-    )
+    # Dispatch to the appropriate backend.
+    if backend == "quadtree":
+        # Extract x and y coordinate arrays (the quadtree backend expects
+        # contiguous 2D positions).
+        pos_x = ensure_array_c_compatible_double(
+            np.ascontiguousarray(_coords[:, 0])
+        )
+        pos_y = ensure_array_c_compatible_double(
+            np.ascontiguousarray(_coords[:, 1])
+        )
+        pos_2d = np.column_stack((pos_x, pos_y))
+        pos_2d = ensure_array_c_compatible_double(pos_2d)
+
+        # Get the (npix_x, npix_y, Nimg) array of images.
+        imgs_arr = make_img_quadtree(
+            ensure_array_c_compatible_double(signals),
+            ensure_array_c_compatible_double(_smoothing_lengths),
+            pos_2d,
+            kernel_arr,
+            res,
+            imgs.npix[0],
+            imgs.npix[1],
+            cent_coords.shape[0],
+            kernel_threshold,
+            kernel_arr.size,
+            signals.shape[1],
+            nthreads,
+        )
+    else:
+        # Existing octree path.
+        # Get the (Nimg, npix_x, npix_y) array of images
+        imgs_arr = make_img(
+            ensure_array_c_compatible_double(signals),
+            ensure_array_c_compatible_double(_smoothing_lengths),
+            ensure_array_c_compatible_double(_coords),
+            kernel_arr,
+            res,
+            imgs.npix[0],
+            imgs.npix[1],
+            cent_coords.shape[0],
+            kernel_threshold,
+            kernel_arr.size,
+            signals.shape[1],
+            nthreads,
+        )
 
     # Apply units if needs be
     if isinstance(signals, (unyt_quantity, unyt_array)):
@@ -814,6 +1038,7 @@ def _generate_images_particle_smoothed(
                     kernel=kernel,
                     kernel_threshold=kernel_threshold,
                     nthreads=nthreads,
+                    backend=backend,
                 )
 
                 # Normalise the image by the normalisation property
