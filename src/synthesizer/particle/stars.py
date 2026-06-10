@@ -33,6 +33,7 @@ from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
 from synthesizer.particle.resample_utils import (
+    _sample_1d_histogram,
     _sample_sfzh_arrays,
     resample_by_mode,
     resample_coordinates,
@@ -836,6 +837,8 @@ class Stars(Particles, StarsComponent):
         attr_modes=None,
         velocity_dispersion=None,
         sfzh=None,
+        sfh=None,
+        metal_dist=None,
     ):
         """Resample this stellar distribution spatially.
 
@@ -863,9 +866,9 @@ class Stars(Particles, StarsComponent):
           kept as-is if scalar
         - ``**kwargs`` extras → ``"duplicated"``
 
-        In the SFZH path, ``ages``, ``metallicities``, ``initial_masses`` and
-        ``current_masses`` are overridden by the SFZH sampling and
-        *attr_modes* entries for those names are silently ignored.
+        When *sfzh*, *sfh*, or *metal_dist* are provided, ages and
+        metallicities are sampled from those distributions; *attr_modes*
+        entries for ``ages`` and ``metallicities`` are ignored.
 
         Args:
             resample_factor (int):
@@ -884,8 +887,21 @@ class Stars(Particles, StarsComponent):
             velocity_dispersion (float or unyt_quantity, optional):
                 Std. dev. of Gaussian velocity noise.
             sfzh (parametric.Stars, optional):
-                Parametric SFZH for joint age--metallicity--mass
-                sampling.
+                Pre-built 2-D SFZH object.  When provided, ages,
+                metallicities and masses are sampled from this
+                distribution.
+            sfh (synthesizer.parametric.sf_hist.Common, optional):
+                A star-formation history functional form.  When
+                provided with *metal_dist*, the two are evaluated on
+                auto-derived grid axes and combined via outer product
+                into a 2-D SFZH for joint sampling.  When provided
+                alone, ages are sampled from the 1-D SFH and
+                metallicities are kept from the input particles.
+            metal_dist (synthesizer.parametric.metal_dist.Common, optional):
+                A metallicity distribution functional form.  When
+                provided with *sfh*, combined into a 2-D SFZH.  When
+                provided alone, metallicities are sampled from the
+                1-D MetalDist and ages are kept from the input.
 
         Returns:
             Stars: A new Stars object with the resampled distribution.
@@ -1008,30 +1024,135 @@ class Stars(Particles, StarsComponent):
         # Now handle the attributes which can have a range of resampling
         # modes.  The SFZH path overrides ages, metallicities and masses;
         # everything else follows attr_modes.
-        if sfzh is not None:
+        if sfzh is not None or sfh is not None or metal_dist is not None:
             # How many new particles in total do we need to sample?
             n_total = to_resample[0].shape[0] * resample_factor
 
-            # Sample the ages, metallicities and masses from the SFZH
-            new_ages, new_metallicities = _sample_sfzh_arrays(
-                sfzh.sfzh,
-                sfzh.log10ages,
-                sfzh.metallicities,
-                n_total,
-                rng,
-            )
-
-            # Associate units with the ages
-            new_ages *= yr
-
-            # For the masses we want to ensure we preserve the total mass
-            # of the original particles, so we rescale the sampled masses to
-            # have the same total mass as the original particles.
+            # Normalise mass to the original input total
             orig_total_mass = (
                 np.sum(to_resample[2])
                 if to_resample[2] is not None
-                else np.sum(sfzh.sfzh) * Msun
+                else n_total * Msun
             )
+
+            # Derive grid axes from the particle population (sorted, finely
+            # sampled so the parametric Stars can integrate accurately)
+            log10ages = np.linspace(
+                np.log10(self.ages.value.min()),
+                np.log10(self.ages.value.max()),
+                100,
+            )
+            metallicities_axis = np.linspace(
+                self.metallicities.min() or 1e-5,
+                self.metallicities.max(),
+                100,
+            )
+
+            # Build a full 2-D SFZH when both distributions are provided;
+            # for single-distribution cases sample directly from the 1-D
+            # evaluated histogram.
+            if sfh is not None and metal_dist is not None:
+                para = Para_Stars(
+                    log10ages=log10ages,
+                    metallicities=metallicities_axis,
+                    sf_hist=sfh,
+                    metal_dist=metal_dist,
+                )
+                sfh_arr = para.sf_hist
+                md_arr = para.metal_dist
+            else:
+                sfh_arr = None
+                md_arr = None
+
+            if sfzh is not None:
+                # Use a pre-built 2-D SFZH object to sample ages and
+                # metallicities from the joint distribution
+                new_ages, new_metallicities = _sample_sfzh_arrays(
+                    sfzh.sfzh,
+                    sfzh.log10ages,
+                    sfzh.metallicities,
+                    n_total,
+                    rng,
+                )
+                new_ages *= yr
+
+            elif sfh is not None and metal_dist is not None:
+                # Build a 2-D SFZH from the outer product of the 1-D
+                # SFH and MetalDist arrays (or their evaluated forms)
+                sfzh_2d = np.outer(sfh_arr, md_arr)
+                sfzh_2d /= sfzh_2d.sum()
+
+                new_ages, new_metallicities = _sample_sfzh_arrays(
+                    sfzh_2d,
+                    log10ages,
+                    metallicities_axis,
+                    n_total,
+                    rng,
+                )
+                new_ages *= yr
+
+            elif sfh is not None:
+                # Evaluate the SFH onto the age grid via a minimal
+                # parametric Stars (use a flat metal_dist as a dummy
+                # so the constructor can build the 2-D SFZH)
+                para = Para_Stars(
+                    log10ages=log10ages,
+                    metallicities=metallicities_axis,
+                    sf_hist=sfh,
+                    metal_dist=np.ones_like(metallicities_axis, dtype=float),
+                )
+                sfh_arr = para.sf_hist
+
+                # Sample ages from the 1-D SFH distribution.
+                # The SFH is a histogram over log10(age) bins, so we
+                # sample log10(age) values and then convert to linear
+                # age.
+                new_ages = (
+                    10
+                    ** _sample_1d_histogram(
+                        sfh_arr / np.sum(sfh_arr),
+                        log10ages,
+                        n_total,
+                        rng,
+                    )
+                    * yr
+                )
+
+                # Metallicities come from the input particles
+                new_metallicities = resample_by_mode(
+                    to_resample[4],
+                    attr_modes.get("metallicities", "duplicated"),
+                    resample_factor,
+                    rng,
+                )
+
+            elif metal_dist is not None:
+                # Evaluate the MetalDist onto the metallicity grid
+                para = Para_Stars(
+                    log10ages=log10ages,
+                    metallicities=metallicities_axis,
+                    sf_hist=np.ones_like(log10ages, dtype=float),
+                    metal_dist=metal_dist,
+                )
+                md_arr = para.metal_dist
+
+                # Sample metallicities from the 1-D MetalDist
+
+                new_metallicities = _sample_1d_histogram(
+                    md_arr / np.sum(md_arr),
+                    metallicities_axis,
+                    n_total,
+                    rng,
+                )
+
+                # Ages come from the input particles
+                new_ages = resample_by_mode(
+                    to_resample[3],
+                    attr_modes.get("ages", "duplicated"),
+                    resample_factor,
+                    rng,
+                )
+
             new_initial_masses = (
                 np.ones(n_total, dtype=np.float64)
                 * orig_total_mass.value
