@@ -559,6 +559,64 @@ def _sample_sfzh_arrays(sfzh, log10ages, log10metallicities, nstar, rng):
     return ages, metallicities
 
 
+def _sample_1d_histogram(hist, edges, nstar, rng):
+    """Sample continuously from a 1-D histogram.
+
+    Builds a CDF from the normalised histogram, picks bin indices via
+    inverse-CDF sampling, then interpolates uniformly within each
+    selected bin so values are continuous rather than quantised at bin
+    centres.
+
+    Args:
+        hist (np.ndarray):
+            1-D histogram (must sum to 1).
+        edges (np.ndarray):
+            Bin edges (length ``len(hist) + 1``) or bin centres (same
+            length as *hist*).  If bin centres are passed, linear
+            interpolation is done between consecutive centres; the first
+            and last bins use a half-bin width.
+        nstar (int):
+            Number of samples to draw.
+        rng (np.random.Generator):
+            Seeded random generator.
+
+    Returns:
+        np.ndarray:
+            Sampled values of length *nstar* in the units of *edges*.
+    """
+    # Normalise and build CDF
+    normed = hist / np.sum(hist)
+    cdf = np.cumsum(normed)
+    cdf = cdf / cdf[-1]
+
+    # Choose bin indices and interpolate with**in each bin
+    values = rng.random(nstar)
+    idx = np.searchsorted(cdf, values)
+    frac = rng.random(nstar)
+
+    # Determine whether *edges* are bin edges or centres
+    edges = np.asarray(edges)
+    if len(edges) == len(hist):
+        # Bin centres — interpolate between neighbours
+        centres = edges
+        lo = np.where(
+            idx == 0,
+            centres[0] - (centres[1] - centres[0]) / 2,
+            centres[idx - 1],
+        )
+        hi = np.where(
+            idx == len(centres) - 1,
+            centres[-1] + (centres[-1] - centres[-2]) / 2,
+            centres[idx],
+        )
+        return lo + frac * (hi - lo)
+    else:
+        # Bin edges — interpolate within the selected bin
+        lo = edges[idx]
+        hi = edges[np.clip(idx + 1, 0, len(edges) - 1)]
+        return lo + frac * (hi - lo)
+
+
 def split_by_mask(mask, **arrays):
     """Split arrays by a boolean mask, preserving input order.
 
