@@ -20,6 +20,7 @@ Example usages:
 """
 
 import os
+from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,6 +32,17 @@ from synthesizer.grid import Grid
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
+from synthesizer.particle.resample_utils import (
+    _sample_sfzh_arrays,
+    resample_by_mode,
+    resample_coordinates,
+    resample_smoothing_lengths,
+    resample_velocities,
+    split_by_mask,
+    validate_mask,
+    validate_required_inputs,
+    validate_resample_factor,
+)
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
@@ -570,7 +582,7 @@ class Stars(Particles, StarsComponent):
             pmask (array-like, bool):
                 A boolean mask to remove stars from the object.
         """
-        # Remove the masked stars from this object
+        # Remove the to_resample stars from this object
         self.initial_masses = self.initial_masses[~pmask]
         self.ages = self.ages[~pmask]
         self.metallicities = self.metallicities[~pmask]
@@ -813,6 +825,386 @@ class Stars(Particles, StarsComponent):
                 The stellar mass array to be renormalised.
         """
         self.initial_masses *= stellar_mass / np.sum(self.initial_masses)
+
+    @timed("Stars.spatially_resample")
+    def spatially_resample(
+        self,
+        resample_factor,
+        kernel=None,
+        seed=None,
+        mask=None,
+        attr_modes=None,
+        velocity_dispersion=None,
+        sfzh=None,
+    ):
+        """Resample this stellar distribution spatially.
+
+        Each particle is replaced by *resample_factor* new particles whose
+        positions are sampled from the SPH kernel centred on the original
+        position.  All standard Stars attributes and any extras registered at
+        construction time (see
+        :attr:`~synthesizer.particle.particles.Particles._custom_attr_names`)
+        are harvested automatically.
+
+        When an SFZH is provided the ages, metallicities and masses are
+        sampled from the joint SFZH distribution; otherwise ``ages`` /
+        ``metallicities`` are duplicated and ``initial_masses`` /
+        ``current_masses`` are divided proportionally.
+
+        Per-attribute resampling is controlled via *attr_modes*.  See
+        :func:`~.resample_utils.resample_by_mode` for available modes.
+
+        **Default modes per attribute:**
+
+        - ``initial_masses``, ``current_masses`` → ``"proportional"``
+        - ``ages``, ``metallicities``, ``alpha_enhancement``, ``s_oxygen``,
+          ``s_hydrogen`` → ``"duplicated"``
+        - ``tau_v``, ``softening_lengths`` → ``"duplicated"`` if per-particle,
+          kept as-is if scalar
+        - ``**kwargs`` extras → ``"duplicated"``
+
+        In the SFZH path, ``ages``, ``metallicities``, ``initial_masses`` and
+        ``current_masses`` are overridden by the SFZH sampling and
+        *attr_modes* entries for those names are silently ignored.
+
+        Args:
+            resample_factor (int):
+                Number of new particles per original particle (>= 2).
+            kernel (Kernel):
+                SPH kernel for position sampling
+                (e.g. ``Kernel("cubic")``).  Required.
+            seed (int, optional):
+                Random seed for reproducibility.
+            mask (array-like, optional):
+                Boolean mask.  ``True`` particles are resampled;
+                ``False`` particles are kept unchanged.
+            attr_modes (dict, optional):
+                Override resampling mode for individual attributes.
+                See :func:`~.resample_utils.resample_by_mode`.
+            velocity_dispersion (float or unyt_quantity, optional):
+                Std. dev. of Gaussian velocity noise.
+            sfzh (parametric.Stars, optional):
+                Parametric SFZH for joint age--metallicity--mass
+                sampling.
+
+        Returns:
+            Stars: A new Stars object with the resampled distribution.
+        """
+        # Unpack any of the custom kwargs we attached at init
+        custom = {
+            name: getattr(self, name)
+            for name in self._custom_attr_names
+            if hasattr(self, name)
+        }
+
+        # Get all the other attributes we need for resampling
+        coordinates = self.coordinates
+        smoothing_lengths = self.smoothing_lengths
+        initial_masses = self.initial_masses
+        ages = self.ages
+        metallicities = self.metallicities
+        current_masses = self.current_masses
+        velocities = getattr(self, "velocities", None)
+        tau_v = self.tau_v
+        alpha_enhancement = getattr(self, "alpha_enhancement", None)
+        s_oxygen = getattr(self, "s_oxygen", None)
+        s_hydrogen = getattr(self, "s_hydrogen", None)
+        softening_lengths = self.softening_lengths
+        redshift = self.redshift
+        centre = getattr(self, "centre", None)
+        metallicity_floor = self.metallicity_floor
+
+        # Validate our inputs
+        validate_resample_factor(resample_factor)
+        validate_required_inputs(
+            coordinates=coordinates,
+            smoothing_lengths=smoothing_lengths,
+            kernel=kernel,
+        )
+
+        # How many original particles do we have?
+        n_orig = coordinates.shape[0]
+
+        # Ensure we have a dict for attr_modes (even if empty)
+        if attr_modes is None:
+            attr_modes = {}
+
+        # Set up the random number generator
+        rng = np.random.default_rng(seed)
+
+        # If we have a mask we need to split the original arrays into those
+        # that will be resampled and those that will be kept as-is
+        if mask is not None:
+            # First, is the mask even valid?
+            mask = validate_mask(mask, n_orig)
+
+            # Split all the relevant arrays by the mask
+            to_resample, no_resample = split_by_mask(
+                mask,
+                coordinates=coordinates,
+                smoothing_lengths=smoothing_lengths,
+                initial_masses=initial_masses,
+                ages=ages,
+                metallicities=metallicities,
+                current_masses=current_masses,
+                velocities=velocities,
+                tau_v=tau_v,
+                alpha_enhancement=alpha_enhancement,
+                s_oxygen=s_oxygen,
+                s_hydrogen=s_hydrogen,
+                softening_lengths=softening_lengths,
+                **custom,
+            )
+        else:
+            # Create dummies for the to_resample and no_resample cases so we
+            # proceed cleanly
+            to_resample = (
+                coordinates,
+                smoothing_lengths,
+                initial_masses,
+                ages,
+                metallicities,
+                current_masses,
+                velocities,
+                tau_v,
+                alpha_enhancement,
+                s_oxygen,
+                s_hydrogen,
+                softening_lengths,
+            ) + tuple(custom[name] for name in self._custom_attr_names)
+            no_resample = None
+
+        # Early exit if we have no particles to resample
+        if to_resample[0].shape[0] == 0:
+            return deepcopy(self)
+
+        # Start with the coordinates
+        new_coords = resample_coordinates(
+            coordinates=to_resample[0],
+            smoothing_lengths=to_resample[1],
+            kernel=kernel,
+            resample_factor=resample_factor,
+            seed=seed,
+        )
+
+        # If we have velocities we can resample those too
+        if velocities is not None:
+            new_vels = resample_velocities(
+                velocities=to_resample[6],
+                resample_factor=resample_factor,
+                velocity_dispersion=velocity_dispersion,
+                seed=seed,
+            )
+        else:
+            new_vels = None
+
+        # Resample the smoothing lengths (this is the last array which is
+        # independent of the resampling modes)
+        new_sml = resample_smoothing_lengths(
+            smoothing_lengths=to_resample[1],
+            resample_factor=resample_factor,
+        )
+
+        # Now handle the attributes which can have a range of resampling
+        # modes.  The SFZH path overrides ages, metallicities and masses;
+        # everything else follows attr_modes.
+        if sfzh is not None:
+            # How many new particles in total do we need to sample?
+            n_total = to_resample[0].shape[0] * resample_factor
+
+            # Sample the ages, metallicities and masses from the SFZH
+            new_ages, new_metallicities = _sample_sfzh_arrays(
+                sfzh.sfzh,
+                sfzh.log10ages,
+                sfzh.metallicities,
+                n_total,
+                rng,
+            )
+
+            # Associate units with the ages
+            new_ages *= yr
+
+            # For the masses we want to ensure we preserve the total mass
+            # of the original particles, so we rescale the sampled masses to
+            # have the same total mass as the original particles.
+            orig_total_mass = (
+                np.sum(to_resample[2])
+                if to_resample[2] is not None
+                else np.sum(sfzh.sfzh) * Msun
+            )
+            new_initial_masses = (
+                np.ones(n_total, dtype=np.float64)
+                * orig_total_mass.value
+                / n_total
+                * orig_total_mass.units
+            )
+            new_current_masses = None
+        else:
+            new_initial_masses = resample_by_mode(
+                to_resample[2],
+                attr_modes.get("initial_masses", "proportional"),
+                resample_factor,
+                rng,
+            )
+            new_ages = resample_by_mode(
+                to_resample[3],
+                attr_modes.get("ages", "duplicated"),
+                resample_factor,
+                rng,
+            )
+            new_metallicities = resample_by_mode(
+                to_resample[4],
+                attr_modes.get("metallicities", "duplicated"),
+                resample_factor,
+                rng,
+            )
+            new_current_masses = (
+                resample_by_mode(
+                    to_resample[5],
+                    attr_modes.get("current_masses", "proportional"),
+                    resample_factor,
+                    rng,
+                )
+                if current_masses is not None
+                else None
+            )
+
+        # Optical depth only needs resampling if it's an array of values for
+        # each particle, if it's a single value we just keep it as-is
+        if tau_v is not None and hasattr(tau_v, "shape") and tau_v.ndim >= 1:
+            new_tau_v = resample_by_mode(
+                to_resample[7],
+                attr_modes.get("tau_v", "duplicated"),
+                resample_factor,
+                rng,
+            )
+        else:
+            new_tau_v = tau_v
+
+        new_alpha = (
+            resample_by_mode(
+                to_resample[8],
+                attr_modes.get("alpha_enhancement", "duplicated"),
+                resample_factor,
+                rng,
+            )
+            if alpha_enhancement is not None
+            else None
+        )
+        new_s_oxygen = (
+            resample_by_mode(
+                to_resample[9],
+                attr_modes.get("s_oxygen", "duplicated"),
+                resample_factor,
+                rng,
+            )
+            if s_oxygen is not None
+            else None
+        )
+        new_s_hydrogen = (
+            resample_by_mode(
+                to_resample[10],
+                attr_modes.get("s_hydrogen", "duplicated"),
+                resample_factor,
+                rng,
+            )
+            if s_hydrogen is not None
+            else None
+        )
+
+        # Softening lengths only need resampling if it's an array of values
+        # for each particle, if it's a single value we just keep it as-is
+        if (
+            softening_lengths is not None
+            and hasattr(softening_lengths, "shape")
+            and softening_lengths.ndim >= 1
+        ):
+            new_softening = resample_by_mode(
+                to_resample[11],
+                attr_modes.get("softening_lengths", "duplicated"),
+                resample_factor,
+                rng,
+            )
+        else:
+            new_softening = softening_lengths
+
+        # Handle any custom attributes which are arrays and need to be
+        # resampled according to the attr_modes dict
+        new_custom = {
+            self._custom_attr_names[i]: resample_by_mode(
+                to_resample[12 + i],
+                attr_modes.get(self._custom_attr_names[i], "duplicated"),
+                resample_factor,
+                rng,
+            )
+            for i in range(len(custom))
+            if to_resample[12 + i] is not None
+        }
+
+        # Combine any no_resample particles back in with the resampled ones
+        if no_resample is not None:
+            new_coords = combine_arrays(new_coords, no_resample[0])
+            new_sml = combine_arrays(new_sml, no_resample[1])
+            new_initial_masses = combine_arrays(
+                new_initial_masses, no_resample[2]
+            )
+            new_ages = combine_arrays(new_ages, no_resample[3])
+            new_metallicities = combine_arrays(
+                new_metallicities, no_resample[4]
+            )
+            new_current_masses = (
+                combine_arrays(new_current_masses, no_resample[5])
+                if current_masses is not None
+                else None
+            )
+            if velocities is not None:
+                new_vels = combine_arrays(new_vels, no_resample[6])
+            if (
+                tau_v is not None
+                and hasattr(tau_v, "shape")
+                and tau_v.ndim >= 1
+            ):
+                new_tau_v = combine_arrays(new_tau_v, no_resample[7])
+            if alpha_enhancement is not None:
+                new_alpha = combine_arrays(new_alpha, no_resample[8])
+            if s_oxygen is not None:
+                new_s_oxygen = combine_arrays(new_s_oxygen, no_resample[9])
+            if s_hydrogen is not None:
+                new_s_hydrogen = combine_arrays(
+                    new_s_hydrogen, no_resample[10]
+                )
+            if (
+                softening_lengths is not None
+                and hasattr(softening_lengths, "shape")
+                and softening_lengths.ndim >= 1
+            ):
+                new_softening = combine_arrays(new_softening, no_resample[11])
+            for i in range(len(custom)):
+                name = self._custom_attr_names[i]
+                if name in new_custom:
+                    new_custom[name] = combine_arrays(
+                        new_custom[name], no_resample[12 + i]
+                    )
+
+        # Create the new Stars object with all the resampled attributes
+        return type(self)(
+            initial_masses=new_initial_masses,
+            ages=new_ages,
+            metallicities=new_metallicities,
+            redshift=redshift or 0.0,
+            tau_v=new_tau_v,
+            alpha_enhancement=new_alpha,
+            coordinates=new_coords,
+            velocities=new_vels,
+            current_masses=new_current_masses,
+            smoothing_lengths=new_sml,
+            s_oxygen=new_s_oxygen,
+            s_hydrogen=new_s_hydrogen,
+            softening_lengths=new_softening,
+            centre=centre,
+            metallicity_floor=metallicity_floor,
+            **new_custom,
+        )
 
     def _power_law_sample(self, low_lim, upp_lim, g, size=1):
         """Sample from a power law over an interval not containing zero.
@@ -1496,6 +1888,71 @@ class Stars(Particles, StarsComponent):
 
 
 @accepts(initial_mass=Msun.in_base("galactic"))
+def sample_sfzh_from_array(
+    sfzh,
+    log10ages,
+    log10metallicities,
+    nstar,
+    initial_mass=None,
+    seed=None,
+    **kwargs,
+):
+    """Create stellar particles by continuously sampling an SFZH array.
+
+    This is the recommended replacement for :func:`sample_sfzh`.  Rather
+    than returning ages and metallicities at the exact grid points it
+    samples uniformly *within* each 2‑D histogram cell, producing a
+    smooth continuous distribution.
+
+    The total stellar mass is conserved: if *initial_mass* is ``None``,
+    every particle receives the same mass such that the sum equals the
+    total mass encoded in the SFZH.
+
+    Args:
+        sfzh (np.ndarray):
+            The 2‑D SFZH array from :class:`~synthesizer.parametric.Stars`.
+        log10ages (np.ndarray):
+            The log10 age axis of the SFZH grid.
+        log10metallicities (np.ndarray):
+            The metallicity axis of the SFZH grid.
+        nstar (int):
+            Number of stellar particles to produce.
+        initial_mass (unyt_quantity, optional):
+            Total initial mass to assign.  If ``None``, the total mass is
+            taken from ``np.sum(sfzh)`` and split equally.
+        seed (int, optional):
+            Random seed for reproducibility.
+        **kwargs:
+            Extra keyword arguments passed to :class:`Stars`.
+
+    Returns:
+        Stars:
+            A :class:`~synthesizer.particle.stars.Stars` instance
+            containing the sampled particles.
+    """
+    # Set the random seed for reproducibility if provided
+    rng = np.random.default_rng(seed)
+
+    # Sample ages and metallicities from the SFZH array
+    ages, metallicities = _sample_sfzh_arrays(
+        sfzh, log10ages, log10metallicities, nstar, rng
+    )
+
+    # Assign masses to the particles.  If *initial_mass* is ``None``, we
+    # conserve the total mass encoded in the SFZH by splitting it equally among
+    # the particles
+    if initial_mass is None:
+        total = np.sum(sfzh)
+        masses = np.full(nstar, total / nstar) * Msun.in_base("galactic")
+    else:
+        initial_mass = initial_mass.in_base("galactic")
+        masses = (
+            np.full(nstar, initial_mass.value / nstar) * initial_mass.units
+        )
+
+    return Stars(masses, ages * yr, metallicities, **kwargs)
+
+
 def sample_sfzh(
     sfzh,
     log10ages,
@@ -1504,70 +1961,37 @@ def sample_sfzh(
     initial_mass=None,
     **kwargs,
 ):
-    """Create "fake" stellar particles by sampling a SFZH.
+    """Create stellar particles by sampling an SFZH array.
+
+    .. deprecated::
+        Use :func:`sample_sfzh_from_array` instead, which samples within
+        the grid cell for a continuous distribution and correctly
+        conserves the total mass.
 
     Args:
-        sfzh (np.ndarray of float):
-            The Star Formation Metallicity History grid
-            (from parametric.Stars).
-        log10ages (np.ndarray of float):
-            The log of the SFZH age axis.
-        log10metallicities (np.ndarray of float):
-            The log of the SFZH metallicities axis.
+        sfzh (np.ndarray):
+            The SFZH array (from parametric.Stars).
+        log10ages (np.ndarray):
+            The log10 age axis of the SFZH grid.
+        log10metallicities (np.ndarray):
+            The metallicity axis of the SFZH grid.
         nstar (int):
-            The number of stellar particles to produce.
-        initial_mass (int):
-            The initial mass of the fake stellar particles. If None, the
-            initial mass is set such that the total mass of the SFZH is
-            split equally among the nstar particles. If set, this mass will
-            override the parametric mass implied by the SFZH, instead using
-            the SFZH as a normalised probability distribution function for
-            sampling ages and metallicities.
+            Number of stellar particles to produce.
+        initial_mass (unyt_quantity, optional):
+            The initial mass of each stellar particle.  If ``None``, the
+            total mass is split equally among *nstar* particles.
         **kwargs:
-            Any additional keyword arguments to pass to the Stars
-            constructor.
+            Extra keyword arguments passed to :class:`Stars`.
 
     Returns:
-        stars (Stars)
-            An instance of Stars containing the fake stellar particles.
+        Stars:
+            A :class:`~synthesizer.particle.stars.Stars` instance.
     """
-    # If we have an initial_mass of None, use the existing one
-    if initial_mass is None:
-        initial_mass = np.sum(sfzh) / nstar * Msun.in_base("galactic")
-    else:
-        initial_mass = initial_mass.in_base("galactic")
-
-    # Normalise the sfzh to produce a histogram (binned in time) between 0
-    # and 1.
-    hist = sfzh / np.sum(sfzh)
-
-    # Compute the cumulative distribution function
-    cdf = np.cumsum(hist.flatten())
-    cdf = cdf / cdf[-1]
-
-    # Get a random sample from the cdf
-    values = np.random.rand(nstar)
-    value_bins = np.searchsorted(cdf, values)
-
-    # Convert 1D random indices to 2D indices
-    x_idx, y_idx = np.unravel_index(
-        value_bins, (len(log10ages), len(log10metallicities))
-    )
-
-    # Extract the sampled ages and metallicities and create an array
-    random_from_cdf = np.column_stack(
-        (log10ages[x_idx], log10metallicities[y_idx])
-    )
-
-    # Extract the individual logged quantities
-    log10ages, log10metallicities = random_from_cdf.T
-
-    # Instantiate Stars object with extra keyword arguments
-    stars = Stars(
-        initial_mass * np.ones(nstar),
-        10**log10ages * yr,
-        10**log10metallicities,
+    return sample_sfzh_from_array(
+        sfzh,
+        log10ages,
+        log10metallicities,
+        nstar,
+        initial_mass=initial_mass,
         **kwargs,
     )
-
-    return stars
