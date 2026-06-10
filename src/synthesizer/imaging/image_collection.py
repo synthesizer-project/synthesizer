@@ -479,6 +479,7 @@ class ImageCollection(ImagingBase):
         density_grid=None,
         nthreads=1,
         normalisations=None,
+        backend="octree",
     ):
         """Calculate an images from a smoothed distribution.
 
@@ -515,6 +516,9 @@ class ImageCollection(ImagingBase):
                 The normalisation property. This is multiplied by the signal
                 before sorting, then normalised out. (Only applicable to
                 particle imaging)
+            backend (str):
+                The rendering backend for particle smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             ImageCollection: The image collection containing the generated
@@ -546,6 +550,7 @@ class ImageCollection(ImagingBase):
                 kernel_threshold=kernel_threshold,
                 nthreads=nthreads,
                 normalisations=normalisations,
+                backend=backend,
             )
         else:
             raise exceptions.InconsistentArguments(

@@ -196,6 +196,7 @@ class Galaxy(BaseGalaxy):
         nthreads=1,
         smoothing_lengths=None,
         normalisation=None,
+        backend="octree",
     ):
         """Generate one legacy particle map via shared image helpers.
 
@@ -212,6 +213,9 @@ class Galaxy(BaseGalaxy):
                 lengths used by the smoothed imaging path.
             normalisation (unyt_array, optional): Optional per-particle
                 normalisation applied before forming a weighted average.
+            backend (str):
+                The rendering backend to use for smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             Image: Generated map.
@@ -241,6 +245,7 @@ class Galaxy(BaseGalaxy):
                 kernel_threshold=kernel_threshold,
                 nthreads=nthreads,
                 normalisation=normalisation,
+                backend=backend,
             )
 
         # Reject any unsupported map-generation mode explicitly
@@ -886,6 +891,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
+        backend="octree",
     ):
         """Make a mass map, either with or without smoothing.
 
@@ -904,6 +910,9 @@ class Galaxy(BaseGalaxy):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            backend (str):
+                The rendering backend for smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             Image: The stellar mass image.
@@ -918,6 +927,7 @@ class Galaxy(BaseGalaxy):
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
             smoothing_lengths=self.stars.smoothing_lengths,
+            backend=backend,
         )
 
     def get_map_gas_mass(
@@ -928,6 +938,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
+        backend="octree",
     ):
         """Make a mass map, either with or without smoothing.
 
@@ -946,6 +957,9 @@ class Galaxy(BaseGalaxy):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            backend (str):
+                The rendering backend for smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             Image: The gas mass image.
@@ -960,6 +974,7 @@ class Galaxy(BaseGalaxy):
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
             smoothing_lengths=self.gas.smoothing_lengths,
+            backend=backend,
         )
 
     def get_map_stellar_age(
@@ -970,6 +985,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
+        backend="octree",
     ):
         """Make an age map, either with or without smoothing.
 
@@ -991,6 +1007,9 @@ class Galaxy(BaseGalaxy):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            backend (str):
+                The rendering backend for smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             Image: The stellar age image.
@@ -1006,6 +1025,7 @@ class Galaxy(BaseGalaxy):
             nthreads=nthreads,
             smoothing_lengths=self.stars.smoothing_lengths,
             normalisation=self.stars.initial_masses,
+            backend=backend,
         )
 
     def get_map_stellar_metal_mass(
@@ -1016,6 +1036,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
+        backend="octree",
     ):
         """Make a stellar metal mass map, either with or without smoothing.
 
@@ -1034,6 +1055,9 @@ class Galaxy(BaseGalaxy):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            backend (str):
+                The rendering backend for smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             Image: The stellar metal mass image.
@@ -1048,6 +1072,7 @@ class Galaxy(BaseGalaxy):
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
             smoothing_lengths=self.stars.smoothing_lengths,
+            backend=backend,
         )
 
     def get_map_gas_metal_mass(
@@ -1058,6 +1083,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
+        backend="octree",
     ):
         """Make a gas metal mass map, either with or without smoothing.
 
@@ -1078,6 +1104,9 @@ class Galaxy(BaseGalaxy):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            backend (str):
+                The rendering backend for smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             Image: The gas metal mass image.
@@ -1092,6 +1121,7 @@ class Galaxy(BaseGalaxy):
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
             smoothing_lengths=self.gas.smoothing_lengths,
+            backend=backend,
         )
 
     def get_map_stellar_metallicity(
@@ -1102,6 +1132,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
+        backend="octree",
     ):
         """Make a stellar metallicity map, either with or without smoothing.
 
@@ -1123,6 +1154,9 @@ class Galaxy(BaseGalaxy):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            backend (str):
+                The rendering backend for smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             Image: The stellar metallicity image.
@@ -1135,11 +1169,18 @@ class Galaxy(BaseGalaxy):
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
+            backend=backend,
         )
 
         # Make the mass image
         mass_img = self.get_map_stellar_mass(
-            resolution, fov, img_type, kernel, kernel_threshold, nthreads
+            resolution,
+            fov,
+            img_type,
+            kernel,
+            kernel_threshold,
+            nthreads,
+            backend=backend,
         )
 
         # Divide out the mass contribution, handling zero contribution pixels
@@ -1161,6 +1202,7 @@ class Galaxy(BaseGalaxy):
         kernel=None,
         kernel_threshold=1,
         nthreads=1,
+        backend="octree",
     ):
         """Make a gas metallicity map, either with or without smoothing.
 
@@ -1184,6 +1226,9 @@ class Galaxy(BaseGalaxy):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            backend (str):
+                The rendering backend for smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             Image: The gas metallicity image.
@@ -1196,11 +1241,18 @@ class Galaxy(BaseGalaxy):
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
+            backend=backend,
         )
 
         # Make the mass image
         mass_img = self.get_map_gas_mass(
-            resolution, fov, img_type, kernel, kernel_threshold, nthreads
+            resolution,
+            fov,
+            img_type,
+            kernel,
+            kernel_threshold,
+            nthreads,
+            backend=backend,
         )
 
         # Divide out the mass contribution, handling zero contribution pixels
@@ -1223,6 +1275,7 @@ class Galaxy(BaseGalaxy):
         kernel_threshold=1,
         age_bin=100 * Myr,
         nthreads=1,
+        backend="octree",
     ):
         """Make a star formation rate map, either with or without smoothing.
 
@@ -1248,6 +1301,9 @@ class Galaxy(BaseGalaxy):
                 rate. If supplied without units, the unit system is assumed.
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            backend (str):
+                The rendering backend for smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             Image: The SFR image.
@@ -1276,6 +1332,7 @@ class Galaxy(BaseGalaxy):
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
             smoothing_lengths=self.stars.smoothing_lengths[mask],
+            backend=backend,
         )
 
         # Convert the initial mass map to SFR
@@ -1293,6 +1350,7 @@ class Galaxy(BaseGalaxy):
         kernel_threshold=1,
         age_bin=100 * Myr,
         nthreads=1,
+        backend="octree",
     ):
         """Make a specific star formation rate map.
 
@@ -1319,6 +1377,9 @@ class Galaxy(BaseGalaxy):
                 rate. If supplied without units, the unit system is assumed.
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            backend (str):
+                The rendering backend for smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             Image: The sSFR image.
@@ -1347,6 +1408,7 @@ class Galaxy(BaseGalaxy):
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
             smoothing_lengths=self.stars.smoothing_lengths[mask],
+            backend=backend,
         )
         stellar_mass_map = self._generate_particle_map(
             signal=self.stars.current_masses,
@@ -1358,6 +1420,7 @@ class Galaxy(BaseGalaxy):
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
             smoothing_lengths=self.stars.smoothing_lengths,
+            backend=backend,
         )
 
         ssfr_img = Image(

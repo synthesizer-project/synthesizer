@@ -379,6 +379,7 @@ class Image(ImagingBase):
         density_grid=None,
         normalisation=None,
         nthreads=1,
+        backend="octree",
     ):
         """Calculate a smoothed image.
 
@@ -411,6 +412,9 @@ class Image(ImagingBase):
             nthreads (int):
                 The number of threads to use for the C extension. (particle
                 case only)
+            backend (str):
+                The rendering backend to use for particle smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             img : array_like (float):
@@ -448,6 +452,7 @@ class Image(ImagingBase):
                 kernel_threshold=kernel_threshold,
                 nthreads=nthreads,
                 normalisation=normalisation,
+                backend=backend,
             )
         else:
             raise exceptions.InconsistentArguments(
