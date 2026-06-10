@@ -266,6 +266,7 @@ class PhotometricImager(PhotometricInstrument):
         nthreads,
         emitter,
         cosmo,
+        backend="octree",
     ):
         """Generate an image collection for one emitter.
 
@@ -281,6 +282,9 @@ class PhotometricImager(PhotometricInstrument):
             emitter (Component): Emitter supplying geometry and source data.
             cosmo (astropy.cosmology.Cosmology, optional): Cosmology used for
                 angular-image coordinate conversions.
+            backend (str):
+                The rendering backend for particle smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             ImageCollection: The generated image collection.
@@ -297,6 +301,7 @@ class PhotometricImager(PhotometricInstrument):
             nthreads=nthreads,
             emitter=emitter,
             cosmo=cosmo,
+            backend=backend,
         )
 
     @timed("PhotometricImager.apply_psf")

@@ -1343,6 +1343,7 @@ class BaseGalaxy:
         nthreads=1,
         cosmo=None,
         phot_type="lnu",
+        backend="octree",
     ):
         """Make an ImageCollection for a galaxy and attached components.
 
@@ -1391,6 +1392,9 @@ class BaseGalaxy:
             phot_type (str):
                 The type of photometry to use for the images. Either "lnu"
                 for luminosity per unit frequency images, or "fnu" for flux.
+            backend (str):
+                The rendering backend for particle smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             ImageCollection/dict
@@ -1499,6 +1503,7 @@ class BaseGalaxy:
                 cosmo=cosmo,
                 phot_type=phot_type,
                 postprocess=False,
+                backend=backend,
             )
 
             # Component returns a dict if multiple labels, or bare
@@ -1687,6 +1692,7 @@ class BaseGalaxy:
         kernel_threshold=1,
         nthreads=1,
         cosmo=None,
+        backend="octree",
     ):
         """Make an ImageCollection from luminosities.
 
@@ -1732,6 +1738,9 @@ class BaseGalaxy:
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            backend (str):
+                The rendering backend for particle smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             ImageCollection/dict
@@ -1749,6 +1758,7 @@ class BaseGalaxy:
             nthreads=nthreads,
             cosmo=cosmo,
             phot_type="lnu",
+            backend=backend,
         )
 
     def get_images_flux(
@@ -1761,6 +1771,7 @@ class BaseGalaxy:
         kernel_threshold=1,
         nthreads=1,
         cosmo=None,
+        backend="octree",
     ):
         """Make an ImageCollection from fluxes.
 
@@ -1806,6 +1817,9 @@ class BaseGalaxy:
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            backend (str):
+                The rendering backend for particle smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             ImageCollection/dict
@@ -1823,6 +1837,7 @@ class BaseGalaxy:
             nthreads=nthreads,
             cosmo=cosmo,
             phot_type="fnu",
+            backend=backend,
         )
 
     def _generate_data_cubes(

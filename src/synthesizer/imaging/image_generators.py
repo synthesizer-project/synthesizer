@@ -1121,6 +1121,7 @@ def _generate_image_collection_generic(
     nthreads,
     emitter,
     cosmo,
+    backend="octree",
 ):
     """Generate an image collection for a generic emitter.
 
@@ -1157,6 +1158,9 @@ def _generate_image_collection_generic(
             A cosmology object defining the cosmology to use for the images.
             This is only relevant for angular images where a conversion to
             projected angular coordinates is needed.
+        backend (str):
+            The rendering backend for particle smoothed images.
+            ``"octree"`` (default) or ``"quadtree"``.
 
     Returns:
         ImageCollection
@@ -1231,6 +1235,7 @@ def _generate_image_collection_generic(
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
+            backend=backend,
         )
 
     elif img_type == "smoothed":

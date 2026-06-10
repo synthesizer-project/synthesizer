@@ -546,6 +546,7 @@ class Component(ABC):
         cosmo=None,
         phot_type="lnu",
         postprocess=True,
+        backend="octree",
     ):
         """Make an ImageCollection from component luminosities or fluxes.
 
@@ -598,6 +599,9 @@ class Component(ABC):
             postprocess (bool):
                 If True, automatically apply the instrument-defined imaging
                 post-processing after raw image generation.
+            backend (str):
+                The rendering backend for particle smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             ImageCollection/dict
@@ -686,6 +690,7 @@ class Component(ABC):
                 nthreads=nthreads,
                 emitter=self,
                 cosmo=cosmo,
+                backend=backend,
             )
 
         # OK, loop over the combination labels and make those images
@@ -753,6 +758,7 @@ class Component(ABC):
         kernel_threshold=1,
         nthreads=1,
         cosmo=None,
+        backend="octree",
     ):
         """Make an ImageCollection from component luminosities.
 
@@ -798,6 +804,9 @@ class Component(ABC):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            backend (str):
+                The rendering backend for particle smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             ImageCollection/dict
@@ -814,6 +823,7 @@ class Component(ABC):
             nthreads=nthreads,
             cosmo=cosmo,
             phot_type="lnu",
+            backend=backend,
         )
 
     def get_images_flux(
@@ -826,6 +836,7 @@ class Component(ABC):
         kernel_threshold=1,
         nthreads=1,
         cosmo=None,
+        backend="octree",
     ):
         """Make an ImageCollection from component fluxes.
 
@@ -871,6 +882,9 @@ class Component(ABC):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            backend (str):
+                The rendering backend for particle smoothed images.
+                ``"octree"`` (default) or ``"quadtree"``.
 
         Returns:
             ImageCollection/dict
@@ -887,6 +901,7 @@ class Component(ABC):
             nthreads=nthreads,
             cosmo=cosmo,
             phot_type="fnu",
+            backend=backend,
         )
 
     @deprecated(
