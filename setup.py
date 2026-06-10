@@ -383,6 +383,19 @@ extensions = [
         include_dirs=include_dirs,
     ),
     create_extension(
+        "synthesizer.imaging.extensions.image_quadtree",
+        [
+            "src/synthesizer/imaging/extensions/image_quadtree.cpp",
+            "src/synthesizer/extensions/quadtree.cpp",
+            "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
+    create_extension(
         "synthesizer.extensions.sfzh",
         [
             "src/synthesizer/extensions/sfzh.cpp",
