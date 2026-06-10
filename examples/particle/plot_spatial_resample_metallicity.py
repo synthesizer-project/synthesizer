@@ -52,19 +52,21 @@ SIGMA_Z = 1.0  # large fixed sigma to make scatter visible
 # ---------------------------------------------------------------------------
 # Resample
 # ---------------------------------------------------------------------------
-g_dup = original.gas.spatially_resample(FACTOR, seed=42)
-s_dup = original.stars.spatially_resample(FACTOR, seed=42)
+g_dup = original.gas.spatially_resample(FACTOR, seed=42, kernel=KERNEL)
+s_dup = original.stars.spatially_resample(FACTOR, seed=42, kernel=KERNEL)
 g_dup.calculate_smoothing_lengths()
 s_dup.calculate_smoothing_lengths()
 
 g_norm = original.gas.spatially_resample(
     FACTOR,
     seed=42,
+    kernel=KERNEL,
     attr_modes={"metallicities": "normal"},
 )
 s_norm = original.stars.spatially_resample(
     FACTOR,
     seed=42,
+    kernel=KERNEL,
     attr_modes={"metallicities": "normal"},
 )
 g_norm.calculate_smoothing_lengths()

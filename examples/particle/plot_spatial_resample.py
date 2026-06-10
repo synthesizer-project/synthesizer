@@ -56,9 +56,17 @@ kernel = Kernel("cubic")
 galaxy_list = [original]
 
 for factor in resample_factors:
-    resampled_gas = original.gas.spatially_resample(factor, seed=42)
+    resampled_gas = original.gas.spatially_resample(
+        factor,
+        seed=42,
+        kernel=kernel,
+    )
     resampled_gas.calculate_smoothing_lengths()
-    resampled_stars = original.stars.spatially_resample(factor, seed=42)
+    resampled_stars = original.stars.spatially_resample(
+        factor,
+        seed=42,
+        kernel=kernel,
+    )
     resampled_stars.calculate_smoothing_lengths()
     gal = Galaxy(
         name=f"Resample factor={factor}",

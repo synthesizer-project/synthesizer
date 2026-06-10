@@ -42,6 +42,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Mpc, Msun, km, s
 
+from synthesizer.kernel_functions import Kernel
 from synthesizer.particle.gas import Gas
 
 plt.rcParams["font.family"] = "DeJavu Serif"
@@ -70,25 +71,29 @@ gas = Gas(
 # ---------------------------------------------------------------------------
 # Resample under each mode
 # ---------------------------------------------------------------------------
-g_dup = gas.spatially_resample(FACTOR, seed=1)
+g_dup = gas.spatially_resample(FACTOR, seed=1, kernel=Kernel("cubic"))
 g_prop = gas.spatially_resample(
     FACTOR,
     seed=1,
+    kernel=Kernel("cubic"),
     attr_modes={"my_attribute": "proportional"},
 )
 g_norm = gas.spatially_resample(
     FACTOR,
     seed=1,
+    kernel=Kernel("cubic"),
     attr_modes={"my_attribute": "normal"},
 )
 g_logn = gas.spatially_resample(
     FACTOR,
     seed=1,
+    kernel=Kernel("cubic"),
     attr_modes={"my_attribute": "lognormal"},
 )
 g_cons = gas.spatially_resample(
     FACTOR,
     seed=1,
+    kernel=Kernel("cubic"),
     attr_modes={"my_attribute": "conserved_normal"},
 )
 
