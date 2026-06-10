@@ -10,28 +10,47 @@ from unyt import eV
 class Ions:
     """A dataclass holding the ionisation energy of various ions.
 
-    Used for calculating ionising photon luminosities (Q).
+    Used for calculating ionising photon production rates (Q)
+    for different species.
 
     Values taken from: \
         https://en.wikipedia.org/wiki/Ionization_energies_of_the_elements_(data_page)
     """
 
     energy = {
-        "HI": 13.6 * eV,
-        "HeI": 24.6 * eV,
-        "HeII": 54.4 * eV,
-        "CII": 24.4 * eV,
-        "CIII": 47.9 * eV,
-        "CIV": 64.5 * eV,
-        "NI": 14.5 * eV,
-        "NII": 29.6 * eV,
-        "NIII": 47.4 * eV,
-        "OI": 13.6 * eV,
-        "OII": 35.1 * eV,
-        "OIII": 54.9 * eV,
-        "NeI": 21.6 * eV,
-        "NeII": 41.0 * eV,
-        "NeIII": 63.45 * eV,
+        "H+": 13.6 * eV,
+        "He+": 24.6 * eV,
+        "He2+": 54.4 * eV,
+        "C2+": 24.4 * eV,
+        "C3+": 47.9 * eV,
+        "C4+": 64.5 * eV,
+        "N+": 14.5 * eV,
+        "N2+": 29.6 * eV,
+        "N3+": 47.4 * eV,
+        "O+": 13.6 * eV,
+        "O2+": 35.1 * eV,
+        "O3+": 54.9 * eV,
+        "Ne+": 21.6 * eV,
+        "Ne2+": 41.0 * eV,
+        "Ne3+": 63.45 * eV,
+    }
+
+    label = {
+        "H+": r"H$^{+}$",
+        "He+": r"He$^{+}$",
+        "He2+": r"He$^{2+}$",
+        "C2+": r"C$^{2+}$",
+        "C3+": r"C$^{3+}$",
+        "C4+": r"C$^{4+}$",
+        "N+": r"N$^{+}$",
+        "N2+": r"N$^{2+}$",
+        "N3+": r"N$^{3+}$",
+        "O+": r"O$^{+}$",
+        "O2+": r"O$^{2+}$",
+        "O3+": r"O$^{3+}$",
+        "Ne+": r"Ne$^{+}$",
+        "Ne2+": r"Ne$^{2+}$",
+        "Ne3+": r"Ne$^{3+}$",
     }
 
 
@@ -46,7 +65,7 @@ def calculate_Q_from_U(U_avg, n_h):
 
     Returns:
         float:
-            Ionising photon luminosity (units: s^-1)
+            Ionising photon production rate (units: s^-1)
     """
     alpha_B = 2.59e-13  # cm^3 s^-1
     c_cm = 2.99e8 * 100  # cm s^-1
@@ -62,7 +81,7 @@ def calculate_U_from_Q(Q_avg, n_h=100):
 
     Args:
         Q_avg (float):
-            Ionising photon luminosity (units: s^-1)
+            Ionising photon production rate (units: s^-1)
         n_h (float):
             Hyodrogen density (units: cm^-3)
 
