@@ -13,8 +13,6 @@ from synthesizer.particle.resample_utils import (
     RESAMPLE_MODES,
     add_velocity_dispersion,
     resample_by_mode,
-    resample_duplicated,
-    resample_proportional,
     sample_kernel_positions,
     validate_mask,
     validate_resample_factor,
@@ -85,49 +83,6 @@ class TestSampleKernelPositions:
         radii = np.linalg.norm(offsets, axis=2)
         assert np.all(radii <= 2.0)
         assert np.any(radii > 0.0)
-
-
-class TestResampleDuplicated:
-    """Tests for :func:`resample_duplicated`."""
-
-    def test_basic(self):
-        """Plain array is tiled element-wise."""
-        arr = np.array([1.0, 2.0, 3.0])
-        tiled = resample_duplicated(arr, 2)
-        assert np.array_equal(tiled, np.repeat(arr, 2))
-
-    def test_unyt(self):
-        """Unyt array preserves its units after tiling."""
-        arr = unyt_array([1.0, 2.0, 3.0], "Msun")
-        tiled = resample_duplicated(arr, 2)
-        assert tiled.shape == (6,)
-        assert tiled.units == arr.units
-        assert np.allclose(tiled.value, np.repeat(arr.value, 2))
-
-    def test_none(self):
-        """``None`` input returns ``None``."""
-        assert resample_duplicated(None, 2) is None
-
-
-class TestResampleProportional:
-    """Tests for :func:`resample_proportional`."""
-
-    def test_basic(self):
-        """Elements are divided by factor and tiled."""
-        arr = np.array([10.0, 20.0, 30.0])
-        result = resample_proportional(arr, 2)
-        assert np.allclose(result, np.repeat(arr / 2, 2))
-
-    def test_unyt(self):
-        """Unyt array is divided and tiled with units preserved."""
-        arr = unyt_array([10.0, 20.0], "Msun")
-        result = resample_proportional(arr, 2)
-        assert result.units == arr.units
-        assert np.allclose(result.value, [5.0, 5.0, 10.0, 10.0])
-
-    def test_none(self):
-        """``None`` input returns ``None``."""
-        assert resample_proportional(None, 2) is None
 
 
 class TestValidateResampleFactor:
