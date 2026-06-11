@@ -160,27 +160,39 @@ static void render_tile(int px0, int px1, int py0, int py1,
   std::vector<double> tile_img(tw * th * nimgs, 0.0);
 
   tic("render_image_quadtree.tile_inner");
-  for (int px = px0; px < px1; px++) {
-    for (int py = py0; py < py1; py++) {
+  /* Particle→pixels: for each candidate particle, determine which
+   * pixels in the tile it can affect and compute contributions.
+   * This is O(Nparticles × pixels_per_particle), not O(Npixels ×
+   * Ncandidates). */
+  for (size_t li = 0; li < leaves.size(); li++) {
+    const struct quadcell *leaf = leaves[li];
+    int start = starts[li];
+    int end = start + counts[li];
 
-      double pix_x_min = px * res;
-      double pix_x_max = (px + 1) * res;
-      double pix_y_min = py * res;
-      double pix_y_max = (py + 1) * res;
+    for (int p = start; p < end; p++) {
+      double part_x = leaf->pos_x[p];
+      double part_y = leaf->pos_y[p];
+      double h = leaf->sml_arr[p];
+      double h_squ = leaf->sml_squ_arr[p];
+      double kern_r = h * threshold;
+      int idx = leaf->indices[p];
 
-      double *accum = &tile_img[((px - px0) * th + (py - py0)) * nimgs];
+      /* Pixel range this particle can affect, clamped to the tile. */
+      int pi0 = (int)floor((part_x - kern_r) / res);
+      int pi1 = (int)floor((part_x + kern_r) / res);
+      int pj0 = (int)floor((part_y - kern_r) / res);
+      int pj1 = (int)floor((part_y + kern_r) / res);
+      if (pi0 < px0) pi0 = px0;
+      if (pi1 >= px1) pi1 = px1 - 1;
+      if (pj0 < py0) pj0 = py0;
+      if (pj1 >= py1) pj1 = py1 - 1;
 
-      for (size_t li = 0; li < leaves.size(); li++) {
-        const struct quadcell *leaf = leaves[li];
-        int start = starts[li];
-        int end = start + counts[li];
-
-        for (int p = start; p < end; p++) {
-          double part_x = leaf->pos_x[p];
-          double part_y = leaf->pos_y[p];
-          double h = leaf->sml_arr[p];
-          double h_squ = leaf->sml_squ_arr[p];
-          double kern_r = h * threshold;
+      for (int pi = pi0; pi <= pi1; pi++) {
+        double pix_x_min = pi * res;
+        double pix_x_max = (pi + 1) * res;
+        for (int pj = pj0; pj <= pj1; pj++) {
+          double pix_y_min = pj * res;
+          double pix_y_max = (pj + 1) * res;
 
           double kvalue;
           if (kernel_fully_inside_pixel_raw(part_x, part_y, pix_x_min,
@@ -205,7 +217,8 @@ static void render_tile(int px0, int px1, int py0, int py1,
           }
           kvalue *= norm_factor;
 
-          int idx = leaf->indices[p];
+          int ti = (pi - px0) * th + (pj - py0);
+          double *accum = &tile_img[ti * nimgs];
           for (int f = 0; f < nimgs; f++) {
             accum[f] += kvalue * pix_values[idx * nimgs + f];
           }
