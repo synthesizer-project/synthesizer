@@ -134,24 +134,24 @@ static void render_tile(int px0, int px1, int py0, int py1,
                         double res, int npix_x, int npix_y, int nimgs,
                         double threshold, double threshold_squ, int kdim,
                         double norm_factor, double *img,
-                        const struct quadcell *root) {
+                        const struct quadtree *tree) {
 
-  /* Work out the world-coordinate bounds of the tile, expanded by the
-   * largest possible kernel radius so the candidate set is a superset
-   * for every pixel in the tile.  We don't know the true maximum kernel
-   * radius a priori so we use the root cell's max_sml_squ — the query
-   * function prunes per-cell anyway (B1). */
-  double max_kern = threshold * sqrt(root->max_sml_squ);
-  double tile_xmin = px0 * res - max_kern;
-  double tile_xmax = (px1 - 1) * res + res + max_kern;
-  double tile_ymin = py0 * res - max_kern;
-  double tile_ymax = (py1 - 1) * res + res + max_kern;
+  /* Work out the world-coordinate bounds of the tile.  The quadtree
+   * query prunes per-cell using each cell's own max_sml_squ (B1), so
+   * we pass the UNEXPANDED tile rect — cells whose largest kernel can
+   * reach the tile will be kept automatically. */
+  double tile_xmin = px0 * res;
+  double tile_xmax = (px1 - 1) * res + res;
+  double tile_ymin = py0 * res;
+  double tile_ymax = (py1 - 1) * res + res;
 
   /* A1: single quadtree query for the whole tile. */
+  tic("render_image_quadtree.tile_query");
   std::vector<const struct quadcell *> leaves;
   std::vector<int> starts, counts;
-  query_quadtree_for_pixel(root, tile_xmin, tile_xmax, tile_ymin, tile_ymax,
+  query_quadtree_for_pixel(tree, tile_xmin, tile_xmax, tile_ymin, tile_ymax,
                            threshold, leaves, starts, counts);
+  toc("render_image_quadtree.tile_query");
 
   if (leaves.empty()) return;
 
@@ -159,6 +159,7 @@ static void render_tile(int px0, int px1, int py0, int py1,
   int tw = px1 - px0, th = py1 - py0;
   std::vector<double> tile_img(tw * th * nimgs, 0.0);
 
+  tic("render_image_quadtree.tile_inner");
   for (int px = px0; px < px1; px++) {
     for (int py = py0; py < py1; py++) {
 
@@ -212,8 +213,10 @@ static void render_tile(int px0, int px1, int py0, int py1,
       }
     }
   }
+  toc("render_image_quadtree.tile_inner");
 
   /* Copy tile image to global image — no atomics needed. */
+  tic("render_image_quadtree.tile_copy");
   for (int lx = 0; lx < tw; lx++) {
     for (int ly = 0; ly < th; ly++) {
       int gx = px0 + lx, gy = py0 + ly;
@@ -223,6 +226,7 @@ static void render_tile(int px0, int px1, int py0, int py1,
       for (int f = 0; f < nimgs; f++) img[gi + f] = tile_img[ti + f];
     }
   }
+  toc("render_image_quadtree.tile_copy");
 }
 
 /**
@@ -233,7 +237,7 @@ static void render_image_quadtree(const double *pix_values,
                                   int npix_x, int npix_y, int nimgs,
                                   double threshold, int kdim,
                                   double norm_factor, double *img,
-                                  const struct quadcell *root, int nthreads) {
+                                  const struct quadtree *tree, int nthreads) {
 
   tic("render_image_quadtree");
 
@@ -255,7 +259,7 @@ static void render_image_quadtree(const double *pix_values,
         int py1 = std::min(ty + TILE, npix_y);
         render_tile(px0, px1, py0, py1, pix_values, kernel_q2, res, npix_x,
                     npix_y, nimgs, threshold, threshold_squ, kdim, norm_factor,
-                    img, root);
+                    img, tree);
       }
     }
 
@@ -266,7 +270,7 @@ static void render_image_quadtree(const double *pix_values,
         int py0 = ty, py1 = std::min(ty + TILE, npix_y);
         render_tile(px0, px1, py0, py1, pix_values, kernel_q2, res, npix_x,
                     npix_y, nimgs, threshold, threshold_squ, kdim, norm_factor,
-                    img, root);
+                    img, tree);
       }
     }
   }
@@ -332,10 +336,9 @@ PyObject *make_img_quadtree(PyObject *self, PyObject *args) {
   toc("make_img_quadtree.build_kernel_q2");
 
   tic("make_img_quadtree.construct_quadtree");
-  int ncells = 0;
-  struct quadcell *root = new struct quadcell;
-  construct_quadtree(pos_x_vec.data(), pos_y_vec.data(), smoothing_lengths,
-                     npart, root, &ncells, QUADTREE_MAX_DEPTH, 100, res);
+  struct quadtree *tree =
+      construct_quadtree(pos_x_vec.data(), pos_y_vec.data(), smoothing_lengths,
+                         npart, QUADTREE_MAX_DEPTH, 100, res, 16);
   toc("make_img_quadtree.construct_quadtree");
 
   tic("make_img_quadtree.create_output_array");
@@ -348,10 +351,10 @@ PyObject *make_img_quadtree(PyObject *self, PyObject *args) {
   double norm_factor = compute_kernel_norm(kernel, kdim, threshold);
 
   render_image_quadtree(pix_values, kernel_q2.data(), res, npix_x, npix_y,
-                        nimgs, threshold, kdim, norm_factor, img, root,
+                        nimgs, threshold, kdim, norm_factor, img, tree,
                         nthreads);
 
-  cleanup_quadtree(root);
+  cleanup_quadtree(tree);
   toc("make_img_quadtree");
   return Py_BuildValue("N", np_img);
 }
