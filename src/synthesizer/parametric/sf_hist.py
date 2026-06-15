@@ -174,7 +174,7 @@ class Common:
                 The SFH in units of 1 / yr.
         """
         # Define the age array
-        t = np.arange(*t_range, dt)
+        t = np.arange(*t_range, dt, dtype=np.float64)
 
         # Evaluate the array
         sfh = self.get_sfr(t)
@@ -366,7 +366,7 @@ class Constant(Common):
             ages (np.ndarray of float):
                 The ages (in years) at which to evaluate the SFR.
         """
-        sfrs = np.zeros_like(ages)
+        sfrs = np.zeros_like(ages, dtype=np.float64)
         mask = (ages <= self.max_age) & (ages >= self.min_age)
         sfrs[mask] = 1.0
         return sfrs
@@ -437,7 +437,7 @@ class Gaussian(Common):
                 The ages (in years) at which to evaluate the SFR.
         """
         # Set the SFR based on the duration.
-        sfrs = np.zeros_like(ages)
+        sfrs = np.zeros_like(ages, dtype=np.float64)
         mask = (ages <= self.max_age) & (ages >= self.min_age)
         sfrs[mask] = np.exp(
             -np.power((ages[mask] - self.peak_age) / self.sigma, 2.0)
@@ -520,7 +520,7 @@ class Exponential(Common):
         t = self.max_age - ages
 
         # Set the SFR based on the duration.
-        sfrs = np.zeros_like(ages)
+        sfrs = np.zeros_like(ages, dtype=np.float64)
         mask = (ages < self.max_age) & (ages >= self.min_age)
         sfrs[mask] = np.exp(-t[mask] / self.tau)
 
@@ -662,7 +662,7 @@ class DelayedExponential(Common):
         t = self.max_age - ages
 
         # Set the SFR based on the duration.
-        sfrs = np.zeros_like(ages)
+        sfrs = np.zeros_like(ages, dtype=np.float64)
         mask = (ages < self.max_age) & (ages >= self.min_age)
         sfrs[mask] = t[mask] * np.exp(-t[mask] / self.tau)
 
@@ -744,7 +744,7 @@ class LogNormal(Common):
                 The ages (in years) at which to evaluate the SFR.
         """
         # Set the SFR based on the duration.
-        sfrs = np.zeros_like(ages)
+        sfrs = np.zeros_like(ages, dtype=np.float64)
         mask = (ages < self.max_age) & (ages >= self.min_age)
         norm = 1.0 / (self.max_age - ages[mask])
         exponent = (
@@ -830,7 +830,7 @@ class DoublePowerLaw(Common):
                 The ages (in years) at which to evaluate the SFR.
         """
         # Set the SFR based on the duration.
-        sfrs = np.zeros_like(ages)
+        sfrs = np.zeros_like(ages, dtype=np.float64)
         mask = (ages < self.max_age) & (ages >= self.min_age)
         term1 = (ages[mask] / self.peak_age) ** self.alpha
         term2 = (ages[mask] / self.peak_age) ** self.beta
