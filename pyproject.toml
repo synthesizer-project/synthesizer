@@ -90,7 +90,6 @@ dependencies = [
   "tqdm",
   "requests",
   "pathos",
-  "statsmodels",
   "pympler",
   "platformdirs",
 ]
@@ -107,7 +106,7 @@ dev = [
 test = [
     "nbmake",
     "pytest",
-    "ruff==0.11.7",
+    "ruff==0.15.15",
     "mypy>=0.910",
 ]
 # Documentation building

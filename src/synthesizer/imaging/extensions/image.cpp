@@ -25,7 +25,6 @@
 #include "../../extensions/cpp_to_python.h"
 #include "../../extensions/octree.h"
 #include "../../extensions/property_funcs.h"
-#include "../../extensions/python_to_cpp.h"
 #include "../../extensions/timers.h"
 #ifdef ATOMIC_TIMING
 #include "../../extensions/timers_init.h"
@@ -36,14 +35,16 @@
 #include <omp.h>
 #endif
 
+using Cell = cell<double>;
+using Particle = particle<double>;
+
 /**
  * @brief Structure to hold cell with its computational cost
  */
-template <typename Real>
 struct weighted_cell {
 
   /*! Pointer to the cell */
-  struct cell<Real> *cell_ptr;
+  Cell *cell_ptr;
 
   /*! Cost of the cell, calculated as max_smoothing_length * particle_count */
   double cost;
@@ -56,7 +57,7 @@ struct weighted_cell {
    *
    * @param c Pointer to the cell to be weighted
    */
-  weighted_cell(struct cell<Real> *c) : cell_ptr(c) {
+  weighted_cell(Cell *c) : cell_ptr(c) {
     // Cost = max_smoothing_length * particle_count
     // This represents kernel area × work per kernel
     double max_sml = sqrt(c->max_sml_squ);
@@ -73,31 +74,25 @@ struct weighted_cell {
  * It is used to sort the cells in descending order of cost,
  * so that the most expensive cells are processed first.
  *
- * @tparam Real The floating-point type.
  * @param a First weighted cell to compare
  * @param b Second weighted cell to compare
  *
  * @return True if the cost of cell `a` is greater than that of cell `b`,
  *         false otherwise.
  */
-template <typename Real>
-inline bool compare_by_cost(const weighted_cell<Real> &a,
-                            const weighted_cell<Real> &b) {
+inline bool compare_by_cost(const weighted_cell &a, const weighted_cell &b) {
   return a.cost > b.cost;  // Descending order
 }
 
 /**
  * @brief Build balanced work list using adaptive subdivision
- *
- * @tparam Real The floating-point type.
  */
-template <typename Real>
-static std::vector<weighted_cell<Real>> build_balanced_work_list(
-    struct cell<Real> *root, int nthreads, double balance_tolerance = 2.0) {
+static std::vector<weighted_cell> build_balanced_work_list(
+    Cell *root, int nthreads, double balance_tolerance = 2.0) {
 
   tic("build_balanced_work_list");
 
-  std::vector<weighted_cell<Real>> work_list;
+  std::vector<weighted_cell> work_list;
   work_list.emplace_back(root);
 
   int target_cells =
@@ -129,13 +124,15 @@ static std::vector<weighted_cell<Real>> build_balanced_work_list(
     }
 
     // Find the most expensive cell that can be subdivided
-    auto most_expensive = std::max_element(
-        work_list.begin(), work_list.end(),
-        [](const weighted_cell<Real> &a, const weighted_cell<Real> &b) {
-          if (!a.can_subdivide && b.can_subdivide) return true;
-          if (a.can_subdivide && !b.can_subdivide) return false;
-          return a.cost < b.cost;
-        });
+    auto most_expensive =
+        std::max_element(work_list.begin(), work_list.end(),
+                         [](const weighted_cell &a, const weighted_cell &b) {
+                           if (!a.can_subdivide && b.can_subdivide)
+                             return true;
+                           if (a.can_subdivide && !b.can_subdivide)
+                             return false;
+                           return a.cost < b.cost;
+                         });
 
     if (!most_expensive->can_subdivide) {
       printf("  No more cells can be subdivided\n");
@@ -143,18 +140,29 @@ static std::vector<weighted_cell<Real>> build_balanced_work_list(
     }
 
     // Subdivide the most expensive cell
-    struct cell<Real> *expensive_cell = most_expensive->cell_ptr;
+    Cell *expensive_cell = most_expensive->cell_ptr;
 
     // Remove the expensive cell from the list
     work_list.erase(most_expensive);
 
     // Add its children
     for (int ip = 0; ip < 8; ip++) {
-      struct cell<Real> *child = &expensive_cell->progeny[ip];
+      Cell *child = &expensive_cell->progeny[ip];
       if (child->part_count > 0) {
         work_list.emplace_back(child);
       }
     }
+  }
+
+  // Final statistics
+  double final_total_cost = 0.0;
+  double final_max_cost = 0.0;
+  double final_min_cost = 1e99;
+
+  for (const auto &wc : work_list) {
+    final_total_cost += wc.cost;
+    final_max_cost = std::max(final_max_cost, wc.cost);
+    final_min_cost = std::min(final_min_cost, wc.cost);
   }
 
   toc("build_balanced_work_list");
@@ -170,7 +178,6 @@ static std::vector<weighted_cell<Real>> build_balanced_work_list(
  * leaves the particles themselves will be checked to see if their SPH kernel
  * overlaps with the line of sight of the star particle.
  *
- * @tparam Real The floating-point type.
  * @param c The cell to calculate the surface densities for.
  * @param pix_x The x position of the pixel.
  * @param pix_y The y position of the pixel.
@@ -181,20 +188,19 @@ static std::vector<weighted_cell<Real>> build_balanced_work_list(
  * @param nimgs The number of images to populate.
  * @param pix_values The pixel values to use for each image.
  */
-template <typename Real>
-static void populate_pixel_recursive(const struct cell<Real> *c,
-                                     Real threshold, int kdim,
-                                     const Real *kernel, Real norm_factor,
-                                     int npart, Real *out, int nimgs,
-                                     const Real *pix_values, const double res,
-                                     const int npix_x, const int npix_y) {
+static void populate_pixel_recursive(const Cell *c, double threshold, int kdim,
+                                     const double *kernel, double norm_factor,
+                                     int npart, double *out, int nimgs,
+                                     const double *pix_values,
+                                     const double res, const int npix_x,
+                                     const int npix_y) {
 
   /* Is the cell split? */
   if (c->split) {
 
     /* Ok, so we recurse... */
     for (int ip = 0; ip < 8; ip++) {
-      struct cell<Real> *cp = &c->progeny[ip];
+      Cell *cp = &c->progeny[ip];
 
       /* Skip empty progeny. */
       if (cp->part_count == 0) {
@@ -202,9 +208,8 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
       }
 
       /* Recurse... */
-      populate_pixel_recursive<Real>(cp, threshold, kdim, kernel, norm_factor,
-                                     npart, out, nimgs, pix_values, res,
-                                     npix_x, npix_y);
+      populate_pixel_recursive(cp, threshold, kdim, kernel, norm_factor, npart,
+                               out, nimgs, pix_values, res, npix_x, npix_y);
     }
 
   } else {
@@ -215,20 +220,20 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
      * then copy the results back to the global image at the end. */
 
     /* Calculate the maximum kernel radius for particles in this cell. */
-    Real max_sml = sqrt(c->max_sml_squ);
-    Real max_kernel_radius = max_sml * threshold;
+    double max_sml = sqrt(c->max_sml_squ);
+    double max_kernel_radius = max_sml * threshold;
 
     /* Add a buffer around the cell to account for kernel overlap. We need
      * to include the maximum kernel radius plus an extra pixel buffer to
      * ensure we capture all affected pixels. */
-    Real buffer = max_kernel_radius + static_cast<Real>(res);
+    double buffer = max_kernel_radius + res;
 
     /* Calculate the world coordinate bounds of the region this cell affects.
      */
-    Real x_min_world = c->loc[0] - buffer;
-    Real x_max_world = c->loc[0] + c->width + buffer;
-    Real y_min_world = c->loc[1] - buffer;
-    Real y_max_world = c->loc[1] + c->width + buffer;
+    double x_min_world = c->loc[0] - buffer;
+    double x_max_world = c->loc[0] + c->width + buffer;
+    double y_min_world = c->loc[1] - buffer;
+    double y_max_world = c->loc[1] + c->width + buffer;
 
     /* Convert world coordinates to pixel indices, clamping to image bounds. */
     int i_min = std::max(0, (int)floor(x_min_world / res));
@@ -248,18 +253,17 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
     /* Allocate and zero-initialize the local image buffer. This will store
      * contributions from all particles in this cell before we copy them
      * back to the global image. */
-    std::vector<Real> local_img(local_width * local_height * nimgs,
-                                static_cast<Real>(0.0));
+    std::vector<double> local_img(local_width * local_height * nimgs, 0.0);
 
     /* Unpack the particles from this leaf cell. */
-    struct particle<Real> *parts = c->particles;
+    Particle *parts = c->particles;
 
     /* Loop over the particles adding their contribution to the local buffer.
      */
     for (int p = 0; p < c->part_count; p++) {
 
       /* Get the particle. */
-      struct particle<Real> *part = &parts[p];
+      Particle *part = &parts[p];
 
       /* Get the particle position in terms of pixels. */
       int i = (int)floor(part->pos[0] / res);
@@ -267,8 +271,7 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
 
       /* How many pixels do we need to walk out in the kernel? (with a
        * buffer of 1 pixel to ensure we cover the kernel). */
-      int delta_pix =
-          (int)ceil(part->sml * threshold / static_cast<Real>(res)) + 1;
+      int delta_pix = (int)ceil(part->sml * threshold / res) + 1;
 
       /* Loop over the pixels in the kernel. */
       for (int ii = -delta_pix; ii <= delta_pix; ii++) {
@@ -286,25 +289,23 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
           }
 
           /* Calculate the pixel bounds. */
-          Real pix_x_min = static_cast<Real>(iii * res);
-          Real pix_x_max = static_cast<Real>((iii + 1) * res);
-          Real pix_y_min = static_cast<Real>(jjj * res);
-          Real pix_y_max = static_cast<Real>((jjj + 1) * res);
+          double pix_x_min = iii * res;
+          double pix_x_max = (iii + 1) * res;
+          double pix_y_min = jjj * res;
+          double pix_y_max = (jjj + 1) * res;
 
           /* Calculate kernel support radius */
-          Real kernel_radius = part->sml * threshold;
+          double kernel_radius = part->sml * threshold;
 
           /* Fast path: kernel wholly inside this pixel. */
-          Real kvalue;
-          if (kernel_fully_inside_pixel<Real>(part, pix_x_min, pix_x_max,
-                                              pix_y_min, pix_y_max,
-                                              kernel_radius)) {
-            kvalue = static_cast<Real>(
-                1.0); /* Entire kernel mass inside this pixel */
+          double kvalue;
+          if (kernel_fully_inside_pixel(part, pix_x_min, pix_x_max, pix_y_min,
+                                        pix_y_max, kernel_radius)) {
+            kvalue = 1.0; /* Entire kernel mass inside this pixel */
           } else {
             /* Determine overlap of kernel and pixel. */
-            Real q_min, q_max, q_center;
-            calculate_pixel_kernel_overlap<Real>(
+            double q_min, q_max, q_center;
+            calculate_pixel_kernel_overlap(
                 part->pos[0], part->pos[1], pix_x_min, pix_x_max, pix_y_min,
                 pix_y_max, part->sml, q_min, q_max, q_center);
 
@@ -316,14 +317,12 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
             if (q_max < threshold) {
               /* Pixel wholly inside kernel: center-sample with SPH
                * normalization (fast path). */
-              kvalue = pixel_inside_kernel_contribution<Real>(
-                  pix_x_min, pix_y_min, static_cast<Real>(res), part, kernel,
-                  kdim, threshold);
+              kvalue = pixel_inside_kernel_contribution(
+                  pix_x_min, pix_y_min, res, part, kernel, kdim, threshold);
             } else {
               /* Partial overlap: integrate over pixel area. */
-              kvalue = pixel_kernel_partial_overlap_contribution<Real>(
-                  part, pix_x_min, pix_y_min, kernel, kdim, threshold,
-                  static_cast<Real>(res));
+              kvalue = pixel_kernel_partial_overlap_contribution(
+                  part, pix_x_min, pix_y_min, kernel, kdim, threshold, res);
             }
           }
 
@@ -396,7 +395,6 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
  * across threads, and then it will populate the image by recursively
  * processing each cell in the partitioned work list.
  *
- * @tparam Real The floating-point type.
  * @param pix_values: The particle data to be sorted into pixels
  *                   (luminosity/flux/mass etc.).
  * @param kernel: The kernel data (integrated along the z axis and softed by
@@ -414,27 +412,27 @@ static void populate_pixel_recursive(const struct cell<Real> *c,
  * @return void
  */
 #ifdef WITH_OPENMP
-template <typename Real>
-void populate_smoothed_image_parallel(
-    const Real *pix_values, const Real *kernel, const double res,
-    const int npix_x, const int npix_y, const int npart, const Real threshold,
-    const int kdim, Real norm_factor, Real *img, const int nimgs,
-    struct cell<Real> *root, const int nthreads) {
+void populate_smoothed_image_parallel(const double *pix_values,
+                                      const double *kernel, const double res,
+                                      const int npix_x, const int npix_y,
+                                      const int npart, const double threshold,
+                                      const int kdim, double norm_factor,
+                                      double *img, const int nimgs, Cell *root,
+                                      const int nthreads) {
 
   /* Build a balanced work list. */
-  std::vector<weighted_cell<Real>> work_list =
-      build_balanced_work_list<Real>(root, nthreads);
+  std::vector<weighted_cell> work_list =
+      build_balanced_work_list(root, nthreads);
 
   /* Parallel loop over the work list. */
 #pragma omp parallel for num_threads(nthreads) schedule(dynamic)
   for (size_t i = 0; i < work_list.size(); i++) {
-    const weighted_cell<Real> &wc = work_list[i];
-    struct cell<Real> *c = wc.cell_ptr;
+    const weighted_cell &wc = work_list[i];
+    Cell *c = wc.cell_ptr;
 
     /* Populate the pixel recursively. */
-    populate_pixel_recursive<Real>(c, threshold, kdim, kernel, norm_factor,
-                                   npart, img, nimgs, pix_values, res, npix_x,
-                                   npix_y);
+    populate_pixel_recursive(c, threshold, kdim, kernel, norm_factor, npart,
+                             img, nimgs, pix_values, res, npix_x, npix_y);
   }
 }
 #endif
@@ -451,9 +449,10 @@ void populate_smoothed_image_parallel(
  * image by calculating the contribution of each particle to the pixels
  * in the image.
  *
- * @tparam Real The floating-point type.
  * @param pix_values: The particle data to be sorted into pixels
  *                    (luminosity/flux/mass etc.).
+ * @param smoothing_lengths: The stellar particle smoothing lengths.
+ * @param pos: The coordinates of the particles.
  * @param kernel: The kernel data (integrated along the z axis and softed by
  *               impact parameter).
  * @param res: The pixel resolution.
@@ -466,29 +465,26 @@ void populate_smoothed_image_parallel(
  * @param nimgs: The number of images to populate.
  * @param root: The root of the tree.
  */
-template <typename Real>
-void populate_smoothed_image_serial(const Real *pix_values, const Real *kernel,
-                                    const double res, const int npix_x,
-                                    const int npix_y, const int npart,
-                                    const Real threshold, const int kdim,
-                                    Real norm_factor, Real *img,
-                                    const int nimgs, struct cell<Real> *root) {
+void populate_smoothed_image_serial(const double *pix_values,
+                                    const double *kernel, const double res,
+                                    const int npix_x, const int npix_y,
+                                    const int npart, const double threshold,
+                                    const int kdim, double norm_factor,
+                                    double *img, const int nimgs, Cell *root) {
 
   /* Build a balanced work list (this isn't really necessary in serial,
    * but it keeps the code consistent with the parallel version and has
    * negligible cost and does give cache benefits). */
-  std::vector<weighted_cell<Real>> work_list =
-      build_balanced_work_list<Real>(root, 1);
+  std::vector<weighted_cell> work_list = build_balanced_work_list(root, 1);
 
   /* Loop over the work list. */
   for (size_t i = 0; i < work_list.size(); i++) {
-    const weighted_cell<Real> &wc = work_list[i];
-    struct cell<Real> *c = wc.cell_ptr;
+    const weighted_cell &wc = work_list[i];
+    Cell *c = wc.cell_ptr;
 
     /* Populate the pixel recursively. */
-    populate_pixel_recursive<Real>(c, threshold, kdim, kernel, norm_factor,
-                                   npart, img, nimgs, pix_values, res, npix_x,
-                                   npix_y);
+    populate_pixel_recursive(c, threshold, kdim, kernel, norm_factor, npart,
+                             img, nimgs, pix_values, res, npix_x, npix_y);
   }
 }
 
@@ -499,7 +495,6 @@ void populate_smoothed_image_serial(const Real *pix_values, const Real *kernel,
  * populate the image based on whether or not OpenMP is available and the
  * number of threads to use.
  *
- * @tparam Real The floating-point type.
  * @param pix_values: The particle data to be sorted into pixels
  *                    (luminosity/flux/mass etc.).
  * @param kernel: The kernel data (integrated along the z axis and softed by
@@ -515,111 +510,43 @@ void populate_smoothed_image_serial(const Real *pix_values, const Real *kernel,
  * @param root: The root of the tree.
  * @param nthreads: The number of threads to use.
  */
-template <typename Real>
-void populate_smoothed_image(const Real *pix_values, const Real *kernel,
+void populate_smoothed_image(const double *pix_values, const double *kernel,
                              const double res, const int npix_x,
                              const int npix_y, const int npart,
-                             const Real threshold, const int kdim, Real *img,
-                             const int nimgs, struct cell<Real> *root,
+                             const double threshold, const int kdim,
+                             double *img, const int nimgs, Cell *root,
                              const int nthreads) {
   tic("populate_smoothed_image");
 
   /* Compute normalization to conserve flux when truncating kernel. */
-  Real norm_factor = compute_kernel_norm<Real>(kernel, kdim, threshold);
+  double norm_factor = compute_kernel_norm(kernel, kdim, threshold);
 
   /* If we have multiple threads and OpenMP we can parallelise. */
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
 
     /* Populate the image in parallel. */
-    populate_smoothed_image_parallel<Real>(
-        pix_values, kernel, res, npix_x, npix_y, npart, threshold, kdim,
-        norm_factor, img, nimgs, root, nthreads);
+    populate_smoothed_image_parallel(pix_values, kernel, res, npix_x, npix_y,
+                                     npart, threshold, kdim, norm_factor, img,
+                                     nimgs, root, nthreads);
 
   } else {
 
     /* If we don't have OpenMP call the serial version. */
-    populate_smoothed_image_serial<Real>(pix_values, kernel, res, npix_x,
-                                         npix_y, npart, threshold, kdim,
-                                         norm_factor, img, nimgs, root);
+    populate_smoothed_image_serial(pix_values, kernel, res, npix_x, npix_y,
+                                   npart, threshold, kdim, norm_factor, img,
+                                   nimgs, root);
   }
 #else
   (void)nthreads;
 
   /* If we don't have OpenMP call the serial version. */
-  populate_smoothed_image_serial<Real>(pix_values, kernel, res, npix_x, npix_y,
-                                       npart, threshold, kdim, norm_factor,
-                                       img, nimgs, root);
+  populate_smoothed_image_serial(pix_values, kernel, res, npix_x, npix_y,
+                                 npart, threshold, kdim, norm_factor, img,
+                                 nimgs, root);
 #endif
 
   toc("populate_smoothed_image");
-}
-
-/**
- * @brief Templated implementation of make_img.
- *
- * @tparam Real The floating-point type.
- */
-template <typename Real>
-static PyObject *make_img_impl(double res, int npix_x, int npix_y, int npart,
-                               double threshold_double, int kdim, int nimgs,
-                               int nthreads, PyArrayObject *np_pix_values,
-                               PyArrayObject *np_smoothing_lengths,
-                               PyArrayObject *np_pos,
-                               PyArrayObject *np_kernel) {
-
-  const Real threshold = static_cast<Real>(threshold_double);
-
-  /* Get pointers to the actual data. */
-  const Real *pix_values = extract_data<Real>(np_pix_values, "pix_values");
-  const Real *smoothing_lengths =
-      extract_data<Real>(np_smoothing_lengths, "smoothing_lengths");
-  const Real *pos = extract_data<Real>(np_pos, "pos");
-  const Real *kernel = extract_data<Real>(np_kernel, "kernel");
-
-  /* One of the data extractions failed and set a Python error. Return NULL
-   * to propagate the exception back to Python. */
-  if (pix_values == NULL || smoothing_lengths == NULL || pos == NULL ||
-      kernel == NULL) {
-    return NULL;
-  }
-
-  toc("make_img.extract_python_data");
-
-  tic("make_img.construct_cell_tree");
-
-  /* Allocate cells array. The first cell will be the root and then we
-   * will dynamically nibble off cells for the progeny. */
-  int ncells = 1;
-  struct cell<Real> *root = new struct cell<Real>;
-
-  /* Construct the cell tree. */
-  construct_cell_tree<Real>(pos, smoothing_lengths, smoothing_lengths, npart,
-                            root, ncells, MAX_DEPTH, 100);
-
-  toc("make_img.construct_cell_tree");
-
-  tic("make_img.create_output_array");
-
-  /* Create the zeroed image numpy array. */
-  const int typenum = std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
-  npy_intp np_img_dims[3] = {npix_x, npix_y, nimgs};
-  PyArrayObject *np_img =
-      (PyArrayObject *)PyArray_ZEROS(3, np_img_dims, typenum, 0);
-  Real *img = static_cast<Real *>(PyArray_DATA(np_img));
-
-  toc("make_img.create_output_array");
-
-  /* Populate the image. */
-  populate_smoothed_image<Real>(pix_values, kernel, res, npix_x, npix_y, npart,
-                                threshold, kdim, img, nimgs, root, nthreads);
-
-  /* Cleanup the cell tree. */
-  cleanup_cell_tree<Real>(root);
-
-  toc("make_img");
-
-  return Py_BuildValue("N", np_img);
 }
 
 /**
@@ -664,35 +591,55 @@ PyObject *make_img(PyObject *self, PyObject *args) {
                         &nthreads))
     return NULL;
 
-  /* Validate that all float arrays share the same dtype and dispatch. */
-  PyArrayObject *float_arrays[] = {np_pix_values, np_smoothing_lengths, np_pos,
-                                   np_kernel};
-  const char *float_names[] = {"pix_values", "smoothing_lengths", "pos",
-                               "kernel"};
-  int input_typenum = -1;
-  if (!is_matching_float_dtypes(float_arrays, float_names, 4,
-                                &input_typenum)) {
+  /* Get pointers to the actual data. */
+  const double *pix_values = extract_data<double>(np_pix_values, "pix_values");
+  const double *smoothing_lengths =
+      extract_data<double>(np_smoothing_lengths, "smoothing_lengths");
+  const double *pos = extract_data<double>(np_pos, "pos");
+  const double *kernel = extract_data<double>(np_kernel, "kernel");
+
+  /* One of the data extractions failed and set a Python error. Return NULL
+   * to propagate the exception back to Python. */
+  if (pix_values == NULL || smoothing_lengths == NULL || pos == NULL ||
+      kernel == NULL) {
     return NULL;
   }
 
-  PyObject *result = NULL;
-  int dispatch_key = (input_typenum == NPY_FLOAT64);
+  toc("make_img.extract_python_data");
 
-  /* Dispatch: call the matching typed kernel based on the dispatch key. */
-  switch (dispatch_key) {
-    case 0:
-      result = make_img_impl<float>(res, npix_x, npix_y, npart, threshold,
-                                    kdim, nimgs, nthreads, np_pix_values,
-                                    np_smoothing_lengths, np_pos, np_kernel);
-      break;
-    default:
-      result = make_img_impl<double>(res, npix_x, npix_y, npart, threshold,
-                                     kdim, nimgs, nthreads, np_pix_values,
-                                     np_smoothing_lengths, np_pos, np_kernel);
-      break;
-  }
+  tic("make_img.construct_cell_tree");
 
-  return result;
+  /* Allocate cells array. The first cell will be the root and then we
+   * will dynamically nibble off cells for the progeny. */
+  int ncells = 1;
+  Cell *root = new Cell;
+
+  /* Construct the cell tree. */
+  construct_cell_tree<double>(pos, smoothing_lengths, smoothing_lengths, npart,
+                              root, ncells, MAX_DEPTH, 100);
+
+  toc("make_img.construct_cell_tree");
+
+  tic("make_img.create_output_array");
+
+  /* Create the zeroed image numpy array. */
+  npy_intp np_img_dims[3] = {npix_x, npix_y, nimgs};
+  PyArrayObject *np_img =
+      (PyArrayObject *)PyArray_ZEROS(3, np_img_dims, NPY_DOUBLE, 0);
+  double *img = (double *)PyArray_DATA(np_img);
+
+  toc("make_img.create_output_array");
+
+  /* Populate the image. */
+  populate_smoothed_image(pix_values, kernel, res, npix_x, npix_y, npart,
+                          threshold, kdim, img, nimgs, root, nthreads);
+
+  /* Cleanup the cell tree. */
+  cleanup_cell_tree<double>(root);
+
+  toc("make_img");
+
+  return Py_BuildValue("N", np_img);
 }
 
 static PyMethodDef ImageMethods[] = {

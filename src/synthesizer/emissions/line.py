@@ -49,6 +49,7 @@ from unyt import (
     pc,
     s,
     unyt_array,
+    unyt_quantity,
 )
 
 from synthesizer import exceptions
@@ -1293,8 +1294,12 @@ class LineCollection:
                     f"({mask.shape}, {self.lum.shape})"
                 )
 
-        # If tau_v is an array it needs to match the spectra shape
-        if isinstance(tau_v, np.ndarray):
+        # If tau_v is an array it needs to match the spectra shape, note
+        # that we need a special case here because unyt_quantity resolves
+        # to true in isinstance checks despite being a scalar quantity
+        if isinstance(tau_v, np.ndarray) and not isinstance(
+            tau_v, unyt_quantity
+        ):
             if self._luminosity.ndim < 1:
                 raise exceptions.InconsistentArguments(
                     "Arrays of tau_v values are only applicable for Lines"

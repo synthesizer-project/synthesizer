@@ -173,6 +173,9 @@ class Grid:
         # Set up cache for stellar fraction
         self._stellar_frac = None
 
+        # Track the target floating-point dtype for lazy-loaded arrays
+        self._dtype = np.float64
+
         # Get the axes of the grid from the HDF5 file
         self.axes = []  # axes names
         self._axes_values = {}
@@ -422,7 +425,9 @@ class Grid:
         if self._stellar_frac is None:
             with h5py.File(self.grid_filename, "r") as hf:
                 if "star_fraction" in hf.keys():
-                    self._stellar_frac = hf["star_fraction"][:]
+                    self._stellar_frac = np.array(
+                        hf["star_fraction"], dtype=self._dtype
+                    )
                 else:
                     raise exceptions.GridError(
                         f"Grid {self.grid_name} does not contain a stellar "
@@ -868,6 +873,9 @@ class Grid:
                 grid.log10_specific_ionising_lum[ion] = convert_array_dtype(
                     grid.log10_specific_ionising_lum[ion], dtype
                 )
+
+        # Track the target dtype for lazy-loaded arrays
+        grid._dtype = dtype
 
         # Convert the stellar fraction to the target precision, safe if we
         # don't have it

@@ -70,6 +70,15 @@ PyArrayObject *wrap_array_to_numpy(int ndim, npy_intp *dims, int typenum,
     return nullptr;
   }
 
+  /* Reject mismatched explicit dtypes before handing ownership to NumPy. */
+  if (typenum != NumpyTypenum<T>::typenum) {
+    PyErr_Format(PyExc_TypeError,
+                 "Requested typenum %d does not match buffer scalar type.",
+                 typenum);
+    delete[] buffer;
+    return nullptr;
+  }
+
   /* Resolve the NumPy dtype descriptor for the requested output typenum. */
   PyArray_Descr *descr = PyArray_DescrFromType(typenum);
   if (!descr) {

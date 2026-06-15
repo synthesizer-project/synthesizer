@@ -1,7 +1,7 @@
 #ifndef INTEGRATION_H_
 #define INTEGRATION_H_
 
-#include <stddef.h>
+#include <cstddef>
 
 /**
  * @brief Integrate one 1D function using composite Simpson's rule.
