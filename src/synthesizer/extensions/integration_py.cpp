@@ -28,6 +28,26 @@
 #endif
 
 /**
+ * @brief Resolve an optional output dtype, defaulting to the given typenum.
+ *
+ * This preserves the historical Python API where callers omitted the
+ * out_dtype argument entirely.
+ *
+ * @param out_dtype Requested dtype object, or NULL / None if omitted.
+ * @param default_typenum Typenum to use when no explicit dtype was provided.
+ *
+ * @return The resolved NumPy typenum, or -1 on failure.
+ */
+static int resolve_optional_output_typenum(PyObject *out_dtype,
+                                           int default_typenum) {
+  if (out_dtype == NULL || out_dtype == Py_None) {
+    return default_typenum;
+  }
+
+  return resolve_output_typenum(out_dtype, "out_dtype");
+}
+
+/**
  * @brief Serial trapezoidal integration over the final axis.
  *
  * @tparam XReal The floating-point type of the x array.
@@ -194,10 +214,10 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
 
   PyArrayObject *xs, *ys;
   int nthreads;
-  PyObject *out_dtype;
+  PyObject *out_dtype = Py_None;
 
-  if (!PyArg_ParseTuple(args, "O!O!iO", &PyArray_Type, &xs, &PyArray_Type, &ys,
-                        &nthreads, &out_dtype)) {
+  if (!PyArg_ParseTuple(args, "O!O!i|O", &PyArray_Type, &xs, &PyArray_Type,
+                        &ys, &nthreads, &out_dtype)) {
     return NULL;
   }
 
@@ -238,7 +258,8 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
   }
 
   /* Resolve the independently requested output dtype. */
-  const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
+  const int output_typenum = resolve_optional_output_typenum(
+      out_dtype, promoted_float_typenum(xs_typenum, ys_typenum));
   if (output_typenum < 0) {
     return NULL;
   }
@@ -419,10 +440,10 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
 
   PyArrayObject *xs, *ys;
   int nthreads;
-  PyObject *out_dtype;
+  PyObject *out_dtype = Py_None;
 
-  if (!PyArg_ParseTuple(args, "O!O!iO", &PyArray_Type, &xs, &PyArray_Type, &ys,
-                        &nthreads, &out_dtype)) {
+  if (!PyArg_ParseTuple(args, "O!O!i|O", &PyArray_Type, &xs, &PyArray_Type,
+                        &ys, &nthreads, &out_dtype)) {
     return NULL;
   }
 
@@ -463,7 +484,8 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
   }
 
   /* Resolve the requested output dtype independently from the inputs. */
-  const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
+  const int output_typenum = resolve_optional_output_typenum(
+      out_dtype, promoted_float_typenum(xs_typenum, ys_typenum));
   if (output_typenum < 0) {
     return NULL;
   }
@@ -696,9 +718,9 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
 
   PyArrayObject *xs, *ys, *ws;
   int nthreads;
-  PyObject *out_dtype;
+  PyObject *out_dtype = Py_None;
 
-  if (!PyArg_ParseTuple(args, "O!O!O!iO", &PyArray_Type, &xs, &PyArray_Type,
+  if (!PyArg_ParseTuple(args, "O!O!O!i|O", &PyArray_Type, &xs, &PyArray_Type,
                         &ys, &PyArray_Type, &ws, &nthreads, &out_dtype)) {
     return NULL;
   }
@@ -759,7 +781,8 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
   }
 
   /* Resolve the independently requested output dtype. */
-  const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
+  const int output_typenum =
+      resolve_optional_output_typenum(out_dtype, input_typenum);
   if (output_typenum < 0) {
     Py_DECREF(xs_cast);
     Py_DECREF(ys_cast);
@@ -1049,9 +1072,9 @@ static PyObject *weighted_simps_last_axis_integration(PyObject *self,
 
   PyArrayObject *xs, *ys, *ws;
   int nthreads;
-  PyObject *out_dtype;
+  PyObject *out_dtype = Py_None;
 
-  if (!PyArg_ParseTuple(args, "O!O!O!iO", &PyArray_Type, &xs, &PyArray_Type,
+  if (!PyArg_ParseTuple(args, "O!O!O!i|O", &PyArray_Type, &xs, &PyArray_Type,
                         &ys, &PyArray_Type, &ws, &nthreads, &out_dtype)) {
     return NULL;
   }
@@ -1112,7 +1135,8 @@ static PyObject *weighted_simps_last_axis_integration(PyObject *self,
   }
 
   /* Resolve the independently requested output dtype. */
-  const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
+  const int output_typenum =
+      resolve_optional_output_typenum(out_dtype, input_typenum);
   if (output_typenum < 0) {
     Py_DECREF(xs_cast);
     Py_DECREF(ys_cast);
