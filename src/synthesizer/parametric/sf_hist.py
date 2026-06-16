@@ -2106,8 +2106,8 @@ class Stochastic(Common):
                 The redshift at which the SFH is observed. Sets the age of the
                 universe and hence the time baseline of the SFH.
             kernel (Kernels.Kernel):
-                The covariance kernel defining the log10(SFR) fluctuations, e.g.
-                Kernels.DampedRandomWalk(sigma=0.3, tau=1 * Gyr).
+                The covariance kernel defining the log10(SFR) fluctuations,
+                e.g. Kernels.DampedRandomWalk(sigma=0.3, tau=1 * Gyr).
             base_sfh (str/callable/np.ndarray):
                 The mean SFH (in linear SFR) about which fluctuations are drawn
                 in log10 space. One of:
@@ -2211,9 +2211,9 @@ class Stochastic(Common):
         # The mean log10(SFR) on the grid
         mean_log10_sfr = self._base_sfh_log10(t_cosmic, base_sfh)
 
-        # Draw the log10(SFR) fluctuations from the kernel. A kernel may provide
-        # its own (e.g. FFT based) sampler; otherwise fall back to Cholesky on
-        # the covariance matrix.
+        # Draw the log10(SFR) fluctuations from the kernel. A kernel may
+        # provide its own (e.g. FFT based) sampler; otherwise fall back to
+        # Cholesky on the covariance matrix.
         rng = np.random.default_rng(random_seed)
         if hasattr(self.kernel, "sample"):
             fluctuations = self.kernel.sample(t_cosmic, rng)
