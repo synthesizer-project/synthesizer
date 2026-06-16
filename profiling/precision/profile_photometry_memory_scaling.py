@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import importlib.util
 import json
 import logging
 import subprocess
@@ -36,19 +35,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import psutil
-from unyt import c
+from unyt import angstrom, c
 
 from synthesizer.grid import Grid
-
-pipeline_path = (
-    Path(__file__).parent.parent / "pipeline" / "pipeline_test_data.py"
-)
-spec = importlib.util.spec_from_file_location(
-    "pipeline_test_data", pipeline_path
-)
-pipeline_test_data = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(pipeline_test_data)
-get_test_instrument = pipeline_test_data.get_test_instrument
+from synthesizer.instruments import FilterCollection
 
 LOGGER = logging.getLogger(__name__)
 
@@ -75,6 +65,29 @@ def make_synthetic_spectra(nparticles, nlam, dtype, rng):
     return np.array(spectra, dtype=dtype, order="C", copy=True)
 
 
+def make_test_filters(lam, nfilters):
+    """Create a deterministic set of top-hat filters for profiling.
+
+    Using synthetic filters keeps the profiling scripts self-contained and
+    avoids depending on an external cached instrument file in worker
+    subprocesses.
+    """
+    lam_values = lam.to("angstrom").value
+    lam_min = lam_values.min()
+    lam_max = lam_values.max()
+    centres = np.linspace(lam_min * 1.1, lam_max * 0.9, nfilters)
+    widths = np.full(nfilters, max((lam_max - lam_min) / (2 * nfilters), 50.0))
+
+    tophat_dict = {}
+    for i, (centre, width) in enumerate(zip(centres, widths, strict=True)):
+        tophat_dict[f"f{i + 1}"] = {
+            "lam_eff": centre * angstrom,
+            "lam_fwhm": width * angstrom,
+        }
+
+    return FilterCollection(tophat_dict=tophat_dict, new_lam=lam)
+
+
 def _sample_worker_case(
     nparticles,
     nfilters,
@@ -89,12 +102,16 @@ def _sample_worker_case(
 
     The worker process starts from a fresh interpreter so previous profiling
     cases cannot inflate the resident set of the current measurement.
-    Sampling starts before inputs are created so input precision differences
-    are reflected directly in the reported memory usage.
+    Common setup is performed before sampling so the trace focuses on
+    precision-dependent input allocation and photometry execution rather than
+    one-time grid and filter preparation.
     """
     input_dtype = PRECISIONS[input_dtype_name]
     output_dtype = PRECISIONS[output_dtype_name]
     rng = np.random.default_rng(seed)
+
+    grid = Grid("test_grid")
+    filters = make_test_filters(grid.lam, nfilters)
 
     rss_start = psutil.Process().memory_info().rss / (1024**2)
     samples = []
@@ -113,11 +130,6 @@ def _sample_worker_case(
     sampler_thread = threading.Thread(target=sampler, daemon=True)
     sampler_thread.start()
 
-    grid = Grid("test_grid")
-    instrument = get_test_instrument(grid)
-    filters = instrument.filters.select(
-        *instrument.available_filters[:nfilters]
-    )
     spectra = make_synthetic_spectra(nparticles, grid.nlam, input_dtype, rng)
     nu = np.array(
         (c / grid.lam).to("Hz").value,
@@ -142,7 +154,7 @@ def _sample_worker_case(
 
     # Keep allocated objects alive until after sampling ends so the trace
     # reflects the full memory footprint of the isolated case.
-    _ = (grid, instrument, filters, spectra, nu, result)
+    _ = (grid, filters, spectra, nu, result)
 
     all_samples = [rss_start] + samples + [rss_end]
     n = len(all_samples)

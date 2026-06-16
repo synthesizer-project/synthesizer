@@ -17,25 +17,15 @@ from __future__ import annotations
 
 import argparse
 import csv
-import importlib.util
 import time
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import c
+from unyt import angstrom, c
 
 from synthesizer.grid import Grid
-
-pipeline_path = (
-    Path(__file__).parent.parent / "pipeline" / "pipeline_test_data.py"
-)
-spec = importlib.util.spec_from_file_location(
-    "pipeline_test_data", pipeline_path
-)
-pipeline_test_data = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(pipeline_test_data)
-get_test_instrument = pipeline_test_data.get_test_instrument
+from synthesizer.instruments import FilterCollection
 
 plt.rcParams["font.family"] = "DejaVu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -58,6 +48,28 @@ def make_synthetic_spectra(nparticles, nlam, dtype, rng):
     spectra = amplitudes * base + slopes * continuum
 
     return np.array(spectra, dtype=dtype, order="C", copy=True)
+
+
+def make_test_filters(lam, nfilters):
+    """Create a deterministic set of top-hat filters for profiling.
+
+    Using synthetic filters keeps the profiling scripts self-contained and
+    avoids depending on an external cached instrument file.
+    """
+    lam_values = lam.to("angstrom").value
+    lam_min = lam_values.min()
+    lam_max = lam_values.max()
+    centres = np.linspace(lam_min * 1.1, lam_max * 0.9, nfilters)
+    widths = np.full(nfilters, max((lam_max - lam_min) / (2 * nfilters), 50.0))
+
+    tophat_dict = {}
+    for i, (centre, width) in enumerate(zip(centres, widths, strict=True)):
+        tophat_dict[f"f{i + 1}"] = {
+            "lam_eff": centre * angstrom,
+            "lam_fwhm": width * angstrom,
+        }
+
+    return FilterCollection(tophat_dict=tophat_dict, new_lam=lam)
 
 
 def benchmark_photometry(filters, spectra, nu, out_dtype, nthreads, repeats):
@@ -154,10 +166,7 @@ def profile_photometry_precision_scaling(
     rng = np.random.default_rng(seed)
 
     grid = Grid("test_grid")
-    instrument = get_test_instrument(grid)
-    filters = instrument.filters.select(
-        *instrument.available_filters[:nfilters]
-    )
+    filters = make_test_filters(grid.lam, nfilters)
     nlam = grid.nlam
 
     output_dir = Path(out_dir)
