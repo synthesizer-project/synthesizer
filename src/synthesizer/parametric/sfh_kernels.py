@@ -133,6 +133,16 @@ class Kernel:
         tarr = np.asarray(tarr, dtype=np.float64)
         n = tarr.size
 
+        # The Toeplitz construction below assumes a regular grid, so verify
+        # the spacing is uniform to avoid silently returning a wrong matrix.
+        if n > 2:
+            dt = np.diff(tarr)
+            if not np.allclose(dt, dt[0]):
+                raise exceptions.InconsistentArguments(
+                    "build_covariance_matrix requires a regularly spaced "
+                    "time grid; the spacing of tarr is non-uniform."
+                )
+
         # Evaluate the covariance at every lag relative to the first epoch. For
         # a regular grid this contains all the unique values in the matrix.
         cov_deltat = np.asarray(
