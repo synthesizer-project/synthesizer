@@ -2132,6 +2132,12 @@ class Stochastic(Common):
                 The cosmology used to compute the age of the universe. Defaults
                 to astropy.cosmology.Planck18.
         """
+        # Validate n_grid early to fail fast on invalid input
+        if not isinstance(n_grid, (int, np.integer)) or n_grid <= 0:
+            raise ValueError(
+                f"n_grid must be a positive integer, got {n_grid!r}."
+            )
+
         # Initialise the parent
         Common.__init__(
             self,
@@ -2181,15 +2187,29 @@ class Stochastic(Common):
 
         # A callable is evaluated on the grid
         if callable(base_sfh):
-            return np.log10(np.asarray(base_sfh(t_cosmic), dtype=np.float64))
+            sfr = np.asarray(base_sfh(t_cosmic), dtype=np.float64)
+            if sfr.ndim != 1 or sfr.size != t_cosmic.size:
+                raise exceptions.InconsistentArguments(
+                    "base_sfh callable must return a 1D array of length "
+                    f"n_grid ({t_cosmic.size}), got shape {sfr.shape}."
+                )
+            if np.any(sfr <= 0):
+                raise exceptions.InconsistentArguments(
+                    "base_sfh must be strictly positive to take log10."
+                )
+            return np.log10(sfr)
 
         # An array must match the grid
         if isinstance(base_sfh, (np.ndarray, list, tuple)):
             sfr = np.asarray(base_sfh, dtype=np.float64)
-            if sfr.size != t_cosmic.size:
+            if sfr.ndim != 1 or sfr.size != t_cosmic.size:
                 raise exceptions.InconsistentArguments(
-                    "base_sfh array must have length n_grid "
-                    f"({t_cosmic.size}), got {sfr.size}."
+                    "base_sfh array must be 1D with length n_grid "
+                    f"({t_cosmic.size}), got shape {sfr.shape}."
+                )
+            if np.any(sfr <= 0):
+                raise exceptions.InconsistentArguments(
+                    "base_sfh must be strictly positive to take log10."
                 )
             return np.log10(sfr)
 
