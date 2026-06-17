@@ -2083,6 +2083,9 @@ class Stochastic(Common):
             The covariance kernel defining the log10(SFR) fluctuations.
         cosmo (astropy.cosmology):
             The cosmology used to compute the age of the universe.
+        t_univ (float):
+            The age of the universe at the requested redshift (in years). This
+            is the maximum stellar age the SFH spans.
         finegrid (np.ndarray of float):
             The stellar age grid (in years, ascending) on which the realisation
             is stored.
@@ -2151,7 +2154,7 @@ class Stochastic(Common):
         self.cosmo = cosmo
 
         # The age of the universe at this redshift, in years
-        self._t_univ = cosmo.age(redshift).to("yr").value
+        self.t_univ = cosmo.age(redshift).to("yr").value
 
         # Draw the realisation and store it on finegrid/intsfh
         self._draw_realisation(base_sfh, n_grid, random_seed)
@@ -2206,7 +2209,7 @@ class Stochastic(Common):
                 Seed for the random number generator.
         """
         # The cosmic time grid (yr), from the Big Bang to the observation epoch
-        t_cosmic = np.linspace(0.0, self._t_univ, n_grid, dtype=np.float64)
+        t_cosmic = np.linspace(0.0, self.t_univ, n_grid, dtype=np.float64)
 
         # The mean log10(SFR) on the grid
         mean_log10_sfr = self._base_sfh_log10(t_cosmic, base_sfh)
@@ -2226,7 +2229,7 @@ class Stochastic(Common):
 
         # Map cosmic time -> stellar age (lookback): age = t_univ - t_cosmic.
         # Flip so the age grid is ascending (required by np.interp downstream).
-        age = self._t_univ - t_cosmic
+        age = self.t_univ - t_cosmic
         self.finegrid = np.flip(age).astype(np.float64)
         self.intsfh = np.flip(sfr_cosmic).astype(np.float64)
 
