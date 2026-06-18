@@ -348,6 +348,14 @@ class Gas(Particles, Component):
         # How many original particles do we have?
         n_orig = coordinates.shape[0]
 
+        def _is_per_particle_value(value):
+            return (
+                value is not None
+                and hasattr(value, "shape")
+                and value.ndim >= 1
+                and value.shape[0] == to_resample[0].shape[0]
+            )
+
         # Ensure we have a dict for attr_modes (even if empty)
         if attr_modes is None:
             attr_modes = {}
@@ -503,11 +511,15 @@ class Gas(Particles, Component):
         # Handle any custom attributes which are arrays and need to be
         # resampled according to the attr_modes dict
         new_custom = {
-            self._custom_attr_names[i]: resample_by_mode(
-                to_resample[10 + i],
-                attr_modes.get(self._custom_attr_names[i], "duplicated"),
-                resample_factor,
-                rng,
+            self._custom_attr_names[i]: (
+                resample_by_mode(
+                    to_resample[10 + i],
+                    attr_modes.get(self._custom_attr_names[i], "duplicated"),
+                    resample_factor,
+                    rng,
+                )
+                if _is_per_particle_value(to_resample[10 + i])
+                else to_resample[10 + i]
             )
             for i in range(len(custom))
             if to_resample[10 + i] is not None
@@ -553,7 +565,9 @@ class Gas(Particles, Component):
                 )
             for i in range(len(custom)):
                 name = self._custom_attr_names[i]
-                if name in new_custom:
+                if name in new_custom and _is_per_particle_value(
+                    to_resample[10 + i]
+                ):
                     new_custom[name] = combine_arrays(
                         new_custom[name], no_resample[10 + i]
                     )
@@ -563,12 +577,16 @@ class Gas(Particles, Component):
             masses=new_masses,
             metallicities=new_metallicities,
             star_forming=new_star_forming,
-            redshift=redshift or 0.0,
+            redshift=redshift if redshift is not None else 0.0,
             coordinates=new_coords,
             velocities=new_vels,
             smoothing_lengths=new_sml,
             softening_lengths=new_softening,
-            dust_to_metal_ratio=new_dust_to_metal_ratio,
+            dust_to_metal_ratio=(
+                None
+                if new_dust_masses is not None
+                else new_dust_to_metal_ratio
+            ),
             dust_masses=new_dust_masses,
             centre=centre,
             metallicity_floor=metallicity_floor,

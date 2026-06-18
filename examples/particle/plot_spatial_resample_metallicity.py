@@ -61,13 +61,13 @@ g_norm = original.gas.spatially_resample(
     FACTOR,
     seed=42,
     kernel=KERNEL,
-    attr_modes={"metallicities": "normal"},
+    attr_modes={"metallicities": ("normal", SIGMA_Z)},
 )
 s_norm = original.stars.spatially_resample(
     FACTOR,
     seed=42,
     kernel=KERNEL,
-    attr_modes={"metallicities": "normal"},
+    attr_modes={"metallicities": ("normal", SIGMA_Z)},
 )
 g_norm.calculate_smoothing_lengths()
 s_norm.calculate_smoothing_lengths()
@@ -216,7 +216,7 @@ ax.legend(fontsize=7.5)
 # Mass–metallicity hexbin for normal-mode gas
 ax = axes[2]
 h = ax.hexbin(
-    np.log10(g_norm.masses.value.clip(1e6)),
+    np.log10(g_norm.masses.value.clip(1e-10)),
     g_norm.metallicities.clip(1e-6),
     gridsize=35,
     cmap="magma_r",

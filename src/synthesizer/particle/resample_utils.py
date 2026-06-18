@@ -75,6 +75,12 @@ def validate_resample_factor(resample_factor):
     Raises:
         ValueError: If resample_factor < 2.
     """
+    if isinstance(resample_factor, bool) or not isinstance(
+        resample_factor, (int, np.integer)
+    ):
+        raise ValueError(
+            f"resample_factor must be an integer, got {resample_factor!r}."
+        )
     if resample_factor < 2:
         raise ValueError(
             f"resample_factor must be >= 2, got {resample_factor}."
@@ -123,11 +129,15 @@ def validate_mask(mask, nparticles):
     Raises:
         InconsistentArguments: If mask is the wrong length.
     """
-    mask = np.asarray(mask, dtype=bool)
+    mask = np.asarray(mask)
     if mask.size != nparticles:
         raise exceptions.InconsistentArguments(
             f"mask must have length nparticles ({nparticles}), "
             f"got {mask.size}."
+        )
+    if not np.issubdtype(mask.dtype, np.bool_):
+        raise exceptions.InconsistentArguments(
+            f"mask must be a boolean array. Got dtype {mask.dtype}."
         )
     return mask
 
@@ -292,6 +302,12 @@ def resample_by_mode(arr, mode_spec, resample_factor, rng):
 
     # Handle the lognormal case where we draw in log-space and exponentiate
     elif mode == "lognormal":
+        if np.any(raw <= 0):
+            raise ValueError(
+                "The 'lognormal' resampling mode requires strictly "
+                "positive inputs."
+            )
+
         # Get the log of the raw values
         log_raw = np.log(raw)
 
@@ -597,18 +613,20 @@ def _sample_1d_histogram(hist, edges, nstar, rng):
     # Determine whether *edges* are bin edges or centres
     edges = np.asarray(edges)
     if len(edges) == len(hist):
-        # Bin centres — interpolate between neighbours
+        # Bin centres — convert to actual bin edges first.
         centres = edges
-        lo = np.where(
-            idx == 0,
-            centres[0] - (centres[1] - centres[0]) / 2,
-            centres[idx - 1],
+        if len(centres) == 1:
+            return np.full(nstar, centres[0])
+        midpoints = centres[:-1] + np.diff(centres) / 2
+        edges = np.concatenate(
+            [
+                [centres[0] - (midpoints[0] - centres[0])],
+                midpoints,
+                [centres[-1] + (centres[-1] - midpoints[-1])],
+            ]
         )
-        hi = np.where(
-            idx == len(centres) - 1,
-            centres[-1] + (centres[-1] - centres[-2]) / 2,
-            centres[idx],
-        )
+        lo = edges[idx]
+        hi = edges[idx + 1]
         return lo + frac * (hi - lo)
     else:
         # Bin edges — interpolate within the selected bin

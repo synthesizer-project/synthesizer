@@ -90,6 +90,7 @@ fig, axes = plt.subplots(
 
 age_bins = np.logspace(np.log10(1), np.log10(15000), 60)
 z_bins = np.linspace(0.0001, 0.04, 40)
+original_ages_yr = stars.ages.to("yr").value
 
 for row_idx, (label, samp) in enumerate(
     [
@@ -100,7 +101,7 @@ for row_idx, (label, samp) in enumerate(
 ):
     ax_age = axes[row_idx, 0]
     ax_age.hist(
-        stars.ages.value,
+        original_ages_yr,
         bins=age_bins,
         color="grey",
         alpha=0.3,
@@ -108,7 +109,7 @@ for row_idx, (label, samp) in enumerate(
         density=False,
     )
     ax_age.hist(
-        samp.ages.value,
+        samp.ages.to("yr").value,
         bins=age_bins,
         color="tab:blue",
         alpha=0.6,

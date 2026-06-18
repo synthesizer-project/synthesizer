@@ -33,12 +33,12 @@ def _resample_stars(stars, factor, **kwargs):
 
 
 def _make_gas(n=20):
-    np.random.seed(42)
+    rng = np.random.default_rng(42)
     return Gas(
         masses=np.ones(n) * 1e6 * Msun,
-        metallicities=np.random.uniform(0.001, 0.03, n),
-        coordinates=np.random.uniform(-10, 10, (n, 3)) * Mpc,
-        velocities=np.random.uniform(-100, 100, (n, 3)) * km / s,
+        metallicities=rng.uniform(0.001, 0.03, n),
+        coordinates=rng.uniform(-10, 10, (n, 3)) * Mpc,
+        velocities=rng.uniform(-100, 100, (n, 3)) * km / s,
         smoothing_lengths=np.ones(n) * 0.5 * Mpc,
         softening_lengths=np.ones(n) * 0.1 * Mpc,
         redshift=0.1,
@@ -46,13 +46,13 @@ def _make_gas(n=20):
 
 
 def _make_stars(n=15):
-    np.random.seed(42)
+    rng = np.random.default_rng(42)
     return Stars(
         initial_masses=np.ones(n) * 1e6 * Msun,
-        ages=np.random.uniform(10, 1000, n) * Myr,
-        metallicities=np.random.uniform(0.001, 0.03, n),
-        coordinates=np.random.uniform(-10, 10, (n, 3)) * Mpc,
-        velocities=np.random.uniform(-100, 100, (n, 3)) * km / s,
+        ages=rng.uniform(10, 1000, n) * Myr,
+        metallicities=rng.uniform(0.001, 0.03, n),
+        coordinates=rng.uniform(-10, 10, (n, 3)) * Mpc,
+        velocities=rng.uniform(-100, 100, (n, 3)) * km / s,
         smoothing_lengths=np.ones(n) * 0.5 * Mpc,
         softening_lengths=np.ones(n) * 0.1 * Mpc,
         redshift=0.1,
@@ -102,6 +102,11 @@ class TestValidateResampleFactor:
         with pytest.raises(ValueError, match=">= 2"):
             validate_resample_factor(0)
 
+    def test_rejects_float(self):
+        """Non-integer factors raise ValueError."""
+        with pytest.raises(ValueError, match="must be an integer"):
+            validate_resample_factor(2.5)
+
 
 class TestValidateMask:
     """Tests for :func:`validate_mask`."""
@@ -117,6 +122,11 @@ class TestValidateMask:
         """A mask with the wrong length raises InconsistentArguments."""
         with pytest.raises(exceptions.InconsistentArguments):
             validate_mask(np.array([True, False]), 3)
+
+    def test_rejects_non_boolean_dtype(self):
+        """Non-boolean masks raise InconsistentArguments."""
+        with pytest.raises(exceptions.InconsistentArguments, match="boolean"):
+            validate_mask(np.array([0, 2, -1]), 3)
 
 
 class TestResampleByMode:
@@ -172,6 +182,16 @@ class TestResampleByMode:
         out = resample_by_mode(self.arr, "lognormal", self.factor, self.rng)
         assert out.shape == (9,)
         assert np.all(out > 0)
+
+    def test_lognormal_rejects_non_positive_inputs(self):
+        """``"lognormal"`` rejects zero and negative parent values."""
+        with pytest.raises(ValueError, match="strictly positive"):
+            resample_by_mode(
+                np.array([1.0, 0.0, -1.0]),
+                "lognormal",
+                self.factor,
+                self.rng,
+            )
 
     def test_conserved_normal_sum(self):
         """``"conserved_normal"`` children sum exactly to each parent."""
@@ -378,6 +398,21 @@ class TestGasSpatialResample:
         expected = np.repeat(gas.tau_v, 3)
         assert np.allclose(g.tau_v, expected)
 
+    def test_scalar_custom_attr_is_preserved(self):
+        """Scalar custom attrs are copied without resampling."""
+        gas = Gas(
+            masses=np.ones(4) * Msun,
+            metallicities=np.ones(4) * 0.01,
+            coordinates=np.zeros((4, 3)) * Mpc,
+            velocities=np.zeros((4, 3)) * km / s,
+            smoothing_lengths=np.ones(4) * 0.5 * Mpc,
+            softening_lengths=np.ones(4) * 0.1 * Mpc,
+            redshift=0.1,
+            metadata=7,
+        )
+        resampled = _resample_gas(gas, 2, seed=42)
+        assert resampled.metadata == 7
+
 
 # ---------------------------------------------------------------------------
 # Stars.spatially_resample tests
@@ -508,6 +543,58 @@ class TestStarsSpatialResample:
             np.sum(resampled.current_masses),
             np.sum(stars.current_masses),
         )
+
+    def test_array_redshift_is_resampled(self):
+        """Per-particle redshift arrays are duplicated cleanly."""
+        stars = Stars(
+            initial_masses=np.ones(4) * Msun,
+            ages=np.ones(4) * 100 * Myr,
+            metallicities=np.ones(4) * 0.01,
+            coordinates=np.zeros((4, 3)) * Mpc,
+            velocities=np.zeros((4, 3)) * km / s,
+            smoothing_lengths=np.ones(4) * 0.5 * Mpc,
+            softening_lengths=np.ones(4) * 0.1 * Mpc,
+            redshift=np.array([0.1, 0.2, 0.3, 0.4]),
+        )
+        resampled = _resample_stars(stars, 2, seed=42)
+        assert np.allclose(resampled.redshift, np.repeat(stars.redshift, 2))
+
+    def test_fesc_attrs_are_preserved(self):
+        """Per-particle escape fractions survive resampling."""
+        stars = Stars(
+            initial_masses=np.ones(4) * Msun,
+            ages=np.ones(4) * 100 * Myr,
+            metallicities=np.ones(4) * 0.01,
+            coordinates=np.zeros((4, 3)) * Mpc,
+            velocities=np.zeros((4, 3)) * km / s,
+            smoothing_lengths=np.ones(4) * 0.5 * Mpc,
+            softening_lengths=np.ones(4) * 0.1 * Mpc,
+            redshift=0.1,
+            fesc=np.array([0.1, 0.2, 0.3, 0.4]),
+            fesc_ly_alpha=np.array([0.4, 0.3, 0.2, 0.1]),
+        )
+        resampled = _resample_stars(stars, 2, seed=42)
+        assert np.allclose(resampled.fesc, np.repeat(stars.fesc, 2))
+        assert np.allclose(
+            resampled.fesc_ly_alpha,
+            np.repeat(stars.fesc_ly_alpha, 2),
+        )
+
+    def test_scalar_custom_attr_is_preserved(self):
+        """Scalar custom attrs are copied without resampling."""
+        stars = Stars(
+            initial_masses=np.ones(4) * Msun,
+            ages=np.ones(4) * 100 * Myr,
+            metallicities=np.ones(4) * 0.01,
+            coordinates=np.zeros((4, 3)) * Mpc,
+            velocities=np.zeros((4, 3)) * km / s,
+            smoothing_lengths=np.ones(4) * 0.5 * Mpc,
+            softening_lengths=np.ones(4) * 0.1 * Mpc,
+            redshift=0.1,
+            metadata=7,
+        )
+        resampled = _resample_stars(stars, 2, seed=42)
+        assert resampled.metadata == 7
 
 
 class TestStarsSpatialResampleWithSFZH:

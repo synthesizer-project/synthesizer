@@ -82,6 +82,10 @@ def _evaluate_sfh_on_grid(sfh_func, log10ages, nsub=100):
         sfr_vals = sfh_func.get_sfr(age_grid)
         sf_hist[ia] = trapezoid(sfr_vals, x=age_grid)
         lo = hi
+    hi = ages[-1]
+    age_grid = np.linspace(lo, hi, nsub) if hi > lo else np.array([lo, hi])
+    sfr_vals = sfh_func.get_sfr(age_grid)
+    sf_hist[-1] = trapezoid(sfr_vals, x=age_grid)
     return sf_hist
 
 
@@ -116,6 +120,10 @@ def _evaluate_md_on_grid(metal_dist_func, metallicities, nsub=100):
         w_vals = metal_dist_func.get_dist_weight(z_grid)
         metal_dist[imetal] = trapezoid(w_vals, x=z_grid)
         lo = hi
+    hi = metallicities[-1]
+    z_grid = np.linspace(lo, hi, nsub) if hi > lo else np.array([lo, hi])
+    w_vals = metal_dist_func.get_dist_weight(z_grid)
+    metal_dist[-1] = trapezoid(w_vals, x=z_grid)
     return metal_dist
 
 
@@ -995,6 +1003,8 @@ class Stars(Particles, StarsComponent):
         s_hydrogen = getattr(self, "s_hydrogen", None)
         softening_lengths = self.softening_lengths
         redshift = self.redshift
+        fesc = getattr(self, "fesc", None)
+        fesc_ly_alpha = getattr(self, "fesc_ly_alpha", None)
         centre = getattr(self, "centre", None)
         metallicity_floor = self.metallicity_floor
 
@@ -1008,6 +1018,14 @@ class Stars(Particles, StarsComponent):
 
         # How many original particles do we have?
         n_orig = coordinates.shape[0]
+
+        def _is_per_particle_value(value):
+            return (
+                value is not None
+                and hasattr(value, "shape")
+                and value.ndim >= 1
+                and value.shape[0] == to_resample[0].shape[0]
+            )
 
         # Ensure we have a dict for attr_modes (even if empty)
         if attr_modes is None:
@@ -1037,6 +1055,9 @@ class Stars(Particles, StarsComponent):
                 s_oxygen=s_oxygen,
                 s_hydrogen=s_hydrogen,
                 softening_lengths=softening_lengths,
+                redshift=redshift,
+                fesc=fesc,
+                fesc_ly_alpha=fesc_ly_alpha,
                 **custom,
             )
         else:
@@ -1055,6 +1076,9 @@ class Stars(Particles, StarsComponent):
                 s_oxygen,
                 s_hydrogen,
                 softening_lengths,
+                redshift,
+                fesc,
+                fesc_ly_alpha,
             ) + tuple(custom[name] for name in self._custom_attr_names)
             no_resample = None
 
@@ -1105,9 +1129,14 @@ class Stars(Particles, StarsComponent):
 
             # Derive grid axes from the particle population (sorted, finely
             # sampled so the parametric Stars can integrate accurately)
+            positive_ages = to_resample[3].value[to_resample[3].value > 0]
+            if positive_ages.size == 0:
+                raise ValueError(
+                    "SFH-based resampling requires at least one positive age."
+                )
             log10ages = np.linspace(
-                np.log10(self.ages.value.min()),
-                np.log10(self.ages.value.max()),
+                np.log10(positive_ages.min()),
+                np.log10(to_resample[3].value.max()),
                 100,
             )
             metallicities_axis = np.linspace(
@@ -1249,6 +1278,36 @@ class Stars(Particles, StarsComponent):
         else:
             new_tau_v = tau_v
 
+        if _is_per_particle_value(to_resample[12]):
+            new_redshift = resample_by_mode(
+                to_resample[12],
+                attr_modes.get("redshift", "duplicated"),
+                resample_factor,
+                rng,
+            )
+        else:
+            new_redshift = redshift
+
+        if _is_per_particle_value(to_resample[13]):
+            new_fesc = resample_by_mode(
+                to_resample[13],
+                attr_modes.get("fesc", "duplicated"),
+                resample_factor,
+                rng,
+            )
+        else:
+            new_fesc = fesc
+
+        if _is_per_particle_value(to_resample[14]):
+            new_fesc_ly_alpha = resample_by_mode(
+                to_resample[14],
+                attr_modes.get("fesc_ly_alpha", "duplicated"),
+                resample_factor,
+                rng,
+            )
+        else:
+            new_fesc_ly_alpha = fesc_ly_alpha
+
         new_alpha = (
             resample_by_mode(
                 to_resample[8],
@@ -1299,14 +1358,18 @@ class Stars(Particles, StarsComponent):
         # Handle any custom attributes which are arrays and need to be
         # resampled according to the attr_modes dict
         new_custom = {
-            self._custom_attr_names[i]: resample_by_mode(
-                to_resample[12 + i],
-                attr_modes.get(self._custom_attr_names[i], "duplicated"),
-                resample_factor,
-                rng,
+            self._custom_attr_names[i]: (
+                resample_by_mode(
+                    to_resample[15 + i],
+                    attr_modes.get(self._custom_attr_names[i], "duplicated"),
+                    resample_factor,
+                    rng,
+                )
+                if _is_per_particle_value(to_resample[15 + i])
+                else to_resample[15 + i]
             )
             for i in range(len(custom))
-            if to_resample[12 + i] is not None
+            if to_resample[15 + i] is not None
         }
 
         # Combine any no_resample particles back in with the resampled ones
@@ -1347,11 +1410,21 @@ class Stars(Particles, StarsComponent):
                 and softening_lengths.ndim >= 1
             ):
                 new_softening = combine_arrays(new_softening, no_resample[11])
+            if _is_per_particle_value(to_resample[12]):
+                new_redshift = combine_arrays(new_redshift, no_resample[12])
+            if _is_per_particle_value(to_resample[13]):
+                new_fesc = combine_arrays(new_fesc, no_resample[13])
+            if _is_per_particle_value(to_resample[14]):
+                new_fesc_ly_alpha = combine_arrays(
+                    new_fesc_ly_alpha, no_resample[14]
+                )
             for i in range(len(custom)):
                 name = self._custom_attr_names[i]
-                if name in new_custom:
+                if name in new_custom and _is_per_particle_value(
+                    to_resample[15 + i]
+                ):
                     new_custom[name] = combine_arrays(
-                        new_custom[name], no_resample[12 + i]
+                        new_custom[name], no_resample[15 + i]
                     )
 
         # Create the new Stars object with all the resampled attributes
@@ -1359,7 +1432,7 @@ class Stars(Particles, StarsComponent):
             initial_masses=new_initial_masses,
             ages=new_ages,
             metallicities=new_metallicities,
-            redshift=redshift or 0.0,
+            redshift=new_redshift if new_redshift is not None else 0.0,
             tau_v=new_tau_v,
             alpha_enhancement=new_alpha,
             coordinates=new_coords,
@@ -1371,6 +1444,8 @@ class Stars(Particles, StarsComponent):
             softening_lengths=new_softening,
             centre=centre,
             metallicity_floor=metallicity_floor,
+            fesc=new_fesc,
+            fesc_ly_alpha=new_fesc_ly_alpha,
             **new_custom,
         )
 
