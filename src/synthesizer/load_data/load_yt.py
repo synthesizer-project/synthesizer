@@ -1961,6 +1961,7 @@ def load_yt(
             galaxy.load_gas(**gas)
 
         if black_holes is not None:
+            black_holes = _cast_component_dtype(black_holes, dtype)
             black_hole_kwargs = dict(black_holes)
             galaxy.black_holes = BlackHoles(
                 masses=black_hole_kwargs.pop("masses"),

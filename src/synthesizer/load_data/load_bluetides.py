@@ -354,7 +354,7 @@ def load_BlueTides(
         galaxies[ii].load_stars(
             initial_masses=(imasses * Msun).astype(dtype),
             ages=(ages * Myr).astype(dtype),
-            metals=metallicities.astype(dtype),
+            metallicities=metallicities.astype(dtype),
             coordinates=(coords * kpc).astype(dtype),
             current_masses=(masses * Msun).astype(dtype),
             smoothing_lengths=smoothing_lengths,
