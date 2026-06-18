@@ -6,6 +6,7 @@ import inspect
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.utils import (
@@ -251,7 +252,12 @@ def get_param(
 
     # If we found a ParameterFunction, call it to get the value
     elif value is not None and isinstance(value, ParameterFunction):
-        return value(model, emission, emitter, obj)
+        result = value(model, emission, emitter, obj)
+        if not preserve_units and isinstance(
+            result, (unyt_array, unyt_quantity)
+        ):
+            result = result.value
+        return result
 
     # If we found a value, return it
     elif value is not None:
@@ -264,6 +270,10 @@ def get_param(
                 model_label=model.label,
                 value=value,
             )
+        if not preserve_units and isinstance(
+            value, (unyt_array, unyt_quantity)
+        ):
+            value = value.value
         return value
 
     # If we were finding a logged parameter but failed, try the non-logged
@@ -335,6 +345,10 @@ def get_param(
                 model_label=model.label,
                 value=value,
             )
+        if not preserve_units and isinstance(
+            value, (unyt_array, unyt_quantity)
+        ):
+            value = value.value
         return value
 
     # Otherwise raise an exception
