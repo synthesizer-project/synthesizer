@@ -88,7 +88,9 @@ fig, axes = plt.subplots(
     3, 2, figsize=(11, 9), gridspec_kw=dict(wspace=0.3, hspace=0.3)
 )
 
-age_bins = np.logspace(np.log10(1), np.log10(15000), 60)
+age_bins = np.logspace(
+    np.log10((1 * Myr).to("yr").value), np.log10((15 * Gyr).to("yr").value), 60
+)
 z_bins = np.linspace(0.0001, 0.04, 40)
 original_ages_yr = stars.ages.to("yr").value
 

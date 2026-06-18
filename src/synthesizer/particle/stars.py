@@ -2157,7 +2157,7 @@ def sample_sfzh_from_array(
         log10ages (np.ndarray):
             The log10 age axis of the SFZH grid.
         log10metallicities (np.ndarray):
-            The metallicity axis of the SFZH grid.
+            The log10 metallicity axis of the SFZH grid.
         nstar (int):
             Number of stellar particles to produce.
         initial_mass (unyt_quantity, optional):
@@ -2176,9 +2176,13 @@ def sample_sfzh_from_array(
     # Set the random seed for reproducibility if provided
     rng = np.random.default_rng(seed)
 
+    # The public API still accepts a log10 metallicity axis, but the shared
+    # sampler interpolates over linear metallicities.
+    metallicities_axis = 10 ** np.asarray(log10metallicities)
+
     # Sample ages and metallicities from the SFZH array
     ages, metallicities = _sample_sfzh_arrays(
-        sfzh, log10ages, log10metallicities, nstar, rng
+        sfzh, log10ages, metallicities_axis, nstar, rng
     )
 
     # Assign masses to the particles.  If *initial_mass* is ``None``, we
@@ -2217,7 +2221,7 @@ def sample_sfzh(
         log10ages (np.ndarray):
             The log10 age axis of the SFZH grid.
         log10metallicities (np.ndarray):
-            The metallicity axis of the SFZH grid.
+            The log10 metallicity axis of the SFZH grid.
         nstar (int):
             Number of stellar particles to produce.
         initial_mass (unyt_quantity, optional):

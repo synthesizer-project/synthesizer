@@ -505,7 +505,7 @@ def resample_smoothing_lengths(smoothing_lengths, resample_factor):
     )
 
 
-def _sample_sfzh_arrays(sfzh, log10ages, log10metallicities, nstar, rng):
+def _sample_sfzh_arrays(sfzh, log10ages, metallicities, nstar, rng):
     """Sample ages and metallicities continuously from an SFZH array.
 
     Unlike :func:`sample_sfzh`, which returns values at the exact grid
@@ -523,8 +523,8 @@ def _sample_sfzh_arrays(sfzh, log10ages, log10metallicities, nstar, rng):
         log10ages (np.ndarray):
             1-D array of log10(age) grid edges/centres, sampled linearly
             within cells.
-        log10metallicities (np.ndarray):
-            1-D array of metallicity grid edges/centres.
+        metallicities (np.ndarray):
+            1-D array of linear metallicity grid edges/centres.
         nstar (int):
             Number of stellar particles to produce.
         rng (np.random.Generator):
@@ -547,7 +547,7 @@ def _sample_sfzh_arrays(sfzh, log10ages, log10metallicities, nstar, rng):
 
     # Convert the flat cell indices back to 2-D age and metallicity indices
     x_idx, y_idx = np.unravel_index(
-        value_bins, (len(log10ages), len(log10metallicities))
+        value_bins, (len(log10ages), len(metallicities))
     )
 
     # Interpolate smoothly within each cell for a continuous distribution
@@ -555,8 +555,8 @@ def _sample_sfzh_arrays(sfzh, log10ages, log10metallicities, nstar, rng):
     x_frac = rng.random(nstar)
     y_frac = rng.random(nstar)
 
-    # Interpolate log10(age) and log10(metallicity) separately, then
-    # exponentiate to get back to the ages and metallicities
+    # Interpolate log10(age) and linear metallicity separately, then
+    # exponentiate only the ages.
     ages = 10 ** (
         log10ages[x_idx]
         + x_frac
@@ -565,11 +565,11 @@ def _sample_sfzh_arrays(sfzh, log10ages, log10metallicities, nstar, rng):
             - np.asarray(log10ages)[x_idx]
         )
     )
-    metallicities = np.asarray(log10metallicities)[y_idx] + y_frac * (
-        np.asarray(log10metallicities)[
-            np.clip(y_idx + 1, 0, len(log10metallicities) - 1)
+    metallicities = np.asarray(metallicities)[y_idx] + y_frac * (
+        np.asarray(metallicities)[
+            np.clip(y_idx + 1, 0, len(metallicities) - 1)
         ]
-        - np.asarray(log10metallicities)[y_idx]
+        - np.asarray(metallicities)[y_idx]
     )
 
     return ages, metallicities

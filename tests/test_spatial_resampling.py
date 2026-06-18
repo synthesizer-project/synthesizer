@@ -17,7 +17,7 @@ from synthesizer.particle.resample_utils import (
     validate_mask,
     validate_resample_factor,
 )
-from synthesizer.particle.stars import Stars
+from synthesizer.particle.stars import Stars, sample_sfzh
 
 
 def _resample_gas(gas, factor, **kwargs):
@@ -331,12 +331,12 @@ class TestGasSpatialResample:
 
     def test_no_smoothing_lengths(self):
         """Resample without smoothing_lengths raises InconsistentArguments."""
-        np.random.seed(42)
+        rng = np.random.default_rng(42)
         gas = Gas(
             masses=np.ones(5) * Msun,
             metallicities=np.ones(5) * 0.01,
-            coordinates=np.random.uniform(-1, 1, (5, 3)) * Mpc,
-            velocities=np.random.uniform(-1, 1, (5, 3)) * km / s,
+            coordinates=rng.uniform(-1, 1, (5, 3)) * Mpc,
+            velocities=rng.uniform(-1, 1, (5, 3)) * km / s,
             smoothing_lengths=None,
             redshift=0.1,
         )
@@ -382,17 +382,17 @@ class TestGasSpatialResample:
 
     def test_tau_v_array_is_tiled(self):
         """Per-particle tau_v is duplicated by default."""
-        np.random.seed(42)
+        rng = np.random.default_rng(42)
         n = 5
         gas = Gas(
             masses=np.ones(n) * Msun,
             metallicities=np.ones(n) * 0.01,
-            coordinates=np.random.uniform(-1, 1, (n, 3)) * Mpc,
-            velocities=np.random.uniform(-1, 1, (n, 3)) * km / s,
+            coordinates=rng.uniform(-1, 1, (n, 3)) * Mpc,
+            velocities=rng.uniform(-1, 1, (n, 3)) * km / s,
             smoothing_lengths=np.ones(n) * 0.5 * Mpc,
             softening_lengths=np.ones(n) * 0.1 * Mpc,
             redshift=0.1,
-            tau_v=np.random.uniform(0.1, 2.0, n),
+            tau_v=rng.uniform(0.1, 2.0, n),
         )
         g = _resample_gas(gas, 3, seed=42)
         expected = np.repeat(gas.tau_v, 3)
@@ -468,13 +468,13 @@ class TestStarsSpatialResample:
 
     def test_no_smoothing_lengths(self):
         """Missing smoothing_lengths raises InconsistentArguments."""
-        np.random.seed(42)
+        rng = np.random.default_rng(42)
         stars = Stars(
             initial_masses=np.ones(5) * Msun,
             ages=np.ones(5) * 100 * Myr,
             metallicities=np.ones(5) * 0.01,
-            coordinates=np.random.uniform(-1, 1, (5, 3)) * Mpc,
-            velocities=np.random.uniform(-1, 1, (5, 3)) * km / s,
+            coordinates=rng.uniform(-1, 1, (5, 3)) * Mpc,
+            velocities=rng.uniform(-1, 1, (5, 3)) * km / s,
             smoothing_lengths=None,
             redshift=0.1,
         )
@@ -526,13 +526,13 @@ class TestStarsSpatialResample:
 
     def test_non_sfzh_current_masses(self):
         """Current masses are divided proportionally and conserve total."""
-        np.random.seed(42)
+        rng = np.random.default_rng(42)
         stars = Stars(
             initial_masses=np.ones(5) * Msun,
             ages=np.ones(5) * 100 * Myr,
             metallicities=np.ones(5) * 0.01,
-            coordinates=np.random.uniform(-1, 1, (5, 3)) * Mpc,
-            velocities=np.random.uniform(-1, 1, (5, 3)) * km / s,
+            coordinates=rng.uniform(-1, 1, (5, 3)) * Mpc,
+            velocities=rng.uniform(-1, 1, (5, 3)) * km / s,
             smoothing_lengths=np.ones(5) * 0.5 * Mpc,
             softening_lengths=np.ones(5) * 0.1 * Mpc,
             redshift=0.1,
@@ -652,6 +652,18 @@ class TestStarsSpatialResampleWithSFZH:
         s = _resample_stars(stars, 3, sfzh=sfzh, mask=mask, seed=42)
         assert s.nparticles == 6 + 4 * 3
 
+    def test_sample_sfzh_converts_logged_metallicity_axis(self, sfzh):
+        """Public sample_sfzh converts logged metallicity axes to linear Z."""
+        stars = sample_sfzh(
+            sfzh.sfzh,
+            sfzh.log10ages,
+            sfzh.log10metallicities,
+            20,
+        )
+        assert np.all(stars.metallicities > 0)
+        assert np.all(stars.metallicities >= sfzh.metallicities.min())
+        assert np.all(stars.metallicities <= sfzh.metallicities.max())
+
 
 # ---------------------------------------------------------------------------
 # Instance method and _custom_attr_names tests
@@ -679,13 +691,13 @@ class TestInstanceResample:
 
     def test_custom_attr_names_registered(self):
         """Extra kwargs at construction appear in ``_custom_attr_names``."""
-        np.random.seed(42)
-        extra = np.random.uniform(0, 1, 20)
+        rng = np.random.default_rng(42)
+        extra = rng.uniform(0, 1, 20)
         gas = Gas(
             masses=np.ones(20) * 1e6 * Msun,
-            metallicities=np.random.uniform(0.001, 0.03, 20),
-            coordinates=np.random.uniform(-10, 10, (20, 3)) * Mpc,
-            velocities=np.random.uniform(-100, 100, (20, 3)) * km / s,
+            metallicities=rng.uniform(0.001, 0.03, 20),
+            coordinates=rng.uniform(-10, 10, (20, 3)) * Mpc,
+            velocities=rng.uniform(-100, 100, (20, 3)) * km / s,
             smoothing_lengths=np.ones(20) * 0.5 * Mpc,
             softening_lengths=np.ones(20) * 0.1 * Mpc,
             redshift=0.1,
@@ -695,14 +707,14 @@ class TestInstanceResample:
 
     def test_custom_attr_propagated_through_instance_resample(self):
         """Custom attrs survive resampling with correct output shape."""
-        np.random.seed(42)
+        rng = np.random.default_rng(42)
         n = 20
-        extra = np.random.uniform(0, 1, n)
+        extra = rng.uniform(0, 1, n)
         gas = Gas(
             masses=np.ones(n) * 1e6 * Msun,
-            metallicities=np.random.uniform(0.001, 0.03, n),
-            coordinates=np.random.uniform(-10, 10, (n, 3)) * Mpc,
-            velocities=np.random.uniform(-100, 100, (n, 3)) * km / s,
+            metallicities=rng.uniform(0.001, 0.03, n),
+            coordinates=rng.uniform(-10, 10, (n, 3)) * Mpc,
+            velocities=rng.uniform(-100, 100, (n, 3)) * km / s,
             smoothing_lengths=np.ones(n) * 0.5 * Mpc,
             softening_lengths=np.ones(n) * 0.1 * Mpc,
             redshift=0.1,
