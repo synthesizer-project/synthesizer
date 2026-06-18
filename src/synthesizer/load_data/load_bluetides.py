@@ -242,6 +242,7 @@ def load_BlueTides(
     sort_bhar=True,
     bluetides_data_folder="",
     center=False,
+    dtype=np.float64,
 ):
     """Load BlueTides galaxies into a galaxy object.
 
@@ -268,8 +269,13 @@ def load_BlueTides(
             location of BlueTides pig/sunset files. Only required if
             dataholder is `None` (default is an empty string)
         center (bool):
-             whether or not to center the galaxy on the Bh
-             (default is False)
+            whether or not to center the galaxy on the Bh
+            (default is False)
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
 
     Returns:
         galaxies (object):
@@ -346,11 +352,11 @@ def load_BlueTides(
 
         coords = np.transpose([x, y, z])
         galaxies[ii].load_stars(
-            initial_masses=imasses * Msun,
-            ages=ages * Myr,
-            metals=metallicities,
-            coordinates=coords * kpc,
-            current_masses=masses * Msun,
+            initial_masses=(imasses * Msun).astype(dtype),
+            ages=(ages * Myr).astype(dtype),
+            metals=metallicities.astype(dtype),
+            coordinates=(coords * kpc).astype(dtype),
+            current_masses=(masses * Msun).astype(dtype),
             smoothing_lengths=smoothing_lengths,
         )
 
