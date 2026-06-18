@@ -51,6 +51,74 @@ from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.util_funcs import combine_arrays
 
 
+def _evaluate_sfh_on_grid(sfh_func, log10ages, nsub=100):
+    """Evaluate an SFH function onto a log10(age) grid.
+
+    Evaluates ``get_sfr`` on a fine sub-grid within each bin and
+    integrates with :func:`numpy.trapezoid`, mirroring the logic in
+    :meth:`~synthesizer.parametric.stars.Stars._get_sfzh`.
+
+    Args:
+        sfh_func (synthesizer.parametric.sf_hist.Common):
+            An SFH function object with a ``get_sfr`` method.
+        log10ages (np.ndarray):
+            1-D array of log10(age) grid points.
+        nsub (int):
+            Number of sub-samples per bin for trapezoidal integration.
+
+    Returns:
+        np.ndarray:
+            1-D array of integrated SFH values, same length as
+            *log10ages*.
+    """
+    from synthesizer.utils.integrate import trapezoid
+
+    ages = 10**log10ages
+    sf_hist = np.zeros(len(ages))
+    lo = 0.0
+    for ia in range(len(ages) - 1):
+        hi = (ages[ia + 1] + ages[ia]) / 2.0
+        age_grid = np.linspace(lo, hi, nsub) if hi > lo else np.array([lo, hi])
+        sfr_vals = sfh_func.get_sfr(age_grid)
+        sf_hist[ia] = trapezoid(sfr_vals, x=age_grid)
+        lo = hi
+    return sf_hist
+
+
+def _evaluate_md_on_grid(metal_dist_func, metallicities, nsub=100):
+    """Evaluate a MetalDist function onto a metallicity grid.
+
+    Evaluates ``get_dist_weight`` on a fine sub-grid within each bin and
+    integrates with :func:`numpy.trapezoid`, mirroring the logic in
+    :meth:`~synthesizer.parametric.stars.Stars._get_sfzh`.
+
+    Args:
+        metal_dist_func (synthesizer.parametric.metal_dist.Common):
+            A MetalDist function object with a ``get_dist_weight``
+            method.
+        metallicities (np.ndarray):
+            1-D array of metallicity grid points.
+        nsub (int):
+            Number of sub-samples per bin for trapezoidal integration.
+
+    Returns:
+        np.ndarray:
+            1-D array of integrated metal distribution values, same
+            length as *metallicities*.
+    """
+    from synthesizer.utils.integrate import trapezoid
+
+    metal_dist = np.zeros(len(metallicities))
+    lo = 0.0
+    for imetal in range(len(metallicities) - 1):
+        hi = (metallicities[imetal + 1] + metallicities[imetal]) / 2.0
+        z_grid = np.linspace(lo, hi, nsub) if hi > lo else np.array([lo, hi])
+        w_vals = metal_dist_func.get_dist_weight(z_grid)
+        metal_dist[imetal] = trapezoid(w_vals, x=z_grid)
+        lo = hi
+    return metal_dist
+
+
 class Stars(Particles, StarsComponent):
     """The base Stars class.
 
@@ -1052,14 +1120,8 @@ class Stars(Particles, StarsComponent):
             # for single-distribution cases sample directly from the 1-D
             # evaluated histogram.
             if sfh is not None and metal_dist is not None:
-                para = Para_Stars(
-                    log10ages=log10ages,
-                    metallicities=metallicities_axis,
-                    sf_hist=sfh,
-                    metal_dist=metal_dist,
-                )
-                sfh_arr = para.sf_hist
-                md_arr = para.metal_dist
+                sfh_arr = _evaluate_sfh_on_grid(sfh, log10ages)
+                md_arr = _evaluate_md_on_grid(metal_dist, metallicities_axis)
             else:
                 sfh_arr = None
                 md_arr = None
@@ -1092,18 +1154,10 @@ class Stars(Particles, StarsComponent):
                 new_ages *= yr
 
             elif sfh is not None:
-                # Evaluate the SFH onto the age grid via a minimal
-                # parametric Stars (use a flat metal_dist as a dummy
-                # so the constructor can build the 2-D SFZH)
-                para = Para_Stars(
-                    log10ages=log10ages,
-                    metallicities=metallicities_axis,
-                    sf_hist=sfh,
-                    metal_dist=np.ones_like(metallicities_axis, dtype=float),
-                )
-                sfh_arr = para.sf_hist
+                # Evaluate the SFH onto the age grid and sample ages
+                # from the 1-D SFH distribution.
+                sfh_arr = _evaluate_sfh_on_grid(sfh, log10ages)
 
-                # Sample ages from the 1-D SFH distribution.
                 # The SFH is a histogram over log10(age) bins, so we
                 # sample log10(age) values and then convert to linear
                 # age.
@@ -1127,16 +1181,9 @@ class Stars(Particles, StarsComponent):
                 )
 
             elif metal_dist is not None:
-                # Evaluate the MetalDist onto the metallicity grid
-                para = Para_Stars(
-                    log10ages=log10ages,
-                    metallicities=metallicities_axis,
-                    sf_hist=np.ones_like(log10ages, dtype=float),
-                    metal_dist=metal_dist,
-                )
-                md_arr = para.metal_dist
-
-                # Sample metallicities from the 1-D MetalDist
+                # Evaluate the MetalDist onto the metallicity grid and
+                # sample metallicities from the 1-D MetalDist
+                md_arr = _evaluate_md_on_grid(metal_dist, metallicities_axis)
 
                 new_metallicities = _sample_1d_histogram(
                     md_arr / np.sum(md_arr),
