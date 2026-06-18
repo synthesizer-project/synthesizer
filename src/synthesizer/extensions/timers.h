@@ -26,9 +26,8 @@
 #ifndef TIMERS_H_
 #define TIMERS_H_
 
-#include <time.h>
-
 #include <chrono>
+#include <time.h>
 
 #ifdef WITH_OPENMP
 #include <omp.h>

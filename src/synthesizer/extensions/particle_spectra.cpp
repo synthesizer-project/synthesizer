@@ -3,21 +3,21 @@
  * Calculates weights on an arbitrary dimensional grid given the mass.
  *****************************************************************************/
 /* C includes */
-#include <math.h>
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <new>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <algorithm>
-#include <array>
 #include <vector>
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include <Python.h>
-
 #include "numpy_init.h"
+
+#include <Python.h>
 
 /* Local includes */
 #include "cpp_to_python.h"
@@ -36,18 +36,25 @@
  *
  * This is the serial version of the function for grids with a wavelength mask.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param good_lams: The wavelength indices that are not masked.
  */
+template <typename PartReal, typename SpecReal, typename OutT>
 static void spectra_loop_cic_with_lam_mask_serial(
-    GridProps *grid_props, Particles *parts, double *part_spectra,
+    GridProps *grid_props, Particles *parts, OutT *part_spectra,
     const std::vector<int> &good_lams) {
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
+  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const double *__restrict grid_spectra = grid_props->get_spectra();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -56,8 +63,8 @@ static void spectra_loop_cic_with_lam_mask_serial(
   int ncells = 1 << ndim;
 
   /* Store the non-zero cell contributions for each particle. */
-  std::vector<const double *> cell_spectra_ptrs(ncells);
-  std::vector<double> cell_weights(ncells);
+  std::vector<const SpecReal *> cell_spectra_ptrs(ncells);
+  std::vector<OutT> cell_weights(ncells);
 
   /* Set up fixed sub-dimensions array (always {2, 2, ..., 2}) */
   std::array<int, MAX_GRID_NDIM> sub_dims;
@@ -90,10 +97,13 @@ static void spectra_loop_cic_with_lam_mask_serial(
     }
 
     /* Compute base linear index for this particle */
-    const int base_linidx = parts->grid_indices[p];
-
-    /* Cache particle weight once */
-    const double w_p = parts->get_weight_at(p);
+    /* Cache particle weight and base-cell information once. */
+    const PartReal w_p = parts->get_weight_at<PartReal>(p);
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    std::array<PartReal, MAX_GRID_NDIM> axis_fracs;
+    get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props,
+                                    parts, p);
+    const int base_linidx = get_flat_index(part_indices, dims.data(), ndim);
 
     /* Loop over sub-cells collecting their weighted contributions. */
     int nvalid_cells = 0;
@@ -103,18 +113,15 @@ static void spectra_loop_cic_with_lam_mask_serial(
       /* Compute the CIC fraction */
       double frac = 1.0;
       for (int idim = 0; idim < ndim; idim++) {
-        if (sc.offs[idim]) {
-          frac *= parts->grid_fracs[p * ndim + idim];
-        } else {
-          frac *= (1.0 - parts->grid_fracs[p * ndim + idim]);
-        }
+        frac *= sc.offs[idim] ? axis_fracs[idim]
+                              : (static_cast<PartReal>(1) - axis_fracs[idim]);
       }
-      if (frac == 0.0) {
+      if (frac == static_cast<PartReal>(0)) {
         continue;
       }
 
       /* Define the weighted contribution from this cell. */
-      const double weight = frac * w_p;
+      const OutT weight = static_cast<OutT>(frac) * static_cast<OutT>(w_p);
 
       /* Compute grid cell index via base + precomputed offset */
       const int grid_ind = base_linidx + sc.linoff;
@@ -125,14 +132,14 @@ static void spectra_loop_cic_with_lam_mask_serial(
     }
 
     /* Get this particle's output row. */
-    double *__restrict part_spec = part_spectra + p * nlam;
+    OutT *__restrict part_spec = part_spectra + p * nlam;
 
     /* Add all grid cell contributions to the spectra. */
     for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
       const int ilam = good_lams[jl];
-      double spec_val = 0.0;
+      OutT spec_val = static_cast<OutT>(0);
       for (int icell = 0; icell < nvalid_cells; icell++) {
-        spec_val = std::fma(cell_spectra_ptrs[icell][ilam],
+        spec_val = std::fma(static_cast<OutT>(cell_spectra_ptrs[icell][ilam]),
                             cell_weights[icell], spec_val);
       }
       part_spec[ilam] = spec_val;
@@ -146,17 +153,24 @@ static void spectra_loop_cic_with_lam_mask_serial(
  * This is the serial version of the function for grids without a wavelength
  * mask.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  */
+template <typename PartReal, typename SpecReal, typename OutT>
 static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
                                                 Particles *parts,
-                                                double *part_spectra) {
+                                                OutT *part_spectra) {
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
+  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const double *__restrict grid_spectra = grid_props->get_spectra();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -165,8 +179,8 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
   int ncells = 1 << ndim;
 
   /* Store the non-zero cell contributions for each particle. */
-  std::vector<const double *> cell_spectra_ptrs(ncells);
-  std::vector<double> cell_weights(ncells);
+  std::vector<const SpecReal *> cell_spectra_ptrs(ncells);
+  std::vector<OutT> cell_weights(ncells);
 
   /* Set up fixed sub-dimensions array (always {2, 2, ..., 2}) */
   std::array<int, MAX_GRID_NDIM> sub_dims;
@@ -199,10 +213,13 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
     }
 
     /* Compute base linear index for this particle */
-    const int base_linidx = parts->grid_indices[p];
-
-    /* Cache particle weight once */
-    const double w_p = parts->get_weight_at(p);
+    /* Cache particle weight and base-cell information once. */
+    const PartReal w_p = parts->get_weight_at<PartReal>(p);
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    std::array<PartReal, MAX_GRID_NDIM> axis_fracs;
+    get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props,
+                                    parts, p);
+    const int base_linidx = get_flat_index(part_indices, dims.data(), ndim);
 
     /* Loop over sub-cells collecting their weighted contributions. */
     int nvalid_cells = 0;
@@ -212,18 +229,15 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
       /* Compute the CIC fraction */
       double frac = 1.0;
       for (int idim = 0; idim < ndim; idim++) {
-        if (sc.offs[idim]) {
-          frac *= parts->grid_fracs[p * ndim + idim];
-        } else {
-          frac *= (1.0 - parts->grid_fracs[p * ndim + idim]);
-        }
+        frac *= sc.offs[idim] ? axis_fracs[idim]
+                              : (static_cast<PartReal>(1) - axis_fracs[idim]);
       }
-      if (frac == 0.0) {
+      if (frac == static_cast<PartReal>(0)) {
         continue;
       }
 
       /* Define the weighted contribution from this cell. */
-      const double weight = frac * w_p;
+      const OutT weight = static_cast<OutT>(frac) * static_cast<OutT>(w_p);
 
       /* Compute grid cell index via base + precomputed offset */
       const int grid_ind = base_linidx + sc.linoff;
@@ -234,13 +248,13 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
     }
 
     /* Get this particle's output row. */
-    double *__restrict part_spec = part_spectra + p * nlam;
+    OutT *__restrict part_spec = part_spectra + p * nlam;
 
     /* Add all grid cell contributions to the spectra. */
     for (size_t ilam = 0; ilam < nlam; ilam++) {
-      double spec_val = 0.0;
+      OutT spec_val = static_cast<OutT>(0);
       for (int icell = 0; icell < nvalid_cells; icell++) {
-        spec_val = std::fma(cell_spectra_ptrs[icell][ilam],
+        spec_val = std::fma(static_cast<OutT>(cell_spectra_ptrs[icell][ilam]),
                             cell_weights[icell], spec_val);
       }
       part_spec[ilam] = spec_val;
@@ -254,16 +268,22 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
  * This is the serial wrapper which dispatches to the masked or unmasked
  * wavelength implementation.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param has_lam_mask: Are we applying a wavelength mask?
  */
+template <typename PartReal, typename SpecReal, typename OutT>
 static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
-                                    double *part_spectra, bool has_lam_mask) {
+                                    OutT *part_spectra, bool has_lam_mask) {
   /* If there is no wavelength mask, use the branch-free contiguous loop. */
   if (!has_lam_mask) {
-    spectra_loop_cic_no_lam_mask_serial(grid_props, parts, part_spectra);
+    spectra_loop_cic_no_lam_mask_serial<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra);
     return;
   }
 
@@ -277,8 +297,8 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
     }
   }
 
-  spectra_loop_cic_with_lam_mask_serial(grid_props, parts, part_spectra,
-                                        good_lams);
+  spectra_loop_cic_with_lam_mask_serial<PartReal, SpecReal, OutT>(
+      grid_props, parts, part_spectra, good_lams);
 }
 
 /**
@@ -287,6 +307,10 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
  * This is the parallel version of the function for grids with a wavelength
  * mask.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
@@ -294,13 +318,16 @@ static void spectra_loop_cic_serial(GridProps *grid_props, Particles *parts,
  * @param good_lams: The wavelength indices that are not masked.
  */
 #ifdef WITH_OPENMP
+template <typename PartReal, typename SpecReal, typename OutT>
 static void spectra_loop_cic_with_lam_mask_omp(
-    GridProps *grid_props, Particles *parts, double *part_spectra,
-    int nthreads, const std::vector<int> &good_lams) {
+    GridProps *grid_props, Particles *parts, OutT *part_spectra, int nthreads,
+    const std::vector<int> &good_lams) {
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
+  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const double *__restrict grid_spectra = grid_props->get_spectra();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
   const int ncells = 1 << ndim;
 
   /* Get and cast the number of particles. */
@@ -344,8 +371,8 @@ static void spectra_loop_cic_with_lam_mask_omp(
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
     /* Store the non-zero cell contributions for each particle. */
-    std::vector<const double *> cell_spectra_ptrs(ncells);
-    std::vector<double> cell_weights(ncells);
+    std::vector<const SpecReal *> cell_spectra_ptrs(ncells);
+    std::vector<OutT> cell_weights(ncells);
 
     /* Loop over particles in this thread's range. */
     for (size_t p = start_idx; p < end_idx; p++) {
@@ -356,10 +383,13 @@ static void spectra_loop_cic_with_lam_mask_omp(
       }
 
       /* Compute base linear index for this particle */
-      const int base_linidx = parts->grid_indices[p];
-
-      /* Cache particle weight once */
-      const double w_p = parts->get_weight_at(p);
+      /* Cache particle weight and base-cell information once. */
+      const PartReal w_p = parts->get_weight_at<PartReal>(p);
+      std::array<int, MAX_GRID_NDIM> part_indices;
+      std::array<PartReal, MAX_GRID_NDIM> axis_fracs;
+      get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props,
+                                      parts, p);
+      const int base_linidx = get_flat_index(part_indices, dims.data(), ndim);
 
       /* Loop over sub-cells collecting their weighted contributions. */
       int nvalid_cells = 0;
@@ -369,18 +399,16 @@ static void spectra_loop_cic_with_lam_mask_omp(
         /* Compute the CIC fraction */
         double frac = 1.0;
         for (int idim = 0; idim < ndim; idim++) {
-          if (sc.offs[idim]) {
-            frac *= parts->grid_fracs[p * ndim + idim];
-          } else {
-            frac *= (1.0 - parts->grid_fracs[p * ndim + idim]);
-          }
+          frac *= sc.offs[idim]
+                      ? axis_fracs[idim]
+                      : (static_cast<PartReal>(1) - axis_fracs[idim]);
         }
-        if (frac == 0.0) {
+        if (frac == static_cast<PartReal>(0)) {
           continue;
         }
 
         /* Define the weighted contribution from this cell. */
-        const double weight = frac * w_p;
+        const OutT weight = static_cast<OutT>(frac) * static_cast<OutT>(w_p);
 
         /* Compute grid cell index via base + precomputed offset */
         const int grid_ind = base_linidx + sc.linoff;
@@ -391,15 +419,16 @@ static void spectra_loop_cic_with_lam_mask_omp(
       }
 
       /* Get this particle's output row. */
-      double *__restrict part_spec = part_spectra + p * nlam;
+      OutT *__restrict part_spec = part_spectra + p * nlam;
 
       /* Add all grid cell contributions to the spectra. */
       for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
         const int ilam = good_lams[jl];
-        double spec_val = 0.0;
+        OutT spec_val = static_cast<OutT>(0);
         for (int icell = 0; icell < nvalid_cells; icell++) {
-          spec_val = std::fma(cell_spectra_ptrs[icell][ilam],
-                              cell_weights[icell], spec_val);
+          spec_val =
+              std::fma(static_cast<OutT>(cell_spectra_ptrs[icell][ilam]),
+                       cell_weights[icell], spec_val);
         }
         part_spec[ilam] = spec_val;
       }
@@ -413,19 +442,26 @@ static void spectra_loop_cic_with_lam_mask_omp(
  * This is the parallel version of the function for grids without a wavelength
  * mask.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param nthreads: The number of threads to use.
  */
+template <typename PartReal, typename SpecReal, typename OutT>
 static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
                                              Particles *parts,
-                                             double *part_spectra,
+                                             OutT *part_spectra,
                                              int nthreads) {
   /* Unpack the grid properties. */
   const int ndim = grid_props->ndim;
+  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const double *__restrict grid_spectra = grid_props->get_spectra();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
   const int ncells = 1 << ndim;
 
   /* Get and cast the number of particles. */
@@ -469,8 +505,8 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
     /* Store the non-zero cell contributions for each particle. */
-    std::vector<const double *> cell_spectra_ptrs(ncells);
-    std::vector<double> cell_weights(ncells);
+    std::vector<const SpecReal *> cell_spectra_ptrs(ncells);
+    std::vector<OutT> cell_weights(ncells);
 
     /* Loop over particles in this thread's range. */
     for (size_t p = start_idx; p < end_idx; p++) {
@@ -481,10 +517,13 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
       }
 
       /* Compute base linear index for this particle */
-      const int base_linidx = parts->grid_indices[p];
-
-      /* Cache particle weight once */
-      const double w_p = parts->get_weight_at(p);
+      /* Cache particle weight and base-cell information once. */
+      const PartReal w_p = parts->get_weight_at<PartReal>(p);
+      std::array<int, MAX_GRID_NDIM> part_indices;
+      std::array<PartReal, MAX_GRID_NDIM> axis_fracs;
+      get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props,
+                                      parts, p);
+      const int base_linidx = get_flat_index(part_indices, dims.data(), ndim);
 
       /* Loop over sub-cells collecting their weighted contributions. */
       int nvalid_cells = 0;
@@ -494,18 +533,16 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
         /* Compute the CIC fraction */
         double frac = 1.0;
         for (int idim = 0; idim < ndim; idim++) {
-          if (sc.offs[idim]) {
-            frac *= parts->grid_fracs[p * ndim + idim];
-          } else {
-            frac *= (1.0 - parts->grid_fracs[p * ndim + idim]);
-          }
+          frac *= sc.offs[idim]
+                      ? axis_fracs[idim]
+                      : (static_cast<PartReal>(1) - axis_fracs[idim]);
         }
-        if (frac == 0.0) {
+        if (frac == static_cast<PartReal>(0)) {
           continue;
         }
 
         /* Define the weighted contribution from this cell. */
-        const double weight = frac * w_p;
+        const OutT weight = static_cast<OutT>(frac) * static_cast<OutT>(w_p);
 
         /* Compute grid cell index via base + precomputed offset */
         const int grid_ind = base_linidx + sc.linoff;
@@ -516,14 +553,15 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
       }
 
       /* Get this particle's output row. */
-      double *__restrict part_spec = part_spectra + p * nlam;
+      OutT *__restrict part_spec = part_spectra + p * nlam;
 
       /* Add all grid cell contributions to the spectra. */
       for (size_t ilam = 0; ilam < nlam; ilam++) {
-        double spec_val = 0.0;
+        OutT spec_val = static_cast<OutT>(0);
         for (int icell = 0; icell < nvalid_cells; icell++) {
-          spec_val = std::fma(cell_spectra_ptrs[icell][ilam],
-                              cell_weights[icell], spec_val);
+          spec_val =
+              std::fma(static_cast<OutT>(cell_spectra_ptrs[icell][ilam]),
+                       cell_weights[icell], spec_val);
         }
         part_spec[ilam] = spec_val;
       }
@@ -537,19 +575,24 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
  * This is the parallel wrapper which dispatches to the masked or unmasked
  * wavelength implementation.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param nthreads: The number of threads to use.
  * @param has_lam_mask: Are we applying a wavelength mask?
  */
+template <typename PartReal, typename SpecReal, typename OutT>
 static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
-                                 double *part_spectra, int nthreads,
+                                 OutT *part_spectra, int nthreads,
                                  bool has_lam_mask) {
   /* If there is no wavelength mask, use the branch-free contiguous loop. */
   if (!has_lam_mask) {
-    spectra_loop_cic_no_lam_mask_omp(grid_props, parts, part_spectra,
-                                     nthreads);
+    spectra_loop_cic_no_lam_mask_omp<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra, nthreads);
     return;
   }
 
@@ -563,8 +606,8 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
     }
   }
 
-  spectra_loop_cic_with_lam_mask_omp(grid_props, parts, part_spectra, nthreads,
-                                     good_lams);
+  spectra_loop_cic_with_lam_mask_omp<PartReal, SpecReal, OutT>(
+      grid_props, parts, part_spectra, nthreads, good_lams);
 }
 #endif /* WITH_OPENMP */
 
@@ -574,18 +617,20 @@ static void spectra_loop_cic_omp(GridProps *grid_props, Particles *parts,
  * This is a wrapper which calls the correct function based on the number of
  * threads requested and whether OpenMP is available.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param nthreads: The number of threads to use.
  * @param has_lam_mask: Are we applying a wavelength mask?
  */
+template <typename PartReal, typename SpecReal, typename OutT>
 void spectra_loop_cic(GridProps *grid_props, Particles *parts,
-                      double *part_spectra, const int nthreads,
+                      OutT *part_spectra, const int nthreads,
                       bool has_lam_mask) {
-
-  /* First get the grid indices and fractions for all particles. */
-  get_particle_indices_and_fracs(grid_props, parts, nthreads);
 
   tic("spectra_loop_cic");
 
@@ -595,12 +640,13 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    spectra_loop_cic_omp(grid_props, parts, part_spectra, nthreads,
-                         has_lam_mask);
+    spectra_loop_cic_omp<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra, nthreads, has_lam_mask);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    spectra_loop_cic_serial(grid_props, parts, part_spectra, has_lam_mask);
+    spectra_loop_cic_serial<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra, has_lam_mask);
   }
 
 #else
@@ -608,7 +654,8 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  spectra_loop_cic_serial(grid_props, parts, part_spectra, has_lam_mask);
+  spectra_loop_cic_serial<PartReal, SpecReal, OutT>(
+      grid_props, parts, part_spectra, has_lam_mask);
 
 #endif
   toc("spectra_loop_cic");
@@ -620,17 +667,24 @@ void spectra_loop_cic(GridProps *grid_props, Particles *parts,
  *
  * This is the serial version of the function for grids with a wavelength mask.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param good_lams: The wavelength indices that are not masked.
  */
+template <typename PartReal, typename SpecReal, typename OutT>
 static void spectra_loop_ngp_with_lam_mask_serial(
-    GridProps *grid_props, Particles *parts, double *part_spectra,
+    GridProps *grid_props, Particles *parts, OutT *part_spectra,
     const std::vector<int> &good_lams) {
   /* Unpack the grid properties. */
+  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const double *__restrict grid_spectra = grid_props->get_spectra();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -644,18 +698,21 @@ static void spectra_loop_ngp_with_lam_mask_serial(
     }
 
     /* Get the weight's index. */
-    const int grid_ind = parts->grid_indices[p];
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    get_part_inds_ngp<PartReal>(part_indices, grid_props, parts, p);
+    const int grid_ind =
+        get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
     /* Get the weight of this particle. */
-    const double weight = parts->get_weight_at(p);
-    const double *__restrict cell_spectra =
+    const OutT weight = static_cast<OutT>(parts->get_weight_at<PartReal>(p));
+    const SpecReal *__restrict cell_spectra =
         grid_spectra + static_cast<size_t>(grid_ind) * nlam;
-    double *__restrict part_spec = part_spectra + p * nlam;
+    OutT *__restrict part_spec = part_spectra + p * nlam;
 
     /* Add this grid cell's contribution to the spectra */
     for (int jl = 0, J = (int)good_lams.size(); jl < J; jl++) {
       const int ilam = good_lams[jl];
-      const double spec_val = cell_spectra[ilam];
+      const OutT spec_val = static_cast<OutT>(cell_spectra[ilam]);
 
       /* Assign to this particle's spectra array. */
       part_spec[ilam] = spec_val * weight;
@@ -670,16 +727,23 @@ static void spectra_loop_ngp_with_lam_mask_serial(
  * This is the serial version of the function for grids without a wavelength
  * mask.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  */
+template <typename PartReal, typename SpecReal, typename OutT>
 static void spectra_loop_ngp_no_lam_mask_serial(GridProps *grid_props,
                                                 Particles *parts,
-                                                double *part_spectra) {
+                                                OutT *part_spectra) {
   /* Unpack the grid properties. */
+  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const double *__restrict grid_spectra = grid_props->get_spectra();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -693,17 +757,20 @@ static void spectra_loop_ngp_no_lam_mask_serial(GridProps *grid_props,
     }
 
     /* Get the weight's index. */
-    const int grid_ind = parts->grid_indices[p];
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    get_part_inds_ngp<PartReal>(part_indices, grid_props, parts, p);
+    const int grid_ind =
+        get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
     /* Get the weight of this particle. */
-    const double weight = parts->get_weight_at(p);
-    const double *__restrict cell_spectra =
+    const OutT weight = static_cast<OutT>(parts->get_weight_at<PartReal>(p));
+    const SpecReal *__restrict cell_spectra =
         grid_spectra + static_cast<size_t>(grid_ind) * nlam;
-    double *__restrict part_spec = part_spectra + p * nlam;
+    OutT *__restrict part_spec = part_spectra + p * nlam;
 
     /* Add this grid cell's contribution to the spectra */
     for (size_t ilam = 0; ilam < nlam; ilam++) {
-      const double spec_val = cell_spectra[ilam];
+      const OutT spec_val = static_cast<OutT>(cell_spectra[ilam]);
 
       /* Assign to this particle's spectra array. */
       part_spec[ilam] = spec_val * weight;
@@ -718,16 +785,22 @@ static void spectra_loop_ngp_no_lam_mask_serial(GridProps *grid_props,
  * This is the serial wrapper which dispatches to the masked or unmasked
  * wavelength implementation.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param has_lam_mask: Are we applying a wavelength mask?
  */
+template <typename PartReal, typename SpecReal, typename OutT>
 static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
-                                    double *part_spectra, bool has_lam_mask) {
+                                    OutT *part_spectra, bool has_lam_mask) {
   /* If there is no wavelength mask, use the branch-free contiguous loop. */
   if (!has_lam_mask) {
-    spectra_loop_ngp_no_lam_mask_serial(grid_props, parts, part_spectra);
+    spectra_loop_ngp_no_lam_mask_serial<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra);
     return;
   }
 
@@ -741,8 +814,8 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
     }
   }
 
-  spectra_loop_ngp_with_lam_mask_serial(grid_props, parts, part_spectra,
-                                        good_lams);
+  spectra_loop_ngp_with_lam_mask_serial<PartReal, SpecReal, OutT>(
+      grid_props, parts, part_spectra, good_lams);
 }
 
 /**
@@ -751,6 +824,10 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
  * This is the parallel version of the function for grids with a wavelength
  * mask.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
@@ -758,12 +835,15 @@ static void spectra_loop_ngp_serial(GridProps *grid_props, Particles *parts,
  * @param good_lams: The wavelength indices that are not masked.
  */
 #ifdef WITH_OPENMP
+template <typename PartReal, typename SpecReal, typename OutT>
 static void spectra_loop_ngp_with_lam_mask_omp(
-    GridProps *grid_props, Particles *parts, double *part_spectra,
-    int nthreads, const std::vector<int> &good_lams) {
+    GridProps *grid_props, Particles *parts, OutT *part_spectra, int nthreads,
+    const std::vector<int> &good_lams) {
   /* Unpack the grid properties. */
+  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const double *__restrict grid_spectra = grid_props->get_spectra();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -783,10 +863,10 @@ static void spectra_loop_ngp_with_lam_mask_omp(
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
     /* Get this threads part of the output array. */
-    double *__restrict local_part_spectra = part_spectra + start_idx * nlam;
+    OutT *__restrict local_part_spectra = part_spectra + start_idx * nlam;
 
     /* Get an array that we'll put each particle's spectra into. */
-    std::vector<double> this_part_spectra(nlam, 0.0);
+    std::vector<OutT> this_part_spectra(nlam, static_cast<OutT>(0));
 
     /* Loop over particles. */
     for (size_t p = start_idx; p < end_idx; p++) {
@@ -797,11 +877,14 @@ static void spectra_loop_ngp_with_lam_mask_omp(
       }
 
       /* Get the particle's grid index. */
-      const int grid_ind = parts->grid_indices[p];
+      std::array<int, MAX_GRID_NDIM> part_indices;
+      get_part_inds_ngp<PartReal>(part_indices, grid_props, parts, p);
+      const int grid_ind =
+          get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
       /* Get the weight of this particle. */
-      const double weight = parts->get_weight_at(p);
-      const double *__restrict cell_spectra =
+      const OutT weight = static_cast<OutT>(parts->get_weight_at<PartReal>(p));
+      const SpecReal *__restrict cell_spectra =
           grid_spectra + static_cast<size_t>(grid_ind) * nlam;
 
       /* Add this grid cell's contribution to the spectra */
@@ -811,7 +894,7 @@ static void spectra_loop_ngp_with_lam_mask_omp(
         const int ilam = good_lams[jl];
 
         /* Get the spectra value at this index and wavelength. */
-        const double spec_val = cell_spectra[ilam];
+        const OutT spec_val = static_cast<OutT>(cell_spectra[ilam]);
 
         /* Assign to this particle's spectra array. */
         this_part_spectra[ilam] = spec_val * weight;
@@ -819,7 +902,7 @@ static void spectra_loop_ngp_with_lam_mask_omp(
 
       /* Copy the entire spectrum at once into the output array. */
       memcpy(local_part_spectra + (p - start_idx) * nlam,
-             this_part_spectra.data(), nlam * sizeof(double));
+             this_part_spectra.data(), nlam * sizeof(OutT));
 
       /* No reset needed as we overwrite the whole array each time and the
        * wavelength mask never changes. */
@@ -833,18 +916,25 @@ static void spectra_loop_ngp_with_lam_mask_omp(
  * This is the parallel version of the function for grids without a wavelength
  * mask.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param nthreads: The number of threads to use.
  */
+template <typename PartReal, typename SpecReal, typename OutT>
 static void spectra_loop_ngp_no_lam_mask_omp(GridProps *grid_props,
                                              Particles *parts,
-                                             double *part_spectra,
+                                             OutT *part_spectra,
                                              int nthreads) {
   /* Unpack the grid properties. */
+  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const double *__restrict grid_spectra = grid_props->get_spectra();
+  const SpecReal *__restrict grid_spectra =
+      grid_props->get_spectra<SpecReal>();
 
   /* Get and cast the number of particles. */
   size_t npart = static_cast<size_t>(parts->npart);
@@ -864,10 +954,10 @@ static void spectra_loop_ngp_no_lam_mask_omp(GridProps *grid_props,
         (tid == nthreads - 1) ? parts->npart : start_idx + nparts_per_thread;
 
     /* Get this threads part of the output array. */
-    double *__restrict local_part_spectra = part_spectra + start_idx * nlam;
+    OutT *__restrict local_part_spectra = part_spectra + start_idx * nlam;
 
     /* Get an array that we'll put each particle's spectra into. */
-    std::vector<double> this_part_spectra(nlam, 0.0);
+    std::vector<OutT> this_part_spectra(nlam, static_cast<OutT>(0));
 
     /* Loop over particles. */
     for (size_t p = start_idx; p < end_idx; p++) {
@@ -878,16 +968,19 @@ static void spectra_loop_ngp_no_lam_mask_omp(GridProps *grid_props,
       }
 
       /* Get the particle's grid index. */
-      const int grid_ind = parts->grid_indices[p];
+      std::array<int, MAX_GRID_NDIM> part_indices;
+      get_part_inds_ngp<PartReal>(part_indices, grid_props, parts, p);
+      const int grid_ind =
+          get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
       /* Get the weight of this particle. */
-      const double weight = parts->get_weight_at(p);
-      const double *__restrict cell_spectra =
+      const OutT weight = static_cast<OutT>(parts->get_weight_at<PartReal>(p));
+      const SpecReal *__restrict cell_spectra =
           grid_spectra + static_cast<size_t>(grid_ind) * nlam;
 
       /* Add this grid cell's contribution to the spectra */
       for (size_t ilam = 0; ilam < nlam; ilam++) {
-        const double spec_val = cell_spectra[ilam];
+        const OutT spec_val = static_cast<OutT>(cell_spectra[ilam]);
 
         /* Assign to this particle's spectra array. */
         this_part_spectra[ilam] = spec_val * weight;
@@ -895,7 +988,7 @@ static void spectra_loop_ngp_no_lam_mask_omp(GridProps *grid_props,
 
       /* Copy the entire spectrum at once into the output array. */
       memcpy(local_part_spectra + (p - start_idx) * nlam,
-             this_part_spectra.data(), nlam * sizeof(double));
+             this_part_spectra.data(), nlam * sizeof(OutT));
 
       /* No reset needed as we overwrite the whole array each time and the
        * wavelength mask never changes. */
@@ -909,19 +1002,24 @@ static void spectra_loop_ngp_no_lam_mask_omp(GridProps *grid_props,
  * This is the parallel wrapper which dispatches to the masked or unmasked
  * wavelength implementation.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param nthreads: The number of threads to use.
  * @param has_lam_mask: Are we applying a wavelength mask?
  */
+template <typename PartReal, typename SpecReal, typename OutT>
 static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
-                                 double *part_spectra, int nthreads,
+                                 OutT *part_spectra, int nthreads,
                                  bool has_lam_mask) {
   /* If there is no wavelength mask, use the branch-free contiguous loop. */
   if (!has_lam_mask) {
-    spectra_loop_ngp_no_lam_mask_omp(grid_props, parts, part_spectra,
-                                     nthreads);
+    spectra_loop_ngp_no_lam_mask_omp<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra, nthreads);
     return;
   }
 
@@ -935,8 +1033,8 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
     }
   }
 
-  spectra_loop_ngp_with_lam_mask_omp(grid_props, parts, part_spectra, nthreads,
-                                     good_lams);
+  spectra_loop_ngp_with_lam_mask_omp<PartReal, SpecReal, OutT>(
+      grid_props, parts, part_spectra, nthreads, good_lams);
 }
 #endif
 
@@ -947,18 +1045,20 @@ static void spectra_loop_ngp_omp(GridProps *grid_props, Particles *parts,
  * This is a wrapper which calls the correct function based on the number of
  * threads requested and whether OpenMP is available.
  *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam SpecReal The floating-point type of grid spectra.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
  * @param part_spectra: The per-particle output array.
  * @param nthreads: The number of threads to use.
  * @param has_lam_mask: Are we applying a wavelength mask?
  */
+template <typename PartReal, typename SpecReal, typename OutT>
 void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
-                      double *part_spectra, const int nthreads,
+                      OutT *part_spectra, const int nthreads,
                       bool has_lam_mask) {
-
-  /* First get the grid indices for all particles. */
-  get_particle_indices(grid_props, parts, nthreads);
 
   tic("spectra_loop_ngp");
 
@@ -968,12 +1068,13 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    spectra_loop_ngp_omp(grid_props, parts, part_spectra, nthreads,
-                         has_lam_mask);
+    spectra_loop_ngp_omp<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra, nthreads, has_lam_mask);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    spectra_loop_ngp_serial(grid_props, parts, part_spectra, has_lam_mask);
+    spectra_loop_ngp_serial<PartReal, SpecReal, OutT>(
+        grid_props, parts, part_spectra, has_lam_mask);
   }
 
 #else
@@ -981,28 +1082,29 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  spectra_loop_ngp_serial(grid_props, parts, part_spectra, has_lam_mask);
+  spectra_loop_ngp_serial<PartReal, SpecReal, OutT>(
+      grid_props, parts, part_spectra, has_lam_mask);
 
 #endif
   toc("spectra_loop_ngp");
 }
 
 /**
- * @brief Computes an integrated SED for a collection of particles.
+ * @brief Computes per-particle spectra for a collection of particles.
  *
  * @param np_grid_spectra: The SPS spectra array.
  * @param grid_tuple: The tuple containing arrays of grid axis properties.
  * @param part_tuple: The tuple of particle property arrays (in the same
  * order as grid_tuple).
  * @param np_part_mass: The particle mass array.
- * @param np_velocities: The velocities array.
  * @param np_ndims: The size of each grid axis.
  * @param ndim: The number of grid axes.
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements.
- * @param vel_shift: bool flag whether to consider doppler shift in spectra
- * computation. Defaults to False
- * @param c: speed of light
+ * @param out_dtype: Requested floating-point dtype for the returned
+ *                   per-particle spectra array.
+ *
+ * @return The per-particle spectra array.
  */
 PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   tic("compute_particle_seds");
@@ -1014,16 +1116,17 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   int ndim, npart, nlam, nthreads;
   int has_lam_mask;
   PyObject *grid_tuple, *part_tuple;
+  PyObject *out_dtype;
   PyObject *prop_names = NULL;
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_part_mass, *np_ndims;
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOp|O", &np_grid_spectra, &grid_tuple,
-                        &part_tuple, &np_part_mass, &np_ndims, &ndim, &npart,
-                        &nlam, &method, &nthreads, &np_mask, &np_lam_mask,
-                        &has_lam_mask, &prop_names)) {
+  if (!PyArg_ParseTuple(
+          args, "OOOOOiiisiOOpO|O", &np_grid_spectra, &grid_tuple, &part_tuple,
+          &np_part_mass, &np_ndims, &ndim, &npart, &nlam, &method, &nthreads,
+          &np_mask, &np_lam_mask, &has_lam_mask, &out_dtype, &prop_names)) {
     return NULL;
   }
 
@@ -1040,29 +1143,170 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
                     prop_names, npart);
   RETURN_IF_PYERR();
 
+  const int grid_typenum = grid_props->get_float_typenum();
+  const int part_typenum = part_props->get_float_typenum();
+
+  const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
+  if (output_typenum < 0) {
+    delete part_props;
+    delete grid_props;
+    return NULL;
+  }
+
   tic("compute_particle_seds.setup_output_arrays");
 
   /* Define the output dimensions. */
   npy_intp np_part_dims[2] = {npart, nlam};
 
-  /* Allocate the particle spectra. */
-  PyArrayObject *np_part_spectra =
-      (PyArrayObject *)PyArray_ZEROS(2, np_part_dims, NPY_DOUBLE, 0);
-  double *part_spectra = static_cast<double *>(PyArray_DATA(np_part_spectra));
+  /* Allocate the particle spectra in the requested output precision. */
+  PyArrayObject *np_part_spectra = NULL;
+  {
+    int dispatch_key = (output_typenum == NPY_FLOAT64);
+
+    /* Dispatch: call the matching typed kernel based on the dispatch key. */
+    switch (dispatch_key) {
+      case 0:
+        np_part_spectra =
+            (PyArrayObject *)PyArray_ZEROS(2, np_part_dims, NPY_FLOAT32, 0);
+        break;
+      default:
+        np_part_spectra =
+            (PyArrayObject *)PyArray_ZEROS(2, np_part_dims, NPY_FLOAT64, 0);
+        break;
+    }
+  }
+  if (np_part_spectra == NULL) {
+    delete part_props;
+    delete grid_props;
+    return NULL;
+  }
 
   toc("compute_particle_seds.setup_output_arrays");
 
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
   if (strcmp(method, "cic") == 0) {
-    spectra_loop_cic(grid_props, part_props, part_spectra, nthreads,
-                     has_lam_mask);
+    {
+      int dispatch_key = ((part_typenum == NPY_FLOAT64) << 2) |
+                         ((grid_typenum == NPY_FLOAT64) << 1) |
+                         (output_typenum == NPY_FLOAT64);
+
+      /* Dispatch: call the matching typed kernel based on the dispatch key. */
+      switch (dispatch_key) {
+        case 0:
+          spectra_loop_cic<float, float, float>(
+              grid_props, part_props,
+              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 1:
+          spectra_loop_cic<float, float, double>(
+              grid_props, part_props,
+              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 2:
+          spectra_loop_cic<float, double, float>(
+              grid_props, part_props,
+              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 3:
+          spectra_loop_cic<float, double, double>(
+              grid_props, part_props,
+              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 4:
+          spectra_loop_cic<double, float, float>(
+              grid_props, part_props,
+              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 5:
+          spectra_loop_cic<double, float, double>(
+              grid_props, part_props,
+              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 6:
+          spectra_loop_cic<double, double, float>(
+              grid_props, part_props,
+              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        default:
+          spectra_loop_cic<double, double, double>(
+              grid_props, part_props,
+              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+      }
+    }
   } else if (strcmp(method, "ngp") == 0) {
-    spectra_loop_ngp(grid_props, part_props, part_spectra, nthreads,
-                     has_lam_mask);
+    {
+      int dispatch_key = ((part_typenum == NPY_FLOAT64) << 2) |
+                         ((grid_typenum == NPY_FLOAT64) << 1) |
+                         (output_typenum == NPY_FLOAT64);
+
+      /* Dispatch: call the matching typed kernel based on the dispatch key. */
+      switch (dispatch_key) {
+        case 0:
+          spectra_loop_ngp<float, float, float>(
+              grid_props, part_props,
+              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 1:
+          spectra_loop_ngp<float, float, double>(
+              grid_props, part_props,
+              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 2:
+          spectra_loop_ngp<float, double, float>(
+              grid_props, part_props,
+              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 3:
+          spectra_loop_ngp<float, double, double>(
+              grid_props, part_props,
+              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 4:
+          spectra_loop_ngp<double, float, float>(
+              grid_props, part_props,
+              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 5:
+          spectra_loop_ngp<double, float, double>(
+              grid_props, part_props,
+              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        case 6:
+          spectra_loop_ngp<double, double, float>(
+              grid_props, part_props,
+              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+        default:
+          spectra_loop_ngp<double, double, double>(
+              grid_props, part_props,
+              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
+              has_lam_mask);
+          break;
+      }
+    }
   } else {
     PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",
                  method);
+    Py_DECREF(np_part_spectra);
+    delete part_props;
+    delete grid_props;
     return NULL;
   }
   RETURN_IF_PYERR();

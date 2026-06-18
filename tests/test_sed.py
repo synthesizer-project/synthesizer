@@ -2,11 +2,13 @@
 
 import numpy as np
 from astropy.cosmology import Planck18
+from synthesizer.extensions.reductions import reduce_particle_spectra
 from unyt import Hz, angstrom, cm, erg, nJy, pc, s
 
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emission_models.attenuation import PowerLaw
-from synthesizer.emissions.sed import Sed
+from synthesizer.emissions import Sed
+from synthesizer.emissions.sed import Sed, integrate_particle_sed
 
 
 def test_sed_empty(empty_sed):
@@ -166,3 +168,36 @@ def test_get_fnu_applies_igm_with_observer_frame_wavelengths():
     assert igm.last_z == z
     np.testing.assert_allclose(igm.last_lam_obs.value, sed._obslam)
     np.testing.assert_allclose(fnu.value, 0.5 * baseline.value)
+
+
+def test_reduce_particle_spectra_supports_float32_inputs_and_outputs():
+    """Particle spectra reduction should preserve float32 output requests."""
+    part_spectra = np.arange(15, dtype=np.float32).reshape(3, 5)
+
+    reduced = reduce_particle_spectra(part_spectra, 1, np.float32)
+
+    assert reduced.dtype == np.float32
+    np.testing.assert_allclose(reduced, np.sum(part_spectra, axis=0))
+
+
+def test_reduce_particle_spectra_supports_float64_output_from_float32():
+    """Particle spectra reduction should allow widening the output dtype."""
+    part_spectra = np.arange(15, dtype=np.float32).reshape(3, 5)
+
+    reduced = reduce_particle_spectra(part_spectra, 1, np.float64)
+
+    assert reduced.dtype == np.float64
+    np.testing.assert_allclose(
+        reduced, np.sum(part_spectra.astype(np.float64), axis=0)
+    )
+
+
+def test_integrate_particle_sed_preserves_input_precision():
+    """The Sed reduction helper should keep the luminosity dtype family."""
+    lam = np.linspace(1000.0, 2000.0, 5) * angstrom
+    lnu = (np.arange(15, dtype=np.float32).reshape(3, 5) + 1.0) * erg / s / Hz
+
+    reduced = integrate_particle_sed(Sed(lam=lam, lnu=lnu), nthreads=1)
+
+    assert reduced._lnu.dtype == np.float32
+    np.testing.assert_allclose(reduced._lnu, np.sum(lnu.value, axis=0))

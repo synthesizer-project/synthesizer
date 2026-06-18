@@ -72,6 +72,7 @@ def test_compute_particle_seds_matches_expected(method, expected_func):
         None,
         None,
         False,
+        np.float64,
         ("x",),
     )
 
@@ -101,6 +102,7 @@ def test_compute_particle_seds_lam_mask_dispatch(method):
         None,
         None,
         False,
+        np.float64,
         ("x",),
     )
 
@@ -119,6 +121,7 @@ def test_compute_particle_seds_lam_mask_dispatch(method):
         None,
         all_lam_mask,
         True,
+        np.float64,
         ("x",),
     )
 
@@ -143,6 +146,7 @@ def test_compute_particle_seds_lam_mask_dispatch(method):
         None,
         partial_lam_mask,
         True,
+        np.float64,
         ("x",),
     )
 
@@ -179,6 +183,7 @@ def test_compute_particle_seds_threaded_matches_serial(method):
         None,
         lam_mask,
         True,
+        np.float64,
         ("x",),
     )
     threaded_part_spectra = compute_particle_seds(
@@ -195,12 +200,81 @@ def test_compute_particle_seds_threaded_matches_serial(method):
         None,
         lam_mask,
         True,
+        np.float64,
         ("x",),
     )
 
     np.testing.assert_allclose(
         threaded_part_spectra, serial_part_spectra, rtol=0.0, atol=0.0
     )
+
+
+def test_compute_particle_seds_supports_float32_input_and_output():
+    """Particle spectra should preserve float32 when requested."""
+    nlam = 5
+    axis = np.array([0.0, 1.0, 2.0], dtype=np.float32)
+    grid_spectra = np.arange(axis.size * nlam, dtype=np.float32).reshape(
+        axis.size, nlam
+    ) + np.float32(1.0)
+    part_props = (np.array([0.25, 1.5, -1.0, 3.0], dtype=np.float32),)
+    weights = np.array([2.0, 3.0, 5.0, 7.0], dtype=np.float32)
+    grid_dims = np.array([axis.size], dtype=np.int32)
+
+    part_spectra = compute_particle_seds(
+        grid_spectra,
+        (axis,),
+        part_props,
+        weights,
+        grid_dims,
+        1,
+        weights.size,
+        nlam,
+        "ngp",
+        1,
+        None,
+        None,
+        False,
+        np.float32,
+        ("x",),
+    )
+
+    expected = _expected_ngp_spectra(grid_spectra, weights).astype(np.float32)
+    np.testing.assert_allclose(part_spectra, expected, rtol=0.0, atol=0.0)
+    assert part_spectra.dtype == np.float32
+
+
+def test_compute_particle_seds_supports_float64_output_from_float32_input():
+    """Particle spectra output dtype should be independently configurable."""
+    nlam = 5
+    axis = np.array([0.0, 1.0, 2.0], dtype=np.float32)
+    grid_spectra = np.arange(axis.size * nlam, dtype=np.float32).reshape(
+        axis.size, nlam
+    ) + np.float32(1.0)
+    part_props = (np.array([0.25, 1.5, -1.0, 3.0], dtype=np.float32),)
+    weights = np.array([2.0, 3.0, 5.0, 7.0], dtype=np.float32)
+    grid_dims = np.array([axis.size], dtype=np.int32)
+
+    part_spectra = compute_particle_seds(
+        grid_spectra,
+        (axis,),
+        part_props,
+        weights,
+        grid_dims,
+        1,
+        weights.size,
+        nlam,
+        "ngp",
+        1,
+        None,
+        None,
+        False,
+        np.float64,
+        ("x",),
+    )
+
+    expected = _expected_ngp_spectra(grid_spectra, weights).astype(np.float64)
+    np.testing.assert_allclose(part_spectra, expected, rtol=0.0, atol=0.0)
+    assert part_spectra.dtype == np.float64
 
 
 class TestDopplerParticleSpectraExtension:
@@ -267,6 +341,7 @@ class TestDopplerParticleSpectraExtension:
             299792458.0,
             None,
             lam_mask,
+            np.float64,
             ("x",),
         )
         threaded_part_spectra, threaded_spectra = (
@@ -286,6 +361,7 @@ class TestDopplerParticleSpectraExtension:
                 299792458.0,
                 None,
                 lam_mask,
+                np.float64,
                 ("x",),
             )
         )
@@ -296,3 +372,42 @@ class TestDopplerParticleSpectraExtension:
         np.testing.assert_allclose(
             threaded_spectra, serial_spectra, rtol=0.0, atol=1e-12
         )
+
+    def test_supports_float32_input_and_output(self):
+        """Doppler particle spectra should preserve float32 when requested."""
+        nlam = 5
+        axis = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float32)
+        wavelength = np.array(
+            [100.0, 200.0, 300.0, 400.0, 500.0], dtype=np.float32
+        )
+        grid_spectra = np.arange(axis.size * nlam, dtype=np.float32).reshape(
+            axis.size, nlam
+        ) + np.float32(1.0)
+        part_props = (np.array([0.2, 1.5, 2.2], dtype=np.float32),)
+        weights = np.array([2.0, 3.0, 4.0], dtype=np.float32)
+        velocities = np.array([0.0, 10.0, -20.0], dtype=np.float32)
+        grid_dims = np.array([axis.size], dtype=np.int32)
+        lam_mask = np.ones(nlam, dtype=np.bool_)
+
+        part_spectra, spectra = compute_part_seds_with_vel_shift(
+            grid_spectra,
+            wavelength,
+            (axis,),
+            part_props,
+            weights,
+            velocities,
+            grid_dims,
+            1,
+            weights.size,
+            nlam,
+            "ngp",
+            1,
+            299792458.0,
+            None,
+            lam_mask,
+            np.float32,
+            ("x",),
+        )
+
+        assert part_spectra.dtype == np.float32
+        assert spectra.dtype == np.float32

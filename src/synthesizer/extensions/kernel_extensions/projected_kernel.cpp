@@ -6,10 +6,10 @@
  * the source kernel at a given dimensionless impact parameter.
  *****************************************************************************/
 
-#include <vector>
-
 #include "kernel_functions.h"
 #include "kernels.h"
+
+#include <vector>
 
 /**
  * @brief Integrate the projected LOS kernel at one impact parameter.
@@ -23,45 +23,48 @@
  * produces a stable value that can be checked against the Python reference in
  * the unit tests.
  *
+ * @tparam Real The floating-point type (float or double).
  * @param q The dimensionless impact parameter.
  * @param func The analytic kernel function to evaluate.
  * @param nsteps The number of trapezoidal integration steps.
  *
  * @return The projected LOS kernel value at ``q``.
  */
-static inline double integrate_projected_kernel(const double q,
-                                                kernel_func func,
-                                                const int nsteps) {
-  if (q < 0.0 || q >= 1.0) {
-    return 0.0;
+template <typename Real>
+static inline Real integrate_projected_kernel(const Real q,
+                                              kernel_func<Real> func,
+                                              const int nsteps) {
+  if (q < static_cast<Real>(0.0) || q >= static_cast<Real>(1.0)) {
+    return static_cast<Real>(0.0);
   }
 
-  const double zmax = sqrt(1.0 - q * q);
-  if (zmax == 0.0) {
-    return 0.0;
+  const Real zmax = sqrt(static_cast<Real>(1.0) - q * q);
+  if (zmax == static_cast<Real>(0.0)) {
+    return static_cast<Real>(0.0);
   }
 
-  const double dz = zmax / nsteps;
+  const Real dz = zmax / static_cast<Real>(nsteps);
 
-  std::vector<double> z_values(nsteps + 1);
-  std::vector<double> integrand(nsteps + 1);
+  std::vector<Real> z_values(nsteps + 1);
+  std::vector<Real> integrand(nsteps + 1);
 
   for (int iz = 0; iz <= nsteps; iz++) {
-    const double z = dz * iz;
+    const Real z = dz * static_cast<Real>(iz);
     z_values[iz] = z;
-    double radius = sqrt(z * z + q * q);
+    Real radius = sqrt(z * z + q * q);
 
     /* Nudge the final sample infinitesimally inside the compact support so
      * kernels with a hard edge do not pick up an artificial zero-valued
      * endpoint. */
-    if (iz == nsteps && radius >= 1.0) {
-      radius = nextafter(1.0, 0.0);
+    if (iz == nsteps && radius >= static_cast<Real>(1.0)) {
+      radius = nextafter(static_cast<Real>(1.0), static_cast<Real>(0.0));
     }
 
     integrand[iz] = func(radius);
   }
 
-  return 2.0 * trapz_1d(z_values.data(), integrand.data(), nsteps + 1);
+  return static_cast<Real>(2.0) *
+         trapz_1d<Real>(z_values.data(), integrand.data(), nsteps + 1);
 }
 
 /**
@@ -71,14 +74,16 @@ static inline double integrate_projected_kernel(const double q,
  * entry stores the full LOS integral through the source kernel at that impact
  * parameter.
  *
+ * @tparam Real The floating-point type (float or double).
  * @param kernel The output projected kernel table.
  * @param q_grid The projected-separation lookup grid.
  * @param qdim The number of projected-separation bins.
  * @param func The analytic kernel function to evaluate.
  * @param nsteps The number of trapezoidal integration steps per q bin.
  */
-static void build_projected_kernel(double *kernel, const double *q_grid,
-                                   const int qdim, kernel_func func,
+template <typename Real>
+static void build_projected_kernel(Real *kernel, const Real *q_grid,
+                                   const int qdim, kernel_func<Real> func,
                                    const int nsteps) {
 #ifdef WITH_OPENMP
 #pragma omp parallel for schedule(static)
@@ -86,8 +91,47 @@ static void build_projected_kernel(double *kernel, const double *q_grid,
   for (int iq = 0; iq < qdim; iq++) {
     /* Each q bin is independent, so we can tabulate the projected kernel with
      * a simple embarrassingly-parallel loop. */
-    kernel[iq] = integrate_projected_kernel(q_grid[iq], func, nsteps);
+    kernel[iq] = integrate_projected_kernel<Real>(q_grid[iq], func, nsteps);
   }
+}
+
+/**
+ * @brief Templated implementation of projected LOS kernel table construction.
+ *
+ * @tparam Real The floating-point type (float or double).
+ */
+template <typename Real>
+static PyObject *compute_projected_kernel_impl(PyObject *self,
+                                               PyArrayObject *np_q_grid,
+                                               const char *kernel_name,
+                                               int nsteps) {
+  (void)self;
+
+  const Real *q_grid = extract_data<Real>(np_q_grid, "q_grid");
+  if (q_grid == NULL) {
+    return NULL;
+  }
+
+  kernel_func<Real> func = get_kernel_function<Real>(kernel_name);
+  if (func == NULL) {
+    PyErr_SetString(PyExc_ValueError, "Kernel name not defined");
+    return NULL;
+  }
+
+  const int qdim = static_cast<int>(PyArray_DIM(np_q_grid, 0));
+  const int typenum = std::is_same_v<Real, float> ? NPY_FLOAT32 : NPY_FLOAT64;
+  npy_intp dims[1] = {qdim};
+  PyArrayObject *np_kernel =
+      (PyArrayObject *)PyArray_ZEROS(1, dims, typenum, 0);
+  if (np_kernel == NULL) {
+    PyErr_NoMemory();
+    return NULL;
+  }
+  Real *kernel = static_cast<Real *>(PyArray_DATA(np_kernel));
+
+  build_projected_kernel<Real>(kernel, q_grid, qdim, func, nsteps);
+
+  return Py_BuildValue("N", np_kernel);
 }
 
 /**
@@ -101,7 +145,8 @@ static void build_projected_kernel(double *kernel, const double *q_grid,
  * @param args Python arguments containing the q-grid, kernel name, and the
  *        number of integration steps.
  *
- * @return A 1D float64 NumPy array with the projected LOS kernel values.
+ * @return A 1D float64 or float32 NumPy array with the projected LOS kernel
+ *         values, matching the input precision.
  */
 PyObject *compute_projected_kernel(PyObject *self, PyObject *args) {
 
@@ -126,30 +171,21 @@ PyObject *compute_projected_kernel(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* The q-grid is prepared in Python so the public Kernel class controls the
-   * tabulation resolution, while this wrapper only handles numeric filling. */
-  const double *q_grid = extract_data_double(np_q_grid, "q_grid");
-  if (q_grid == NULL) {
-    return NULL;
+  /* Validate the dtype and dispatch to the correct instantiation. */
+  const int input_typenum = PyArray_TYPE(np_q_grid);
+  /* Dispatch: encode input precision into a 1-bit key. */
+  int dispatch_key = (input_typenum == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+    case 0:
+      return compute_projected_kernel_impl<float>(self, np_q_grid, kernel_name,
+                                                  nsteps);
+    case 1:
+      return compute_projected_kernel_impl<double>(self, np_q_grid,
+                                                   kernel_name, nsteps);
+    default:
+      PyErr_SetString(PyExc_TypeError, "q_grid must be float32 or float64.");
+      return NULL;
   }
-
-  kernel_func func = get_kernel_function(kernel_name);
-  if (func == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Kernel name not defined");
-    return NULL;
-  }
-
-  const int qdim = static_cast<int>(PyArray_DIM(np_q_grid, 0));
-  npy_intp dims[1] = {qdim};
-  PyArrayObject *np_kernel =
-      (PyArrayObject *)PyArray_ZEROS(1, dims, NPY_DOUBLE, 0);
-  if (np_kernel == NULL) {
-    PyErr_NoMemory();
-    return NULL;
-  }
-  double *kernel = static_cast<double *>(PyArray_DATA(np_kernel));
-
-  build_projected_kernel(kernel, q_grid, qdim, func, nsteps);
-
-  return Py_BuildValue("N", np_kernel);
 }

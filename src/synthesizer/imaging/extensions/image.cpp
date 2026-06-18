@@ -3,24 +3,23 @@
  *****************************************************************************/
 
 /* C includes. */
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <math.h>
 #include <numeric>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <vector>
 
 /* Python includes. */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include <Python.h>
-
 #include "../../extensions/numpy_init.h"
+
+#include <Python.h>
 
 /* Local includes. */
 #include "../../extensions/cpp_to_python.h"
@@ -36,13 +35,16 @@
 #include <omp.h>
 #endif
 
+using Cell = cell<double>;
+using Particle = particle<double>;
+
 /**
  * @brief Structure to hold cell with its computational cost
  */
 struct weighted_cell {
 
   /*! Pointer to the cell */
-  struct cell *cell_ptr;
+  Cell *cell_ptr;
 
   /*! Cost of the cell, calculated as max_smoothing_length * particle_count */
   double cost;
@@ -55,7 +57,7 @@ struct weighted_cell {
    *
    * @param c Pointer to the cell to be weighted
    */
-  weighted_cell(struct cell *c) : cell_ptr(c) {
+  weighted_cell(Cell *c) : cell_ptr(c) {
     // Cost = max_smoothing_length * particle_count
     // This represents kernel area × work per kernel
     double max_sml = sqrt(c->max_sml_squ);
@@ -86,7 +88,7 @@ inline bool compare_by_cost(const weighted_cell &a, const weighted_cell &b) {
  * @brief Build balanced work list using adaptive subdivision
  */
 static std::vector<weighted_cell> build_balanced_work_list(
-    struct cell *root, int nthreads, double balance_tolerance = 2.0) {
+    Cell *root, int nthreads, double balance_tolerance = 2.0) {
 
   tic("build_balanced_work_list");
 
@@ -138,14 +140,14 @@ static std::vector<weighted_cell> build_balanced_work_list(
     }
 
     // Subdivide the most expensive cell
-    struct cell *expensive_cell = most_expensive->cell_ptr;
+    Cell *expensive_cell = most_expensive->cell_ptr;
 
     // Remove the expensive cell from the list
     work_list.erase(most_expensive);
 
     // Add its children
     for (int ip = 0; ip < 8; ip++) {
-      struct cell *child = &expensive_cell->progeny[ip];
+      Cell *child = &expensive_cell->progeny[ip];
       if (child->part_count > 0) {
         work_list.emplace_back(child);
       }
@@ -186,10 +188,9 @@ static std::vector<weighted_cell> build_balanced_work_list(
  * @param nimgs The number of images to populate.
  * @param pix_values The pixel values to use for each image.
  */
-static void populate_pixel_recursive(const struct cell *c, double threshold,
-                                     int kdim, const double *kernel,
-                                     double norm_factor, int npart,
-                                     double *out, int nimgs,
+static void populate_pixel_recursive(const Cell *c, double threshold, int kdim,
+                                     const double *kernel, double norm_factor,
+                                     int npart, double *out, int nimgs,
                                      const double *pix_values,
                                      const double res, const int npix_x,
                                      const int npix_y) {
@@ -199,7 +200,7 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
 
     /* Ok, so we recurse... */
     for (int ip = 0; ip < 8; ip++) {
-      struct cell *cp = &c->progeny[ip];
+      Cell *cp = &c->progeny[ip];
 
       /* Skip empty progeny. */
       if (cp->part_count == 0) {
@@ -255,14 +256,14 @@ static void populate_pixel_recursive(const struct cell *c, double threshold,
     std::vector<double> local_img(local_width * local_height * nimgs, 0.0);
 
     /* Unpack the particles from this leaf cell. */
-    struct particle *parts = c->particles;
+    Particle *parts = c->particles;
 
     /* Loop over the particles adding their contribution to the local buffer.
      */
     for (int p = 0; p < c->part_count; p++) {
 
       /* Get the particle. */
-      struct particle *part = &parts[p];
+      Particle *part = &parts[p];
 
       /* Get the particle position in terms of pixels. */
       int i = (int)floor(part->pos[0] / res);
@@ -416,8 +417,8 @@ void populate_smoothed_image_parallel(const double *pix_values,
                                       const int npix_x, const int npix_y,
                                       const int npart, const double threshold,
                                       const int kdim, double norm_factor,
-                                      double *img, const int nimgs,
-                                      struct cell *root, const int nthreads) {
+                                      double *img, const int nimgs, Cell *root,
+                                      const int nthreads) {
 
   /* Build a balanced work list. */
   std::vector<weighted_cell> work_list =
@@ -427,7 +428,7 @@ void populate_smoothed_image_parallel(const double *pix_values,
 #pragma omp parallel for num_threads(nthreads) schedule(dynamic)
   for (size_t i = 0; i < work_list.size(); i++) {
     const weighted_cell &wc = work_list[i];
-    struct cell *c = wc.cell_ptr;
+    Cell *c = wc.cell_ptr;
 
     /* Populate the pixel recursively. */
     populate_pixel_recursive(c, threshold, kdim, kernel, norm_factor, npart,
@@ -469,8 +470,7 @@ void populate_smoothed_image_serial(const double *pix_values,
                                     const int npix_x, const int npix_y,
                                     const int npart, const double threshold,
                                     const int kdim, double norm_factor,
-                                    double *img, const int nimgs,
-                                    struct cell *root) {
+                                    double *img, const int nimgs, Cell *root) {
 
   /* Build a balanced work list (this isn't really necessary in serial,
    * but it keeps the code consistent with the parallel version and has
@@ -480,7 +480,7 @@ void populate_smoothed_image_serial(const double *pix_values,
   /* Loop over the work list. */
   for (size_t i = 0; i < work_list.size(); i++) {
     const weighted_cell &wc = work_list[i];
-    struct cell *c = wc.cell_ptr;
+    Cell *c = wc.cell_ptr;
 
     /* Populate the pixel recursively. */
     populate_pixel_recursive(c, threshold, kdim, kernel, norm_factor, npart,
@@ -514,7 +514,7 @@ void populate_smoothed_image(const double *pix_values, const double *kernel,
                              const double res, const int npix_x,
                              const int npix_y, const int npart,
                              const double threshold, const int kdim,
-                             double *img, const int nimgs, struct cell *root,
+                             double *img, const int nimgs, Cell *root,
                              const int nthreads) {
   tic("populate_smoothed_image");
 
@@ -592,11 +592,11 @@ PyObject *make_img(PyObject *self, PyObject *args) {
     return NULL;
 
   /* Get pointers to the actual data. */
-  const double *pix_values = extract_data_double(np_pix_values, "pix_values");
+  const double *pix_values = extract_data<double>(np_pix_values, "pix_values");
   const double *smoothing_lengths =
-      extract_data_double(np_smoothing_lengths, "smoothing_lengths");
-  const double *pos = extract_data_double(np_pos, "pos");
-  const double *kernel = extract_data_double(np_kernel, "kernel");
+      extract_data<double>(np_smoothing_lengths, "smoothing_lengths");
+  const double *pos = extract_data<double>(np_pos, "pos");
+  const double *kernel = extract_data<double>(np_kernel, "kernel");
 
   /* One of the data extractions failed and set a Python error. Return NULL
    * to propagate the exception back to Python. */
@@ -612,11 +612,11 @@ PyObject *make_img(PyObject *self, PyObject *args) {
   /* Allocate cells array. The first cell will be the root and then we
    * will dynamically nibble off cells for the progeny. */
   int ncells = 1;
-  struct cell *root = new struct cell;
+  Cell *root = new Cell;
 
   /* Construct the cell tree. */
-  construct_cell_tree(pos, smoothing_lengths, smoothing_lengths, npart, root,
-                      ncells, MAX_DEPTH, 100);
+  construct_cell_tree<double>(pos, smoothing_lengths, smoothing_lengths, npart,
+                              root, ncells, MAX_DEPTH, 100);
 
   toc("make_img.construct_cell_tree");
 
@@ -635,7 +635,7 @@ PyObject *make_img(PyObject *self, PyObject *args) {
                           threshold, kdim, img, nimgs, root, nthreads);
 
   /* Cleanup the cell tree. */
-  cleanup_cell_tree(root);
+  cleanup_cell_tree<double>(root);
 
   toc("make_img");
 

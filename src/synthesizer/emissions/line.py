@@ -1334,6 +1334,12 @@ class LineCollection:
                 self.lam,
                 **dust_curve_kwargs,
             )
+            # Ensure arrays share dtype with the emission arrays.
+            lum_dtype = self._luminosity.dtype
+            if isinstance(tau_v, np.ndarray) and tau_v.dtype != lum_dtype:
+                tau_v = tau_v.astype(lum_dtype, copy=False)
+            if tau_x_v.dtype != lum_dtype:
+                tau_x_v = tau_x_v.astype(lum_dtype, copy=False)
             # Both arrays see the same attenuation structure, so we run the
             # same kernel twice rather than building two transmission matrices.
             att_lum = apply_separable_attenuation_2d(
@@ -1361,6 +1367,10 @@ class LineCollection:
         transmission = dust_curve.get_transmission(
             tau_v, self.lam, **dust_curve_kwargs
         )
+
+        # Ensure transmission dtype matches the emission array dtype.
+        if isinstance(transmission, np.ndarray):
+            transmission = transmission.astype(self._luminosity.dtype)
 
         # When attenuation reduces to a wavelength-only transmission curve we
         # can apply it with the dedicated last-axis scaling kernel. Here we

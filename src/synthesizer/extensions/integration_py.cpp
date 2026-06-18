@@ -7,12 +7,11 @@
  *****************************************************************************/
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include <Python.h>
+#include "numpy_init.h"
 
+#include <Python.h>
 #include <cmath>
 #include <new>
-
-#include "numpy_init.h"
 
 #ifdef WITH_OPENMP
 #include <omp.h>

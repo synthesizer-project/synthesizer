@@ -238,6 +238,10 @@ class BlackHoles(Particles, BlackholesComponent):
 
         self.cosine_inclination = np.cos(self.inclination.to("rad").value)
 
+    def get_spectra(self, *args, out_dtype=np.float64, **kwargs):
+        """Generate spectra with a float64 default for black holes."""
+        return super().get_spectra(*args, out_dtype=out_dtype, **kwargs)
+
     def calculate_ionising_luminosity(self):
         """Calculates the ionising luminosity of the blackhole(s).
 

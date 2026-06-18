@@ -31,7 +31,6 @@ from synthesizer.extensions.particle_spectra import (
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unyt_to_ndview
-from synthesizer.utils import get_attr_c_compatible_double
 from synthesizer.utils.operation_timers import timed, timer
 
 
@@ -149,6 +148,8 @@ class Extractor(ABC):
                 is a sanity check that can be used to check the consistency
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned spectra arrays.
 
         Returns:
             tuple
@@ -267,6 +268,7 @@ class IntegratedParticleExtractor(Extractor):
         grid_assignment_method,
         nthreads,
         do_grid_check,
+        out_dtype=np.float32,
     ):
         """Extract the spectra from the grid for the emitter.
 
@@ -290,21 +292,36 @@ class IntegratedParticleExtractor(Extractor):
                 is a sanity check that can be used to check the consistency
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned spectra arrays.
 
         Returns:
             Sed: The integrated spectra.
         """
+        resolved_out_dtype = np.dtype(out_dtype)
         with timer("IntegratedParticleExtractor.generate_lnu.setup"):
             # Check we actually have to do the calculation
             if emitter.nparticles == 0:
                 warn("Found emitter with no particles, returning empty Sed")
-                return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
+                return Sed(
+                    model.lam,
+                    np.zeros(self._grid_nlam, dtype=resolved_out_dtype)
+                    * erg
+                    / s
+                    / Hz,
+                )
             elif mask is not None and np.sum(mask) == 0:
                 warn(
                     "A mask has filtered out all particles, returning "
                     "empty Sed"
                 )
-                return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
+                return Sed(
+                    model.lam,
+                    np.zeros(self._grid_nlam, dtype=resolved_out_dtype)
+                    * erg
+                    / s
+                    / Hz,
+                )
 
             # Get the attributes from the emitter
             extracted, weight = self.get_emitter_attrs(
@@ -342,6 +359,7 @@ class IntegratedParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            out_dtype,
             emitter_attr_names,
         )
 
@@ -368,6 +386,7 @@ class IntegratedParticleExtractor(Extractor):
         grid_assignment_method,
         nthreads,
         do_grid_check,
+        out_dtype=np.float64,
     ):
         """Extract the line luminosities from the grid for the emitter.
 
@@ -391,7 +410,10 @@ class IntegratedParticleExtractor(Extractor):
                 is a sanity check that can be used to check the consistency
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned spectra arrays.
         """
+        resolved_out_dtype = np.dtype(out_dtype)
         with timer("IntegratedParticleExtractor.generate_line.setup"):
             # Check we actually have to do the calculation
             if emitter.nparticles == 0:
@@ -399,8 +421,13 @@ class IntegratedParticleExtractor(Extractor):
                 return LineCollection(
                     line_ids=self._grid.line_ids,
                     lam=self._line_lams,
-                    lum=np.zeros(self._grid.nlines) * erg / s,
-                    cont=np.zeros(self._grid.nlines) * erg / s / Hz,
+                    lum=np.zeros(self._grid.nlines, dtype=resolved_out_dtype)
+                    * erg
+                    / s,
+                    cont=np.zeros(self._grid.nlines, dtype=resolved_out_dtype)
+                    * erg
+                    / s
+                    / Hz,
                 )
             elif mask is not None and np.sum(mask) == 0:
                 warn(
@@ -410,8 +437,13 @@ class IntegratedParticleExtractor(Extractor):
                 return LineCollection(
                     line_ids=self._grid.line_ids,
                     lam=self._line_lams,
-                    lum=np.zeros(self._grid.nlines) * erg / s,
-                    cont=np.zeros(self._grid.nlines) * erg / s / Hz,
+                    lum=np.zeros(self._grid.nlines, dtype=resolved_out_dtype)
+                    * erg
+                    / s,
+                    cont=np.zeros(self._grid.nlines, dtype=resolved_out_dtype)
+                    * erg
+                    / s
+                    / Hz,
                 )
 
             # Get the attributes from the emitter
@@ -454,6 +486,7 @@ class IntegratedParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            out_dtype,
             emitter_attr_names,
         )
 
@@ -472,6 +505,7 @@ class IntegratedParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            out_dtype,
             emitter_attr_names,
         )
 
@@ -515,6 +549,7 @@ class DopplerShiftedParticleExtractor(Extractor):
         grid_assignment_method,
         nthreads,
         do_grid_check,
+        out_dtype=np.float32,
     ):
         """Extract the per particle doppler shifted spectra from the grid.
 
@@ -538,18 +573,24 @@ class DopplerShiftedParticleExtractor(Extractor):
                 is a sanity check that can be used to check the consistency
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned spectra arrays.
 
         Returns:
             Sed
                 The integrated spectra.
         """
+        resolved_out_dtype = np.dtype(out_dtype)
         with timer("DopplerShiftedParticleExtractor.generate_lnu.setup"):
             # Check we actually have to do the calculation
             if emitter.nparticles == 0:
                 warn("Found emitter with no particles, returning empty Sed")
                 return Sed(
                     model.lam,
-                    np.zeros((emitter.nparticles, self._grid_nlam))
+                    np.zeros(
+                        (emitter.nparticles, self._grid_nlam),
+                        dtype=resolved_out_dtype,
+                    )
                     * erg
                     / s
                     / Hz,
@@ -561,7 +602,10 @@ class DopplerShiftedParticleExtractor(Extractor):
                 )
                 return Sed(
                     model.lam,
-                    np.zeros((emitter.nparticles, self._grid_nlam))
+                    np.zeros(
+                        (emitter.nparticles, self._grid_nlam),
+                        dtype=resolved_out_dtype,
+                    )
                     * erg
                     / s
                     / Hz,
@@ -594,7 +638,7 @@ class DopplerShiftedParticleExtractor(Extractor):
             self._grid_axes,
             extracted,
             weight,
-            get_attr_c_compatible_double(emitter, "_velocities"),
+            getattr(emitter, "_velocities"),
             self._grid_dims,
             self._grid_naxes,
             emitter.nparticles,
@@ -604,6 +648,7 @@ class DopplerShiftedParticleExtractor(Extractor):
             c.to(vel_units).ndview,
             mask,
             lam_mask,
+            out_dtype,
             emitter_attr_names,
         )
 
@@ -643,6 +688,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
         grid_assignment_method,
         nthreads,
         do_grid_check,
+        out_dtype=np.float32,
     ):
         """Extract the integrated doppler shifted spectra from the grid.
 
@@ -661,29 +707,46 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             nthreads (int):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned spectra arrays.
             do_grid_check (bool):
                 Whether to check how many particles lie outside the grid. This
                 is a sanity check that can be used to check the consistency
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned spectra arrays.
 
         Returns:
             Sed
                 The integrated spectra.
         """
+        resolved_out_dtype = np.dtype(out_dtype)
         with timer(
             "IntegratedDopplerShiftedParticleExtractor.generate_lnu.setup"
         ):
             # Check we actually have to do the calculation
             if emitter.nparticles == 0:
                 warn("Found emitter with no particles, returning empty Sed")
-                return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
+                return Sed(
+                    model.lam,
+                    np.zeros(self._grid_nlam, dtype=resolved_out_dtype)
+                    * erg
+                    / s
+                    / Hz,
+                )
             elif mask is not None and np.sum(mask) == 0:
                 warn(
                     "A mask has filtered out all particles, returning "
                     "empty Sed"
                 )
-                return Sed(model.lam, np.zeros(self._grid_nlam) * erg / s / Hz)
+                return Sed(
+                    model.lam,
+                    np.zeros(self._grid_nlam, dtype=resolved_out_dtype)
+                    * erg
+                    / s
+                    / Hz,
+                )
 
             # Get the attributes from the emitter
             extracted, weight = self.get_emitter_attrs(
@@ -712,7 +775,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             self._grid_axes,
             extracted,
             weight,
-            get_attr_c_compatible_double(emitter, "_velocities"),
+            getattr(emitter, "_velocities"),
             self._grid_dims,
             self._grid_naxes,
             emitter.nparticles,
@@ -722,6 +785,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             c.to(vel_units).ndview,
             mask,
             lam_mask,
+            out_dtype,
             emitter_attr_names,
         )
 
@@ -753,6 +817,7 @@ class ParticleExtractor(Extractor):
         grid_assignment_method,
         nthreads,
         do_grid_check,
+        out_dtype=np.float32,
     ):
         """Extract the per particle spectra from the grid.
 
@@ -771,6 +836,8 @@ class ParticleExtractor(Extractor):
             nthreads (int):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned spectra arrays.
             do_grid_check (bool):
                 Whether to check how many particles lie outside the grid. This
                 is a sanity check that can be used to check the consistency
@@ -781,6 +848,7 @@ class ParticleExtractor(Extractor):
             Sed
                 The integrated spectra.
         """
+        resolved_out_dtype = np.dtype(out_dtype)
         with timer("ParticleExtractor.generate_lnu.setup"):
             # Check we actually have to do the calculation
             if emitter.nparticles == 0:
@@ -788,14 +856,20 @@ class ParticleExtractor(Extractor):
                 return (
                     Sed(
                         model.lam,
-                        np.zeros((emitter.nparticles, self._grid_nlam))
+                        np.zeros(
+                            (emitter.nparticles, self._grid_nlam),
+                            dtype=resolved_out_dtype,
+                        )
                         * erg
                         / s
                         / Hz,
                     ),
                     Sed(
                         model.lam,
-                        np.zeros(self._grid_nlam) * erg / s / Hz,
+                        np.zeros(self._grid_nlam, dtype=resolved_out_dtype)
+                        * erg
+                        / s
+                        / Hz,
                     ),
                 )
             elif mask is not None and np.sum(mask) == 0:
@@ -806,14 +880,20 @@ class ParticleExtractor(Extractor):
                 return (
                     Sed(
                         model.lam,
-                        np.zeros((emitter.nparticles, self._grid_nlam))
+                        np.zeros(
+                            (emitter.nparticles, self._grid_nlam),
+                            dtype=resolved_out_dtype,
+                        )
                         * erg
                         / s
                         / Hz,
                     ),
                     Sed(
                         model.lam,
-                        np.zeros(self._grid_nlam) * erg / s / Hz,
+                        np.zeros(self._grid_nlam, dtype=resolved_out_dtype)
+                        * erg
+                        / s
+                        / Hz,
                     ),
                 )
 
@@ -855,6 +935,7 @@ class ParticleExtractor(Extractor):
             mask,
             lam_mask,
             lam_mask is not None,
+            out_dtype,
             emitter_attr_names,
         )
 
@@ -874,6 +955,7 @@ class ParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            out_dtype,
             emitter_attr_names,
         )
 
@@ -908,6 +990,7 @@ class ParticleExtractor(Extractor):
         grid_assignment_method,
         nthreads,
         do_grid_check,
+        out_dtype=np.float64,
     ):
         """Extract the line luminosities from the grid for the emitter.
 
@@ -931,8 +1014,11 @@ class ParticleExtractor(Extractor):
                 is a sanity check that can be used to check the consistency
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned line arrays.
         """
         with timer("ParticleExtractor.generate_line.setup"):
+            resolved_out_dtype = np.dtype(out_dtype)
             # Check we actually have to do the calculation
             if emitter.nparticles == 0:
                 warn("Found emitter with no particles, returning empty Line")
@@ -940,10 +1026,16 @@ class ParticleExtractor(Extractor):
                     LineCollection(
                         line_ids=self._grid.line_ids,
                         lam=self._line_lams,
-                        lum=np.zeros((emitter.nparticles, self._grid.nlines))
+                        lum=np.zeros(
+                            (emitter.nparticles, self._grid.nlines),
+                            dtype=resolved_out_dtype,
+                        )
                         * erg
                         / s,
-                        cont=np.zeros((emitter.nparticles, self._grid.nlines))
+                        cont=np.zeros(
+                            (emitter.nparticles, self._grid.nlines),
+                            dtype=resolved_out_dtype,
+                        )
                         * erg
                         / s
                         / Hz,
@@ -951,8 +1043,17 @@ class ParticleExtractor(Extractor):
                     LineCollection(
                         line_ids=self._grid.line_ids,
                         lam=self._line_lams,
-                        lum=np.zeros(self._grid.nlines) * erg / s,
-                        cont=np.zeros(self._grid.nlines) * erg / s / Hz,
+                        lum=np.zeros(
+                            self._grid.nlines, dtype=resolved_out_dtype
+                        )
+                        * erg
+                        / s,
+                        cont=np.zeros(
+                            self._grid.nlines, dtype=resolved_out_dtype
+                        )
+                        * erg
+                        / s
+                        / Hz,
                     ),
                 )
 
@@ -965,10 +1066,16 @@ class ParticleExtractor(Extractor):
                     LineCollection(
                         line_ids=self._grid.line_ids,
                         lam=self._line_lams,
-                        lum=np.zeros((emitter.nparticles, self._grid.nlines))
+                        lum=np.zeros(
+                            (emitter.nparticles, self._grid.nlines),
+                            dtype=resolved_out_dtype,
+                        )
                         * erg
                         / s,
-                        cont=np.zeros((emitter.nparticles, self._grid.nlines))
+                        cont=np.zeros(
+                            (emitter.nparticles, self._grid.nlines),
+                            dtype=resolved_out_dtype,
+                        )
                         * erg
                         / s
                         / Hz,
@@ -976,8 +1083,17 @@ class ParticleExtractor(Extractor):
                     LineCollection(
                         line_ids=self._grid.line_ids,
                         lam=self._line_lams,
-                        lum=np.zeros(self._grid.nlines) * erg / s,
-                        cont=np.zeros(self._grid.nlines) * erg / s / Hz,
+                        lum=np.zeros(
+                            self._grid.nlines, dtype=resolved_out_dtype
+                        )
+                        * erg
+                        / s,
+                        cont=np.zeros(
+                            self._grid.nlines, dtype=resolved_out_dtype
+                        )
+                        * erg
+                        / s
+                        / Hz,
                     ),
                 )
 
@@ -1023,6 +1139,7 @@ class ParticleExtractor(Extractor):
             mask,
             lam_mask,
             lam_mask is not None,
+            out_dtype,
             emitter_attr_names,
         )
 
@@ -1041,6 +1158,7 @@ class ParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            out_dtype,
             emitter_attr_names,
         )
 
@@ -1059,6 +1177,7 @@ class ParticleExtractor(Extractor):
             mask,
             lam_mask,
             lam_mask is not None,
+            out_dtype,
             emitter_attr_names,
         )
 
@@ -1078,6 +1197,7 @@ class ParticleExtractor(Extractor):
             grid_weights,
             mask,
             lam_mask,
+            out_dtype,
             emitter_attr_names,
         )
 
@@ -1128,6 +1248,7 @@ class IntegratedParametricExtractor(Extractor):
         grid_assignment_method,
         nthreads,
         do_grid_check,
+        out_dtype=np.float32,
     ):
         """Extract the integrated spectra from a grid for a parametric emitter.
 
@@ -1151,6 +1272,8 @@ class IntegratedParametricExtractor(Extractor):
                 is a sanity check that can be used to check the consistency
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned spectra arrays.
 
         Returns:
             Sed: The integrated spectra.
@@ -1169,7 +1292,9 @@ class IntegratedParametricExtractor(Extractor):
 
         # Compute the integrated lnu array by multiplying the sfzh by the
         # grid spectra
-        spec = np.sum(grid_spectra[mask] * sfzh[mask], axis=0)
+        spec = np.sum(grid_spectra[mask] * sfzh[mask], axis=0).astype(
+            np.dtype(out_dtype), copy=False
+        )
 
         return Sed(model.lam, spec * erg / s / Hz)
 
@@ -1182,6 +1307,7 @@ class IntegratedParametricExtractor(Extractor):
         grid_assignment_method,
         nthreads,
         do_grid_check,
+        out_dtype=np.float64,
     ):
         """Extract the line luminosities from the grid for the emitter.
 
@@ -1205,8 +1331,11 @@ class IntegratedParametricExtractor(Extractor):
                 is a sanity check that can be used to check the consistency
                 of your particles with the grid. It is False by default
                 because the check is extreme expensive.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned line arrays.
         """
         with timer("IntegratedParametricExtractor.generate_line"):
+            resolved_out_dtype = np.dtype(out_dtype)
             # Get a mask for non-zero bins in the SFZH
             mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
 
@@ -1225,8 +1354,17 @@ class IntegratedParametricExtractor(Extractor):
             # Compute the integrated line array by multiplying the sfzh by the
             # grids.
             if lam_mask is not None:
-                lum = np.zeros(self._grid.nlines) * erg / s
-                cont = np.zeros(self._grid.nlines) * erg / s / Hz
+                lum = (
+                    np.zeros(self._grid.nlines, dtype=resolved_out_dtype)
+                    * erg
+                    / s
+                )
+                cont = (
+                    np.zeros(self._grid.nlines, dtype=resolved_out_dtype)
+                    * erg
+                    / s
+                    / Hz
+                )
                 lum[lam_mask] = np.sum(
                     grid_line_lums[mask] * sfzh[mask], axis=0
                 )
@@ -1234,8 +1372,12 @@ class IntegratedParametricExtractor(Extractor):
                     grid_line_conts[mask] * sfzh[mask], axis=0
                 )
             else:
-                lum = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0)
-                cont = np.sum(grid_line_conts[mask] * sfzh[mask], axis=0)
+                lum = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0).astype(
+                    resolved_out_dtype, copy=False
+                )
+                cont = np.sum(
+                    grid_line_conts[mask] * sfzh[mask], axis=0
+                ).astype(resolved_out_dtype, copy=False)
 
         return LineCollection(
             line_ids=self._grid.line_ids,

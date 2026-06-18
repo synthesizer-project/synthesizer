@@ -183,11 +183,15 @@ class TestParticlesPhotometry:
                 self.called_lnu = False
                 self.called_fnu = False
 
-            def get_photo_lnu(self, filters, verbose, nthreads):
+            def get_photo_lnu(
+                self, filters, verbose, nthreads, out_dtype=None
+            ):
                 self.called_lnu = True
                 return {"F": unyt_array([1.0], "erg/s/Hz")}
 
-            def get_photo_fnu(self, filters, verbose, nthreads):
+            def get_photo_fnu(
+                self, filters, verbose, nthreads, out_dtype=None
+            ):
                 self.called_fnu = True
                 return {"F": unyt_array([2.0], "erg/s/cm**2/Hz")}
 

@@ -17,7 +17,7 @@ from synthesizer.emission_models.utils import get_param
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
-from synthesizer.utils import TableFormatter, ensure_array_c_compatible_double
+from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.utils.operation_timers import timed, timer
 
@@ -112,8 +112,8 @@ class Particles:
                 The name of the particle type.
         """
         # Set phase space coordinates
-        self.coordinates = ensure_array_c_compatible_double(coordinates)
-        self.velocities = ensure_array_c_compatible_double(velocities)
+        self.coordinates = coordinates
+        self.velocities = velocities
 
         # Define the dictionary to hold particle spectra
         self.particle_spectra = {}
@@ -128,12 +128,10 @@ class Particles:
         # Set unit information
 
         # Set the softening length
-        self.softening_lengths = ensure_array_c_compatible_double(
-            softening_lengths
-        )
+        self.softening_lengths = softening_lengths
 
         # Set the particle masses
-        self.masses = ensure_array_c_compatible_double(masses)
+        self.masses = masses
 
         # Set the redshift of the particles
         self.redshift = redshift
@@ -142,7 +140,7 @@ class Particles:
         self.nparticles = nparticles
 
         # Set the centre of the particle distribution
-        self.centre = ensure_array_c_compatible_double(centre)
+        self.centre = centre
 
         # Set the radius to None, this will be populated when needed and
         # can then be subsequently accessed
@@ -245,7 +243,7 @@ class Particles:
         coords[:, 1] = np.arctan2(y, d)
 
         # Ensure the array is C-contiguous
-        coords = ensure_array_c_compatible_double(coords)
+        coords = np.ascontiguousarray(coords)
 
         return coords * rad
 
@@ -317,11 +315,8 @@ class Particles:
         d = los_dists.to_value(self.smoothing_lengths.units)
 
         # Calculate and return the projected angular smoothing lengths
-        projected_smoothing_lengths = np.arctan2(self._smoothing_lengths, d)
-
-        # Ensure the array is C-contiguous
-        projected_smoothing_lengths = ensure_array_c_compatible_double(
-            projected_smoothing_lengths
+        projected_smoothing_lengths = np.ascontiguousarray(
+            np.arctan2(self._smoothing_lengths, d)
         )
 
         return projected_smoothing_lengths * rad
@@ -499,6 +494,7 @@ class Particles:
         verbose=True,
         nthreads=1,
         limit_to=None,
+        out_dtype=np.float32,
     ):
         """Calculate luminosity photometry using a FilterCollection object.
 
@@ -514,6 +510,8 @@ class Particles:
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             photo_lnu (dict): A dictionary of rest frame broadband
@@ -527,7 +525,9 @@ class Particles:
             # Create the photometry collection and store it in the object
             self.particle_photo_lnu[label] = self.particle_spectra[
                 label
-            ].get_photo_lnu(filters, verbose, nthreads=nthreads)
+            ].get_photo_lnu(
+                filters, verbose, nthreads=nthreads, out_dtype=out_dtype
+            )
 
         return self.particle_photo_lnu
 
@@ -537,6 +537,7 @@ class Particles:
         verbose=True,
         nthreads=1,
         limit_to=None,
+        out_dtype=np.float32,
     ):
         """Calculate flux photometry using a FilterCollection object.
 
@@ -552,6 +553,8 @@ class Particles:
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             dict: A dictionary of fluxes in each filter in filters.
@@ -564,7 +567,9 @@ class Particles:
             # Create the photometry collection and store it in the object
             self.particle_photo_fnu[label] = self.particle_spectra[
                 label
-            ].get_photo_fnu(filters, verbose, nthreads=nthreads)
+            ].get_photo_fnu(
+                filters, verbose, nthreads=nthreads, out_dtype=out_dtype
+            )
 
         return self.particle_photo_fnu
 
@@ -1026,18 +1031,11 @@ class Particles:
                 "projected and truncated LOS kernel tables are available."
             )
 
-        projected_kernel = np.ascontiguousarray(
-            kernel.get_kernel(), dtype=np.float64
-        )
-        truncated_kernel, _, _ = kernel.get_truncated_los_kernel()
-        truncated_kernel = np.ascontiguousarray(
-            truncated_kernel, dtype=np.float64
-        )
+        projected_kernel = kernel.get_kernel()
+        truncated_kernel = kernel.get_truncated_los_kernel()[0]
 
         # Set up the inputs from this particle instance.
-        pos_i = np.ascontiguousarray(
-            self._coordinates[mask, :], dtype=np.float64
-        )
+        pos_i = self._coordinates[mask, :]
 
         # Set up the kernel inputs to the C function.
         kernel = projected_kernel
@@ -1050,15 +1048,9 @@ class Particles:
         npart_j = other_parts.nparticles
 
         # Set up the inputs from the other particle instance.
-        pos_j = np.ascontiguousarray(
-            other_parts._coordinates, dtype=np.float64
-        )
-        smls = np.ascontiguousarray(
-            other_parts._smoothing_lengths, dtype=np.float64
-        )
-        surf_den_vals = np.ascontiguousarray(
-            getattr(other_parts, attr), dtype=np.float64
-        )
+        pos_j = other_parts._coordinates
+        smls = other_parts._smoothing_lengths
+        surf_den_vals = getattr(other_parts, attr)
 
         return (
             kernel,
@@ -1198,38 +1190,22 @@ class Particles:
         # uses the tabulated coordinate arrays explicitly for trilinear
         # lookup.
         with timer("Particles._prepare_smoothed_los_args.pack_arguments"):
-            overlap_kernel = np.ascontiguousarray(
-                overlap_kernel, dtype=np.float64
-            )
-            q_grid = np.ascontiguousarray(q_grid, dtype=np.float64)
-            u_grid = np.ascontiguousarray(u_grid, dtype=np.float64)
-            eta_grid = np.ascontiguousarray(eta_grid, dtype=np.float64)
             qdim = q_grid.size
             udim = u_grid.size
             etadim = eta_grid.size
 
             # Set up the inputs from this particle instance.
-            pos_i = np.ascontiguousarray(
-                self._coordinates[mask, :], dtype=np.float64
-            )
-            input_smls = np.ascontiguousarray(
-                self._smoothing_lengths[mask], dtype=np.float64
-            )
+            pos_i = self._coordinates[mask, :]
+            input_smls = self._smoothing_lengths[mask]
 
             # Get particle counts.
             npart_i = pos_i.shape[0]
             npart_j = other_parts.nparticles
 
             # Set up the inputs from the other particle instance.
-            pos_j = np.ascontiguousarray(
-                other_parts._coordinates, dtype=np.float64
-            )
-            smls = np.ascontiguousarray(
-                other_parts._smoothing_lengths, dtype=np.float64
-            )
-            surf_den_vals = np.ascontiguousarray(
-                getattr(other_parts, attr), dtype=np.float64
-            )
+            pos_j = other_parts._coordinates
+            smls = other_parts._smoothing_lengths
+            surf_den_vals = getattr(other_parts, attr)
 
         return (
             overlap_kernel,

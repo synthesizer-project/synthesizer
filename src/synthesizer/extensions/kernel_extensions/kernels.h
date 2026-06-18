@@ -26,9 +26,9 @@
 #define NO_IMPORT_ARRAY
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
-#include <Python.h>
-
 #include "numpy_init.h"
+
+#include <Python.h>
 
 /* Local includes. */
 #include "integration.h"
@@ -40,7 +40,8 @@
 #endif
 
 /* Kernel function typedef shared across all table builders. */
-typedef double (*kernel_func)(double);
+template <typename Real>
+using kernel_func = Real (*)(Real);
 
 /* Declare the Python wrapper functions defined in separate source files.
  * Each compute_* function is implemented in its own .cpp file and

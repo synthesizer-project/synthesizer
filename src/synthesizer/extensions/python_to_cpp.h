@@ -10,9 +10,9 @@
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include <Python.h>
-
 #include "numpy_init.h"
+
+#include <Python.h>
 
 /* Prototypes for Python-to-C++ boundary helpers. */
 const char *typenum_to_string(int typenum);

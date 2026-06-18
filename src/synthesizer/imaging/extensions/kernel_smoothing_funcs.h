@@ -178,7 +178,7 @@ inline double compute_kernel_norm(const double *kernel, int kdim,
  *
  * @return True if kernel is fully inside pixel, false otherwise.
  */
-inline bool kernel_fully_inside_pixel(const struct particle *part,
+inline bool kernel_fully_inside_pixel(const particle<double> *part,
                                       double pix_x_min, double pix_x_max,
                                       double pix_y_min, double pix_y_max,
                                       double kernel_radius) {
@@ -213,7 +213,7 @@ inline bool kernel_fully_inside_pixel(const struct particle *part,
  */
 inline double pixel_inside_kernel_contribution(double pix_x_min,
                                                double pix_y_min, double res,
-                                               const struct particle *part,
+                                               const particle<double> *part,
                                                const double *kernel, int kdim,
                                                double threshold) {
 
@@ -258,7 +258,7 @@ inline double pixel_inside_kernel_contribution(double pix_x_min,
  * @return The kernel contribution value (normalized).
  */
 inline double pixel_kernel_partial_overlap_contribution(
-    const struct particle *part, double pix_x_min, double pix_y_min,
+    const particle<double> *part, double pix_x_min, double pix_y_min,
     const double *kernel, int kdim, double threshold, double res) {
 
   /* Adaptive sampling based on smoothing length.

@@ -1581,6 +1581,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                 valid,
                 None,
                 False,
+                np.float32,
                 (dtg_axis_name,),
             )
 

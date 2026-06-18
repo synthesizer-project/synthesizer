@@ -43,12 +43,19 @@ def _normalize_nthreads(nthreads):
     return nthreads
 
 
-def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
+def integrate_last_axis(
+    xs,
+    ys,
+    nthreads=1,
+    method="trapz",
+    out_dtype=np.float32,
+):
     """Integrate the last axis of an N-dimensional array.
 
     Args:
         xs (array-like):
-            The x-values to integrate over.
+            The x-values to integrate over. Inputs must already be NumPy
+            arrays with supported floating precision and C-contiguous layout.
         ys (array-like):
             The y-values to integrate.
         nthreads (int):
@@ -57,6 +64,8 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
         method (str):
             The integration method to use. Options are 'trapz' or
             'simps'.
+        out_dtype (np.dtype):
+            Requested floating-point dtype for the returned integral.
 
     Returns:
         array-like:
@@ -80,23 +89,36 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
         trapz_last_axis if method == "trapz" else simps_last_axis
     )
 
-    # Ensure arrays are C-contiguous float64 for C extension safety/performance
-    _xs = np.ascontiguousarray(xs, dtype=np.float64)
-    _ys = np.ascontiguousarray(ys, dtype=np.float64)
+    resolved_out_dtype = np.dtype(out_dtype)
 
     # If either input is empty or trivially zero, return zeros
-    if _xs.size == 0 or _ys.size == 0:
-        out_shape = _ys.shape[:-1]
-        return np.zeros(out_shape) if out_shape else 0.0
+    if xs.size == 0 or ys.size == 0:
+        out_shape = ys.shape[:-1]
+        return (
+            np.zeros(out_shape, dtype=resolved_out_dtype)
+            if out_shape
+            else resolved_out_dtype.type(0.0)
+        )
 
-    if not np.any(_xs) or not np.any(_ys):
-        out_shape = _ys.shape[:-1]
-        return np.zeros(out_shape) if out_shape else 0.0
+    if not np.any(xs) or not np.any(ys):
+        out_shape = ys.shape[:-1]
+        return (
+            np.zeros(out_shape, dtype=resolved_out_dtype)
+            if out_shape
+            else resolved_out_dtype.type(0.0)
+        )
 
-    return integration_function(_xs, _ys, nthreads)
+    return integration_function(xs, ys, nthreads, out_dtype)
 
 
-def integrate_weighted_last_axis(xs, ys, weights, nthreads=1, method="trapz"):
+def integrate_weighted_last_axis(
+    xs,
+    ys,
+    weights,
+    nthreads=1,
+    method="trapz",
+    out_dtype=np.float32,
+):
     """Compute a weighted average over the final axis of an ND array.
 
     This computes:
@@ -115,6 +137,8 @@ def integrate_weighted_last_axis(xs, ys, weights, nthreads=1, method="trapz"):
             Number of threads to use. If -1, all available threads are used.
         method (str):
             Integration method: 'trapz' or 'simps'.
+        out_dtype (np.dtype):
+            Requested floating-point dtype for the returned weighted average.
 
     Returns:
         array-like:
@@ -138,16 +162,22 @@ def integrate_weighted_last_axis(xs, ys, weights, nthreads=1, method="trapz"):
         else weighted_simps_last_axis
     )
 
-    _xs = np.ascontiguousarray(xs, dtype=np.float64)
-    _ys = np.ascontiguousarray(ys, dtype=np.float64)
-    _weights = np.ascontiguousarray(weights, dtype=np.float64)
+    resolved_out_dtype = np.dtype(out_dtype)
 
-    if _xs.size == 0 or _ys.size == 0 or _weights.size == 0:
-        out_shape = _ys.shape[:-1]
-        return np.zeros(out_shape) if out_shape else 0.0
+    if xs.size == 0 or ys.size == 0 or weights.size == 0:
+        out_shape = ys.shape[:-1]
+        return (
+            np.zeros(out_shape, dtype=resolved_out_dtype)
+            if out_shape
+            else resolved_out_dtype.type(0.0)
+        )
 
-    if not np.any(_weights):
-        out_shape = _ys.shape[:-1]
-        return np.zeros(out_shape) if out_shape else 0.0
+    if not np.any(weights):
+        out_shape = ys.shape[:-1]
+        return (
+            np.zeros(out_shape, dtype=resolved_out_dtype)
+            if out_shape
+            else resolved_out_dtype.type(0.0)
+        )
 
-    return integration_function(_xs, _ys, _weights, nthreads)
+    return integration_function(xs, ys, weights, nthreads, out_dtype)

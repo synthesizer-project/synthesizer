@@ -652,6 +652,7 @@ class Sed:
             self._nu,
             self._lnu,
             method="trapz",
+            out_dtype=np.float64,
         )
 
         # Return the bolometric luminosity with units
@@ -746,6 +747,7 @@ class Sed:
             self._lnu,
             nthreads=nthreads,
             method=integration_method,
+            out_dtype=np.float64,
         )
         return integral * self.lnu.units * self.nu.units
 
@@ -1095,14 +1097,6 @@ class Sed:
             fnu (ndarray):
                 Spectral flux density calculated at 10 pc.
         """
-        # Ensure the arrays are ready to be handed to the C++
-        if self._lnu.dtype != np.float64 or not self._lnu.flags.c_contiguous:
-            self._lnu = np.ascontiguousarray(self._lnu, dtype=np.float64)
-        if self._lam.dtype != np.float64 or not self._lam.flags.c_contiguous:
-            self._lam = np.ascontiguousarray(self._lam, dtype=np.float64)
-        if self._nu.dtype != np.float64 or not self._nu.flags.c_contiguous:
-            self._nu = np.ascontiguousarray(self._nu, dtype=np.float64)
-
         # Set the observed wavelength and frequency
         self._obslam = self._lam
         self._obsnu = self._nu
@@ -1164,13 +1158,6 @@ class Sed:
         if self.redshift == 0:
             return self.get_fnu0()
 
-        # Ensure the arrays are ready to be handed to the C++
-        if self._lnu.dtype != np.float64 or not self._lnu.flags.c_contiguous:
-            self._lnu = np.ascontiguousarray(self._lnu, dtype=np.float64)
-        if self._lam.dtype != np.float64 or not self._lam.flags.c_contiguous:
-            self._lam = np.ascontiguousarray(self._lam, dtype=np.float64)
-        if self._nu.dtype != np.float64 or not self._nu.flags.c_contiguous:
-            self._nu = np.ascontiguousarray(self._nu, dtype=np.float64)
         if self._obslam is None or self._obslam.shape != self._lam.shape:
             self._obslam = np.empty_like(self._lam)
         if self._obsnu is None or self._obsnu.shape != self._nu.shape:
@@ -1227,6 +1214,7 @@ class Sed:
         verbose=True,
         nthreads=1,
         integration_method="trapz",
+        out_dtype=np.float32,
     ):
         """Calculate broadband luminosities using a FilterCollection object.
 
@@ -1241,6 +1229,8 @@ class Sed:
             integration_method (str):
                 The integration method used to calculate the luminosities over
                 the filter profile. Options include "trapz" and "simps".
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             (PhotometryCollection):
@@ -1252,6 +1242,7 @@ class Sed:
             nu=self._nu,
             nthreads=nthreads,
             integration_method=integration_method,
+            out_dtype=out_dtype,
         )
 
         # Create the photometry collection and store it in the object
@@ -1268,7 +1259,12 @@ class Sed:
 
     @timed("Sed.get_photo_fnu")
     def get_photo_fnu(
-        self, filters, verbose=True, nthreads=1, integration_method="trapz"
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        integration_method="trapz",
+        out_dtype=np.float32,
     ):
         """Calculate broadband fluxes using a FilterCollection object.
 
@@ -1283,6 +1279,8 @@ class Sed:
             integration_method (str):
                 The integration method used to calculate the fluxes over the
                 filter profile. Options include "trapz" and "simps".
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             (PhotometryCollection):
@@ -1304,6 +1302,7 @@ class Sed:
             nu=self._obsnu,
             nthreads=nthreads,
             integration_method=integration_method,
+            out_dtype=out_dtype,
         )
 
         # Create the photometry collection and store it in the object
@@ -1634,6 +1633,12 @@ class Sed:
                 self.lam,
                 **dust_curve_kwargs,
             )
+            # Ensure the attenuation arrays share dtype with the spectra.
+            spec_dtype = self._lnu.dtype
+            if isinstance(tau_v, np.ndarray) and tau_v.dtype != spec_dtype:
+                tau_v = tau_v.astype(spec_dtype, copy=False)
+            if tau_x_v.dtype != spec_dtype:
+                tau_x_v = tau_x_v.astype(spec_dtype, copy=False)
             # The kernel both attenuates and respects the optional row mask, so
             # we avoid ever materialising the full transmission matrix.
             out = apply_separable_attenuation_2d(
@@ -1652,6 +1657,14 @@ class Sed:
         transmission = dust_curve.get_transmission(
             tau_v, self.lam, **dust_curve_kwargs
         )
+
+        # Ensure the transmission dtype matches the spectra dtype.
+        spec_dtype = self._lnu.dtype
+        if (
+            isinstance(transmission, np.ndarray)
+            and transmission.dtype != spec_dtype
+        ):
+            transmission = transmission.astype(spec_dtype, copy=False)
 
         # When attenuation reduces to a per-row transmission curve we can use
         # the dedicated 2D scaling kernel with mask support. This applies when
@@ -2742,5 +2755,5 @@ def integrate_particle_sed(sed, nthreads=1):
 
     # Reduce the per-particle spectra in C++ and rebuild a unit-aware Sed on
     # the original wavelength grid.
-    reduced_lnu = reduce_particle_spectra(sed._lnu, nthreads)
+    reduced_lnu = reduce_particle_spectra(sed._lnu, nthreads, sed._lnu.dtype)
     return Sed(sed.lam, reduced_lnu * sed.lnu.units)

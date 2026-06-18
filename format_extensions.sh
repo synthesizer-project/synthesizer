@@ -32,44 +32,55 @@ if [[ "$VERSION" != "$REQUIRED_VERSION" ]]; then
   echo "Or set CLANG_FORMAT to point to a specific binary."
 fi
 
+EXTENSIONS_DIRS=(
+  "$HERE/src/synthesizer/extensions"
+  "$HERE/src/synthesizer/imaging/extensions"
+)
+
 MODE="${1:--i}"
 
 case "$MODE" in
--i)
-  echo "Formatting all C/C++ files in-place..."
-  ;;
---check)
-  echo "Checking formatting of all C/C++ files..."
-  ;;
-*)
-  echo "Usage: $0 [-i | --check]"
-  echo "  -i        Format files in-place (default)"
-  echo "  --check   Dry-run; exit 1 if any file would be changed"
-  exit 1
-  ;;
+  -i)
+    echo "Formatting all extension files in-place..."
+    ;;
+  --check)
+    echo "Checking formatting of all extension files..."
+    ;;
+  *)
+    echo "Usage: $0 [-i | --check]"
+    echo "  -i        Format files in-place (default)"
+    echo "  --check   Dry-run; exit 1 if any file would be changed"
+    exit 1
+    ;;
 esac
 
 collect_files() {
-  find "$HERE/src" \( -name '*.cpp' -o -name '*.h' \) -print0
+  for DIR in "${EXTENSIONS_DIRS[@]}"; do
+    if [[ -d "$DIR" ]]; then
+      find "$DIR" \( -name '*.h' -o -name '*.cpp' \) -print0
+    else
+      echo "Warning: $DIR does not exist, skipping" >&2
+    fi
+  done
 }
 
 case "$MODE" in
--i)
-  collect_files | xargs -0 "$CLANG_FORMAT" -i
-  echo "Done."
-  ;;
---check)
-  errors=0
-  while IFS= read -r -d '' file; do
-    if ! "$CLANG_FORMAT" -n --Werror "$file" 2>/dev/null; then
-      echo "Would reformat: $file"
-      ((errors++))
+  -i)
+    collect_files | xargs -0 "$CLANG_FORMAT" -i
+    echo "Done."
+    ;;
+  --check)
+    errors=0
+    while IFS= read -r -d '' file; do
+      if ! "$CLANG_FORMAT" -n --Werror "$file" 2>/dev/null; then
+        echo "Would reformat: $file"
+        ((errors++))
+      fi
+    done < <(collect_files)
+    if ((errors > 0)); then
+      echo "$errors file(s) would be reformatted."
+      exit 1
     fi
-  done < <(collect_files)
-  if ((errors > 0)); then
-    echo "$errors file(s) would be reformatted."
-    exit 1
-  fi
-  echo "All files are correctly formatted."
-  ;;
+    echo "All files are correctly formatted."
+    ;;
 esac
