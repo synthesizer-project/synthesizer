@@ -2,7 +2,6 @@
 
 import numpy as np
 import pytest
-
 from synthesizer.extensions.doppler_particle_spectra import (
     compute_part_seds_with_vel_shift,
 )
