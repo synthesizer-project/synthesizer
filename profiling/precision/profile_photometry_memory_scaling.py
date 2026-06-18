@@ -35,10 +35,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import psutil
-from unyt import angstrom, c
+from _helpers import make_synthetic_spectra, make_test_filters
+from unyt import c
 
 from synthesizer.grid import Grid
-from synthesizer.instruments import FilterCollection
 
 LOGGER = logging.getLogger(__name__)
 
@@ -49,43 +49,6 @@ PRECISIONS = {
     "float32": np.float32,
     "float64": np.float64,
 }
-
-
-def make_synthetic_spectra(nparticles, nlam, dtype, rng):
-    """Create a contiguous synthetic 2D spectra array."""
-    lam_axis = np.linspace(-3.0, 3.0, nlam, dtype=np.float64)
-    base = np.exp(-0.5 * lam_axis**2) + 0.15 * np.sin(4.0 * lam_axis)
-    base = base[None, :]
-
-    amplitudes = rng.uniform(0.5, 2.0, size=(nparticles, 1))
-    slopes = rng.uniform(0.0, 0.2, size=(nparticles, 1))
-    continuum = np.linspace(0.8, 1.2, nlam, dtype=np.float64)[None, :]
-    spectra = amplitudes * base + slopes * continuum
-
-    return np.array(spectra, dtype=dtype, order="C", copy=True)
-
-
-def make_test_filters(lam, nfilters):
-    """Create a deterministic set of top-hat filters for profiling.
-
-    Using synthetic filters keeps the profiling scripts self-contained and
-    avoids depending on an external cached instrument file in worker
-    subprocesses.
-    """
-    lam_values = lam.to("angstrom").value
-    lam_min = lam_values.min()
-    lam_max = lam_values.max()
-    centres = np.linspace(lam_min * 1.1, lam_max * 0.9, nfilters)
-    widths = np.full(nfilters, max((lam_max - lam_min) / (2 * nfilters), 50.0))
-
-    tophat_dict = {}
-    for i, (centre, width) in enumerate(zip(centres, widths, strict=True)):
-        tophat_dict[f"f{i + 1}"] = {
-            "lam_eff": centre * angstrom,
-            "lam_fwhm": width * angstrom,
-        }
-
-    return FilterCollection(tophat_dict=tophat_dict, new_lam=lam)
 
 
 def _sample_worker_case(
@@ -115,12 +78,12 @@ def _sample_worker_case(
 
     rss_start = psutil.Process().memory_info().rss / (1024**2)
     samples = []
-    stop_sampling = False
+    stop_sampling = threading.Event()
     interval = 1.0 / sample_freq_hz
 
     def sampler():
         next_sample = time.perf_counter()
-        while not stop_sampling:
+        while not stop_sampling.is_set():
             now = time.perf_counter()
             if now >= next_sample:
                 rss_mib = psutil.Process().memory_info().rss / (1024**2)
@@ -147,7 +110,7 @@ def _sample_worker_case(
             out_dtype=output_dtype,
         )
 
-    stop_sampling = True
+    stop_sampling.set()
     sampler_thread.join()
 
     rss_end = psutil.Process().memory_info().rss / (1024**2)

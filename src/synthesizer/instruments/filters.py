@@ -1190,7 +1190,8 @@ class FilterCollection:
             out_dtype (np.dtype): Requested floating-point dtype for the
                 returned photometry array. Input arrays must already be
                 contiguous and share one supported floating-point precision
-                family; no implicit casting is performed.
+                family. The ``lam`` / ``nu`` grid is implicitly cast to
+                match the input array's floating-point dtype.
 
         Returns:
             np.ndarray:
