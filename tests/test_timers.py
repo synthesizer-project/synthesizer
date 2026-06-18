@@ -3,7 +3,6 @@
 import time
 import unittest
 
-from synthesizer import check_atomic_timing
 from synthesizer.extensions.timers import (
     _test_toc_from_c,
     get_operation_names,
@@ -12,6 +11,8 @@ from synthesizer.extensions.timers import (
     tic,
     toc,
 )
+
+from synthesizer import check_atomic_timing
 from synthesizer.utils.operation_timers import OperationTimers
 
 
