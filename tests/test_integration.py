@@ -7,7 +7,6 @@ from synthesizer.extensions.integration import (
     simps_last_axis,
     trapz_last_axis,
     weighted_simps_last_axis,
-    weighted_trapz_last_axis,
 )
 
 from synthesizer.utils.integrate import integrate_weighted_last_axis
@@ -56,7 +55,7 @@ def test_trapz_integration(example_data, threads, request):
     """Test the trapezoidal integration."""
     xs, ys = request.getfixturevalue(example_data.__name__)
     expected = trapezoid(y=ys, x=xs, axis=-1)
-    result = trapz_last_axis(xs, ys, threads)
+    result = trapz_last_axis(xs, ys, threads, None)
     np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-8)
 
 
@@ -68,7 +67,7 @@ def test_simpson_integration(example_data, threads, request):
     """Test the Simpson's rule integration."""
     xs, ys = request.getfixturevalue(example_data.__name__)
     expected = simpson(y=ys, x=xs, axis=-1)
-    result = simps_last_axis(xs, ys, threads)
+    result = simps_last_axis(xs, ys, threads, None)
     np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-8)
 
 
@@ -85,7 +84,7 @@ def test_weighted_trapz_integration(example_data, threads, request):
     expected_den = trapezoid(y=weights, x=xs)
     expected = expected_num / expected_den
 
-    result = weighted_trapz_last_axis(xs, ys, weights, threads)
+    result = weighted_simps_last_axis(xs, ys, weights, threads, None)
     np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-8)
 
 
@@ -118,7 +117,7 @@ def test_weighted_simpson_integration_nonuniform_grid(
     expected_den = simpson(y=weights, x=xs)
     expected = expected_num / expected_den
 
-    result = weighted_simps_last_axis(xs, ys, weights, threads)
+    result = weighted_simps_last_axis(xs, ys, weights, threads, None)
     np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-8)
 
 
