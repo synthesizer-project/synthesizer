@@ -1177,7 +1177,7 @@ class Sed:
             self._obsnu = np.empty_like(self._nu)
 
         # Calculate the observed wavelength and frequency
-        one_plus_z = 1.0 + z
+        one_plus_z = 1.0 + float(z)
         luminosity_distance_cm = get_luminosity_distance(cosmo, z).to_value(cm)
         conversion = (
             get_attr_unit_conversion(

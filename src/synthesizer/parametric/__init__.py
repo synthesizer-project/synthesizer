@@ -1,5 +1,6 @@
 import synthesizer.parametric.metal_dist as ZDist
 import synthesizer.parametric.sf_hist as SFH
+import synthesizer.parametric.sfh_kernels as Kernels
 from synthesizer.parametric.blackholes import BlackHole
 from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.parametric.morphology import (

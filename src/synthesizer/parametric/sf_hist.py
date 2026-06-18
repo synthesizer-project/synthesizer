@@ -43,7 +43,34 @@ parametrisations = (
     "Dirichlet",
     "ContinuityPSB",
     "CombinedSFH",
+    "Stochastic",
 )
+
+
+def _sample_multivariate_normal(cov, rng):
+    """Draw a zero-mean multivariate normal sample via Cholesky decomposition.
+
+    Args:
+        cov (np.ndarray of float):
+            An (N, N) covariance matrix.
+        rng (np.random.Generator):
+            The random number generator to use.
+
+    Returns:
+        np.ndarray of float:
+            A length-N sample drawn from N(0, cov).
+    """
+    n = cov.shape[0]
+
+    # Cholesky factor (lower triangular). A small jitter on the diagonal guards
+    # against non-positive-definiteness arising from numerical error.
+    try:
+        chol = np.linalg.cholesky(cov)
+    except np.linalg.LinAlgError:
+        jitter = 1e-10 * np.trace(cov) / n
+        chol = np.linalg.cholesky(cov + jitter * np.eye(n))
+
+    return chol @ rng.standard_normal(n)
 
 
 class Common:
@@ -174,7 +201,7 @@ class Common:
                 The SFH in units of 1 / yr.
         """
         # Define the age array
-        t = np.arange(*t_range, dt)
+        t = np.arange(*t_range, dt, dtype=np.float64)
 
         # Evaluate the array
         sfh = self.get_sfr(t)
@@ -366,7 +393,7 @@ class Constant(Common):
             ages (np.ndarray of float):
                 The ages (in years) at which to evaluate the SFR.
         """
-        sfrs = np.zeros_like(ages)
+        sfrs = np.zeros_like(ages, dtype=np.float64)
         mask = (ages <= self.max_age) & (ages >= self.min_age)
         sfrs[mask] = 1.0
         return sfrs
@@ -437,7 +464,7 @@ class Gaussian(Common):
                 The ages (in years) at which to evaluate the SFR.
         """
         # Set the SFR based on the duration.
-        sfrs = np.zeros_like(ages)
+        sfrs = np.zeros_like(ages, dtype=np.float64)
         mask = (ages <= self.max_age) & (ages >= self.min_age)
         sfrs[mask] = np.exp(
             -np.power((ages[mask] - self.peak_age) / self.sigma, 2.0)
@@ -520,7 +547,7 @@ class Exponential(Common):
         t = self.max_age - ages
 
         # Set the SFR based on the duration.
-        sfrs = np.zeros_like(ages)
+        sfrs = np.zeros_like(ages, dtype=np.float64)
         mask = (ages < self.max_age) & (ages >= self.min_age)
         sfrs[mask] = np.exp(-t[mask] / self.tau)
 
@@ -662,7 +689,7 @@ class DelayedExponential(Common):
         t = self.max_age - ages
 
         # Set the SFR based on the duration.
-        sfrs = np.zeros_like(ages)
+        sfrs = np.zeros_like(ages, dtype=np.float64)
         mask = (ages < self.max_age) & (ages >= self.min_age)
         sfrs[mask] = t[mask] * np.exp(-t[mask] / self.tau)
 
@@ -744,7 +771,7 @@ class LogNormal(Common):
                 The ages (in years) at which to evaluate the SFR.
         """
         # Set the SFR based on the duration.
-        sfrs = np.zeros_like(ages)
+        sfrs = np.zeros_like(ages, dtype=np.float64)
         mask = (ages < self.max_age) & (ages >= self.min_age)
         norm = 1.0 / (self.max_age - ages[mask])
         exponent = (
@@ -830,7 +857,7 @@ class DoublePowerLaw(Common):
                 The ages (in years) at which to evaluate the SFR.
         """
         # Set the SFR based on the duration.
-        sfrs = np.zeros_like(ages)
+        sfrs = np.zeros_like(ages, dtype=np.float64)
         mask = (ages < self.max_age) & (ages >= self.min_age)
         term1 = (ages[mask] / self.peak_age) ** self.alpha
         term2 = (ages[mask] / self.peak_age) ** self.beta
@@ -2028,3 +2055,226 @@ class CombinedSFH(Common):
             )
         else:
             raise TypeError(f"Cannot add {type(other)} to CombinedSFH")
+
+
+class Stochastic(Common):
+    """A stochastic star formation history drawn as a Gaussian Process.
+
+    This implements the Gaussian Process + Power Spectral Density approach of
+    Iyer et al. 2022 (arXiv:2208.05938): fluctuations in log10(SFR) about a
+    mean (base) SFH are drawn from a Gaussian Process whose covariance is set
+    by a kernel (see synthesizer.parametric.Kernels). A single realisation is
+    drawn at initialisation and reconstructed onto a fine grid, after which it
+    behaves like any other parametric SFH, i.e. it is integrated over the SFZH
+    age bins when building a Stars object.
+
+    The SFR is sampled in cosmic time (time since the Big Bang) and then mapped
+    onto stellar age (lookback time) via ``age = t_univ - t_cosmic``, where
+    ``t_univ`` is the age of the universe at the requested redshift.
+
+    The variability model lives entirely in the kernel, so new models (e.g. a
+    general power-spectral-density or composite multi-timescale kernel) require
+    no changes to this class.
+
+    Attributes:
+        redshift (float):
+            The redshift at which the SFH is observed.
+        kernel (Kernels.Kernel):
+            The covariance kernel defining the log10(SFR) fluctuations.
+        cosmo (astropy.cosmology):
+            The cosmology used to compute the age of the universe.
+        t_univ (float):
+            The age of the universe at the requested redshift (in years). This
+            is the maximum stellar age the SFH spans.
+        finegrid (np.ndarray of float):
+            The stellar age grid (in years, ascending) on which the realisation
+            is stored.
+        intsfh (np.ndarray of float):
+            The star formation rate evaluated on finegrid.
+    """
+
+    def __init__(
+        self,
+        redshift,
+        kernel,
+        base_sfh="constant",
+        n_grid=1000,
+        random_seed=None,
+        cosmo=None,
+    ):
+        """Initialise the parent and draw a stochastic SFH realisation.
+
+        Args:
+            redshift (float):
+                The redshift at which the SFH is observed. Sets the age of the
+                universe and hence the time baseline of the SFH.
+            kernel (Kernels.Kernel):
+                The covariance kernel defining the log10(SFR) fluctuations,
+                e.g. Kernels.DampedRandomWalk(sigma=0.3, tau=1 * Gyr).
+            base_sfh (str/callable/np.ndarray):
+                The mean SFH (in linear SFR) about which fluctuations are drawn
+                in log10 space. One of:
+
+                - "constant" (default): a flat mean SFH.
+                - a callable f(t_cosmic_yr) -> SFR evaluated on the cosmic time
+                  grid.
+                - a 1D array of length n_grid giving the mean SFR on the cosmic
+                  time grid.
+
+                Only the shape matters; the overall normalisation is set later
+                by the initial_mass of the Stars object.
+            n_grid (int):
+                The number of points in the internal cosmic time grid.
+            random_seed (int):
+                Seed for the random number generator used to draw the
+                realisation. Use a fixed seed for reproducibility.
+            cosmo (astropy.cosmology):
+                The cosmology used to compute the age of the universe. Defaults
+                to astropy.cosmology.Planck18.
+        """
+        # Validate n_grid early to fail fast on invalid input
+        if not isinstance(n_grid, (int, np.integer)) or n_grid <= 0:
+            raise ValueError(
+                f"n_grid must be a positive integer, got {n_grid!r}."
+            )
+
+        # Initialise the parent
+        Common.__init__(
+            self,
+            name="Stochastic",
+            redshift=redshift,
+            kernel=kernel,
+            base_sfh=base_sfh,
+            n_grid=n_grid,
+            random_seed=random_seed,
+        )
+
+        self.redshift = redshift
+        self.kernel = kernel
+
+        # Default to Planck18 if no cosmology is provided
+        if cosmo is None:
+            from astropy.cosmology import Planck18
+
+            cosmo = Planck18
+        self.cosmo = cosmo
+
+        # The age of the universe at this redshift, in years
+        self.t_univ = cosmo.age(redshift).to("yr").value
+
+        # Draw the realisation and store it on finegrid/intsfh
+        self._draw_realisation(base_sfh, n_grid, random_seed)
+
+    def _base_sfh_log10(self, t_cosmic, base_sfh):
+        """Evaluate the mean log10(SFR) on the cosmic time grid.
+
+        Args:
+            t_cosmic (np.ndarray of float):
+                The cosmic time grid (in years).
+            base_sfh (str/callable/np.ndarray):
+                The mean SFH specification (see __init__).
+
+        Returns:
+            np.ndarray of float:
+                The mean log10(SFR) on the grid.
+
+        Raises:
+            InconsistentArguments: If base_sfh is invalid.
+        """
+        # A constant mean is flat in log space
+        if isinstance(base_sfh, str) and base_sfh == "constant":
+            return np.zeros_like(t_cosmic, dtype=np.float64)
+
+        # A callable is evaluated on the grid
+        if callable(base_sfh):
+            sfr = np.asarray(base_sfh(t_cosmic), dtype=np.float64)
+            if sfr.ndim != 1 or sfr.size != t_cosmic.size:
+                raise exceptions.InconsistentArguments(
+                    "base_sfh callable must return a 1D array of length "
+                    f"n_grid ({t_cosmic.size}), got shape {sfr.shape}."
+                )
+            if np.any(sfr <= 0):
+                raise exceptions.InconsistentArguments(
+                    "base_sfh must be strictly positive to take log10."
+                )
+            return np.log10(sfr)
+
+        # An array must match the grid
+        if isinstance(base_sfh, (np.ndarray, list, tuple)):
+            sfr = np.asarray(base_sfh, dtype=np.float64)
+            if sfr.ndim != 1 or sfr.size != t_cosmic.size:
+                raise exceptions.InconsistentArguments(
+                    "base_sfh array must be 1D with length n_grid "
+                    f"({t_cosmic.size}), got shape {sfr.shape}."
+                )
+            if np.any(sfr <= 0):
+                raise exceptions.InconsistentArguments(
+                    "base_sfh must be strictly positive to take log10."
+                )
+            return np.log10(sfr)
+
+        raise exceptions.InconsistentArguments(
+            "base_sfh must be 'constant', a callable, or a 1D array."
+        )
+
+    def _draw_realisation(self, base_sfh, n_grid, random_seed):
+        """Draw a single stochastic SFH realisation and store it on finegrid.
+
+        Args:
+            base_sfh (str/callable/np.ndarray):
+                The mean SFH specification (see __init__).
+            n_grid (int):
+                The number of points in the cosmic time grid.
+            random_seed (int):
+                Seed for the random number generator.
+        """
+        # The cosmic time grid (yr), from the Big Bang to the observation epoch
+        t_cosmic = np.linspace(0.0, self.t_univ, n_grid, dtype=np.float64)
+
+        # The mean log10(SFR) on the grid
+        mean_log10_sfr = self._base_sfh_log10(t_cosmic, base_sfh)
+
+        # Draw the log10(SFR) fluctuations from the kernel. A kernel may
+        # provide its own (e.g. FFT based) sampler; otherwise fall back to
+        # Cholesky on the covariance matrix.
+        rng = np.random.default_rng(random_seed)
+        if hasattr(self.kernel, "sample"):
+            fluctuations = self.kernel.sample(t_cosmic, rng)
+        else:
+            cov = self.kernel.build_covariance_matrix(t_cosmic)
+            fluctuations = _sample_multivariate_normal(cov, rng)
+
+        # Combine the mean and fluctuations in log space, then exponentiate
+        sfr_cosmic = 10.0 ** (mean_log10_sfr + fluctuations)
+
+        # Map cosmic time -> stellar age (lookback): age = t_univ - t_cosmic.
+        # Flip so the age grid is ascending (required by np.interp downstream).
+        age = self.t_univ - t_cosmic
+        self.finegrid = np.flip(age).astype(np.float64)
+        self.intsfh = np.flip(sfr_cosmic).astype(np.float64)
+
+    def _sfr(self, age):
+        """Return the SFR at a given stellar age.
+
+        Args:
+            age (float):
+                The stellar age (in years) at which to evaluate the SFR.
+
+        Returns:
+            float:
+                The SFR at the passed age (zero outside the realisation grid).
+        """
+        return np.interp(age, self.finegrid, self.intsfh, left=0.0, right=0.0)
+
+    def _sfrs(self, ages):
+        """Vectorised version of _sfr for multiple ages.
+
+        Args:
+            ages (np.ndarray of float):
+                The stellar ages (in years) at which to evaluate the SFR.
+
+        Returns:
+            np.ndarray of float:
+                The SFR at each age.
+        """
+        return self._sfr(ages)
