@@ -256,3 +256,18 @@ class BlackHoles(Particles, BlackholesComponent):
                 "It is necessary to first calculate the disc_incident "
                 "particle_spectra before calculating the ionising luminosity"
             )
+
+    def spatially_resample(self, *args, **kwargs):
+        """Spatial resampling is not supported for black holes.
+
+        Black holes are discrete objects and should not be spatially
+        resampled.
+
+        Raises:
+            NotImplementedError: always.
+        """
+        raise NotImplementedError(
+            "Spatial resampling of black holes is nonsensical. "
+            "Black holes are discrete objects that should not be "
+            "spatially resampled."
+        )

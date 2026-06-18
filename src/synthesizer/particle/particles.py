@@ -158,6 +158,26 @@ class Particles:
         # Attach the name of the particle type
         self.name = name
 
+        # Track names of any extra attributes set via **kwargs by subclasses.
+        # Populated by _register_custom_attrs; used by spatially_resample.
+        self._custom_attr_names = []
+
+    def _register_custom_attrs(self, **kwargs):
+        """Record the names of extra attributes added via ``**kwargs``.
+
+        Each subclass constructor should call this with its own ``**kwargs``
+        after setting those attributes on *self* so that methods like
+        :meth:`spatially_resample` can later discover and handle them.
+
+        Args:
+            **kwargs:
+                The same keyword arguments that were passed to the subclass
+                constructor.
+        """
+        for name in kwargs:
+            if name not in self._custom_attr_names:
+                self._custom_attr_names.append(name)
+
     @property
     def centered_coordinates(self):
         """Returns the coordinates centred on the geometric mean."""
@@ -603,7 +623,9 @@ class Particles:
         # Get the attribute
         attr_str = attr
         try:
-            attr = get_param(attr_str, attr_override_obj, None, self)
+            attr = get_param(
+                attr_str, attr_override_obj, None, self, preserve_units=True
+            )
         except exceptions.MissingAttribute as e:
             raise exceptions.MissingMaskAttribute(
                 f"Masking attribute ({attr_str}) not found on particle object."
@@ -613,7 +635,13 @@ class Particles:
         if isinstance(thresh, str):
             thresh_str = thresh
             try:
-                thresh = get_param(thresh_str, attr_override_obj, None, self)
+                thresh = get_param(
+                    thresh_str,
+                    attr_override_obj,
+                    None,
+                    self,
+                    preserve_units=True,
+                )
             except exceptions.MissingAttribute as e:
                 raise exceptions.MissingMaskAttribute(
                     f"Mask threshold alias ({thresh_str}) not found on "
@@ -684,6 +712,39 @@ class Particles:
         for key, sed in self.particle_spectra.items():
             # Sum the spectra
             self.spectra[key] = sed.sum()
+
+    def spatially_resample(self, resample_factor, **kwargs):
+        """Resample this particle distribution spatially.
+
+        Each particle is replaced by *resample_factor* new particles whose
+        positions are sampled from the SPH kernel centred on the original
+        position.  Any extra attributes registered via ``**kwargs`` at
+        construction time (see :attr:`_custom_attr_names`) are automatically
+        included and duplicated by default.
+
+        Subclasses (Gas, Stars) override this with a concrete implementation
+        that harvests their own attributes and delegates to the class-level
+        resampling engine.
+
+        Args:
+            resample_factor (int):
+                Number of new particles per original particle (>= 2).
+            **kwargs:
+                Additional keyword arguments forwarded to the subclass
+                implementation (e.g. ``seed``, ``mask``, ``kernel``,
+                ``proportional_attrs``, ``distributions``).
+
+        Returns:
+            A new particle object of the same type with the resampled
+            distribution.
+
+        Raises:
+            NotImplementedError: If the subclass has not overridden this
+                method.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not implement spatially_resample."
+        )
 
     def __str__(self):
         """Return a string representation of the particle object.

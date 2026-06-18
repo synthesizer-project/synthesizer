@@ -13,12 +13,24 @@ Example usages:
               redshift=redshift, coordinates=coordinates, ...)
 """
 
+from copy import deepcopy
+
 import numpy as np
 from unyt import Mpc, Msun, km, s
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
 from synthesizer.particle.particles import Particles
+from synthesizer.particle.resample_utils import (
+    resample_by_mode,
+    resample_coordinates,
+    resample_smoothing_lengths,
+    resample_velocities,
+    split_by_mask,
+    validate_mask,
+    validate_required_inputs,
+    validate_resample_factor,
+)
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
@@ -211,9 +223,11 @@ class Gas(Particles, Component):
         # Check the arguments we've been given
         self._check_gas_args()
 
-        # Set any extra properties
+        # Set any extra properties and record their names so that methods
+        # like spatially_resample can discover and handle them later.
         for key, value in kwargs.items():
             setattr(self, key, value)
+        self._register_custom_attrs(**kwargs)
 
     def _check_gas_args(self):
         """Sanitize the inputs ensuring all arguments agree and are compatible.
@@ -250,6 +264,335 @@ class Gas(Particles, Component):
         formatter = TableFormatter(self)
 
         return formatter.get_table("Gas")
+
+    @timed("Gas.spatially_resample")
+    def spatially_resample(
+        self,
+        resample_factor,
+        kernel=None,
+        seed=None,
+        mask=None,
+        attr_modes=None,
+        velocity_dispersion=None,
+    ):
+        """Resample this gas distribution spatially.
+
+        Each particle is replaced by *resample_factor* new particles whose
+        positions are sampled from the SPH kernel centred on the original
+        position.  All standard Gas attributes and any extras registered at
+        construction time (see
+        :attr:`~synthesizer.particle.particles.Particles._custom_attr_names`)
+        are harvested automatically.
+
+        Per-attribute resampling is controlled via *attr_modes*.  See
+        :func:`~.resample_utils.resample_by_mode` for the full list of
+        supported modes.
+
+        **Default modes per attribute:**
+
+        - ``masses``, ``dust_masses`` → ``"proportional"`` (sum conserved)
+        - all others → ``"duplicated"`` (children inherit parent value)
+        - scalars (tau_v, softening_lengths, dust_to_metal_ratio when not
+          per-particle) → kept as-is
+
+        Args:
+            resample_factor (int):
+                Number of new particles per original particle (>= 2).
+            kernel (Kernel):
+                SPH kernel for position sampling
+                (e.g. ``Kernel("cubic")``).  Required.
+            seed (int, optional):
+                Random seed for reproducibility.
+            mask (array-like, optional):
+                Boolean mask.  ``True`` particles are resampled;
+                ``False`` particles are kept unchanged.
+            attr_modes (dict, optional):
+                Override resampling mode for individual attributes.
+                See :func:`~.resample_utils.resample_by_mode`.
+            velocity_dispersion (float or unyt_quantity, optional):
+                Std. dev. of Gaussian velocity noise.
+
+        Returns:
+            Gas: A new Gas object with the resampled distribution.
+        """
+        # Unpack any of the custom kwargs we attached at init
+        custom = {
+            name: getattr(self, name)
+            for name in self._custom_attr_names
+            if hasattr(self, name)
+        }
+
+        # Get all the other attributes we need for resampling
+        coordinates = self.coordinates
+        smoothing_lengths = self.smoothing_lengths
+        masses = self.masses
+        metallicities = self.metallicities
+        velocities = self.velocities
+        star_forming = getattr(self, "star_forming", None)
+        dust_to_metal_ratio = getattr(self, "dust_to_metal_ratio", None)
+        tau_v = self.tau_v
+        softening_lengths = self.softening_lengths
+        metallicity_floor = self.metallicity_floor
+        dust_masses = getattr(self, "dust_masses", None)
+        redshift = self.redshift
+        centre = getattr(self, "centre", None)
+
+        # Validate our inputs
+        validate_resample_factor(resample_factor)
+        validate_required_inputs(
+            coordinates=coordinates,
+            smoothing_lengths=smoothing_lengths,
+            kernel=kernel,
+        )
+
+        # How many original particles do we have?
+        n_orig = coordinates.shape[0]
+
+        def _is_per_particle_value(value):
+            return (
+                value is not None
+                and hasattr(value, "shape")
+                and value.ndim >= 1
+                and value.shape[0] == to_resample[0].shape[0]
+            )
+
+        # Ensure we have a dict for attr_modes (even if empty)
+        if attr_modes is None:
+            attr_modes = {}
+
+        # Set up the random number generator
+        rng = np.random.default_rng(seed)
+
+        # If we have a mask we need to split the original arrays into those
+        # that will be resampled and those that will be kept as-is
+        if mask is not None:
+            # First, is the mask even valid?
+            mask = validate_mask(mask, n_orig)
+
+            # Split all the relevant arrays by the mask
+            to_resample, no_resample = split_by_mask(
+                mask,
+                coordinates=coordinates,
+                smoothing_lengths=smoothing_lengths,
+                masses=masses,
+                metallicities=metallicities,
+                velocities=velocities,
+                star_forming=star_forming,
+                dust_to_metal_ratio=dust_to_metal_ratio,
+                tau_v=tau_v,
+                softening_lengths=softening_lengths,
+                dust_masses=dust_masses,
+                **custom,
+            )
+        else:
+            # Create dummies for the to_resample and no_resample cases so we
+            # proceed cleanly
+            to_resample = (
+                coordinates,
+                smoothing_lengths,
+                masses,
+                metallicities,
+                velocities,
+                star_forming,
+                dust_to_metal_ratio,
+                tau_v,
+                softening_lengths,
+                dust_masses,
+            ) + tuple(custom[name] for name in self._custom_attr_names)
+            no_resample = None
+
+        # Early exit if we have no particles to resample
+        if to_resample[0].shape[0] == 0:
+            return deepcopy(self)
+
+        # Start with the coordinates
+        new_coords = resample_coordinates(
+            coordinates=to_resample[0],
+            smoothing_lengths=to_resample[1],
+            kernel=kernel,
+            resample_factor=resample_factor,
+            seed=seed,
+        )
+
+        # If we have velocities we can resample those too
+        if velocities is not None:
+            new_vels = resample_velocities(
+                velocities=to_resample[4],
+                resample_factor=resample_factor,
+                velocity_dispersion=velocity_dispersion,
+                seed=seed,
+            )
+        else:
+            new_vels = None
+
+        # Resample the smoothing lengths (this is the last array which is
+        # independent of the resampling modes
+        new_sml = resample_smoothing_lengths(
+            smoothing_lengths=to_resample[1],
+            resample_factor=resample_factor,
+        )
+
+        # Now handle the attributes which can have a range of resampling modes
+        new_masses = resample_by_mode(
+            to_resample[2],
+            attr_modes.get("masses", "proportional"),
+            resample_factor,
+            rng,
+        )
+        new_metallicities = resample_by_mode(
+            to_resample[3],
+            attr_modes.get("metallicities", "duplicated"),
+            resample_factor,
+            rng,
+        )
+        if star_forming is not None:
+            new_star_forming = resample_by_mode(
+                to_resample[5],
+                attr_modes.get("star_forming", "duplicated"),
+                resample_factor,
+                rng,
+            )
+        else:
+            new_star_forming = None
+        if dust_masses is not None:
+            new_dust_masses = resample_by_mode(
+                to_resample[9],
+                attr_modes.get("dust_masses", "proportional"),
+                resample_factor,
+                rng,
+            )
+        else:
+            new_dust_masses = None
+
+        # Optical depth only needs resampling if it's an array of values for
+        # each particle, if it's a single value we just keep it as-is
+        if tau_v is not None and hasattr(tau_v, "shape") and tau_v.ndim >= 1:
+            new_tau_v = resample_by_mode(
+                to_resample[7],
+                attr_modes.get("tau_v", "duplicated"),
+                resample_factor,
+                rng,
+            )
+        else:
+            new_tau_v = tau_v
+
+        # Softening lengths only need resampling if it's an array of values for
+        # each particle, if it's a single value we just keep it as-is
+        if (
+            softening_lengths is not None
+            and hasattr(softening_lengths, "shape")
+            and softening_lengths.ndim >= 1
+        ):
+            new_softening = resample_by_mode(
+                to_resample[8],
+                attr_modes.get("softening_lengths", "duplicated"),
+                resample_factor,
+                rng,
+            )
+        else:
+            new_softening = softening_lengths
+
+        # Dust to metal ratio only needs resampling if it's an array of values
+        # for each particle, if it's a single value we just keep it as-is
+        if (
+            dust_to_metal_ratio is not None
+            and hasattr(dust_to_metal_ratio, "shape")
+            and dust_to_metal_ratio.ndim >= 1
+        ):
+            new_dust_to_metal_ratio = resample_by_mode(
+                to_resample[6],
+                attr_modes.get("dust_to_metal_ratio", "duplicated"),
+                resample_factor,
+                rng,
+            )
+        else:
+            new_dust_to_metal_ratio = dust_to_metal_ratio
+
+        # Handle any custom attributes which are arrays and need to be
+        # resampled according to the attr_modes dict
+        new_custom = {
+            self._custom_attr_names[i]: (
+                resample_by_mode(
+                    to_resample[10 + i],
+                    attr_modes.get(self._custom_attr_names[i], "duplicated"),
+                    resample_factor,
+                    rng,
+                )
+                if _is_per_particle_value(to_resample[10 + i])
+                else to_resample[10 + i]
+            )
+            for i in range(len(custom))
+            if to_resample[10 + i] is not None
+        }
+
+        # Combine any no_resample particles back in with the resampled ones
+        if no_resample is not None:
+            new_coords = combine_arrays(new_coords, no_resample[0])
+            new_sml = combine_arrays(new_sml, no_resample[1])
+            new_masses = combine_arrays(new_masses, no_resample[2])
+            new_metallicities = combine_arrays(
+                new_metallicities, no_resample[3]
+            )
+            if velocities is not None:
+                new_vels = combine_arrays(new_vels, no_resample[4])
+            if star_forming is not None:
+                new_star_forming = combine_arrays(
+                    new_star_forming, no_resample[5]
+                )
+            if (
+                dust_to_metal_ratio is not None
+                and hasattr(dust_to_metal_ratio, "shape")
+                and dust_to_metal_ratio.ndim >= 1
+            ):
+                new_dust_to_metal_ratio = combine_arrays(
+                    new_dust_to_metal_ratio, no_resample[6]
+                )
+            if (
+                tau_v is not None
+                and hasattr(tau_v, "shape")
+                and tau_v.ndim >= 1
+            ):
+                new_tau_v = combine_arrays(new_tau_v, no_resample[7])
+            if (
+                softening_lengths is not None
+                and hasattr(softening_lengths, "shape")
+                and softening_lengths.ndim >= 1
+            ):
+                new_softening = combine_arrays(new_softening, no_resample[8])
+            if dust_masses is not None:
+                new_dust_masses = combine_arrays(
+                    new_dust_masses, no_resample[9]
+                )
+            for i in range(len(custom)):
+                name = self._custom_attr_names[i]
+                if name in new_custom and _is_per_particle_value(
+                    to_resample[10 + i]
+                ):
+                    new_custom[name] = combine_arrays(
+                        new_custom[name], no_resample[10 + i]
+                    )
+
+        # Create the new Gas object with all the resampled attributes
+        return type(self)(
+            masses=new_masses,
+            metallicities=new_metallicities,
+            star_forming=new_star_forming,
+            redshift=redshift if redshift is not None else 0.0,
+            coordinates=new_coords,
+            velocities=new_vels,
+            smoothing_lengths=new_sml,
+            softening_lengths=new_softening,
+            dust_to_metal_ratio=(
+                None
+                if new_dust_masses is not None
+                else new_dust_to_metal_ratio
+            ),
+            dust_masses=new_dust_masses,
+            centre=centre,
+            metallicity_floor=metallicity_floor,
+            tau_v=new_tau_v,
+            **new_custom,
+        )
 
     def __add__(self, other):
         """Add two gas objects together.
