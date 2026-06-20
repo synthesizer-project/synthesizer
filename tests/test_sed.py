@@ -2,7 +2,7 @@
 
 import numpy as np
 from astropy.cosmology import Planck18
-from unyt import Hz, angstrom, cm, erg, nJy, pc, s
+from unyt import Hz, angstrom, c, cm, erg, km, nJy, pc, s
 
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emission_models.attenuation import PowerLaw
@@ -166,3 +166,44 @@ def test_get_fnu_applies_igm_with_observer_frame_wavelengths():
     assert igm.last_z == z
     np.testing.assert_allclose(igm.last_lam_obs.value, sed._obslam)
     np.testing.assert_allclose(fnu.value, 0.5 * baseline.value)
+
+
+def test_get_fnu_peculiar_velocity_zero_matches_default():
+    """peculiar_velocity of None or 0 reproduces the cosmological get_fnu."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
+    z = 1.5
+
+    base = Sed(lam=lam, lnu=lnu).get_fnu(Planck18, z)
+    none = Sed(lam=lam, lnu=lnu).get_fnu(Planck18, z, peculiar_velocity=None)
+    zero = Sed(lam=lam, lnu=lnu).get_fnu(Planck18, z, peculiar_velocity=0.0)
+
+    np.testing.assert_array_equal(none.value, base.value)
+    np.testing.assert_allclose(zero.value, base.value)
+
+
+def test_get_fnu_peculiar_velocity_shifts_to_observed_redshift():
+    """A peculiar velocity shifts to z_obs while the luminosity distance and
+    (1+z) factor stay tied to the cosmological z."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
+    z = 1.0
+    v = 600.0  # km/s, receding
+
+    z_obs = (1.0 + z) * (1.0 + v / c.to_value("km/s")) - 1.0
+    d_l = get_luminosity_distance(Planck18, z).to(cm)
+    d_l_eff = d_l * (1.0 + z_obs) / (1.0 + z)
+    expected = lnu * (1.0 + z_obs) / (4 * np.pi * d_l_eff**2)
+
+    sed = Sed(lam=lam, lnu=lnu)
+    fnu = sed.get_fnu(Planck18, z, peculiar_velocity=v)
+
+    np.testing.assert_allclose(sed._obslam, sed._lam * (1.0 + z_obs))
+    np.testing.assert_allclose(sed._obsnu, sed._nu / (1.0 + z_obs))
+    np.testing.assert_allclose(fnu.to("nJy").value, expected.to("nJy").value)
+
+    # A unyt velocity matches the float (km/s) shorthand.
+    fnu_unyt = Sed(lam=lam, lnu=lnu).get_fnu(
+        Planck18, z, peculiar_velocity=v * km / s
+    )
+    np.testing.assert_allclose(fnu_unyt.to("nJy").value, fnu.to("nJy").value)
