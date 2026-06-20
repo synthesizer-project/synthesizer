@@ -23,7 +23,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 from synthesizer.extensions.integration import simps_last_axis, trapz_last_axis
 
 plt.rcParams["font.family"] = "DejaVu Serif"

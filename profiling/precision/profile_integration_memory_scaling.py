@@ -34,7 +34,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import psutil
-
 from synthesizer.extensions.integration import (
     simps_last_axis,
     trapz_last_axis,

@@ -8,12 +8,12 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 from astropy.cosmology import Planck18 as cosmo
+from synthesizer.extensions.timers import reset_timings, tic, toc
 from unyt import Mpc, angstrom, kpc, unyt_array
 
 from synthesizer import check_atomic_timing, exceptions
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.emissions import Sed
-from synthesizer.extensions.timers import reset_timings, tic, toc
 from synthesizer.instruments import FilterCollection, Instrument
 from synthesizer.pipeline.pipeline import Pipeline
 from synthesizer.pipeline.pipeline_utils import (
