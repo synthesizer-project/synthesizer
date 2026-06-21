@@ -1102,7 +1102,7 @@ class Stars(Particles, StarsComponent):
 
         if method == "field":
             field_kernel = kernel if field_kernel is None else field_kernel
-            new_coords, _parent_indices = resample_coordinates_field(
+            new_coords = resample_coordinates_field(
                 coordinates=to_resample[0],
                 smoothing_lengths=to_resample[1],
                 kernel=kernel,

@@ -437,8 +437,9 @@ def resample_coordinates_field(
             Number of children per parent.
 
     Returns:
-        tuple[unyt_array, np.ndarray]:
-            ``(new_coordinates, parent_indices)``.
+        unyt_array:
+            Deterministic child coordinates of shape
+            ``(N * resample_factor, 3)``.
     """
     unit_offsets = deterministic_kernel_offsets(kernel, resample_factor)
     scaled_offsets = (
@@ -448,11 +449,7 @@ def resample_coordinates_field(
 
     coords = _tile_array(coordinates, resample_factor)
     offsets_flat = scaled_offsets.reshape(-1, 3) * coordinates.units
-    parent_indices = np.repeat(
-        np.arange(coordinates.shape[0], dtype=np.int64), resample_factor
-    )
-
-    return coords + offsets_flat, parent_indices
+    return coords + offsets_flat
 
 
 def resample_attributes_field(
