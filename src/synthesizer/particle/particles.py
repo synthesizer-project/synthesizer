@@ -732,7 +732,7 @@ class Particles:
             **kwargs:
                 Additional keyword arguments forwarded to the subclass
                 implementation (e.g. ``seed``, ``mask``, ``kernel``,
-                ``proportional_attrs``, ``distributions``).
+                ``method``, ``attr_modes``).
 
         Returns:
             A new particle object of the same type with the resampled

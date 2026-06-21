@@ -35,15 +35,20 @@ from synthesizer.particle.particles import Particles
 from synthesizer.particle.resample_utils import (
     _sample_1d_histogram,
     _sample_sfzh_arrays,
+    add_velocity_dispersion,
+    resample_attributes_field,
     resample_by_mode,
     resample_coordinates,
+    resample_coordinates_field,
     resample_smoothing_lengths,
+    resample_smoothing_lengths_field,
     resample_velocities,
     split_by_mask,
     validate_mask,
     validate_required_inputs,
     validate_resample_factor,
 )
+from synthesizer.particle.sph_density import evaluate_sph_field
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
@@ -915,6 +920,8 @@ class Stars(Particles, StarsComponent):
         sfzh=None,
         sfh=None,
         metal_dist=None,
+        method="random",
+        field_kernel=None,
     ):
         """Resample this stellar distribution spatially.
 
@@ -978,6 +985,13 @@ class Stars(Particles, StarsComponent):
                 provided with *sfh*, combined into a 2-D SFZH.  When
                 provided alone, metallicities are sampled from the
                 1-D MetalDist and ages are kept from the input.
+            method (str, optional):
+                ``"random"`` keeps the original stochastic position sampler.
+                ``"field"`` uses deterministic child placement and local SPH
+                interpolation for intensive attributes.
+            field_kernel (Kernel, optional):
+                Kernel to use for field interpolation in ``"field"`` mode.
+                Defaults to *kernel*.
 
         Returns:
             Stars: A new Stars object with the resampled distribution.
@@ -1086,291 +1100,587 @@ class Stars(Particles, StarsComponent):
         if to_resample[0].shape[0] == 0:
             return deepcopy(self)
 
-        # Start with the coordinates
-        new_coords = resample_coordinates(
-            coordinates=to_resample[0],
-            smoothing_lengths=to_resample[1],
-            kernel=kernel,
-            resample_factor=resample_factor,
-            seed=seed,
-        )
-
-        # If we have velocities we can resample those too
-        if velocities is not None:
-            new_vels = resample_velocities(
-                velocities=to_resample[6],
+        if method == "field":
+            field_kernel = kernel if field_kernel is None else field_kernel
+            new_coords, _parent_indices = resample_coordinates_field(
+                coordinates=to_resample[0],
+                smoothing_lengths=to_resample[1],
+                kernel=kernel,
                 resample_factor=resample_factor,
-                velocity_dispersion=velocity_dispersion,
-                seed=seed,
             )
-        else:
-            new_vels = None
-
-        # Resample the smoothing lengths (this is the last array which is
-        # independent of the resampling modes)
-        new_sml = resample_smoothing_lengths(
-            smoothing_lengths=to_resample[1],
-            resample_factor=resample_factor,
-        )
-
-        # Now handle the attributes which can have a range of resampling
-        # modes.  The SFZH path overrides ages, metallicities and masses;
-        # everything else follows attr_modes.
-        if sfzh is not None or sfh is not None or metal_dist is not None:
-            # How many new particles in total do we need to sample?
-            n_total = to_resample[0].shape[0] * resample_factor
-
-            # Normalise mass to the original input total
-            orig_total_mass = (
-                np.sum(to_resample[2])
-                if to_resample[2] is not None
-                else n_total * Msun
+            new_sml = resample_smoothing_lengths_field(
+                parent_smoothing_lengths=to_resample[1],
+                resample_factor=resample_factor,
             )
 
-            # Derive grid axes from the particle population (sorted, finely
-            # sampled so the parametric Stars can integrate accurately)
-            positive_ages = to_resample[3].value[to_resample[3].value > 0]
-            if positive_ages.size == 0:
-                raise ValueError(
-                    "SFH-based resampling requires at least one positive age."
+            field_attrs = {}
+            if sfzh is None and sfh is None and metal_dist is None:
+                field_attrs["log10ages"] = np.log10(
+                    to_resample[3].to(yr).value
                 )
-            log10ages = np.linspace(
-                np.log10(positive_ages.min()),
-                np.log10(to_resample[3].value.max()),
-                100,
+                field_attrs["metallicities"] = to_resample[4]
+            if velocities is not None:
+                field_attrs["velocities"] = to_resample[6]
+            if (
+                tau_v is not None
+                and hasattr(tau_v, "shape")
+                and tau_v.ndim >= 1
+            ):
+                field_attrs["tau_v"] = to_resample[7]
+            if alpha_enhancement is not None:
+                field_attrs["alpha_enhancement"] = to_resample[8]
+            if s_oxygen is not None:
+                field_attrs["s_oxygen"] = to_resample[9]
+            if s_hydrogen is not None:
+                field_attrs["s_hydrogen"] = to_resample[10]
+            if _is_per_particle_value(to_resample[12]):
+                field_attrs["redshift"] = to_resample[12]
+            if _is_per_particle_value(to_resample[13]):
+                field_attrs["fesc"] = to_resample[13]
+            if _is_per_particle_value(to_resample[14]):
+                field_attrs["fesc_ly_alpha"] = to_resample[14]
+
+            _density, interpolated_attrs = evaluate_sph_field(
+                query_positions=new_coords,
+                particle_positions=to_resample[0],
+                smoothing_lengths=to_resample[1],
+                masses=to_resample[2],
+                kernel=field_kernel,
+                attributes=field_attrs,
             )
-            metallicities_axis = np.linspace(
-                self.metallicities.min() or 1e-5,
-                self.metallicities.max(),
-                100,
-            )
 
-            # Build a full 2-D SFZH when both distributions are provided;
-            # for single-distribution cases sample directly from the 1-D
-            # evaluated histogram.
-            if sfh is not None and metal_dist is not None:
-                sfh_arr = _evaluate_sfh_on_grid(sfh, log10ages)
-                md_arr = _evaluate_md_on_grid(metal_dist, metallicities_axis)
-            else:
-                sfh_arr = None
-                md_arr = None
+            if sfzh is not None or sfh is not None or metal_dist is not None:
+                # How many new particles in total do we need to sample?
+                n_total = to_resample[0].shape[0] * resample_factor
 
-            if sfzh is not None:
-                # Use a pre-built 2-D SFZH object to sample ages and
-                # metallicities from the joint distribution
-                new_ages, new_metallicities = _sample_sfzh_arrays(
-                    sfzh.sfzh,
-                    sfzh.log10ages,
-                    sfzh.metallicities,
-                    n_total,
-                    rng,
+                # Normalise mass to the original input total
+                orig_total_mass = (
+                    np.sum(to_resample[2])
+                    if to_resample[2] is not None
+                    else n_total * Msun
                 )
-                new_ages *= yr
 
-            elif sfh is not None and metal_dist is not None:
-                # Build a 2-D SFZH from the outer product of the 1-D
-                # SFH and MetalDist arrays (or their evaluated forms)
-                sfzh_2d = np.outer(sfh_arr, md_arr)
-                sfzh_2d /= sfzh_2d.sum()
-
-                new_ages, new_metallicities = _sample_sfzh_arrays(
-                    sfzh_2d,
-                    log10ages,
-                    metallicities_axis,
-                    n_total,
-                    rng,
+                positive_ages = to_resample[3].value[to_resample[3].value > 0]
+                if positive_ages.size == 0:
+                    raise ValueError(
+                        "SFH-based resampling requires at least one "
+                        "positive age."
+                    )
+                log10ages = np.linspace(
+                    np.log10(positive_ages.min()),
+                    np.log10(to_resample[3].value.max()),
+                    100,
                 )
-                new_ages *= yr
+                metallicities_axis = np.linspace(
+                    self.metallicities.min() or 1e-5,
+                    self.metallicities.max(),
+                    100,
+                )
 
-            elif sfh is not None:
-                # Evaluate the SFH onto the age grid and sample ages
-                # from the 1-D SFH distribution.
-                sfh_arr = _evaluate_sfh_on_grid(sfh, log10ages)
+                if sfh is not None and metal_dist is not None:
+                    sfh_arr = _evaluate_sfh_on_grid(sfh, log10ages)
+                    md_arr = _evaluate_md_on_grid(
+                        metal_dist, metallicities_axis
+                    )
+                else:
+                    sfh_arr = None
+                    md_arr = None
 
-                # The SFH is a histogram over log10(age) bins, so we
-                # sample log10(age) values and then convert to linear
-                # age.
-                new_ages = (
-                    10
-                    ** _sample_1d_histogram(
-                        sfh_arr / np.sum(sfh_arr),
-                        log10ages,
+                if sfzh is not None:
+                    new_ages, new_metallicities = _sample_sfzh_arrays(
+                        sfzh.sfzh,
+                        sfzh.log10ages,
+                        sfzh.metallicities,
                         n_total,
                         rng,
                     )
-                    * yr
+                    new_ages *= yr
+                elif sfh is not None and metal_dist is not None:
+                    sfzh_2d = np.outer(sfh_arr, md_arr)
+                    sfzh_2d /= sfzh_2d.sum()
+
+                    new_ages, new_metallicities = _sample_sfzh_arrays(
+                        sfzh_2d,
+                        log10ages,
+                        metallicities_axis,
+                        n_total,
+                        rng,
+                    )
+                    new_ages *= yr
+                elif sfh is not None:
+                    sfh_arr = _evaluate_sfh_on_grid(sfh, log10ages)
+                    new_ages = (
+                        10
+                        ** _sample_1d_histogram(
+                            sfh_arr / np.sum(sfh_arr),
+                            log10ages,
+                            n_total,
+                            rng,
+                        )
+                        * yr
+                    )
+                    new_metallicities = resample_by_mode(
+                        to_resample[4],
+                        attr_modes.get("metallicities", "duplicated"),
+                        resample_factor,
+                        rng,
+                    )
+                elif metal_dist is not None:
+                    md_arr = _evaluate_md_on_grid(
+                        metal_dist, metallicities_axis
+                    )
+                    new_metallicities = _sample_1d_histogram(
+                        md_arr / np.sum(md_arr),
+                        metallicities_axis,
+                        n_total,
+                        rng,
+                    )
+                    new_ages = resample_by_mode(
+                        to_resample[3],
+                        attr_modes.get("ages", "duplicated"),
+                        resample_factor,
+                        rng,
+                    )
+
+                new_initial_masses = (
+                    np.ones(n_total, dtype=np.float64)
+                    * orig_total_mass.value
+                    / n_total
+                    * orig_total_mass.units
+                )
+                new_current_masses = None
+            else:
+                if "log10ages" in interpolated_attrs:
+                    interpolated_attrs["ages"] = (
+                        10 ** interpolated_attrs.pop("log10ages")
+                    ) * yr
+
+                processed = resample_attributes_field(
+                    interpolated_attrs=interpolated_attrs,
+                    conserved_attrs={
+                        "initial_masses": to_resample[2],
+                        "current_masses": to_resample[5],
+                    },
+                    resample_factor=resample_factor,
+                    attr_modes=attr_modes,
+                    rng=rng,
+                    default_interpolated_modes={
+                        "ages": "duplicated",
+                        "metallicities": "duplicated",
+                        "velocities": "duplicated",
+                        "tau_v": "duplicated",
+                        "alpha_enhancement": "duplicated",
+                        "s_oxygen": "duplicated",
+                        "s_hydrogen": "duplicated",
+                        "redshift": "duplicated",
+                        "fesc": "duplicated",
+                        "fesc_ly_alpha": "duplicated",
+                    },
+                    default_conserved_modes={
+                        "initial_masses": "proportional",
+                        "current_masses": "proportional",
+                    },
                 )
 
-                # Metallicities come from the input particles
-                new_metallicities = resample_by_mode(
-                    to_resample[4],
-                    attr_modes.get("metallicities", "duplicated"),
+                new_initial_masses = processed["initial_masses"]
+                new_current_masses = processed["current_masses"]
+                new_ages = processed["ages"]
+                new_metallicities = processed["metallicities"]
+
+            new_tau_v = (
+                interpolated_attrs.get("tau_v", tau_v)
+                if sfzh is not None
+                or sfh is not None
+                or metal_dist is not None
+                else processed.get("tau_v", tau_v)
+            )
+            new_redshift = (
+                interpolated_attrs.get("redshift", redshift)
+                if sfzh is not None
+                or sfh is not None
+                or metal_dist is not None
+                else processed.get("redshift", redshift)
+            )
+            new_fesc = (
+                interpolated_attrs.get("fesc", fesc)
+                if sfzh is not None
+                or sfh is not None
+                or metal_dist is not None
+                else processed.get("fesc", fesc)
+            )
+            new_fesc_ly_alpha = (
+                interpolated_attrs.get("fesc_ly_alpha", fesc_ly_alpha)
+                if sfzh is not None
+                or sfh is not None
+                or metal_dist is not None
+                else processed.get("fesc_ly_alpha", fesc_ly_alpha)
+            )
+            new_alpha = (
+                interpolated_attrs.get("alpha_enhancement", None)
+                if sfzh is not None
+                or sfh is not None
+                or metal_dist is not None
+                else processed.get("alpha_enhancement", None)
+            )
+            new_s_oxygen = (
+                interpolated_attrs.get("s_oxygen", None)
+                if sfzh is not None
+                or sfh is not None
+                or metal_dist is not None
+                else processed.get("s_oxygen", None)
+            )
+            new_s_hydrogen = (
+                interpolated_attrs.get("s_hydrogen", None)
+                if sfzh is not None
+                or sfh is not None
+                or metal_dist is not None
+                else processed.get("s_hydrogen", None)
+            )
+            new_vels = (
+                interpolated_attrs.get("velocities", None)
+                if sfzh is not None
+                or sfh is not None
+                or metal_dist is not None
+                else processed.get("velocities", None)
+            )
+            if new_vels is not None and velocity_dispersion is not None:
+                new_vels = add_velocity_dispersion(
+                    new_vels, velocity_dispersion, seed=seed
+                )
+
+            if (
+                softening_lengths is not None
+                and hasattr(softening_lengths, "shape")
+                and softening_lengths.ndim >= 1
+            ):
+                new_softening = resample_by_mode(
+                    to_resample[11],
+                    attr_modes.get("softening_lengths", "duplicated"),
                     resample_factor,
                     rng,
                 )
+            else:
+                new_softening = softening_lengths
 
-            elif metal_dist is not None:
-                # Evaluate the MetalDist onto the metallicity grid and
-                # sample metallicities from the 1-D MetalDist
-                md_arr = _evaluate_md_on_grid(metal_dist, metallicities_axis)
+            new_custom = {
+                self._custom_attr_names[i]: (
+                    resample_by_mode(
+                        to_resample[15 + i],
+                        attr_modes.get(
+                            self._custom_attr_names[i], "duplicated"
+                        ),
+                        resample_factor,
+                        rng,
+                    )
+                    if _is_per_particle_value(to_resample[15 + i])
+                    else to_resample[15 + i]
+                )
+                for i in range(len(custom))
+                if to_resample[15 + i] is not None
+            }
+        elif method == "random":
+            # Start with the coordinates
+            new_coords = resample_coordinates(
+                coordinates=to_resample[0],
+                smoothing_lengths=to_resample[1],
+                kernel=kernel,
+                resample_factor=resample_factor,
+                seed=seed,
+            )
 
-                new_metallicities = _sample_1d_histogram(
-                    md_arr / np.sum(md_arr),
-                    metallicities_axis,
-                    n_total,
-                    rng,
+            # If we have velocities we can resample those too
+            if velocities is not None:
+                new_vels = resample_velocities(
+                    velocities=to_resample[6],
+                    resample_factor=resample_factor,
+                    velocity_dispersion=velocity_dispersion,
+                    seed=seed,
+                )
+            else:
+                new_vels = None
+
+            # Resample the smoothing lengths (this is the last array which is
+            # independent of the resampling modes)
+            new_sml = resample_smoothing_lengths(
+                smoothing_lengths=to_resample[1],
+                resample_factor=resample_factor,
+            )
+
+            # Now handle the attributes which can have a range of resampling
+            # modes.  The SFZH path overrides ages, metallicities and masses;
+            # everything else follows attr_modes.
+            if sfzh is not None or sfh is not None or metal_dist is not None:
+                # How many new particles in total do we need to sample?
+                n_total = to_resample[0].shape[0] * resample_factor
+
+                # Normalise mass to the original input total
+                orig_total_mass = (
+                    np.sum(to_resample[2])
+                    if to_resample[2] is not None
+                    else n_total * Msun
                 )
 
-                # Ages come from the input particles
+                # Derive grid axes from the particle population (sorted, finely
+                # sampled so the parametric Stars can integrate accurately)
+                positive_ages = to_resample[3].value[to_resample[3].value > 0]
+                if positive_ages.size == 0:
+                    raise ValueError(
+                        "SFH-based resampling requires at least one "
+                        "positive age."
+                    )
+                log10ages = np.linspace(
+                    np.log10(positive_ages.min()),
+                    np.log10(to_resample[3].value.max()),
+                    100,
+                )
+                metallicities_axis = np.linspace(
+                    self.metallicities.min() or 1e-5,
+                    self.metallicities.max(),
+                    100,
+                )
+
+                # Build a full 2-D SFZH when both distributions are provided;
+                # for single-distribution cases sample directly from the 1-D
+                # evaluated histogram.
+                if sfh is not None and metal_dist is not None:
+                    sfh_arr = _evaluate_sfh_on_grid(sfh, log10ages)
+                    md_arr = _evaluate_md_on_grid(
+                        metal_dist, metallicities_axis
+                    )
+                else:
+                    sfh_arr = None
+                    md_arr = None
+
+                if sfzh is not None:
+                    # Use a pre-built 2-D SFZH object to sample ages and
+                    # metallicities from the joint distribution
+                    new_ages, new_metallicities = _sample_sfzh_arrays(
+                        sfzh.sfzh,
+                        sfzh.log10ages,
+                        sfzh.metallicities,
+                        n_total,
+                        rng,
+                    )
+                    new_ages *= yr
+
+                elif sfh is not None and metal_dist is not None:
+                    # Build a 2-D SFZH from the outer product of the 1-D
+                    # SFH and MetalDist arrays (or their evaluated forms)
+                    sfzh_2d = np.outer(sfh_arr, md_arr)
+                    sfzh_2d /= sfzh_2d.sum()
+
+                    new_ages, new_metallicities = _sample_sfzh_arrays(
+                        sfzh_2d,
+                        log10ages,
+                        metallicities_axis,
+                        n_total,
+                        rng,
+                    )
+                    new_ages *= yr
+
+                elif sfh is not None:
+                    # Evaluate the SFH onto the age grid and sample ages
+                    # from the 1-D SFH distribution.
+                    sfh_arr = _evaluate_sfh_on_grid(sfh, log10ages)
+
+                    # The SFH is a histogram over log10(age) bins, so we
+                    # sample log10(age) values and then convert to linear
+                    # age.
+                    new_ages = (
+                        10
+                        ** _sample_1d_histogram(
+                            sfh_arr / np.sum(sfh_arr),
+                            log10ages,
+                            n_total,
+                            rng,
+                        )
+                        * yr
+                    )
+
+                    # Metallicities come from the input particles
+                    new_metallicities = resample_by_mode(
+                        to_resample[4],
+                        attr_modes.get("metallicities", "duplicated"),
+                        resample_factor,
+                        rng,
+                    )
+
+                elif metal_dist is not None:
+                    # Evaluate the MetalDist onto the metallicity grid and
+                    # sample metallicities from the 1-D MetalDist
+                    md_arr = _evaluate_md_on_grid(
+                        metal_dist, metallicities_axis
+                    )
+
+                    new_metallicities = _sample_1d_histogram(
+                        md_arr / np.sum(md_arr),
+                        metallicities_axis,
+                        n_total,
+                        rng,
+                    )
+
+                    # Ages come from the input particles
+                    new_ages = resample_by_mode(
+                        to_resample[3],
+                        attr_modes.get("ages", "duplicated"),
+                        resample_factor,
+                        rng,
+                    )
+
+                new_initial_masses = (
+                    np.ones(n_total, dtype=np.float64)
+                    * orig_total_mass.value
+                    / n_total
+                    * orig_total_mass.units
+                )
+                new_current_masses = None
+            else:
+                new_initial_masses = resample_by_mode(
+                    to_resample[2],
+                    attr_modes.get("initial_masses", "proportional"),
+                    resample_factor,
+                    rng,
+                )
                 new_ages = resample_by_mode(
                     to_resample[3],
                     attr_modes.get("ages", "duplicated"),
                     resample_factor,
                     rng,
                 )
-
-            new_initial_masses = (
-                np.ones(n_total, dtype=np.float64)
-                * orig_total_mass.value
-                / n_total
-                * orig_total_mass.units
-            )
-            new_current_masses = None
-        else:
-            new_initial_masses = resample_by_mode(
-                to_resample[2],
-                attr_modes.get("initial_masses", "proportional"),
-                resample_factor,
-                rng,
-            )
-            new_ages = resample_by_mode(
-                to_resample[3],
-                attr_modes.get("ages", "duplicated"),
-                resample_factor,
-                rng,
-            )
-            new_metallicities = resample_by_mode(
-                to_resample[4],
-                attr_modes.get("metallicities", "duplicated"),
-                resample_factor,
-                rng,
-            )
-            new_current_masses = (
-                resample_by_mode(
-                    to_resample[5],
-                    attr_modes.get("current_masses", "proportional"),
+                new_metallicities = resample_by_mode(
+                    to_resample[4],
+                    attr_modes.get("metallicities", "duplicated"),
                     resample_factor,
                     rng,
                 )
-                if current_masses is not None
+                new_current_masses = (
+                    resample_by_mode(
+                        to_resample[5],
+                        attr_modes.get("current_masses", "proportional"),
+                        resample_factor,
+                        rng,
+                    )
+                    if current_masses is not None
+                    else None
+                )
+
+            # Optical depth only needs resampling if it is an array of
+            # values for each particle. If it is a single value we keep
+            # it as-is.
+            if (
+                tau_v is not None
+                and hasattr(tau_v, "shape")
+                and tau_v.ndim >= 1
+            ):
+                new_tau_v = resample_by_mode(
+                    to_resample[7],
+                    attr_modes.get("tau_v", "duplicated"),
+                    resample_factor,
+                    rng,
+                )
+            else:
+                new_tau_v = tau_v
+
+            if _is_per_particle_value(to_resample[12]):
+                new_redshift = resample_by_mode(
+                    to_resample[12],
+                    attr_modes.get("redshift", "duplicated"),
+                    resample_factor,
+                    rng,
+                )
+            else:
+                new_redshift = redshift
+
+            if _is_per_particle_value(to_resample[13]):
+                new_fesc = resample_by_mode(
+                    to_resample[13],
+                    attr_modes.get("fesc", "duplicated"),
+                    resample_factor,
+                    rng,
+                )
+            else:
+                new_fesc = fesc
+
+            if _is_per_particle_value(to_resample[14]):
+                new_fesc_ly_alpha = resample_by_mode(
+                    to_resample[14],
+                    attr_modes.get("fesc_ly_alpha", "duplicated"),
+                    resample_factor,
+                    rng,
+                )
+            else:
+                new_fesc_ly_alpha = fesc_ly_alpha
+
+            new_alpha = (
+                resample_by_mode(
+                    to_resample[8],
+                    attr_modes.get("alpha_enhancement", "duplicated"),
+                    resample_factor,
+                    rng,
+                )
+                if alpha_enhancement is not None
+                else None
+            )
+            new_s_oxygen = (
+                resample_by_mode(
+                    to_resample[9],
+                    attr_modes.get("s_oxygen", "duplicated"),
+                    resample_factor,
+                    rng,
+                )
+                if s_oxygen is not None
+                else None
+            )
+            new_s_hydrogen = (
+                resample_by_mode(
+                    to_resample[10],
+                    attr_modes.get("s_hydrogen", "duplicated"),
+                    resample_factor,
+                    rng,
+                )
+                if s_hydrogen is not None
                 else None
             )
 
-        # Optical depth only needs resampling if it's an array of values for
-        # each particle, if it's a single value we just keep it as-is
-        if tau_v is not None and hasattr(tau_v, "shape") and tau_v.ndim >= 1:
-            new_tau_v = resample_by_mode(
-                to_resample[7],
-                attr_modes.get("tau_v", "duplicated"),
-                resample_factor,
-                rng,
-            )
-        else:
-            new_tau_v = tau_v
-
-        if _is_per_particle_value(to_resample[12]):
-            new_redshift = resample_by_mode(
-                to_resample[12],
-                attr_modes.get("redshift", "duplicated"),
-                resample_factor,
-                rng,
-            )
-        else:
-            new_redshift = redshift
-
-        if _is_per_particle_value(to_resample[13]):
-            new_fesc = resample_by_mode(
-                to_resample[13],
-                attr_modes.get("fesc", "duplicated"),
-                resample_factor,
-                rng,
-            )
-        else:
-            new_fesc = fesc
-
-        if _is_per_particle_value(to_resample[14]):
-            new_fesc_ly_alpha = resample_by_mode(
-                to_resample[14],
-                attr_modes.get("fesc_ly_alpha", "duplicated"),
-                resample_factor,
-                rng,
-            )
-        else:
-            new_fesc_ly_alpha = fesc_ly_alpha
-
-        new_alpha = (
-            resample_by_mode(
-                to_resample[8],
-                attr_modes.get("alpha_enhancement", "duplicated"),
-                resample_factor,
-                rng,
-            )
-            if alpha_enhancement is not None
-            else None
-        )
-        new_s_oxygen = (
-            resample_by_mode(
-                to_resample[9],
-                attr_modes.get("s_oxygen", "duplicated"),
-                resample_factor,
-                rng,
-            )
-            if s_oxygen is not None
-            else None
-        )
-        new_s_hydrogen = (
-            resample_by_mode(
-                to_resample[10],
-                attr_modes.get("s_hydrogen", "duplicated"),
-                resample_factor,
-                rng,
-            )
-            if s_hydrogen is not None
-            else None
-        )
-
-        # Softening lengths only need resampling if it's an array of values
-        # for each particle, if it's a single value we just keep it as-is
-        if (
-            softening_lengths is not None
-            and hasattr(softening_lengths, "shape")
-            and softening_lengths.ndim >= 1
-        ):
-            new_softening = resample_by_mode(
-                to_resample[11],
-                attr_modes.get("softening_lengths", "duplicated"),
-                resample_factor,
-                rng,
-            )
-        else:
-            new_softening = softening_lengths
-
-        # Handle any custom attributes which are arrays and need to be
-        # resampled according to the attr_modes dict
-        new_custom = {
-            self._custom_attr_names[i]: (
-                resample_by_mode(
-                    to_resample[15 + i],
-                    attr_modes.get(self._custom_attr_names[i], "duplicated"),
+            # Softening lengths only need resampling if it's an array of values
+            # for each particle, if it's a single value we just keep it as-is
+            if (
+                softening_lengths is not None
+                and hasattr(softening_lengths, "shape")
+                and softening_lengths.ndim >= 1
+            ):
+                new_softening = resample_by_mode(
+                    to_resample[11],
+                    attr_modes.get("softening_lengths", "duplicated"),
                     resample_factor,
                     rng,
                 )
-                if _is_per_particle_value(to_resample[15 + i])
-                else to_resample[15 + i]
+            else:
+                new_softening = softening_lengths
+
+            # Handle any custom attributes which are arrays and need to be
+            # resampled according to the attr_modes dict
+            new_custom = {
+                self._custom_attr_names[i]: (
+                    resample_by_mode(
+                        to_resample[15 + i],
+                        attr_modes.get(
+                            self._custom_attr_names[i], "duplicated"
+                        ),
+                        resample_factor,
+                        rng,
+                    )
+                    if _is_per_particle_value(to_resample[15 + i])
+                    else to_resample[15 + i]
+                )
+                for i in range(len(custom))
+                if to_resample[15 + i] is not None
+            }
+        else:
+            raise ValueError(
+                f"Unknown spatial resampling method {method!r}. "
+                "Expected 'random' or 'field'."
             )
-            for i in range(len(custom))
-            if to_resample[15 + i] is not None
-        }
 
         # Combine any no_resample particles back in with the resampled ones
         if no_resample is not None:

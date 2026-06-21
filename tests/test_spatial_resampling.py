@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from unyt import Mpc, Msun, Myr, km, s, unyt_array
 
-from synthesizer import exceptions
+from synthesizer import check_atomic_timing, check_openmp, exceptions
 from synthesizer.kernel_functions import Kernel
 from synthesizer.particle.blackholes import BlackHoles
 from synthesizer.particle.gas import Gas
@@ -12,12 +12,15 @@ from synthesizer.particle.particles import Particles
 from synthesizer.particle.resample_utils import (
     RESAMPLE_MODES,
     add_velocity_dispersion,
+    deterministic_kernel_offsets,
     resample_by_mode,
     sample_kernel_positions,
     validate_mask,
     validate_resample_factor,
 )
+from synthesizer.particle.sph_density import evaluate_sph_field
 from synthesizer.particle.stars import Stars, sample_sfzh
+from synthesizer.utils.operation_timers import OperationTimers
 
 
 def _resample_gas(gas, factor, **kwargs):
@@ -57,6 +60,39 @@ def _make_stars(n=15):
         softening_lengths=np.ones(n) * 0.1 * Mpc,
         redshift=0.1,
     )
+
+
+def _make_overlap_gas():
+    """Create two overlapping gas particles with contrasting metallicities."""
+    return Gas(
+        masses=np.array([1.0, 1.0]) * Msun,
+        metallicities=np.array([0.0, 1.0]),
+        coordinates=np.array([[-0.2, 0.0, 0.0], [0.2, 0.0, 0.0]]) * Mpc,
+        velocities=np.array([[10.0, 0.0, 0.0], [-10.0, 0.0, 0.0]]) * km / s,
+        smoothing_lengths=np.array([1.0, 1.0]) * Mpc,
+        softening_lengths=np.array([0.1, 0.1]) * Mpc,
+        redshift=0.1,
+    )
+
+
+def _make_overlap_stars():
+    """Create two overlapping stars with contrasting ages and metallicities."""
+    return Stars(
+        initial_masses=np.array([1.0, 1.0]) * Msun,
+        ages=np.array([100.0, 1000.0]) * Myr,
+        metallicities=np.array([0.001, 0.03]),
+        coordinates=np.array([[-0.2, 0.0, 0.0], [0.2, 0.0, 0.0]]) * Mpc,
+        velocities=np.array([[5.0, 0.0, 0.0], [-5.0, 0.0, 0.0]]) * km / s,
+        smoothing_lengths=np.array([1.0, 1.0]) * Mpc,
+        softening_lengths=np.array([0.1, 0.1]) * Mpc,
+        redshift=0.1,
+    )
+
+
+def _set_omp_threads(monkeypatch, nthreads):
+    """Set the OpenMP thread count for the duration of a test."""
+    monkeypatch.setenv("OMP_NUM_THREADS", str(nthreads))
+    monkeypatch.setenv("OMP_DYNAMIC", "FALSE")
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +142,23 @@ class TestValidateResampleFactor:
         """Non-integer factors raise ValueError."""
         with pytest.raises(ValueError, match="must be an integer"):
             validate_resample_factor(2.5)
+
+
+class TestDeterministicKernelOffsets:
+    """Tests for deterministic field-mode kernel offsets."""
+
+    def test_repeatable(self):
+        """Repeated calls return identical offset patterns."""
+        kernel = Kernel("cubic")
+        first = deterministic_kernel_offsets(kernel, 8)
+        second = deterministic_kernel_offsets(kernel, 8)
+        assert np.allclose(first, second)
+
+    def test_within_unit_support(self):
+        """All deterministic offsets remain inside the unit support radius."""
+        kernel = Kernel("cubic")
+        offsets = deterministic_kernel_offsets(kernel, 32)
+        assert np.all(np.linalg.norm(offsets, axis=1) < 1.0)
 
 
 class TestValidateMask:
@@ -228,6 +281,103 @@ class TestAddVelocityDispersion:
         assert result.shape == (10, 3)
         assert not np.allclose(result, 0.0)
         assert np.std(result) > 0.0
+
+
+class TestSphFieldEvaluation:
+    """Tests for the SPH field-evaluation helpers."""
+
+    def test_overlap_case_returns_mixed_field_values(self):
+        """Overlapping kernels produce sensible mixed field values."""
+        gas = _make_overlap_gas()
+        query_positions = (
+            np.array([[0.0, 0.0, 0.0], [0.15, 0.0, 0.0]], dtype=np.float64)
+            * Mpc
+        )
+        attributes = {
+            "metallicities": gas.metallicities,
+            "velocities": gas.velocities,
+        }
+
+        density, interpolated = evaluate_sph_field(
+            query_positions=query_positions,
+            particle_positions=gas.coordinates,
+            smoothing_lengths=gas.smoothing_lengths,
+            masses=gas.masses,
+            kernel=Kernel("cubic"),
+            attributes=attributes,
+        )
+
+        assert density.shape == (2,)
+        assert np.all(density.value > 0.0)
+        assert interpolated["metallicities"].shape == (2,)
+        assert interpolated["velocities"].shape == (2, 3)
+        assert np.all(interpolated["metallicities"] > 0.0)
+        assert np.all(interpolated["metallicities"] < 1.0)
+
+    @pytest.mark.skipif(
+        not check_openmp(),
+        reason="Requires the C++ SPH evaluator with OpenMP enabled.",
+    )
+    def test_cpp_wrapper_matches_between_thread_counts(self, monkeypatch):
+        """Threaded and serial evaluator runs agree numerically."""
+        gas = _make_gas(n=24)
+        query_positions = gas.coordinates[:12]
+        attributes = {
+            "metallicities": gas.metallicities,
+            "velocities": gas.velocities,
+        }
+
+        _set_omp_threads(monkeypatch, 1)
+        density_single, attrs_single = evaluate_sph_field(
+            query_positions=query_positions,
+            particle_positions=gas.coordinates,
+            smoothing_lengths=gas.smoothing_lengths,
+            masses=gas.masses,
+            kernel=Kernel("cubic"),
+            attributes=attributes,
+        )
+
+        _set_omp_threads(monkeypatch, 4)
+        density_multi, attrs_multi = evaluate_sph_field(
+            query_positions=query_positions,
+            particle_positions=gas.coordinates,
+            smoothing_lengths=gas.smoothing_lengths,
+            masses=gas.masses,
+            kernel=Kernel("cubic"),
+            attributes=attributes,
+        )
+
+        assert np.allclose(density_single.value, density_multi.value)
+        assert np.allclose(
+            attrs_single["metallicities"], attrs_multi["metallicities"]
+        )
+        assert np.allclose(
+            attrs_single["velocities"].value,
+            attrs_multi["velocities"].value,
+        )
+
+    @pytest.mark.skipif(
+        not check_atomic_timing(),
+        reason="Requires ATOMIC_TIMING to be enabled.",
+    )
+    def test_field_evaluator_records_operation_timers(self):
+        """The public and C++ SPH evaluator timings appear."""
+        timers = OperationTimers()
+        timers.reset()
+
+        gas = _make_overlap_gas()
+        _density, _attrs = evaluate_sph_field(
+            query_positions=gas.coordinates,
+            particle_positions=gas.coordinates,
+            smoothing_lengths=gas.smoothing_lengths,
+            masses=gas.masses,
+            kernel=Kernel("cubic"),
+            attributes={"metallicities": gas.metallicities},
+        )
+
+        names = set(timers.keys())
+        assert "particle.evaluate_sph_field" in names
+        assert "evaluate_sph_density_cpp" in names
 
 
 # ---------------------------------------------------------------------------
@@ -413,6 +563,48 @@ class TestGasSpatialResample:
         resampled = _resample_gas(gas, 2, seed=42)
         assert resampled.metadata == 7
 
+    def test_field_mode_is_repeatable(self):
+        """Field mode returns identical coordinates across repeated runs."""
+        gas = _make_gas(n=8)
+        first = _resample_gas(gas, 3, method="field", seed=1)
+        second = _resample_gas(gas, 3, method="field", seed=999)
+        assert np.allclose(first.coordinates.value, second.coordinates.value)
+        assert np.allclose(first.metallicities, second.metallicities)
+
+    def test_field_mode_conserves_mass(self):
+        """Field mode still preserves the total gas mass exactly."""
+        gas = _make_gas(n=8)
+        resampled = _resample_gas(gas, 4, method="field")
+        assert np.isclose(resampled.masses.sum().value, gas.masses.sum().value)
+
+    def test_field_mode_interpolates_overlap_metallicity(self):
+        """Overlapping gas kernels yield mixed metallicities in field mode."""
+        gas = _make_overlap_gas()
+        resampled = _resample_gas(gas, 4, method="field")
+        assert np.all(resampled.metallicities >= 0.0)
+        assert np.all(resampled.metallicities <= 1.0)
+        assert np.any(resampled.metallicities > 0.1)
+        assert np.any(resampled.metallicities < 0.9)
+
+    @pytest.mark.skipif(
+        not check_openmp(),
+        reason="Requires the C++ SPH evaluator with OpenMP enabled.",
+    )
+    def test_field_mode_matches_between_thread_counts(self, monkeypatch):
+        """Gas field-mode resampling agrees across thread counts."""
+        gas = _make_gas(n=12)
+
+        _set_omp_threads(monkeypatch, 1)
+        single = _resample_gas(gas, 3, method="field")
+
+        _set_omp_threads(monkeypatch, 4)
+        multi = _resample_gas(gas, 3, method="field")
+
+        assert np.allclose(single.coordinates.value, multi.coordinates.value)
+        assert np.allclose(single.metallicities, multi.metallicities)
+        assert np.allclose(single.masses.value, multi.masses.value)
+        assert np.allclose(single.velocities.value, multi.velocities.value)
+
 
 # ---------------------------------------------------------------------------
 # Stars.spatially_resample tests
@@ -595,6 +787,47 @@ class TestStarsSpatialResample:
         )
         resampled = _resample_stars(stars, 2, seed=42)
         assert resampled.metadata == 7
+
+    def test_field_mode_is_repeatable(self):
+        """Field mode returns identical stellar coordinates across reruns."""
+        stars = _make_stars(n=8)
+        first = _resample_stars(stars, 3, method="field", seed=7)
+        second = _resample_stars(stars, 3, method="field", seed=123)
+        assert np.allclose(first.coordinates.value, second.coordinates.value)
+        assert np.allclose(first.ages.value, second.ages.value)
+
+    def test_field_mode_interpolates_overlap_properties(self):
+        """Field mode mixes ages and metallicities in overlap regions."""
+        stars = _make_overlap_stars()
+        resampled = _resample_stars(stars, 4, method="field")
+        assert np.all(resampled.metallicities >= stars.metallicities.min())
+        assert np.all(resampled.metallicities <= stars.metallicities.max())
+        assert np.any(resampled.metallicities > stars.metallicities.min())
+        assert np.any(resampled.metallicities < stars.metallicities.max())
+        assert np.any(resampled.ages.value > stars.ages.min().value)
+        assert np.any(resampled.ages.value < stars.ages.max().value)
+
+    @pytest.mark.skipif(
+        not check_openmp(),
+        reason="Requires the C++ SPH evaluator with OpenMP enabled.",
+    )
+    def test_field_mode_matches_between_thread_counts(self, monkeypatch):
+        """Stellar field-mode resampling agrees across thread counts."""
+        stars = _make_stars(n=10)
+
+        _set_omp_threads(monkeypatch, 1)
+        single = _resample_stars(stars, 3, method="field")
+
+        _set_omp_threads(monkeypatch, 4)
+        multi = _resample_stars(stars, 3, method="field")
+
+        assert np.allclose(single.coordinates.value, multi.coordinates.value)
+        assert np.allclose(single.ages.value, multi.ages.value)
+        assert np.allclose(single.metallicities, multi.metallicities)
+        assert np.allclose(
+            single.initial_masses.value, multi.initial_masses.value
+        )
+        assert np.allclose(single.velocities.value, multi.velocities.value)
 
 
 class TestStarsSpatialResampleWithSFZH:

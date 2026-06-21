@@ -1,14 +1,12 @@
 """Shared utilities for particle spatial resampling.
 
-Provides kernel-based position sampling from the SPH kernel, array tiling,
-velocity dispersion helpers, and higher-level engine functions used by
-both Gas.spatially_resample and Stars.spatially_resample.
+Provides the original random kernel sampler as well as the deterministic
+field-mode helpers used by :meth:`Gas.spatially_resample` and
+:meth:`Stars.spatially_resample`.
 
-Private helpers (_tile_array, _divide_and_tile) handle the low-level numpy
-mechanics. Public engine functions (resample_coordinates,
-resample_velocities, resample_smoothing_lengths, resample_by_mode,
-split_by_mask, validate_required_inputs) form the stable API consumed by
-the class methods.
+Private helpers handle the low-level numpy mechanics. Public engine functions
+cover coordinate generation, attribute resampling, velocity perturbations,
+field interpolation, and mask splitting.
 """
 
 import numpy as np
@@ -203,6 +201,62 @@ def sample_kernel_positions(kernel, smoothing_lengths, n_samples, seed=None):
     return offsets
 
 
+def deterministic_kernel_offsets(kernel, n_samples):
+    """Generate deterministic offsets inside the unit-kernel support.
+
+    The random sampler is appropriate when Monte Carlo noise is acceptable,
+    but movie generation benefits from a stable set of child offsets. This
+    helper builds a deterministic offset pattern by combining:
+
+    - equally spaced radial probability quantiles from the SPH kernel
+    - Fibonacci-sphere directions for angular coverage
+
+    The same ordered offset pattern is reused for every parent particle in
+    field mode, so repeated calls produce identical coordinates.
+
+    Args:
+        kernel (Kernel):
+            SPH kernel providing ``kernel.f`` for the dimensionless profile.
+        n_samples (int):
+            Number of offsets to generate.
+
+    Returns:
+        np.ndarray:
+            ``(n_samples, 3)`` array of unit-kernel offsets with
+            radii ``<= 1``.
+    """
+    if n_samples <= 0:
+        return np.zeros((0, 3), dtype=np.float64)
+
+    # Tabulate the radial CDF exactly as in the stochastic sampler so field
+    # mode follows the same kernel profile, only without random draws.
+    n_q_bins = 10001
+    q_bins = np.linspace(0.0, 1.0, n_q_bins)
+    f_q = kernel.f(q_bins)
+    pdf_radial = 4.0 * np.pi * q_bins**2 * f_q
+    cdf = np.cumsum(pdf_radial)
+    cdf /= cdf[-1]
+
+    # Midpoint quantiles avoid ever landing exactly on the kernel boundary.
+    quantiles = (np.arange(n_samples, dtype=np.float64) + 0.5) / n_samples
+    radii = np.interp(quantiles, cdf, q_bins)
+
+    # Fibonacci-sphere directions give a deterministic, well-spaced set of
+    # directions without imposing a visible Cartesian grid.
+    indices = np.arange(n_samples, dtype=np.float64)
+    z = 1.0 - 2.0 * (indices + 0.5) / n_samples
+    xy = np.sqrt(np.clip(1.0 - z**2, 0.0, None))
+    golden_angle = np.pi * (3.0 - np.sqrt(5.0))
+    phi = golden_angle * indices
+
+    offsets = np.zeros((n_samples, 3), dtype=np.float64)
+    offsets[:, 0] = radii * xy * np.cos(phi)
+    offsets[:, 1] = radii * xy * np.sin(phi)
+    offsets[:, 2] = radii * z
+
+    return offsets
+
+
 def resample_by_mode(arr, mode_spec, resample_factor, rng):
     """Resample a per-particle array according to a named mode.
 
@@ -354,6 +408,146 @@ def resample_by_mode(arr, mode_spec, resample_factor, rng):
     if units is not None:
         return unyt_array(out, units, bypass_validation=True)
     return out
+
+
+@accepts(
+    coordinates=Mpc,
+    smoothing_lengths=Mpc,
+)
+def resample_coordinates_field(
+    coordinates,
+    smoothing_lengths,
+    kernel,
+    resample_factor,
+):
+    """Generate deterministic child coordinates for field mode.
+
+    Field mode preserves the user-facing contract of ``resample_factor``
+    children per parent, but replaces random kernel draws with a shared,
+    deterministic offset pattern.
+
+    Args:
+        coordinates (unyt_array, (N, 3)):
+            Parent particle coordinates.
+        smoothing_lengths (unyt_array, (N,)):
+            Parent smoothing lengths.
+        kernel (Kernel):
+            SPH kernel controlling the radial offset profile.
+        resample_factor (int):
+            Number of children per parent.
+
+    Returns:
+        tuple[unyt_array, np.ndarray]:
+            ``(new_coordinates, parent_indices)``.
+    """
+    unit_offsets = deterministic_kernel_offsets(kernel, resample_factor)
+    scaled_offsets = (
+        unit_offsets[np.newaxis, :, :]
+        * smoothing_lengths.ndview[:, np.newaxis, np.newaxis]
+    )
+
+    coords = _tile_array(coordinates, resample_factor)
+    offsets_flat = scaled_offsets.reshape(-1, 3) * coordinates.units
+    parent_indices = np.repeat(
+        np.arange(coordinates.shape[0], dtype=np.int64), resample_factor
+    )
+
+    return coords + offsets_flat, parent_indices
+
+
+def resample_attributes_field(
+    interpolated_attrs,
+    conserved_attrs,
+    resample_factor,
+    attr_modes,
+    rng,
+    default_interpolated_modes=None,
+    default_conserved_modes=None,
+):
+    """Post-process field-mode attributes.
+
+    Interpolated attributes are already defined at child-particle positions,
+    so they are only passed through the scatter machinery. Conserved
+    attributes still live on the parent particles and must be split into
+    children using the existing resampling modes.
+
+    Args:
+        interpolated_attrs (dict):
+            Child-sized arrays sampled from the SPH field.
+        conserved_attrs (dict):
+            Parent-sized arrays to split among children.
+        resample_factor (int):
+            Number of children per parent.
+        attr_modes (dict):
+            Per-attribute mode overrides.
+        rng (np.random.Generator):
+            Seeded generator used by :func:`resample_by_mode`.
+        default_interpolated_modes (dict, optional):
+            Defaults for attributes in *interpolated_attrs*.
+        default_conserved_modes (dict, optional):
+            Defaults for attributes in *conserved_attrs*.
+
+    Returns:
+        dict:
+            Mapping of attribute name to final child-sized array.
+    """
+    attr_modes = {} if attr_modes is None else attr_modes
+    default_interpolated_modes = (
+        {}
+        if default_interpolated_modes is None
+        else default_interpolated_modes
+    )
+    default_conserved_modes = (
+        {} if default_conserved_modes is None else default_conserved_modes
+    )
+
+    resampled = {}
+
+    for name, arr in interpolated_attrs.items():
+        if arr is None:
+            resampled[name] = None
+            continue
+        mode = attr_modes.get(
+            name, default_interpolated_modes.get(name, "duplicated")
+        )
+        # These arrays already contain one value per child particle, so we
+        # set the factor to one and use resample_by_mode purely for
+        # optional scatter.
+        resampled[name] = resample_by_mode(arr, mode, 1, rng)
+
+    for name, arr in conserved_attrs.items():
+        if arr is None:
+            resampled[name] = None
+            continue
+        mode = attr_modes.get(
+            name, default_conserved_modes.get(name, "proportional")
+        )
+        resampled[name] = resample_by_mode(arr, mode, resample_factor, rng)
+
+    return resampled
+
+
+def resample_smoothing_lengths_field(
+    parent_smoothing_lengths, resample_factor
+):
+    """Scale smoothing lengths for deterministic field-mode resampling.
+
+    Field mode keeps the same smoothing-length convention as the original
+    stochastic implementation so the total kernel volume is preserved.
+
+    Args:
+        parent_smoothing_lengths (unyt_array, (N,)):
+            Parent smoothing lengths.
+        resample_factor (int):
+            Number of children per parent.
+
+    Returns:
+        unyt_array:
+            Child smoothing lengths of shape ``(N * resample_factor,)``.
+    """
+    return resample_smoothing_lengths(
+        parent_smoothing_lengths, resample_factor
+    )
 
 
 def add_velocity_dispersion(velocities, dispersion, seed=None):
