@@ -922,6 +922,7 @@ class Stars(Particles, StarsComponent):
         metal_dist=None,
         method="random",
         field_kernel=None,
+        nthreads=1,
     ):
         """Resample this stellar distribution spatially.
 
@@ -992,6 +993,9 @@ class Stars(Particles, StarsComponent):
             field_kernel (Kernel, optional):
                 Kernel to use for field interpolation in ``"field"`` mode.
                 Defaults to *kernel*.
+            nthreads (int):
+                Number of threads for the C++ field evaluator when
+                ``method="field"`` (default 1).
 
         Returns:
             Stars: A new Stars object with the resampled distribution.
@@ -1147,6 +1151,7 @@ class Stars(Particles, StarsComponent):
                 masses=to_resample[2],
                 kernel=field_kernel,
                 attributes=field_attrs,
+                nthreads=nthreads,
             )
 
             if sfzh is not None or sfh is not None or metal_dist is not None:

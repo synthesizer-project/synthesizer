@@ -335,6 +335,7 @@ class TestSphFieldEvaluation:
             masses=gas.masses,
             kernel=Kernel("cubic"),
             attributes=attributes,
+            nthreads=1,
         )
 
         _set_omp_threads(monkeypatch, 4)
@@ -345,6 +346,7 @@ class TestSphFieldEvaluation:
             masses=gas.masses,
             kernel=Kernel("cubic"),
             attributes=attributes,
+            nthreads=4,
         )
 
         assert np.allclose(density_single.value, density_multi.value)
@@ -595,10 +597,10 @@ class TestGasSpatialResample:
         gas = _make_gas(n=12)
 
         _set_omp_threads(monkeypatch, 1)
-        single = _resample_gas(gas, 3, method="field")
+        single = _resample_gas(gas, 3, method="field", nthreads=1)
 
         _set_omp_threads(monkeypatch, 4)
-        multi = _resample_gas(gas, 3, method="field")
+        multi = _resample_gas(gas, 3, method="field", nthreads=4)
 
         assert np.allclose(single.coordinates.value, multi.coordinates.value)
         assert np.allclose(single.metallicities, multi.metallicities)
@@ -816,10 +818,10 @@ class TestStarsSpatialResample:
         stars = _make_stars(n=10)
 
         _set_omp_threads(monkeypatch, 1)
-        single = _resample_stars(stars, 3, method="field")
+        single = _resample_stars(stars, 3, method="field", nthreads=1)
 
         _set_omp_threads(monkeypatch, 4)
-        multi = _resample_stars(stars, 3, method="field")
+        multi = _resample_stars(stars, 3, method="field", nthreads=4)
 
         assert np.allclose(single.coordinates.value, multi.coordinates.value)
         assert np.allclose(single.ages.value, multi.ages.value)

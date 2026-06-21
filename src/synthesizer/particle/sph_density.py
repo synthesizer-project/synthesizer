@@ -31,6 +31,7 @@ def evaluate_sph_field(
     masses,
     kernel,
     attributes,
+    nthreads=1,
 ):
     """Evaluate the SPH density field and local attribute means.
 
@@ -47,6 +48,8 @@ def evaluate_sph_field(
             SPH kernel definition.
         attributes (dict[str, np.ndarray or unyt_array]):
             Per-particle attributes to interpolate as SPH-weighted means.
+        nthreads (int):
+            Number of threads for the C++ evaluator (default 1).
 
     Returns:
         tuple[unyt_array, dict]:
@@ -72,6 +75,9 @@ def evaluate_sph_field(
         _as_float64_c_contiguous(masses),
         tuple(attr_arrays),
         kernel.name,
+        16,
+        8,
+        nthreads,
     )
 
     density_units = masses.units / (particle_positions.units**3)

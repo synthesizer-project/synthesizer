@@ -281,6 +281,7 @@ class Gas(Particles, Component):
         velocity_dispersion=None,
         method="random",
         field_kernel=None,
+        nthreads=1,
     ):
         """Resample this gas distribution spatially.
 
@@ -325,6 +326,9 @@ class Gas(Particles, Component):
             field_kernel (Kernel, optional):
                 Kernel to use for SPH field interpolation in ``"field"`` mode.
                 Defaults to *kernel*.
+            nthreads (int):
+                Number of threads for the C++ field evaluator when
+                ``method="field"`` (default 1).
 
         Returns:
             Gas: A new Gas object with the resampled distribution.
@@ -583,6 +587,7 @@ class Gas(Particles, Component):
                 masses=to_resample[2],
                 kernel=field_kernel,
                 attributes=field_attrs,
+                nthreads=nthreads,
             )
 
             processed = resample_attributes_field(

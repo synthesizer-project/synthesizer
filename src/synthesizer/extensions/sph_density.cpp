@@ -166,7 +166,7 @@ static void accumulate_sph_query_recursive(
  *
  * ``evaluate_sph_density(query_positions, particle_positions,
  * smoothing_lengths, masses, attribute_arrays, kernel_name,
- * maxdepth=16, min_count=8)``
+ * maxdepth=16, min_count=8, nthreads=1)``
  *
  * @param self The module instance (unused).
  * @param args Python arguments containing the query positions, source particle
@@ -190,12 +190,14 @@ PyObject *evaluate_sph_density(PyObject *self, PyObject *args) {
   const char *kernel_name;
   int maxdepth = 16;
   int min_count = 8;
+  int nthreads = 1;
 
-  if (!PyArg_ParseTuple(
-          args, "O!O!O!O!Os|ii", &PyArray_Type, &np_query_positions,
-          &PyArray_Type, &np_particle_positions, &PyArray_Type,
-          &np_smoothing_lengths, &PyArray_Type, &np_masses,
-          &attribute_sequence, &kernel_name, &maxdepth, &min_count)) {
+  if (!PyArg_ParseTuple(args, "O!O!O!O!Os|iii", &PyArray_Type,
+                        &np_query_positions, &PyArray_Type,
+                        &np_particle_positions, &PyArray_Type,
+                        &np_smoothing_lengths, &PyArray_Type, &np_masses,
+                        &attribute_sequence, &kernel_name, &maxdepth,
+                        &min_count, &nthreads)) {
     return NULL;
   }
 
@@ -252,6 +254,10 @@ PyObject *evaluate_sph_density(PyObject *self, PyObject *args) {
   }
   if (min_count < 1) {
     PyErr_SetString(PyExc_ValueError, "min_count must be >= 1.");
+    return NULL;
+  }
+  if (nthreads < 1) {
+    PyErr_SetString(PyExc_ValueError, "nthreads must be >= 1.");
     return NULL;
   }
 
@@ -347,7 +353,7 @@ PyObject *evaluate_sph_density(PyObject *self, PyObject *args) {
    * in other particle/image kernels when OpenMP is available. Each thread only
    * touches its own output row, while the octree itself is read-only. */
 #ifdef WITH_OPENMP
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(static) num_threads(nthreads)
 #endif
   for (npy_intp iq = 0; iq < n_query; ++iq) {
     const double qx = query_positions[iq * 3];
