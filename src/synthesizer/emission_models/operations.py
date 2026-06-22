@@ -8,7 +8,7 @@ These classes should not be used directly.
 """
 
 import numpy as np
-from unyt import Hz, erg, s
+from unyt import Hz, erg, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.emission_models.extractors.extractor import (
@@ -891,7 +891,7 @@ class Combination:
 
             out_spec = Sed(
                 emission_model.lam,
-                lnu=out_lnu * erg / s / Hz,
+                lnu=unyt_array(out_lnu, erg / s / Hz, bypass_validation=True),
             )
             particle_spectra[this_model.label] = out_spec
 
@@ -900,12 +900,18 @@ class Combination:
             reduced_lnu = reduce_particle_spectra(out_lnu, nthreads)
             spectra[this_model.label] = Sed(
                 emission_model.lam,
-                lnu=reduced_lnu * erg / s / Hz,
+                lnu=unyt_array(
+                    reduced_lnu, erg / s / Hz, bypass_validation=True
+                ),
             )
         else:
             out_spec = Sed(
                 emission_model.lam,
-                lnu=np.zeros_like(spectra[labels[0]]._lnu) * erg / s / Hz,
+                lnu=unyt_array(
+                    np.zeros_like(spectra[labels[0]]._lnu),
+                    erg / s / Hz,
+                    bypass_validation=True,
+                ),
             )
             for arr in arrays:
                 out_spec._lnu[~np.isnan(arr)] += arr[~np.isnan(arr)]

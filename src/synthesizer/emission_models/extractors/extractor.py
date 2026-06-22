@@ -358,7 +358,9 @@ class IntegratedParticleExtractor(Extractor):
                 self._grid.grid_name
             ] = grid_weights
 
-        return Sed(model.lam, spec * erg / s / Hz)
+        return Sed(
+            model.lam, unyt_array(spec, erg / s / Hz, bypass_validation=True)
+        )
 
     @timed("IntegratedParticleExtractor.generate_line")
     def generate_line(
@@ -610,8 +612,14 @@ class DopplerShiftedParticleExtractor(Extractor):
         )
 
         # Make the Sed objects themselves
-        part_sed = Sed(model.lam, spec * erg / s / Hz)
-        integrated_sed = Sed(model.lam, integrated_spec * erg / s / Hz)
+        part_sed = Sed(
+            model.lam,
+            unyt_array(spec, erg / s / Hz, bypass_validation=True),
+        )
+        integrated_sed = Sed(
+            model.lam,
+            unyt_array(integrated_spec, erg / s / Hz, bypass_validation=True),
+        )
 
         return part_sed, integrated_sed
 
@@ -727,7 +735,10 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             emitter_attr_names,
         )
 
-        return Sed(model.lam, integrated_spec * erg / s / Hz)
+        return Sed(
+            model.lam,
+            unyt_array(integrated_spec, erg / s / Hz, bypass_validation=True),
+        )
 
     def generate_line(self, *args, **kwargs):
         """Doppler shifted line luminosities make no sense."""
@@ -1173,7 +1184,9 @@ class IntegratedParametricExtractor(Extractor):
         # grid spectra
         spec = np.sum(grid_spectra[mask] * sfzh[mask], axis=0)
 
-        return Sed(model.lam, spec * erg / s / Hz)
+        return Sed(
+            model.lam, unyt_array(spec, erg / s / Hz, bypass_validation=True)
+        )
 
     def generate_line(
         self,
