@@ -15,6 +15,7 @@ from synthesizer.emission_models.generators.dust.dust_emission_base import (
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.units import accepts
 from synthesizer.utils import planck
+from synthesizer.utils.operation_timers import timed
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
@@ -100,6 +101,7 @@ class Blackbody(DustEmission):
         return f"Blackbody({', '.join(parts)})"
 
     @accepts(lams=angstrom)
+    @timed("Blackbody._generate_spectra")
     def _generate_spectra(
         self,
         lams: unyt_array,

@@ -2702,6 +2702,7 @@ def plot_spectra_as_rainbow(
     return fig, ax
 
 
+@timed("Sed.integrate_particle_sed")
 def integrate_particle_sed(sed, nthreads=1):
     """Integrate a per-particle Sed to an integrated Sed using C++.
 

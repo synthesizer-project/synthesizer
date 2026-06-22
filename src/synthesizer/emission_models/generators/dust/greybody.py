@@ -24,6 +24,7 @@ from synthesizer.emission_models.generators.dust.dust_emission_base import (
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.units import accepts
 from synthesizer.utils import planck
+from synthesizer.utils.operation_timers import timed
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
@@ -161,6 +162,7 @@ class Greybody(DustEmission):
             return optically_thick_factor * planck(nu, temperature)
 
     @accepts(lams=angstrom)
+    @timed("Greybody._generate_spectra")
     def _generate_spectra(
         self,
         lams: unyt_array,

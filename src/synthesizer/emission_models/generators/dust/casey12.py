@@ -26,6 +26,7 @@ from synthesizer.emission_models.generators.dust.dust_emission_base import (
 )
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.units import accepts
+from synthesizer.utils.operation_timers import timed
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
@@ -237,6 +238,7 @@ class Casey12(DustEmission):
         return _power_law(lam) + _blackbody(lam)
 
     @accepts(lams=angstrom)
+    @timed("Casey12._generate_spectra")
     def _generate_spectra(
         self,
         lams: unyt_array,

@@ -237,6 +237,7 @@ class AttenuationLaw(Transformer):
 
         self._required_params = required_params
 
+    @timed("DustAttenuation._transform")
     def _transform(
         self,
         emission,
