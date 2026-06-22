@@ -4,6 +4,8 @@
 /* Python includes */
 #include <Python.h>
 
+#include <vector>
+
 /* Local includes */
 #include "cpp_to_python.h"
 #include "reductions.h"
@@ -206,11 +208,132 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
   return Py_BuildValue("N", np_spectra);
 }
 
+/**
+ * @brief Accumulate a list of per-particle spectra arrays into an output
+ *        array, skipping NaN values, with OpenMP when available.
+ *
+ * This is the hot-path C++ backend for ``Combination._combine_spectra``.
+ * Instead of doing NaN-masked NumPy addition in a Python loop, we hand the
+ * list of input arrays directly to a parallel C++ kernel that iterates over
+ * rows and adds each non-NaN contribution.
+ *
+ * Python signature:
+ *
+ * ``combine_spectra_2d(output, inputs, nthreads)``
+ *
+ * @param self The module instance (unused).
+ * @param args Python arguments: output array, tuple/list of input arrays,
+ *        and the thread count.
+ *
+ * @return None. The output array is modified in-place.
+ */
+PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
+  tic("combine_spectra_2d");
+
+  (void)self;
+
+  PyArrayObject *np_out;
+  PyObject *inputs_sequence;
+  int nthreads;
+
+  if (!PyArg_ParseTuple(args, "O!Oi", &PyArray_Type, &np_out, &inputs_sequence,
+                        &nthreads)) {
+    return NULL;
+  }
+
+  if (PyArray_NDIM(np_out) != 2) {
+    PyErr_SetString(PyExc_ValueError, "output must be a 2D float64 array.");
+    return NULL;
+  }
+  if (PyArray_TYPE(np_out) != NPY_DOUBLE) {
+    PyErr_SetString(PyExc_TypeError, "output must have dtype float64.");
+    return NULL;
+  }
+  if (!PyArray_IS_C_CONTIGUOUS(np_out)) {
+    PyErr_SetString(PyExc_ValueError, "output must be C-contiguous.");
+    return NULL;
+  }
+
+  const npy_intp nrow = PyArray_DIM(np_out, 0);
+  const npy_intp nlam = PyArray_DIM(np_out, 1);
+
+  PyObject *inputs_fast = PySequence_Fast(
+      inputs_sequence, "inputs must be a sequence of 2D arrays.");
+  if (inputs_fast == NULL) {
+    return NULL;
+  }
+
+  const Py_ssize_t n_inputs = PySequence_Fast_GET_SIZE(inputs_fast);
+  PyObject **input_items = PySequence_Fast_ITEMS(inputs_fast);
+
+  std::vector<const double *> input_ptrs;
+  std::vector<PyArrayObject *> input_views;
+  input_ptrs.reserve(n_inputs);
+  input_views.reserve(n_inputs);
+
+  for (Py_ssize_t i = 0; i < n_inputs; ++i) {
+    PyArrayObject *np_in = (PyArrayObject *)PyArray_FROM_OTF(
+        input_items[i], NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    if (np_in == NULL) {
+      for (PyArrayObject *view : input_views) {
+        Py_DECREF(view);
+      }
+      Py_DECREF(inputs_fast);
+      return NULL;
+    }
+
+    if (PyArray_NDIM(np_in) != 2 || PyArray_DIM(np_in, 0) != nrow ||
+        PyArray_DIM(np_in, 1) != nlam) {
+      PyErr_SetString(PyExc_ValueError,
+                      "All input arrays must be 2D float64 with the "
+                      "same shape as the output array.");
+      Py_DECREF(np_in);
+      for (PyArrayObject *view : input_views) {
+        Py_DECREF(view);
+      }
+      Py_DECREF(inputs_fast);
+      return NULL;
+    }
+
+    input_views.push_back(np_in);
+    input_ptrs.push_back(static_cast<const double *>(PyArray_DATA(np_in)));
+  }
+
+  double *out_data = static_cast<double *>(PyArray_DATA(np_out));
+
+#ifdef WITH_OPENMP
+#pragma omp parallel for schedule(static) num_threads(nthreads)
+#endif
+  for (npy_intp irow = 0; irow < nrow; ++irow) {
+    double *out_row = out_data + irow * nlam;
+
+    for (Py_ssize_t j = 0; j < n_inputs; ++j) {
+      const double *in_row = input_ptrs[j] + irow * nlam;
+      for (npy_intp ilam = 0; ilam < nlam; ++ilam) {
+        const double val = in_row[ilam];
+        if (!std::isnan(val)) {
+          out_row[ilam] += val;
+        }
+      }
+    }
+  }
+
+  for (PyArrayObject *view : input_views) {
+    Py_DECREF(view);
+  }
+  Py_DECREF(inputs_fast);
+
+  toc("combine_spectra_2d");
+  Py_RETURN_NONE;
+}
+
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef ReductionMethods[] = {
     {"reduce_particle_spectra", (PyCFunction)reduce_particle_spectra,
      METH_VARARGS,
      "Method for reducing per-particle spectra to an integrated spectrum."},
+    {"combine_spectra_2d", (PyCFunction)combine_spectra_2d, METH_VARARGS,
+     "Accumulate a list of 2D spectra into an output array."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */

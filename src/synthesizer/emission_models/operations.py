@@ -19,7 +19,15 @@ from synthesizer.emission_models.extractors.extractor import (
     ParticleExtractor,
 )
 from synthesizer.emission_models.utils import cache_model_params
-from synthesizer.emissions import LineCollection, Sed, integrate_particle_sed
+from synthesizer.emissions import (
+    LineCollection,
+    Sed,
+    integrate_particle_sed,
+)
+from synthesizer.extensions.reductions import (
+    combine_spectra_2d,
+    reduce_particle_spectra,
+)
 from synthesizer.grid import Template
 from synthesizer.utils.operation_timers import timed, timer
 
@@ -864,51 +872,54 @@ class Combination:
             dict:
                 The dictionary of spectra.
         """
-        # Create an empty spectra to add to
+        # Grab the raw numpy arrays for each combination label. The C++
+        # combine kernel works directly on contiguous float64 arrays and
+        # avoids the expensive NaN-masked Python-loop addition that was the
+        # dominant hot-path in this dispatching layer.
+        labels = this_model._combine_labels
+        arrays = [
+            (
+                particle_spectra[label]._lnu
+                if this_model.per_particle
+                else spectra[label]._lnu
+            )
+            for label in labels
+        ]
+
         if this_model.per_particle:
+            # Allocate a zero-filled output array and accumulate all
+            # per-particle contributions via the parallel C++ kernel.
+            out_lnu = np.zeros_like(arrays[0])
+            combine_spectra_2d(out_lnu, tuple(arrays), nthreads)
+
             out_spec = Sed(
                 emission_model.lam,
-                lnu=np.zeros_like(
-                    particle_spectra[this_model._combine_labels[0]]._lnu
-                )
-                * erg
-                / s
-                / Hz,
+                lnu=out_lnu * erg / s / Hz,
             )
-        else:
-            out_spec = Sed(
-                emission_model.lam,
-                lnu=np.zeros_like(spectra[this_model._combine_labels[0]]._lnu)
-                * erg
-                / s
-                / Hz,
-            )
-
-        # Combine the spectra
-        for combine_label in this_model._combine_labels:
-            if this_model.per_particle:
-                nan_mask = np.isnan(particle_spectra[combine_label]._lnu)
-                out_spec._lnu[~nan_mask] += particle_spectra[
-                    combine_label
-                ]._lnu[~nan_mask]
-            else:
-                nan_mask = np.isnan(spectra[combine_label]._lnu)
-                out_spec._lnu[~nan_mask] += spectra[combine_label]._lnu[
-                    ~nan_mask
-                ]
-
-        # Cache the model on the emitter
-        cache_model_params(this_model, emitter)
-
-        # Store the spectra in the right place (integrating if we need to)
-        if this_model.per_particle:
             particle_spectra[this_model.label] = out_spec
-            spectra[this_model.label] = integrate_particle_sed(
-                out_spec, nthreads
+
+            # Use the existing C++ reduction kernel to integrate the
+            # combined per-particle array down to a single spectrum.
+            reduced_lnu = reduce_particle_spectra(
+                np.ascontiguousarray(out_lnu), nthreads
+            )
+            spectra[this_model.label] = Sed(
+                emission_model.lam,
+                lnu=reduced_lnu * erg / s / Hz,
             )
         else:
+            # Integrated-mode combination adds a modest number of 1D arrays
+            # and does not benefit materially from a C++ kernel.  Keep the
+            # existing NaN-guarded element-wise addition.
+            out_spec = Sed(
+                emission_model.lam,
+                lnu=np.zeros_like(spectra[labels[0]]._lnu) * erg / s / Hz,
+            )
+            for arr in arrays:
+                out_spec._lnu[~np.isnan(arr)] += arr[~np.isnan(arr)]
             spectra[this_model.label] = out_spec
 
+        cache_model_params(this_model, emitter)
         return spectra, particle_spectra
 
     def _combine_lines(
