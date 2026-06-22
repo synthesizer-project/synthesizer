@@ -872,25 +872,22 @@ class Combination:
             dict:
                 The dictionary of spectra.
         """
-        # Grab the raw numpy arrays for each combination label. The C++
-        # combine kernel works directly on contiguous float64 arrays and
-        # avoids the expensive NaN-masked Python-loop addition that was the
-        # dominant hot-path in this dispatching layer.
+        # Grab the raw numpy arrays for each combination label.  They are
+        # handed directly to the parallel C++ combine kernel, which also
+        # allocates the output array internally to avoid a Python-side
+        # np.zeros_like allocation of the full (npart × nlam) buffer.
         labels = this_model._combine_labels
-        arrays = [
+        arrays = tuple(
             (
                 particle_spectra[label]._lnu
                 if this_model.per_particle
                 else spectra[label]._lnu
             )
             for label in labels
-        ]
+        )
 
         if this_model.per_particle:
-            # Allocate a zero-filled output array and accumulate all
-            # per-particle contributions via the parallel C++ kernel.
-            out_lnu = np.zeros_like(arrays[0])
-            combine_spectra_2d(out_lnu, tuple(arrays), nthreads)
+            out_lnu = combine_spectra_2d(None, arrays, nthreads)
 
             out_spec = Sed(
                 emission_model.lam,
@@ -900,17 +897,12 @@ class Combination:
 
             # Use the existing C++ reduction kernel to integrate the
             # combined per-particle array down to a single spectrum.
-            reduced_lnu = reduce_particle_spectra(
-                np.ascontiguousarray(out_lnu), nthreads
-            )
+            reduced_lnu = reduce_particle_spectra(out_lnu, nthreads)
             spectra[this_model.label] = Sed(
                 emission_model.lam,
                 lnu=reduced_lnu * erg / s / Hz,
             )
         else:
-            # Integrated-mode combination adds a modest number of 1D arrays
-            # and does not benefit materially from a C++ kernel.  Keep the
-            # existing NaN-guarded element-wise addition.
             out_spec = Sed(
                 emission_model.lam,
                 lnu=np.zeros_like(spectra[labels[0]]._lnu) * erg / s / Hz,

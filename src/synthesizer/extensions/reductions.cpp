@@ -221,41 +221,34 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
  *
  * ``combine_spectra_2d(output, inputs, nthreads)``
  *
+ * If *output* is ``None`` a new zero-filled array is allocated and returned.
+ * Otherwise the existing array is modified in-place and ``None`` is returned.
+ *
  * @param self The module instance (unused).
- * @param args Python arguments: output array, tuple/list of input arrays,
+ * @param args Python arguments: output (or None), tuple/list of input arrays,
  *        and the thread count.
  *
- * @return None. The output array is modified in-place.
+ * @return ``None`` when the output array is provided, or the newly allocated
+ *         combined array.
  */
 PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
   tic("combine_spectra_2d");
 
   (void)self;
 
-  PyArrayObject *np_out;
+  PyObject *out_obj;
   PyObject *inputs_sequence;
   int nthreads;
 
-  if (!PyArg_ParseTuple(args, "O!Oi", &PyArray_Type, &np_out, &inputs_sequence,
-                        &nthreads)) {
+  if (!PyArg_ParseTuple(args, "OOi", &out_obj, &inputs_sequence, &nthreads)) {
     return NULL;
   }
 
-  if (PyArray_NDIM(np_out) != 2) {
-    PyErr_SetString(PyExc_ValueError, "output must be a 2D float64 array.");
-    return NULL;
-  }
-  if (PyArray_TYPE(np_out) != NPY_DOUBLE) {
-    PyErr_SetString(PyExc_TypeError, "output must have dtype float64.");
-    return NULL;
-  }
-  if (!PyArray_IS_C_CONTIGUOUS(np_out)) {
-    PyErr_SetString(PyExc_ValueError, "output must be C-contiguous.");
-    return NULL;
-  }
-
-  const npy_intp nrow = PyArray_DIM(np_out, 0);
-  const npy_intp nlam = PyArray_DIM(np_out, 1);
+  /* When the caller passes None for the output we allocate a fresh
+   * zero-filled array whose shape and dtype match the first input.
+   * This is the common fast-path for per-particle combination. */
+  const bool alloc_output = (out_obj == Py_None);
+  PyArrayObject *np_out = NULL;
 
   PyObject *inputs_fast = PySequence_Fast(
       inputs_sequence, "inputs must be a sequence of 2D arrays.");
@@ -264,20 +257,92 @@ PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
   }
 
   const Py_ssize_t n_inputs = PySequence_Fast_GET_SIZE(inputs_fast);
+  if (n_inputs == 0) {
+    Py_DECREF(inputs_fast);
+    if (alloc_output) {
+      Py_RETURN_NONE;
+    }
+    Py_RETURN_NONE;
+  }
+
   PyObject **input_items = PySequence_Fast_ITEMS(inputs_fast);
+
+  /* Validate and acquire the first input to infer the output shape. */
+  PyArrayObject *np_first = (PyArrayObject *)PyArray_FROM_OTF(
+      input_items[0], NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+  if (np_first == NULL) {
+    Py_DECREF(inputs_fast);
+    return NULL;
+  }
+  if (PyArray_NDIM(np_first) != 2) {
+    PyErr_SetString(PyExc_ValueError, "All input arrays must be 2D float64.");
+    Py_DECREF(np_first);
+    Py_DECREF(inputs_fast);
+    return NULL;
+  }
+  const npy_intp nrow = PyArray_DIM(np_first, 0);
+  const npy_intp nlam = PyArray_DIM(np_first, 1);
+
+  if (alloc_output) {
+    npy_intp out_dims[2] = {nrow, nlam};
+    np_out = (PyArrayObject *)PyArray_ZEROS(2, out_dims, NPY_DOUBLE, 0);
+    if (np_out == NULL) {
+      Py_DECREF(np_first);
+      Py_DECREF(inputs_fast);
+      return NULL;
+    }
+  } else {
+    if (!PyArray_Check(out_obj)) {
+      Py_DECREF(np_first);
+      Py_DECREF(inputs_fast);
+      PyErr_SetString(PyExc_TypeError,
+                      "output must be a NumPy array or None.");
+      return NULL;
+    }
+    np_out = (PyArrayObject *)out_obj;
+    Py_INCREF(np_out);
+
+    if (PyArray_NDIM(np_out) != 2 || PyArray_DIM(np_out, 0) != nrow ||
+        PyArray_DIM(np_out, 1) != nlam) {
+      Py_DECREF(np_first);
+      Py_DECREF(inputs_fast);
+      Py_DECREF(np_out);
+      PyErr_SetString(PyExc_ValueError,
+                      "output must be a 2D float64 array matching "
+                      "the input shape.");
+      return NULL;
+    }
+    if (PyArray_TYPE(np_out) != NPY_DOUBLE) {
+      Py_DECREF(np_first);
+      Py_DECREF(inputs_fast);
+      Py_DECREF(np_out);
+      PyErr_SetString(PyExc_TypeError, "output must have dtype float64.");
+      return NULL;
+    }
+    if (!PyArray_IS_C_CONTIGUOUS(np_out)) {
+      Py_DECREF(np_first);
+      Py_DECREF(inputs_fast);
+      Py_DECREF(np_out);
+      PyErr_SetString(PyExc_ValueError, "output must be C-contiguous.");
+      return NULL;
+    }
+  }
 
   std::vector<const double *> input_ptrs;
   std::vector<PyArrayObject *> input_views;
   input_ptrs.reserve(n_inputs);
   input_views.reserve(n_inputs);
+  input_views.push_back(np_first);
+  input_ptrs.push_back(static_cast<const double *>(PyArray_DATA(np_first)));
 
-  for (Py_ssize_t i = 0; i < n_inputs; ++i) {
+  for (Py_ssize_t i = 1; i < n_inputs; ++i) {
     PyArrayObject *np_in = (PyArrayObject *)PyArray_FROM_OTF(
         input_items[i], NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
     if (np_in == NULL) {
       for (PyArrayObject *view : input_views) {
         Py_DECREF(view);
       }
+      Py_DECREF(np_out);
       Py_DECREF(inputs_fast);
       return NULL;
     }
@@ -286,11 +351,12 @@ PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
         PyArray_DIM(np_in, 1) != nlam) {
       PyErr_SetString(PyExc_ValueError,
                       "All input arrays must be 2D float64 with the "
-                      "same shape as the output array.");
+                      "same shape as the first input array.");
       Py_DECREF(np_in);
       for (PyArrayObject *view : input_views) {
         Py_DECREF(view);
       }
+      Py_DECREF(np_out);
       Py_DECREF(inputs_fast);
       return NULL;
     }
@@ -324,6 +390,11 @@ PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
   Py_DECREF(inputs_fast);
 
   toc("combine_spectra_2d");
+
+  if (alloc_output) {
+    return Py_BuildValue("N", np_out);
+  }
+  Py_DECREF(np_out);
   Py_RETURN_NONE;
 }
 
