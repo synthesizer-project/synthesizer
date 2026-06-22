@@ -5,6 +5,7 @@ from scipy.spatial import cKDTree
 from unyt import Mpc, rad, unyt_array
 
 from synthesizer.units import accepts
+from synthesizer.utils.operation_timers import timed
 
 
 @accepts(phi=rad, theta=rad)
@@ -63,6 +64,7 @@ def rotate(
 
 
 @accepts(coordinates=Mpc, source_coords=Mpc, boxsize=Mpc)
+@timed("particle.utils.calculate_smoothing_lengths")
 def calculate_smoothing_lengths(
     coordinates: unyt_array,
     source_coords: unyt_array = None,
