@@ -279,12 +279,20 @@ class Image(ImagingBase):
                 self.resolution,
                 self.fov,
                 img=self.arr + other_img.arr,
+                flux_conserving_resample=(
+                    self.flux_conserving_resample
+                    or other_img.flux_conserving_resample
+                ),
             )
         elif self.units is not None and other_img.units is not None:
             return Image(
                 self.resolution,
                 self.fov,
                 img=self.arr * self.units + other_img.arr * other_img.units,
+                flux_conserving_resample=(
+                    self.flux_conserving_resample
+                    or other_img.flux_conserving_resample
+                ),
             )
         else:
             s = "dimensionless"
@@ -330,12 +338,20 @@ class Image(ImagingBase):
                 self.resolution,
                 self.fov,
                 img=self.arr - other_img.arr,
+                flux_conserving_resample=(
+                    self.flux_conserving_resample
+                    or other_img.flux_conserving_resample
+                ),
             )
         elif self.units is not None and other_img.units is not None:
             return Image(
                 self.resolution,
                 self.fov,
                 img=self.arr * self.units - other_img.arr * other_img.units,
+                flux_conserving_resample=(
+                    self.flux_conserving_resample
+                    or other_img.flux_conserving_resample
+                ),
             )
         else:
             s = "dimensionless"
@@ -369,7 +385,7 @@ class Image(ImagingBase):
                 The new image containing the multipled array.
         """
         # Create the new image
-        new_img = Image(self.resolution, self.fov)
+        new_img = Image(self.resolution, self.fov, self.flux_conserving_resample)
 
         # Associate the image array and units
         new_img.arr = self.arr.copy()
