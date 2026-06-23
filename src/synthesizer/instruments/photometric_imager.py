@@ -348,7 +348,6 @@ class PhotometricImager(PhotometricInstrument):
                 resolution=image.resolution,
                 fov=image.fov,
                 img=image.img,
-                flux_conserving_resample=image.flux_conserving_resample,
             )
 
         # If requested, temporarily supersample before the PSF convolution
@@ -415,7 +414,6 @@ class PhotometricImager(PhotometricInstrument):
                     resolution=image.resolution,
                     fov=image.fov,
                     img=image.img,
-                    flux_conserving_resample=image.flux_conserving_resample,
                 )
             working_collection = ImageCollection(
                 resolution=image_collection.resolution,

@@ -29,7 +29,7 @@ from synthesizer.imaging.image_generators import (
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,
 )
-from synthesizer.synth_warnings import deprecated
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
@@ -60,12 +60,6 @@ class Image(ImagingBase):
             The noise array added to the image.
         weight_map (array_like, float):
             The weight map derived from the noise array.
-        flux_conserving_resample (bool):
-            If True, use flux-conserving integer resampling: downsampling is
-            performed by summing pixel blocks, and supersampling is performed
-            by uniformly splitting each pixel into subpixels. This preserves
-            the total flux, but requires integer resampling factors.
-            Otherwise, use standard spline interpolation when resampling.
     """
 
     @timed("Image.__init__")
@@ -74,7 +68,6 @@ class Image(ImagingBase):
         resolution,
         fov,
         img=None,
-        flux_conserving_resample=False,
     ):
         """Create an image with the images metadata.
 
@@ -88,10 +81,6 @@ class Image(ImagingBase):
                 The image array. Only used to attach an existing image array
                 to an image instance. Mostly used internally when methods
                 make a new image instance for self.
-            flux_conserving_resample (bool):
-                If True, use flux-conserving integer resampling instead of
-                standard spline interpolation. This preserves total flux, but
-                requires integer resampling factors.
         """
         # Instantiate the base class holding the geometry
         ImagingBase.__init__(self, resolution, fov)
@@ -110,11 +99,6 @@ class Image(ImagingBase):
         # Set up the noise array and weight map
         self.noise_arr = None
         self.weight_map = None
-
-        # Set up resampling option
-        if not isinstance(flux_conserving_resample, bool):
-            raise TypeError("flux_conserving_resample must be a bool.")
-        self.flux_conserving_resample = flux_conserving_resample
 
     @property
     def img(self):
@@ -151,45 +135,63 @@ class Image(ImagingBase):
     def resample(self, factor):
         """Resample the image by factor.
 
+        If factor, or 1/factor for downsampling, is an integer, use
+        flux-conserving integer resampling: downsampling is performed by
+        summing pixel blocks, and supersampling is performed by uniformly
+        splitting each pixel into subpixels. This preserves the total flux.
+        Otherwise, for non-integer factors use a spline interpolation.
+
         Args:
             factor (float):
                 The factor by which to resample the image, >1 increases
                 resolution, <1 decreases resolution.
-        """
-        # Resample the resoltion, this will also update the npix and fov (if
-        # necessary)
-        self._resample_resolution(factor)
 
+        """
         # Resample the image.
         # NOTE: skimage.transform.pyramid_gaussian is more efficient but adds
         #       another dependency.
-        if self.arr is not None:
-            if self.flux_conserving_resample:
-                int_factor = int(round(factor))
-                inv_factor = int(round(1.0 / factor))
+        if self.arr is None:
+            raise exceptions.MissingImage(
+                "The image array hasn't been generated yet. Please run "
+                "generate_img_hist() or generate_img_smoothed() before "
+                "resampling."
+            )
+        elif factor == 1:
+            warn(
+                "Resampling is unnecessary for resampling factor = 1. "
+                "Ignoring resample request."
+            )
+            return
+        elif factor > 0 and np.isfinite(factor):
+            # Resample the resoltion, this will also update the npix and fov
+            # (if necessary)
 
-                if np.isclose(factor, int_factor):
-                    # Replace each pixel with an int_factor x int_factor
-                    # block whose subpixels each contain 1 / int_factor**2
-                    # of the original pixel value, preserving total flux.
-                    self.arr = (
-                        np.repeat(
-                            np.repeat(self.arr, int_factor, axis=0),
-                            int_factor,
-                            axis=1,
-                        )
-                        / int_factor**2
+            int_factor = int(round(factor))
+            inv_factor = int(round(1.0 / factor))
+
+            if np.isclose(factor, int_factor):
+                # Replace each pixel with an int_factor x int_factor
+                # block whose subpixels each contain 1 / int_factor**2
+                # of the original pixel value, preserving total flux.
+
+                self.arr = (
+                    np.repeat(
+                        np.repeat(self.arr, int_factor, axis=0),
+                        int_factor,
+                        axis=1,
                     )
+                    / int_factor**2
+                )
 
-                elif np.isclose(1.0 / factor, inv_factor):
-                    ny, nx = self.arr.shape
+            elif np.isclose(1.0 / factor, inv_factor):
+                ny, nx = self.arr.shape
 
-                    if ny % inv_factor != 0 or nx % inv_factor != 0:
-                        raise ValueError(
-                            f"Image shape {self.arr.shape} is not divisible "
-                            f"by downsampling factor {inv_factor}."
-                        )
+                if ny % inv_factor != 0 or nx % inv_factor != 0:
+                    # Image shape is not divisible by downsampling factor,
+                    # so use spline interpolation
+                    self.arr = zoom(self.arr, (factor, factor), order=3)
 
+                else:
                     # Group the image into non-overlapping
                     # inv_factor x inv_factor blocks and sum each block into
                     # one pixel, preserving total flux.
@@ -200,22 +202,15 @@ class Image(ImagingBase):
                         inv_factor,
                     ).sum(axis=(1, 3))
 
-                else:
-                    raise ValueError(
-                        "flux_conserving_resample requires the resampling "
-                        "factor or its reciprocal to be integer, but received "
-                        f"{factor}."
-                    )
             else:
                 # Resample via spline interpolation
                 self.arr = zoom(self.arr, (factor, factor), order=3)
             new_shape = self.arr.shape
         else:
-            raise exceptions.MissingImage(
-                "The image array hasn't been generated yet. Please run "
-                "generate_img_hist() or generate_img_smoothed() before "
-                "resampling."
-            )
+            raise ValueError(f"Factor {factor} is not positive finite.")
+
+        # Update pixel metadata
+        self._resample_resolution(factor)
 
         # Handle the edge case where the conversion between resolutions has
         # messed with the FOV.
@@ -279,20 +274,12 @@ class Image(ImagingBase):
                 self.resolution,
                 self.fov,
                 img=self.arr + other_img.arr,
-                flux_conserving_resample=(
-                    self.flux_conserving_resample
-                    or other_img.flux_conserving_resample
-                ),
             )
         elif self.units is not None and other_img.units is not None:
             return Image(
                 self.resolution,
                 self.fov,
                 img=self.arr * self.units + other_img.arr * other_img.units,
-                flux_conserving_resample=(
-                    self.flux_conserving_resample
-                    or other_img.flux_conserving_resample
-                ),
             )
         else:
             s = "dimensionless"
@@ -338,20 +325,12 @@ class Image(ImagingBase):
                 self.resolution,
                 self.fov,
                 img=self.arr - other_img.arr,
-                flux_conserving_resample=(
-                    self.flux_conserving_resample
-                    or other_img.flux_conserving_resample
-                ),
             )
         elif self.units is not None and other_img.units is not None:
             return Image(
                 self.resolution,
                 self.fov,
                 img=self.arr * self.units - other_img.arr * other_img.units,
-                flux_conserving_resample=(
-                    self.flux_conserving_resample
-                    or other_img.flux_conserving_resample
-                ),
             )
         else:
             s = "dimensionless"
@@ -386,7 +365,8 @@ class Image(ImagingBase):
         """
         # Create the new image
         new_img = Image(
-            self.resolution, self.fov, self.flux_conserving_resample
+            self.resolution,
+            self.fov,
         )
 
         # Associate the image array and units
@@ -600,7 +580,6 @@ class Image(ImagingBase):
             resolution=self.resolution,
             fov=self.fov,
             img=noisy_img,
-            flux_conserving_resample=self.flux_conserving_resample,
         )
 
         # Store the noise array on the new image
