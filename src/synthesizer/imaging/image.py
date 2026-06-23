@@ -74,7 +74,7 @@ class Image(ImagingBase):
         resolution,
         fov,
         img=None,
-        flux_conserving_resample = False,
+        flux_conserving_resample=False,
     ):
         """Create an image with the images metadata.
 
@@ -110,7 +110,7 @@ class Image(ImagingBase):
         # Set up the noise array and weight map
         self.noise_arr = None
         self.weight_map = None
-            
+
         # Set up resampling option
         if not isinstance(flux_conserving_resample, bool):
             raise TypeError("flux_conserving_resample must be a bool.")
