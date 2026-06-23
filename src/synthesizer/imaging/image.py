@@ -385,7 +385,9 @@ class Image(ImagingBase):
                 The new image containing the multipled array.
         """
         # Create the new image
-        new_img = Image(self.resolution, self.fov, self.flux_conserving_resample)
+        new_img = Image(
+            self.resolution, self.fov, self.flux_conserving_resample
+        )
 
         # Associate the image array and units
         new_img.arr = self.arr.copy()
