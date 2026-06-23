@@ -62,10 +62,10 @@ class Image(ImagingBase):
             The weight map derived from the noise array.
         flux_conserving_resample (bool):
             If True, use flux-conserving integer resampling: downsampling is
-            performed by summing pixel blocks, and supersampling is performed by
-            uniformly splitting each pixel into subpixels. This preserves the
-            total flux, but requires integer resampling factors. Otherwise, use
-            standard spline interpolation when resampling.
+            performed by summing pixel blocks, and supersampling is performed
+            by uniformly splitting each pixel into subpixels. This preserves
+            the total flux, but requires integer resampling factors.
+            Otherwise, use standard spline interpolation when resampling.
     """
 
     @timed("Image.__init__")
@@ -169,22 +169,43 @@ class Image(ImagingBase):
                 inv_factor = int(round(1.0 / factor))
 
                 if np.isclose(factor, int_factor):
-                    # Replace each pix with an int_factor × int_factor block whose subpixels each contain 1/int_factor**2
-                    # of the original pixel value, preserving total flux
-                    self.arr = np.repeat(np.repeat(self.arr, int_factor, axis=0),int_factor,axis=1) / int_factor**2
+                    # Replace each pixel with an int_factor x int_factor
+                    # block whose subpixels each contain 1 / int_factor**2
+                    # of the original pixel value, preserving total flux.
+                    self.arr = (
+                        np.repeat(
+                            np.repeat(self.arr, int_factor, axis=0),
+                            int_factor,
+                            axis=1,
+                        )
+                        / int_factor**2
+                    )
 
                 elif np.isclose(1.0 / factor, inv_factor):
                     ny, nx = self.arr.shape
 
                     if ny % inv_factor != 0 or nx % inv_factor != 0:
-                        raise ValueError(f"Image shape {self.arr.shape} is not divisible by downsampling factor {inv_factor}.")
+                        raise ValueError(
+                            f"Image shape {self.arr.shape} is not divisible "
+                            f"by downsampling factor {inv_factor}."
+                        )
 
-                    # Groups the image into non-overlapping inv_factor × inv_factor blocks and sums each block into one pixel, 
-                    # preserving total flux
-                    self.arr = self.arr.reshape(ny // inv_factor,inv_factor,nx // inv_factor,inv_factor).sum(axis=(1, 3))
+                    # Group the image into non-overlapping
+                    # inv_factor x inv_factor blocks and sum each block into
+                    # one pixel, preserving total flux.
+                    self.arr = self.arr.reshape(
+                        ny // inv_factor,
+                        inv_factor,
+                        nx // inv_factor,
+                        inv_factor,
+                    ).sum(axis=(1, 3))
 
                 else:
-                    raise ValueError(f"flux_conserving_resample requires resampling factor or its reciprocal to be integer, but received {factor}.")
+                    raise ValueError(
+                        "flux_conserving_resample requires the resampling "
+                        "factor or its reciprocal to be integer, but received "
+                        f"{factor}."
+                    )
             else:
                 # Resample via spline interpolation
                 self.arr = zoom(self.arr, (factor, factor), order=3)
