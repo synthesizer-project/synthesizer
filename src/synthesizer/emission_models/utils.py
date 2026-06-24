@@ -6,12 +6,11 @@ import inspect
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.utils import (
     depluralize,
-    ensure_array_c_compatible_double,
-    get_attr_c_compatible_double,
     pluralize,
 )
 
@@ -212,34 +211,20 @@ def get_param(
             ParameterFunction,
         ):
             value = model.fixed_parameters[param]
-            if not preserve_units:
-                value = ensure_array_c_compatible_double(value)
         else:
             value = model.fixed_parameters[param]
 
     # Check the emission next
     elif emission is not None and hasattr(emission, param):
-        value = (
-            getattr(emission, param)
-            if preserve_units
-            else get_attr_c_compatible_double(emission, param)
-        )
+        value = getattr(emission, param)
 
     # Check the emitter
     elif emitter is not None and hasattr(emitter, param):
-        value = (
-            getattr(emitter, param)
-            if preserve_units
-            else get_attr_c_compatible_double(emitter, param)
-        )
+        value = getattr(emitter, param)
 
     # Finally, if we have an additional object, check that
     elif obj is not None and hasattr(obj, param):
-        value = (
-            getattr(obj, param)
-            if preserve_units
-            else get_attr_c_compatible_double(obj, param)
-        )
+        value = getattr(obj, param)
 
     # Do we need to recursively look for the parameter? (We know we're only
     # looking on the emitter at this point)
@@ -267,7 +252,12 @@ def get_param(
 
     # If we found a ParameterFunction, call it to get the value
     elif value is not None and isinstance(value, ParameterFunction):
-        return value(model, emission, emitter, obj)
+        result = value(model, emission, emitter, obj)
+        if not preserve_units and isinstance(
+            result, (unyt_array, unyt_quantity)
+        ):
+            result = result.value
+        return result
 
     # If we found a value, return it
     elif value is not None:
@@ -280,6 +270,10 @@ def get_param(
                 model_label=model.label,
                 value=value,
             )
+        if not preserve_units and isinstance(
+            value, (unyt_array, unyt_quantity)
+        ):
+            value = value.value
         return value
 
     # If we were finding a logged parameter but failed, try the non-logged
@@ -351,6 +345,10 @@ def get_param(
                 model_label=model.label,
                 value=value,
             )
+        if not preserve_units and isinstance(
+            value, (unyt_array, unyt_quantity)
+        ):
+            value = value.value
         return value
 
     # Otherwise raise an exception
