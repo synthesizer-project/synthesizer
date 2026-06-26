@@ -923,6 +923,7 @@ class Stars(Particles, StarsComponent):
         method="random",
         field_kernel=None,
         nthreads=1,
+        gas_field=None,
     ):
         """Resample this stellar distribution spatially.
 
@@ -996,6 +997,11 @@ class Stars(Particles, StarsComponent):
             nthreads (int):
                 Number of threads for the C++ field evaluator when
                 ``method="field"`` (default 1).
+            gas_field (Gas, optional):
+                A Gas object whose particles are included in the SPH
+                field evaluation for overlapping attributes
+                (metallicities, velocities, tau_v).  When ``None``
+                (default) the field is built from stars alone.
 
         Returns:
             Stars: A new Stars object with the resampled distribution.
@@ -1144,15 +1150,81 @@ class Stars(Particles, StarsComponent):
             if _is_per_particle_value(to_resample[14]):
                 field_attrs["fesc_ly_alpha"] = to_resample[14]
 
-            _density, interpolated_attrs = evaluate_sph_field(
-                query_positions=new_coords,
-                particle_positions=to_resample[0],
-                smoothing_lengths=to_resample[1],
-                masses=to_resample[2],
-                kernel=field_kernel,
-                attributes=field_attrs,
-                nthreads=nthreads,
-            )
+            if gas_field is not None:
+                # Build combined star + gas SPH field for overlapping
+                # attributes (metallicities, velocities, tau_v).
+                gas_coords = gas_field.coordinates
+                gas_sml = gas_field.smoothing_lengths
+                gas_masses = gas_field.masses
+
+                combined_pos = np.concatenate([to_resample[0], gas_coords])
+                combined_sml = np.concatenate([to_resample[1], gas_sml])
+                combined_masses = np.concatenate([to_resample[2], gas_masses])
+
+                combined_attrs = {}
+                star_only_attrs = {}
+
+                for name, arr in field_attrs.items():
+                    if name == "metallicities":
+                        combined_attrs[name] = np.concatenate(
+                            [arr, gas_field.metallicities]
+                        )
+                    elif name == "velocities":
+                        combined_attrs[name] = np.concatenate(
+                            [arr, gas_field.velocities]
+                        )
+                    elif name == "tau_v":
+                        gas_tau = getattr(gas_field, "tau_v", None)
+                        if (
+                            gas_tau is not None
+                            and hasattr(gas_tau, "shape")
+                            and gas_tau.ndim >= 1
+                        ):
+                            combined_attrs[name] = np.concatenate(
+                                [arr, gas_tau]
+                            )
+                        else:
+                            star_only_attrs[name] = arr
+                    else:
+                        star_only_attrs[name] = arr
+
+                if combined_attrs:
+                    _density, combined_interp = evaluate_sph_field(
+                        query_positions=new_coords,
+                        particle_positions=combined_pos,
+                        smoothing_lengths=combined_sml,
+                        masses=combined_masses,
+                        kernel=field_kernel,
+                        attributes=combined_attrs,
+                        nthreads=nthreads,
+                    )
+                else:
+                    combined_interp = {}
+
+                if star_only_attrs:
+                    _density, star_interp = evaluate_sph_field(
+                        query_positions=new_coords,
+                        particle_positions=to_resample[0],
+                        smoothing_lengths=to_resample[1],
+                        masses=to_resample[2],
+                        kernel=field_kernel,
+                        attributes=star_only_attrs,
+                        nthreads=nthreads,
+                    )
+                else:
+                    star_interp = {}
+
+                interpolated_attrs = {**combined_interp, **star_interp}
+            else:
+                _density, interpolated_attrs = evaluate_sph_field(
+                    query_positions=new_coords,
+                    particle_positions=to_resample[0],
+                    smoothing_lengths=to_resample[1],
+                    masses=to_resample[2],
+                    kernel=field_kernel,
+                    attributes=field_attrs,
+                    nthreads=nthreads,
+                )
 
             if sfzh is not None or sfh is not None or metal_dist is not None:
                 # How many new particles in total do we need to sample?

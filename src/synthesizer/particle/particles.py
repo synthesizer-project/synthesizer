@@ -774,7 +774,6 @@ class Particles:
 
         self.center = com
 
-    @timed("Particles.calculate_smoothing_lengths")
     def calculate_smoothing_lengths(self, source_coords=None, **kwargs):
         """Calculate smoothing lengths of particles and assign.
 
