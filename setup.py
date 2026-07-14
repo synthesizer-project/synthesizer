@@ -289,6 +289,20 @@ extensions = [
         include_dirs=include_dirs,
     ),
     create_extension(
+        "synthesizer.extensions.grid_interpolation",
+        [
+            "src/synthesizer/extensions/grid_interpolation.cpp",
+            "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/part_props.cpp",
+            "src/synthesizer/extensions/grid_props.cpp",
+            "src/synthesizer/extensions/numpy_init.cpp",
+        ],
+        compile_flags=compile_flags,
+        links=link_args,
+        include_dirs=include_dirs,
+    ),
+    create_extension(
         "synthesizer.extensions.reductions",
         [
             "src/synthesizer/extensions/reductions.cpp",
