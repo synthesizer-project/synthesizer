@@ -181,7 +181,56 @@ double Particles::get_weight_at(int pind) const {
  * @return The velocity of the particle at the given index.
  */
 double Particles::get_vel_at(int pind) const {
-  return get_double_at(np_velocities_, pind, "velocities");
+  const int ndim = PyArray_NDIM(np_velocities_);
+
+  /* A 1D velocity array is already a line-of-sight velocity array. */
+  if (ndim == 1) {
+    return get_double_at(np_velocities_, pind, "velocities");
+  }
+
+  /* Particle velocities are normally stored as (npart, 3); use z as LOS. */
+  if (ndim == 2) {
+    if (PyArray_TYPE(np_velocities_) != NPY_FLOAT64) {
+      PyErr_SetString(PyExc_TypeError,
+                      "[get_vel_at]: Array 'velocities' must be of type "
+                      "float64.");
+      return 0.0;
+    }
+
+    if (!PyArray_ISCONTIGUOUS(np_velocities_)) {
+      PyErr_SetString(PyExc_ValueError,
+                      "[get_vel_at]: Array 'velocities' must be contiguous.");
+      return 0.0;
+    }
+
+    const npy_intp nvel = PyArray_DIM(np_velocities_, 0);
+    const npy_intp ncomp = PyArray_DIM(np_velocities_, 1);
+    if (ncomp != 3) {
+      PyErr_Format(PyExc_ValueError,
+                   "[get_vel_at]: Array 'velocities' must have shape "
+                   "(npart, 3) or (npart,), got second dimension %ld.",
+                   static_cast<long>(ncomp));
+      return 0.0;
+    }
+
+    if (pind < 0 || pind >= nvel) {
+      PyErr_Format(PyExc_IndexError,
+                   "[get_vel_at]: Particle index (%ld) out of bounds for "
+                   "array 'velocities'. Valid range is [0, %ld).",
+                   static_cast<long>(pind), static_cast<long>(nvel));
+      return 0.0;
+    }
+
+    const double *data_ptr =
+        static_cast<const double *>(PyArray_DATA(np_velocities_));
+    return data_ptr[static_cast<npy_intp>(pind) * ncomp + 2];
+  }
+
+  PyErr_Format(PyExc_ValueError,
+               "[get_vel_at]: Array 'velocities' must have shape (npart, 3) "
+               "or (npart,), got %d dimensions.",
+               ndim);
+  return 0.0;
 }
 
 /**
