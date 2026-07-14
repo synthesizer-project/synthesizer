@@ -30,6 +30,9 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
                      PyObject *part_names_tuple, int npart_)
     : np_weights_(np_weights),
       np_velocities_(np_velocities),
+      velocities_(NULL),
+      velocity_ndim_(0),
+      velocity_ncomp_(0),
       np_mask_(np_mask),
       part_tuple_(part_tuple) {
 
@@ -37,6 +40,66 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
 
   /* Assign the number of particles. */
   npart = npart_;
+
+  if (np_velocities_ != NULL) {
+    velocity_ndim_ = PyArray_NDIM(np_velocities_);
+
+    if (PyArray_TYPE(np_velocities_) != NPY_FLOAT64) {
+      PyErr_SetString(PyExc_TypeError,
+                      "[Particles.__init__]: Array 'velocities' must be of "
+                      "type float64.");
+      toc("Particles.__init__");
+      return;
+    }
+
+    if (!PyArray_ISCONTIGUOUS(np_velocities_)) {
+      PyErr_SetString(PyExc_ValueError,
+                      "[Particles.__init__]: Array 'velocities' must be "
+                      "contiguous.");
+      toc("Particles.__init__");
+      return;
+    }
+
+    if (velocity_ndim_ == 1) {
+      if (PyArray_DIM(np_velocities_, 0) < npart) {
+        PyErr_Format(PyExc_IndexError,
+                     "[Particles.__init__]: Array 'velocities' has %ld "
+                     "entries but %d particles were requested.",
+                     static_cast<long>(PyArray_DIM(np_velocities_, 0)), npart);
+        toc("Particles.__init__");
+        return;
+      }
+      velocity_ncomp_ = 1;
+    } else if (velocity_ndim_ == 2) {
+      if (PyArray_DIM(np_velocities_, 0) < npart) {
+        PyErr_Format(PyExc_IndexError,
+                     "[Particles.__init__]: Array 'velocities' has %ld "
+                     "particles but %d particles were requested.",
+                     static_cast<long>(PyArray_DIM(np_velocities_, 0)), npart);
+        toc("Particles.__init__");
+        return;
+      }
+
+      velocity_ncomp_ = PyArray_DIM(np_velocities_, 1);
+      if (velocity_ncomp_ != 3) {
+        PyErr_Format(PyExc_ValueError,
+                     "[Particles.__init__]: Array 'velocities' must have "
+                     "shape (npart, 3) or (npart,), got second dimension %ld.",
+                     static_cast<long>(velocity_ncomp_));
+        toc("Particles.__init__");
+        return;
+      }
+    } else {
+      PyErr_Format(PyExc_ValueError,
+                   "[Particles.__init__]: Array 'velocities' must have shape "
+                   "(npart, 3) or (npart,), got %d dimensions.",
+                   velocity_ndim_);
+      toc("Particles.__init__");
+      return;
+    }
+
+    velocities_ = static_cast<const double *>(PyArray_DATA(np_velocities_));
+  }
 
   if (part_names_tuple != NULL && PySequence_Check(part_names_tuple) &&
       !PyUnicode_Check(part_names_tuple)) {
@@ -181,56 +244,10 @@ double Particles::get_weight_at(int pind) const {
  * @return The velocity of the particle at the given index.
  */
 double Particles::get_vel_at(int pind) const {
-  const int ndim = PyArray_NDIM(np_velocities_);
-
-  /* A 1D velocity array is already a line-of-sight velocity array. */
-  if (ndim == 1) {
-    return get_double_at(np_velocities_, pind, "velocities");
+  if (velocity_ndim_ == 1) {
+    return velocities_[pind];
   }
-
-  /* Particle velocities are normally stored as (npart, 3); use z as LOS. */
-  if (ndim == 2) {
-    if (PyArray_TYPE(np_velocities_) != NPY_FLOAT64) {
-      PyErr_SetString(PyExc_TypeError,
-                      "[get_vel_at]: Array 'velocities' must be of type "
-                      "float64.");
-      return 0.0;
-    }
-
-    if (!PyArray_ISCONTIGUOUS(np_velocities_)) {
-      PyErr_SetString(PyExc_ValueError,
-                      "[get_vel_at]: Array 'velocities' must be contiguous.");
-      return 0.0;
-    }
-
-    const npy_intp nvel = PyArray_DIM(np_velocities_, 0);
-    const npy_intp ncomp = PyArray_DIM(np_velocities_, 1);
-    if (ncomp != 3) {
-      PyErr_Format(PyExc_ValueError,
-                   "[get_vel_at]: Array 'velocities' must have shape "
-                   "(npart, 3) or (npart,), got second dimension %ld.",
-                   static_cast<long>(ncomp));
-      return 0.0;
-    }
-
-    if (pind < 0 || pind >= nvel) {
-      PyErr_Format(PyExc_IndexError,
-                   "[get_vel_at]: Particle index (%ld) out of bounds for "
-                   "array 'velocities'. Valid range is [0, %ld).",
-                   static_cast<long>(pind), static_cast<long>(nvel));
-      return 0.0;
-    }
-
-    const double *data_ptr =
-        static_cast<const double *>(PyArray_DATA(np_velocities_));
-    return data_ptr[static_cast<npy_intp>(pind) * ncomp + 2];
-  }
-
-  PyErr_Format(PyExc_ValueError,
-               "[get_vel_at]: Array 'velocities' must have shape (npart, 3) "
-               "or (npart,), got %d dimensions.",
-               ndim);
-  return 0.0;
+  return velocities_[static_cast<npy_intp>(pind) * velocity_ncomp_ + 2];
 }
 
 /**
