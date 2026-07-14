@@ -26,6 +26,8 @@
 
 /* C/C++ includes */
 #include <cstring>
+#include <memory>
+#include <new>
 #include <vector>
 
 #ifdef WITH_OPENMP
@@ -35,6 +37,7 @@
 /* Local includes */
 #include "cpp_to_python.h"
 #include "property_funcs.h"
+#include "python_to_cpp.h"
 
 /**
  * @brief Compact per-filter metadata for use in tight inner loops.
@@ -51,12 +54,13 @@
  *                         transmission.
  * @param inv_denominator: Precomputed 1.0 / denominator for this filter.
  */
+template <typename Real, typename OutT>
 struct FilterWork {
   npy_intp filter_index;
-  const double *weights;
+  const Real *weights;
   npy_int64 start;
   npy_int64 end;
-  double inv_denominator;
+  OutT inv_denominator;
 };
 
 /**
@@ -79,22 +83,21 @@ struct FilterWork {
  *
  * @return A vector of FilterWork descriptors for active filters only.
  */
-static std::vector<FilterWork> build_filter_work(const double *weight_matrix,
-                                                 const double *denominators,
-                                                 const npy_int64 *starts,
-                                                 const npy_int64 *ends,
-                                                 npy_intp wavelength_count,
-                                                 npy_intp nfilters) {
+template <typename Real, typename OutT>
+static std::vector<FilterWork<Real, OutT>> build_filter_work(
+    const Real *weight_matrix, const Real *denominators,
+    const npy_int64 *starts, const npy_int64 *ends, npy_intp wavelength_count,
+    npy_intp nfilters) {
 
   /* Pre-allocate space for up to nfilters entries. */
-  std::vector<FilterWork> work;
+  std::vector<FilterWork<Real, OutT>> work;
   work.reserve((size_t)nfilters);
 
   /* Walk through every filter and keep only the active ones. */
   for (npy_intp filter_index = 0; filter_index < nfilters; ++filter_index) {
     const npy_int64 start = starts[filter_index];
     const npy_int64 end = ends[filter_index];
-    const double denominator = denominators[filter_index];
+    const OutT denominator = static_cast<OutT>(denominators[filter_index]);
 
     /* Skip filters with zero denominator or fewer than 2 samples. */
     if (denominator == 0.0 || end - start < 2) {
@@ -102,12 +105,12 @@ static std::vector<FilterWork> build_filter_work(const double *weight_matrix,
     }
 
     /* Populate the work descriptor. */
-    FilterWork item;
+    FilterWork<Real, OutT> item;
     item.filter_index = filter_index;
     item.weights = &weight_matrix[filter_index * wavelength_count];
     item.start = start;
     item.end = end;
-    item.inv_denominator = 1.0 / denominator;
+    item.inv_denominator = static_cast<OutT>(1.0) / denominator;
     work.push_back(item);
   }
 
@@ -137,16 +140,17 @@ static std::vector<FilterWork> build_filter_work(const double *weight_matrix,
  *
  * @return Newly allocated filter-major result buffer, or NULL on failure.
  */
-static double *compute_photometry_trapz_serial(
-    const double *x_values, const double *spectra_values,
-    const std::vector<FilterWork> &filter_work, npy_intp wavelength_count,
-    npy_intp nentries, npy_intp nfilters) {
+template <typename Real, typename OutT>
+static OutT *compute_photometry_trapz_serial(
+    const Real *x_values, const Real *spectra_values,
+    const std::vector<FilterWork<Real, OutT>> &filter_work,
+    npy_intp wavelength_count, npy_intp nentries, npy_intp nfilters) {
 
   /* Allocate output directly in filter-major layout. calloc zeroes the
    * memory so inactive filter slots are already 0. */
-  double *filter_major =
-      (double *)calloc((size_t)(nentries * nfilters), sizeof(double));
-  if (filter_major == NULL) {
+  std::unique_ptr<OutT[]> filter_major(
+      new (std::nothrow) OutT[(size_t)(nentries * nfilters)]());
+  if (filter_major == nullptr) {
     return NULL;
   }
 
@@ -154,19 +158,23 @@ static double *compute_photometry_trapz_serial(
   for (npy_intp entry = 0; entry < nentries; ++entry) {
 
     /* Get a pointer to this entry's spectrum. */
-    const double *spectrum = &spectra_values[entry * wavelength_count];
+    const Real *spectrum = &spectra_values[entry * wavelength_count];
 
     /* Loop over active filters. */
-    for (const FilterWork &work : filter_work) {
+    for (const FilterWork<Real, OutT> &work : filter_work) {
 
       /* Accumulate the trapezoidal quadrature numerator over the
        * filter's non-zero support range [start, end). */
-      double numerator = 0.0;
+      OutT numerator = static_cast<OutT>(0.0);
       for (npy_int64 wavelength = work.start; wavelength < work.end - 1;
            ++wavelength) {
-        numerator += 0.5 * (x_values[wavelength + 1] - x_values[wavelength]) *
-                     (spectrum[wavelength + 1] * work.weights[wavelength + 1] +
-                      spectrum[wavelength] * work.weights[wavelength]);
+        numerator += static_cast<OutT>(0.5) *
+                     static_cast<OutT>(x_values[wavelength + 1] -
+                                       x_values[wavelength]) *
+                     (static_cast<OutT>(spectrum[wavelength + 1]) *
+                          static_cast<OutT>(work.weights[wavelength + 1]) +
+                      static_cast<OutT>(spectrum[wavelength]) *
+                          static_cast<OutT>(work.weights[wavelength]));
       }
 
       /* Divide by the precomputed denominator and store directly in
@@ -176,7 +184,7 @@ static double *compute_photometry_trapz_serial(
     }
   }
 
-  return filter_major;
+  return filter_major.release();
 }
 
 /**
@@ -200,15 +208,16 @@ static double *compute_photometry_trapz_serial(
  *
  * @return Newly allocated filter-major result buffer, or NULL on failure.
  */
-static double *compute_photometry_simps_serial(
-    const double *x_values, const double *spectra_values,
-    const std::vector<FilterWork> &filter_work, npy_intp wavelength_count,
-    npy_intp nentries, npy_intp nfilters) {
+template <typename Real, typename OutT>
+static OutT *compute_photometry_simps_serial(
+    const Real *x_values, const Real *spectra_values,
+    const std::vector<FilterWork<Real, OutT>> &filter_work,
+    npy_intp wavelength_count, npy_intp nentries, npy_intp nfilters) {
 
   /* Allocate output directly in filter-major layout. */
-  double *filter_major =
-      (double *)calloc((size_t)(nentries * nfilters), sizeof(double));
-  if (filter_major == NULL) {
+  std::unique_ptr<OutT[]> filter_major(
+      new (std::nothrow) OutT[(size_t)(nentries * nfilters)]());
+  if (filter_major == nullptr) {
     return NULL;
   }
 
@@ -216,10 +225,10 @@ static double *compute_photometry_simps_serial(
   for (npy_intp entry = 0; entry < nentries; ++entry) {
 
     /* Get a pointer to this entry's spectrum. */
-    const double *spectrum = &spectra_values[entry * wavelength_count];
+    const Real *spectrum = &spectra_values[entry * wavelength_count];
 
     /* Loop over active filters. */
-    for (const FilterWork &work : filter_work) {
+    for (const FilterWork<Real, OutT> &work : filter_work) {
 
       /* How many wavelength samples does this filter span? */
       const npy_int64 sample_count = work.end - work.start;
@@ -233,23 +242,30 @@ static double *compute_photometry_simps_serial(
       const bool has_tail = ((sample_count - 1) % 2) != 0;
 
       /* Accumulate the Simpson's quadrature numerator. */
-      double numerator = 0.0;
+      OutT numerator = static_cast<OutT>(0.0);
       for (npy_int64 pair_index = 0; pair_index < npairs; ++pair_index) {
         const npy_int64 k = work.start + 2 * pair_index;
-        numerator += (x_values[k + 2] - x_values[k]) *
-                     (spectrum[k] * work.weights[k] +
-                      4.0 * spectrum[k + 1] * work.weights[k + 1] +
-                      spectrum[k + 2] * work.weights[k + 2]) /
-                     6.0;
+        numerator +=
+            static_cast<OutT>(x_values[k + 2] - x_values[k]) *
+            (static_cast<OutT>(spectrum[k]) *
+                 static_cast<OutT>(work.weights[k]) +
+             static_cast<OutT>(4.0) * static_cast<OutT>(spectrum[k + 1]) *
+                 static_cast<OutT>(work.weights[k + 1]) +
+             static_cast<OutT>(spectrum[k + 2]) *
+                 static_cast<OutT>(work.weights[k + 2])) /
+            static_cast<OutT>(6.0);
       }
 
       /* If there is a leftover interval, add a trapezoidal step. */
       if (has_tail) {
         const npy_int64 k0 = work.end - 2;
         const npy_int64 k1 = work.end - 1;
-        numerator += 0.5 * (x_values[k1] - x_values[k0]) *
-                     (spectrum[k1] * work.weights[k1] +
-                      spectrum[k0] * work.weights[k0]);
+        numerator += static_cast<OutT>(0.5) *
+                     static_cast<OutT>(x_values[k1] - x_values[k0]) *
+                     (static_cast<OutT>(spectrum[k1]) *
+                          static_cast<OutT>(work.weights[k1]) +
+                      static_cast<OutT>(spectrum[k0]) *
+                          static_cast<OutT>(work.weights[k0]));
       }
 
       /* Divide by the precomputed denominator and store directly in
@@ -259,7 +275,7 @@ static double *compute_photometry_simps_serial(
     }
   }
 
-  return filter_major;
+  return filter_major.release();
 }
 
 #ifdef WITH_OPENMP
@@ -282,16 +298,18 @@ static double *compute_photometry_simps_serial(
  *
  * @return Newly allocated filter-major result buffer, or NULL on failure.
  */
-static double *compute_photometry_trapz_parallel(
-    const double *x_values, const double *spectra_values,
-    const std::vector<FilterWork> &filter_work, npy_intp wavelength_count,
-    npy_intp nentries, npy_intp nfilters, int nthreads) {
+template <typename Real, typename OutT>
+static OutT *compute_photometry_trapz_parallel(
+    const Real *x_values, const Real *spectra_values,
+    const std::vector<FilterWork<Real, OutT>> &filter_work,
+    npy_intp wavelength_count, npy_intp nentries, npy_intp nfilters,
+    int nthreads) {
 
   /* Allocate the output directly in filter-major layout. calloc zeroes the
    * memory so inactive filter slots are already 0. */
-  double *filter_major =
-      (double *)calloc((size_t)(nentries * nfilters), sizeof(double));
-  if (filter_major == NULL) {
+  std::unique_ptr<OutT[]> filter_major(
+      new (std::nothrow) OutT[(size_t)(nentries * nfilters)]());
+  if (filter_major == nullptr) {
     return NULL;
   }
 
@@ -311,19 +329,23 @@ static double *compute_photometry_trapz_parallel(
     const npy_intp af = work_idx % nactive;
 
     /* Get the filter work descriptor. */
-    const FilterWork &work = filter_work[(size_t)af];
+    const FilterWork<Real, OutT> &work = filter_work[(size_t)af];
 
     /* Get a pointer to this entry's spectrum. */
-    const double *spectrum = &spectra_values[entry * wavelength_count];
+    const Real *spectrum = &spectra_values[entry * wavelength_count];
 
     /* Accumulate the trapezoidal quadrature numerator over the
      * filter's non-zero support range [start, end). */
-    double numerator = 0.0;
+    OutT numerator = static_cast<OutT>(0.0);
     for (npy_int64 wavelength = work.start; wavelength < work.end - 1;
          ++wavelength) {
-      numerator += 0.5 * (x_values[wavelength + 1] - x_values[wavelength]) *
-                   (spectrum[wavelength + 1] * work.weights[wavelength + 1] +
-                    spectrum[wavelength] * work.weights[wavelength]);
+      numerator +=
+          static_cast<OutT>(0.5) *
+          static_cast<OutT>(x_values[wavelength + 1] - x_values[wavelength]) *
+          (static_cast<OutT>(spectrum[wavelength + 1]) *
+               static_cast<OutT>(work.weights[wavelength + 1]) +
+           static_cast<OutT>(spectrum[wavelength]) *
+               static_cast<OutT>(work.weights[wavelength]));
     }
 
     /* Write directly to the output. Each work_idx maps to a unique
@@ -332,7 +354,7 @@ static double *compute_photometry_trapz_parallel(
         numerator * work.inv_denominator;
   }
 
-  return filter_major;
+  return filter_major.release();
 }
 
 /**
@@ -354,15 +376,17 @@ static double *compute_photometry_trapz_parallel(
  *
  * @return Newly allocated filter-major result buffer, or NULL on failure.
  */
-static double *compute_photometry_simps_parallel(
-    const double *x_values, const double *spectra_values,
-    const std::vector<FilterWork> &filter_work, npy_intp wavelength_count,
-    npy_intp nentries, npy_intp nfilters, int nthreads) {
+template <typename Real, typename OutT>
+static OutT *compute_photometry_simps_parallel(
+    const Real *x_values, const Real *spectra_values,
+    const std::vector<FilterWork<Real, OutT>> &filter_work,
+    npy_intp wavelength_count, npy_intp nentries, npy_intp nfilters,
+    int nthreads) {
 
   /* Allocate the output directly in filter-major layout. */
-  double *filter_major =
-      (double *)calloc((size_t)(nentries * nfilters), sizeof(double));
-  if (filter_major == NULL) {
+  std::unique_ptr<OutT[]> filter_major(
+      new (std::nothrow) OutT[(size_t)(nentries * nfilters)]());
+  if (filter_major == nullptr) {
     return NULL;
   }
 
@@ -382,10 +406,10 @@ static double *compute_photometry_simps_parallel(
     const npy_intp af = work_idx % nactive;
 
     /* Get the filter work descriptor. */
-    const FilterWork &work = filter_work[(size_t)af];
+    const FilterWork<Real, OutT> &work = filter_work[(size_t)af];
 
     /* Get a pointer to this entry's spectrum. */
-    const double *spectrum = &spectra_values[entry * wavelength_count];
+    const Real *spectrum = &spectra_values[entry * wavelength_count];
 
     /* How many wavelength samples does this filter span? */
     const npy_int64 sample_count = work.end - work.start;
@@ -397,23 +421,30 @@ static double *compute_photometry_simps_parallel(
     const bool has_tail = ((sample_count - 1) % 2) != 0;
 
     /* Accumulate the Simpson's quadrature numerator. */
-    double numerator = 0.0;
+    OutT numerator = static_cast<OutT>(0.0);
     for (npy_int64 pair_index = 0; pair_index < npairs; ++pair_index) {
       const npy_int64 k = work.start + 2 * pair_index;
-      numerator += (x_values[k + 2] - x_values[k]) *
-                   (spectrum[k] * work.weights[k] +
-                    4.0 * spectrum[k + 1] * work.weights[k + 1] +
-                    spectrum[k + 2] * work.weights[k + 2]) /
-                   6.0;
+      numerator +=
+          static_cast<OutT>(x_values[k + 2] - x_values[k]) *
+          (static_cast<OutT>(spectrum[k]) *
+               static_cast<OutT>(work.weights[k]) +
+           static_cast<OutT>(4.0) * static_cast<OutT>(spectrum[k + 1]) *
+               static_cast<OutT>(work.weights[k + 1]) +
+           static_cast<OutT>(spectrum[k + 2]) *
+               static_cast<OutT>(work.weights[k + 2])) /
+          static_cast<OutT>(6.0);
     }
 
     /* If there is a leftover interval, add a trapezoidal step. */
     if (has_tail) {
       const npy_int64 k0 = work.end - 2;
       const npy_int64 k1 = work.end - 1;
-      numerator +=
-          0.5 * (x_values[k1] - x_values[k0]) *
-          (spectrum[k1] * work.weights[k1] + spectrum[k0] * work.weights[k0]);
+      numerator += static_cast<OutT>(0.5) *
+                   static_cast<OutT>(x_values[k1] - x_values[k0]) *
+                   (static_cast<OutT>(spectrum[k1]) *
+                        static_cast<OutT>(work.weights[k1]) +
+                    static_cast<OutT>(spectrum[k0]) *
+                        static_cast<OutT>(work.weights[k0]));
     }
 
     /* Write directly to the output. Each work_idx maps to a unique
@@ -422,9 +453,141 @@ static double *compute_photometry_simps_parallel(
         numerator * work.inv_denominator;
   }
 
-  return filter_major;
+  return filter_major.release();
 }
 #endif /* WITH_OPENMP */
+
+/**
+ * @brief Run batched photometry integration.
+ *
+ * The Python-facing wrapper resolves the shared input precision and requested
+ * output precision once, then dispatches here so the hot numerical loops can
+ * operate entirely on raw typed pointers.
+ *
+ * @tparam Real: Floating-point type shared by all input arrays.
+ * @tparam OutT: Floating-point type used for the returned array.
+ */
+template <typename Real, typename OutT>
+static PyObject *compute_photometry_integration_impl(
+    PyArrayObject *np_x_values, PyArrayObject *np_spectra_values,
+    PyArrayObject *np_weight_matrix, PyArrayObject *np_denominators,
+    PyArrayObject *np_starts, PyArrayObject *np_ends, int nthreads,
+    const char *integration_method) {
+  /* Extract shape information. */
+  npy_intp *spectra_shape = PyArray_SHAPE(np_spectra_values);
+  const npy_intp spectra_ndim = PyArray_NDIM(np_spectra_values);
+  const npy_intp wavelength_count = spectra_shape[spectra_ndim - 1];
+  const npy_intp nfilters = PyArray_DIM(np_weight_matrix, 0);
+
+  /* Extract typed C pointers from the validated numpy arrays. */
+  const Real *x_values = data_ptr<const Real>(np_x_values);
+  const Real *spectra_values = data_ptr<const Real>(np_spectra_values);
+  const Real *weight_matrix = data_ptr<const Real>(np_weight_matrix);
+  const Real *denominators = data_ptr<const Real>(np_denominators);
+  const npy_int64 *starts = extract_index_array(np_starts, "starts");
+  if (starts == NULL) {
+    return NULL;
+  }
+  const npy_int64 *ends = extract_index_array(np_ends, "ends");
+  if (ends == NULL) {
+    return NULL;
+  }
+
+  for (npy_intp f = 0; f < nfilters; ++f) {
+    if (starts[f] < 0 || ends[f] < 0 || starts[f] > ends[f] ||
+        ends[f] > wavelength_count) {
+      PyErr_SetString(PyExc_ValueError,
+                      "Filter band indices must satisfy 0 <= start <= end <= "
+                      "wavelength_count.");
+      return NULL;
+    }
+  }
+
+  /* The total number of spectra is the product of all leading dimensions.
+   * We flatten them for the C kernel and reshape on return. */
+  const npy_intp nentries = PyArray_SIZE(np_spectra_values) / wavelength_count;
+
+  /* Which integration method was requested? */
+  const bool use_simps = strcmp(integration_method, "simps") == 0;
+  const bool use_trapz = strcmp(integration_method, "trapz") == 0;
+
+  if (!use_simps && !use_trapz) {
+    PyErr_SetString(PyExc_ValueError,
+                    "method must be either 'trapz' or 'simps'.");
+    return NULL;
+  }
+
+  /* Build the compact work descriptors for active filters. */
+  const std::vector<FilterWork<Real, OutT>> filter_work =
+      build_filter_work<Real, OutT>(weight_matrix, denominators, starts, ends,
+                                    wavelength_count, nfilters);
+
+  /* Dispatch to the appropriate kernel. */
+  OutT *result_array = NULL;
+
+#ifdef WITH_OPENMP
+  /* If we have multiple threads and OpenMP we can parallelise. */
+  if (nthreads > 1) {
+    if (use_trapz) {
+      result_array = compute_photometry_trapz_parallel<Real, OutT>(
+          x_values, spectra_values, filter_work, wavelength_count, nentries,
+          nfilters, nthreads);
+    } else {
+      result_array = compute_photometry_simps_parallel<Real, OutT>(
+          x_values, spectra_values, filter_work, wavelength_count, nentries,
+          nfilters, nthreads);
+    }
+  }
+  /* Otherwise there's no point paying the OpenMP overhead. */
+  else {
+    if (use_trapz) {
+      result_array = compute_photometry_trapz_serial<Real, OutT>(
+          x_values, spectra_values, filter_work, wavelength_count, nentries,
+          nfilters);
+    } else {
+      result_array = compute_photometry_simps_serial<Real, OutT>(
+          x_values, spectra_values, filter_work, wavelength_count, nentries,
+          nfilters);
+    }
+  }
+#else
+  /* We don't have OpenMP, just call the serial version. */
+  if (use_trapz) {
+    result_array = compute_photometry_trapz_serial<Real, OutT>(
+        x_values, spectra_values, filter_work, wavelength_count, nentries,
+        nfilters);
+  } else {
+    result_array = compute_photometry_simps_serial<Real, OutT>(
+        x_values, spectra_values, filter_work, wavelength_count, nentries,
+        nfilters);
+  }
+#endif
+
+  /* Check for allocation failure in the kernel. */
+  if (result_array == NULL) {
+    PyErr_SetString(PyExc_MemoryError,
+                    "Failed to allocate photometry output arrays.");
+    return NULL;
+  }
+
+  /* Build the output shape: (nfilters, *leading_spectrum_shape).
+   * The leading dimensions of the input spectra become the trailing
+   * dimensions of the output (the wavelength axis is consumed). */
+  npy_intp result_shape[NPY_MAXDIMS];
+  result_shape[0] = nfilters;
+  for (npy_intp axis = 1; axis < spectra_ndim; ++axis) {
+    result_shape[axis] = spectra_shape[axis - 1];
+  }
+
+  /* Wrap the raw C array into a numpy array (transfers ownership). */
+  PyArrayObject *result =
+      wrap_array_to_numpy<OutT>(spectra_ndim, result_shape, result_array);
+  if (result == NULL) {
+    return NULL;
+  }
+
+  return (PyObject *)result;
+}
 
 /**
  * @brief Python-facing entry point for batched photometry integration.
@@ -444,6 +607,7 @@ static double *compute_photometry_simps_parallel(
  *   - ends    (ndarray):  1D end indices per filter, shape (nfilters,).
  *   - nthreads (int):     Number of OpenMP threads requested.
  *   - method   (str):     Integration method, "trapz" or "simps".
+ *   - out_dtype (dtype):  Requested output dtype, float32 or float64.
  *
  * @return A numpy array of shape (nfilters, *leading_spectrum_shape).
  */
@@ -459,13 +623,14 @@ static PyObject *compute_photometry_integration(PyObject *self,
   PyArrayObject *np_denominators, *np_starts, *np_ends;
   int nthreads;
   const char *integration_method;
+  PyObject *out_dtype;
 
   /* Parse the positional arguments from the Python call. */
-  if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!is", &PyArray_Type, &np_x_values,
+  if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!isO", &PyArray_Type, &np_x_values,
                         &PyArray_Type, &np_spectra_values, &PyArray_Type,
                         &np_weight_matrix, &PyArray_Type, &np_denominators,
                         &PyArray_Type, &np_starts, &PyArray_Type, &np_ends,
-                        &nthreads, &integration_method)) {
+                        &nthreads, &integration_method, &out_dtype)) {
     return NULL;
   }
 
@@ -510,134 +675,45 @@ static PyObject *compute_photometry_integration(PyObject *self,
     return NULL;
   }
 
-  /* Extract C pointers from the numpy arrays. */
-  const double *x_values = extract_data_double(np_x_values, "xs");
-  if (x_values == NULL) {
+  /* Validate that all floating-point inputs share the same precision family.
+   * For the first mixed-precision pass we keep a single Real type for the
+   * whole call and let the user request the output precision independently. */
+  PyArrayObject *float_arrays[] = {np_x_values, np_spectra_values,
+                                   np_weight_matrix, np_denominators};
+  const char *float_names[] = {"xs", "spectra", "weights", "denominators"};
+  int input_typenum = -1;
+  if (!is_matching_float_dtypes(float_arrays, float_names, 4,
+                                &input_typenum)) {
     return NULL;
   }
 
-  const double *spectra_values =
-      extract_data_double(np_spectra_values, "spectra");
-  if (spectra_values == NULL) {
+  const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
+  if (output_typenum < 0) {
     return NULL;
   }
 
-  const double *weight_matrix =
-      extract_data_double(np_weight_matrix, "weights");
-  if (weight_matrix == NULL) {
-    return NULL;
+  int dispatch_key =
+      ((input_typenum == NPY_FLOAT64) << 1) | (output_typenum == NPY_FLOAT64);
+
+  /* Dispatch: call the matching typed kernel based on the dispatch key. */
+  switch (dispatch_key) {
+    case 0:
+      return compute_photometry_integration_impl<float, float>(
+          np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
+          np_starts, np_ends, nthreads, integration_method);
+    case 1:
+      return compute_photometry_integration_impl<float, double>(
+          np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
+          np_starts, np_ends, nthreads, integration_method);
+    case 2:
+      return compute_photometry_integration_impl<double, float>(
+          np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
+          np_starts, np_ends, nthreads, integration_method);
+    default:
+      return compute_photometry_integration_impl<double, double>(
+          np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
+          np_starts, np_ends, nthreads, integration_method);
   }
-
-  const double *denominators =
-      extract_data_double(np_denominators, "denominators");
-  if (denominators == NULL) {
-    return NULL;
-  }
-
-  const npy_int64 *starts = extract_index_array(np_starts, "starts");
-  if (starts == NULL) {
-    return NULL;
-  }
-  const npy_int64 *ends = extract_index_array(np_ends, "ends");
-  if (ends == NULL) {
-    return NULL;
-  }
-
-  for (npy_intp f = 0; f < nfilters; ++f) {
-    if (starts[f] < 0 || ends[f] < 0 || starts[f] > ends[f] ||
-        ends[f] > wavelength_count) {
-      PyErr_SetString(PyExc_ValueError,
-                      "Filter band indices must satisfy 0 <= start <= end <= "
-                      "wavelength_count.");
-      return NULL;
-    }
-  }
-
-  /* The total number of spectra is the product of all leading dimensions.
-   * We flatten them for the C kernel and reshape on return. */
-  const npy_intp nentries = PyArray_SIZE(np_spectra_values) / wavelength_count;
-
-  /* Which integration method was requested? */
-  const bool use_simps = strcmp(integration_method, "simps") == 0;
-  const bool use_trapz = strcmp(integration_method, "trapz") == 0;
-
-  if (!use_simps && !use_trapz) {
-    PyErr_SetString(PyExc_ValueError,
-                    "method must be either 'trapz' or 'simps'.");
-    return NULL;
-  }
-
-  /* Build the compact work descriptors for active filters. */
-  const std::vector<FilterWork> filter_work = build_filter_work(
-      weight_matrix, denominators, starts, ends, wavelength_count, nfilters);
-
-  /* Dispatch to the appropriate kernel. */
-  double *result_array = NULL;
-
-#ifdef WITH_OPENMP
-  /* If we have multiple threads and OpenMP we can parallelise. */
-  if (nthreads > 1) {
-    if (use_trapz) {
-      result_array = compute_photometry_trapz_parallel(
-          x_values, spectra_values, filter_work, wavelength_count, nentries,
-          nfilters, nthreads);
-    } else {
-      result_array = compute_photometry_simps_parallel(
-          x_values, spectra_values, filter_work, wavelength_count, nentries,
-          nfilters, nthreads);
-    }
-  }
-  /* Otherwise there's no point paying the OpenMP overhead. */
-  else {
-    if (use_trapz) {
-      result_array = compute_photometry_trapz_serial(
-          x_values, spectra_values, filter_work, wavelength_count, nentries,
-          nfilters);
-    } else {
-      result_array = compute_photometry_simps_serial(
-          x_values, spectra_values, filter_work, wavelength_count, nentries,
-          nfilters);
-    }
-  }
-#else
-
-  /* We don't have OpenMP, just call the serial version. */
-  if (use_trapz) {
-    result_array =
-        compute_photometry_trapz_serial(x_values, spectra_values, filter_work,
-                                        wavelength_count, nentries, nfilters);
-  } else {
-    result_array =
-        compute_photometry_simps_serial(x_values, spectra_values, filter_work,
-                                        wavelength_count, nentries, nfilters);
-  }
-#endif
-
-  /* Check for allocation failure in the kernel. */
-  if (result_array == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate photometry output arrays.");
-    return NULL;
-  }
-
-  /* Build the output shape: (nfilters, *leading_spectrum_shape).
-   * The leading dimensions of the input spectra become the trailing
-   * dimensions of the output (the wavelength axis is consumed). */
-  npy_intp result_shape[NPY_MAXDIMS];
-  result_shape[0] = nfilters;
-  for (npy_intp axis = 1; axis < spectra_ndim; ++axis) {
-    result_shape[axis] = spectra_shape[axis - 1];
-  }
-
-  /* Wrap the raw C array into a numpy array (transfers ownership). */
-  PyArrayObject *result =
-      wrap_array_to_numpy<double>(spectra_ndim, result_shape, result_array);
-  if (result == NULL) {
-    free(result_array);
-    return NULL;
-  }
-
-  return (PyObject *)result;
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */
