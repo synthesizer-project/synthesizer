@@ -655,7 +655,17 @@ class Particles:
         # If we only have a scalar attribute we need to expand it to a
         # nparticle array
         if attr.size == 1:
-            attr = np.full(self.nparticles, attr.value, dtype=np.float64)
+            if hasattr(attr, "units"):
+                attr = (
+                    np.full(
+                        self.nparticles,
+                        attr.value,
+                        dtype=np.float64,
+                    )
+                    * attr.units
+                )
+            else:
+                attr = np.full(self.nparticles, attr, dtype=np.float64)
 
         # Apply the operator
         if op == ">":

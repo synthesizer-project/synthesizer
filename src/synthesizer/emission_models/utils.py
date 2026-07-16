@@ -252,7 +252,13 @@ def get_param(
 
     # If we found a ParameterFunction, call it to get the value
     elif value is not None and isinstance(value, ParameterFunction):
-        result = value(model, emission, emitter, obj)
+        result = value(
+            model,
+            emission,
+            emitter,
+            obj,
+            preserve_units=preserve_units,
+        )
         if not preserve_units and isinstance(
             result, (unyt_array, unyt_quantity)
         ):
@@ -333,6 +339,21 @@ def get_param(
     # parameter value, so we use a sentinel object instead.
     if value is None and default is not _NO_DEFAULT:
         value = default
+
+    # If we found a ParameterFunction, call it to get the value
+    if value is not None and isinstance(value, ParameterFunction):
+        result = value(
+            model,
+            emission,
+            emitter,
+            obj,
+            preserve_units=preserve_units,
+        )
+        if not preserve_units and isinstance(
+            result, (unyt_array, unyt_quantity)
+        ):
+            result = result.value
+        return result
 
     # If we found a value, return it
     if value is not None:
@@ -506,7 +527,14 @@ class ParameterFunction:
                     "of the ParameterFunction."
                 )
 
-    def __call__(self, model, emission, emitter, obj=None):
+    def __call__(
+        self,
+        model,
+        emission,
+        emitter,
+        obj=None,
+        preserve_units=False,
+    ):
         """Call the wrapped function with parameters extracted from objects.
 
         This will extract the required parameters from the model, emission,
@@ -522,6 +550,8 @@ class ParameterFunction:
                 The emitter object.
             obj (object, optional):
                 An optional additional object to look for parameters on last.
+            preserve_units (bool, optional):
+                If True, preserve units while resolving function arguments.
 
         Returns:
             value:
@@ -536,6 +566,7 @@ class ParameterFunction:
                 emission,
                 emitter,
                 obj,
+                preserve_units=preserve_units,
             )
 
         # Call the function with the extracted parameters

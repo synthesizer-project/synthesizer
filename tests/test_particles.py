@@ -403,6 +403,16 @@ class TestParticlesMasking:
         with pytest.raises(exceptions.InconsistentArguments):
             sp.get_mask("dummy", 5.0, "invalid")
 
+    def test_get_mask_scalar_unitful_attribute_preserves_units(
+        self, simple_parts
+    ):
+        """Scalar unitful mask attributes preserve units when expanded."""
+        sp = simple_parts
+        sp.dummy = 5.0 * Msun
+
+        mask = sp.get_mask("dummy", 4.0 * Msun, ">")
+        assert mask.tolist() == [True, True, True]
+
 
 class TestWeightedAttributes:
     """Tests for weighted attribute and luminosity/flux weighting."""

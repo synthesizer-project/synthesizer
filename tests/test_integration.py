@@ -7,6 +7,7 @@ from synthesizer.extensions.integration import (
     simps_last_axis,
     trapz_last_axis,
     weighted_simps_last_axis,
+    weighted_trapz_last_axis,
 )
 
 from synthesizer.utils.integrate import integrate_weighted_last_axis
@@ -84,7 +85,7 @@ def test_weighted_trapz_integration(example_data, threads, request):
     expected_den = trapezoid(y=weights, x=xs)
     expected = expected_num / expected_den
 
-    result = weighted_simps_last_axis(xs, ys, weights, threads, None)
+    result = weighted_trapz_last_axis(xs, ys, weights, threads, None)
     np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-8)
 
 
