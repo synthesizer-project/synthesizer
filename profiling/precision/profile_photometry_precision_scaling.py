@@ -17,25 +17,15 @@ from __future__ import annotations
 
 import argparse
 import csv
-import importlib.util
 import time
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from _helpers import make_synthetic_spectra, make_test_filters
 from unyt import c
 
 from synthesizer.grid import Grid
-
-pipeline_path = (
-    Path(__file__).parent.parent / "pipeline" / "pipeline_test_data.py"
-)
-spec = importlib.util.spec_from_file_location(
-    "pipeline_test_data", pipeline_path
-)
-pipeline_test_data = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(pipeline_test_data)
-get_test_instrument = pipeline_test_data.get_test_instrument
 
 plt.rcParams["font.family"] = "DejaVu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -44,20 +34,6 @@ PRECISIONS = {
     "float32": np.float32,
     "float64": np.float64,
 }
-
-
-def make_synthetic_spectra(nparticles, nlam, dtype, rng):
-    """Create a contiguous synthetic 2D spectra array."""
-    lam_axis = np.linspace(-3.0, 3.0, nlam, dtype=np.float64)
-    base = np.exp(-0.5 * lam_axis**2) + 0.15 * np.sin(4.0 * lam_axis)
-    base = base[None, :]
-
-    amplitudes = rng.uniform(0.5, 2.0, size=(nparticles, 1))
-    slopes = rng.uniform(0.0, 0.2, size=(nparticles, 1))
-    continuum = np.linspace(0.8, 1.2, nlam, dtype=np.float64)[None, :]
-    spectra = amplitudes * base + slopes * continuum
-
-    return np.array(spectra, dtype=dtype, order="C", copy=True)
 
 
 def benchmark_photometry(filters, spectra, nu, out_dtype, nthreads, repeats):
@@ -154,10 +130,7 @@ def profile_photometry_precision_scaling(
     rng = np.random.default_rng(seed)
 
     grid = Grid("test_grid")
-    instrument = get_test_instrument(grid)
-    filters = instrument.filters.select(
-        *instrument.available_filters[:nfilters]
-    )
+    filters = make_test_filters(grid.lam, nfilters)
     nlam = grid.nlam
 
     output_dir = Path(out_dir)

@@ -583,7 +583,6 @@ static PyObject *compute_photometry_integration_impl(
   PyArrayObject *result =
       wrap_array_to_numpy<OutT>(spectra_ndim, result_shape, result_array);
   if (result == NULL) {
-    delete[] result_array;
     return NULL;
   }
 
