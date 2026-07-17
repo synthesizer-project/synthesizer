@@ -221,6 +221,27 @@ class TestGetParamParameterFunction:
         result = get_param("scaled", model, None, emitter)
         assert result == 300.0
 
+    def test_get_param_parameter_function_preserves_dependency_units(self):
+        """Test preserve_units flows into ParameterFunction dependencies."""
+
+        def identity(test_unyt):
+            return test_unyt
+
+        model = MockModel()
+        model.fixed_parameters["test_unyt"] = unyt.unyt_array(
+            [1.0, 2.0, 3.0], "Myr"
+        )
+        model.fixed_parameters["computed"] = ParameterFunction(
+            identity, "computed", ["test_unyt"]
+        )
+        emitter = MockEmitter()
+
+        result = get_param(
+            "computed", model, None, emitter, preserve_units=True
+        )
+        assert hasattr(result, "units")
+        assert str(result.units) == "Myr"
+
 
 class TestGetParamLogged:
     """Test log10 parameter handling in get_param."""

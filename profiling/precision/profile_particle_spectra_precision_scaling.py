@@ -22,7 +22,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 from synthesizer.extensions.particle_spectra import compute_particle_seds
 
 plt.rcParams["font.family"] = "DejaVu Serif"

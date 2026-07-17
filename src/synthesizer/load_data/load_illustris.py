@@ -54,6 +54,7 @@ def load_IllustrisTNG(
     metals=True,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
+    dtype=np.float64,
 ):
     """Load IllustrisTNG particle data into galaxy objects.
 
@@ -86,6 +87,11 @@ def load_IllustrisTNG(
             Create a lookup table for ages
         age_lookup_delta_a (float):
             Scale factor resolution of the age lookup
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
 
     Returns:
         galaxies (list):
@@ -215,13 +221,19 @@ def load_IllustrisTNG(
                 smoothing_lengths = hsml * kpc
 
             galaxies[i].load_stars(
-                initial_masses=imasses * Msun,
-                ages=ages * yr,
-                metallicities=metallicities,
-                s_oxygen=s_oxygen,
-                s_hydrogen=s_hydrogen,
-                coordinates=coods * kpc,
-                current_masses=masses * Msun,
+                initial_masses=(imasses * Msun).astype(dtype),
+                ages=(ages * yr).astype(dtype),
+                metallicities=metallicities.astype(dtype),
+                s_oxygen=(
+                    s_oxygen.astype(dtype) if s_oxygen is not None else None
+                ),
+                s_hydrogen=(
+                    s_hydrogen.astype(dtype)
+                    if s_hydrogen is not None
+                    else None
+                ),
+                coordinates=(coods * kpc).astype(dtype),
+                current_masses=(masses * Msun).astype(dtype),
                 smoothing_lengths=smoothing_lengths,
             )
 
@@ -253,11 +265,11 @@ def load_IllustrisTNG(
                 g_hsml *= scale_factor
 
             galaxies[i].load_gas(
-                coordinates=g_coods * kpc,
-                masses=g_masses * Msun,
-                metallicities=g_metals,
+                coordinates=(g_coods * kpc).astype(dtype),
+                masses=(g_masses * Msun).astype(dtype),
+                metallicities=g_metals.astype(dtype),
                 star_forming=star_forming,
-                smoothing_lengths=g_hsml * kpc,
+                smoothing_lengths=(g_hsml * kpc).astype(dtype),
                 dust_to_metal_ratio=dtm,
             )
 

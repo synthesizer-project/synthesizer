@@ -28,7 +28,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import psutil
-
 from synthesizer.extensions.integrated_spectra import compute_integrated_sed
 
 plt.rcParams["font.family"] = "DejaVu Serif"

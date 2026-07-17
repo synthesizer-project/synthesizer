@@ -608,7 +608,9 @@ class Particles:
         # Get the attribute
         attr_str = attr
         try:
-            attr = get_param(attr_str, attr_override_obj, None, self)
+            attr = get_param(
+                attr_str, attr_override_obj, None, self, preserve_units=True
+            )
         except exceptions.MissingAttribute as e:
             raise exceptions.MissingMaskAttribute(
                 f"Masking attribute ({attr_str}) not found on particle object."
@@ -618,7 +620,13 @@ class Particles:
         if isinstance(thresh, str):
             thresh_str = thresh
             try:
-                thresh = get_param(thresh_str, attr_override_obj, None, self)
+                thresh = get_param(
+                    thresh_str,
+                    attr_override_obj,
+                    None,
+                    self,
+                    preserve_units=True,
+                )
             except exceptions.MissingAttribute as e:
                 raise exceptions.MissingMaskAttribute(
                     f"Mask threshold alias ({thresh_str}) not found on "
@@ -652,7 +660,17 @@ class Particles:
         # If we only have a scalar attribute we need to expand it to a
         # nparticle array
         if attr.size == 1:
-            attr = np.full(self.nparticles, attr.value, dtype=np.float64)
+            if hasattr(attr, "units"):
+                attr = (
+                    np.full(
+                        self.nparticles,
+                        attr.value,
+                        dtype=np.float64,
+                    )
+                    * attr.units
+                )
+            else:
+                attr = np.full(self.nparticles, attr, dtype=np.float64)
 
         # Apply the operator
         if op == ">":

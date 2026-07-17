@@ -16,7 +16,7 @@ from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 from synthesizer.particle.stars import Stars as ParticleStars
 
 
-def load_SCSAM(fname, method, grid=None, verbose=False):
+def load_SCSAM(fname, method, grid=None, verbose=False, dtype=np.float64):
     r"""Read an SC-SAM star formation data file.
 
     Returns a list of galaxy objects, halo indices, and birth halo IDs.
@@ -36,15 +36,11 @@ def load_SCSAM(fname, method, grid=None, verbose=False):
             Grid object to extract from (needed for parametric galaxies).
         verbose (bool):
             Are we talking?
-
-    Returns:
-        tuple:
-            galaxies (list):
-                list of galaxy objects
-            halo_ind_list (list):
-                list of halo indices
-            birthhalo_id_list (list):
-                birth halo indices
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
     """
     # Prepare to read SFHist file
     sfhist = open(fname, "r")
@@ -126,7 +122,7 @@ def load_SCSAM(fname, method, grid=None, verbose=False):
             # Create galaxy object
             if method == "particle":
                 galaxy = _load_SCSAM_particle_galaxy(
-                    SFH, age_lst, Z_lst, verbose=verbose
+                    SFH, age_lst, Z_lst, verbose=verbose, dtype=dtype
                 )
             elif method == "parametric_NNI":
                 galaxy = _load_SCSAM_parametric_galaxy(
@@ -145,7 +141,9 @@ def load_SCSAM(fname, method, grid=None, verbose=False):
     return galaxies, halo_ind_list, birthhalo_id_list
 
 
-def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=False):
+def _load_SCSAM_particle_galaxy(
+    SFH, age_lst, Z_lst, verbose=False, dtype=np.float64
+):
     """Treat each age-Z bin as a particle.
 
     Args:
@@ -157,6 +155,11 @@ def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=False):
             metallicity bins in the SFH array (unitless).
         verbose (bool):
             Are we talking?
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
     """
     # Initialise arrays for storing particle information
     p_imass = []  # initial mass
@@ -182,9 +185,9 @@ def _load_SCSAM_particle_galaxy(SFH, age_lst, Z_lst, verbose=False):
     # Convert units
     if verbose:
         print("Converting units...")
-    p_imass = np.array(p_imass) * 10**9  # Msun
-    p_age = np.array(p_age) * 10**9  # yr
-    p_Z = np.array(p_Z)  # unitless
+    p_imass = np.array(p_imass, dtype=dtype) * 10**9  # Msun
+    p_age = np.array(p_age, dtype=dtype) * 10**9  # yr
+    p_Z = np.array(p_Z, dtype=dtype)  # unitless
 
     if verbose:
         print("Generating SED...")

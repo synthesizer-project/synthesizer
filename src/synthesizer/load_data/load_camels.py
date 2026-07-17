@@ -113,7 +113,7 @@ def _load_CAMELS(
         if s_hsml is None:
             smoothing_lengths = s_hsml
         else:
-            smoothing_lengths = s_hsml[b:e] * kpc
+            smoothing_lengths = (s_hsml[b:e] * kpc).astype(dtype)
 
         galaxies[i].load_stars(
             initial_masses=(imasses[b:e] * Msun).astype(dtype),
@@ -834,11 +834,11 @@ def load_CAMELS_SwiftEAGLE_subfind(
 
         gal.load_stars(
             initial_masses=(sh_imasses * Msun).astype(dtype),
-            ages=sh_ages * yr,
-            metallicities=sh_metallicity,
-            s_oxygen=s_oxygen,
-            s_hydrogen=s_hydrogen,
-            coordinates=sh_coods * Mpc,
+            ages=(sh_ages * yr).astype(dtype),
+            metallicities=sh_metallicity.astype(dtype),
+            s_oxygen=s_oxygen.astype(dtype),
+            s_hydrogen=s_hydrogen.astype(dtype),
+            coordinates=(sh_coods * Mpc).astype(dtype),
             current_masses=(sh_masses * Msun).astype(dtype),
             smoothing_lengths=smoothing_lengths,
         )
@@ -866,11 +866,11 @@ def load_CAMELS_SwiftEAGLE_subfind(
             star_forming = sh_g_sfr > 0.0
 
             gal.load_gas(
-                coordinates=sh_g_coods * Mpc,
+                coordinates=(sh_g_coods * Mpc).astype(dtype),
                 masses=(sh_g_masses * Msun).astype(dtype),
-                metallicities=sh_g_metals,
+                metallicities=sh_g_metals.astype(dtype),
                 star_forming=star_forming,
-                smoothing_lengths=sh_g_hsml * Mpc,
+                smoothing_lengths=(sh_g_hsml * Mpc).astype(dtype),
                 dust_to_metal_ratio=dtm,
             )
 
