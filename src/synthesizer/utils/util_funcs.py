@@ -95,7 +95,7 @@ def get_distance_in_cm(distance_pc=10.0):
     return (distance_pc * pc).to_value(cm)
 
 
-def ensure_array_buffer(obj, attr_name, shape_like):
+def ensure_array_buffer(obj, attr_name, shape_like, dtype=None):
     """Return a reusable ndarray buffer on ``obj`` matching ``shape_like``.
 
     Args:
@@ -104,15 +104,24 @@ def ensure_array_buffer(obj, attr_name, shape_like):
         attr_name (str):
             Name of the ndarray attribute to reuse or create.
         shape_like (np.ndarray):
-            Array whose shape and dtype define the required buffer.
+            Array whose shape (and, when dtype is None, dtype) define the
+            required buffer.
+        dtype (np.dtype, optional):
+            The dtype for the buffer. Defaults to shape_like's dtype.
 
     Returns:
         np.ndarray:
-            Reusable buffer with the same shape and dtype as ``shape_like``.
+            Reusable buffer with the same shape as ``shape_like`` at the
+            requested dtype.
     """
+    target_dtype = shape_like.dtype if dtype is None else np.dtype(dtype)
     buffer = getattr(obj, attr_name, None)
-    if buffer is None or buffer.shape != shape_like.shape:
-        buffer = np.empty_like(shape_like)
+    if (
+        buffer is None
+        or buffer.shape != shape_like.shape
+        or buffer.dtype != target_dtype
+    ):
+        buffer = np.empty(shape_like.shape, dtype=target_dtype)
         setattr(obj, attr_name, buffer)
     return buffer
 
@@ -649,7 +658,8 @@ def convert_array_dtype(array, dtype):
     latter while ensuring the underlying storage is contiguous and of the
     correct dtype.
 
-    Note that this will always make a copy of the array.
+    If the input already has the requested dtype and contiguous storage it
+    is returned untouched; otherwise a copy is made.
 
     Args:
         array (array-like):
@@ -664,6 +674,15 @@ def convert_array_dtype(array, dtype):
     # Nothing to do if input is None
     if array is None:
         return None
+
+    # If the array already has the requested dtype and contiguous storage
+    # there is nothing to do; return it untouched to avoid a needless copy.
+    if (
+        isinstance(array, np.ndarray)
+        and array.dtype == np.dtype(dtype)
+        and array.flags["C_CONTIGUOUS"]
+    ):
+        return array
 
     # Handle the unyt_array case where we act on the underlying array and
     # then reattach the units
