@@ -101,7 +101,9 @@ def test_get_param_preserve_units_keeps_fixed_parameter_units():
         preserve_units=True,
     )
 
-    assert default_value.units == km / s
+    # By default get_param strips units; preserve_units=True keeps them.
+    assert not hasattr(default_value, "units")
+    assert default_value == 300.0
     assert unit_value.units == km / s
 
 

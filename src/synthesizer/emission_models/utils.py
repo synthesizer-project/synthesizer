@@ -136,6 +136,61 @@ def cache_model_params(
         )
 
 
+def _finalize_param_value(
+    value,
+    param,
+    model,
+    emission,
+    emitter,
+    obj,
+    preserve_units,
+):
+    """Finalise a resolved parameter value before returning it.
+
+    ParameterFunctions are called to produce the concrete value, plain
+    values are cached (when there is a model and emitter to cache against),
+    and units are stripped unless preserve_units was requested.
+
+    Args:
+        value (object):
+            The resolved parameter value or ParameterFunction.
+        param (str):
+            The parameter name (used for caching).
+        model (EmissionModel):
+            The model object.
+        emission (Sed/LineCollection):
+            The emission object.
+        emitter (Stars/Gas/Galaxy):
+            The emitter object.
+        obj (object):
+            An optional additional object parameters were searched on.
+        preserve_units (bool):
+            If False, strip units from unyt values before returning.
+
+    Returns:
+        The finalised parameter value.
+    """
+    if isinstance(value, ParameterFunction):
+        value = value(
+            model,
+            emission,
+            emitter,
+            obj,
+            preserve_units=preserve_units,
+        )
+    elif model is not None and emitter is not None:
+        # Only cache plain values when we are in a cacheable context
+        cache_param(
+            param=param,
+            emitter=emitter,
+            model_label=model.label,
+            value=value,
+        )
+    if not preserve_units and isinstance(value, (unyt_array, unyt_quantity)):
+        value = value.value
+    return value
+
+
 def get_param(
     param,
     model,
@@ -204,15 +259,7 @@ def get_param(
 
     # Check the model's fixed parameters first
     if model is not None and param in model.fixed_parameters:
-        if not isinstance(
-            model.fixed_parameters[param], str
-        ) and not isinstance(
-            model.fixed_parameters[param],
-            ParameterFunction,
-        ):
-            value = model.fixed_parameters[param]
-        else:
-            value = model.fixed_parameters[param]
+        value = model.fixed_parameters[param]
 
     # Check the emission next
     elif emission is not None and hasattr(emission, param):
@@ -250,37 +297,12 @@ def get_param(
             _visited=new_visited,
         )
 
-    # If we found a ParameterFunction, call it to get the value
-    elif value is not None and isinstance(value, ParameterFunction):
-        result = value(
-            model,
-            emission,
-            emitter,
-            obj,
-            preserve_units=preserve_units,
-        )
-        if not preserve_units and isinstance(
-            result, (unyt_array, unyt_quantity)
-        ):
-            result = result.value
-        return result
-
-    # If we found a value, return it
+    # If we found a value (or a ParameterFunction to produce one), finalise
+    # and return it
     elif value is not None:
-        # Only cache if we are in a cacheable context (have a model
-        # and emitter)
-        if model is not None and emitter is not None:
-            cache_param(
-                param=param,
-                emitter=emitter,
-                model_label=model.label,
-                value=value,
-            )
-        if not preserve_units and isinstance(
-            value, (unyt_array, unyt_quantity)
-        ):
-            value = value.value
-        return value
+        return _finalize_param_value(
+            value, param, model, emission, emitter, obj, preserve_units
+        )
 
     # If we were finding a logged parameter but failed, try the non-logged
     # version and log it
@@ -340,37 +362,12 @@ def get_param(
     if value is None and default is not _NO_DEFAULT:
         value = default
 
-    # If we found a ParameterFunction, call it to get the value
-    if value is not None and isinstance(value, ParameterFunction):
-        result = value(
-            model,
-            emission,
-            emitter,
-            obj,
-            preserve_units=preserve_units,
-        )
-        if not preserve_units and isinstance(
-            result, (unyt_array, unyt_quantity)
-        ):
-            result = result.value
-        return result
-
-    # If we found a value, return it
+    # If we found a value (or a ParameterFunction to produce one), finalise
+    # and return it
     if value is not None:
-        # Only cache if we are in a cacheable context (have a model
-        # and emitter)
-        if model is not None and emitter is not None:
-            cache_param(
-                param=param,
-                emitter=emitter,
-                model_label=model.label,
-                value=value,
-            )
-        if not preserve_units and isinstance(
-            value, (unyt_array, unyt_quantity)
-        ):
-            value = value.value
-        return value
+        return _finalize_param_value(
+            value, param, model, emission, emitter, obj, preserve_units
+        )
 
     # Otherwise raise an exception
     else:
