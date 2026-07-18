@@ -201,3 +201,38 @@ def test_integrate_particle_sed_preserves_input_precision():
 
     assert reduced._lnu.dtype == np.float32
     np.testing.assert_allclose(reduced._lnu, np.sum(lnu.value, axis=0))
+
+
+def test_get_fnu_inherits_lnu_dtype():
+    """Observed fluxes should inherit the luminosity dtype by default."""
+    lam = np.linspace(1e3, 1e4, 64) * angstrom
+    sed32 = Sed(lam, np.ones(64, dtype=np.float32) * erg / s / Hz)
+    sed32.get_fnu(Planck18, z=1.0)
+    assert sed32._fnu.dtype == np.float32
+
+    sed64 = Sed(lam, np.ones(64, dtype=np.float64) * erg / s / Hz)
+    sed64.get_fnu(Planck18, z=1.0)
+    assert sed64._fnu.dtype == np.float64
+
+
+def test_get_fnu_out_dtype_overrides_lnu_dtype():
+    """An explicit out_dtype should control the flux dtype."""
+    lam = np.linspace(1e3, 1e4, 64) * angstrom
+    sed = Sed(lam, np.ones(64, dtype=np.float64) * erg / s / Hz)
+    sed.get_fnu(Planck18, z=1.0, out_dtype=np.float32)
+    assert sed._fnu.dtype == np.float32
+
+    # And at redshift zero (the get_fnu0 path)
+    sed0 = Sed(lam, np.ones(64, dtype=np.float64) * erg / s / Hz)
+    sed0.get_fnu(Planck18, z=0.0, out_dtype=np.float32)
+    assert sed0._fnu.dtype == np.float32
+
+
+def test_sed_cast():
+    """Sed.cast should cast lnu and fnu in place."""
+    lam = np.linspace(1e3, 1e4, 64) * angstrom
+    sed = Sed(lam, np.ones(64, dtype=np.float64) * erg / s / Hz)
+    sed.get_fnu(Planck18, z=1.0)
+    sed.cast(np.float32)
+    assert sed._lnu.dtype == np.float32
+    assert sed._fnu.dtype == np.float32
