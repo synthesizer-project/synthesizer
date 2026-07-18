@@ -46,7 +46,7 @@ from functools import lru_cache
 from types import MappingProxyType
 
 import numpy as np
-from unyt import angstrom
+from unyt import angstrom, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.units import accepts
@@ -595,8 +595,6 @@ def _cast_curve_input(value, dtype):
     Returns:
         The input cast to dtype where applicable.
     """
-    from unyt import unyt_array
-
     if isinstance(value, unyt_array):
         if value.dtype != dtype:
             return unyt_array(

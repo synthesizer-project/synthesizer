@@ -44,6 +44,14 @@ def _normalize_nthreads(nthreads):
     return nthreads
 
 
+def _zero_result(ys, out_dtype):
+    """Return the all-zero integral matching ys' leading shape."""
+    out_shape = ys.shape[:-1]
+    if out_shape:
+        return np.zeros(out_shape, dtype=out_dtype)
+    return out_dtype.type(0.0)
+
+
 def integrate_last_axis(
     xs,
     ys,
@@ -92,24 +100,12 @@ def integrate_last_axis(
 
     out_dtype = resolve_out_dtype(out_dtype)
 
-    resolved_out_dtype = out_dtype
-
     # If either input is empty or trivially zero, return zeros
     if xs.size == 0 or ys.size == 0:
-        out_shape = ys.shape[:-1]
-        return (
-            np.zeros(out_shape, dtype=resolved_out_dtype)
-            if out_shape
-            else resolved_out_dtype.type(0.0)
-        )
+        return _zero_result(ys, out_dtype)
 
     if not np.any(xs) or not np.any(ys):
-        out_shape = ys.shape[:-1]
-        return (
-            np.zeros(out_shape, dtype=resolved_out_dtype)
-            if out_shape
-            else resolved_out_dtype.type(0.0)
-        )
+        return _zero_result(ys, out_dtype)
 
     return integration_function(xs, ys, nthreads, out_dtype)
 
@@ -167,22 +163,10 @@ def integrate_weighted_last_axis(
 
     out_dtype = resolve_out_dtype(out_dtype)
 
-    resolved_out_dtype = out_dtype
-
     if xs.size == 0 or ys.size == 0 or weights.size == 0:
-        out_shape = ys.shape[:-1]
-        return (
-            np.zeros(out_shape, dtype=resolved_out_dtype)
-            if out_shape
-            else resolved_out_dtype.type(0.0)
-        )
+        return _zero_result(ys, out_dtype)
 
     if not np.any(weights):
-        out_shape = ys.shape[:-1]
-        return (
-            np.zeros(out_shape, dtype=resolved_out_dtype)
-            if out_shape
-            else resolved_out_dtype.type(0.0)
-        )
+        return _zero_result(ys, out_dtype)
 
     return integration_function(xs, ys, weights, nthreads, out_dtype)

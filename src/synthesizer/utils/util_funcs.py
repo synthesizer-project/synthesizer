@@ -502,33 +502,6 @@ def depluralize(word: str) -> str:
         return word  # Already singular or unknown pattern
 
 
-def ensure_double_precision(value):
-    """Ensure that the input value is a double precision float.
-
-    Args:
-        value (float or unyt_quantity): The value to be converted.
-
-    Returns:
-        unyt_quantity: The input value as a double precision float.
-    """
-    # If the value is None, return it as is
-    if value is None:
-        return value
-
-    # Convert the value to double precision
-    if isinstance(value, (unyt_quantity, unyt_array, np.ndarray)):
-        return value.astype(np.float64)
-    elif isinstance(value, (int, float)):
-        return np.float64(value)
-    elif np.isscalar(value):
-        return np.float64(value)
-    else:
-        raise exceptions.InconsistentArguments(
-            "Value to convert to double precision wasn't compatible:"
-            f"type(value) = {type(value)}"
-        )
-
-
 def is_c_compatible_int(arr):
     """Check if the input array is compatible with our C extensions.
 
