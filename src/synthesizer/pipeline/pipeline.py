@@ -42,6 +42,7 @@ from synthesizer.pipeline.pipeline_utils import (
     NO_MODEL_LABEL,
     OperationKwargsHandler,
     accumulate_pipeline_results_from_child,
+    cast_products_recursive,
     clear_pipeline_outputs,
     combine_atomic_timing_snapshots,
     combine_list_of_dicts,
@@ -63,6 +64,7 @@ from synthesizer.utils.operation_timers import (
     timed,
     timer,
 )
+from synthesizer.utils.precision import resolve_out_dtype
 
 
 class Pipeline:
@@ -253,26 +255,11 @@ class Pipeline:
         self._do_sfzh = False
         self._do_sfh = False
 
-        # Define attributes to hold the dtypes of each of the outputs,
-        # Note that the first dtype each method is called with will not be
-        # overridden by subsequent calls
-        self._los_optical_depths_out_dtype = None
-        self._sfzh_out_dtype = None
-        self._sfh_out_dtype = None
-        self._spectra_out_dtype = None
-        self._observed_spectra_out_dtype = None
-        self._cosmic_sed_out_dtype = None
-        self._observed_cosmic_sed_out_dtype = None
-        self._photometry_luminosities_out_dtype = None
-        self._photometry_fluxes_out_dtype = None
-        self._lines_out_dtype = None
-        self._observed_lines_out_dtype = None
-        self._images_luminosity_out_dtype = None
-        self._images_flux_out_dtype = None
-        self._data_cubes_lnu_out_dtype = None
-        self._data_cubes_fnu_out_dtype = None
-        self._spectroscopy_lnu_out_dtype = None
-        self._spectroscopy_fnu_out_dtype = None
+        # The requested output dtype for each operation, keyed by operation
+        # name. The first dtype each signalling method is called with wins;
+        # a missing/None entry defers to the global default at the point of
+        # use (see synthesizer.utils.precision).
+        self._out_dtypes = {}
 
         # Define the container for all the kwargs needed by each operation
         # This is a handler that manages kwargs for each
@@ -1365,7 +1352,7 @@ class Pipeline:
         kappa=0.0795,
         tau_v_attr="tau_v",
         as_points=True,
-        out_dtype=np.float64,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the LOS optical depths.
 
@@ -1407,10 +1394,8 @@ class Pipeline:
             as_points=as_points,
         )
 
-        # Set the output dtype for the LOS optical depths if it hasn't already
-        # been set by a previous call to this method
-        if self._los_optical_depths_out_dtype is None:
-            self._los_optical_depths_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("los_optical_depths", out_dtype)
 
         # Flag that we will compute the LOS optical depths
         self._do_los_optical_depths = True
@@ -1447,7 +1432,7 @@ class Pipeline:
                     tau_v_attr=op_kwargs["tau_v_attr"],
                     as_points=op_kwargs["as_points"],
                     nthreads=self.nthreads,
-                    out_dtype=self._los_optical_depths_out_dtype,
+                    out_dtype=self._out_dtypes.get("los_optical_depths"),
                 )
             if (
                 galaxy.black_holes is not None
@@ -1461,7 +1446,7 @@ class Pipeline:
                     tau_v_attr=op_kwargs["tau_v_attr"],
                     as_points=op_kwargs["as_points"],
                     nthreads=self.nthreads,
-                    out_dtype=self._los_optical_depths_out_dtype,
+                    out_dtype=self._out_dtypes.get("los_optical_depths"),
                 )
 
         # Count how many optical depths we have generated (1 per particle) and
@@ -1474,9 +1459,7 @@ class Pipeline:
         # Record the time taken
         self._op_timing["LOS optical depths"] += time.perf_counter() - start
 
-    def get_sfzh(
-        self, log10ages, metallicities, write=True, out_dtype=np.float64
-    ):
+    def get_sfzh(self, log10ages, metallicities, write=True, out_dtype=None):
         """Flag that the Pipeline should compute the SFZH grid.
 
         This will signal the Pipeline to compute the SFZH grid when the run
@@ -1501,10 +1484,8 @@ class Pipeline:
             metallicities=metallicities,
         )
 
-        # Set the output dtype for the SFZH grid if it hasn't already been set
-        # by a previous call to this method
-        if self._sfzh_out_dtype is None:
-            self._sfzh_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("sfzh", out_dtype)
 
         # Flag that we will compute the SFZH grid
         self._do_sfzh = True
@@ -1552,7 +1533,7 @@ class Pipeline:
                     len(op_kwargs["log10ages"]),
                     len(op_kwargs["metallicities"]),
                 ),
-                dtype=self._sfzh_out_dtype,
+                dtype=resolve_out_dtype(self._out_dtypes.get("sfzh")),
             )
             return galaxy.sfzh
 
@@ -1564,7 +1545,7 @@ class Pipeline:
 
         return galaxy.sfzh
 
-    def get_sfh(self, log10ages, write=True, out_dtype=np.float64):
+    def get_sfh(self, log10ages, write=True, out_dtype=None):
         """Flag that the Pipeline should compute the binned SFH.
 
         This will signal the Pipeline to compute the binned SFH when the run
@@ -1587,10 +1568,8 @@ class Pipeline:
             log10ages=log10ages,
         )
 
-        # Set the output dtype for the SFH grid if it hasn't already been set
-        # by a previous call to this method
-        if self._sfh_out_dtype is None:
-            self._sfh_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("sfh", out_dtype)
 
         # Flag that we will compute the SFH grid
         self._do_sfh = True
@@ -1630,7 +1609,8 @@ class Pipeline:
         else:
             # No stars, no SFH, store a zeroed grid
             galaxy.sfh = np.zeros(
-                len(op_kwargs["log10ages"]), dtype=self._sfh_out_dtype
+                len(op_kwargs["log10ages"]),
+                dtype=resolve_out_dtype(self._out_dtypes.get("sfh")),
             )
             return galaxy.sfh
 
@@ -1642,7 +1622,7 @@ class Pipeline:
 
         return galaxy.sfh
 
-    def get_spectra(self, write=True, out_dtype=np.float64):
+    def get_spectra(self, write=True, out_dtype=None):
         """Flag that the Pipeline should compute the rest frame spectra.
 
         This will signal the Pipeline to compute the rest frame spectral
@@ -1662,10 +1642,8 @@ class Pipeline:
             out_dtype (np.dtype):
                 Requested floating-point dtype for generated spectra arrays.
         """
-        # Set the output dtype for the spectra if it hasn't already been set
-        # by a previous call to this method
-        if self._spectra_out_dtype is None:
-            self._spectra_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("spectra", out_dtype)
 
         # Flag that we will compute the spectra
         self._do_lnu_spectra = True
@@ -1688,17 +1666,11 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        if self._spectra_out_dtype is None:
-            raise exceptions.InconsistentArguments(
-                "Pipeline.get_spectra must set _spectra_out_dtype before "
-                "spectra generation runs."
-            )
-
         # Get the spectra
         galaxy.get_spectra(
             self.emission_model,
             nthreads=self.nthreads,
-            out_dtype=self._spectra_out_dtype,
+            out_dtype=self._out_dtypes.get("spectra"),
         )
 
         # Count the number of spectra we have generated
@@ -1718,7 +1690,7 @@ class Pipeline:
         self._op_timing["Lnu Spectra"] += time.perf_counter() - start
 
     def get_observed_spectra(
-        self, cosmo, igm=None, write=True, out_dtype=np.float64
+        self, cosmo, igm=None, write=True, out_dtype=None
     ):
         """Flag that the Pipeline should compute the observed spectra.
 
@@ -1745,10 +1717,8 @@ class Pipeline:
             igm=igm,
         )
 
-        # Set the output dtype for the observed spectra if it hasn't already
-        # been set by a previous call to this method
-        if self._observed_spectra_out_dtype is None:
-            self._observed_spectra_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("observed_spectra", out_dtype)
 
         # Flag that we will compute the observed spectra
         self._do_fnu_spectra = True
@@ -1811,7 +1781,7 @@ class Pipeline:
         average=False,
         volume=None,
         write=True,
-        out_dtype=np.float64,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the cosmic SED.
 
@@ -1898,10 +1868,8 @@ class Pipeline:
             volume=volume,
         )
 
-        # Set the output dtype for the cosmic SED if it hasn't already been set
-        # by a previous call to this method
-        if self._cosmic_sed_out_dtype is None:
-            self._cosmic_sed_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("cosmic_sed", out_dtype)
 
         # Flag that we will compute the cosmic SED
         self._do_cosmic_lnu = True
@@ -2053,7 +2021,7 @@ class Pipeline:
         average=False,
         volume=None,
         write=True,
-        out_dtype=np.float64,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the observed cosmic SED.
 
@@ -2130,10 +2098,8 @@ class Pipeline:
             volume=volume,
         )
 
-        # Set the output dtype for the observed cosmic SED if it hasn't already
-        # been set by a previous call to this method
-        if self._observed_cosmic_sed_out_dtype is None:
-            self._observed_cosmic_sed_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("observed_cosmic_sed", out_dtype)
 
         # Flag that we will compute the observed cosmic SED
         self._do_cosmic_fnu = True
@@ -2264,7 +2230,7 @@ class Pipeline:
         *instruments,
         labels=None,
         write=True,
-        out_dtype=np.float64,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the photometric luminosities.
 
@@ -2316,10 +2282,8 @@ class Pipeline:
             instruments=_instruments,
         )
 
-        # Set the output dtype for the photometric luminosities if it hasn't
-        # already been set by a previous call to this method
-        if self._photometry_luminosities_out_dtype is None:
-            self._photometry_luminosities_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("photometry_luminosities", out_dtype)
 
         # Flag that we will compute the photometric luminosities
         self._do_luminosities = True
@@ -2357,7 +2321,7 @@ class Pipeline:
                 filters=instruments.all_filters,
                 nthreads=self.nthreads,
                 limit_to=model_label,
-                out_dtype=self._photometry_luminosities_out_dtype,
+                out_dtype=self._out_dtypes.get("photometry_luminosities"),
             )
 
         # Count the number of photometric luminosities we have generated
@@ -2383,7 +2347,7 @@ class Pipeline:
         igm=None,
         labels=None,
         write=True,
-        out_dtype=np.float64,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the photometric fluxes.
 
@@ -2443,10 +2407,8 @@ class Pipeline:
             igm=igm,
         )
 
-        # Set the output dtype for the photometric fluxes if it hasn't already
-        # been set by a previous call to this method
-        if self._photometry_fluxes_out_dtype is None:
-            self._photometry_fluxes_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("photometry_fluxes", out_dtype)
 
         # Flag that we will compute the photometric fluxes
         self._do_fluxes = True
@@ -2486,7 +2448,7 @@ class Pipeline:
                 filters=instruments.all_filters,
                 nthreads=self.nthreads,
                 limit_to=model_label,
-                out_dtype=self._photometry_fluxes_out_dtype,
+                out_dtype=self._out_dtypes.get("photometry_fluxes"),
             )
 
         # Count the number of photometric fluxes we have generated
@@ -2505,7 +2467,7 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Fluxes"] += time.perf_counter() - start
 
-    def get_lines(self, line_ids, write=True, out_dtype=np.float64):
+    def get_lines(self, line_ids, write=True, out_dtype=None):
         """Flag that the Pipeline should compute the emission lines.
 
         This will signal the Pipeline to compute the emission lines for each
@@ -2528,10 +2490,8 @@ class Pipeline:
             line_ids=line_ids,
         )
 
-        # Set the output dtype for the emission lines if it hasn't already been
-        # set by a previous call to this method
-        if self._lines_out_dtype is None:
-            self._lines_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("lines", out_dtype)
 
         # Flag that we will compute the emission lines
         self._do_lum_lines = True
@@ -2576,7 +2536,7 @@ class Pipeline:
             line_ids=op_kwargs["line_ids"],
             emission_model=self.emission_model,
             nthreads=self.nthreads,
-            out_dtype=self._lines_out_dtype,
+            out_dtype=self._out_dtypes.get("lines"),
         )
 
         # Store the line wavelengths for writing, we only do this once since
@@ -2620,7 +2580,7 @@ class Pipeline:
         igm=None,
         line_ids=None,
         write=True,
-        out_dtype=np.float64,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the observed emission lines.
 
@@ -2651,10 +2611,8 @@ class Pipeline:
             igm=igm,
         )
 
-        # Set the output dtype for the observed emission lines if it hasn't
-        # already been set by a previous call to this method
-        if self._observed_lines_out_dtype is None:
-            self._observed_lines_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("observed_lines", out_dtype)
 
         # Flag that we will compute the observed emission lines
         self._do_flux_lines = True
@@ -2703,6 +2661,7 @@ class Pipeline:
         galaxy.get_observed_lines(
             cosmo=op_kwargs["cosmo"],
             igm=op_kwargs["igm"],
+            out_dtype=self._out_dtypes.get("observed_lines"),
         )
 
         # Store the observed line wavelengths for writing, we only do this once
@@ -2748,7 +2707,7 @@ class Pipeline:
         labels=None,
         cosmo=None,
         write=True,
-        out_dtype=np.float64,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the luminosity images.
 
@@ -2837,10 +2796,8 @@ class Pipeline:
             cosmo=cosmo,
         )
 
-        # Set the output dtype for the luminosity images if it hasn't already
-        # been set by a previous call to this method
-        if self._images_luminosity_out_dtype is None:
-            self._images_luminosity_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("images_luminosity", out_dtype)
 
         # Validate noise attribute units for luminosity images
         validate_noise_unit_compatibility(_instruments, "erg/s/Hz")
@@ -2903,6 +2860,15 @@ class Pipeline:
                     cosmo=op_kwargs["cosmo"],
                 )
 
+        # Honour any requested output dtype for the stored images
+        img_dtype = self._out_dtypes.get("images_luminosity")
+        for obj in (galaxy, galaxy.stars, galaxy.black_holes):
+            if obj is None:
+                continue
+            cast_products_recursive(obj.images_lnu, img_dtype)
+            cast_products_recursive(obj.images_psf_lnu, img_dtype)
+            cast_products_recursive(obj.images_noise_lnu, img_dtype)
+
         # Count the number of images we have generated
         self._op_counts["Luminosity Images"] += count_and_check_dict_recursive(
             galaxy.images_lnu
@@ -2952,7 +2918,7 @@ class Pipeline:
         igm=None,
         labels=None,
         write=True,
-        out_dtype=np.float64,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the flux images.
 
@@ -3057,10 +3023,8 @@ class Pipeline:
             cosmo=cosmo,
         )
 
-        # Set the output dtype for the flux images if it hasn't already been
-        # set by a previous call to this method
-        if self._images_flux_out_dtype is None:
-            self._images_flux_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("images_flux", out_dtype)
 
         # Validate noise attribute units for flux images
         validate_noise_unit_compatibility(_instruments, "nJy")
@@ -3125,6 +3089,15 @@ class Pipeline:
                     instrument=inst,
                 )
 
+        # Honour any requested output dtype for the stored images
+        img_dtype = self._out_dtypes.get("images_flux")
+        for obj in (galaxy, galaxy.stars, galaxy.black_holes):
+            if obj is None:
+                continue
+            cast_products_recursive(obj.images_fnu, img_dtype)
+            cast_products_recursive(obj.images_psf_fnu, img_dtype)
+            cast_products_recursive(obj.images_noise_fnu, img_dtype)
+
         # Count the number of images we have generated
         self._op_counts["Flux Images"] += count_and_check_dict_recursive(
             galaxy.images_fnu
@@ -3173,7 +3146,7 @@ class Pipeline:
         cosmo=None,
         labels=None,
         write=True,
-        out_dtype=np.float64,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute luminosity data cubes.
 
@@ -3277,10 +3250,8 @@ class Pipeline:
             cosmo=cosmo,
         )
 
-        # Set the output dtype for the luminosity data cubes if it hasn't
-        # already been set by a previous call to this method
-        if self._data_cubes_lnu_out_dtype is None:
-            self._data_cubes_lnu_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("data_cubes_lnu", out_dtype)
 
         # We need to ensure the lnu spectra are computed first
         # NOTE: this is safe if the user has already called
@@ -3331,6 +3302,13 @@ class Pipeline:
                         nthreads=self.nthreads,
                     )
 
+        # Honour any requested output dtype for the stored data cubes
+        cube_dtype = self._out_dtypes.get("data_cubes_lnu")
+        for obj in (galaxy, galaxy.stars, galaxy.black_holes):
+            if obj is None:
+                continue
+            cast_products_recursive(obj.data_cubes_lnu, cube_dtype)
+
         # Count the number of data cubes we have generated
         self._op_counts["Lnu Data Cubes"] += count_and_check_dict_recursive(
             galaxy.data_cubes_lnu
@@ -3360,7 +3338,7 @@ class Pipeline:
         igm=None,
         labels=None,
         write=True,
-        out_dtype=np.float64,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute flux density data cubes.
 
@@ -3467,10 +3445,8 @@ class Pipeline:
             igm=igm,
         )
 
-        # Set the output dtype for the flux data cubes if it hasn't already
-        # been set by a previous call to this method
-        if self._data_cubes_fnu_out_dtype is None:
-            self._data_cubes_fnu_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("data_cubes_fnu", out_dtype)
 
         # We need to ensure the observed spectra are computed first
         # NOTE: this is safe if the user has already called
@@ -3523,6 +3499,13 @@ class Pipeline:
                         nthreads=self.nthreads,
                     )
 
+        # Honour any requested output dtype for the stored data cubes
+        cube_dtype = self._out_dtypes.get("data_cubes_fnu")
+        for obj in (galaxy, galaxy.stars, galaxy.black_holes):
+            if obj is None:
+                continue
+            cast_products_recursive(obj.data_cubes_fnu, cube_dtype)
+
         # Count the number of data cubes we have generated
         self._op_counts["Fnu Data Cubes"] += count_and_check_dict_recursive(
             galaxy.data_cubes_fnu
@@ -3542,7 +3525,7 @@ class Pipeline:
         self._op_timing["Fnu Data Cubes"] += time.perf_counter() - start
 
     def get_spectroscopy_lnu(
-        self, *instruments, labels=None, write=True, out_dtype=np.float64
+        self, *instruments, labels=None, write=True, out_dtype=None
     ):
         """Flag that the Pipeline should compute spectral luminosity density.
 
@@ -3602,10 +3585,8 @@ class Pipeline:
             instruments=_instruments,
         )
 
-        # Set the output dtype for the luminosity spectroscopy if it hasn't
-        # already been set by a previous call to this method
-        if self._spectroscopy_lnu_out_dtype is None:
-            self._spectroscopy_lnu_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("spectroscopy_lnu", out_dtype)
 
         # We need to ensure the lnu spectra are computed first
         # NOTE: this is safe if the user has already called
@@ -3636,7 +3617,11 @@ class Pipeline:
             # Loop over instruments
             for inst in instruments:
                 # Get the spectroscopy for this instrument
-                galaxy.get_spectroscopy(inst, limit_to=model_label)
+                galaxy.get_spectroscopy(
+                    inst,
+                    limit_to=model_label,
+                    out_dtype=self._out_dtypes.get("spectroscopy_lnu"),
+                )
 
         # Count the number of spectroscopy items we have generated
         self._op_counts["Spectroscopy Lnu"] += count_and_check_dict_recursive(
@@ -3661,7 +3646,7 @@ class Pipeline:
         cosmo=None,
         igm=None,
         write=True,
-        out_dtype=np.float64,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the spectral flux density.
 
@@ -3727,10 +3712,8 @@ class Pipeline:
             instruments=_instruments,
         )
 
-        # Set the output dtype for the flux spectroscopy if it hasn't already
-        # been set by a previous call to this method
-        if self._spectroscopy_fnu_out_dtype is None:
-            self._spectroscopy_fnu_out_dtype = out_dtype
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("spectroscopy_fnu", out_dtype)
 
         # We need to ensure the fnu spectra are computed first
         # NOTE: this is safe if the user has already called
@@ -3763,7 +3746,11 @@ class Pipeline:
             # Loop over instruments
             for inst in instruments:
                 # Get the spectroscopy for this instrument
-                galaxy.get_spectroscopy(inst, limit_to=model_label)
+                galaxy.get_spectroscopy(
+                    inst,
+                    limit_to=model_label,
+                    out_dtype=self._out_dtypes.get("spectroscopy_fnu"),
+                )
 
         # Count the number of spectroscopy items we have generated
         self._op_counts["Spectroscopy Fnu"] += count_and_check_dict_recursive(
@@ -4514,18 +4501,25 @@ class Pipeline:
                         )
                         averaged.add((component, label))
 
+        # Convert accumulated cosmic SEDs to unyt arrays, honouring any
+        # requested output dtype (accumulation itself always happens at the
+        # contribution dtype for accuracy).
+        cosmic_lnu_dtype = self._out_dtypes.get("cosmic_sed")
+        cosmic_fnu_dtype = self._out_dtypes.get("observed_cosmic_sed")
         for component in self.cosmic_lnus:
             for label, spectra in self.cosmic_lnus[component].items():
                 for spec_type, spec in spectra.items():
-                    self.cosmic_lnus[component][label][spec_type] = unyt_array(
-                        spec
-                    )
+                    spec = unyt_array(spec)
+                    if cosmic_lnu_dtype is not None:
+                        spec = spec.astype(cosmic_lnu_dtype, copy=False)
+                    self.cosmic_lnus[component][label][spec_type] = spec
         for component in self.cosmic_fnus:
             for label, spectra in self.cosmic_fnus[component].items():
                 for spec_type, spec in spectra.items():
-                    self.cosmic_fnus[component][label][spec_type] = unyt_array(
-                        spec
-                    )
+                    spec = unyt_array(spec)
+                    if cosmic_fnu_dtype is not None:
+                        spec = spec.astype(cosmic_fnu_dtype, copy=False)
+                    self.cosmic_fnus[component][label][spec_type] = spec
 
         # Convert the lists of luminosities to unyt arrays
         for spec_type, phot in self.luminosities["Galaxy"].items():

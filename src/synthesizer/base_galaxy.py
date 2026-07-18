@@ -4,7 +4,6 @@ The class described in this module should never be directly instantiated. It
 only contains common attributes and methods to reduce boilerplate.
 """
 
-import numpy as np
 from unyt import Mpc, arcsecond, kpc, pc
 
 from synthesizer import exceptions
@@ -282,7 +281,9 @@ class BaseGalaxy:
 
         return equivalent_widths
 
-    def get_observed_spectra(self, cosmo, igm=Inoue14, nthreads=1):
+    def get_observed_spectra(
+        self, cosmo, igm=Inoue14, nthreads=1, out_dtype=None
+    ):
         """Calculate the observed spectra for all Seds within this galaxy.
 
         This will run Sed.get_fnu(...) and populate Sed.fnu (and sed.obslam
@@ -307,6 +308,9 @@ class BaseGalaxy:
             nthreads (int):
                 The number of threads to use for observer-frame flux
                 conversion.
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the flux arrays. If None
+                the fluxes inherit the source spectra dtype.
 
         Raises:
             MissingAttribute
@@ -328,6 +332,7 @@ class BaseGalaxy:
                 z=self.redshift,
                 igm=igm,
                 nthreads=nthreads,
+                out_dtype=out_dtype,
             )
 
         # Do we have stars?
@@ -340,6 +345,7 @@ class BaseGalaxy:
                     z=self.redshift,
                     igm=igm,
                     nthreads=nthreads,
+                    out_dtype=out_dtype,
                 )
 
             # Loop over all stellar particle spectra
@@ -351,6 +357,7 @@ class BaseGalaxy:
                         z=self.redshift,
                         igm=igm,
                         nthreads=nthreads,
+                        out_dtype=out_dtype,
                     )
 
         # Do we have black holes?
@@ -363,6 +370,7 @@ class BaseGalaxy:
                     z=self.redshift,
                     igm=igm,
                     nthreads=nthreads,
+                    out_dtype=out_dtype,
                 )
 
             # Loop over all black hole particle spectra
@@ -374,9 +382,10 @@ class BaseGalaxy:
                         z=self.redshift,
                         igm=igm,
                         nthreads=nthreads,
+                        out_dtype=out_dtype,
                     )
 
-    def get_observed_lines(self, cosmo, igm=Inoue14):
+    def get_observed_lines(self, cosmo, igm=Inoue14, out_dtype=None):
         """Calculate the observed lines for all Line objects.
 
         This will run Line.get_fnu(...) and populate Line.fnu (and Line.obslam
@@ -398,6 +407,9 @@ class BaseGalaxy:
             igm (igm):
                 The object describing the intergalactic medium (defaults to
                 Inoue14).
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the flux arrays. If None
+                the fluxes inherit the line luminosity dtype.
 
         Raises:
             MissingAttribute
@@ -417,6 +429,7 @@ class BaseGalaxy:
                 cosmo=cosmo,
                 z=self.redshift,
                 igm=igm,
+                out_dtype=out_dtype,
             )
 
         # Do we have stars?
@@ -428,6 +441,7 @@ class BaseGalaxy:
                     cosmo=cosmo,
                     z=self.redshift,
                     igm=igm,
+                    out_dtype=out_dtype,
                 )
 
             # Loop over all stellar particle lines
@@ -439,6 +453,7 @@ class BaseGalaxy:
                         cosmo=cosmo,
                         z=self.redshift,
                         igm=igm,
+                        out_dtype=out_dtype,
                     )
 
         # Do we have black holes?
@@ -450,6 +465,7 @@ class BaseGalaxy:
                     cosmo=cosmo,
                     z=self.redshift,
                     igm=igm,
+                    out_dtype=out_dtype,
                 )
 
             # Loop over all black hole particle lines
@@ -460,6 +476,7 @@ class BaseGalaxy:
                         cosmo=cosmo,
                         z=self.redshift,
                         igm=igm,
+                        out_dtype=out_dtype,
                     )
 
     def get_spectra_combined(self):
@@ -512,7 +529,7 @@ class BaseGalaxy:
         verbose=True,
         nthreads=1,
         limit_to=None,
-        out_dtype=np.float32,
+        out_dtype=None,
     ):
         """Calculate luminosity photometry using a FilterCollection object.
 
@@ -629,7 +646,7 @@ class BaseGalaxy:
         verbose=True,
         nthreads=1,
         limit_to=None,
-        out_dtype=np.float32,
+        out_dtype=None,
     ):
         """Calculate flux photometry using a FilterCollection object.
 
@@ -1102,7 +1119,7 @@ class BaseGalaxy:
         mask=None,
         vel_shift=None,
         verbose=True,
-        out_dtype=np.float32,
+        out_dtype=None,
         **kwargs,
     ):
         """Generate spectra as described by the emission model.
@@ -1241,7 +1258,7 @@ class BaseGalaxy:
         covering_fraction=None,
         mask=None,
         verbose=True,
-        out_dtype=np.float64,
+        out_dtype=None,
         **kwargs,
     ):
         """Generate lines as described by the emission model.
@@ -2538,6 +2555,7 @@ class BaseGalaxy:
         self,
         instrument,
         limit_to=None,
+        out_dtype=None,
     ):
         """Get spectroscopy for the galaxy based on a specific instrument.
 
@@ -2553,6 +2571,9 @@ class BaseGalaxy:
                 If None, then spectroscopy is calculated for all spectra in
                 the galaxy. If a string or list of strings is provided, then
                 spectroscopy is only calculated for the specified spectra.
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the resulting spectra.
+                If None the spectroscopy inherits the source spectra dtype.
 
         Returns:
             dict
@@ -2591,15 +2612,21 @@ class BaseGalaxy:
             spectrum = instrument.apply_lam_array(self.spectra[label])
             if instrument.can_do_noisy_spectroscopy:
                 spectrum = instrument.apply_noise(spectrum)
+            if out_dtype is not None:
+                spectrum.cast(out_dtype)
             self.spectroscopy[instrument.label][label] = spectrum
 
         # Do the stars level spectra
         if self.stars is not None:
-            self.stars.get_spectroscopy(instrument, limit_to=limit_to)
+            self.stars.get_spectroscopy(
+                instrument, limit_to=limit_to, out_dtype=out_dtype
+            )
 
         # Do the black holes level spectra
         if self.black_holes is not None:
-            self.black_holes.get_spectroscopy(instrument, limit_to=limit_to)
+            self.black_holes.get_spectroscopy(
+                instrument, limit_to=limit_to, out_dtype=out_dtype
+            )
 
         return self.spectroscopy[instrument.label]
 

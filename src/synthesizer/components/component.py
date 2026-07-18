@@ -11,7 +11,6 @@ respectively.
 
 from abc import ABC, abstractmethod
 
-import numpy as np
 from unyt import arcsecond, kpc, pc
 
 from synthesizer import exceptions
@@ -285,7 +284,7 @@ class Component(ABC):
         verbose=True,
         nthreads=1,
         limit_to=None,
-        out_dtype=np.float32,
+        out_dtype=None,
     ):
         """Calculate luminosity photometry using a FilterCollection object.
 
@@ -329,7 +328,7 @@ class Component(ABC):
         verbose=True,
         nthreads=1,
         limit_to=None,
-        out_dtype=np.float32,
+        out_dtype=None,
     ):
         """Calculate flux photometry using a FilterCollection object.
 
@@ -378,7 +377,7 @@ class Component(ABC):
         verbose=True,
         nthreads=1,
         grid_assignment_method="cic",
-        out_dtype=np.float32,
+        out_dtype=None,
         **kwargs,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -479,7 +478,7 @@ class Component(ABC):
         fesc=None,
         mask=None,
         verbose=True,
-        out_dtype=np.float64,
+        out_dtype=None,
         **kwargs,
     ):
         """Generate stellar lines as described by the emission model.
@@ -1202,6 +1201,7 @@ class Component(ABC):
         self,
         instrument,
         limit_to=None,
+        out_dtype=None,
     ):
         """Get spectroscopy for the component based on a specific instrument.
 
@@ -1218,6 +1218,9 @@ class Component(ABC):
                 the component. If a string or list of strings is provided,
                 then spectroscopy is only calculated for the specified
                 spectra.
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the resulting spectra.
+                If None the spectroscopy inherits the source spectra dtype.
 
         Returns:
             dict
@@ -1241,6 +1244,8 @@ class Component(ABC):
             spectrum = instrument.apply_lam_array(self.spectra[label])
             if instrument.can_do_noisy_spectroscopy:
                 spectrum = instrument.apply_noise(spectrum)
+            if out_dtype is not None:
+                spectrum.cast(out_dtype)
             self.spectroscopy[instrument.label][label] = spectrum
 
         # If we have particle spectra then do the same for them
@@ -1269,6 +1274,8 @@ class Component(ABC):
                 )
                 if instrument.can_do_noisy_spectroscopy:
                     spectrum = instrument.apply_noise(spectrum)
+                if out_dtype is not None:
+                    spectrum.cast(out_dtype)
                 self.particle_spectroscopy[instrument.label][label] = spectrum
 
         # Return the spectroscopy for the component
