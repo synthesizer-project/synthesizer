@@ -79,13 +79,20 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   RETURN_IF_PYERR();
 
   /* Resolve the input dtypes. Grid and particle arrays may use different
-   * precisions; each is read at its own width. */
-  const int grid_typenum = grid_props->get_float_typenum();
-  const int part_typenum = parts->get_float_typenum();
+   * precisions; each is read at its own width. A typenum of -1 means the
+   * object holds no float arrays at all (unreachable in practice); default
+   * such cases to float64 so the dispatch below never misreads a buffer. */
+  int grid_typenum = grid_props->get_float_typenum();
+  int part_typenum = parts->get_float_typenum();
+  if (grid_typenum == -1) {
+    grid_typenum = NPY_FLOAT64;
+  }
+  if (part_typenum == -1) {
+    part_typenum = NPY_FLOAT64;
+  }
 
-  /* Default the output to the grid precision family (falling back to the
-   * particle precision if the grid holds no float arrays). */
-  int output_typenum = grid_typenum != -1 ? grid_typenum : part_typenum;
+  /* Default the output to the grid precision family. */
+  int output_typenum = grid_typenum;
   if (out_dtype != Py_None) {
     output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
     if (output_typenum < 0) {

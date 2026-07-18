@@ -40,6 +40,10 @@ def _call_kernel_function(kernel_name, r):
             The kernel value(s), preserving scalar inputs as scalars.
     """
     input_array = np.asarray(r)
+    if not np.issubdtype(input_array.dtype, np.floating):
+        # Radii are small user-provided values (not bulk data), so coerce
+        # non-float input to float64 for convenience.
+        input_array = input_array.astype(np.float64)
     radii = np.atleast_1d(input_array).ravel()
     values = evaluate_kernel(radii, kernel_name)
 

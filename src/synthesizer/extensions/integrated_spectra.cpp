@@ -285,8 +285,14 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
    * precisions; the weight-loop kernels read each at its own width. Grid
    * weights always live at the grid precision (matching any weights passed
    * in, which are validated against the grid float family). */
-  const int grid_typenum = grid_props->get_float_typenum();
-  const int part_typenum = part_props->get_float_typenum();
+  int grid_typenum = grid_props->get_float_typenum();
+  int part_typenum = part_props->get_float_typenum();
+  if (grid_typenum == -1) {
+    grid_typenum = NPY_FLOAT64;
+  }
+  if (part_typenum == -1) {
+    part_typenum = NPY_FLOAT64;
+  }
 
   const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
   if (output_typenum < 0) {
