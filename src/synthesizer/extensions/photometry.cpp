@@ -692,28 +692,16 @@ static PyObject *compute_photometry_integration(PyObject *self,
     return NULL;
   }
 
-  int dispatch_key =
-      ((input_typenum == NPY_FLOAT64) << 1) | (output_typenum == NPY_FLOAT64);
-
-  /* Dispatch: call the matching typed kernel based on the dispatch key. */
-  switch (dispatch_key) {
-    case 0:
-      return compute_photometry_integration_impl<float, float>(
+  /* Dispatch: call the matching typed kernel for the input/output dtypes. */
+  return dispatch_float(input_typenum, [&](auto in) -> PyObject * {
+    return dispatch_float(output_typenum, [&](auto o) -> PyObject * {
+      using InReal = decltype(in);
+      using OutT = decltype(o);
+      return compute_photometry_integration_impl<InReal, OutT>(
           np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
           np_starts, np_ends, nthreads, integration_method);
-    case 1:
-      return compute_photometry_integration_impl<float, double>(
-          np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
-          np_starts, np_ends, nthreads, integration_method);
-    case 2:
-      return compute_photometry_integration_impl<double, float>(
-          np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
-          np_starts, np_ends, nthreads, integration_method);
-    default:
-      return compute_photometry_integration_impl<double, double>(
-          np_x_values, np_spectra_values, np_weight_matrix, np_denominators,
-          np_starts, np_ends, nthreads, integration_method);
-  }
+    });
+  });
 }
 
 /* Below is all the gubbins needed to make the module importable in Python. */

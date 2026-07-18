@@ -8,6 +8,7 @@
 
 #include "kernel_functions.h"
 #include "kernels.h"
+#include "python_to_cpp.h"
 
 #include <vector>
 
@@ -173,19 +174,15 @@ PyObject *compute_projected_kernel(PyObject *self, PyObject *args) {
 
   /* Validate the dtype and dispatch to the correct instantiation. */
   const int input_typenum = PyArray_TYPE(np_q_grid);
-  /* Dispatch: encode input precision into a 1-bit key. */
-  int dispatch_key = (input_typenum == NPY_FLOAT64);
-
-  /* Dispatch: call the matching typed kernel based on the dispatch key. */
-  switch (dispatch_key) {
-    case 0:
-      return compute_projected_kernel_impl<float>(self, np_q_grid, kernel_name,
-                                                  nsteps);
-    case 1:
-      return compute_projected_kernel_impl<double>(self, np_q_grid,
-                                                   kernel_name, nsteps);
-    default:
-      PyErr_SetString(PyExc_TypeError, "q_grid must be float32 or float64.");
-      return NULL;
+  if (input_typenum != NPY_FLOAT32 && input_typenum != NPY_FLOAT64) {
+    PyErr_SetString(PyExc_TypeError, "q_grid must be float32 or float64.");
+    return NULL;
   }
+
+  /* Dispatch: call the matching typed kernel for the input dtype. */
+  return dispatch_float(input_typenum, [&](auto v) -> PyObject * {
+    using Real = decltype(v);
+    return compute_projected_kernel_impl<Real>(self, np_q_grid, kernel_name,
+                                               nsteps);
+  });
 }

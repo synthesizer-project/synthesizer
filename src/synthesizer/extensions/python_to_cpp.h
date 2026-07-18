@@ -20,9 +20,48 @@ bool is_c_contiguous(PyArrayObject *np_arr, const char *name);
 bool is_float32_or_float64(PyArrayObject *np_arr, const char *name);
 bool is_supported_float_typenum(int typenum);
 int promoted_float_typenum(int lhs, int rhs);
-PyArrayObject *cast_float_array(PyArrayObject *array, int typenum);
 bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
                               int count, int *resolved_typenum);
+
+/* Float-type dispatch helpers.
+ *
+ * These map a NumPy float typenum (NPY_FLOAT32/NPY_FLOAT64) onto a C++
+ * scalar type and invoke a callable with a value of that type. Nesting
+ * calls dispatches over several independent typenums without hand-written
+ * switch tables, e.g.:
+ *
+ *   dispatch_float(part_typenum, [&](auto p) {
+ *     dispatch_float(grid_typenum, [&](auto g) {
+ *       dispatch_float(out_typenum, [&](auto o) {
+ *         using PartReal = decltype(p);
+ *         using GridReal = decltype(g);
+ *         using OutT = decltype(o);
+ *         kernel<PartReal, GridReal, OutT>(...);
+ *       });
+ *     });
+ *   });
+ *
+ * Callers must validate that the typenum is float32 or float64 first
+ * (anything else dispatches as float64's opposite branch never fires;
+ * float32 is the fallback branch).
+ */
+
+/**
+ * @brief Invoke a callable with a scalar of the C++ type matching typenum.
+ *
+ * @tparam F The callable type (typically a generic lambda).
+ * @param typenum: The NumPy float typenum (NPY_FLOAT32 or NPY_FLOAT64).
+ * @param f: The callable invoked with float{} or double{}.
+ *
+ * @return Whatever the callable returns.
+ */
+template <typename F>
+inline decltype(auto) dispatch_float(int typenum, F &&f) {
+  if (typenum == NPY_FLOAT64) {
+    return f(double{});
+  }
+  return f(float{});
+}
 
 /* Inline pointer extraction helpers. */
 /**

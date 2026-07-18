@@ -8,6 +8,7 @@
 
 #include "kernel_functions.h"
 #include "kernels.h"
+#include "python_to_cpp.h"
 
 /**
  * @brief Templated implementation of kernel evaluation.
@@ -80,19 +81,16 @@ PyObject *evaluate_kernel(PyObject *self, PyObject *args) {
   }
 
   const int input_typenum = PyArray_TYPE(np_radii);
-  /* Dispatch: encode input precision into a 1-bit key. */
-  int dispatch_key = (input_typenum == NPY_FLOAT64);
-
-  /* Dispatch: call the matching typed kernel based on the dispatch key. */
-  switch (dispatch_key) {
-    case 0:
-      return evaluate_kernel_impl<float>(self, np_radii, kernel_name);
-    case 1:
-      return evaluate_kernel_impl<double>(self, np_radii, kernel_name);
-    default:
-      PyErr_SetString(PyExc_TypeError, "radii must be float32 or float64.");
-      return NULL;
+  if (input_typenum != NPY_FLOAT32 && input_typenum != NPY_FLOAT64) {
+    PyErr_SetString(PyExc_TypeError, "radii must be float32 or float64.");
+    return NULL;
   }
+
+  /* Dispatch: call the matching typed kernel for the input dtype. */
+  return dispatch_float(input_typenum, [&](auto v) -> PyObject * {
+    using Real = decltype(v);
+    return evaluate_kernel_impl<Real>(self, np_radii, kernel_name);
+  });
 }
 
 /* Expose the Python-callable entry points for this extension module. */

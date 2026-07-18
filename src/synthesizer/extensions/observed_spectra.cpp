@@ -283,128 +283,27 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
   const npy_intp nelem = PyArray_SIZE(np_lnu);
   tic("compute_fnu");
 
-  /* Dispatch: encode input/grid/output precision into a 3-bit key. */
-  int dispatch_key = ((input_typenum == NPY_FLOAT64) << 2) |
-                     ((grid_typenum == NPY_FLOAT64) << 1) |
-                     (out_typenum == NPY_FLOAT64);
-
-  /* Dispatch: call the matching typed kernel based on the dispatch key. */
-  switch (dispatch_key) {
-    case 0: {
-      const float *lnu = data_ptr<float>(np_lnu);
-      const float *lam = data_ptr<float>(np_lam);
-      const float *nu = data_ptr<float>(np_nu);
-      float *fnu_out = data_ptr<float>(np_fnu_out);
-      float *obslam_out =
-          np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
-      float *obsnu_out =
-          np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
-      compute_fnu_kernel<float, float, float>(
-          lnu, lam, nu, static_cast<float>(one_plus_z),
-          static_cast<float>(conversion), nthreads, fnu_out, obslam_out,
-          obsnu_out, nelem, nlam);
-      break;
-    }
-    case 1: {
-      const float *lnu = data_ptr<float>(np_lnu);
-      const float *lam = data_ptr<float>(np_lam);
-      const float *nu = data_ptr<float>(np_nu);
-      double *fnu_out = data_ptr<double>(np_fnu_out);
-      float *obslam_out =
-          np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
-      float *obsnu_out =
-          np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
-      compute_fnu_kernel<float, double, float>(
-          lnu, lam, nu, static_cast<float>(one_plus_z),
-          static_cast<float>(conversion), nthreads, fnu_out, obslam_out,
-          obsnu_out, nelem, nlam);
-      break;
-    }
-    case 2: {
-      const float *lnu = data_ptr<float>(np_lnu);
-      const double *lam = data_ptr<double>(np_lam);
-      const double *nu = data_ptr<double>(np_nu);
-      float *fnu_out = data_ptr<float>(np_fnu_out);
-      double *obslam_out =
-          np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
-      double *obsnu_out =
-          np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
-      compute_fnu_kernel<float, float, double>(
-          lnu, lam, nu, one_plus_z, static_cast<float>(conversion), nthreads,
-          fnu_out, obslam_out, obsnu_out, nelem, nlam);
-      break;
-    }
-    case 3: {
-      const float *lnu = data_ptr<float>(np_lnu);
-      const double *lam = data_ptr<double>(np_lam);
-      const double *nu = data_ptr<double>(np_nu);
-      double *fnu_out = data_ptr<double>(np_fnu_out);
-      double *obslam_out =
-          np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
-      double *obsnu_out =
-          np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
-      compute_fnu_kernel<float, double, double>(
-          lnu, lam, nu, one_plus_z, static_cast<float>(conversion), nthreads,
-          fnu_out, obslam_out, obsnu_out, nelem, nlam);
-      break;
-    }
-    case 4: {
-      const double *lnu = data_ptr<double>(np_lnu);
-      const float *lam = data_ptr<float>(np_lam);
-      const float *nu = data_ptr<float>(np_nu);
-      float *fnu_out = data_ptr<float>(np_fnu_out);
-      float *obslam_out =
-          np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
-      float *obsnu_out =
-          np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
-      compute_fnu_kernel<double, float, float>(
-          lnu, lam, nu, static_cast<float>(one_plus_z), conversion, nthreads,
-          fnu_out, obslam_out, obsnu_out, nelem, nlam);
-      break;
-    }
-    case 5: {
-      const double *lnu = data_ptr<double>(np_lnu);
-      const float *lam = data_ptr<float>(np_lam);
-      const float *nu = data_ptr<float>(np_nu);
-      double *fnu_out = data_ptr<double>(np_fnu_out);
-      float *obslam_out =
-          np_obslam_out ? data_ptr<float>(np_obslam_out) : nullptr;
-      float *obsnu_out =
-          np_obsnu_out ? data_ptr<float>(np_obsnu_out) : nullptr;
-      compute_fnu_kernel<double, double, float>(
-          lnu, lam, nu, static_cast<float>(one_plus_z), conversion, nthreads,
-          fnu_out, obslam_out, obsnu_out, nelem, nlam);
-      break;
-    }
-    case 6: {
-      const double *lnu = data_ptr<double>(np_lnu);
-      const double *lam = data_ptr<double>(np_lam);
-      const double *nu = data_ptr<double>(np_nu);
-      float *fnu_out = data_ptr<float>(np_fnu_out);
-      double *obslam_out =
-          np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
-      double *obsnu_out =
-          np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
-      compute_fnu_kernel<double, float, double>(
-          lnu, lam, nu, one_plus_z, conversion, nthreads, fnu_out, obslam_out,
-          obsnu_out, nelem, nlam);
-      break;
-    }
-    default: {
-      const double *lnu = data_ptr<double>(np_lnu);
-      const double *lam = data_ptr<double>(np_lam);
-      const double *nu = data_ptr<double>(np_nu);
-      double *fnu_out = data_ptr<double>(np_fnu_out);
-      double *obslam_out =
-          np_obslam_out ? data_ptr<double>(np_obslam_out) : nullptr;
-      double *obsnu_out =
-          np_obsnu_out ? data_ptr<double>(np_obsnu_out) : nullptr;
-      compute_fnu_kernel<double, double, double>(
-          lnu, lam, nu, one_plus_z, conversion, nthreads, fnu_out, obslam_out,
-          obsnu_out, nelem, nlam);
-      break;
-    }
-  }
+  /* Dispatch: call the matching typed kernel for the lnu/grid/output dtypes.
+   * Note one_plus_z is applied to the wavelength/frequency arrays so it
+   * follows the grid dtype, while the flux conversion factor scales lnu and
+   * follows the lnu dtype. */
+  dispatch_float(input_typenum, [&](auto in) {
+    dispatch_float(grid_typenum, [&](auto g) {
+      dispatch_float(out_typenum, [&](auto o) {
+        using LnuReal = decltype(in);
+        using GridReal = decltype(g);
+        using OutT = decltype(o);
+        compute_fnu_kernel<LnuReal, OutT, GridReal>(
+            data_ptr<LnuReal>(np_lnu), data_ptr<GridReal>(np_lam),
+            data_ptr<GridReal>(np_nu), static_cast<GridReal>(one_plus_z),
+            static_cast<LnuReal>(conversion), nthreads,
+            data_ptr<OutT>(np_fnu_out),
+            np_obslam_out ? data_ptr<GridReal>(np_obslam_out) : nullptr,
+            np_obsnu_out ? data_ptr<GridReal>(np_obsnu_out) : nullptr, nelem,
+            nlam);
+      });
+    });
+  });
 
   toc("compute_fnu");
 
