@@ -12,26 +12,6 @@
 #include "property_funcs.h"
 
 /**
- * @brief Extract int data from a numpy array.
- *
- * @param np_arr: The numpy array to extract.
- * @param name: The name of the numpy array. (For error messages)
- */
-int *extract_data_int(PyArrayObject *np_arr, const char *name) {
-
-  /* Extract a pointer to the spectra grids */
-  int *data = reinterpret_cast<int *>(PyArray_DATA(np_arr));
-  if (data == NULL) {
-    char error_msg[100];
-    snprintf(error_msg, sizeof(error_msg), "Failed to extract %s.", name);
-    PyErr_SetString(PyExc_ValueError, error_msg);
-    return NULL;
-  }
-  /* Success. */
-  return data;
-}
-
-/**
  * @brief Extract an int64-compatible 1D index array.
  *
  * Accepts NPY_INT64 or NPY_INTP (when sizes match). The array must be
@@ -73,25 +53,4 @@ const npy_int64 *extract_index_array(PyArrayObject *np_arr, const char *name) {
 
   PyErr_Format(PyExc_TypeError, "%s must be int64 or intp.", name);
   return NULL;
-}
-
-/**
- * @brief Extract boolean data from a numpy array.
- *
- * This function returns a pointer to the underlying boolean data stored
- * as npy_bool values (typically unsigned char).
- *
- * @param np_arr: The numpy array to extract.
- * @param name: The name of the numpy array (for error messages).
- * @return Pointer to the npy_bool data, or NULL on error.
- */
-npy_bool *extract_data_bool(PyArrayObject *np_arr, const char *name) {
-  npy_bool *data = reinterpret_cast<npy_bool *>(PyArray_DATA(np_arr));
-  if (data == NULL) {
-    char error_msg[100];
-    snprintf(error_msg, sizeof(error_msg), "Failed to extract %s.", name);
-    PyErr_SetString(PyExc_ValueError, error_msg);
-    return NULL;
-  }
-  return data;
 }
