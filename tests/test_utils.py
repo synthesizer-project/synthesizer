@@ -1,6 +1,7 @@
 """A test suite for the utils module."""
 
 import numpy as np
+import pytest
 import unyt
 
 from synthesizer.utils import ensure_array_c_compatible_double
@@ -191,3 +192,64 @@ class TestPluralization:
         from synthesizer.utils.util_funcs import depluralize
 
         assert depluralize("metallicities") == "metallicity"
+
+
+class TestPrecisionConfig:
+    """Test suite for the global output precision configuration."""
+
+    def test_default_is_float64(self):
+        """The out-of-the-box default output dtype should be float64."""
+        from synthesizer.utils.precision import (
+            get_default_out_dtype,
+            resolve_out_dtype,
+        )
+
+        assert get_default_out_dtype() == np.dtype(np.float64)
+        assert resolve_out_dtype(None) == np.dtype(np.float64)
+
+    def test_explicit_dtype_overrides_default(self):
+        """An explicit out_dtype should win over the global default."""
+        from synthesizer.utils.precision import resolve_out_dtype
+
+        assert resolve_out_dtype(np.float32) == np.dtype(np.float32)
+
+    def test_set_default_out_dtype(self):
+        """Changing the global default should flow through resolution."""
+        from synthesizer.utils.precision import (
+            resolve_out_dtype,
+            set_default_out_dtype,
+        )
+
+        set_default_out_dtype(np.float32)
+        try:
+            assert resolve_out_dtype(None) == np.dtype(np.float32)
+        finally:
+            set_default_out_dtype(np.float64)
+
+    def test_invalid_dtype_raises(self):
+        """Non-float32/float64 dtypes should be rejected."""
+        from synthesizer.utils.precision import (
+            resolve_out_dtype,
+            set_default_out_dtype,
+        )
+
+        with pytest.raises(ValueError):
+            set_default_out_dtype(np.int32)
+        with pytest.raises(ValueError):
+            resolve_out_dtype(np.float16)
+
+    def test_global_default_controls_integration_output(self):
+        """Integration outputs should follow the global default dtype."""
+        from synthesizer.utils.integrate import integrate_last_axis
+        from synthesizer.utils.precision import set_default_out_dtype
+
+        xs = np.linspace(0.0, 1.0, 32)
+        ys = np.ones((4, 32))
+
+        assert integrate_last_axis(xs, ys).dtype == np.float64
+
+        set_default_out_dtype(np.float32)
+        try:
+            assert integrate_last_axis(xs, ys).dtype == np.float32
+        finally:
+            set_default_out_dtype(np.float64)

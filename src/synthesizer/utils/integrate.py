@@ -19,6 +19,7 @@ from synthesizer.extensions.integration import (
     weighted_simps_last_axis,
     weighted_trapz_last_axis,
 )
+from synthesizer.utils.precision import resolve_out_dtype
 
 # Import trapezoid or trapz based on numpy version
 if np.__version__.startswith("1."):
@@ -48,7 +49,7 @@ def integrate_last_axis(
     ys,
     nthreads=1,
     method="trapz",
-    out_dtype=np.float32,
+    out_dtype=None,
 ):
     """Integrate the last axis of an N-dimensional array.
 
@@ -89,7 +90,9 @@ def integrate_last_axis(
         trapz_last_axis if method == "trapz" else simps_last_axis
     )
 
-    resolved_out_dtype = np.dtype(out_dtype)
+    out_dtype = resolve_out_dtype(out_dtype)
+
+    resolved_out_dtype = out_dtype
 
     # If either input is empty or trivially zero, return zeros
     if xs.size == 0 or ys.size == 0:
@@ -117,7 +120,7 @@ def integrate_weighted_last_axis(
     weights,
     nthreads=1,
     method="trapz",
-    out_dtype=np.float32,
+    out_dtype=None,
 ):
     """Compute a weighted average over the final axis of an ND array.
 
@@ -162,7 +165,9 @@ def integrate_weighted_last_axis(
         else weighted_simps_last_axis
     )
 
-    resolved_out_dtype = np.dtype(out_dtype)
+    out_dtype = resolve_out_dtype(out_dtype)
+
+    resolved_out_dtype = out_dtype
 
     if xs.size == 0 or ys.size == 0 or weights.size == 0:
         out_shape = ys.shape[:-1]

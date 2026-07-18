@@ -494,7 +494,7 @@ class Particles:
         verbose=True,
         nthreads=1,
         limit_to=None,
-        out_dtype=np.float32,
+        out_dtype=None,
     ):
         """Calculate luminosity photometry using a FilterCollection object.
 
@@ -537,7 +537,7 @@ class Particles:
         verbose=True,
         nthreads=1,
         limit_to=None,
-        out_dtype=np.float32,
+        out_dtype=None,
     ):
         """Calculate flux photometry using a FilterCollection object.
 

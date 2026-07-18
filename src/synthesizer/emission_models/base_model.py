@@ -2516,7 +2516,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         particle_spectra=None,
         nthreads=1,
         grid_assignment_method="cic",
-        out_dtype=np.float32,
+        out_dtype=None,
         **fixed_parameters,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -2882,7 +2882,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         particle_lines=None,
         nthreads=1,
         grid_assignment_method="cic",
-        out_dtype=np.float64,
+        out_dtype=None,
         **kwargs,
     ):
         """Generate stellar lines as described by the emission model.

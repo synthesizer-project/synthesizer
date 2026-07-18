@@ -36,6 +36,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts, unyt_to_ndview
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import resolve_out_dtype
 
 
 class Galaxy(BaseGalaxy):
@@ -532,7 +533,7 @@ class Galaxy(BaseGalaxy):
         force_loop=0,
         min_count=100,
         nthreads=1,
-        out_dtype=np.float64,
+        out_dtype=None,
     ):
         """Calculate the LOS optical depth for each star particle.
 
@@ -613,10 +614,14 @@ class Galaxy(BaseGalaxy):
 
         # Apply the mask if provided
         if mask is not None:
-            tau_vs = np.zeros(self.stars.nparticles, dtype=out_dtype)
+            tau_vs = np.zeros(
+                self.stars.nparticles, dtype=resolve_out_dtype(out_dtype)
+            )
             tau_vs[mask] = tau_v
         else:
-            tau_vs = np.array(tau_v, dtype=out_dtype, copy=True)
+            tau_vs = np.array(
+                tau_v, dtype=resolve_out_dtype(out_dtype), copy=True
+            )
 
         # Store the result in self.stars
         setattr(self.stars, tau_v_attr, tau_vs)
@@ -635,7 +640,7 @@ class Galaxy(BaseGalaxy):
         force_loop=0,
         min_count=100,
         nthreads=1,
-        out_dtype=np.float64,
+        out_dtype=None,
     ):
         """Calculate the LOS optical depth for each black hole particle.
 
@@ -717,10 +722,15 @@ class Galaxy(BaseGalaxy):
 
         # Apply the mask if provided
         if mask is not None:
-            tau_vs = np.zeros(self.black_holes.nparticles, dtype=out_dtype)
+            tau_vs = np.zeros(
+                self.black_holes.nparticles,
+                dtype=resolve_out_dtype(out_dtype),
+            )
             tau_vs[mask] = tau_v
         else:
-            tau_vs = np.array(tau_v, dtype=out_dtype, copy=True)
+            tau_vs = np.array(
+                tau_v, dtype=resolve_out_dtype(out_dtype), copy=True
+            )
 
         # Store the result in self.black_holes
         setattr(self.black_holes, tau_v_attr, tau_vs)
