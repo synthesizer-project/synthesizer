@@ -54,8 +54,14 @@ Products derived from an existing emission — observed spectra and line
 fluxes, spectroscopy, images, data cubes, and cosmic SEDs — behave slightly
 differently: when ``out_dtype`` is not given they inherit the dtype of the
 emission they are derived from (float32 spectra produce float32 fluxes and
-images), rather than resolving to the global default. Passing ``out_dtype``
-explicitly always wins:
+spectroscopy), rather than resolving to the global default. Passing
+``out_dtype`` explicitly always wins.
+
+Note that the imaging and data cube backends currently compute at float64
+internally regardless of the input dtype; without an explicit ``out_dtype``
+the stored images and cubes are therefore float64. Requesting a reduced
+precision shrinks the stored product but not the peak memory during their
+generation:
 
 .. code-block:: python
 

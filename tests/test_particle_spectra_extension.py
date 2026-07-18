@@ -411,3 +411,80 @@ class TestDopplerParticleSpectraExtension:
 
         assert part_spectra.dtype == np.float32
         assert spectra.dtype == np.float32
+
+
+@pytest.mark.parametrize("method", ["ngp", "cic"])
+def test_compute_particle_seds_mixed_part_grid_dtypes(method):
+    """Mixed particle/grid dtypes must match the all-float64 result.
+
+    This is a regression test for the grid axes being reinterpreted at the
+    particle dtype's width when the two families differ.
+    """
+    grid_spectra, axes, part_props, weights, grid_dims = (
+        _particle_spectra_inputs()
+    )
+    nlam = grid_spectra.shape[-1]
+
+    def run(props, w):
+        return compute_particle_seds(
+            grid_spectra,
+            axes,
+            props,
+            w,
+            grid_dims,
+            len(axes),
+            w.size,
+            nlam,
+            method,
+            1,
+            None,
+            None,
+            False,
+            np.float64,
+            ("x",),
+        )
+
+    ref = run(part_props, weights)
+    mixed = run(
+        (part_props[0].astype(np.float32),), weights.astype(np.float32)
+    )
+    np.testing.assert_allclose(mixed, ref, rtol=1e-6)
+
+
+@pytest.mark.parametrize("method", ["ngp", "cic"])
+def test_compute_integrated_sed_mixed_part_grid_dtypes(method):
+    """Integrated spectra must accept mixed particle/grid dtypes."""
+    from synthesizer.extensions.integrated_spectra import (
+        compute_integrated_sed,
+    )
+
+    grid_spectra, axes, part_props, weights, grid_dims = (
+        _particle_spectra_inputs()
+    )
+    nlam = grid_spectra.shape[-1]
+
+    def run(props, w):
+        spec, _ = compute_integrated_sed(
+            grid_spectra,
+            axes,
+            props,
+            w,
+            grid_dims,
+            len(axes),
+            w.size,
+            nlam,
+            method,
+            1,
+            None,
+            None,
+            None,
+            np.float64,
+            ("x",),
+        )
+        return spec
+
+    ref = run(part_props, weights)
+    mixed = run(
+        (part_props[0].astype(np.float32),), weights.astype(np.float32)
+    )
+    np.testing.assert_allclose(mixed, ref, rtol=1e-6)

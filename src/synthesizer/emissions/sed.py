@@ -1543,6 +1543,10 @@ class Sed:
         sed._obslam = np.nan_to_num(sed._obslam)
         sed._obsnu = np.nan_to_num(sed._obsnu)
 
+        # The resampler computes in float64 for flux conservation accuracy;
+        # cast the result back so the resampled Sed keeps the source dtype.
+        sed.cast(self._lnu.dtype)
+
         return sed
 
     def apply_instrument_lams(self, instrument, nthreads=1):
