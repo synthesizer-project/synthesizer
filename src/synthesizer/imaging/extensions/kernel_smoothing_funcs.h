@@ -178,7 +178,8 @@ inline double compute_kernel_norm(const double *kernel, int kdim,
  *
  * @return True if kernel is fully inside pixel, false otherwise.
  */
-inline bool kernel_fully_inside_pixel(const particle<double> *part,
+template <typename GeomReal>
+inline bool kernel_fully_inside_pixel(const particle<GeomReal> *part,
                                       double pix_x_min, double pix_x_max,
                                       double pix_y_min, double pix_y_max,
                                       double kernel_radius) {
@@ -211,9 +212,10 @@ inline bool kernel_fully_inside_pixel(const particle<double> *part,
  *
  * @return The kernel contribution value (normalized).
  */
+template <typename GeomReal>
 inline double pixel_inside_kernel_contribution(double pix_x_min,
                                                double pix_y_min, double res,
-                                               const particle<double> *part,
+                                               const particle<GeomReal> *part,
                                                const double *kernel, int kdim,
                                                double threshold) {
 
@@ -257,8 +259,9 @@ inline double pixel_inside_kernel_contribution(double pix_x_min,
  *
  * @return The kernel contribution value (normalized).
  */
+template <typename GeomReal>
 inline double pixel_kernel_partial_overlap_contribution(
-    const particle<double> *part, double pix_x_min, double pix_y_min,
+    const particle<GeomReal> *part, double pix_x_min, double pix_y_min,
     const double *kernel, int kdim, double threshold, double res) {
 
   /* Adaptive sampling based on smoothing length.

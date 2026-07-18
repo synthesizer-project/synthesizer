@@ -25,6 +25,7 @@
 #include "../../extensions/cpp_to_python.h"
 #include "../../extensions/octree.h"
 #include "../../extensions/property_funcs.h"
+#include "../../extensions/python_to_cpp.h"
 #include "../../extensions/timers.h"
 #ifdef ATOMIC_TIMING
 #include "../../extensions/timers_init.h"
@@ -35,16 +36,14 @@
 #include <omp.h>
 #endif
 
-using Cell = cell<double>;
-using Particle = particle<double>;
-
 /**
  * @brief Structure to hold cell with its computational cost
  */
+template <typename GeomReal>
 struct weighted_cell {
 
   /*! Pointer to the cell */
-  Cell *cell_ptr;
+  cell<GeomReal> *cell_ptr;
 
   /*! Cost of the cell, calculated as max_smoothing_length * particle_count */
   double cost;
@@ -57,7 +56,7 @@ struct weighted_cell {
    *
    * @param c Pointer to the cell to be weighted
    */
-  weighted_cell(Cell *c) : cell_ptr(c) {
+  weighted_cell(cell<GeomReal> *c) : cell_ptr(c) {
     // Cost = max_smoothing_length * particle_count
     // This represents kernel area × work per kernel
     double max_sml = sqrt(c->max_sml_squ);
@@ -80,19 +79,22 @@ struct weighted_cell {
  * @return True if the cost of cell `a` is greater than that of cell `b`,
  *         false otherwise.
  */
-inline bool compare_by_cost(const weighted_cell &a, const weighted_cell &b) {
+template <typename GeomReal>
+inline bool compare_by_cost(const weighted_cell<GeomReal> &a,
+                            const weighted_cell<GeomReal> &b) {
   return a.cost > b.cost;  // Descending order
 }
 
 /**
  * @brief Build balanced work list using adaptive subdivision
  */
-static std::vector<weighted_cell> build_balanced_work_list(
-    Cell *root, int nthreads, double balance_tolerance = 2.0) {
+template <typename GeomReal>
+static std::vector<weighted_cell<GeomReal>> build_balanced_work_list(
+    cell<GeomReal> *root, int nthreads, double balance_tolerance = 2.0) {
 
   tic("build_balanced_work_list");
 
-  std::vector<weighted_cell> work_list;
+  std::vector<weighted_cell<GeomReal>> work_list;
   work_list.emplace_back(root);
 
   int target_cells =
@@ -126,7 +128,8 @@ static std::vector<weighted_cell> build_balanced_work_list(
     // Find the most expensive cell that can be subdivided
     auto most_expensive =
         std::max_element(work_list.begin(), work_list.end(),
-                         [](const weighted_cell &a, const weighted_cell &b) {
+                         [](const weighted_cell<GeomReal> &a,
+                            const weighted_cell<GeomReal> &b) {
                            if (!a.can_subdivide && b.can_subdivide)
                              return true;
                            if (a.can_subdivide && !b.can_subdivide)
@@ -140,14 +143,14 @@ static std::vector<weighted_cell> build_balanced_work_list(
     }
 
     // Subdivide the most expensive cell
-    Cell *expensive_cell = most_expensive->cell_ptr;
+    cell<GeomReal> *expensive_cell = most_expensive->cell_ptr;
 
     // Remove the expensive cell from the list
     work_list.erase(most_expensive);
 
     // Add its children
     for (int ip = 0; ip < 8; ip++) {
-      Cell *child = &expensive_cell->progeny[ip];
+      cell<GeomReal> *child = &expensive_cell->progeny[ip];
       if (child->part_count > 0) {
         work_list.emplace_back(child);
       }
@@ -188,10 +191,12 @@ static std::vector<weighted_cell> build_balanced_work_list(
  * @param nimgs The number of images to populate.
  * @param pix_values The pixel values to use for each image.
  */
-static void populate_pixel_recursive(const Cell *c, double threshold, int kdim,
-                                     const double *kernel, double norm_factor,
-                                     int npart, double *out, int nimgs,
-                                     const double *pix_values,
+template <typename GeomReal, typename SigReal>
+static void populate_pixel_recursive(const cell<GeomReal> *c, double threshold,
+                                     int kdim, const double *kernel,
+                                     double norm_factor, int npart,
+                                     SigReal *out, int nimgs,
+                                     const SigReal *pix_values,
                                      const double res, const int npix_x,
                                      const int npix_y) {
 
@@ -200,7 +205,7 @@ static void populate_pixel_recursive(const Cell *c, double threshold, int kdim,
 
     /* Ok, so we recurse... */
     for (int ip = 0; ip < 8; ip++) {
-      Cell *cp = &c->progeny[ip];
+      cell<GeomReal> *cp = &c->progeny[ip];
 
       /* Skip empty progeny. */
       if (cp->part_count == 0) {
@@ -256,14 +261,14 @@ static void populate_pixel_recursive(const Cell *c, double threshold, int kdim,
     std::vector<double> local_img(local_width * local_height * nimgs, 0.0);
 
     /* Unpack the particles from this leaf cell. */
-    Particle *parts = c->particles;
+    particle<GeomReal> *parts = c->particles;
 
     /* Loop over the particles adding their contribution to the local buffer.
      */
     for (int p = 0; p < c->part_count; p++) {
 
       /* Get the particle. */
-      Particle *part = &parts[p];
+      particle<GeomReal> *part = &parts[p];
 
       /* Get the particle position in terms of pixels. */
       int i = (int)floor(part->pos[0] / res);
@@ -345,7 +350,8 @@ static void populate_pixel_recursive(const Cell *c, double threshold, int kdim,
               if (local_idx >= 0 &&
                   static_cast<size_t>(local_idx) < local_img.size()) {
                 local_img[local_idx] +=
-                    kvalue * pix_values[part->index * nimgs + nimg];
+                    kvalue * static_cast<double>(
+                                 pix_values[part->index * nimgs + nimg]);
               }
             }
           }
@@ -380,7 +386,7 @@ static void populate_pixel_recursive(const Cell *c, double threshold, int kdim,
 #ifdef WITH_OPENMP
 #pragma omp atomic
 #endif
-            out[global_idx] += local_img[local_idx];
+            out[global_idx] += static_cast<SigReal>(local_img[local_idx]);
           }
         }
       }
@@ -412,23 +418,22 @@ static void populate_pixel_recursive(const Cell *c, double threshold, int kdim,
  * @return void
  */
 #ifdef WITH_OPENMP
-void populate_smoothed_image_parallel(const double *pix_values,
-                                      const double *kernel, const double res,
-                                      const int npix_x, const int npix_y,
-                                      const int npart, const double threshold,
-                                      const int kdim, double norm_factor,
-                                      double *img, const int nimgs, Cell *root,
-                                      const int nthreads) {
+template <typename GeomReal, typename SigReal>
+void populate_smoothed_image_parallel(
+    const SigReal *pix_values, const double *kernel, const double res,
+    const int npix_x, const int npix_y, const int npart,
+    const double threshold, const int kdim, double norm_factor, SigReal *img,
+    const int nimgs, cell<GeomReal> *root, const int nthreads) {
 
   /* Build a balanced work list. */
-  std::vector<weighted_cell> work_list =
+  std::vector<weighted_cell<GeomReal>> work_list =
       build_balanced_work_list(root, nthreads);
 
   /* Parallel loop over the work list. */
 #pragma omp parallel for num_threads(nthreads) schedule(dynamic)
   for (size_t i = 0; i < work_list.size(); i++) {
-    const weighted_cell &wc = work_list[i];
-    Cell *c = wc.cell_ptr;
+    const weighted_cell<GeomReal> &wc = work_list[i];
+    cell<GeomReal> *c = wc.cell_ptr;
 
     /* Populate the pixel recursively. */
     populate_pixel_recursive(c, threshold, kdim, kernel, norm_factor, npart,
@@ -465,22 +470,25 @@ void populate_smoothed_image_parallel(const double *pix_values,
  * @param nimgs: The number of images to populate.
  * @param root: The root of the tree.
  */
-void populate_smoothed_image_serial(const double *pix_values,
+template <typename GeomReal, typename SigReal>
+void populate_smoothed_image_serial(const SigReal *pix_values,
                                     const double *kernel, const double res,
                                     const int npix_x, const int npix_y,
                                     const int npart, const double threshold,
                                     const int kdim, double norm_factor,
-                                    double *img, const int nimgs, Cell *root) {
+                                    SigReal *img, const int nimgs,
+                                    cell<GeomReal> *root) {
 
   /* Build a balanced work list (this isn't really necessary in serial,
    * but it keeps the code consistent with the parallel version and has
    * negligible cost and does give cache benefits). */
-  std::vector<weighted_cell> work_list = build_balanced_work_list(root, 1);
+  std::vector<weighted_cell<GeomReal>> work_list =
+      build_balanced_work_list(root, 1);
 
   /* Loop over the work list. */
   for (size_t i = 0; i < work_list.size(); i++) {
-    const weighted_cell &wc = work_list[i];
-    Cell *c = wc.cell_ptr;
+    const weighted_cell<GeomReal> &wc = work_list[i];
+    cell<GeomReal> *c = wc.cell_ptr;
 
     /* Populate the pixel recursively. */
     populate_pixel_recursive(c, threshold, kdim, kernel, norm_factor, npart,
@@ -510,12 +518,13 @@ void populate_smoothed_image_serial(const double *pix_values,
  * @param root: The root of the tree.
  * @param nthreads: The number of threads to use.
  */
-void populate_smoothed_image(const double *pix_values, const double *kernel,
+template <typename GeomReal, typename SigReal>
+void populate_smoothed_image(const SigReal *pix_values, const double *kernel,
                              const double res, const int npix_x,
                              const int npix_y, const int npart,
                              const double threshold, const int kdim,
-                             double *img, const int nimgs, Cell *root,
-                             const int nthreads) {
+                             SigReal *img, const int nimgs,
+                             cell<GeomReal> *root, const int nthreads) {
   tic("populate_smoothed_image");
 
   /* Compute normalization to conserve flux when truncating kernel. */
@@ -591,55 +600,83 @@ PyObject *make_img(PyObject *self, PyObject *args) {
                         &nthreads))
     return NULL;
 
-  /* Get pointers to the actual data. */
-  const double *pix_values = extract_data<double>(np_pix_values, "pix_values");
-  const double *smoothing_lengths =
-      extract_data<double>(np_smoothing_lengths, "smoothing_lengths");
-  const double *pos = extract_data<double>(np_pos, "pos");
-  const double *kernel = extract_data<double>(np_kernel, "kernel");
+  /* The geometry arrays (positions and smoothing lengths) must share one
+   * floating-point family; the signal array has its own independent family.
+   * The kernel lookup table is generated internally and always float64. */
+  PyArrayObject *geom_arrays[] = {np_pos, np_smoothing_lengths};
+  const char *geom_names[] = {"pos", "smoothing_lengths"};
+  int geom_typenum = -1;
+  if (!is_matching_float_dtypes(geom_arrays, geom_names, 2, &geom_typenum)) {
+    return NULL;
+  }
 
-  /* One of the data extractions failed and set a Python error. Return NULL
-   * to propagate the exception back to Python. */
-  if (pix_values == NULL || smoothing_lengths == NULL || pos == NULL ||
-      kernel == NULL) {
+  const int sig_typenum = PyArray_TYPE(np_pix_values);
+  if (!is_float32_or_float64(np_pix_values, "pix_values") ||
+      !is_c_contiguous(np_pix_values, "pix_values")) {
+    return NULL;
+  }
+
+  const double *kernel = extract_data<double>(np_kernel, "kernel");
+  if (kernel == NULL) {
     return NULL;
   }
 
   toc("make_img.extract_python_data");
 
-  tic("make_img.construct_cell_tree");
-
-  /* Allocate cells array. The first cell will be the root and then we
-   * will dynamically nibble off cells for the progeny. */
-  int ncells = 1;
-  Cell *root = new Cell;
-
-  /* Construct the cell tree. */
-  construct_cell_tree<double>(pos, smoothing_lengths, smoothing_lengths, npart,
-                              root, ncells, MAX_DEPTH, 100);
-
-  toc("make_img.construct_cell_tree");
-
-  tic("make_img.create_output_array");
-
-  /* Create the zeroed image numpy array. */
+  /* Build the tree at the geometry dtype, allocate the image at the signal
+   * dtype, and populate it. Accumulation happens in double internally. */
   npy_intp np_img_dims[3] = {npix_x, npix_y, nimgs};
-  PyArrayObject *np_img =
-      (PyArrayObject *)PyArray_ZEROS(3, np_img_dims, NPY_DOUBLE, 0);
-  double *img = (double *)PyArray_DATA(np_img);
+  PyObject *result = dispatch_float(geom_typenum, [&](auto g) -> PyObject * {
+    return dispatch_float(sig_typenum, [&](auto s) -> PyObject * {
+      using GeomReal = decltype(g);
+      using SigReal = decltype(s);
 
-  toc("make_img.create_output_array");
+      const GeomReal *pos = data_ptr<const GeomReal>(np_pos);
+      const GeomReal *smoothing_lengths =
+          data_ptr<const GeomReal>(np_smoothing_lengths);
+      const SigReal *pix_values = data_ptr<const SigReal>(np_pix_values);
 
-  /* Populate the image. */
-  populate_smoothed_image(pix_values, kernel, res, npix_x, npix_y, npart,
-                          threshold, kdim, img, nimgs, root, nthreads);
+      tic("make_img.construct_cell_tree");
 
-  /* Cleanup the cell tree. */
-  cleanup_cell_tree<double>(root);
+      /* Allocate cells array. The first cell will be the root and then we
+       * will dynamically nibble off cells for the progeny. */
+      int ncells = 1;
+      cell<GeomReal> *root = new cell<GeomReal>;
+
+      /* Construct the cell tree. */
+      construct_cell_tree<GeomReal>(pos, smoothing_lengths, smoothing_lengths,
+                                    npart, root, ncells, MAX_DEPTH, 100);
+
+      toc("make_img.construct_cell_tree");
+
+      tic("make_img.create_output_array");
+
+      /* Create the zeroed image numpy array at the signal dtype. */
+      PyArrayObject *np_img =
+          (PyArrayObject *)PyArray_ZEROS(3, np_img_dims, sig_typenum, 0);
+      if (np_img == NULL) {
+        cleanup_cell_tree<GeomReal>(root);
+        return NULL;
+      }
+      SigReal *img = (SigReal *)PyArray_DATA(np_img);
+
+      toc("make_img.create_output_array");
+
+      /* Populate the image. */
+      populate_smoothed_image<GeomReal, SigReal>(
+          pix_values, kernel, res, npix_x, npix_y, npart, threshold, kdim, img,
+          nimgs, root, nthreads);
+
+      /* Cleanup the cell tree. */
+      cleanup_cell_tree<GeomReal>(root);
+
+      return Py_BuildValue("N", np_img);
+    });
+  });
 
   toc("make_img");
 
-  return Py_BuildValue("N", np_img);
+  return result;
 }
 
 static PyMethodDef ImageMethods[] = {

@@ -29,7 +29,6 @@ from synthesizer.imaging.image_generators import (
 )
 from synthesizer.kernel_functions import Kernel
 from synthesizer.units import unit_is_compatible
-from synthesizer.utils import ensure_array_c_compatible_double
 from synthesizer.utils.operation_timers import timed, timer
 
 
@@ -181,7 +180,7 @@ def _generate_ifu_particle_hist(
         # arrays.
         _coords[:, 0] += fov[0] / 2
         _coords[:, 1] += fov[1] / 2
-        smls = np.zeros(cent_coords.shape[0], dtype=np.float64)
+        smls = np.zeros(cent_coords.shape[0], dtype=_coords.dtype)
 
         # Get the kernel
         # TODO: We should do away with this and write a histogram backend
@@ -189,9 +188,9 @@ def _generate_ifu_particle_hist(
 
     # Generate the histogram IFU from the prepared particle inputs
     ifu.arr = make_img(
-        ensure_array_c_compatible_double(spectra),
+        np.ascontiguousarray(spectra),
         smls,
-        ensure_array_c_compatible_double(_coords),
+        np.ascontiguousarray(_coords),
         kernel,
         res,
         ifu.npix[0],
@@ -269,7 +268,7 @@ def _generate_ifu_particle_smoothed(
         ifu.units = spectra.units
         # TODO: Rethink IFU path to avoid contiguous conversion.
         # Consider an IFU-specific backend that consumes native layout.
-        spectra = ensure_array_c_compatible_double(spectra.ndview)
+        spectra = np.ascontiguousarray(spectra.ndview)
 
         # Ensure the spectra is 2D with a spectra per particle
 
@@ -336,10 +335,8 @@ def _generate_ifu_particle_smoothed(
     # Generate the smoothed IFU from the prepared particle inputs
     ifu.arr = make_img(
         spectra,
-        ensure_array_c_compatible_double(
-            smoothing_lengths.to_value(spatial_units)
-        ),
-        ensure_array_c_compatible_double(_coords),
+        np.ascontiguousarray(smoothing_lengths.to_value(spatial_units)),
+        np.ascontiguousarray(_coords),
         kernel_arr,
         res,
         ifu.npix[0],
