@@ -236,3 +236,21 @@ def test_sed_cast():
     sed.cast(np.float32)
     assert sed._lnu.dtype == np.float32
     assert sed._fnu.dtype == np.float32
+
+
+def test_ionising_photon_production_rate_multidimensional():
+    """The ionising rate must handle multi-spectra Seds.
+
+    Boolean masking the final axis of a 2D array yields a Fortran-ordered
+    result; this is a regression test for that reaching the C extension.
+    """
+    lam = np.logspace(2, 5, 500) * angstrom
+    sed = Sed(lam, np.ones((4, 500)) * erg / s / Hz)
+    rates = sed.calculate_ionising_photon_production_rate()
+    assert rates.shape == (4,)
+    assert np.all(rates.value > 0)
+
+    # And the 1D result should match a single row of the 2D result
+    sed1d = Sed(lam, np.ones(500) * erg / s / Hz)
+    rate1d = sed1d.calculate_ionising_photon_production_rate()
+    assert np.isclose(rates[0].value, rate1d.value)

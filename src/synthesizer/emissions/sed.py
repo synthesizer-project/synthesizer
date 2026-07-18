@@ -1810,12 +1810,15 @@ class Sed:
         x = self._lam
         y = (llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)).value
 
-        # Restrict arrays to ionisation regime
+        # Restrict arrays to ionisation regime. Note that boolean masking
+        # along the final axis of a multidimensional array produces a
+        # Fortran-ordered result, so we have to explicitly restore C order
+        # for the C extension (at the cost of a copy of this derived array).
         x = x[ionisation_mask]
         if len(y.shape) == 1:
             y = y[ionisation_mask]
         else:
-            y = y[..., ionisation_mask]
+            y = np.ascontiguousarray(y[..., ionisation_mask])
 
         # Add a final data point at the ionising energy to ensure full
         # coverage.
