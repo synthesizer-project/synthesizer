@@ -57,7 +57,12 @@ static inline int binary_search(int low, int high, const Real *arr,
  * This will also calculate the fractions of the particle's mass in each grid
  * cell. (Unnecessary for NGP, but required for CIC.)
  *
- * @tparam Real The floating-point type.
+ * The grid axis arrays are read at the grid dtype and the particle value at
+ * the particle dtype, so mixed precision inputs never reinterpret a buffer
+ * at the wrong width. All fraction arithmetic happens at the grid dtype.
+ *
+ * @tparam PartReal The floating-point type of the particle arrays.
+ * @tparam GridReal The floating-point type of the grid axis arrays.
  * @param part_indices: The output array of base (lower) grid indices.
  * @param axis_fracs: The output array of fractional distances to upper grid
  * cell.
@@ -65,24 +70,25 @@ static inline int binary_search(int low, int high, const Real *arr,
  * @param part_props: The properties of the particle.
  * @param p: The particle index.
  */
-template <typename Real>
+template <typename PartReal, typename GridReal>
 static inline void get_part_ind_frac_cic(
     std::array<int, MAX_GRID_NDIM> &part_indices,
-    std::array<Real, MAX_GRID_NDIM> &axis_fracs, GridProps *grid_props,
+    std::array<GridReal, MAX_GRID_NDIM> &axis_fracs, GridProps *grid_props,
     Particles *parts, int p) {
 
   /* Loop over dimensions, finding the mass weightings and indices. */
   for (int dim = 0; dim < grid_props->ndim; dim++) {
 
     /* Get the array of grid coordinates for this dimension. */
-    const Real *grid_axis = grid_props->get_axis<Real>(dim);
+    const GridReal *grid_axis = grid_props->get_axis<GridReal>(dim);
     const int dim_size = grid_props->dims[dim];
 
     /* Get the particle's value along this dimension. */
-    const Real part_val = parts->get_part_prop_at<Real>(dim, p);
+    const GridReal part_val =
+        static_cast<GridReal>(parts->get_part_prop_at<PartReal>(dim, p));
 
     int lower, upper;
-    Real frac;
+    GridReal frac;
 
     /* Handle values outside the grid bounds. Clamp to edges. */
     if (part_val <= grid_axis[0]) {
@@ -90,14 +96,14 @@ static inline void get_part_ind_frac_cic(
       /* Particle lies below the lowest grid edge. Clamp to first cell. */
       lower = 0;
       upper = 1;
-      frac = static_cast<Real>(0);
+      frac = static_cast<GridReal>(0);
 
     } else if (part_val >= grid_axis[dim_size - 1]) {
 
       /* Particle lies beyond the last grid edge. Clamp to final cell. */
       lower = dim_size - 2;
       upper = dim_size - 1;
-      frac = static_cast<Real>(1);
+      frac = static_cast<GridReal>(1);
 
     } else {
 
@@ -109,8 +115,8 @@ static inline void get_part_ind_frac_cic(
       lower = upper - 1;
 
       /* Compute the linear fraction between the two grid points. */
-      const Real low = grid_axis[lower];
-      const Real high = grid_axis[upper];
+      const GridReal low = grid_axis[lower];
+      const GridReal high = grid_axis[upper];
       frac = (part_val - low) / (high - low);
     }
 
@@ -127,13 +133,14 @@ static inline void get_part_ind_frac_cic(
  *
  * For each axis, this finds the grid point closest to the particle's position.
  *
- * @tparam Real The floating-point type.
+ * @tparam PartReal The floating-point type of the particle arrays.
+ * @tparam GridReal The floating-point type of the grid axis arrays.
  * @param part_indices: The output array of nearest grid point indices.
  * @param grid_props: The properties of the grid.
  * @param part_props: The properties of the particle.
  * @param p: The particle index.
  */
-template <typename Real>
+template <typename PartReal, typename GridReal>
 static inline void get_part_inds_ngp(
     std::array<int, MAX_GRID_NDIM> &part_indices, GridProps *grid_props,
     Particles *parts, int p) {
@@ -142,11 +149,12 @@ static inline void get_part_inds_ngp(
   for (int dim = 0; dim < grid_props->ndim; dim++) {
 
     /* Get this array of grid coordinate values for this dimension. */
-    const Real *grid_axis = grid_props->get_axis<Real>(dim);
+    const GridReal *grid_axis = grid_props->get_axis<GridReal>(dim);
     const int dim_size = grid_props->dims[dim];
 
     /* Get the particle's coordinate along this axis. */
-    const Real part_val = parts->get_part_prop_at<Real>(dim, p);
+    const GridReal part_val =
+        static_cast<GridReal>(parts->get_part_prop_at<PartReal>(dim, p));
 
     int part_cell;
 
@@ -183,18 +191,15 @@ static inline void get_part_inds_ngp(
   }
 }
 
-/* Prototypes */
-void weight_loop_cic(GridProps *grid, Particles *parts, int out_size,
-                     void *out, const int nthreads);
-void weight_loop_ngp(GridProps *grid, Particles *parts, int out_size,
-                     void *out, const int nthreads);
-
-/* Typed kernel entry points. Callers must provide validated buffers. */
-template <typename Real, typename OutT = Real>
+/* Typed kernel entry points. Callers must provide validated buffers and
+ * dispatch on the particle/grid/output dtypes (see dispatch_float in
+ * python_to_cpp.h). Accumulation always happens in double precision
+ * internally; the result is folded into the output buffer at OutT. */
+template <typename PartReal, typename GridReal, typename OutT>
 void weight_loop_cic(GridProps *grid, Particles *parts, int out_size,
                      OutT *out, const int nthreads);
 
-template <typename Real, typename OutT = Real>
+template <typename PartReal, typename GridReal, typename OutT>
 void weight_loop_ngp(GridProps *grid, Particles *parts, int out_size,
                      OutT *out, const int nthreads);
 

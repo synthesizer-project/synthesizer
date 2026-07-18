@@ -44,8 +44,8 @@
  * @param nlam: The number of wavelengths in the spectra.
  * @param npart: The number of particles.
  */
-template <typename Real, typename OutT>
-static void reduce_spectra_serial(OutT *spectra, const Real *part_spectra,
+template <typename Real>
+static void reduce_spectra_serial(double *accum, const Real *part_spectra,
                                   int nlam, int npart) {
 
   /* Cast npart to size_t for safety in the loop. */
@@ -57,10 +57,7 @@ static void reduce_spectra_serial(OutT *spectra, const Real *part_spectra,
 
     /* Loop over wavelengths. */
     for (int ilam = 0; ilam < nlam; ilam++) {
-      /* Use fused multiply-add to accumulate with better precision.
-       * Equivalent to: += spec_val * weight, but with a single rounding. */
-      spectra[ilam] = std::fma(static_cast<OutT>(part_spectra_row[ilam]),
-                               static_cast<OutT>(1.0), spectra[ilam]);
+      accum[ilam] += static_cast<double>(part_spectra_row[ilam]);
     }
   }
 }
@@ -78,8 +75,8 @@ static void reduce_spectra_serial(OutT *spectra, const Real *part_spectra,
  * @param nthreads: The number of threads to use.
  */
 #ifdef WITH_OPENMP
-template <typename Real, typename OutT>
-static void reduce_spectra_parallel(OutT *spectra, const Real *part_spectra,
+template <typename Real>
+static void reduce_spectra_parallel(double *accum, const Real *part_spectra,
                                     int nlam, int npart, int nthreads) {
 
   /* Cast npart to size_t for safety in the loop. */
@@ -87,28 +84,28 @@ static void reduce_spectra_parallel(OutT *spectra, const Real *part_spectra,
 
   /* Loop over particles in parallel. */
 #if defined(_OPENMP) && _OPENMP >= 201511
-#pragma omp parallel for num_threads(nthreads) reduction(+ : spectra[ : nlam])
+#pragma omp parallel for num_threads(nthreads) reduction(+ : accum[ : nlam])
   for (size_t p = 0; p < npart_size; p++) {
     const Real *__restrict part_spectra_row = part_spectra + p * nlam;
     for (int ilam = 0; ilam < nlam; ilam++) {
-      spectra[ilam] += static_cast<OutT>(part_spectra_row[ilam]);
+      accum[ilam] += static_cast<double>(part_spectra_row[ilam]);
     }
   }
 #else  // OpenMP < 4.5 or no array reduction support
 #pragma omp parallel num_threads(nthreads)
   {
-    std::vector<OutT> local(nlam, static_cast<OutT>(0.0));
+    std::vector<double> local(nlam, 0.0);
 #pragma omp for nowait schedule(static)
     for (size_t p = 0; p < npart; p++) {
       const Real *__restrict part_spectra_row = part_spectra + p * nlam;
       for (int ilam = 0; ilam < nlam; ilam++) {
-        local[ilam] += static_cast<OutT>(part_spectra_row[ilam]);
+        local[ilam] += static_cast<double>(part_spectra_row[ilam]);
       }
     }
 #pragma omp critical
     {
       for (int ilam = 0; ilam < nlam; ilam++) {
-        spectra[ilam] += local[ilam];
+        accum[ilam] += local[ilam];
       }
     }
   }
@@ -133,16 +130,28 @@ void reduce_spectra(OutT *spectra, const Real *part_spectra, int nlam,
                     int npart, int nthreads) {
 
   tic("reduce_spectra");
+
+  /* Accumulate in double regardless of the requested output precision so
+   * reduced precision outputs don't suffer float32 accumulation error over
+   * many particles. */
+  std::vector<double> accum(nlam, 0.0);
+
   if (nthreads > 1) {
 #ifdef WITH_OPENMP
-    reduce_spectra_parallel<Real, OutT>(spectra, part_spectra, nlam, npart,
-                                        nthreads);
+    reduce_spectra_parallel<Real>(accum.data(), part_spectra, nlam, npart,
+                                  nthreads);
 #else
-    reduce_spectra_serial<Real, OutT>(spectra, part_spectra, nlam, npart);
+    reduce_spectra_serial<Real>(accum.data(), part_spectra, nlam, npart);
 #endif
   } else {
-    reduce_spectra_serial<Real, OutT>(spectra, part_spectra, nlam, npart);
+    reduce_spectra_serial<Real>(accum.data(), part_spectra, nlam, npart);
   }
+
+  /* Fold the double precision accumulation into the output buffer. */
+  for (int ilam = 0; ilam < nlam; ilam++) {
+    spectra[ilam] += static_cast<OutT>(accum[ilam]);
+  }
+
   toc("reduce_spectra");
 }
 
@@ -259,24 +268,15 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  int dispatch_key =
-      ((input_typenum == NPY_FLOAT64) << 1) | (output_typenum == NPY_FLOAT64);
-
-  /* Dispatch: call the matching typed kernel based on the dispatch key. */
-  switch (dispatch_key) {
-    case 0:
-      return reduce_particle_spectra_impl<float, float>(np_part_spectra,
+  /* Dispatch: call the matching typed kernel for the input/output dtypes. */
+  return dispatch_float(input_typenum, [&](auto in) -> PyObject * {
+    return dispatch_float(output_typenum, [&](auto o) -> PyObject * {
+      using InReal = decltype(in);
+      using OutT = decltype(o);
+      return reduce_particle_spectra_impl<InReal, OutT>(np_part_spectra,
                                                         nthreads);
-    case 1:
-      return reduce_particle_spectra_impl<float, double>(np_part_spectra,
-                                                         nthreads);
-    case 2:
-      return reduce_particle_spectra_impl<double, float>(np_part_spectra,
-                                                         nthreads);
-    default:
-      return reduce_particle_spectra_impl<double, double>(np_part_spectra,
-                                                          nthreads);
-  }
+    });
+  });
 }
 
 template void reduce_spectra<float, float>(float *, const float *, int, int,

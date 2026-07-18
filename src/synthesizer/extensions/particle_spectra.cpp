@@ -25,6 +25,7 @@
 #include "macros.h"
 #include "part_props.h"
 #include "property_funcs.h"
+#include "python_to_cpp.h"
 #include "timers.h"
 #ifdef ATOMIC_TIMING
 #include "timers_init.h"
@@ -100,9 +101,9 @@ static void spectra_loop_cic_with_lam_mask_serial(
     /* Cache particle weight and base-cell information once. */
     const PartReal w_p = parts->get_weight_at<PartReal>(p);
     std::array<int, MAX_GRID_NDIM> part_indices;
-    std::array<PartReal, MAX_GRID_NDIM> axis_fracs;
-    get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props,
-                                    parts, p);
+    std::array<SpecReal, MAX_GRID_NDIM> axis_fracs;
+    get_part_ind_frac_cic<PartReal, SpecReal>(part_indices, axis_fracs,
+                                              grid_props, parts, p);
     const int base_linidx = get_flat_index(part_indices, dims.data(), ndim);
 
     /* Loop over sub-cells collecting their weighted contributions. */
@@ -114,9 +115,9 @@ static void spectra_loop_cic_with_lam_mask_serial(
       double frac = 1.0;
       for (int idim = 0; idim < ndim; idim++) {
         frac *= sc.offs[idim] ? axis_fracs[idim]
-                              : (static_cast<PartReal>(1) - axis_fracs[idim]);
+                              : (static_cast<SpecReal>(1) - axis_fracs[idim]);
       }
-      if (frac == static_cast<PartReal>(0)) {
+      if (frac == 0.0) {
         continue;
       }
 
@@ -216,9 +217,9 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
     /* Cache particle weight and base-cell information once. */
     const PartReal w_p = parts->get_weight_at<PartReal>(p);
     std::array<int, MAX_GRID_NDIM> part_indices;
-    std::array<PartReal, MAX_GRID_NDIM> axis_fracs;
-    get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props,
-                                    parts, p);
+    std::array<SpecReal, MAX_GRID_NDIM> axis_fracs;
+    get_part_ind_frac_cic<PartReal, SpecReal>(part_indices, axis_fracs,
+                                              grid_props, parts, p);
     const int base_linidx = get_flat_index(part_indices, dims.data(), ndim);
 
     /* Loop over sub-cells collecting their weighted contributions. */
@@ -230,9 +231,9 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
       double frac = 1.0;
       for (int idim = 0; idim < ndim; idim++) {
         frac *= sc.offs[idim] ? axis_fracs[idim]
-                              : (static_cast<PartReal>(1) - axis_fracs[idim]);
+                              : (static_cast<SpecReal>(1) - axis_fracs[idim]);
       }
-      if (frac == static_cast<PartReal>(0)) {
+      if (frac == 0.0) {
         continue;
       }
 
@@ -386,9 +387,9 @@ static void spectra_loop_cic_with_lam_mask_omp(
       /* Cache particle weight and base-cell information once. */
       const PartReal w_p = parts->get_weight_at<PartReal>(p);
       std::array<int, MAX_GRID_NDIM> part_indices;
-      std::array<PartReal, MAX_GRID_NDIM> axis_fracs;
-      get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props,
-                                      parts, p);
+      std::array<SpecReal, MAX_GRID_NDIM> axis_fracs;
+      get_part_ind_frac_cic<PartReal, SpecReal>(part_indices, axis_fracs,
+                                                grid_props, parts, p);
       const int base_linidx = get_flat_index(part_indices, dims.data(), ndim);
 
       /* Loop over sub-cells collecting their weighted contributions. */
@@ -401,9 +402,9 @@ static void spectra_loop_cic_with_lam_mask_omp(
         for (int idim = 0; idim < ndim; idim++) {
           frac *= sc.offs[idim]
                       ? axis_fracs[idim]
-                      : (static_cast<PartReal>(1) - axis_fracs[idim]);
+                      : (static_cast<SpecReal>(1) - axis_fracs[idim]);
         }
-        if (frac == static_cast<PartReal>(0)) {
+        if (frac == 0.0) {
           continue;
         }
 
@@ -520,9 +521,9 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
       /* Cache particle weight and base-cell information once. */
       const PartReal w_p = parts->get_weight_at<PartReal>(p);
       std::array<int, MAX_GRID_NDIM> part_indices;
-      std::array<PartReal, MAX_GRID_NDIM> axis_fracs;
-      get_part_ind_frac_cic<PartReal>(part_indices, axis_fracs, grid_props,
-                                      parts, p);
+      std::array<SpecReal, MAX_GRID_NDIM> axis_fracs;
+      get_part_ind_frac_cic<PartReal, SpecReal>(part_indices, axis_fracs,
+                                                grid_props, parts, p);
       const int base_linidx = get_flat_index(part_indices, dims.data(), ndim);
 
       /* Loop over sub-cells collecting their weighted contributions. */
@@ -535,9 +536,9 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
         for (int idim = 0; idim < ndim; idim++) {
           frac *= sc.offs[idim]
                       ? axis_fracs[idim]
-                      : (static_cast<PartReal>(1) - axis_fracs[idim]);
+                      : (static_cast<SpecReal>(1) - axis_fracs[idim]);
         }
-        if (frac == static_cast<PartReal>(0)) {
+        if (frac == 0.0) {
           continue;
         }
 
@@ -699,7 +700,7 @@ static void spectra_loop_ngp_with_lam_mask_serial(
 
     /* Get the weight's index. */
     std::array<int, MAX_GRID_NDIM> part_indices;
-    get_part_inds_ngp<PartReal>(part_indices, grid_props, parts, p);
+    get_part_inds_ngp<PartReal, SpecReal>(part_indices, grid_props, parts, p);
     const int grid_ind =
         get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
@@ -758,7 +759,7 @@ static void spectra_loop_ngp_no_lam_mask_serial(GridProps *grid_props,
 
     /* Get the weight's index. */
     std::array<int, MAX_GRID_NDIM> part_indices;
-    get_part_inds_ngp<PartReal>(part_indices, grid_props, parts, p);
+    get_part_inds_ngp<PartReal, SpecReal>(part_indices, grid_props, parts, p);
     const int grid_ind =
         get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
@@ -878,7 +879,8 @@ static void spectra_loop_ngp_with_lam_mask_omp(
 
       /* Get the particle's grid index. */
       std::array<int, MAX_GRID_NDIM> part_indices;
-      get_part_inds_ngp<PartReal>(part_indices, grid_props, parts, p);
+      get_part_inds_ngp<PartReal, SpecReal>(part_indices, grid_props, parts,
+                                            p);
       const int grid_ind =
           get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
@@ -969,7 +971,8 @@ static void spectra_loop_ngp_no_lam_mask_omp(GridProps *grid_props,
 
       /* Get the particle's grid index. */
       std::array<int, MAX_GRID_NDIM> part_indices;
-      get_part_inds_ngp<PartReal>(part_indices, grid_props, parts, p);
+      get_part_inds_ngp<PartReal, SpecReal>(part_indices, grid_props, parts,
+                                            p);
       const int grid_ind =
           get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
@@ -1159,22 +1162,8 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   npy_intp np_part_dims[2] = {npart, nlam};
 
   /* Allocate the particle spectra in the requested output precision. */
-  PyArrayObject *np_part_spectra = NULL;
-  {
-    int dispatch_key = (output_typenum == NPY_FLOAT64);
-
-    /* Dispatch: call the matching typed kernel based on the dispatch key. */
-    switch (dispatch_key) {
-      case 0:
-        np_part_spectra =
-            (PyArrayObject *)PyArray_ZEROS(2, np_part_dims, NPY_FLOAT32, 0);
-        break;
-      default:
-        np_part_spectra =
-            (PyArrayObject *)PyArray_ZEROS(2, np_part_dims, NPY_FLOAT64, 0);
-        break;
-    }
-  }
+  PyArrayObject *np_part_spectra =
+      (PyArrayObject *)PyArray_ZEROS(2, np_part_dims, output_typenum, 0);
   if (np_part_spectra == NULL) {
     delete part_props;
     delete grid_props;
@@ -1186,121 +1175,33 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
   if (strcmp(method, "cic") == 0) {
-    {
-      int dispatch_key = ((part_typenum == NPY_FLOAT64) << 2) |
-                         ((grid_typenum == NPY_FLOAT64) << 1) |
-                         (output_typenum == NPY_FLOAT64);
-
-      /* Dispatch: call the matching typed kernel based on the dispatch key. */
-      switch (dispatch_key) {
-        case 0:
-          spectra_loop_cic<float, float, float>(
+    dispatch_float(part_typenum, [&](auto p) {
+      dispatch_float(grid_typenum, [&](auto g) {
+        dispatch_float(output_typenum, [&](auto o) {
+          using PartReal = decltype(p);
+          using SpecReal = decltype(g);
+          using OutT = decltype(o);
+          spectra_loop_cic<PartReal, SpecReal, OutT>(
               grid_props, part_props,
-              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              static_cast<OutT *>(PyArray_DATA(np_part_spectra)), nthreads,
               has_lam_mask);
-          break;
-        case 1:
-          spectra_loop_cic<float, float, double>(
-              grid_props, part_props,
-              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-        case 2:
-          spectra_loop_cic<float, double, float>(
-              grid_props, part_props,
-              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-        case 3:
-          spectra_loop_cic<float, double, double>(
-              grid_props, part_props,
-              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-        case 4:
-          spectra_loop_cic<double, float, float>(
-              grid_props, part_props,
-              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-        case 5:
-          spectra_loop_cic<double, float, double>(
-              grid_props, part_props,
-              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-        case 6:
-          spectra_loop_cic<double, double, float>(
-              grid_props, part_props,
-              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-        default:
-          spectra_loop_cic<double, double, double>(
-              grid_props, part_props,
-              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-      }
-    }
+        });
+      });
+    });
   } else if (strcmp(method, "ngp") == 0) {
-    {
-      int dispatch_key = ((part_typenum == NPY_FLOAT64) << 2) |
-                         ((grid_typenum == NPY_FLOAT64) << 1) |
-                         (output_typenum == NPY_FLOAT64);
-
-      /* Dispatch: call the matching typed kernel based on the dispatch key. */
-      switch (dispatch_key) {
-        case 0:
-          spectra_loop_ngp<float, float, float>(
+    dispatch_float(part_typenum, [&](auto p) {
+      dispatch_float(grid_typenum, [&](auto g) {
+        dispatch_float(output_typenum, [&](auto o) {
+          using PartReal = decltype(p);
+          using SpecReal = decltype(g);
+          using OutT = decltype(o);
+          spectra_loop_ngp<PartReal, SpecReal, OutT>(
               grid_props, part_props,
-              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
+              static_cast<OutT *>(PyArray_DATA(np_part_spectra)), nthreads,
               has_lam_mask);
-          break;
-        case 1:
-          spectra_loop_ngp<float, float, double>(
-              grid_props, part_props,
-              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-        case 2:
-          spectra_loop_ngp<float, double, float>(
-              grid_props, part_props,
-              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-        case 3:
-          spectra_loop_ngp<float, double, double>(
-              grid_props, part_props,
-              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-        case 4:
-          spectra_loop_ngp<double, float, float>(
-              grid_props, part_props,
-              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-        case 5:
-          spectra_loop_ngp<double, float, double>(
-              grid_props, part_props,
-              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-        case 6:
-          spectra_loop_ngp<double, double, float>(
-              grid_props, part_props,
-              static_cast<float *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-        default:
-          spectra_loop_ngp<double, double, double>(
-              grid_props, part_props,
-              static_cast<double *>(PyArray_DATA(np_part_spectra)), nthreads,
-              has_lam_mask);
-          break;
-      }
-    }
+        });
+      });
+    });
   } else {
     PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",
                  method);

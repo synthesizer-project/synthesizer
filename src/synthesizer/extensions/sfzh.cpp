@@ -78,23 +78,14 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
                                    np_mask, part_tuple, prop_names, npart);
   RETURN_IF_PYERR();
 
-  /* Resolve the shared input precision family before allocating the output. */
+  /* Resolve the input dtypes. Grid and particle arrays may use different
+   * precisions; each is read at its own width. */
   const int grid_typenum = grid_props->get_float_typenum();
   const int part_typenum = parts->get_float_typenum();
-  if (grid_typenum != -1 && part_typenum != -1 &&
-      grid_typenum != part_typenum) {
-    PyErr_SetString(
-        PyExc_TypeError,
-        "Grid and particle arrays must share the same floating-point dtype.");
-    delete parts;
-    delete grid_props;
-    return NULL;
-  }
 
-  /* Default to the shared input precision family, or float64 if neither has
-   * any float arrays. */
-  const int input_typenum = grid_typenum != -1 ? grid_typenum : part_typenum;
-  int output_typenum = input_typenum;
+  /* Default the output to the grid precision family (falling back to the
+   * particle precision if the grid holds no float arrays). */
+  int output_typenum = grid_typenum != -1 ? grid_typenum : part_typenum;
   if (out_dtype != Py_None) {
     output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
     if (output_typenum < 0) {
@@ -104,86 +95,38 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
     }
   }
 
-  /* Allocate the SFZH array in the requested output precision. */
-  void *sfzh = NULL;
-  {
-    int dispatch_key = (output_typenum == NPY_FLOAT64);
-
-    /* Dispatch: call the matching typed kernel based on the dispatch key. */
-    switch (dispatch_key) {
-      case 0:
-        sfzh = static_cast<void *>(grid_props->get_grid_weights<float>());
-        break;
-      default:
-        sfzh = static_cast<void *>(grid_props->get_grid_weights<double>());
-        break;
-    }
-  }
-  RETURN_IF_PYERR();
-
-  /* With everything set up we can compute the weights for each particle using
-   * the requested method. */
-  if (strcmp(method, "cic") == 0) {
-    {
-      int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
-                         (output_typenum == NPY_FLOAT64);
-
-      /* Dispatch: call the matching typed kernel based on the dispatch key. */
-      switch (dispatch_key) {
-        case 0:
-          weight_loop_cic<float, float>(grid_props, parts, grid_props->size,
-                                        static_cast<float *>(sfzh), nthreads);
-          break;
-        case 1:
-          weight_loop_cic<float, double>(grid_props, parts, grid_props->size,
-                                         static_cast<double *>(sfzh),
-                                         nthreads);
-          break;
-        case 2:
-          weight_loop_cic<double, float>(grid_props, parts, grid_props->size,
-                                         static_cast<float *>(sfzh), nthreads);
-          break;
-        default:
-          weight_loop_cic<double, double>(grid_props, parts, grid_props->size,
-                                          static_cast<double *>(sfzh),
-                                          nthreads);
-          break;
-      }
-    }
-  } else if (strcmp(method, "ngp") == 0) {
-    {
-      int dispatch_key = ((input_typenum == NPY_FLOAT64) << 1) |
-                         (output_typenum == NPY_FLOAT64);
-
-      /* Dispatch: call the matching typed kernel based on the dispatch key. */
-      switch (dispatch_key) {
-        case 0:
-          weight_loop_ngp<float, float>(grid_props, parts, grid_props->size,
-                                        static_cast<float *>(sfzh), nthreads);
-          break;
-        case 1:
-          weight_loop_ngp<float, double>(grid_props, parts, grid_props->size,
-                                         static_cast<double *>(sfzh),
-                                         nthreads);
-          break;
-        case 2:
-          weight_loop_ngp<double, float>(grid_props, parts, grid_props->size,
-                                         static_cast<float *>(sfzh), nthreads);
-          break;
-        default:
-          weight_loop_ngp<double, double>(grid_props, parts, grid_props->size,
-                                          static_cast<double *>(sfzh),
-                                          nthreads);
-          break;
-      }
-    }
-  } else {
+  /* Check the method is valid before doing any work. */
+  const bool is_cic = strcmp(method, "cic") == 0;
+  if (!is_cic && strcmp(method, "ngp") != 0) {
     PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",
                  method);
     delete parts;
     delete grid_props;
     return NULL;
   }
+
+  /* Allocate the SFZH array in the requested output precision and compute
+   * the weights for each particle using the requested method. */
+  dispatch_float(part_typenum, [&](auto p) {
+    dispatch_float(grid_typenum, [&](auto g) {
+      dispatch_float(output_typenum, [&](auto o) {
+        using PartReal = decltype(p);
+        using GridReal = decltype(g);
+        using OutT = decltype(o);
+        OutT *sfzh = grid_props->get_grid_weights<OutT>();
+        if (sfzh == NULL || PyErr_Occurred()) {
+          return;
+        }
+        if (is_cic) {
+          weight_loop_cic<PartReal, GridReal, OutT>(
+              grid_props, parts, grid_props->size, sfzh, nthreads);
+        } else {
+          weight_loop_ngp<PartReal, GridReal, OutT>(
+              grid_props, parts, grid_props->size, sfzh, nthreads);
+        }
+      });
+    });
+  });
   RETURN_IF_PYERR();
 
   /* Extract the grid weights we'll write out. */
