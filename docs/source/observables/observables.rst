@@ -7,8 +7,9 @@ In this section, we will cover the different types of observable that can be gen
 
 These observables are typically generated through the specialised instrument
 classes introduced in the observatories section: ``PhotometricInstrument`` for
-photometry, ``PhotometricImager`` for imaging, ``SpectroscopicInstrument`` for
-one-dimensional spectroscopy, and ``IntegratedFieldUnit`` for spectral cubes.
+photometry, ``PhotometricImager`` for imaging, ``LineImager`` for emission
+line imaging, ``SpectroscopicInstrument`` for one-dimensional spectroscopy,
+and ``IntegratedFieldUnit`` for spectral cubes.
 
 
 .. toctree::
