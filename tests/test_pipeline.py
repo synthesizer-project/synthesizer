@@ -1106,6 +1106,80 @@ class TestPipelineOperations:
             > 0
         ), "Base images were removed"
 
+    def test_run_pipeline_line_images_luminosity(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        test_grid,
+    ):
+        """Test running the pipeline with luminosity line images."""
+        from synthesizer.instruments import LineImager
+
+        line_ids = list(test_grid.available_lines[:3])
+        line_imager = LineImager(
+            "test_line_imager", line_ids=line_ids, resolution=1 * Mpc
+        )
+
+        pipeline_with_galaxies_per_particle.get_spectra()
+        pipeline_with_galaxies_per_particle.get_line_images_luminosity(
+            line_imager,
+            line_ids=line_ids,
+            fov=100 * Mpc,
+            kernel=kernel,
+        )
+        pipeline_with_galaxies_per_particle.run()
+
+        assert pipeline_with_galaxies_per_particle._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies_per_particle._write_line_images_lum, (
+            "Line images not flagged for writing"
+        )
+        assert (
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies_per_particle.line_images_lum
+            )
+            > 0
+        ), "No line images were calculated"
+
+    def test_run_pipeline_line_images_flux(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        test_grid,
+    ):
+        """Test running the pipeline with flux line images."""
+        from synthesizer.instruments import LineImager
+
+        line_ids = list(test_grid.available_lines[:3])
+        line_imager = LineImager(
+            "test_line_imager_flux", line_ids=line_ids, resolution=1 * Mpc
+        )
+
+        pipeline_with_galaxies_per_particle.get_spectra()
+        pipeline_with_galaxies_per_particle.get_observed_spectra(cosmo=cosmo)
+        pipeline_with_galaxies_per_particle.get_line_images_flux(
+            line_imager,
+            line_ids=line_ids,
+            fov=100 * Mpc,
+            kernel=kernel,
+            cosmo=cosmo,
+        )
+        pipeline_with_galaxies_per_particle.run()
+
+        assert pipeline_with_galaxies_per_particle._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies_per_particle._write_line_images_flux, (
+            "Line images not flagged for writing"
+        )
+        assert (
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies_per_particle.line_images_flux
+            )
+            > 0
+        ), "No flux line images were calculated"
+
     def test_run_pipeline_sfzh(
         self,
         test_grid,

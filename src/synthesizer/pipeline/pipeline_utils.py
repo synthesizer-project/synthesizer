@@ -60,6 +60,12 @@ def clear_pipeline_outputs(gal):
             ("images_psf_fnu", {}),
             ("images_noise_lnu", {}),
             ("images_noise_fnu", {}),
+            ("line_images_lnu", {}),
+            ("line_images_fnu", {}),
+            ("line_images_psf_lnu", {}),
+            ("line_images_psf_fnu", {}),
+            ("line_images_noise_lnu", {}),
+            ("line_images_noise_fnu", {}),
             ("particle_spectra", {}),
             ("particle_lines", {}),
             ("particle_photo_lnu", {}),
@@ -137,6 +143,12 @@ def accumulate_pipeline_results_from_child(parent, *children):
             "images_psf_fnu",
             "images_noise_lnu",
             "images_noise_fnu",
+            "line_images_lnu",
+            "line_images_fnu",
+            "line_images_psf_lnu",
+            "line_images_psf_fnu",
+            "line_images_noise_lnu",
+            "line_images_noise_fnu",
             "data_cubes_lnu",
             "data_cubes_fnu",
         ):
@@ -172,6 +184,12 @@ def accumulate_pipeline_results_from_child(parent, *children):
                 "images_psf_fnu",
                 "images_noise_lnu",
                 "images_noise_fnu",
+                "line_images_lnu",
+                "line_images_fnu",
+                "line_images_psf_lnu",
+                "line_images_psf_fnu",
+                "line_images_noise_lnu",
+                "line_images_noise_fnu",
                 "sfh",
                 "sfzh",
             ):
@@ -970,7 +988,11 @@ def get_full_memory(obj, seen=None):
     return size
 
 
-def validate_noise_unit_compatibility(instruments, expected_unit):
+def validate_noise_unit_compatibility(
+    instruments,
+    expected_unit,
+    capability_attr="can_do_noisy_imaging",
+):
     """Validate that noise attributes have compatible units.
 
     This function checks that instruments with noise capabilities have
@@ -989,6 +1011,11 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
         expected_unit (unyt.Unit):
             The expected unit for the image type (e.g., "erg/s/Hz" for
             luminosity images or "nJy" for flux images).
+        capability_attr (str):
+            The name of the boolean capability property to check before
+            validating an instrument's noise attributes. Defaults to
+            ``"can_do_noisy_imaging"`` for photometric images; pass
+            ``"can_do_noisy_line_imaging"`` for line images.
 
     Raises:
         InconsistentArguments:
@@ -999,7 +1026,7 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
         expected_unit = Unit(expected_unit)
 
     for inst in instruments:
-        if inst.can_do_noisy_imaging:
+        if getattr(inst, capability_attr):
             # Check depth units if using SNR-based noise
             if inst.depth is not None:
                 if isinstance(inst.depth, dict):
