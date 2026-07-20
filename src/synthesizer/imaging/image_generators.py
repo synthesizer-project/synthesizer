@@ -1033,6 +1033,168 @@ def _generate_image_collection_generic(
     return imgs
 
 
+def _generate_line_image_collection_generic(
+    instrument,
+    lines,
+    fov,
+    img_type,
+    kernel,
+    kernel_threshold,
+    nthreads,
+    emitter,
+    cosmo,
+    quantity="luminosity",
+):
+    """Generate a line image collection for a generic emitter.
+
+    This mirrors :func:`_generate_image_collection_generic`, but rather than
+    projecting a `PhotometryCollection` (one signal per filter) it projects a
+    `LineCollection` (one signal per requested emission line), producing one
+    `Image` per line id.
+
+    Particle based imaging can either be hist or smoothed, while parametric
+    imaging can only be smoothed.
+
+    Args:
+        instrument (Instrument):
+            The instrument to create the images for.
+        lines (LineCollection):
+            The lines to use for the images.
+        fov (unyt_quantity/tuple, unyt_quantity):
+            The width of the image.
+        img_type (str):
+            The type of image to create. Options are "hist" or "smoothed".
+        kernel (str):
+            The array describing the kernel. This is derived from the
+            kernel_functions module. (Only applicable to particle imaging)
+        kernel_threshold (float):
+            The threshold for the kernel. Particles with a kernel value
+            below this threshold are included in the image. (Only
+            applicable to particle imaging)
+        nthreads (int):
+            The number of threads to use when smoothing the image. This
+            only applies to particle imaging.
+        emitter (Stars/BlackHoles/BlackHole):
+            The emitter object to create the images for.
+        cosmo (astropy.cosmology.Cosmology):
+            A cosmology object defining the cosmology to use for the images.
+            This is only relevant for angular images where a conversion to
+            projected angular coordinates is needed.
+        quantity (str):
+            Either "luminosity" or "flux", selecting which LineCollection
+            attribute is imaged.
+
+    Returns:
+        ImageCollection
+            An image collection containing one Image per line id.
+    """
+    # Avoid cyclic imports
+    from synthesizer.imaging import ImageCollection
+    from synthesizer.particle import Particles
+
+    # Pull out the signal array (and its per-line labels) we are imaging
+    if quantity not in ("luminosity", "flux"):
+        raise exceptions.InconsistentArguments(
+            f"Unknown quantity {quantity} for line images. Options are "
+            "'luminosity' or 'flux'."
+        )
+    signal = getattr(lines, quantity)
+    if signal is None:
+        raise exceptions.MissingAttribute(
+            f"LineCollection has no {quantity} data. Did you forget to call "
+            "get_flux?"
+            if quantity == "flux"
+            else f"LineCollection has no {quantity} data."
+        )
+    line_ids = [str(line_id) for line_id in lines.line_ids]
+
+    # For particle emitters, standardize units to ensure resolution, fov,
+    # and emitter data are all in the same system (both angular or both
+    # Cartesian). Parametric emitters handle their own geometry via
+    # morphology.get_density_grid() and don't need this standardization.
+    if isinstance(emitter, Particles):
+        needs_smoothing_lengths = img_type == "smoothed"
+        resolution, fov, coords, smls = _standardize_imaging_units(
+            resolution=instrument.resolution,
+            fov=fov,
+            emitter=emitter,
+            cosmo=cosmo,
+            include_smoothing_lengths=needs_smoothing_lengths,
+        )
+
+        if img_type == "smoothed" and smls is None:
+            raise exceptions.InconsistentArguments(
+                "Smoothed particle imaging requires smoothing_lengths. "
+                "The emitter must have a smoothing_lengths attribute."
+            )
+    else:
+        resolution = instrument.resolution
+        fov = fov
+        coords = smls = None
+
+    # Create the image collection
+    imgs = ImageCollection(
+        resolution=resolution,
+        fov=fov,
+    )
+
+    # Make the image handling the different types of image creation
+    # NOTE: Black holes are always a histogram, safer to just hack this here
+    # since a user can set the "global" method as smoothed for a galaxy
+    # with both stars and black holes.
+    if (img_type == "hist" and isinstance(emitter, Particles)) or (
+        getattr(emitter, "name", None) == "Black Holes"
+    ):
+        signal_dict = {
+            line_id: signal[..., i] for i, line_id in enumerate(line_ids)
+        }
+        return _generate_images_particle_hist(
+            imgs,
+            coordinates=coords,
+            signals=signal_dict,
+        )
+
+    elif img_type == "hist":
+        raise exceptions.InconsistentArguments(
+            "Parametric images can only be made using the smoothed image type."
+        )
+
+    elif img_type == "smoothed" and isinstance(emitter, Particles):
+        # The C++ backend expects the signal axis first, (Nlines, Nparticles),
+        # whereas LineCollection stores it with the line axis last.
+        return _generate_images_particle_smoothed(
+            imgs=imgs,
+            signals=signal.T,
+            cent_coords=coords,
+            smoothing_lengths=smls,
+            labels=line_ids,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+        )
+
+    elif img_type == "smoothed":
+        signal_dict = {
+            line_id: signal[i] for i, line_id in enumerate(line_ids)
+        }
+        return _generate_images_parametric_smoothed(
+            imgs,
+            density_grid=emitter.morphology.get_density_grid(
+                imgs.resolution, imgs.npix
+            ),
+            signals=signal_dict,
+        )
+
+    else:
+        raise exceptions.UnknownImageType(
+            f"Unknown img_type {img_type} for a {type(emitter)} emitter. "
+            " (Options are 'hist' (only for particle based emitters)"
+            " or 'smoothed')"
+        )
+
+    return imgs
+
+
 def _combine_image_collections(images, label, model_cache):
     """Combine multiple image collections into a single image collection.
 

@@ -136,6 +136,152 @@ def _apply_image_noise(final_images, noise_store, instrument):
     }
 
 
+def _get_line_image_postprocess_stores(owner, phot_type):
+    """Return the raw, PSF, and noise stores for a line image family.
+
+    Args:
+        owner:
+            Object holding the line image stores.
+        phot_type (str):
+            Either ``"lnu"`` or ``"fnu"``.
+
+    Returns:
+        tuple:
+            ``(raw_store, psf_store, noise_store)`` for the requested
+            line image family.
+    """
+    if phot_type == "lnu":
+        raw_store = owner.line_images_lnu
+        if not hasattr(owner, "line_images_psf_lnu"):
+            owner.line_images_psf_lnu = {}
+        if not hasattr(owner, "line_images_noise_lnu"):
+            owner.line_images_noise_lnu = {}
+        return (
+            raw_store,
+            owner.line_images_psf_lnu,
+            owner.line_images_noise_lnu,
+        )
+
+    if phot_type == "fnu":
+        raw_store = owner.line_images_fnu
+        if not hasattr(owner, "line_images_psf_fnu"):
+            owner.line_images_psf_fnu = {}
+        if not hasattr(owner, "line_images_noise_fnu"):
+            owner.line_images_noise_fnu = {}
+        return (
+            raw_store,
+            owner.line_images_psf_fnu,
+            owner.line_images_noise_fnu,
+        )
+
+    raise exceptions.InconsistentArguments(
+        f"Photometry type {phot_type} not recognised. Must be 'lnu' or 'fnu'."
+    )
+
+
+def _apply_line_image_psfs(final_images, psf_store, instrument):
+    """Apply the instrument PSF configuration to line image collections.
+
+    Args:
+        final_images (dict):
+            Current image collections keyed by label.
+        psf_store (dict):
+            Store for PSF-processed images.
+        instrument (Instrument):
+            Instrument defining the PSF application.
+
+    Returns:
+        dict:
+            Updated image collections after PSF processing.
+    """
+    # Skip this stage entirely when the instrument has no line imaging PSF
+    # model.
+    if not instrument.can_do_psf_line_imaging:
+        return final_images
+
+    psf_store.setdefault(instrument.label, {})
+    for label, imgs in final_images.items():
+        psf_store[instrument.label][label] = instrument.apply_psfs(imgs)
+
+    return {
+        label: psf_store[instrument.label][label] for label in final_images
+    }
+
+
+def _apply_line_image_noise(final_images, noise_store, instrument):
+    """Apply the instrument noise configuration to line image collections.
+
+    Args:
+        final_images (dict):
+            Current image collections keyed by label.
+        noise_store (dict):
+            Store for noise-processed images.
+        instrument (Instrument):
+            Instrument defining the noise application.
+
+    Returns:
+        dict:
+            Updated image collections after noise processing.
+    """
+    # Skip this stage entirely when the instrument has no configured line
+    # imaging noise model.
+    if not instrument.can_do_noisy_line_imaging:
+        return final_images
+
+    noise_store.setdefault(instrument.label, {})
+    for label, imgs in final_images.items():
+        noise_store[instrument.label][label] = instrument.apply_noises(
+            imgs,
+            aperture_radius=instrument.depth_app_radius,
+        )
+
+    return {
+        label: noise_store[instrument.label][label] for label in final_images
+    }
+
+
+def _postprocess_existing_line_images(
+    owner,
+    instrument,
+    phot_type,
+    limit_to=None,
+):
+    """Apply the instrument-defined line imaging post-processing to images.
+
+    Args:
+        owner:
+            Object holding the raw and post-processed line image stores.
+            This is typically a Component or BaseGalaxy instance.
+        instrument (Instrument):
+            Instrument defining the observation.
+        phot_type (str):
+            Either ``"lnu"`` or ``"fnu"``.
+        limit_to (list, optional):
+            Specific labels to post-process.
+
+    Returns:
+        dict:
+            Final image collections keyed by label.
+    """
+    raw_store, psf_store, noise_store = _get_line_image_postprocess_stores(
+        owner, phot_type
+    )
+
+    final_images = _get_raw_images_for_postprocess(
+        raw_store,
+        instrument.label,
+        limit_to=limit_to,
+    )
+
+    final_images = _apply_line_image_psfs(final_images, psf_store, instrument)
+
+    final_images = _apply_line_image_noise(
+        final_images, noise_store, instrument
+    )
+
+    return final_images
+
+
 def _postprocess_existing_images(
     owner,
     instrument,
