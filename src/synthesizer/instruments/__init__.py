@@ -13,8 +13,9 @@ The main specialised instrument classes are:
 
 - :class:`PhotometricInstrument` for integrated photometry,
 - :class:`PhotometricImager` for photometric imaging,
-- :class:`SpectroscopicInstrument` for one-dimensional spectroscopy, and
-- :class:`IntegratedFieldUnit` for spatially resolved spectroscopy.
+- :class:`SpectroscopicInstrument` for one-dimensional spectroscopy,
+- :class:`IntegratedFieldUnit` for spatially resolved spectroscopy, and
+- :class:`LineImager` for resolved emission line imaging.
 
 All specialised instrument classes share the :class:`InstrumentBase`
 interface, while :class:`InstrumentCollection` provides the common container
@@ -28,6 +29,7 @@ from synthesizer.instruments.instrument import Instrument
 from synthesizer.instruments.instrument_base import InstrumentBase
 from synthesizer.instruments.instrument_collection import InstrumentCollection
 from synthesizer.instruments.integrated_field_unit import IntegratedFieldUnit
+from synthesizer.instruments.line_imager import LineImager
 from synthesizer.instruments.photometric_imager import PhotometricImager
 from synthesizer.instruments.photometric_instrument import (
     PhotometricInstrument,
@@ -55,6 +57,7 @@ __all__ = [
     "PhotometricImager",
     "SpectroscopicInstrument",
     "IntegratedFieldUnit",
+    "LineImager",
     "InstrumentCollection",
     "photometric_noise",
     "UVJ",

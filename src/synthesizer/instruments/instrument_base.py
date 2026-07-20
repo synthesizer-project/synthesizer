@@ -94,6 +94,36 @@ class InstrumentBase(ABC):
         return False
 
     @property
+    def can_do_line_imaging(self):
+        """Return whether this instrument supports emission line imaging.
+
+        Returns:
+            bool: ``True`` if the instrument supports emission line image
+                generation, otherwise ``False``.
+        """
+        return False
+
+    @property
+    def can_do_psf_line_imaging(self):
+        """Return whether this instrument supports PSF line imaging.
+
+        Returns:
+            bool: ``True`` if the instrument has the information required to
+                apply a PSF to line images, otherwise ``False``.
+        """
+        return False
+
+    @property
+    def can_do_noisy_line_imaging(self):
+        """Return whether this instrument supports noisy line imaging.
+
+        Returns:
+            bool: ``True`` if the instrument has the information required to
+                apply noise to line images, otherwise ``False``.
+        """
+        return False
+
+    @property
     def can_do_spectroscopy(self):
         """Return whether this instrument supports spectroscopy.
 
