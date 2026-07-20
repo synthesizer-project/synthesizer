@@ -771,6 +771,47 @@ class LineCollection:
             f"comma separated string (type={type(line_id)} line_id={line_id})"
         )
 
+    def items(self):
+        """Return an iterator over the line_id, LineCollection pairs.
+
+        This mirrors the dict-like interface of PhotometryCollection and
+        enables syntax such as ``for line_id, line in lines.items()``.
+
+        Returns:
+            iterator:
+                An iterator over (line_id, LineCollection) pairs, one per
+                line in the collection.
+        """
+        for line_id in self.line_ids:
+            yield str(line_id), self[line_id]
+
+    def keys(self):
+        """Return an iterator over the line_ids in the collection.
+
+        This enables syntax such as ``for line_id in lines.keys()``.
+
+        Returns:
+            iterator:
+                An iterator over the line_ids in the collection.
+        """
+        for line_id in self.line_ids:
+            yield str(line_id)
+
+    def __contains__(self, line_id):
+        """Check whether a line_id is in the collection.
+
+        This enables syntax such as ``if line_id in lines``.
+
+        Args:
+            line_id (str):
+                The line_id to check for.
+
+        Returns:
+            bool:
+                True if the line_id is in the collection, False otherwise.
+        """
+        return str(alias_to_line_id(line_id)) in self.line2index
+
     def sum(self, axis=None):
         """Sum the lines in the collection.
 
