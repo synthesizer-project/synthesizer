@@ -25,6 +25,7 @@ from synthesizer.imaging.image_generators import (
 from synthesizer.imaging.postprocess import (
     _postprocess_existing_data_cubes,
     _postprocess_existing_images,
+    _postprocess_existing_line_images,
 )
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import accepts, unit_is_compatible
@@ -115,6 +116,16 @@ class BaseGalaxy:
         self.images_psf_fnu = {}
         self.images_noise_lnu = {}
         self.images_noise_fnu = {}
+
+        # Define the dictionaries to hold the emission line images (same
+        # structure as the photometric images above, but keyed by line id
+        # rather than filter code)
+        self.line_images_lnu = {}
+        self.line_images_fnu = {}
+        self.line_images_psf_lnu = {}
+        self.line_images_psf_fnu = {}
+        self.line_images_noise_lnu = {}
+        self.line_images_noise_fnu = {}
 
         # Initialise the dictionary to hold instrument specific spectroscopy
         self.spectroscopy = {}
@@ -1869,6 +1880,449 @@ class BaseGalaxy:
         """
         return self._generate_images(
             *labels,
+            fov=fov,
+            instrument=instrument,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            cosmo=cosmo,
+            phot_type="fnu",
+        )
+
+    def _generate_line_images(
+        self,
+        *labels,
+        line_ids,
+        fov,
+        instrument,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        cosmo=None,
+        phot_type="lnu",
+    ):
+        """Make emission line ImageCollections for a galaxy and components.
+
+        For Parametric Galaxy objects, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle Galaxy objects, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        Which images are produced is defined by the labels passed. If any
+        of the necessary lines are missing for generating a particular
+        image, an exception will be raised.
+
+        All images that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the line_images_lnu/line_images_fnu
+        attribute.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make line images for.
+                These must be present in the lines dicts of the components or
+                the galaxy.
+            line_ids (list):
+                The line ids to make images for. Each requested label must
+                have all of these lines available.
+            fov (unyt_quantity of float):
+                The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image (typically a
+                LineImager).
+            img_type (str):
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+            phot_type (str):
+                The type of line quantity to use for the images, either
+                'lnu' for luminosity images, or 'fnu' for flux.
+
+        Returns:
+            ImageCollection/dict
+                Either a single ImageCollection if only one label is passed,
+                otherwise a dict of ImageCollections keyed by label. Each
+                ImageCollection contains one Image per requested line id.
+        """
+        labels = list(labels)
+        for label in labels:
+            if not isinstance(label, str):
+                raise exceptions.InconsistentArguments(
+                    f"All labels must be strings, got {type(label).__name__}. "
+                    "If passing an EmissionModel, use model.label instead."
+                )
+
+        if isinstance(line_ids, str):
+            line_ids = [line_ids]
+
+        if self.galaxy_type == "Parametric" and img_type == "hist":
+            raise exceptions.InconsistentArguments(
+                "Parametric Galaxies can only produce smoothed images."
+            )
+
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set on a Galaxy when using an angular "
+                    "resolution and FOV."
+                )
+
+        # Build a combined model_param_cache that includes the galaxy's cache
+        # and all component caches. This ensures we can find labels that were
+        # generated on components.
+        combined_cache = dict(self.model_param_cache)
+        if self.stars is not None and hasattr(self.stars, "model_param_cache"):
+            combined_cache.update(self.stars.model_param_cache)
+        if self.black_holes is not None and hasattr(
+            self.black_holes, "model_param_cache"
+        ):
+            combined_cache.update(self.black_holes.model_param_cache)
+        if self.gas is not None and hasattr(self.gas, "model_param_cache"):
+            combined_cache.update(self.gas.model_param_cache)
+
+        galaxy_combine_labels, component_labels_by_emitter = (
+            _prepare_galaxy_image_labels(
+                labels,
+                combined_cache,
+            )
+        )
+
+        routed_labels = set(galaxy_combine_labels)
+        for emitter_labels in component_labels_by_emitter.values():
+            routed_labels.update(emitter_labels)
+        missing = set(labels) - routed_labels
+        if missing:
+            raise exceptions.InconsistentArguments(
+                f"The following labels were not found in any emitter: "
+                f"{missing}. Available labels are: "
+                f"{list(combined_cache.keys())}"
+            )
+
+        out_images = {}
+
+        # Generate line images for each component based on the routing
+        for emitter, emitter_labels in component_labels_by_emitter.items():
+            component = None
+            if emitter == "stellar" and self.stars is not None:
+                component = self.stars
+            elif emitter == "blackhole" and self.black_holes is not None:
+                component = self.black_holes
+            elif emitter == "gas" and self.gas is not None:
+                component = self.gas
+
+            if component is None:
+                continue
+
+            component_imgs = component._generate_line_images(
+                *emitter_labels,
+                line_ids=line_ids,
+                img_type=img_type,
+                instrument=instrument,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+                fov=fov,
+                cosmo=cosmo,
+                phot_type=phot_type,
+                postprocess=False,
+            )
+
+            if isinstance(component_imgs, dict):
+                out_images.update(component_imgs)
+            else:
+                out_images[emitter_labels[0]] = component_imgs
+
+        expected_labels = []
+        for emitter_labels in component_labels_by_emitter.values():
+            expected_labels.extend(emitter_labels)
+
+        missing_labels = set(expected_labels) - set(out_images.keys())
+        if len(missing_labels) > 0:
+            raise exceptions.MissingImage(
+                "Cannot generate galaxy line images for the following "
+                "labels as the necessary component line images are "
+                f"missing: {', '.join(missing_labels)}"
+            )
+
+        for label in galaxy_combine_labels:
+            out_images.update(
+                {
+                    label: _combine_image_collections(
+                        images=out_images,
+                        label=label,
+                        model_cache=combined_cache,
+                    )
+                }
+            )
+
+        instrument_name = instrument.label
+
+        if instrument_name is not None:
+            if phot_type == "lnu":
+                for label in out_images:
+                    in_stars = self.stars is not None and label in (
+                        self.stars.line_images_lnu.get(instrument_name, {})
+                    )
+                    in_bhs = self.black_holes is not None and label in (
+                        self.black_holes.line_images_lnu.get(
+                            instrument_name, {}
+                        )
+                    )
+                    in_gas = self.gas is not None and label in (
+                        self.gas.line_images_lnu.get(instrument_name, {})
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
+                        self.line_images_lnu.setdefault(instrument_name, {})
+                        self.line_images_lnu[instrument_name][label] = (
+                            out_images[label]
+                        )
+            else:
+                for label in out_images:
+                    in_stars = self.stars is not None and label in (
+                        self.stars.line_images_fnu.get(instrument_name, {})
+                    )
+                    in_bhs = self.black_holes is not None and label in (
+                        self.black_holes.line_images_fnu.get(
+                            instrument_name, {}
+                        )
+                    )
+                    in_gas = self.gas is not None and label in (
+                        self.gas.line_images_fnu.get(instrument_name, {})
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
+                        self.line_images_fnu.setdefault(instrument_name, {})
+                        self.line_images_fnu[instrument_name][label] = (
+                            out_images[label]
+                        )
+        else:
+            if phot_type == "lnu":
+                for label in out_images:
+                    in_stars = (
+                        self.stars is not None
+                        and label in self.stars.line_images_lnu
+                    )
+                    in_bhs = (
+                        self.black_holes is not None
+                        and label in self.black_holes.line_images_lnu
+                    )
+                    in_gas = (
+                        self.gas is not None
+                        and label in self.gas.line_images_lnu
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
+                        self.line_images_lnu[label] = out_images[label]
+            else:
+                for label in out_images:
+                    in_stars = (
+                        self.stars is not None
+                        and label in self.stars.line_images_fnu
+                    )
+                    in_bhs = (
+                        self.black_holes is not None
+                        and label in self.black_holes.line_images_fnu
+                    )
+                    in_gas = (
+                        self.gas is not None
+                        and label in self.gas.line_images_fnu
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
+                        self.line_images_fnu[label] = out_images[label]
+
+        if len(out_images) == 0:
+            warn(
+                "No line images were generated for the requested labels. "
+                "An empty dict will be returned. (Note that this is very "
+                "unlikely to happen and should have raised an exception "
+                "earlier.)"
+            )
+            return {}
+
+        final_images = dict(out_images)
+
+        for emitter, emitter_labels in component_labels_by_emitter.items():
+            component = None
+            if emitter == "stellar" and self.stars is not None:
+                component = self.stars
+            elif emitter == "blackhole" and self.black_holes is not None:
+                component = self.black_holes
+            elif emitter == "gas" and self.gas is not None:
+                component = self.gas
+
+            if component is None:
+                continue
+
+            final_images.update(
+                _postprocess_existing_line_images(
+                    component,
+                    instrument=instrument,
+                    phot_type=phot_type,
+                    limit_to=emitter_labels,
+                )
+            )
+
+        if len(galaxy_combine_labels) > 0:
+            final_images.update(
+                _postprocess_existing_line_images(
+                    self,
+                    instrument=instrument,
+                    phot_type=phot_type,
+                    limit_to=galaxy_combine_labels,
+                )
+            )
+
+        if len(labels) == 1:
+            return final_images[labels[0]]
+        return final_images
+
+    def get_line_images_luminosity(
+        self,
+        *labels,
+        line_ids,
+        fov,
+        instrument,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Make emission line ImageCollections from luminosities.
+
+        For Parametric Galaxy objects, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle Galaxy objects, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        All images that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the line_images_lnu attribute.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make line images for.
+                These must be present in the lines dicts of the components or
+                the galaxy.
+            line_ids (list):
+                The line ids to make images for.
+            fov (unyt_quantity of float):
+                The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image (typically a
+                LineImager).
+            img_type (str):
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+
+        Returns:
+            ImageCollection/dict
+                Either a single ImageCollection if only one label is passed,
+                otherwise a dict of ImageCollections keyed by label.
+        """
+        return self._generate_line_images(
+            *labels,
+            line_ids=line_ids,
+            fov=fov,
+            instrument=instrument,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            cosmo=cosmo,
+            phot_type="lnu",
+        )
+
+    def get_line_images_flux(
+        self,
+        *labels,
+        line_ids,
+        fov,
+        instrument,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Make emission line ImageCollections from fluxes.
+
+        For Parametric Galaxy objects, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle Galaxy objects, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        All images that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the line_images_fnu attribute.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make line images for.
+                These must be present in the lines dicts of the components or
+                the galaxy.
+            line_ids (list):
+                The line ids to make images for.
+            fov (unyt_quantity of float):
+                The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image (typically a
+                LineImager).
+            img_type (str):
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+
+        Returns:
+            ImageCollection/dict
+                Either a single ImageCollection if only one label is passed,
+                otherwise a dict of ImageCollections keyed by label.
+        """
+        return self._generate_line_images(
+            *labels,
+            line_ids=line_ids,
             fov=fov,
             instrument=instrument,
             img_type=img_type,

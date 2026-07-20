@@ -30,6 +30,7 @@ from synthesizer.imaging.image_generators import (
 from synthesizer.imaging.postprocess import (
     _postprocess_existing_data_cubes,
     _postprocess_existing_images,
+    _postprocess_existing_line_images,
 )
 from synthesizer.synth_warnings import deprecated
 from synthesizer.units import unit_is_compatible
@@ -101,6 +102,16 @@ class Component(ABC):
         self.images_psf_fnu = {}
         self.images_noise_lnu = {}
         self.images_noise_fnu = {}
+
+        # Define the dictionaries to hold the emission line images (same
+        # structure as the photometric images above, but keyed by line id
+        # rather than filter code)
+        self.line_images_lnu = {}
+        self.line_images_fnu = {}
+        self.line_images_psf_lnu = {}
+        self.line_images_psf_fnu = {}
+        self.line_images_noise_lnu = {}
+        self.line_images_noise_fnu = {}
 
         # Define the dictionaries to hold instrument specific spectroscopy
         self.spectroscopy = {}
@@ -907,6 +918,351 @@ class Component(ABC):
         """
         return self._generate_images(
             *labels,
+            fov=fov,
+            instrument=instrument,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            cosmo=cosmo,
+            phot_type="fnu",
+        )
+
+    def _generate_line_images(
+        self,
+        *labels,
+        line_ids,
+        fov,
+        instrument,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        cosmo=None,
+        phot_type="lnu",
+        postprocess=True,
+    ):
+        """Make an ImageCollection of emission line images per line id.
+
+        For Parametric components, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle components, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        Which images are produced is defined by the labels passed. If any
+        of the necessary lines are missing for generating a particular
+        image, an exception will be raised.
+
+        All images that are created will be stored on the emitter (Stars or
+        BlackHole/s) under the line_images_lnu attribute (for
+        phot_type='lnu') or line_images_fnu attribute (for phot_type='fnu').
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make line images for.
+                These must be present in the lines dicts of the component.
+                For particle components, these labels must be present in the
+                particle lines dict.
+            line_ids (list):
+                The line ids to make images for. Each requested label must
+                have all of these lines available.
+            fov (unyt_quantity of float):
+                The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image (typically a
+                LineImager).
+            img_type (str):
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+            phot_type (str):
+                The type of line quantity to use for the images, either
+                'lnu' for luminosity images, or 'fnu' for flux.
+            postprocess (bool):
+                If True, automatically apply the instrument-defined imaging
+                post-processing after raw image generation.
+
+        Returns:
+            dict
+                A dict of dicts of the form
+                {label: {line_id: ImageCollection}}, one ImageCollection per
+                requested label, each containing one Image per line id.
+        """
+        labels = list(labels)
+        for label in labels:
+            if not isinstance(label, str):
+                raise exceptions.InconsistentArguments(
+                    f"All labels must be strings, got {type(label).__name__}. "
+                    "If passing an EmissionModel, use model.label instead."
+                )
+
+        if isinstance(line_ids, str):
+            line_ids = [line_ids]
+
+        # Are we doing a parametric image?
+        is_param = hasattr(self, "morphology")
+
+        if is_param and img_type == "hist":
+            raise exceptions.InconsistentArguments(
+                f"Parametric {self.component_type} can only produce "
+                "smoothed images."
+            )
+
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set when using an angular "
+                    "resolution and FOV."
+                )
+
+        quantity = "luminosity" if phot_type == "lnu" else "flux"
+        if phot_type not in ("lnu", "fnu"):
+            raise exceptions.InconsistentArguments(
+                f"Photometry type {phot_type} not recognised. Must be "
+                "'lnu' or 'fnu'."
+            )
+
+        # Find which images must be generated and which can simply
+        # be combined
+        combine_labels, generate_labels = _prepare_component_image_labels(
+            labels,
+            self.model_param_cache,
+            remove_missing=True,
+        )
+
+        out_images = {}
+
+        # Get the appropriate lines dict
+        if is_param:
+            lines_dict = self.lines
+        else:
+            lines_dict = self.particle_lines
+
+        for label in generate_labels:
+            if label not in lines_dict:
+                raise exceptions.MissingLines(
+                    f"Lines for model {label} not found on the "
+                    f"{self.component_type} component. "
+                    f"Available line sets: {list(lines_dict.keys())}"
+                )
+
+            lines = lines_dict[label]
+            missing_lines = [lid for lid in line_ids if lid not in lines]
+            if len(missing_lines) > 0:
+                raise exceptions.MissingLines(
+                    f"Lines {missing_lines} not found in the lines saved "
+                    f"for model {label}."
+                )
+
+            if quantity == "flux" and lines.flux is None:
+                raise exceptions.MissingAttribute(
+                    f"Lines for model {label} have no flux. Did you forget "
+                    "to call get_observed_lines?"
+                )
+
+            out_images[label] = instrument.generate_images(
+                lines=lines[line_ids],
+                fov=fov,
+                img_type=img_type,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+                emitter=self,
+                cosmo=cosmo,
+                quantity=quantity,
+            )
+
+        for label in combine_labels:
+            out_images.update(
+                {
+                    label: _combine_image_collections(
+                        images=out_images,
+                        label=label,
+                        model_cache=self.model_param_cache,
+                    )
+                }
+            )
+
+        instrument_name = instrument.label
+
+        if instrument_name is not None:
+            if phot_type == "lnu":
+                self.line_images_lnu.setdefault(instrument_name, {})
+                self.line_images_lnu[instrument_name].update(out_images)
+            else:
+                self.line_images_fnu.setdefault(instrument_name, {})
+                self.line_images_fnu[instrument_name].update(out_images)
+        else:
+            if phot_type == "lnu":
+                self.line_images_lnu.update(out_images)
+            else:
+                self.line_images_fnu.update(out_images)
+
+        if len(out_images) == 0:
+            return out_images
+
+        if not postprocess:
+            if len(labels) == 1:
+                return out_images[labels[0]]
+            return out_images
+
+        out_images = _postprocess_existing_line_images(
+            self,
+            instrument=instrument,
+            phot_type=phot_type,
+            limit_to=labels,
+        )
+
+        if len(labels) == 1:
+            return out_images[labels[0]]
+        return out_images
+
+    def get_line_images_luminosity(
+        self,
+        *labels,
+        line_ids,
+        fov,
+        instrument,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Make an ImageCollection of emission line images from luminosities.
+
+        For Parametric components, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle components, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        All images that are created will be stored on the emitter (Stars or
+        BlackHole/s) under the line_images_lnu attribute.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make line images for.
+                These must be present in the lines dicts of the component.
+            line_ids (list):
+                The line ids to make images for.
+            fov (unyt_quantity of float):
+                The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image (typically a
+                LineImager).
+            img_type (str):
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+
+        Returns:
+            dict
+                A dict of the form {label: ImageCollection}, each containing
+                one Image per requested line id.
+        """
+        return self._generate_line_images(
+            *labels,
+            line_ids=line_ids,
+            fov=fov,
+            instrument=instrument,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            cosmo=cosmo,
+            phot_type="lnu",
+        )
+
+    def get_line_images_flux(
+        self,
+        *labels,
+        line_ids,
+        fov,
+        instrument,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Make an ImageCollection of emission line images from fluxes.
+
+        For Parametric components, images can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle components, images can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        All images that are created will be stored on the emitter (Stars or
+        BlackHole/s) under the line_images_fnu attribute.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make line images for.
+                These must be present in the lines dicts of the component.
+            line_ids (list):
+                The line ids to make images for.
+            fov (unyt_quantity of float):
+                The width of the image in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the image (typically a
+                LineImager).
+            img_type (str):
+                The type of image to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed images.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+
+        Returns:
+            dict
+                A dict of the form {label: ImageCollection}, each containing
+                one Image per requested line id.
+        """
+        return self._generate_line_images(
+            *labels,
+            line_ids=line_ids,
             fov=fov,
             instrument=instrument,
             img_type=img_type,
