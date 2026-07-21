@@ -29,7 +29,7 @@ from synthesizer.imaging.image_generators import (
     _generate_image_particle_hist,
     _generate_image_particle_smoothed,
 )
-from synthesizer.synth_warnings import deprecated
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
@@ -135,27 +135,82 @@ class Image(ImagingBase):
     def resample(self, factor):
         """Resample the image by factor.
 
+        If factor, or 1/factor for downsampling, is an integer, use
+        flux-conserving integer resampling: downsampling is performed by
+        summing pixel blocks, and supersampling is performed by uniformly
+        splitting each pixel into subpixels. This preserves the total flux.
+        Otherwise, for non-integer factors use a spline interpolation.
+
         Args:
             factor (float):
                 The factor by which to resample the image, >1 increases
                 resolution, <1 decreases resolution.
-        """
-        # Resample the resoltion, this will also update the npix and fov (if
-        # necessary)
-        self._resample_resolution(factor)
 
+        """
         # Resample the image.
         # NOTE: skimage.transform.pyramid_gaussian is more efficient but adds
         #       another dependency.
-        if self.arr is not None:
-            self.arr = zoom(self.arr, (factor, factor), order=3)
-            new_shape = self.arr.shape
-        else:
+        if self.arr is None:
             raise exceptions.MissingImage(
                 "The image array hasn't been generated yet. Please run "
                 "generate_img_hist() or generate_img_smoothed() before "
                 "resampling."
             )
+        elif factor == 1:
+            warn(
+                "Resampling is unnecessary for resampling factor = 1. "
+                "Ignoring resample request."
+            )
+            return
+        elif factor > 0 and np.isfinite(factor):
+            # Resample the resoltion, this will also update the npix and fov
+            # (if necessary)
+
+            int_factor = int(round(factor))
+            inv_factor = int(round(1.0 / factor))
+
+            if np.isclose(factor, int_factor):
+                # Replace each pixel with an int_factor x int_factor
+                # block whose subpixels each contain 1 / int_factor**2
+                # of the original pixel value, preserving total flux.
+
+                self.arr = (
+                    np.repeat(
+                        np.repeat(self.arr, int_factor, axis=0),
+                        int_factor,
+                        axis=1,
+                    )
+                    / int_factor**2
+                )
+
+            elif np.isclose(1.0 / factor, inv_factor):
+                ny, nx = self.arr.shape
+
+                if ny % inv_factor != 0 or nx % inv_factor != 0:
+                    # Image shape is not divisible by downsampling factor,
+                    # so use spline interpolation
+                    self.arr = zoom(self.arr, (factor, factor), order=3)
+
+                else:
+                    # Group the image into non-overlapping
+                    # inv_factor x inv_factor blocks and sum each block into
+                    # one pixel, preserving total flux.
+                    self.arr = self.arr.reshape(
+                        ny // inv_factor,
+                        inv_factor,
+                        nx // inv_factor,
+                        inv_factor,
+                    ).sum(axis=(1, 3))
+
+            else:
+                # Resample via spline interpolation
+                self.arr = zoom(self.arr, (factor, factor), order=3)
+            new_shape = self.arr.shape
+        else:
+            raise ValueError(f"Factor {factor} is not positive finite.")
+
+        # Update pixel metadata
+        self._resample_resolution(factor)
 
         # Handle the edge case where the conversion between resolutions has
         # messed with the FOV.
@@ -309,7 +364,10 @@ class Image(ImagingBase):
                 The new image containing the multipled array.
         """
         # Create the new image
-        new_img = Image(self.resolution, self.fov)
+        new_img = Image(
+            self.resolution,
+            self.fov,
+        )
 
         # Associate the image array and units
         new_img.arr = self.arr.copy()
