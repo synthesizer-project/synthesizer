@@ -93,7 +93,7 @@ def integrate_last_axis(xs, ys, nthreads=1, method="trapz"):
         out_shape = _ys.shape[:-1]
         return np.zeros(out_shape) if out_shape else 0.0
 
-    return integration_function(_xs, _ys, nthreads)
+    return integration_function(_xs, _ys, nthreads, None)
 
 
 def integrate_weighted_last_axis(xs, ys, weights, nthreads=1, method="trapz"):
@@ -150,4 +150,4 @@ def integrate_weighted_last_axis(xs, ys, weights, nthreads=1, method="trapz"):
         out_shape = _ys.shape[:-1]
         return np.zeros(out_shape) if out_shape else 0.0
 
-    return integration_function(_xs, _ys, _weights, nthreads)
+    return integration_function(_xs, _ys, _weights, nthreads, None)
