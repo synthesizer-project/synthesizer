@@ -487,7 +487,9 @@ def resample_smoothing_lengths(smoothing_lengths, resample_factor):
 
     Each smoothing length is scaled by ``resample_factor ** (-1/3)`` so that
     the total kernel volume is conserved across the resampled particles, then
-    tiled *resample_factor* times.
+    tiled *resample_factor* times. The returned smoothing lengths are therefore
+    ``resample_factor ** (1/3)`` times smaller than the originals with the same
+    total volume.
 
     Args:
         smoothing_lengths (unyt_array, (N,)):
