@@ -111,9 +111,13 @@ class Component(ABC):
         # Attach a default escape fraction
         self.fesc = fesc if fesc is not None else 0.0
 
-        # Set any of the extra attribute provided as kwargs
+        # Set any of the extra attribute provided as kwargs and, if this
+        # instance also inherits from Particles, record the names so that
+        # methods like spatially_resample can discover them later.
         for key, val in kwargs.items():
             setattr(self, key, val)
+        if hasattr(self, "_register_custom_attrs"):
+            self._register_custom_attrs(**kwargs)
 
         # A container for any grid weights we already computed
         self._grid_weights = {"cic": {}, "ngp": {}}

@@ -30,6 +30,8 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
                      PyObject *part_names_tuple, int npart_)
     : np_weights_(np_weights),
       np_velocities_(np_velocities),
+      velocity_ndim_(0),
+      velocity_ncomp_(0),
       np_mask_(np_mask),
       part_tuple_(part_tuple) {
 
@@ -85,6 +87,49 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
       !is_matching_float_dtypes(float_arrays, float_names, float_count,
                                 &float_typenum_)) {
     return;
+  }
+
+  if (np_velocities_ != NULL &&
+      reinterpret_cast<PyObject *>(np_velocities_) != Py_None) {
+    velocity_ndim_ = PyArray_NDIM(np_velocities_);
+
+    if (velocity_ndim_ == 1) {
+      if (PyArray_DIM(np_velocities_, 0) < npart) {
+        PyErr_Format(PyExc_IndexError,
+                     "[Particles.__init__]: Array 'velocities' has %ld "
+                     "entries but %d particles were requested.",
+                     static_cast<long>(PyArray_DIM(np_velocities_, 0)), npart);
+        toc("Particles.__init__");
+        return;
+      }
+      velocity_ncomp_ = 1;
+    } else if (velocity_ndim_ == 2) {
+      if (PyArray_DIM(np_velocities_, 0) < npart) {
+        PyErr_Format(PyExc_IndexError,
+                     "[Particles.__init__]: Array 'velocities' has %ld "
+                     "particles but %d particles were requested.",
+                     static_cast<long>(PyArray_DIM(np_velocities_, 0)), npart);
+        toc("Particles.__init__");
+        return;
+      }
+
+      velocity_ncomp_ = PyArray_DIM(np_velocities_, 1);
+      if (velocity_ncomp_ != 3) {
+        PyErr_Format(PyExc_ValueError,
+                     "[Particles.__init__]: Array 'velocities' must have "
+                     "shape (npart, 3) or (npart,), got second dimension %ld.",
+                     static_cast<long>(velocity_ncomp_));
+        toc("Particles.__init__");
+        return;
+      }
+    } else {
+      PyErr_Format(PyExc_ValueError,
+                   "[Particles.__init__]: Array 'velocities' must have shape "
+                   "(npart, 3) or (npart,), got %d dimensions.",
+                   velocity_ndim_);
+      toc("Particles.__init__");
+      return;
+    }
   }
 
   if (part_names_tuple != NULL && PySequence_Check(part_names_tuple) &&

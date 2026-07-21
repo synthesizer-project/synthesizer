@@ -99,7 +99,11 @@ class Particles {
       return static_cast<Real>(0);
     }
 
-    return get_velocities<Real>()[pind];
+    const Real *velocities = get_velocities<Real>();
+    if (velocity_ndim_ == 1) {
+      return velocities[pind];
+    }
+    return velocities[static_cast<npy_intp>(pind) * velocity_ncomp_ + 2];
   }
 
   template <typename Real>
@@ -140,6 +144,10 @@ class Particles {
 
   /* The numpy array holding the particle velocities. */
   PyArrayObject *np_velocities_;
+
+  /* Cached velocity array metadata for LOS velocity access. */
+  int velocity_ndim_;
+  npy_intp velocity_ncomp_;
 
   /* The mask (can be Py_None). */
   PyArrayObject *np_mask_;
