@@ -296,3 +296,113 @@ class TestDopplerParticleSpectraExtension:
         np.testing.assert_allclose(
             threaded_spectra, serial_spectra, rtol=0.0, atol=1e-12
         )
+
+    @pytest.mark.parametrize("method", ["ngp", "cic"])
+    def test_uses_z_velocity_for_3d_velocities(self, method):
+        """Test 3D velocities are shifted using the z-axis component."""
+        (
+            grid_spectra,
+            wavelength,
+            axes,
+            part_props,
+            weights,
+            velocities,
+            grid_dims,
+            lam_mask,
+        ) = self._inputs()
+        velocities_3d = np.ascontiguousarray(
+            np.column_stack(
+                (
+                    velocities + 1000.0,
+                    velocities - 1000.0,
+                    velocities,
+                )
+            ),
+            dtype=np.float64,
+        )
+
+        los_part_spectra, los_spectra = compute_part_seds_with_vel_shift(
+            grid_spectra,
+            wavelength,
+            axes,
+            part_props,
+            weights,
+            velocities,
+            grid_dims,
+            len(axes),
+            weights.size,
+            grid_spectra.shape[-1],
+            method,
+            1,
+            100.0,
+            None,
+            lam_mask,
+            ("x",),
+        )
+        vel3d_part_spectra, vel3d_spectra = compute_part_seds_with_vel_shift(
+            grid_spectra,
+            wavelength,
+            axes,
+            part_props,
+            weights,
+            velocities_3d,
+            grid_dims,
+            len(axes),
+            weights.size,
+            grid_spectra.shape[-1],
+            method,
+            1,
+            100.0,
+            None,
+            lam_mask,
+            ("x",),
+        )
+
+        np.testing.assert_allclose(
+            vel3d_part_spectra, los_part_spectra, rtol=0.0, atol=0.0
+        )
+        np.testing.assert_allclose(
+            vel3d_spectra, los_spectra, rtol=0.0, atol=0.0
+        )
+
+    @pytest.mark.parametrize("method", ["ngp", "cic"])
+    def test_velocity_shift_matches_expected_interpolation(self, method):
+        """Test Doppler shifts scatter into expected wavelength bins."""
+        wavelength = np.ascontiguousarray(
+            [100.0, 200.0, 300.0, 400.0, 500.0], dtype=np.float64
+        )
+        axis = np.ascontiguousarray([0.0, 1.0], dtype=np.float64)
+        grid_spectra = np.ascontiguousarray(
+            [[10.0, 20.0, 30.0, 40.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0]],
+            dtype=np.float64,
+        )
+        part_props = (np.ascontiguousarray([0.0], dtype=np.float64),)
+        weights = np.ascontiguousarray([1.0], dtype=np.float64)
+        velocities = np.ascontiguousarray([25.0], dtype=np.float64)
+        grid_dims = np.ascontiguousarray([axis.size], dtype=np.int32)
+        lam_mask = np.ascontiguousarray(
+            np.ones(wavelength.size, dtype=np.bool_)
+        )
+
+        part_spectra, spectra = compute_part_seds_with_vel_shift(
+            grid_spectra,
+            wavelength,
+            (axis,),
+            part_props,
+            weights,
+            velocities,
+            grid_dims,
+            1,
+            weights.size,
+            wavelength.size,
+            method,
+            1,
+            100.0,
+            None,
+            lam_mask,
+            ("x",),
+        )
+
+        expected = np.array([[7.5, 12.5, 17.5, 22.5, 40.0]])
+        np.testing.assert_allclose(part_spectra, expected, rtol=0.0, atol=0.0)
+        np.testing.assert_allclose(spectra, expected[0], rtol=0.0, atol=0.0)

@@ -64,6 +64,11 @@ class Particles {
   /* The numpy array holding the particle velocities. */
   PyArrayObject *np_velocities_;
 
+  /* Cached velocity array metadata for raw LOS velocity access. */
+  const double *velocities_;
+  int velocity_ndim_;
+  npy_intp velocity_ncomp_;
+
   /* The mask (can be Py_None). */
   PyArrayObject *np_mask_;
 
