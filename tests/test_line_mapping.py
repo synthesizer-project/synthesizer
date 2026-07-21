@@ -1,7 +1,7 @@
-"""Test suite for emission line imaging.
+"""Test suite for emission line mapping.
 
-This module contains unit tests for the LineImager instrument and the
-get_line_images_luminosity/get_line_images_flux interfaces on both
+This module contains unit tests for the LineMapper instrument and the
+get_line_maps_luminosity/get_line_maps_flux interfaces on both
 Components and Galaxies.
 """
 
@@ -12,7 +12,7 @@ from unyt import Mpc, Msun, Myr, kpc
 
 from synthesizer import exceptions
 from synthesizer.imaging.image_collection import ImageCollection
-from synthesizer.instruments import LineImager
+from synthesizer.instruments import LineMapper
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
 from synthesizer.parametric.morphology import Gaussian2D
@@ -80,44 +80,44 @@ def parametric_galaxy_with_lines(nebular_emission_model, line_ids, test_grid):
     return galaxy
 
 
-class TestLineImager:
-    """Tests for the LineImager instrument class."""
+class TestLineMapper:
+    """Tests for the LineMapper instrument class."""
 
     def test_construction(self, line_ids):
-        """A LineImager should construct with just line_ids and resolution."""
-        inst = LineImager("test", line_ids=line_ids, resolution=1 * kpc)
+        """A LineMapper should construct with just line_ids and resolution."""
+        inst = LineMapper("test", line_ids=line_ids, resolution=1 * kpc)
         assert inst.line_ids == line_ids
-        assert inst.can_do_line_imaging
-        assert not inst.can_do_psf_line_imaging
-        assert not inst.can_do_noisy_line_imaging
-        assert inst.instrument_type == "line_imager"
+        assert inst.can_do_line_mapping
+        assert not inst.can_do_psf_line_mapping
+        assert not inst.can_do_noisy_line_mapping
+        assert inst.instrument_type == "line_mapper"
 
     def test_requires_line_ids(self):
-        """LineImager should reject an empty line_ids list."""
+        """LineMapper should reject an empty line_ids list."""
         with pytest.raises(exceptions.MissingArgument):
-            LineImager("test", line_ids=[], resolution=1 * kpc)
+            LineMapper("test", line_ids=[], resolution=1 * kpc)
 
     def test_requires_resolution(self, line_ids):
-        """LineImager should reject a missing resolution."""
+        """LineMapper should reject a missing resolution."""
         with pytest.raises(TypeError):
-            LineImager("test", line_ids=line_ids)
+            LineMapper("test", line_ids=line_ids)
 
     def test_psf_capability_flag(self, line_ids):
-        """can_do_psf_line_imaging should reflect configured PSFs."""
+        """can_do_psf_line_mapping should reflect configured PSFs."""
         psf = np.ones((3, 3))
-        inst = LineImager(
+        inst = LineMapper(
             "test",
             line_ids=line_ids,
             resolution=1 * kpc,
             psfs={lid: psf for lid in line_ids},
         )
-        assert inst.can_do_psf_line_imaging
+        assert inst.can_do_psf_line_mapping
 
     def test_partial_psf_dict_rejected(self, line_ids):
         """A PSF dict missing entries for some lines should be rejected."""
         psf = np.ones((3, 3))
         with pytest.raises(exceptions.MissingArgument):
-            LineImager(
+            LineMapper(
                 "test",
                 line_ids=line_ids,
                 resolution=1 * kpc,
@@ -125,43 +125,43 @@ class TestLineImager:
             )
 
     def test_noise_capability_flag(self, line_ids):
-        """can_do_noisy_line_imaging should reflect SNR/depth config."""
+        """can_do_noisy_line_mapping should reflect SNR/depth config."""
         from unyt import erg, s
 
-        inst = LineImager(
+        inst = LineMapper(
             "test",
             line_ids=line_ids,
             resolution=1 * kpc,
             snrs=5.0,
             depth=1e30 * erg / s,
         )
-        assert inst.can_do_noisy_line_imaging
+        assert inst.can_do_noisy_line_mapping
 
     def test_hdf5_roundtrip(self, line_ids, tmp_path):
-        """A LineImager should round-trip through HDF5 serialisation."""
+        """A LineMapper should round-trip through HDF5 serialisation."""
         import h5py
 
-        inst = LineImager("test", line_ids=line_ids, resolution=1 * kpc)
-        path = tmp_path / "line_imager.hdf5"
+        inst = LineMapper("test", line_ids=line_ids, resolution=1 * kpc)
+        path = tmp_path / "line_mapper.hdf5"
         with h5py.File(path, "w") as hdf:
             inst.to_hdf5(hdf)
 
         with h5py.File(path, "r") as hdf:
-            loaded = LineImager._from_hdf5(hdf)
+            loaded = LineMapper._from_hdf5(hdf)
 
         assert loaded.line_ids == inst.line_ids
         assert loaded.resolution == inst.resolution
 
 
-class TestParticleGalaxyLineImages:
-    """Tests for line images on particle galaxies and components."""
+class TestParticleGalaxyLineMaps:
+    """Tests for line maps on particle galaxies and components."""
 
-    def test_smoothed_luminosity_images(
+    def test_smoothed_luminosity_maps(
         self, particle_galaxy_with_lines, line_ids, kernel
     ):
-        """Smoothed luminosity line images produce one Image per line."""
-        instrument = LineImager("inst", line_ids=line_ids, resolution=1 * Mpc)
-        imgs = particle_galaxy_with_lines.get_line_images_luminosity(
+        """Smoothed luminosity line maps produce one Image per line."""
+        instrument = LineMapper("inst", line_ids=line_ids, resolution=1 * Mpc)
+        imgs = particle_galaxy_with_lines.get_line_maps_luminosity(
             "nebular",
             line_ids=line_ids,
             fov=0.1 * Mpc,
@@ -174,12 +174,10 @@ class TestParticleGalaxyLineImages:
         for lid in line_ids:
             assert imgs[lid].arr.shape == tuple(imgs.npix)
 
-    def test_hist_luminosity_images(
-        self, particle_galaxy_with_lines, line_ids
-    ):
-        """Histogram luminosity line images should also work."""
-        instrument = LineImager("inst", line_ids=line_ids, resolution=1 * Mpc)
-        imgs = particle_galaxy_with_lines.get_line_images_luminosity(
+    def test_hist_luminosity_maps(self, particle_galaxy_with_lines, line_ids):
+        """Histogram luminosity line maps should also work."""
+        instrument = LineMapper("inst", line_ids=line_ids, resolution=1 * Mpc)
+        imgs = particle_galaxy_with_lines.get_line_maps_luminosity(
             "nebular",
             line_ids=line_ids,
             fov=0.1 * Mpc,
@@ -188,10 +186,10 @@ class TestParticleGalaxyLineImages:
         )
         assert set(imgs.keys()) == set(line_ids)
 
-    def test_flux_images(self, particle_galaxy_with_lines, line_ids, kernel):
-        """Flux line images should be generated from observed lines."""
-        instrument = LineImager("inst", line_ids=line_ids, resolution=1 * Mpc)
-        imgs = particle_galaxy_with_lines.get_line_images_flux(
+    def test_flux_maps(self, particle_galaxy_with_lines, line_ids, kernel):
+        """Flux line maps should be generated from observed lines."""
+        instrument = LineMapper("inst", line_ids=line_ids, resolution=1 * Mpc)
+        imgs = particle_galaxy_with_lines.get_line_maps_flux(
             "nebular",
             line_ids=line_ids,
             fov=0.1 * Mpc,
@@ -201,13 +199,13 @@ class TestParticleGalaxyLineImages:
         )
         assert set(imgs.keys()) == set(line_ids)
 
-    def test_component_level_images(
+    def test_component_level_maps(
         self, particle_galaxy_with_lines, line_ids, kernel
     ):
-        """Component-level get_line_images_luminosity should work directly."""
-        instrument = LineImager("inst", line_ids=line_ids, resolution=1 * Mpc)
+        """Component-level get_line_maps_luminosity should work directly."""
+        instrument = LineMapper("inst", line_ids=line_ids, resolution=1 * Mpc)
         stars = particle_galaxy_with_lines.stars
-        comp_imgs = stars.get_line_images_luminosity(
+        comp_imgs = stars.get_line_maps_luminosity(
             "nebular",
             line_ids=line_ids,
             fov=0.1 * Mpc,
@@ -224,7 +222,7 @@ class TestParticleGalaxyLineImages:
         from unyt import erg, s
 
         psf = np.outer(np.hanning(9), np.hanning(9))
-        instrument = LineImager(
+        instrument = LineMapper(
             "inst-psf",
             line_ids=line_ids,
             resolution=1 * Mpc,
@@ -232,7 +230,7 @@ class TestParticleGalaxyLineImages:
             snrs=5.0,
             depth=1e30 * erg / s,
         )
-        particle_galaxy_with_lines.get_line_images_luminosity(
+        particle_galaxy_with_lines.get_line_maps_luminosity(
             "nebular",
             line_ids=line_ids,
             fov=0.1 * Mpc,
@@ -241,18 +239,18 @@ class TestParticleGalaxyLineImages:
             kernel=kernel,
         )
         stars = particle_galaxy_with_lines.stars
-        assert "inst-psf" in stars.line_images_psf_lnu
-        assert "inst-psf" in stars.line_images_noise_lnu
-        psf_lines = stars.line_images_psf_lnu["inst-psf"]["nebular"]
+        assert "inst-psf" in stars.line_maps_psf_lnu
+        assert "inst-psf" in stars.line_maps_noise_lnu
+        psf_lines = stars.line_maps_psf_lnu["inst-psf"]["nebular"]
         assert set(psf_lines.keys()) == set(line_ids)
 
     def test_missing_line_raises(self, particle_galaxy_with_lines, kernel):
         """Requesting an ungenerated line should raise MissingLines."""
-        instrument = LineImager(
+        instrument = LineMapper(
             "inst", line_ids=["made up line"], resolution=1 * Mpc
         )
         with pytest.raises(exceptions.MissingLines):
-            particle_galaxy_with_lines.get_line_images_luminosity(
+            particle_galaxy_with_lines.get_line_maps_luminosity(
                 "nebular",
                 line_ids=["made up line"],
                 fov=0.1 * Mpc,
@@ -262,7 +260,7 @@ class TestParticleGalaxyLineImages:
             )
 
     def test_missing_flux_raises(self, per_particle_nebular_model, line_ids):
-        """Requesting flux images before get_observed_lines should raise."""
+        """Requesting flux maps before get_observed_lines should raise."""
         nstars = 5
         rng = np.random.default_rng(1)
         coordinates = rng.normal(0.0, 0.01, (nstars, 3)) * Mpc
@@ -280,9 +278,9 @@ class TestParticleGalaxyLineImages:
         )
         galaxy.get_lines(line_ids, per_particle_nebular_model)
 
-        instrument = LineImager("inst", line_ids=line_ids, resolution=1 * Mpc)
+        instrument = LineMapper("inst", line_ids=line_ids, resolution=1 * Mpc)
         with pytest.raises(exceptions.MissingAttribute):
-            galaxy.get_line_images_flux(
+            galaxy.get_line_maps_flux(
                 "nebular",
                 line_ids=line_ids,
                 fov=0.1 * Mpc,
@@ -291,15 +289,15 @@ class TestParticleGalaxyLineImages:
             )
 
 
-class TestParametricGalaxyLineImages:
-    """Tests for line images on parametric galaxies."""
+class TestParametricGalaxyLineMaps:
+    """Tests for line maps on parametric galaxies."""
 
-    def test_smoothed_luminosity_images(
+    def test_smoothed_luminosity_maps(
         self, parametric_galaxy_with_lines, line_ids
     ):
-        """Parametric galaxies produce smoothed images via density grid."""
-        instrument = LineImager("inst", line_ids=line_ids, resolution=1 * Mpc)
-        imgs = parametric_galaxy_with_lines.get_line_images_luminosity(
+        """Parametric galaxies produce smoothed maps via density grid."""
+        instrument = LineMapper("inst", line_ids=line_ids, resolution=1 * Mpc)
+        imgs = parametric_galaxy_with_lines.get_line_maps_luminosity(
             "nebular",
             line_ids=line_ids,
             fov=0.1 * Mpc,
@@ -311,10 +309,10 @@ class TestParametricGalaxyLineImages:
             assert imgs[lid].arr.sum() >= 0
 
     def test_hist_rejected(self, parametric_galaxy_with_lines, line_ids):
-        """Parametric galaxies cannot produce histogram line images."""
-        instrument = LineImager("inst", line_ids=line_ids, resolution=1 * Mpc)
+        """Parametric galaxies cannot produce histogram line maps."""
+        instrument = LineMapper("inst", line_ids=line_ids, resolution=1 * Mpc)
         with pytest.raises(exceptions.InconsistentArguments):
-            parametric_galaxy_with_lines.get_line_images_luminosity(
+            parametric_galaxy_with_lines.get_line_maps_luminosity(
                 "nebular",
                 line_ids=line_ids,
                 fov=0.1 * Mpc,

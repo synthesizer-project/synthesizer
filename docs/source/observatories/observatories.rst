@@ -11,7 +11,7 @@ matches the observing mode you want:
 
 - ``PhotometricInstrument`` for integrated photometry
 - ``PhotometricImager`` for photometry plus resolved imaging
-- ``LineImager`` for resolved emission line imaging
+- ``LineMapper`` for resolved emission line mapping
 - ``SpectroscopicInstrument`` for one-dimensional spectroscopy
 - ``IntegratedFieldUnit`` for resolved spectroscopy and spectral cubes
 - ``InstrumentCollection`` for combining one or more instruments
@@ -32,8 +32,8 @@ Typical examples are:
        resolution=0.1 * arcsecond,
    )
 
-   line_imager = LineImager(
-       label="line-imager",
+   line_mapper = LineMapper(
+       label="line-mapper",
        line_ids=["H 1 4861.32A", "O 3 5006.84A"],
        resolution=0.1 * arcsecond,
    )
@@ -52,7 +52,7 @@ Each class carries the capabilities needed for that observing mode.
   SNR information
 - ``PhotometricImager`` adds spatial resolution together with optional PSFs,
   ``noise_maps``, and ``noise_source_maps``
-- ``LineImager`` stores the emission line ids to image together with spatial
+- ``LineMapper`` stores the emission line ids to map together with spatial
   resolution and the same optional PSF/noise configuration as
   ``PhotometricImager``, but keyed by line id instead of filter code
 - ``SpectroscopicInstrument`` stores a wavelength grid for integrated spectra

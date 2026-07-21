@@ -1,9 +1,9 @@
-"""Specialised emission line imaging instrument.
+"""Specialised emission line mapping instrument.
 
 This instrument is designed to hold the attributes required to turn
-per-line luminosities/fluxes into resolved images. Unlike photometric
-imaging, there is no filter transmission curve involved: each emission
-line is projected directly into its own image, keyed by line id.
+per-line luminosities/fluxes into resolved emission line maps. Unlike
+photometric imaging, there is no filter transmission curve involved: each
+emission line is projected directly into its own map, keyed by line id.
 """
 
 import hashlib
@@ -17,7 +17,7 @@ from synthesizer import exceptions
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_collection import ImageCollection
 from synthesizer.imaging.image_generators import (
-    _generate_line_image_collection_generic,
+    _generate_line_map_collection_generic,
 )
 from synthesizer.instruments.instrument_base import (
     InstrumentBase,
@@ -28,24 +28,24 @@ from synthesizer.units import accepts
 from synthesizer.utils.operation_timers import timed
 
 
-class LineImager(InstrumentBase):
-    """Emission line imaging instrument class.
+class LineMapper(InstrumentBase):
+    """Emission line mapping instrument class.
 
     A class containing the attributes and methods required to produce
-    resolved emission line images. It holds the set of line ids the
-    instrument images together with the spatial resolution, optional PSFs,
+    resolved emission line maps. It holds the set of line ids the
+    instrument maps together with the spatial resolution, optional PSFs,
     and optional noise definitions, each keyed by line id rather than by
     filter code.
 
     Attributes:
         line_ids (list): The ids of the emission lines this instrument
-            images.
+            maps.
         resolution (unyt_array): The spatial resolution of the instrument, in
             kpc or arcseconds.
         psfs (dict, optional): An optional dictionary of point spread
             functions, with one entry per line id.
         noise_maps (dict, optional): An optional dictionary of fixed noise
-            maps to apply directly to images, with one entry per line id.
+            maps to apply directly to line maps, with one entry per line id.
         noise_source_maps (dict, optional): An optional dictionary of source
             maps used to generate correlated-noise models, with one entry per
             line id.
@@ -61,7 +61,7 @@ class LineImager(InstrumentBase):
     """
 
     @accepts(resolution=(kpc, arcsecond))
-    @timed("LineImager.__init__")
+    @timed("LineMapper.__init__")
     def __init__(
         self,
         label,
@@ -75,18 +75,18 @@ class LineImager(InstrumentBase):
         noise_maps=None,
         noise_source_maps=None,
     ):
-        """Initialise a line imager.
+        """Initialise a line mapper.
 
         Args:
             label (str): A label for the instrument.
             line_ids (list): The ids of the emission lines this instrument
-                images.
+                maps.
             resolution (unyt_array): The spatial resolution of the
                 instrument, in kpc or arcseconds.
             psfs (dict, optional): An optional dictionary of point spread
                 functions, with one entry per line id.
             psf_resample_factor (int, optional): Instrument-owned PSF
-                supersampling factor. When greater than 1, images are
+                supersampling factor. When greater than 1, maps are
                 temporarily resampled by this factor before PSF convolution
                 and then downsampled back to their original resolution.
             depth (dict or unyt_quantity, optional): The depth of the
@@ -100,7 +100,7 @@ class LineImager(InstrumentBase):
                 ratios of the instrument. If values are provided per line,
                 this should be a dictionary keyed by line id.
             noise_maps (dict, optional): An optional dictionary of fixed
-                noise maps to apply directly to images, with one entry per
+                noise maps to apply directly to line maps, with one entry per
                 line id.
             noise_source_maps (dict, optional): An optional dictionary of
                 source maps used to generate correlated-noise models, with
@@ -108,7 +108,7 @@ class LineImager(InstrumentBase):
         """
         super().__init__(label)
 
-        # Set the line imager specific attributes
+        # Set the line mapper specific attributes
         self.line_ids = [str(line_id) for line_id in line_ids]
         self.resolution = resolution
         self.psfs = psfs
@@ -123,7 +123,7 @@ class LineImager(InstrumentBase):
         # Validate the instrument configuration
         self._validate()
 
-    @timed("LineImager._validate")
+    @timed("LineMapper._validate")
     def _validate(self):
         """Validate the instrument attributes.
 
@@ -132,12 +132,12 @@ class LineImager(InstrumentBase):
         """
         if len(self.line_ids) == 0:
             raise exceptions.MissingArgument(
-                "LineImager requires at least one line id."
+                "LineMapper requires at least one line id."
             )
 
         if self.resolution is None:
             raise exceptions.MissingArgument(
-                "LineImager requires a resolution."
+                "LineMapper requires a resolution."
             )
 
         if self.psf_resample_factor < 1:
@@ -206,27 +206,27 @@ class LineImager(InstrumentBase):
     @property
     def instrument_type(self):
         """Return the serialised type tag for this instrument."""
-        return "line_imager"
+        return "line_mapper"
 
     @property
-    def can_do_line_imaging(self):
-        """Return whether this instrument supports line imaging."""
+    def can_do_line_mapping(self):
+        """Return whether this instrument supports line mapping."""
         return True
 
     @property
-    def can_do_psf_line_imaging(self):
-        """Return whether this instrument supports PSF line imaging."""
+    def can_do_psf_line_mapping(self):
+        """Return whether this instrument supports PSF line mapping."""
         return self.psfs is not None
 
     @property
-    def can_do_noisy_line_imaging(self):
-        """Return whether this instrument supports noisy line imaging."""
+    def can_do_noisy_line_mapping(self):
+        """Return whether this instrument supports noisy line mapping."""
         have_noise = self.noise_maps is not None
         have_noise |= self.noise_source_maps is not None
         have_noise |= self.snrs is not None and self.depth is not None
         return have_noise
 
-    @timed("LineImager._build_correlated_noise_models")
+    @timed("LineMapper._build_correlated_noise_models")
     def _build_correlated_noise_models(self):
         """Build per-line correlated-noise models from source maps.
 
@@ -251,9 +251,9 @@ class LineImager(InstrumentBase):
             for line_id, noise_map in self.noise_source_maps.items()
         }
 
-    @timed("LineImager._comparison_state")
+    @timed("LineMapper._comparison_state")
     def _comparison_state(self):
-        """Return a tuple describing the line imaging comparison state.
+        """Return a tuple describing the line mapping comparison state.
 
         Returns:
             tuple: Hashable representation of the instrument state.
@@ -270,7 +270,7 @@ class LineImager(InstrumentBase):
             _hashable_state(self.noise_source_maps),
         )
 
-    @timed("LineImager.get_correlated_noise_model")
+    @timed("LineMapper.get_correlated_noise_model")
     def get_correlated_noise_model(self, line_id):
         """Return the correlated-noise model for a line.
 
@@ -294,8 +294,8 @@ class LineImager(InstrumentBase):
 
         return self.correlated_noise_models[line_id]
 
-    @timed("LineImager.generate_images")
-    def generate_images(
+    @timed("LineMapper.generate_maps")
+    def generate_maps(
         self,
         lines,
         fov,
@@ -307,27 +307,27 @@ class LineImager(InstrumentBase):
         cosmo,
         quantity="luminosity",
     ):
-        """Generate a line image collection for one emitter.
+        """Generate a line map collection for one emitter.
 
         Args:
-            lines (LineCollection): Lines to project into the output images.
-            fov (unyt_quantity/tuple, unyt_quantity): Width of the image.
-            img_type (str): The type of image to create.
+            lines (LineCollection): Lines to project into the output maps.
+            fov (unyt_quantity/tuple, unyt_quantity): Width of the map.
+            img_type (str): The type of map to create.
             kernel (np.ndarray, optional): Kernel used for smoothed particle
                 imaging.
             kernel_threshold (float): Kernel impact-parameter threshold.
             nthreads (int): Number of threads to use for particle smoothing.
             emitter (Component): Emitter supplying geometry and source data.
             cosmo (astropy.cosmology.Cosmology, optional): Cosmology used for
-                angular-image coordinate conversions.
+                angular-coordinate conversions.
             quantity (str): Either "luminosity" or "flux", selecting which
-                LineCollection attribute is imaged.
+                LineCollection attribute is mapped.
 
         Returns:
-            ImageCollection: The generated image collection, one Image per
+            ImageCollection: The generated map collection, one Image per
                 requested line id.
         """
-        return _generate_line_image_collection_generic(
+        return _generate_line_map_collection_generic(
             instrument=self,
             lines=lines,
             fov=fov,
@@ -340,9 +340,9 @@ class LineImager(InstrumentBase):
             quantity=quantity,
         )
 
-    @timed("LineImager.apply_psf")
+    @timed("LineMapper.apply_psf")
     def apply_psf(self, image, line_id, inplace=False):
-        """Apply the configured PSF to one image.
+        """Apply the configured PSF to one line map.
 
         Args:
             image (Image): Image to which the PSF should be applied.
@@ -403,9 +403,9 @@ class LineImager(InstrumentBase):
 
         return working_image
 
-    @timed("LineImager.apply_psfs")
+    @timed("LineMapper.apply_psfs")
     def apply_psfs(self, image_collection, inplace=False):
-        """Apply the configured PSFs to an image collection.
+        """Apply the configured PSFs to a line map collection.
 
         Args:
             image_collection (ImageCollection): Collection to which PSFs
@@ -453,7 +453,7 @@ class LineImager(InstrumentBase):
 
         return working_collection
 
-    @timed("LineImager.apply_noise")
+    @timed("LineMapper.apply_noise")
     def apply_noise(
         self,
         image,
@@ -462,7 +462,7 @@ class LineImager(InstrumentBase):
         rng_seed=None,
         aperture_radius=None,
     ):
-        """Apply the configured imaging noise to one image.
+        """Apply the configured noise to one line map.
 
         Args:
             image (Image): Image to which noise should be applied.
@@ -509,10 +509,10 @@ class LineImager(InstrumentBase):
             )
 
         raise exceptions.MissingArgument(
-            "The instrument has no imaging noise configuration."
+            "The instrument has no line mapping noise configuration."
         )
 
-    @timed("LineImager.apply_noises")
+    @timed("LineMapper.apply_noises")
     def apply_noises(
         self,
         image_collection,
@@ -520,7 +520,7 @@ class LineImager(InstrumentBase):
         rng_seed=None,
         aperture_radius=None,
     ):
-        """Apply the configured imaging noise to an image collection.
+        """Apply the configured noise to a line map collection.
 
         Args:
             image_collection (ImageCollection): Collection to which noise
@@ -559,9 +559,9 @@ class LineImager(InstrumentBase):
             imgs=noisy_imgs,
         )
 
-    @timed("LineImager.to_hdf5")
+    @timed("LineMapper.to_hdf5")
     def to_hdf5(self, group):
-        """Write the line imager to an HDF5 group.
+        """Write the line mapper to an HDF5 group.
 
         Args:
             group (h5py.Group): Group into which the instrument should be
@@ -642,16 +642,16 @@ class LineImager(InstrumentBase):
                 ds.attrs["units"] = str(value.units)
 
     @classmethod
-    @timed("LineImager.load")
+    @timed("LineMapper.load")
     def load(cls, filepath=None, **kwargs):
-        """Load a line imager from an HDF5 file.
+        """Load a line mapper from an HDF5 file.
 
         Args:
             filepath (str or PathLike, optional): Path to the HDF5 file.
             **kwargs: Attribute overrides applied after deserialisation.
 
         Returns:
-            LineImager: The loaded instrument.
+            LineMapper: The loaded instrument.
         """
         if filepath is None:
             filepath = getattr(cls, "_instrument_cache_file", None)
@@ -663,16 +663,16 @@ class LineImager(InstrumentBase):
             return cls._from_hdf5(hdf, **kwargs)
 
     @classmethod
-    @timed("LineImager._from_hdf5")
+    @timed("LineMapper._from_hdf5")
     def _from_hdf5(cls, group, **kwargs):
-        """Load a line imager from an HDF5 group.
+        """Load a line mapper from an HDF5 group.
 
         Args:
             group (h5py.Group): Group containing the serialised instrument.
             **kwargs: Attribute overrides applied after deserialisation.
 
         Returns:
-            LineImager: The loaded instrument.
+            LineMapper: The loaded instrument.
         """
         line_ids = [str(lid) for lid in group.attrs["line_ids"]]
         resolution = unyt_array(

@@ -25,7 +25,7 @@ from synthesizer.imaging.image_generators import (
 from synthesizer.imaging.postprocess import (
     _postprocess_existing_data_cubes,
     _postprocess_existing_images,
-    _postprocess_existing_line_images,
+    _postprocess_existing_line_maps,
 )
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import accepts, unit_is_compatible
@@ -117,15 +117,15 @@ class BaseGalaxy:
         self.images_noise_lnu = {}
         self.images_noise_fnu = {}
 
-        # Define the dictionaries to hold the emission line images (same
+        # Define the dictionaries to hold the emission line maps (same
         # structure as the photometric images above, but keyed by line id
         # rather than filter code)
-        self.line_images_lnu = {}
-        self.line_images_fnu = {}
-        self.line_images_psf_lnu = {}
-        self.line_images_psf_fnu = {}
-        self.line_images_noise_lnu = {}
-        self.line_images_noise_fnu = {}
+        self.line_maps_lnu = {}
+        self.line_maps_fnu = {}
+        self.line_maps_psf_lnu = {}
+        self.line_maps_psf_fnu = {}
+        self.line_maps_noise_lnu = {}
+        self.line_maps_noise_fnu = {}
 
         # Initialise the dictionary to hold instrument specific spectroscopy
         self.spectroscopy = {}
@@ -1890,7 +1890,7 @@ class BaseGalaxy:
             phot_type="fnu",
         )
 
-    def _generate_line_images(
+    def _generate_line_maps(
         self,
         *labels,
         line_ids,
@@ -1903,43 +1903,43 @@ class BaseGalaxy:
         cosmo=None,
         phot_type="lnu",
     ):
-        """Make emission line ImageCollections for a galaxy and components.
+        """Make emission line map ImageCollections for a galaxy/components.
 
-        For Parametric Galaxy objects, images can only be smoothed. An
+        For Parametric Galaxy objects, maps can only be smoothed. An
         exception will be raised if a histogram is requested.
 
-        For Particle Galaxy objects, images can either be a simple
+        For Particle Galaxy objects, maps can either be a simple
         histogram ("hist") or an image with particles smoothed over
         their SPH kernel.
 
-        Which images are produced is defined by the labels passed. If any
+        Which maps are produced is defined by the labels passed. If any
         of the necessary lines are missing for generating a particular
-        image, an exception will be raised.
+        map, an exception will be raised.
 
-        All images that are created will be stored on the emitter (Stars,
-        BlackHole/s, or galaxy) under the line_images_lnu/line_images_fnu
+        All maps that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the line_maps_lnu/line_maps_fnu
         attribute.
 
         Args:
             *labels (str):
-                The labels of the emission models to make line images for.
+                The labels of the emission models to make line maps for.
                 These must be present in the lines dicts of the components or
                 the galaxy.
             line_ids (list):
-                The line ids to make images for. Each requested label must
+                The line ids to make maps for. Each requested label must
                 have all of these lines available.
             fov (unyt_quantity of float):
-                The width of the image in image coordinates.
+                The width of the map in image coordinates.
             instrument (Instrument):
-                The instrument to use for the image (typically a
-                LineImager).
+                The instrument to use for the map (typically a
+                LineMapper).
             img_type (str):
-                The type of image to be made, either "hist" -> a histogram, or
+                The type of map to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
-                module. Only used for smoothed images.
+                module. Only used for smoothed maps.
             kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
@@ -1949,14 +1949,15 @@ class BaseGalaxy:
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
             phot_type (str):
-                The type of line quantity to use for the images, either
-                'lnu' for luminosity images, or 'fnu' for flux.
+                The type of line quantity to use for the maps, either
+                'lnu' for luminosity maps, or 'fnu' for flux.
 
         Returns:
             ImageCollection/dict
                 Either a single ImageCollection if only one label is passed,
                 otherwise a dict of ImageCollections keyed by label. Each
-                ImageCollection contains one Image per requested line id.
+                ImageCollection contains one line map (Image) per requested
+                line id.
         """
         labels = list(labels)
         for label in labels:
@@ -1971,7 +1972,7 @@ class BaseGalaxy:
 
         if self.galaxy_type == "Parametric" and img_type == "hist":
             raise exceptions.InconsistentArguments(
-                "Parametric Galaxies can only produce smoothed images."
+                "Parametric Galaxies can only produce smoothed maps."
             )
 
         if unit_is_compatible(instrument.resolution, arcsecond):
@@ -2017,9 +2018,9 @@ class BaseGalaxy:
                 f"{list(combined_cache.keys())}"
             )
 
-        out_images = {}
+        out_maps = {}
 
-        # Generate line images for each component based on the routing
+        # Generate line maps for each component based on the routing
         for emitter, emitter_labels in component_labels_by_emitter.items():
             component = None
             if emitter == "stellar" and self.stars is not None:
@@ -2032,7 +2033,7 @@ class BaseGalaxy:
             if component is None:
                 continue
 
-            component_imgs = component._generate_line_images(
+            component_maps = component._generate_line_maps(
                 *emitter_labels,
                 line_ids=line_ids,
                 img_type=img_type,
@@ -2046,28 +2047,28 @@ class BaseGalaxy:
                 postprocess=False,
             )
 
-            if isinstance(component_imgs, dict):
-                out_images.update(component_imgs)
+            if isinstance(component_maps, dict):
+                out_maps.update(component_maps)
             else:
-                out_images[emitter_labels[0]] = component_imgs
+                out_maps[emitter_labels[0]] = component_maps
 
         expected_labels = []
         for emitter_labels in component_labels_by_emitter.values():
             expected_labels.extend(emitter_labels)
 
-        missing_labels = set(expected_labels) - set(out_images.keys())
+        missing_labels = set(expected_labels) - set(out_maps.keys())
         if len(missing_labels) > 0:
             raise exceptions.MissingImage(
-                "Cannot generate galaxy line images for the following "
-                "labels as the necessary component line images are "
+                "Cannot generate galaxy line maps for the following "
+                "labels as the necessary component line maps are "
                 f"missing: {', '.join(missing_labels)}"
             )
 
         for label in galaxy_combine_labels:
-            out_images.update(
+            out_maps.update(
                 {
                     label: _combine_image_collections(
-                        images=out_images,
+                        images=out_maps,
                         label=label,
                         model_cache=combined_cache,
                     )
@@ -2078,85 +2079,81 @@ class BaseGalaxy:
 
         if instrument_name is not None:
             if phot_type == "lnu":
-                for label in out_images:
+                for label in out_maps:
                     in_stars = self.stars is not None and label in (
-                        self.stars.line_images_lnu.get(instrument_name, {})
+                        self.stars.line_maps_lnu.get(instrument_name, {})
                     )
                     in_bhs = self.black_holes is not None and label in (
-                        self.black_holes.line_images_lnu.get(
-                            instrument_name, {}
-                        )
+                        self.black_holes.line_maps_lnu.get(instrument_name, {})
                     )
                     in_gas = self.gas is not None and label in (
-                        self.gas.line_images_lnu.get(instrument_name, {})
+                        self.gas.line_maps_lnu.get(instrument_name, {})
                     )
                     if not in_stars and not in_bhs and not in_gas:
-                        self.line_images_lnu.setdefault(instrument_name, {})
-                        self.line_images_lnu[instrument_name][label] = (
-                            out_images[label]
-                        )
+                        self.line_maps_lnu.setdefault(instrument_name, {})
+                        self.line_maps_lnu[instrument_name][label] = out_maps[
+                            label
+                        ]
             else:
-                for label in out_images:
+                for label in out_maps:
                     in_stars = self.stars is not None and label in (
-                        self.stars.line_images_fnu.get(instrument_name, {})
+                        self.stars.line_maps_fnu.get(instrument_name, {})
                     )
                     in_bhs = self.black_holes is not None and label in (
-                        self.black_holes.line_images_fnu.get(
-                            instrument_name, {}
-                        )
+                        self.black_holes.line_maps_fnu.get(instrument_name, {})
                     )
                     in_gas = self.gas is not None and label in (
-                        self.gas.line_images_fnu.get(instrument_name, {})
+                        self.gas.line_maps_fnu.get(instrument_name, {})
                     )
                     if not in_stars and not in_bhs and not in_gas:
-                        self.line_images_fnu.setdefault(instrument_name, {})
-                        self.line_images_fnu[instrument_name][label] = (
-                            out_images[label]
-                        )
+                        self.line_maps_fnu.setdefault(instrument_name, {})
+                        self.line_maps_fnu[instrument_name][label] = out_maps[
+                            label
+                        ]
         else:
             if phot_type == "lnu":
-                for label in out_images:
+                for label in out_maps:
                     in_stars = (
                         self.stars is not None
-                        and label in self.stars.line_images_lnu
+                        and label in self.stars.line_maps_lnu
                     )
                     in_bhs = (
                         self.black_holes is not None
-                        and label in self.black_holes.line_images_lnu
+                        and label in self.black_holes.line_maps_lnu
                     )
                     in_gas = (
                         self.gas is not None
-                        and label in self.gas.line_images_lnu
+                        and label in self.gas.line_maps_lnu
                     )
                     if not in_stars and not in_bhs and not in_gas:
-                        self.line_images_lnu[label] = out_images[label]
+                        self.line_maps_lnu[label] = out_maps[label]
             else:
-                for label in out_images:
+                for label in out_maps:
                     in_stars = (
                         self.stars is not None
-                        and label in self.stars.line_images_fnu
+                        and label in self.stars.line_maps_fnu
                     )
                     in_bhs = (
                         self.black_holes is not None
-                        and label in self.black_holes.line_images_fnu
+                        and label in self.black_holes.line_maps_fnu
                     )
                     in_gas = (
                         self.gas is not None
-                        and label in self.gas.line_images_fnu
+                        and label in self.gas.line_maps_fnu
                     )
                     if not in_stars and not in_bhs and not in_gas:
-                        self.line_images_fnu[label] = out_images[label]
+                        self.line_maps_fnu[label] = out_maps[label]
 
-        if len(out_images) == 0:
+        if len(out_maps) == 0:
             warn(
-                "No line images were generated for the requested labels. "
+                "No line maps were generated for the requested labels. "
                 "An empty dict will be returned. (Note that this is very "
                 "unlikely to happen and should have raised an exception "
                 "earlier.)"
             )
             return {}
 
-        final_images = dict(out_images)
+        final_maps = dict(out_maps)
 
         for emitter, emitter_labels in component_labels_by_emitter.items():
             component = None
@@ -2170,8 +2167,8 @@ class BaseGalaxy:
             if component is None:
                 continue
 
-            final_images.update(
-                _postprocess_existing_line_images(
+            final_maps.update(
+                _postprocess_existing_line_maps(
                     component,
                     instrument=instrument,
                     phot_type=phot_type,
@@ -2180,8 +2177,8 @@ class BaseGalaxy:
             )
 
         if len(galaxy_combine_labels) > 0:
-            final_images.update(
-                _postprocess_existing_line_images(
+            final_maps.update(
+                _postprocess_existing_line_maps(
                     self,
                     instrument=instrument,
                     phot_type=phot_type,
@@ -2190,10 +2187,10 @@ class BaseGalaxy:
             )
 
         if len(labels) == 1:
-            return final_images[labels[0]]
-        return final_images
+            return final_maps[labels[0]]
+        return final_maps
 
-    def get_line_images_luminosity(
+    def get_line_maps_luminosity(
         self,
         *labels,
         line_ids,
@@ -2205,37 +2202,37 @@ class BaseGalaxy:
         nthreads=1,
         cosmo=None,
     ):
-        """Make emission line ImageCollections from luminosities.
+        """Make emission line maps (ImageCollections) from luminosities.
 
-        For Parametric Galaxy objects, images can only be smoothed. An
+        For Parametric Galaxy objects, maps can only be smoothed. An
         exception will be raised if a histogram is requested.
 
-        For Particle Galaxy objects, images can either be a simple
+        For Particle Galaxy objects, maps can either be a simple
         histogram ("hist") or an image with particles smoothed over
         their SPH kernel.
 
-        All images that are created will be stored on the emitter (Stars,
-        BlackHole/s, or galaxy) under the line_images_lnu attribute.
+        All maps that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the line_maps_lnu attribute.
 
         Args:
             *labels (str):
-                The labels of the emission models to make line images for.
+                The labels of the emission models to make line maps for.
                 These must be present in the lines dicts of the components or
                 the galaxy.
             line_ids (list):
-                The line ids to make images for.
+                The line ids to make maps for.
             fov (unyt_quantity of float):
-                The width of the image in image coordinates.
+                The width of the map in image coordinates.
             instrument (Instrument):
-                The instrument to use for the image (typically a
-                LineImager).
+                The instrument to use for the map (typically a
+                LineMapper).
             img_type (str):
-                The type of image to be made, either "hist" -> a histogram, or
+                The type of map to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
-                module. Only used for smoothed images.
+                module. Only used for smoothed maps.
             kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
@@ -2250,7 +2247,7 @@ class BaseGalaxy:
                 Either a single ImageCollection if only one label is passed,
                 otherwise a dict of ImageCollections keyed by label.
         """
-        return self._generate_line_images(
+        return self._generate_line_maps(
             *labels,
             line_ids=line_ids,
             fov=fov,
@@ -2263,7 +2260,7 @@ class BaseGalaxy:
             phot_type="lnu",
         )
 
-    def get_line_images_flux(
+    def get_line_maps_flux(
         self,
         *labels,
         line_ids,
@@ -2275,37 +2272,37 @@ class BaseGalaxy:
         nthreads=1,
         cosmo=None,
     ):
-        """Make emission line ImageCollections from fluxes.
+        """Make emission line maps (ImageCollections) from fluxes.
 
-        For Parametric Galaxy objects, images can only be smoothed. An
+        For Parametric Galaxy objects, maps can only be smoothed. An
         exception will be raised if a histogram is requested.
 
-        For Particle Galaxy objects, images can either be a simple
+        For Particle Galaxy objects, maps can either be a simple
         histogram ("hist") or an image with particles smoothed over
         their SPH kernel.
 
-        All images that are created will be stored on the emitter (Stars,
-        BlackHole/s, or galaxy) under the line_images_fnu attribute.
+        All maps that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the line_maps_fnu attribute.
 
         Args:
             *labels (str):
-                The labels of the emission models to make line images for.
+                The labels of the emission models to make line maps for.
                 These must be present in the lines dicts of the components or
                 the galaxy.
             line_ids (list):
-                The line ids to make images for.
+                The line ids to make maps for.
             fov (unyt_quantity of float):
-                The width of the image in image coordinates.
+                The width of the map in image coordinates.
             instrument (Instrument):
-                The instrument to use for the image (typically a
-                LineImager).
+                The instrument to use for the map (typically a
+                LineMapper).
             img_type (str):
-                The type of image to be made, either "hist" -> a histogram, or
+                The type of map to be made, either "hist" -> a histogram, or
                 "smoothed" -> particles smoothed over a kernel for a particle
                 galaxy. Otherwise, only smoothed is applicable.
             kernel (np.ndarray of float):
                 The values from one of the kernels from the kernel_functions
-                module. Only used for smoothed images.
+                module. Only used for smoothed maps.
             kernel_threshold (float):
                 The kernel's impact parameter threshold (by default 1).
             nthreads (int):
@@ -2320,7 +2317,7 @@ class BaseGalaxy:
                 Either a single ImageCollection if only one label is passed,
                 otherwise a dict of ImageCollections keyed by label.
         """
-        return self._generate_line_images(
+        return self._generate_line_maps(
             *labels,
             line_ids=line_ids,
             fov=fov,

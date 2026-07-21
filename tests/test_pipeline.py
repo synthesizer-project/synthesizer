@@ -1106,23 +1106,23 @@ class TestPipelineOperations:
             > 0
         ), "Base images were removed"
 
-    def test_run_pipeline_line_images_luminosity(
+    def test_run_pipeline_line_maps_luminosity(
         self,
         kernel,
         pipeline_with_galaxies_per_particle,
         test_grid,
     ):
-        """Test running the pipeline with luminosity line images."""
-        from synthesizer.instruments import LineImager
+        """Test running the pipeline with luminosity line maps."""
+        from synthesizer.instruments import LineMapper
 
         line_ids = list(test_grid.available_lines[:3])
-        line_imager = LineImager(
-            "test_line_imager", line_ids=line_ids, resolution=1 * Mpc
+        line_mapper = LineMapper(
+            "test_line_mapper", line_ids=line_ids, resolution=1 * Mpc
         )
 
         pipeline_with_galaxies_per_particle.get_spectra()
-        pipeline_with_galaxies_per_particle.get_line_images_luminosity(
-            line_imager,
+        pipeline_with_galaxies_per_particle.get_line_maps_luminosity(
+            line_mapper,
             line_ids=line_ids,
             fov=100 * Mpc,
             kernel=kernel,
@@ -1132,34 +1132,34 @@ class TestPipelineOperations:
         assert pipeline_with_galaxies_per_particle._analysis_complete, (
             "Pipeline did not run"
         )
-        assert pipeline_with_galaxies_per_particle._write_line_images_lum, (
-            "Line images not flagged for writing"
+        assert pipeline_with_galaxies_per_particle._write_line_maps_lum, (
+            "Line maps not flagged for writing"
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.line_images_lum
+                pipeline_with_galaxies_per_particle.line_maps_lum
             )
             > 0
-        ), "No line images were calculated"
+        ), "No line maps were calculated"
 
-    def test_run_pipeline_line_images_flux(
+    def test_run_pipeline_line_maps_flux(
         self,
         kernel,
         pipeline_with_galaxies_per_particle,
         test_grid,
     ):
-        """Test running the pipeline with flux line images."""
-        from synthesizer.instruments import LineImager
+        """Test running the pipeline with flux line maps."""
+        from synthesizer.instruments import LineMapper
 
         line_ids = list(test_grid.available_lines[:3])
-        line_imager = LineImager(
-            "test_line_imager_flux", line_ids=line_ids, resolution=1 * Mpc
+        line_mapper = LineMapper(
+            "test_line_mapper_flux", line_ids=line_ids, resolution=1 * Mpc
         )
 
         pipeline_with_galaxies_per_particle.get_spectra()
         pipeline_with_galaxies_per_particle.get_observed_spectra(cosmo=cosmo)
-        pipeline_with_galaxies_per_particle.get_line_images_flux(
-            line_imager,
+        pipeline_with_galaxies_per_particle.get_line_maps_flux(
+            line_mapper,
             line_ids=line_ids,
             fov=100 * Mpc,
             kernel=kernel,
@@ -1170,15 +1170,15 @@ class TestPipelineOperations:
         assert pipeline_with_galaxies_per_particle._analysis_complete, (
             "Pipeline did not run"
         )
-        assert pipeline_with_galaxies_per_particle._write_line_images_flux, (
-            "Line images not flagged for writing"
+        assert pipeline_with_galaxies_per_particle._write_line_maps_flux, (
+            "Line maps not flagged for writing"
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.line_images_flux
+                pipeline_with_galaxies_per_particle.line_maps_flux
             )
             > 0
-        ), "No flux line images were calculated"
+        ), "No flux line maps were calculated"
 
     def test_run_pipeline_sfzh(
         self,

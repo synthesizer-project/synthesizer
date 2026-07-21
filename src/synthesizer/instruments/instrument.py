@@ -11,7 +11,7 @@ instrument type directly if they already know which configuration they need.
 
 from synthesizer import exceptions
 from synthesizer.instruments.integrated_field_unit import IntegratedFieldUnit
-from synthesizer.instruments.line_imager import LineImager
+from synthesizer.instruments.line_mapper import LineMapper
 from synthesizer.instruments.photometric_imager import PhotometricImager
 from synthesizer.instruments.photometric_instrument import (
     PhotometricInstrument,
@@ -178,8 +178,8 @@ class Instrument:
             return SpectroscopicInstrument._from_hdf5(group, **kwargs)
         if instrument_type == "ifu":
             return IntegratedFieldUnit._from_hdf5(group, **kwargs)
-        if instrument_type == "line_imager":
-            return LineImager._from_hdf5(group, **kwargs)
+        if instrument_type == "line_mapper":
+            return LineMapper._from_hdf5(group, **kwargs)
 
         raise exceptions.InconsistentArguments(
             "Unsupported instrument_type "

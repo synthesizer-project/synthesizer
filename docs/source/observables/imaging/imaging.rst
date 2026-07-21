@@ -53,4 +53,4 @@ The pages linked below provide detailed walkthroughs of how to generate images a
    particle_imaging
    parametric_imaging
    property_maps
-   line_imaging
+   line_mapping

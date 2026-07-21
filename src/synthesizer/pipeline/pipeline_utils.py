@@ -60,12 +60,12 @@ def clear_pipeline_outputs(gal):
             ("images_psf_fnu", {}),
             ("images_noise_lnu", {}),
             ("images_noise_fnu", {}),
-            ("line_images_lnu", {}),
-            ("line_images_fnu", {}),
-            ("line_images_psf_lnu", {}),
-            ("line_images_psf_fnu", {}),
-            ("line_images_noise_lnu", {}),
-            ("line_images_noise_fnu", {}),
+            ("line_maps_lnu", {}),
+            ("line_maps_fnu", {}),
+            ("line_maps_psf_lnu", {}),
+            ("line_maps_psf_fnu", {}),
+            ("line_maps_noise_lnu", {}),
+            ("line_maps_noise_fnu", {}),
             ("particle_spectra", {}),
             ("particle_lines", {}),
             ("particle_photo_lnu", {}),
@@ -143,12 +143,12 @@ def accumulate_pipeline_results_from_child(parent, *children):
             "images_psf_fnu",
             "images_noise_lnu",
             "images_noise_fnu",
-            "line_images_lnu",
-            "line_images_fnu",
-            "line_images_psf_lnu",
-            "line_images_psf_fnu",
-            "line_images_noise_lnu",
-            "line_images_noise_fnu",
+            "line_maps_lnu",
+            "line_maps_fnu",
+            "line_maps_psf_lnu",
+            "line_maps_psf_fnu",
+            "line_maps_noise_lnu",
+            "line_maps_noise_fnu",
             "data_cubes_lnu",
             "data_cubes_fnu",
         ):
@@ -184,12 +184,12 @@ def accumulate_pipeline_results_from_child(parent, *children):
                 "images_psf_fnu",
                 "images_noise_lnu",
                 "images_noise_fnu",
-                "line_images_lnu",
-                "line_images_fnu",
-                "line_images_psf_lnu",
-                "line_images_psf_fnu",
-                "line_images_noise_lnu",
-                "line_images_noise_fnu",
+                "line_maps_lnu",
+                "line_maps_fnu",
+                "line_maps_psf_lnu",
+                "line_maps_psf_fnu",
+                "line_maps_noise_lnu",
+                "line_maps_noise_fnu",
                 "sfh",
                 "sfzh",
             ):
@@ -1015,7 +1015,7 @@ def validate_noise_unit_compatibility(
             The name of the boolean capability property to check before
             validating an instrument's noise attributes. Defaults to
             ``"can_do_noisy_imaging"`` for photometric images; pass
-            ``"can_do_noisy_line_imaging"`` for line images.
+            ``"can_do_noisy_line_mapping"`` for line maps.
 
     Raises:
         InconsistentArguments:

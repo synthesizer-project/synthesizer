@@ -1033,7 +1033,7 @@ def _generate_image_collection_generic(
     return imgs
 
 
-def _generate_line_image_collection_generic(
+def _generate_line_map_collection_generic(
     instrument,
     lines,
     fov,
@@ -1045,57 +1045,57 @@ def _generate_line_image_collection_generic(
     cosmo,
     quantity="luminosity",
 ):
-    """Generate a line image collection for a generic emitter.
+    """Generate a line map collection for a generic emitter.
 
     This mirrors :func:`_generate_image_collection_generic`, but rather than
     projecting a `PhotometryCollection` (one signal per filter) it projects a
     `LineCollection` (one signal per requested emission line), producing one
-    `Image` per line id.
+    `Image` (line map) per line id.
 
-    Particle based imaging can either be hist or smoothed, while parametric
-    imaging can only be smoothed.
+    Particle based mapping can either be hist or smoothed, while parametric
+    mapping can only be smoothed.
 
     Args:
         instrument (Instrument):
-            The instrument to create the images for.
+            The instrument to create the maps for.
         lines (LineCollection):
-            The lines to use for the images.
+            The lines to use for the maps.
         fov (unyt_quantity/tuple, unyt_quantity):
-            The width of the image.
+            The width of the map.
         img_type (str):
-            The type of image to create. Options are "hist" or "smoothed".
+            The type of map to create. Options are "hist" or "smoothed".
         kernel (str):
             The array describing the kernel. This is derived from the
-            kernel_functions module. (Only applicable to particle imaging)
+            kernel_functions module. (Only applicable to particle mapping)
         kernel_threshold (float):
             The threshold for the kernel. Particles with a kernel value
-            below this threshold are included in the image. (Only
-            applicable to particle imaging)
+            below this threshold are included in the map. (Only
+            applicable to particle mapping)
         nthreads (int):
-            The number of threads to use when smoothing the image. This
-            only applies to particle imaging.
+            The number of threads to use when smoothing the map. This
+            only applies to particle mapping.
         emitter (Stars/BlackHoles/BlackHole):
-            The emitter object to create the images for.
+            The emitter object to create the maps for.
         cosmo (astropy.cosmology.Cosmology):
-            A cosmology object defining the cosmology to use for the images.
-            This is only relevant for angular images where a conversion to
+            A cosmology object defining the cosmology to use for the maps.
+            This is only relevant for angular maps where a conversion to
             projected angular coordinates is needed.
         quantity (str):
             Either "luminosity" or "flux", selecting which LineCollection
-            attribute is imaged.
+            attribute is mapped.
 
     Returns:
         ImageCollection
-            An image collection containing one Image per line id.
+            An image collection containing one line map (Image) per line id.
     """
     # Avoid cyclic imports
     from synthesizer.imaging import ImageCollection
     from synthesizer.particle import Particles
 
-    # Pull out the signal array (and its per-line labels) we are imaging
+    # Pull out the signal array (and its per-line labels) we are mapping
     if quantity not in ("luminosity", "flux"):
         raise exceptions.InconsistentArguments(
-            f"Unknown quantity {quantity} for line images. Options are "
+            f"Unknown quantity {quantity} for line maps. Options are "
             "'luminosity' or 'flux'."
         )
     signal = getattr(lines, quantity)
