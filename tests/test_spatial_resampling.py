@@ -276,6 +276,16 @@ class TestGasSpatialResample:
         )
         assert np.allclose(g.smoothing_lengths.value, expected_sml)
 
+    def test_softening_length_scaling(self):
+        """Softening lengths are scaled by factor^{-1/3}."""
+        gas = _make_gas()
+        g = _resample_gas(gas, 4, seed=42)
+        factor = 4.0
+        expected_soft = np.repeat(
+            gas.softening_lengths.value / (factor ** (1.0 / 3.0)), 4
+        )
+        assert np.allclose(g.softening_lengths.value, expected_soft)
+
     def test_metallicities_duplicated(self):
         """Metallicities are duplicated by default."""
         gas = _make_gas()
@@ -512,6 +522,16 @@ class TestStarsSpatialResample:
         s = _resample_stars(stars, 2, seed=42)
         assert np.allclose(s.ages.value, np.repeat(stars.ages.value, 2))
         assert np.allclose(s.metallicities, np.repeat(stars.metallicities, 2))
+
+    def test_softening_length_scaling(self):
+        """Softening lengths are scaled by factor^{-1/3}."""
+        stars = _make_stars()
+        s = _resample_stars(stars, 4, seed=42)
+        factor = 4.0
+        expected_soft = np.repeat(
+            stars.softening_lengths.value / (factor ** (1.0 / 3.0)), 4
+        )
+        assert np.allclose(s.softening_lengths.value, expected_soft)
 
     def test_non_sfzh_mass_conservation(self):
         """Initial and current masses conserve total across factors."""

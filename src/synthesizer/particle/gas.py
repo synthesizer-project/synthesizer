@@ -291,9 +291,19 @@ class Gas(Particles, Component):
         **Default modes per attribute:**
 
         - ``masses``, ``dust_masses`` → ``"proportional"`` (sum conserved)
+        - ``softening_lengths`` → scaled by ``resample_factor ** (-1/3)``
+          and tiled, like ``smoothing_lengths``
         - all others → ``"duplicated"`` (children inherit parent value)
-        - scalars (tau_v, softening_lengths, dust_to_metal_ratio when not
-          per-particle) → kept as-is
+        - scalars (tau_v, dust_to_metal_ratio when not per-particle) → kept
+          as-is
+
+        .. warning::
+
+            Optical depths need special treatment. Per-particle ``tau_v`` is
+            duplicated by default, which is appropriate for simple dust-screen
+            optical depths. If ``tau_v`` was derived from line-of-sight column
+            densities, recompute the line-of-sight optical depths on the
+            resampled distribution to remain self-consistent.
 
         Args:
             resample_factor (int):
@@ -476,18 +486,15 @@ class Gas(Particles, Component):
         else:
             new_tau_v = tau_v
 
-        # Softening lengths only need resampling if it's an array of values for
-        # each particle, if it's a single value we just keep it as-is
+        # Softening lengths are length scales, so scale them like smoothing
+        # lengths to conserve the represented volume after splitting.
         if (
             softening_lengths is not None
             and hasattr(softening_lengths, "shape")
             and softening_lengths.ndim >= 1
         ):
-            new_softening = resample_by_mode(
-                to_resample[8],
-                attr_modes.get("softening_lengths", "duplicated"),
-                resample_factor,
-                rng,
+            new_softening = resample_smoothing_lengths(
+                to_resample[8], resample_factor
             )
         else:
             new_softening = softening_lengths
