@@ -430,6 +430,7 @@ extensions = [
         "synthesizer.extensions.photometry",
         [
             "src/synthesizer/extensions/photometry.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/cpp_to_python.cpp",
             "src/synthesizer/extensions/part_props.cpp",
