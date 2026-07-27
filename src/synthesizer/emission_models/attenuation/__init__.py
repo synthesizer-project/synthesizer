@@ -6,6 +6,8 @@ from synthesizer.emission_models.transformers.dust_attenuation import (
     DraineLiGrainCurves,
     ParametricLi08,
     PowerLaw,
+    SommovigoBartlett2026,
+    predict_sommovigo_bartlett_2026,
 )
 
 # Unpack the IGM transformers into this nice alias submodule

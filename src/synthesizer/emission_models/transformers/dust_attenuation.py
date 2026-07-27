@@ -50,6 +50,8 @@ __all__ = [
     "Calzetti2000",
     "GrainModels",
     "ParametricLi08",
+    "SommovigoBartlett2026",
+    "predict_sommovigo_bartlett_2026",
     "DraineLiGrainCurves",
 ]
 
@@ -1179,6 +1181,379 @@ class ParametricLi08(AttenuationLaw):
             "for the different models, so does not make sense to have this"
             "function. Use other attenuation curve models to get tau_v or Av"
         )
+
+
+# Small-grain fractions for each dust mixture used in the
+# SommovigoBartlett2026 galaxy-property prediction pipeline.
+_SB26_DUST_FRACTIONS = {
+    "MW": 0.5968,
+    "SMC": 0.7193,
+    "stellar": 0.3064,
+}
+
+
+@accepts(lam=angstrom)
+def SB26Tau(lam, B_0, B_1s, B_2s, B_3):
+    """Compute V-band normalised optical depth for Sommovigo & Bartlett 2026.
+
+    Four-parameter attenuation curve model calibrated on TNG50/TNG100
+    radiative transfer simulations (SKIRT) across MW, SMC, and stellar
+    dust models. The model consists of three additive components:
+    a UV bump near the Lyman limit, a UV slope with exponential decay
+    toward the optical, and a curvature term controlling far-UV and
+    optical/IR behaviour.
+
+    At the V-band wavelength (5542 AA), the curve evaluates to unity
+    by construction.
+
+    References:
+        Sommovigo, Bartlett et al. 2026 (https://arxiv.org/abs/2606.10027)
+
+    Args:
+        lam (np.ndarray of float):
+            The wavelengths (AA units) at which to calculate the
+            normalised optical depth.
+        B_0 (float):
+            UV bump amplitude. Typical range (0, 2.5); strongly
+            dust-model dependent: ~1.2 for MW, ~0 for SMC/stellar.
+        B_1s (float):
+            Linear slope term, scaled by 1e-3. Typical range
+            (-0.15, 0.10).
+        B_2s (float):
+            Slope modulation term, scaled by 1e-3. Typical range
+            (-2.5, 1.1).
+        B_3 (float):
+            Exponential/curvature parameter. Typical range
+            (0.8, 5.1).
+
+    Returns:
+        np.ndarray of float:
+            V-band normalised optical depth (A_lambda / A_V).
+    """
+    # Convert wavelength to microns and normalise to V-band
+    x = lam.to("um").value / 0.5542
+
+    # Unscale the slope parameters
+    B_1 = 1e3 * B_1s
+    B_2 = 1e3 * B_2s
+
+    # Fixed constants from the model calibration
+    c0, c1, c2, c3, c4 = 0.4002, 285.6, 0.2092, 9.223, 1.016
+
+    return (
+        B_0 * (np.exp(-c1 * (x - c0) ** 2) - np.exp(-c1 * (1.0 - c0) ** 2))
+        + (B_1 + B_2 * (x - c2)) * (x - c2) * (np.exp(-c3 * x) - np.exp(-c3))
+        + np.exp(B_3 * (np.tanh(c4) - np.tanh(c4 * x)))
+    )
+
+
+class SommovigoBartlett2026(AttenuationLaw):
+    """Four-parameter attenuation curve from Sommovigo & Bartlett 2026.
+
+    Attenuation curve model calibrated on TNG50/TNG100 SKIRT radiative
+    transfer simulations (snapnum93, z=0.07) across three dust grain models:
+
+    - **MW**: Weingartner & Draine 2001 (WD01), Milky Way (R_V=3.1)
+    - **SMC**: Weingartner & Draine 2001 (WD01), SMC Bar
+    - **stellar**: Hirashita & Aoyama 2019, log-normal grain size
+      distribution (a0=0.1 um, sigma=0.47)
+
+    The model consists of three additive components: a UV bump term,
+    a UV slope with exponential decay, and a curvature/far-UV term.
+
+    The curve parameters can be predicted from galaxy physical
+    properties using the companion function
+    ``predict_sommovigo_bartlett_2026``.
+
+    References:
+        Sommovigo, Bartlett et al. 2026 (https://arxiv.org/abs/2606.10027)
+        Weingartner & Draine 2001, ApJ, 548, 296
+        Hirashita & Aoyama 2019, MNRAS, 491, 3844
+
+    Attributes:
+        B_0 (float):
+            UV bump amplitude. Typical range (0, 2.5); strongly
+            dust-model dependent: ~1.2 for MW, ~0 for SMC/stellar.
+        B_1s (float):
+            Linear slope term, scaled by 1e-3. Typical range
+            (-0.15, 0.10).
+        B_2s (float):
+            Slope modulation term, scaled by 1e-3. Typical range
+            (-2.5, 1.1).
+        B_3 (float):
+            Exponential/curvature parameter. Typical range
+            (0.8, 5.1).
+    """
+
+    def __init__(
+        self,
+        B_0=0.025,
+        B_1s=-0.025,
+        B_2s=-0.045,
+        B_3=3.07,
+    ):
+        """Initialise the dust curve.
+
+        Args:
+            B_0 (float):
+                UV bump amplitude. Typical range (0, 2.5); strongly
+            dust-model dependent: ~1.2 for MW, ~0 for SMC/stellar.
+            B_1s (float):
+                Linear slope term, scaled by 1e-3. The internal
+                parameter B_1 = 1e3 * B_1s. Typical range
+                (-0.15, 0.10).
+            B_2s (float):
+                Slope modulation term, scaled by 1e-3. The internal
+                parameter B_2 = 1e3 * B_2s. Typical range
+                (-2.5, 1.1).
+            B_3 (float):
+                Exponential/curvature parameter. Typical range
+            (0.8, 5.1).
+        """
+        description = (
+            "Four-parameter attenuation curve calibrated on "
+            "TNG50/TNG100 SKIRT radiative transfer simulations. "
+            "Introduced in Sommovigo & Bartlett 2026."
+        )
+
+        required_params = ("tau_v", "B_0", "B_1s", "B_2s", "B_3")
+
+        AttenuationLaw.__init__(self, description, required_params)
+
+        self.B_0 = B_0
+        self.B_1s = B_1s
+        self.B_2s = B_2s
+        self.B_3 = B_3
+
+        self._check_required_params()
+
+    def __repr__(self):
+        """Return a string representation."""
+        parts = [
+            f"B_0={self.B_0}",
+            f"B_1s={self.B_1s}",
+            f"B_2s={self.B_2s}",
+            f"B_3={self.B_3}",
+        ]
+        return f"SommovigoBartlett2026({', '.join(parts)})"
+
+    @accepts(lam=angstrom)
+    def get_tau(self, lam):
+        """Calculate V-band normalised optical depth.
+
+        Args:
+            lam (float/np.ndarray of float):
+                An array of wavelengths or a single wavelength at which
+                to calculate optical depths (in AA, global unit).
+
+        Returns:
+            float/np.ndarray of float:
+                The V-band normalised optical depth (A_lambda / A_V).
+        """
+        return SB26Tau(
+            lam=lam,
+            B_0=self.B_0,
+            B_1s=self.B_1s,
+            B_2s=self.B_2s,
+            B_3=self.B_3,
+        )
+
+    @accepts(lam=angstrom)
+    def get_tau_at_lam(self, lam):
+        """Calculate optical depth at a wavelength.
+
+        Args:
+            lam (float/np.ndarray of float):
+                An array of wavelengths or a single wavelength at which
+                to calculate optical depths (in AA, global unit).
+
+        Returns:
+            float/np.ndarray of float:
+                The optical depth.
+        """
+        raise exceptions.UnimplementedFunctionality(
+            "SommovigoBartlett2026 is fit to normalised A_lam/A_V "
+            "values, so get_tau_at_lam is not defined. Use get_tau "
+            "for the normalised curve."
+        )
+
+
+def predict_sommovigo_bartlett_2026(
+    sigma_sfr,
+    inclination,
+    z_gas,
+    log10_mstar,
+    ssfr,
+    dust_model="MW",
+    add_noise=False,
+):
+    """Predict attenuation curve parameters from galaxy properties.
+
+    Sequential prediction pipeline mapping galaxy physical properties
+    to the SommovigoBartlett2026 attenuation curve parameters. The
+    prediction chain is:
+
+        A_V -> B_1s -> B_3 -> B_0 -> B_2s
+
+    Each parameter depends on galaxy properties and/or previously
+    predicted curve parameters. Calibrated on TNG50/TNG100 SKIRT
+    radiative transfer simulations.
+
+    References:
+        Sommovigo, Bartlett et al. 2026 (https://arxiv.org/abs/2606.10027)
+
+    Args:
+        sigma_sfr (float/np.ndarray of float):
+            Star formation rate surface density
+            [Msun yr^-1 kpc^-2].
+        inclination (float/np.ndarray of float):
+            Galaxy inclination angle [degrees].
+        z_gas (float/np.ndarray of float):
+            Gas-phase metallicity as absolute mass fraction
+            (e.g. Zsun = 0.0142, Asplund et al. 2009).
+        log10_mstar (float/np.ndarray of float):
+            Log10 stellar mass [log10(Msun)].
+        ssfr (float/np.ndarray of float):
+            Specific star formation rate [Gyr^-1].
+        dust_model (str):
+            Dust mixture model. One of 'MW', 'SMC', or 'stellar'.
+            Selects the small-grain fraction and the B_0 prediction
+            formula.
+        add_noise (bool):
+            If True, add Gaussian scatter matching the intrinsic
+            dispersion of the calibration sample. Default is False.
+
+    Returns:
+        dict:
+            Dictionary with keys 'A_V', 'B_0', 'B_1s', 'B_2s', 'B_3',
+            and 'tau_v' (= A_V / 1.086).
+
+    Examples:
+        Get predicted parameters for a single galaxy::
+
+            params = predict_sommovigo_bartlett_2026(
+                sigma_sfr=0.01, inclination=60.0,
+                z_gas=0.02, log10_mstar=10.5,
+                ssfr=0.5, dust_model='MW',
+            )
+            curve = SommovigoBartlett2026(
+                B_0=params['B_0'], B_1s=params['B_1s'],
+                B_2s=params['B_2s'], B_3=params['B_3'],
+            )
+            transmission = curve.get_transmission(
+                params['tau_v'], lam,
+            )
+    """
+    if dust_model not in _SB26_DUST_FRACTIONS:
+        raise exceptions.InconsistentArguments(
+            f"dust_model must be one of "
+            f"{list(_SB26_DUST_FRACTIONS)}, "
+            f"got '{dust_model}'."
+        )
+
+    f = _SB26_DUST_FRACTIONS[dust_model]
+    sigma_sfr = np.atleast_1d(np.asarray(sigma_sfr, dtype=float))
+    inclination = np.atleast_1d(np.asarray(inclination, dtype=float))
+    z_gas = np.atleast_1d(np.asarray(z_gas, dtype=float))
+    log10_mstar = np.atleast_1d(np.asarray(log10_mstar, dtype=float))
+    ssfr = np.atleast_1d(np.asarray(ssfr, dtype=float))
+
+    sini = np.sin(inclination * np.pi / 180.0)
+
+    def _noise(sigma, shape):
+        if add_noise:
+            return np.random.normal(0, sigma, size=shape)
+        return 0.0
+
+    # Step 1: Predict A_V
+    c = [0.428, 0.00967, 0.953, 0.00383, 1.51, 1.68, 800.0, 4.75]
+    log10_av = (
+        c[0]
+        - c[1] / np.log10(c[2] * sini)
+        - c[3] / np.log10(c[4] * f)
+        - c[5] * (c[6] * sigma_sfr) ** (-c[7] * z_gas)
+        + _noise(0.221, sigma_sfr.shape)
+    )
+    log10_av = np.clip(log10_av, -5.0, 2.0)
+    A_V = 10.0**log10_av
+
+    # Step 2: Predict B_1s
+    c = [0.0324, 25.5, 2.36, 0.00411, 1.95]
+    B_1s = c[0] / A_V * (
+        (c[1] * z_gas) ** (c[2] * sini)
+        - c[3] * log10_mstar / np.log10(c[4] * f)
+    ) + _noise(0.058, A_V.shape)
+    B_1s = np.clip(B_1s, -1.0, 1.0)
+
+    # Step 3: Predict B_3
+    c = [2.1, 0.83, 51.1, 21.2, 9.7, 3.52, 0.0417, 0.17]
+    B_3 = (
+        -c[0]
+        - c[1] * sini
+        + c[2] * z_gas * (c[3] * A_V) ** (-c[4] * ssfr)
+        + c[5] * (c[6] * A_V) ** (-c[7] * f)
+        + _noise(0.728, A_V.shape)
+    )
+    B_3 = np.clip(B_3, 0.03, 10.0)
+
+    # Step 4: Predict B_0 (dust-mixture-dependent formula)
+    if dust_model == "MW":
+        c = [0.662, 0.224, 0.327, 13.8, 1.53, 23.7, 0.112]
+        log10_b0 = (
+            c[0] * B_1s
+            + c[1] * B_3
+            - c[2]
+            / B_3
+            * (c[3] * B_1s + c[4] * B_3 + (c[5] * A_V) ** (c[6] * B_3))
+            + _noise(0.072, A_V.shape)
+        )
+    else:
+        c = [0.0413, 5.79, 10.2, 3.78, 5.13, 7.2, 0.379, 0.127, 2.91]
+        log10_b0 = (
+            c[0]
+            * B_3
+            * (
+                c[1] * A_V
+                + (c[2] * A_V) ** (c[3] * B_1s)
+                - c[4] * np.log10(c[5] * B_3)
+                + (c[6] * f) ** (-c[7] * B_3)
+            )
+            - c[8]
+            + _noise(0.216, A_V.shape)
+        )
+    log10_b0 = np.clip(log10_b0, -5.0, 2.0)
+    B_0 = 10.0**log10_b0
+
+    # Step 5: Predict B_2s
+    c = [0.264, 0.129, 0.00351, 0.776, 1.29, 5.93, 179.0]
+    B_2s = (
+        c[0] * B_0
+        + c[1]
+        - f
+        * (
+            c[2] * B_0 ** (-c[3])
+            + c[4] * B_1s * (c[5] * B_1s + np.log10(c[6] * B_0))
+        )
+        + _noise(0.381, A_V.shape)
+    )
+    B_2s = np.clip(B_2s, -5.0, 5.0)
+
+    # Squeeze scalar inputs back to scalars
+    if A_V.size == 1:
+        A_V = A_V.item()
+        B_0 = B_0.item()
+        B_1s = B_1s.item()
+        B_2s = B_2s.item()
+        B_3 = B_3.item()
+
+    return {
+        "A_V": A_V,
+        "tau_v": A_V / 1.086,
+        "B_0": B_0,
+        "B_1s": B_1s,
+        "B_2s": B_2s,
+        "B_3": B_3,
+    }
 
 
 class DraineLiGrainCurves(AttenuationLaw):
