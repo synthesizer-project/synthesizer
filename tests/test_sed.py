@@ -17,6 +17,31 @@ def test_sed_empty(empty_sed):
     assert all_zeros
 
 
+def test_sed_init_frequency_matches_wavelength_dtype_family():
+    """The frequency computed in __init__ should track lam's dtype.
+
+    Regression test: dividing by the ``c`` unyt physical constant always
+    upcasts the result to float64 regardless of the dividend's dtype (a
+    unyt quirk, not something specific to Sed), so a naive
+    ``self.nu = c / self.lam`` in Sed.__init__ silently gave every Sed
+    built from a float32 grid a float64 frequency array -- breaking the
+    dtype-family invariant enforced everywhere else in the C extensions.
+    """
+    lam32 = np.linspace(1e3, 1e4, 32).astype(np.float32) * angstrom
+    sed32 = Sed(lam32, np.ones(32, dtype=np.float32) * erg / s / Hz)
+    assert sed32._lam.dtype == np.float32
+    assert sed32._nu.dtype == np.float32
+    np.testing.assert_allclose(
+        sed32._nu,
+        (299792458.0e10 / sed32._lam.astype(np.float64)),
+        rtol=1e-6,
+    )
+
+    lam64 = np.linspace(1e3, 1e4, 32).astype(np.float64) * angstrom
+    sed64 = Sed(lam64, np.ones(32, dtype=np.float64) * erg / s / Hz)
+    assert sed64._nu.dtype == np.float64
+
+
 def test_scale_threaded_row_broadcast_matches_numpy():
     """Threaded row scaling should match NumPy broadcasting."""
     lam = np.linspace(1000, 2000, 4) * angstrom

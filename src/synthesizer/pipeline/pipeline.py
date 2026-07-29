@@ -1754,6 +1754,7 @@ class Pipeline:
             cosmo=op_kwargs["cosmo"],
             igm=op_kwargs["igm"],
             nthreads=self.nthreads,
+            out_dtype=self._out_dtypes.get("observed_spectra"),
         )
 
         # Count the number of observed spectra we have generated

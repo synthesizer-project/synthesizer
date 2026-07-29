@@ -76,6 +76,17 @@ class TestImageGeneration:
         )
         assert np.sum(img.arr) >= 0
 
+    def test_generate_empty_img_hist_preserves_signal_dtype(self):
+        """An empty histogram image should retain the signal precision."""
+        coords = unyt_array(np.empty((0, 3), dtype=np.float32), kpc)
+        signal = unyt_array(np.empty(0, dtype=np.float32), erg / s)
+        img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
+
+        img.generate_img_hist(signal, coords)
+
+        assert img.arr.dtype == np.float32
+        assert img.arr.shape == (10, 10)
+
     def test_get_img_hist_warns_and_delegates(self, mock_particles):
         """Deprecated histogram image wrapper should warn and generate."""
         coords, signal, _ = mock_particles

@@ -134,8 +134,16 @@ class Sed:
         # Set the wavelength
         self.lam = lam
 
-        # Calculate frequency
-        self.nu = c / self.lam
+        # Calculate frequency. Dividing by the `c` physical-constant
+        # quantity always upcasts the result to float64 regardless of the
+        # wavelength's dtype (a unyt quirk affecting constants such as `c`
+        # and `Msun`, but not plain named units), so cast back down to the
+        # wavelength's dtype family afterwards rather than letting that
+        # promotion silently propagate into every Sed's frequency array.
+        nu = c / self.lam
+        if nu.dtype != self._lam.dtype:
+            nu = nu.astype(self._lam.dtype)
+        self.nu = nu
 
         # If no lnu is provided create an empty array with the same shape as
         # lam.
