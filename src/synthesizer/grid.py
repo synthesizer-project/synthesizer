@@ -2259,8 +2259,14 @@ class Grid:
                     name = f"{prefix}/{key}" if prefix else key
                     path_parts = name.split("/")
 
-                    # Skip groups or datasets inside axes, spectra, or lines
-                    if path_parts[0] in ("axes", "spectra", "lines"):
+                    # Skip groups or datasets inside axes, spectra,
+                    # lines, or failures
+                    if path_parts[0] in (
+                        "axes",
+                        "spectra",
+                        "lines",
+                        "failures",
+                    ):
                         continue
 
                     if isinstance(node, h5py.Group):
