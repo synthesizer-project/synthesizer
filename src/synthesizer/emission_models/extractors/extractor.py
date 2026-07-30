@@ -549,24 +549,36 @@ class DopplerShiftedParticleExtractor(Extractor):
             # Check we actually have to do the calculation
             if emitter.nparticles == 0:
                 warn("Found emitter with no particles, returning empty Sed")
-                return Sed(
-                    model.lam,
-                    np.zeros((emitter.nparticles, self._grid_nlam))
-                    * erg
-                    / s
-                    / Hz,
+                return (
+                    Sed(
+                        model.lam,
+                        np.zeros((emitter.nparticles, self._grid_nlam))
+                        * erg
+                        / s
+                        / Hz,
+                    ),
+                    Sed(
+                        model.lam,
+                        np.zeros(self._grid_nlam) * erg / s / Hz,
+                    ),
                 )
             elif mask is not None and np.sum(mask) == 0:
                 warn(
                     "A mask has filtered out all particles, returning "
                     "empty Sed"
                 )
-                return Sed(
-                    model.lam,
-                    np.zeros((emitter.nparticles, self._grid_nlam))
-                    * erg
-                    / s
-                    / Hz,
+                return (
+                    Sed(
+                        model.lam,
+                        np.zeros((emitter.nparticles, self._grid_nlam))
+                        * erg
+                        / s
+                        / Hz,
+                    ),
+                    Sed(
+                        model.lam,
+                        np.zeros(self._grid_nlam) * erg / s / Hz,
+                    ),
                 )
 
             # Get the attributes from the emitter
