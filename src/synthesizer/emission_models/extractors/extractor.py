@@ -164,7 +164,7 @@ class Extractor(ABC):
             self._log_emitter_attr,
         ):
             # Get the attribute from the emitter
-            value = get_param(axis, model, None, emitter)
+            value = get_param(axis, model, None, emitter, preserve_units=True)
 
             # Convert the units if necessary
             if (
@@ -174,6 +174,8 @@ class Extractor(ABC):
                 and value.units != units
             ):
                 value = unyt_to_ndview(value, units)
+            elif isinstance(value, (unyt_array, unyt_quantity)):
+                value = value.value
 
             # We know that the extracted values must be arrays, this can not be
             # the case when we only have 1 value (i.e. a single particle, or
@@ -547,24 +549,36 @@ class DopplerShiftedParticleExtractor(Extractor):
             # Check we actually have to do the calculation
             if emitter.nparticles == 0:
                 warn("Found emitter with no particles, returning empty Sed")
-                return Sed(
-                    model.lam,
-                    np.zeros((emitter.nparticles, self._grid_nlam))
-                    * erg
-                    / s
-                    / Hz,
+                return (
+                    Sed(
+                        model.lam,
+                        np.zeros((emitter.nparticles, self._grid_nlam))
+                        * erg
+                        / s
+                        / Hz,
+                    ),
+                    Sed(
+                        model.lam,
+                        np.zeros(self._grid_nlam) * erg / s / Hz,
+                    ),
                 )
             elif mask is not None and np.sum(mask) == 0:
                 warn(
                     "A mask has filtered out all particles, returning "
                     "empty Sed"
                 )
-                return Sed(
-                    model.lam,
-                    np.zeros((emitter.nparticles, self._grid_nlam))
-                    * erg
-                    / s
-                    / Hz,
+                return (
+                    Sed(
+                        model.lam,
+                        np.zeros((emitter.nparticles, self._grid_nlam))
+                        * erg
+                        / s
+                        / Hz,
+                    ),
+                    Sed(
+                        model.lam,
+                        np.zeros(self._grid_nlam) * erg / s / Hz,
+                    ),
                 )
 
             # Get the attributes from the emitter
