@@ -267,10 +267,8 @@ def create_cloudy_input(
             # this should be the dust-phase abundance in the particular
             # reference environment.
             if params["grains"] == "Orion":
-                reference_C_abund = -3.6259
-                reference_Si_abund = -4.5547
-            # this is incorrect since the abundance in the ISM is probably
-            # different.
+                reference_C_abund = -3.5553
+                reference_Si_abund = -4.4841
             elif params["grains"] == "ISM":
                 reference_C_abund = -3.5553
                 reference_Si_abund = -4.4841
@@ -279,10 +277,10 @@ def create_cloudy_input(
                     "Only Orion and ISM grain types are available in cloudy"
                 )
 
-            PAH_abund = -4.446
+            reference_PAH_abund = -5.526
             f_graphite = delta_graphite / (10 ** (reference_C_abund))
             f_Si = delta_Si / (10 ** (reference_Si_abund))
-            f_pah = delta_PAH / (10 ** (PAH_abund))
+            f_pah = delta_PAH / (10 ** (reference_PAH_abund))
 
         else:
             f_graphite = 1.0
