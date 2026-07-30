@@ -155,6 +155,7 @@ class Generator(ABC):
             None,
             emitter,
             obj=self,
+            preserve_units=True,
         )
 
         # Check if any of the required parameters are missing
