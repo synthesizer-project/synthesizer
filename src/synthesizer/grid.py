@@ -2168,88 +2168,86 @@ class Grid:
         )
         coord_shape = broadcasted_coords[0].shape
 
-        # Flatten coordinates for vectorized calculation
+        # Flatten coordinates for vectorised calculation
         flattened_coords = {}
         for d, axis in enumerate(self.axes):
             flattened_coords[axis] = broadcasted_coords[d].ravel()
 
-        # Interpolate spectra
-        if spectra_type not in self.available_spectra:
-            raise exceptions.InconsistentParameter(
-                f"Provided spectra_type '{spectra_type}' is not in "
-                f"available spectra: {self.available_spectra}"
-            )
-        spectra_grid = self.spectra[spectra_type]
-        interp_spectra = self._interpolate_grid_array(
-            spectra_grid, flattened_coords, method=method
-        )
-        interp_spectra_reshaped = interp_spectra.reshape(
-            coord_shape + (self.nlam,)
-        )
-        sed_lnu = unyt_array(interp_spectra_reshaped, erg / s / Hz)
-        sed = Sed(self.lam, sed_lnu)
-
-        # Interpolate lines or return empty line collection
-        if (
-            spectra_type != "incident"
-            and self.has_lines
-            and spectra_type in self.line_lums
-        ):
-            lum_grid = self.line_lums[spectra_type]
-            cont_grid = self.line_conts[spectra_type]
-
-            interp_lum = self._interpolate_grid_array(
-                lum_grid, flattened_coords, method=method
-            )
-            interp_cont = self._interpolate_grid_array(
-                cont_grid, flattened_coords, method=method
-            )
-
-            line_lum = interp_lum.reshape(coord_shape + (self.nlines,))
-            line_cont = interp_cont.reshape(coord_shape + (self.nlines,))
-
-            # Wrap in LineCollection object, ensuring correct unyt units
-            if isinstance(line_lum, unyt_array):
-                line_lum.convert_to_units(erg / s)
-            else:
-                line_lum = unyt_array(line_lum, erg / s)
-
-            if isinstance(line_cont, unyt_array):
-                line_cont.convert_to_units(erg / s / Hz)
-            else:
-                line_cont = unyt_array(line_cont, (erg / s / Hz))
-
-            lines = LineCollection(
-                line_ids=self.available_lines,
-                lam=self.line_lams,
-                lum=line_lum,
-                cont=line_cont,
-            )
-        else:
-            nlines = self.nlines
-            line_ids = self.available_lines
-            lam = (
-                self.line_lams
-                if self.line_lams is not None
-                else unyt_array([], "angstrom")
-            )
-            line_lum = np.zeros(coord_shape + (nlines,)) * (erg / s)
-            line_cont = np.zeros(coord_shape + (nlines,)) * (erg / s / Hz)
-            lines = LineCollection(
-                line_ids=line_ids,
-                lam=lam,
-                lum=line_lum,
-                cont=line_cont,
-            )
-
-        # Grid axes shape
+        # Grid axes shape (used for HDF5 traversal)
         grid_shape = tuple(len(self._axes_values[ax]) for ax in self.axes)
 
-        # Traverse HDF5 file to find and interpolate any other datasets
-        results = {
-            "spectra": sed,
-            "lines": lines,
-        }
+        # Initialize results dictionary.
+        results = {}
+
+        # Interpolate spectra if available.
+        if self.has_spectra:
+            if spectra_type not in self.available_spectra:
+                raise exceptions.InconsistentParameter(
+                    f"Provided spectra_type '{spectra_type}' is not in "
+                    f"available spectra: {self.available_spectra}"
+                )
+            spectra_grid = self.spectra[spectra_type]
+            interp_spectra = self._interpolate_grid_array(
+                spectra_grid, flattened_coords, method=method
+            )
+            interp_spectra_reshaped = interp_spectra.reshape(
+                coord_shape + (self.nlam,)
+            )
+            sed_lnu = unyt_array(interp_spectra_reshaped, erg / s / Hz)
+            results["spectra"] = Sed(self.lam, sed_lnu)
+
+        # Interpolate lines if available and conditions are met.
+        if self.has_lines:
+            if spectra_type != "incident" and spectra_type in self.line_lums:
+                lum_grid = self.line_lums[spectra_type]
+                cont_grid = self.line_conts[spectra_type]
+
+                interp_lum = self._interpolate_grid_array(
+                    lum_grid, flattened_coords, method=method
+                )
+                interp_cont = self._interpolate_grid_array(
+                    cont_grid, flattened_coords, method=method
+                )
+
+                line_lum = interp_lum.reshape(coord_shape + (self.nlines,))
+                line_cont = interp_cont.reshape(coord_shape + (self.nlines,))
+
+                # Wrap in LineCollection object, ensuring correct unyt units
+                if isinstance(line_lum, unyt_array):
+                    line_lum.convert_to_units(erg / s)
+                else:
+                    line_lum = unyt_array(line_lum, erg / s)
+
+                if isinstance(line_cont, unyt_array):
+                    line_cont.convert_to_units(erg / s / Hz)
+                else:
+                    line_cont = unyt_array(line_cont, (erg / s / Hz))
+
+                results["lines"] = LineCollection(
+                    line_ids=self.available_lines,
+                    lam=self.line_lams,
+                    lum=line_lum,
+                    cont=line_cont,
+                )
+            else:
+                # If lines are available but the spectra_type is
+                # 'incident' or not in line_lums
+                # we still add an empty LineCollection to results.
+                nlines = self.nlines
+                line_ids = self.available_lines
+                lam = (
+                    self.line_lams
+                    if self.line_lams is not None
+                    else unyt_array([], "angstrom")
+                )
+                line_lum = np.zeros(coord_shape + (nlines,)) * (erg / s)
+                line_cont = np.zeros(coord_shape + (nlines,)) * (erg / s / Hz)
+                results["lines"] = LineCollection(
+                    line_ids=line_ids,
+                    lam=lam,
+                    lum=line_lum,
+                    cont=line_cont,
+                )
 
         with h5py.File(self.grid_filename, "r") as hf:
             stack = [("", hf)]
@@ -2261,12 +2259,15 @@ class Grid:
 
                     # Skip groups or datasets inside axes, spectra,
                     # lines, or failures
-                    if path_parts[0] in (
-                        "axes",
-                        "spectra",
-                        "lines",
-                        "failures",
-                    ):
+                    if (
+                        path_parts[0]
+                        in (
+                            "axes",
+                            "spectra",
+                            "lines",
+                            "failures",
+                        )
+                    ) or (path_parts[1] == "wavelength"):
                         continue
 
                     if isinstance(node, h5py.Group):
