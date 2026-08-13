@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include <array>
+#include <memory>
 #include <vector>
 
 /* Python includes */
@@ -55,7 +56,6 @@
 static void interpolate_loop_cic_serial(GridProps *grid_props,
                                         Particles *target_coords, int n_extra,
                                         double *out_arr) {
-  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   const int ndim = grid_props->ndim;
   const int num_sub_cells = 1 << ndim;  // 2^ndim corners of the hypercube
 
@@ -77,7 +77,7 @@ static void interpolate_loop_cic_serial(GridProps *grid_props,
     for (int ic = 0; ic < num_sub_cells; ++ic) {
       get_indices_from_flat(ic, ndim, sub_dims, tmp);
       subcells[ic].offs = tmp;
-      subcells[ic].linoff = get_flat_index(tmp, dims.data(), ndim);
+      subcells[ic].linoff = grid_props->ravel_grid_index(tmp);
     }
   }
 
@@ -85,13 +85,8 @@ static void interpolate_loop_cic_serial(GridProps *grid_props,
 
   /* Loop over target coordinate points. */
   for (int p = 0; p < target_coords->npart; ++p) {
-    std::array<int, MAX_GRID_NDIM> coord_idx;
-    std::array<double, MAX_GRID_NDIM> axis_frac;
-
-    // Get the base grid index and fractional distance along each axis
-    get_part_ind_frac_cic(coord_idx, axis_frac, grid_props, target_coords, p);
-
-    const int base_lin = get_flat_index(coord_idx, dims.data(), ndim);
+    // Use pre-computed base index from the Particles object
+    const int base_lin = target_coords->grid_indices[p];
 
     // Sum contribution from all 2^ndim hypercube corners
     for (int ic = 0; ic < num_sub_cells; ++ic) {
@@ -100,19 +95,23 @@ static void interpolate_loop_cic_serial(GridProps *grid_props,
       // Multiplicative combination of 1D linear weights
       double frac = 1.0;
       for (int d = 0; d < ndim; ++d) {
-        frac *= sc.offs[d] ? axis_frac[d] : (1.0 - axis_frac[d]);
+        frac *= sc.offs[d] ? target_coords->grid_fracs[p * ndim + d]
+                           : (1.0 - target_coords->grid_fracs[p * ndim + d]);
       }
       if (frac == 0.0) {
         continue;
       }
 
-      const int flat_ind = base_lin + sc.linoff;
+      const std::size_t flat_ind = static_cast<std::size_t>(base_lin) +
+                                   static_cast<std::size_t>(sc.linoff);
 
       // Accumulate interpolated values across the extra dimensions (e.g.
       // wavelength)
+      const std::size_t out_off =
+          static_cast<std::size_t>(p) * static_cast<std::size_t>(n_extra);
+      const std::size_t in_off = flat_ind * static_cast<std::size_t>(n_extra);
       for (int iextra = 0; iextra < n_extra; ++iextra) {
-        out_arr[p * n_extra + iextra] +=
-            frac * grid_data[flat_ind * n_extra + iextra];
+        out_arr[out_off + iextra] += frac * grid_data[in_off + iextra];
       }
     }
   }
@@ -131,7 +130,6 @@ static void interpolate_loop_cic_serial(GridProps *grid_props,
 static void interpolate_loop_cic_omp(GridProps *grid_props,
                                      Particles *target_coords, int n_extra,
                                      double *out_arr, int nthreads) {
-  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   const int ndim = grid_props->ndim;
   const int num_sub_cells = 1 << ndim;
 
@@ -152,7 +150,7 @@ static void interpolate_loop_cic_omp(GridProps *grid_props,
     for (int ic = 0; ic < num_sub_cells; ++ic) {
       get_indices_from_flat(ic, ndim, sub_dims, tmp);
       subcells[ic].offs = tmp;
-      subcells[ic].linoff = get_flat_index(tmp, dims.data(), ndim);
+      subcells[ic].linoff = grid_props->ravel_grid_index(tmp);
     }
   }
 
@@ -161,18 +159,16 @@ static void interpolate_loop_cic_omp(GridProps *grid_props,
   // Distribute loops over target points using OpenMP static scheduling
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   for (int p = 0; p < target_coords->npart; ++p) {
-    std::array<int, MAX_GRID_NDIM> coord_idx;
-    std::array<double, MAX_GRID_NDIM> axis_frac;
-    get_part_ind_frac_cic(coord_idx, axis_frac, grid_props, target_coords, p);
-
-    const int base_lin = get_flat_index(coord_idx, dims.data(), ndim);
+    // Use pre-computed base index from the Particles object
+    const int base_lin = target_coords->grid_indices[p];
 
     for (int ic = 0; ic < num_sub_cells; ++ic) {
       const auto &sc = subcells[ic];
 
       double frac = 1.0;
       for (int d = 0; d < ndim; ++d) {
-        frac *= sc.offs[d] ? axis_frac[d] : (1.0 - axis_frac[d]);
+        frac *= sc.offs[d] ? target_coords->grid_fracs[p * ndim + d]
+                           : (1.0 - target_coords->grid_fracs[p * ndim + d]);
       }
       if (frac == 0.0) {
         continue;
@@ -200,16 +196,14 @@ static void interpolate_loop_cic_omp(GridProps *grid_props,
 static void interpolate_loop_ngp_serial(GridProps *grid_props,
                                         Particles *target_coords, int n_extra,
                                         double *out_arr) {
-  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
-  const int ndim = grid_props->ndim;
   const double *grid_data = grid_props->get_spectra();
 
   for (int p = 0; p < target_coords->npart; ++p) {
     std::array<int, MAX_GRID_NDIM> coord_idx;
-    // Determine the single closest grid coordinate index
+
     get_part_inds_ngp(coord_idx, grid_props, target_coords, p);
 
-    const int flat_ind = get_flat_index(coord_idx, dims.data(), ndim);
+    const int flat_ind = grid_props->ravel_grid_index(coord_idx);
 
     // Copy the values directly from closest grid cell
     for (int iextra = 0; iextra < n_extra; ++iextra) {
@@ -231,8 +225,6 @@ static void interpolate_loop_ngp_serial(GridProps *grid_props,
 static void interpolate_loop_ngp_omp(GridProps *grid_props,
                                      Particles *target_coords, int n_extra,
                                      double *out_arr, int nthreads) {
-  const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
-  const int ndim = grid_props->ndim;
   const double *grid_data = grid_props->get_spectra();
 
 #pragma omp parallel for num_threads(nthreads) schedule(static)
@@ -240,7 +232,7 @@ static void interpolate_loop_ngp_omp(GridProps *grid_props,
     std::array<int, MAX_GRID_NDIM> coord_idx;
     get_part_inds_ngp(coord_idx, grid_props, target_coords, p);
 
-    const int flat_ind = get_flat_index(coord_idx, dims.data(), ndim);
+    const int flat_ind = grid_props->ravel_grid_index(coord_idx);
 
     for (int iextra = 0; iextra < n_extra; ++iextra) {
       out_arr[p * n_extra + iextra] = grid_data[flat_ind * n_extra + iextra];
@@ -282,27 +274,28 @@ PyObject *interpolate_grid_array(PyObject *self, PyObject *args) {
     return nullptr;
 
   /* Extract the grid struct. */
-  GridProps *grid_props =
-      new GridProps(np_grid_data, grid_tuple,
-                    /*np_lam*/ nullptr, /*np_lam_mask*/ nullptr, n_extra,
-                    /*np_grid_weights*/ NULL, prop_names);
+  auto grid_props = std::make_unique<GridProps>(
+      np_grid_data, grid_tuple,
+      /*np_lam*/ nullptr, /*np_lam_mask*/ nullptr, n_extra,
+      /*np_grid_weights*/ nullptr, prop_names);
 
   RETURN_IF_PYERR();
 
   /* Create the object that holds target coordinate properties. */
-  Particles *target_coords =
-      new Particles(/*np_weights*/ nullptr, /*np_velocities*/ nullptr,
-                    /*np_mask*/ nullptr, coords_tuple, prop_names, n_coords);
+  auto target_coords = std::make_unique<Particles>(
+      /*np_weights*/ nullptr, /*np_velocities*/ nullptr,
+      /*np_mask*/ nullptr, coords_tuple, prop_names, n_coords);
 
   RETURN_IF_PYERR();
+
+  get_particle_indices_and_fracs(grid_props.get(), target_coords.get(),
+                                 nthreads);
 
   /* Allocate the output numpy array. */
   npy_intp np_dims[2] = {n_coords, n_extra};
   PyArrayObject *out_arr_obj =
       (PyArrayObject *)PyArray_ZEROS(2, np_dims, NPY_DOUBLE, 0);
   if (out_arr_obj == nullptr) {
-    delete target_coords;
-    delete grid_props;
     return nullptr;
   }
   double *out_arr = static_cast<double *>(PyArray_DATA(out_arr_obj));
@@ -311,38 +304,36 @@ PyObject *interpolate_grid_array(PyObject *self, PyObject *args) {
   if (strcmp(method, "cic") == 0) {
 #ifdef WITH_OPENMP
     if (nthreads > 1) {
-      interpolate_loop_cic_omp(grid_props, target_coords, n_extra, out_arr,
-                               nthreads);
+      interpolate_loop_cic_omp(grid_props.get(), target_coords.get(), n_extra,
+                               out_arr, nthreads);
     } else {
-      interpolate_loop_cic_serial(grid_props, target_coords, n_extra, out_arr);
+      interpolate_loop_cic_serial(grid_props.get(), target_coords.get(),
+                                  n_extra, out_arr);
     }
 #else
     (void)nthreads;
-    interpolate_loop_cic_serial(grid_props, target_coords, n_extra, out_arr);
+    interpolate_loop_cic_serial(grid_props.get(), target_coords.get(), n_extra,
+                                out_arr);
 #endif
   } else if (strcmp(method, "ngp") == 0) {
 #ifdef WITH_OPENMP
     if (nthreads > 1) {
-      interpolate_loop_ngp_omp(grid_props, target_coords, n_extra, out_arr,
-                               nthreads);
+      interpolate_loop_ngp_omp(grid_props.get(), target_coords.get(), n_extra,
+                               out_arr, nthreads);
     } else {
-      interpolate_loop_ngp_serial(grid_props, target_coords, n_extra, out_arr);
+      interpolate_loop_ngp_serial(grid_props.get(), target_coords.get(),
+                                  n_extra, out_arr);
     }
 #else
     (void)nthreads;
-    interpolate_loop_ngp_serial(grid_props, target_coords, n_extra, out_arr);
+    interpolate_loop_ngp_serial(grid_props.get(), target_coords.get(), n_extra,
+                                out_arr);
 #endif
   } else {
     PyErr_SetString(PyExc_ValueError, "Unknown interpolation method.");
-    delete target_coords;
-    delete grid_props;
     Py_XDECREF(out_arr_obj);
     return nullptr;
   }
-
-  // Deallocate internal structs
-  delete target_coords;
-  delete grid_props;
 
   toc("interpolate_grid_array");
 
