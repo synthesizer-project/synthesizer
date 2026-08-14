@@ -2469,6 +2469,8 @@ class Grid:
                 The created figure containing the axes.
             matplotlib.Axis
                 The axis on which to plot.
+            matplotlib.Axis
+                The colorbar axis.
         """
         # Define the axis coordinates
         left = 0.2
