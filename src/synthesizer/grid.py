@@ -2098,7 +2098,12 @@ class Grid:
             )
 
         if spectra_type is None:
-            warn("The spectra_type is set to None ")
+            warn(
+                "spectra_type is None: no spectra will be interpolated and "
+                "the returned LineCollection will contain zeros. Pass a "
+                f"spectra_type from {self.available_spectra} to interpolate "
+                "spectra and lines."
+            )
 
         # Normalise accepted aliases first
         normalized_kwargs = {}
