@@ -1338,7 +1338,7 @@ class TestGridInterpolation:
 
         # 1. Test NGP interpolation
         res_ngp = test_grid.interpolate_grid_at_axes_value(
-            method="ngp", **coords
+            spectra_type="incident", method="ngp", **coords
         )
         sed_ngp = res_ngp["spectra"]
         assert sed_ngp is not None
@@ -1346,7 +1346,7 @@ class TestGridInterpolation:
 
         # 2. Test CIC interpolation
         res_cic = test_grid.interpolate_grid_at_axes_value(
-            method="cic", **coords
+            spectra_type="incident", method="cic", **coords
         )
         sed_cic = res_cic["spectra"]
         assert sed_cic is not None
@@ -1363,7 +1363,7 @@ class TestGridInterpolation:
 
         # Interpolate exactly at a grid point
         res_exact = test_grid.interpolate_grid_at_axes_value(
-            method="cic", **grid_coords
+            spectra_type="incident", method="cic", **grid_coords
         )
         sed_exact = res_exact["spectra"]
 

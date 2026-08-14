@@ -2070,7 +2070,7 @@ class Grid:
     def interpolate_grid_at_axes_value(
         self,
         method="cic",
-        spectra_type="incident",
+        spectra_type=None,
         **kwargs,
     ):
         """Interpolate the grid at the specified axes values.
@@ -2079,13 +2079,13 @@ class Grid:
             method (str):
                 The interpolation method to use. Options are "cic" and "ngp".
             spectra_type (str):
-                The spectra type to extract. Default is "incident".
+                The spectra type to extract. Default is None.
             **kwargs:
                 Coordinate values for each grid axis.
 
         Returns:
             dict:
-                A dictionary containing:
+                A dictionary that may contain:
                     - 'spectra': Sed object with the interpolated spectra
                     - 'lines': LineCollection object with the interpolated
                     lines
@@ -2096,6 +2096,9 @@ class Grid:
             raise exceptions.InconsistentParameter(
                 f"Interpolation method must be 'cic' or 'ngp', not {method}"
             )
+
+        if spectra_type is None:
+            warn("The spectra_type is set to None ")
 
         # Normalise accepted aliases first
         normalized_kwargs = {}
@@ -2180,7 +2183,7 @@ class Grid:
         results = {}
 
         # Interpolate spectra if available.
-        if self.has_spectra:
+        if (spectra_type is not None) and self.has_spectra:
             if spectra_type not in self.available_spectra:
                 raise exceptions.InconsistentParameter(
                     f"Provided spectra_type '{spectra_type}' is not in "
@@ -2259,15 +2262,13 @@ class Grid:
 
                     # Skip groups or datasets inside axes, spectra,
                     # lines, or failures
-                    if (
-                        path_parts[0]
-                        in (
-                            "axes",
-                            "spectra",
-                            "lines",
-                            "failures",
-                        )
-                    ) or (path_parts[1] == "wavelength"):
+                    if path_parts[0] in (
+                        "axes",
+                        "spectra",
+                        "lines",
+                        "failures",
+                        "wavelength",
+                    ):
                         continue
 
                     if isinstance(node, h5py.Group):
