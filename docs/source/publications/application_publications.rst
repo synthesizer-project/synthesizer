@@ -120,7 +120,7 @@ A single ADS library of the papers can be found
           :target: https://ui.adsabs.harvard.edu/abs/2026OJAp....957554P
      - **Interpreting nebular emission lines in the high-redshift Universe**
 
-       Authors: Payyoor Vijayan, Aswin, Yates, Robert M., Lovell, Christopher C., Roper, WIlliam J., Wilkins, Stephen M. and others
+       Authors: Payyoor Vijayan, Aswin, Yates, Robert M., Lovell, Christopher C., Roper, William J., Wilkins, Stephen M. and others
 
        February 2026, *OJA*
 
