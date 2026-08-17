@@ -1313,3 +1313,117 @@ class TestGridErrorHandling:
         # Accessing shape should raise an UnrecognisedOption error
         with pytest.raises(exceptions.UnrecognisedOption):
             _ = grid.shape
+
+
+class TestGridInterpolation:
+    """Tests for Grid interpolation (CIC and NGP)."""
+
+    def test_grid_interpolation_cic_and_ngp(self, test_grid):
+        """Test grid interpolation using both 'cic' and 'ngp' methods."""
+        if not test_grid.has_spectra:
+            pytest.skip("Grid has no spectra")
+
+        # Retrieve valid coordinate limits for axes
+        axis_vals = {}
+        for axis in test_grid.axes:
+            axis_vals[axis] = getattr(test_grid, axis)
+
+        # Let's define some coordinate points to interpolate at (within bounds)
+        # Pick a point in the middle of each axis
+        coords = {}
+        for axis in test_grid.axes:
+            vals = axis_vals[axis]
+            mid_val = vals[len(vals) // 2]
+            coords[axis] = np.array([mid_val.value]) * mid_val.units
+
+        # 1. Test NGP interpolation
+        res_ngp = test_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident", method="ngp", **coords
+        )
+        sed_ngp = res_ngp["spectra"]
+        assert sed_ngp is not None
+        assert sed_ngp.lnu.shape[0] == 1  # 1 target coordinate
+
+        # 2. Test CIC interpolation
+        res_cic = test_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident", method="cic", **coords
+        )
+        sed_cic = res_cic["spectra"]
+        assert sed_cic is not None
+        assert sed_cic.lnu.shape[0] == 1  # 1 target coordinate
+
+        # Compare exact point matches if we interpolate exactly at a grid point
+        grid_coords = {}
+        grid_indices = []
+        for axis in test_grid.axes:
+            vals = axis_vals[axis]
+            # Pick index 1 (second point)
+            grid_indices.append(1)
+            grid_coords[axis] = np.array([vals[1].value]) * vals[1].units
+
+        # Interpolate exactly at a grid point
+        res_exact = test_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident", method="cic", **grid_coords
+        )
+        sed_exact = res_exact["spectra"]
+
+        # Get the SED at the actual grid point
+        sed_point = test_grid.get_sed(grid_point=tuple(grid_indices))
+
+        # The interpolated SED at the grid point should match the exact
+        # grid point SED
+        assert np.allclose(
+            sed_exact.lnu[0].value, sed_point.lnu.value, rtol=1e-5
+        )
+
+    @pytest.mark.parametrize("method", ["cic", "ngp"])
+    @pytest.mark.parametrize("out_dtype", [np.float32, np.float64])
+    def test_grid_interpolation_out_dtype(self, test_grid, method, out_dtype):
+        """Test the interpolation honours the requested output dtype."""
+        if not test_grid.has_spectra:
+            pytest.skip("Grid has no spectra")
+
+        coords = {}
+        for axis in test_grid.axes:
+            vals = getattr(test_grid, axis)
+            mid_val = vals[len(vals) // 2]
+            coords[axis] = np.array([mid_val.value]) * mid_val.units
+
+        res = test_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident",
+            method=method,
+            out_dtype=out_dtype,
+            **coords,
+        )
+
+        assert res["spectra"].lnu.dtype == np.dtype(out_dtype)
+
+    @pytest.mark.parametrize("method", ["cic", "ngp"])
+    def test_grid_interpolation_float32_grid(self, test_grid, method):
+        """Test interpolating a float32 grid agrees with the float64 grid."""
+        if not test_grid.has_spectra:
+            pytest.skip("Grid has no spectra")
+
+        f32_grid = test_grid.convert_precision(np.float32)
+
+        coords = {}
+        for axis in test_grid.axes:
+            vals = getattr(test_grid, axis)
+            mid_val = vals[len(vals) // 2]
+            coords[axis] = np.array([mid_val.value]) * mid_val.units
+
+        res_f64 = test_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident", method=method, **coords
+        )
+        res_f32 = f32_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident", method=method, **coords
+        )
+
+        # The output dtype is controlled by out_dtype, not the grid dtype.
+        assert res_f32["spectra"].lnu.dtype == np.float64
+
+        assert np.allclose(
+            res_f32["spectra"].lnu.value,
+            res_f64["spectra"].lnu.value,
+            rtol=1e-5,
+        )
