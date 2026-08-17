@@ -56,6 +56,7 @@ from synthesizer.emission_models.operations import (
     Generation,
     Transformation,
 )
+from synthesizer.emission_models.parameters import VARIATION_TYPES
 from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity
 from synthesizer.utils.operation_timers import timed, timer
@@ -1598,6 +1599,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     raise exceptions.InconsistentArguments(
                         "The apply_dust_to argument has been removed. "
                         "Please use apply_to instead."
+                    )
+                if isinstance(value, VARIATION_TYPES):
+                    raise exceptions.InconsistentArguments(
+                        f"Cannot write an unexpanded {type(value).__name__} "
+                        f"for '{key}' on model '{self.label}' to HDF5. Call "
+                        "expand_models() on the root model first."
                     )
                 fixed_parameters.attrs[key] = value
 
