@@ -1422,6 +1422,114 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """Check if the model is masked."""
         return len(self.masks) > 0
 
+    @property
+    def _generator_model_attrs(self):
+        """Return the generator attributes which point at other models.
+
+        A generator can depend on other models, either for energy balance
+        (an intrinsic and an attenuated model) or for scaling (a single scaler
+        model). These pointers live on the generator rather than the model, so
+        they need handling separately whenever a model is copied or replaced.
+
+        Returns:
+            tuple:
+                The names of the attributes on this model's generator which
+                currently hold an EmissionModel.
+        """
+        # Only generation models can have generator dependencies
+        if not self._is_generating:
+            return ()
+
+        return tuple(
+            attr
+            for attr in ("_intrinsic", "_attenuated", "_scaler")
+            if isinstance(getattr(self.generator, attr, None), EmissionModel)
+        )
+
+    def _replace_generator_dependency(self, old_model, new_model):
+        """Point a generator dependency at a different model.
+
+        Args:
+            old_model (EmissionModel):
+                The model currently referenced by the generator.
+            new_model (EmissionModel):
+                The model to reference instead.
+        """
+        # Only generation models can have generator dependencies
+        if not self._is_generating:
+            return
+
+        generator = self.generator
+
+        # Swap the scaler, going through the setter so the generator's
+        # energy-balance/scaled flags stay consistent
+        if getattr(generator, "_scaler", None) is old_model:
+            if hasattr(generator, "set_scaler"):
+                generator.set_scaler(new_model)
+            else:
+                generator._scaler = new_model
+
+        # Swap either half of an energy balance pair
+        if getattr(generator, "_intrinsic", None) is old_model:
+            generator.set_energy_balance(new_model, generator._attenuated)
+        if getattr(generator, "_attenuated", None) is old_model:
+            generator.set_energy_balance(generator._intrinsic, new_model)
+
+    def _copy_node(self, label=None):
+        """Return a copy of this single model, detached from any tree.
+
+        The copy shares immutable and expensive state with the original (the
+        grid, the wavelength array, the transformer) but gets its own copies of
+        everything mutable, so that modifying the copy cannot reach back and
+        change the original. The copy has no children or parents; the caller is
+        responsible for wiring it into a tree.
+
+        Note that a generator holding references to other models is also
+        copied. Without this a copy would share its generator with the
+        original, and rewiring the copy's dependencies would silently rewire
+        the original's too.
+
+        Args:
+            label (str):
+                An optional label for the copy. Defaults to the original label,
+                which the caller must then change before the copy shares a tree
+                with the original.
+
+        Returns:
+            EmissionModel:
+                The detached copy.
+        """
+        new_model = copy.copy(self)
+
+        # Apply the new label if we've been given one
+        if label is not None:
+            new_model.label = label
+
+        # Detach from any tree, these are rebuilt by unpack_model
+        new_model._children = set()
+        new_model._parents = set()
+        new_model._models = {}
+        new_model._extract_keys = {}
+        new_model._energy_balance_models = None
+        new_model._scaler_model = None
+
+        # Take independent copies of the mutable state. Without this the copy
+        # and the original would share these containers.
+        new_model.masks = [dict(mask) for mask in self.masks]
+        new_model.fixed_parameters = dict(self.fixed_parameters)
+        new_model.related_models = set(self.related_models)
+        new_model._scale_by = copy.copy(self._scale_by)
+        new_model._post_processing = copy.copy(self._post_processing)
+        if self._is_combining:
+            new_model._combine = list(self._combine)
+
+        # Copy a generator which points at other models so that rewiring this
+        # copy's dependencies leaves the original's alone
+        if len(self._generator_model_attrs) > 0:
+            new_model._generator = copy.copy(self.generator)
+
+        return new_model
+
     def replace_model(self, replace_label, *replacements, new_label=None):
         """Remove a child model from this model.
 
@@ -1480,26 +1588,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
             if model._is_transforming and model.apply_to == replace_model:
                 model._apply_to = new_model
-            if model._is_generating:
-                if (
-                    hasattr(model.generator, "_scaler")
-                    and model.generator._scaler == replace_model
-                ):
-                    model._generator._scaler = new_model
-                if (
-                    hasattr(model.generator, "_intrinsic")
-                    and model.generator._intrinsic == replace_model
-                ):
-                    model._generator.set_energy_balance(
-                        new_model, model.generator._attenuated
-                    )
-                if (
-                    hasattr(model.generator, "_attenuated")
-                    and model.generator._attenuated == replace_model
-                ):
-                    model._generator.set_energy_balance(
-                        model.generator._intrinsic, new_model
-                    )
+            model._replace_generator_dependency(replace_model, new_model)
             if replace_label in model._models:
                 model._models.pop(replace_label)
 

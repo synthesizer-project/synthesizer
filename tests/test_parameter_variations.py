@@ -7,6 +7,7 @@ expansion of a model tree into its variant models.
 
 import numpy as np
 import pytest
+import unyt
 
 from synthesizer import exceptions
 from synthesizer.emission_models.parameters import (
@@ -572,3 +573,188 @@ class TestAddLabelPrefix:
         suffix_test_model.add_label_suffix("fesc_0.10")
 
         assert suffix_test_model.label == "stellar_scaled_fesc_0.10"
+
+
+@pytest.fixture
+def energy_balance_model(test_grid):
+    """Return a tree whose generator depends on two other models."""
+    from synthesizer.emission_models import DustEmission, StellarEmissionModel
+    from synthesizer.emission_models.generators.dust.blackbody import (
+        Blackbody,
+    )
+
+    intrinsic = StellarEmissionModel(
+        label="intrinsic",
+        grid=test_grid,
+        extract="incident",
+    )
+    attenuated = StellarEmissionModel(
+        label="attenuated",
+        apply_to=intrinsic,
+        transformer=EscapingFraction(("fesc",)),
+        fesc=0.1,
+    )
+    return DustEmission(
+        dust_emission_model=Blackbody(temperature=50 * unyt.K),
+        emitter="stellar",
+        label="dust_emission",
+        dust_lum_intrinsic=intrinsic,
+        dust_lum_attenuated=attenuated,
+    )
+
+
+class TestCopyNode:
+    """Test copying a single model out of a tree."""
+
+    def test_copy_is_detached(self, suffix_test_model):
+        """Test a copy has no tree wiring of its own."""
+        original = suffix_test_model["combined"]
+        copied = original._copy_node()
+
+        assert copied is not original
+        assert len(copied._children) == 0
+        assert len(copied._parents) == 0
+        assert copied._models == {}
+
+    def test_label_can_be_changed(self, suffix_test_model):
+        """Test the copy can be relabelled without touching the original."""
+        original = suffix_test_model["combined"]
+        copied = original._copy_node(label="combined_variant")
+
+        assert copied.label == "combined_variant"
+        assert original.label == "combined"
+
+    def test_fixed_parameters_are_independent(self, suffix_test_model):
+        """Test changing a copy's fixed parameters leaves the original be."""
+        original = suffix_test_model["transmitted"]
+        copied = original._copy_node()
+
+        copied.fixed_parameters["fesc"] = 0.9
+
+        assert original.fixed_parameters["fesc"] == 0.1
+
+    def test_masks_are_independent(self, suffix_test_model):
+        """Test changing a copy's masks leaves the original alone."""
+        original = suffix_test_model["transmitted"]
+        original.add_mask("ages", "<", 10 * unyt.Myr)
+        copied = original._copy_node()
+
+        copied.masks[0]["thresh"] = 100 * unyt.Myr
+        copied.masks.append(dict(copied.masks[0]))
+
+        assert len(original.masks) == 1
+        assert original.masks[0]["thresh"] == 10 * unyt.Myr
+
+    def test_combine_is_independent(self, suffix_test_model):
+        """Test changing a copy's combine list leaves the original alone."""
+        original = suffix_test_model["combined"]
+        copied = original._copy_node()
+
+        copied._combine.pop()
+
+        assert len(original.combine) == 2
+
+    def test_related_models_are_independent(self, suffix_test_model):
+        """Test changing a copy's related models leaves the original alone."""
+        original = suffix_test_model["combined"]
+        copied = original._copy_node()
+
+        copied.related_models.add(suffix_test_model["incident"])
+
+        assert len(original.related_models) == 0
+
+    def test_shares_expensive_state(self, suffix_test_model):
+        """Test the grid and transformer are shared, not duplicated."""
+        original = suffix_test_model["transmitted"]
+        copied = original._copy_node()
+
+        assert copied.transformer is original.transformer
+
+        extraction = suffix_test_model["incident"]
+        assert extraction._copy_node().grid is extraction.grid
+
+
+class TestGeneratorRewiring:
+    """Test the generator dependency handling shared by copy and replace."""
+
+    def test_generator_model_attrs_found(self, energy_balance_model):
+        """Test the generator's model pointers are discovered."""
+        assert set(energy_balance_model._generator_model_attrs) == {
+            "_intrinsic",
+            "_attenuated",
+        }
+
+    def test_no_attrs_without_generator(self, suffix_test_model):
+        """Test a non generating model reports no generator pointers."""
+        assert suffix_test_model._generator_model_attrs == ()
+
+    def test_generator_is_copied(self, energy_balance_model):
+        """Test a generator holding model refs is copied, not shared."""
+        copied = energy_balance_model._copy_node(label="dust_variant")
+
+        assert copied.generator is not energy_balance_model.generator
+
+    def test_rewiring_copy_leaves_original(
+        self, energy_balance_model, test_grid
+    ):
+        """Test rewiring a copy's generator does not rewire the original's.
+
+        This is the failure mode the generator copy exists to prevent: without
+        it both models share one generator and each variant would silently
+        overwrite the previous one's dependencies.
+        """
+        from synthesizer.emission_models import StellarEmissionModel
+
+        original_intrinsic = energy_balance_model.generator._intrinsic
+        replacement = StellarEmissionModel(
+            label="other_intrinsic",
+            grid=test_grid,
+            extract="incident",
+        )
+
+        copied = energy_balance_model._copy_node(label="dust_variant")
+        copied._replace_generator_dependency(original_intrinsic, replacement)
+
+        assert copied.generator._intrinsic is replacement
+        assert energy_balance_model.generator._intrinsic is original_intrinsic
+
+    def test_rewiring_preserves_the_other_half(
+        self, energy_balance_model, test_grid
+    ):
+        """Test replacing the intrinsic model keeps the attenuated model."""
+        from synthesizer.emission_models import StellarEmissionModel
+
+        attenuated = energy_balance_model.generator._attenuated
+        replacement = StellarEmissionModel(
+            label="other_intrinsic",
+            grid=test_grid,
+            extract="incident",
+        )
+
+        copied = energy_balance_model._copy_node(label="dust_variant")
+        copied._replace_generator_dependency(
+            copied.generator._intrinsic, replacement
+        )
+
+        assert copied.generator._attenuated is attenuated
+        assert copied.generator.is_energy_balance
+
+    def test_replace_model_still_rewires(
+        self, energy_balance_model, test_grid
+    ):
+        """Test replace_model still rewires generator dependencies.
+
+        replace_model now shares the rewiring helper, so this guards against
+        the refactor changing its behaviour.
+        """
+        from synthesizer.emission_models import StellarEmissionModel
+
+        replacement = StellarEmissionModel(
+            label="intrinsic",
+            grid=test_grid,
+            extract="transmitted",
+        )
+
+        energy_balance_model.replace_model("intrinsic", replacement)
+
+        assert energy_balance_model.generator._intrinsic is replacement
