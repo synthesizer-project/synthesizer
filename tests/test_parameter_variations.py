@@ -758,3 +758,586 @@ class TestGeneratorRewiring:
         energy_balance_model.replace_model("intrinsic", replacement)
 
         assert energy_balance_model.generator._intrinsic is replacement
+
+
+@pytest.fixture
+def varied_model_factory(test_grid):
+    """Return a factory building trees with variations attached.
+
+    The tree built is::
+
+        incident --> transmitted --> combined
+
+    with "combined" depending on "incident" both directly and through
+    "transmitted", so it is a diamond.
+    """
+    from synthesizer.emission_models import StellarEmissionModel
+
+    def _build(incident_kwargs=None, transmitted_kwargs=None):
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+            **(incident_kwargs or {}),
+        )
+        transmitted = StellarEmissionModel(
+            label="transmitted",
+            apply_to=incident,
+            transformer=EscapingFraction(("fesc",)),
+            **{"fesc": 0.1, **(transmitted_kwargs or {})},
+        )
+        return StellarEmissionModel(
+            label="combined",
+            combine=(incident, transmitted),
+        )
+
+    return _build
+
+
+class TestExpandNoVariations:
+    """Test expanding a tree with nothing to expand."""
+
+    def test_returns_equivalent_copy(self, varied_model_factory):
+        """Test a tree with no variations expands to a copy of itself."""
+        model = varied_model_factory()
+        expanded = model.expand_models()
+
+        assert expanded is not model
+        assert set(expanded._models) == set(model._models)
+
+    def test_copy_is_independent(self, varied_model_factory):
+        """Test the expanded copy shares no mutable state with the original."""
+        model = varied_model_factory()
+        expanded = model.expand_models()
+
+        expanded["transmitted"].fixed_parameters["fesc"] = 0.9
+
+        assert model["transmitted"].fixed_parameters["fesc"] == 0.1
+        assert expanded["incident"] is not model["incident"]
+
+
+class TestExpandSingleVariation:
+    """Test expanding one variation."""
+
+    def test_one_model_per_value(self, varied_model_factory):
+        """Test the varied model and its dependents are duplicated."""
+        model = varied_model_factory(
+            transmitted_kwargs={
+                "fesc": ParameterList(
+                    [0.0, 0.1, 0.5], label_modifier="fesc_%.2f"
+                )
+            }
+        )
+        expanded = model.expand_models()
+
+        assert set(expanded._models) == {
+            # The dependency is shared, not duplicated
+            "incident",
+            "transmitted_fesc_0.00",
+            "transmitted_fesc_0.10",
+            "transmitted_fesc_0.50",
+            "combined_fesc_0.00",
+            "combined_fesc_0.10",
+            "combined_fesc_0.50",
+        }
+
+    def test_values_are_set(self, varied_model_factory):
+        """Test each variant carries its own value, not the declaration."""
+        model = varied_model_factory(
+            transmitted_kwargs={
+                "fesc": ParameterList([0.0, 0.5], label_modifier="fesc_%.2f")
+            }
+        )
+        expanded = model.expand_models()
+
+        assert (
+            expanded["transmitted_fesc_0.00"].fixed_parameters["fesc"] == 0.0
+        )
+        assert (
+            expanded["transmitted_fesc_0.50"].fixed_parameters["fesc"] == 0.5
+        )
+
+    def test_variant_params_recorded(self, varied_model_factory):
+        """Test each variant records what distinguishes it."""
+        model = varied_model_factory(
+            transmitted_kwargs={
+                "fesc": ParameterList([0.0, 0.5], label_modifier="fesc_%.2f")
+            }
+        )
+        expanded = model.expand_models()
+
+        assert expanded["combined_fesc_0.50"].variant_params == {"fesc": 0.5}
+        # The shared dependency belongs to no variant
+        assert expanded["incident"].variant_params == {}
+
+    def test_root_variants_are_related_models(self, varied_model_factory):
+        """Test the other root variants are reachable as related models."""
+        model = varied_model_factory(
+            transmitted_kwargs={
+                "fesc": ParameterList([0.0, 0.5], label_modifier="fesc_%.2f")
+            }
+        )
+        expanded = model.expand_models()
+
+        assert {related.label for related in expanded.related_models} == {
+            "combined_fesc_0.50"
+        }
+
+    def test_wiring_is_per_variant(self, varied_model_factory):
+        """Test each variant's models point at that variant's models."""
+        model = varied_model_factory(
+            transmitted_kwargs={
+                "fesc": ParameterList([0.0, 0.5], label_modifier="fesc_%.2f")
+            }
+        )
+        expanded = model.expand_models()
+
+        combined = expanded["combined_fesc_0.50"]
+        assert {child.label for child in combined.combine} == {
+            "incident",
+            "transmitted_fesc_0.50",
+        }
+
+    def test_diamond_duplicated_once(self, varied_model_factory):
+        """Test a dependent reached by two routes is duplicated once.
+
+        "combined" depends on "incident" directly and through "transmitted".
+        Recursing each dependency path independently would give one copy of
+        "combined" per path per value, i.e. nine for three values instead of
+        three.
+        """
+        model = varied_model_factory(
+            incident_kwargs={
+                "fesc": ParameterList(
+                    [0.0, 0.1, 0.5], label_modifier="fesc_%.2f"
+                )
+            }
+        )
+        expanded = model.expand_models()
+
+        combined_labels = [
+            label for label in expanded._models if label.startswith("combined")
+        ]
+        assert len(combined_labels) == 3
+
+
+class TestExpandMultipleVariations:
+    """Test variations multiplying out."""
+
+    def test_independent_variations_multiply(self, varied_model_factory):
+        """Test two variations on the same model give every combination."""
+        model = varied_model_factory(
+            transmitted_kwargs={
+                "fesc": ParameterList(
+                    [0.0, 0.1, 0.5], label_modifier="fesc_%.2f"
+                ),
+                "tau_v": ParameterList(
+                    [0.1, 0.2, 0.3, 0.4], label_modifier="tau_v_%.1f"
+                ),
+            }
+        )
+        expanded = model.expand_models()
+
+        transmitted = [
+            label
+            for label in expanded._models
+            if label.startswith("transmitted")
+        ]
+        assert len(transmitted) == 12
+
+    def test_stacked_variations_multiply(self, varied_model_factory):
+        """Test a varied model depending on a varied model gives the product.
+
+        "incident" is varied over four values and "transmitted", which depends
+        on it, over three. Expanding "incident" first leaves four copies of
+        "transmitted", each of which is then expanded into three.
+        """
+        model = varied_model_factory(
+            incident_kwargs={
+                "some_param": ParameterList(
+                    [1.0, 2.0, 3.0, 4.0], label_modifier="p_%.1f"
+                )
+            },
+            transmitted_kwargs={
+                "fesc": ParameterList(
+                    [0.0, 0.1, 0.5], label_modifier="fesc_%.2f"
+                )
+            },
+        )
+        expanded = model.expand_models()
+
+        assert (
+            len(
+                [
+                    label
+                    for label in expanded._models
+                    if label.startswith("incident")
+                ]
+            )
+            == 4
+        )
+        assert (
+            len(
+                [
+                    label
+                    for label in expanded._models
+                    if label.startswith("transmitted")
+                ]
+            )
+            == 12
+        )
+        assert (
+            len(
+                [
+                    label
+                    for label in expanded._models
+                    if label.startswith("combined")
+                ]
+            )
+            == 12
+        )
+
+    def test_suffixes_carried_through(self, varied_model_factory):
+        """Test a downstream variant's label carries both suffixes."""
+        model = varied_model_factory(
+            incident_kwargs={
+                "some_param": ParameterList([1.0], label_modifier="p_%.1f")
+            },
+            transmitted_kwargs={
+                "fesc": ParameterList([0.5], label_modifier="fesc_%.2f")
+            },
+        )
+        expanded = model.expand_models()
+
+        assert "transmitted_p_1.0_fesc_0.50" in expanded._models
+
+    def test_variant_params_accumulate(self, varied_model_factory):
+        """Test a variant records every value which distinguishes it."""
+        model = varied_model_factory(
+            incident_kwargs={
+                "some_param": ParameterList([1.0], label_modifier="p_%.1f")
+            },
+            transmitted_kwargs={
+                "fesc": ParameterList([0.5], label_modifier="fesc_%.2f")
+            },
+        )
+        expanded = model.expand_models()
+
+        assert expanded["transmitted_p_1.0_fesc_0.50"].variant_params == {
+            "some_param": 1.0,
+            "fesc": 0.5,
+        }
+
+    def test_expansion_is_reproducible(self, varied_model_factory):
+        """Test expanding the same tree twice gives the same labels.
+
+        The tree is walked through sets of model objects, so this guards
+        against label order depending on memory addresses.
+        """
+
+        def _labels():
+            model = varied_model_factory(
+                incident_kwargs={
+                    "some_param": ParameterList(
+                        [1.0, 2.0], label_modifier="p_%.1f"
+                    )
+                },
+                transmitted_kwargs={
+                    "fesc": ParameterList(
+                        [0.0, 0.5], label_modifier="fesc_%.2f"
+                    ),
+                    "tau_v": ParameterList(
+                        [0.1, 0.2], label_modifier="tau_v_%.1f"
+                    ),
+                },
+            )
+            return sorted(model.expand_models()._models)
+
+        assert _labels() == _labels()
+
+
+class TestExpandDistributions:
+    """Test expanding a sampled variation."""
+
+    def test_sampled_into_models(self, varied_model_factory):
+        """Test a distribution produces one model per sample."""
+        model = varied_model_factory(
+            transmitted_kwargs={
+                "fesc": ParameterUniformDist(
+                    0.0, 1.0, n=4, seed=42, label_modifier="fesc_%.3f"
+                )
+            }
+        )
+        expanded = model.expand_models()
+
+        assert (
+            len(
+                [
+                    label
+                    for label in expanded._models
+                    if label.startswith("transmitted")
+                ]
+            )
+            == 4
+        )
+
+    def test_seeded_expansion_is_reproducible(self, varied_model_factory):
+        """Test a seeded distribution gives the same models every time."""
+
+        def _labels():
+            model = varied_model_factory(
+                transmitted_kwargs={
+                    "fesc": ParameterUniformDist(
+                        0.0, 1.0, n=4, seed=42, label_modifier="fesc_%.3f"
+                    )
+                }
+            )
+            return sorted(model.expand_models()._models)
+
+        assert _labels() == _labels()
+
+    def test_samples_shared_across_branches(self, varied_model_factory):
+        """Test a distribution is sampled once, not once per branch.
+
+        "incident" is varied over two values, so "transmitted" is duplicated
+        before its own distribution is expanded. Both copies must use the same
+        samples, otherwise the two branches would not be comparable.
+        """
+        model = varied_model_factory(
+            incident_kwargs={
+                "some_param": ParameterList(
+                    [1.0, 2.0], label_modifier="p_%.1f"
+                )
+            },
+            transmitted_kwargs={
+                "fesc": ParameterUniformDist(
+                    0.0, 1.0, n=3, seed=42, label_modifier="fesc_%.3f"
+                )
+            },
+        )
+        expanded = model.expand_models()
+
+        first = sorted(
+            model_.variant_params["fesc"]
+            for label, model_ in expanded.items()
+            if label.startswith("transmitted_p_1.0")
+        )
+        second = sorted(
+            model_.variant_params["fesc"]
+            for label, model_ in expanded.items()
+            if label.startswith("transmitted_p_2.0")
+        )
+
+        assert first == second
+
+
+class TestExpandGeneratorModels:
+    """Test expanding a variation feeding a generator dependency."""
+
+    def test_generator_deps_are_per_variant(
+        self, test_grid, energy_balance_model
+    ):
+        """Test each variant's generator points at that variant's models."""
+        energy_balance_model["intrinsic"].fix_parameters(
+            some_param=ParameterList([1.0, 2.0], label_modifier="p_%.1f")
+        )
+        expanded = energy_balance_model.expand_models()
+
+        first = expanded["dust_emission_p_1.0"]
+        second = expanded["dust_emission_p_2.0"]
+
+        assert first.generator is not second.generator
+        assert first.generator._intrinsic.label == "intrinsic_p_1.0"
+        assert second.generator._intrinsic.label == "intrinsic_p_2.0"
+        assert first.generator._attenuated.label == "attenuated_p_1.0"
+
+
+class TestExpandRelatedModels:
+    """Test expanding a variation in a related model subtree."""
+
+    def test_related_subtree_is_expanded(self, test_grid):
+        """Test a varied related model is expanded and stays reachable."""
+        from synthesizer.emission_models import StellarEmissionModel
+
+        unrelated = StellarEmissionModel(
+            label="unrelated",
+            grid=test_grid,
+            extract="transmitted",
+            fesc=ParameterList([0.1, 0.2], label_modifier="fesc_%.2f"),
+        )
+        root = StellarEmissionModel(
+            label="root",
+            grid=test_grid,
+            extract="incident",
+            related_models=unrelated,
+        )
+
+        expanded = root.expand_models()
+
+        # The root the user built is still the root
+        assert expanded.label == "root"
+
+        # And both variants of the related model are reachable
+        assert set(expanded._models) == {
+            "root",
+            "unrelated_fesc_0.10",
+            "unrelated_fesc_0.20",
+        }
+
+
+class TestExpandRemovesRedundantWork:
+    """Test that unvaried models are only computed once.
+
+    This is the reason the machinery exists: building variations by copying a
+    whole model tree recomputes the models a variation cannot affect.
+    """
+
+    def test_shared_dependency_queued_once(self, varied_model_factory):
+        """Test an unvaried dependency appears once in the execution graph."""
+        from synthesizer.emission_models.model_queue import ModelQueue
+
+        model = varied_model_factory(
+            transmitted_kwargs={
+                "fesc": ParameterList(
+                    [0.0, 0.1, 0.5], label_modifier="fesc_%.2f"
+                )
+            }
+        )
+        expanded = model.expand_models()
+
+        queue = ModelQueue(expanded)
+
+        # The extraction is shared by all three variants, so it is queued once
+        assert (
+            len(
+                [
+                    label
+                    for label in queue.models
+                    if label.startswith("incident")
+                ]
+            )
+            == 1
+        )
+
+        # While everything downstream of the variation is queued per variant
+        assert (
+            len(
+                [
+                    label
+                    for label in queue.models
+                    if label.startswith("combined")
+                ]
+            )
+            == 3
+        )
+
+    def test_all_variants_are_queued(self, varied_model_factory):
+        """Test every variant is reached through the related models."""
+        from synthesizer.emission_models.model_queue import ModelQueue
+
+        model = varied_model_factory(
+            transmitted_kwargs={
+                "fesc": ParameterList(
+                    [0.0, 0.1, 0.5], label_modifier="fesc_%.2f"
+                )
+            }
+        )
+        expanded = model.expand_models()
+
+        assert set(ModelQueue(expanded).models) == set(expanded._models)
+
+
+class TestExpandEndToEnd:
+    """Test generating emissions from an expanded model."""
+
+    def test_all_variants_generated(self, test_grid, particle_stars_A):
+        """Test one get_spectra call produces every variant's spectra."""
+        from synthesizer.emission_models import StellarEmissionModel
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        model = StellarEmissionModel(
+            label="escaped",
+            apply_to=incident,
+            transformer=EscapingFraction(("fesc",)),
+            fesc=ParameterList([0.1, 0.5], label_modifier="fesc_%.2f"),
+        )
+
+        expanded = model.expand_models()
+        particle_stars_A.get_spectra(expanded)
+
+        # Every variant is attached to the emitter under its own label
+        assert "escaped_fesc_0.10" in particle_stars_A.spectra
+        assert "escaped_fesc_0.50" in particle_stars_A.spectra
+
+        # The shared dependency was generated once, under its own label
+        assert "incident" in particle_stars_A.spectra
+
+    def test_variants_used_their_own_values(self, test_grid, particle_stars_A):
+        """Test each variant's emission reflects its own parameter value.
+
+        EscapingFraction scales the emission it is applied to by
+        (1 - covering_fraction), so the ratio of each variant's luminosity to
+        the shared incident luminosity pins down exactly which value it used.
+        """
+        from synthesizer.emission_models import StellarEmissionModel
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        model = StellarEmissionModel(
+            label="escaped",
+            apply_to=incident,
+            transformer=EscapingFraction(("covering_fraction",)),
+            covering_fraction=ParameterList(
+                [0.1, 0.5], label_modifier="fcov_%.2f"
+            ),
+        )
+
+        expanded = model.expand_models()
+        particle_stars_A.get_spectra(expanded)
+
+        incident_lum = particle_stars_A.spectra[
+            "incident"
+        ].bolometric_luminosity
+        low_cov = particle_stars_A.spectra[
+            "escaped_fcov_0.10"
+        ].bolometric_luminosity
+        high_cov = particle_stars_A.spectra[
+            "escaped_fcov_0.50"
+        ].bolometric_luminosity
+
+        assert np.isclose(low_cov / incident_lum, 0.9)
+        assert np.isclose(high_cov / incident_lum, 0.5)
+
+    def test_expanded_model_writes_to_hdf5(self, test_grid, tmp_path):
+        """Test an expanded model can be written to HDF5.
+
+        The unexpanded model cannot, since a variation is not a value, so this
+        checks the expansion really does remove every declaration.
+        """
+        import h5py
+
+        from synthesizer.emission_models import StellarEmissionModel
+
+        model = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+            fesc=ParameterList([0.1, 0.5], label_modifier="fesc_%.2f"),
+        )
+        expanded = model.expand_models()
+
+        with h5py.File(tmp_path / "model.hdf5", "w") as hdf:
+            for label, variant in expanded.items():
+                variant.to_hdf5(hdf.create_group(label))
+
+            assert set(hdf.keys()) == {
+                "incident_fesc_0.10",
+                "incident_fesc_0.50",
+            }

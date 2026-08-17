@@ -1423,6 +1423,49 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return len(self.masks) > 0
 
     @property
+    def variant_params(self):
+        """Return the parameter values which distinguish this model variant.
+
+        A model produced by expanding a parameter variation records the values
+        which were varied to produce it, so which variant a model (and thus its
+        emission) belongs to can be recovered without parsing its label.
+
+        Returns:
+            dict:
+                A dictionary of the form {<param_name>: <value>}. Empty for any
+                model which isn't the product of an expansion.
+        """
+        return getattr(self, "_variant_params", {})
+
+    def expand_models(self):
+        """Expand any parameter variations in this tree into new models.
+
+        Passing a ParameterList or ParameterDistribution as a model parameter
+        declares that the model should be varied over a set of values. This
+        method turns those declarations into models: the varied model, and
+        everything which depends on it, is duplicated once per value, with each
+        copy labelled using the variation's label_modifier. Models which the
+        varied model depends on are shared between the copies rather than
+        duplicated, so the parts of the tree unaffected by the variation are
+        only ever computed once.
+
+        This model is not modified. The expansion is performed on a copy.
+
+        The returned root has the other root variants attached as related
+        models, so a single get_spectra call generates every variant. Each
+        variant's emission is stored on the emitter under its own label.
+
+        Returns:
+            EmissionModel:
+                The root of the expanded tree. If nothing in the tree declared
+                a variation this is just a copy of this model.
+        """
+        # Imported here to avoid a circular import at module load time
+        from synthesizer.emission_models.expansion import expand_models
+
+        return expand_models(self)
+
+    @property
     def _generator_model_attrs(self):
         """Return the generator attributes which point at other models.
 
