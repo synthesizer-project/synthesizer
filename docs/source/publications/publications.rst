@@ -12,6 +12,171 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
+   * - .. image:: plots/2026MNRAS.551g1230T.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2026MNRAS.551g1230T
+     - **Hunting the first cosmic giants: formation and detectability of direct collapse black holes around high-redshift quasars**
+
+       Authors: Trinca, Alessandro, Lupi, Alessandro, Haiman, Zoltán, Volonteri, Marta, Valiante, Rosa and others
+
+       September 2026, *MNRAS*
+
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2026MNRAS.551g1230T>`__ | `[arXiv] <https://arxiv.org/abs/2601.14370>`__
+
+.. list-table::
+   :widths: 40 60
+   :class: borderless
+
+   * - .. image:: plots/2026arXiv260807668T.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2026arXiv260807668T
+     - **First Light and Assembly of GalaxieS (FLAGS) I: The JWST/NIRCam Number Counts and IGL as Constraints on Galaxy Formation Models**
+
+       Authors: Turner, Jack C., Wilkins, Stephen M., Vijayan, Aswin P.
+
+       August 2026, *Preprint*
+
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2026arXiv260807668T>`__ | `[arXiv] <https://arxiv.org/abs/2608.07668>`__
+
+.. list-table::
+   :widths: 40 60
+   :class: borderless
+
+   * - .. image:: plots/2026MNRAS.550g1227S.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2026MNRAS.550g1227S
+     - **The Cosmic Rush Hour: Rapid formation of bright, massive, disky, star-forming galaxies as signatures of early-universe physics**
+
+       Authors: Shen, Xuejian, Zier, Oliver, Vogelsberger, Mark, Boylan-Kolchin, Michael, Hernquist, Lars and others
+
+       August 2026, *MNRAS*
+
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2026MNRAS.550g1227S>`__ | `[arXiv] <https://arxiv.org/abs/2509.19427>`__
+
+.. list-table::
+   :widths: 40 60
+   :class: borderless
+
+   * - .. image:: plots/2026arXiv260727467V.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2026arXiv260727467V
+     - **Stellar photoionisation modelling in SYNTHESIZER**
+
+       Authors: Vijayan, Aswin P., Wilkins, Stephen M., Newman, Sophie L., Lovell, Christopher C., Roper, William J. and others
+
+       July 2026, *Preprint*
+
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2026arXiv260727467V>`__ | `[arXiv] <https://arxiv.org/abs/2607.27467>`__
+
+.. list-table::
+   :widths: 40 60
+   :class: borderless
+
+   * - .. image:: plots/2026arXiv260630726A.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2026arXiv260630726A
+     - **AGN-driven outflows in dwarf galaxies from cosmological simulations: Internal properties and observational signatures**
+
+       Authors: Arjona-Gálvez, Elena, Di Cintio, Arianna, Grand, Robert J.~J., Sales, Laura V., Canalizo, Gabriela and others
+
+       June 2026, *Preprint*
+
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2026arXiv260630726A>`__ | `[arXiv] <https://arxiv.org/abs/2606.30726>`__
+
+.. list-table::
+   :widths: 40 60
+   :class: borderless
+
+   * - .. image:: plots/2026arXiv260630750I.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2026arXiv260630750I
+     - **A Pixel-by-Pixel Path to Population III Discovery with JWST**
+
+       Authors: Iglesias-Navarro, Patricia, Harvey, Thomas, Huertas-Company, Marc, Lovell, Christopher C., Knapen, Johan H. and others
+
+       June 2026, *Preprint*
+
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2026arXiv260630750I>`__ | `[arXiv] <https://arxiv.org/abs/2606.30750>`__
+
+.. list-table::
+   :widths: 40 60
+   :class: borderless
+
+   * - .. image:: plots/2026MNRAS.546ag214T.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2026MNRAS.546ag214T
+     - **The nature of high-redshift massive quiescent galaxies ─ searching for RUBIES-UDS-QG-z7 in FLARES**
+
+       Authors: Turner, Jack C., Roper, Will J., Vijayan, Aswin P., Newman, Sophie L., Wilkins, Stephen M. and others
+
+       March 2026, *MNRAS*
+
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2026MNRAS.546ag214T>`__ | `[arXiv] <https://arxiv.org/abs/2509.16111>`__
+
+.. list-table::
+   :widths: 40 60
+   :class: borderless
+
+   * - .. image:: plots/2026JOSS...11.9436R.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2026JOSS...11.9436R
+     - **Synthesizer: Synthetic Observables for Modern Astronomy**
+
+       Authors: Roper, Will, Lovell, Christopher, Vijayan, Aswin, Wilkins, Stephen, Akins, Hollis and others
+
+       March 2026, *The Journal of Open Source Software*
+
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2026JOSS...11.9436R>`__ | `[arXiv] <https://arxiv.org/abs/2506.15811>`__
+
+.. list-table::
+   :widths: 40 60
+   :class: borderless
+
+   * - .. image:: plots/2026MNRAS.547ag282H.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2026MNRAS.547ag282H
+     - **Flexible simulation-based inference for galaxy photometric fitting with synthesizer**
+
+       Authors: Harvey, Thomas, Lovell, Christopher C., Newman, Sophie, Conselice, Christopher J., Austin, Duncan and others
+
+       March 2026, *MNRAS*
+
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2026MNRAS.547ag282H>`__ | `[arXiv] <https://arxiv.org/abs/2511.10640>`__
+
+.. list-table::
+   :widths: 40 60
+   :class: borderless
+
+   * - .. image:: plots/2026OJAp....957554P.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2026OJAp....957554P
+     - **Interpreting nebular emission lines in the high-redshift Universe**
+
+       Authors: Payyoor Vijayan, Aswin, Yates, Robert M., Lovell, Christopher C., Roper, WIlliam J., Wilkins, Stephen M. and others
+
+       February 2026, *OJA*
+
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2026OJAp....957554P>`__ | `[arXiv] <https://arxiv.org/abs/2507.20190>`__
+
+.. list-table::
+   :widths: 40 60
+   :class: borderless
+
+   * - .. image:: plots/2026ApJ...998..148J.jpeg
+          :width: 100%
+          :target: https://ui.adsabs.harvard.edu/abs/2026ApJ...998..148J
+     - **Little Red Dots and Their Progenitors from Direct Collapse Black Holes**
+
+       Authors: Jeon, Junehyoung, Liu, Boyuan, Bromm, Volker, Fujimoto, Seiji, Taylor, Anthony J. and others
+
+       February 2026, *ApJ*
+
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2026ApJ...998..148J>`__ | `[arXiv] <https://arxiv.org/abs/2508.14155>`__
+
+.. list-table::
+   :widths: 40 60
+   :class: borderless
+
    * - .. image:: plots/2026MNRAS.545f1866N.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026MNRAS.545f1866N
@@ -27,16 +192,16 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2025MNRAS.544.3949L.jpeg
+   * - .. image:: plots/2025arXiv251210839A.jpeg
           :width: 100%
-          :target: https://ui.adsabs.harvard.edu/abs/2025MNRAS.544.3949L
-     - **Learning the Universe: cosmological and astrophysical parameter inference with galaxy luminosity functions and colours**
+          :target: https://ui.adsabs.harvard.edu/abs/2025arXiv251210839A
+     - **Resolving the ionizing photon budget crisis with JWST/NIRCam HII clumping constraints at z=6**
 
-       Authors: Lovell, Christopher C., Starkenburg, Tjitske, Ho, Matthew, Anglés-Alcázar, Daniel, Davé, Romeel and others
+       Authors: Austin, Duncan, Harvey, Thomas, Conselice, Christopher J., Adams, Nathan J., Rusakov, Vadim and others
 
-       December 2025, *MNRAS*
+       December 2025, *Preprint*
 
-       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025MNRAS.544.3949L>`__ | `[arXiv] <https://arxiv.org/abs/2411.13960>`__
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv251210839A>`__ | `[arXiv] <https://arxiv.org/abs/2512.10839>`__
 
 .. list-table::
    :widths: 40 60
@@ -57,16 +222,16 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2025arXiv251110640H.jpeg
+   * - .. image:: plots/2025MNRAS.544.3949L.jpeg
           :width: 100%
-          :target: https://ui.adsabs.harvard.edu/abs/2025arXiv251110640H
-     - **Flexible Simulation Based Inference for Galaxy Photometric Fitting with Synthesizer**
+          :target: https://ui.adsabs.harvard.edu/abs/2025MNRAS.544.3949L
+     - **Learning the Universe: cosmological and astrophysical parameter inference with galaxy luminosity functions and colours**
 
-       Authors: Harvey, Thomas, Lovell, Christopher C., Newman, Sophie, Conselice, Christopher J., Austin, Duncan and others
+       Authors: Lovell, Christopher C., Starkenburg, Tjitske, Ho, Matthew, Anglés-Alcázar, Daniel, Davé, Romeel and others
 
-       November 2025, *Preprint*
+       December 2025, *MNRAS*
 
-       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv251110640H>`__ | `[arXiv] <https://arxiv.org/abs/2511.10640>`__
+       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025MNRAS.544.3949L>`__ | `[arXiv] <https://arxiv.org/abs/2411.13960>`__
 
 .. list-table::
    :widths: 40 60
@@ -117,21 +282,6 @@ You can also find the :doc:`technical <technical_publications>` and
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2025arXiv250916111T.jpeg
-          :width: 100%
-          :target: https://ui.adsabs.harvard.edu/abs/2025arXiv250916111T
-     - **The Nature of High-Redshift Massive Quiescent Galaxies -- Searching for RUBIES-UDS-QG-z7 in FLARES**
-
-       Authors: Turner, Jack C., Roper, Will J., Vijayan, Aswin P., Newman, Sophie L., Wilkins, Stephen M. and others
-
-       September 2025, *Preprint*
-
-       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250916111T>`__ | `[arXiv] <https://arxiv.org/abs/2509.16111>`__
-
-.. list-table::
-   :widths: 40 60
-   :class: borderless
-
    * - .. image:: plots/2025ApJ...991...83R.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025ApJ...991...83R
@@ -142,46 +292,6 @@ You can also find the :doc:`technical <technical_publications>` and
        September 2025, *ApJ*
 
        `[ADS] <https://ui.adsabs.harvard.edu/abs/2025ApJ...991...83R>`__ | `[arXiv] <https://arxiv.org/abs/2505.17183>`__
-
-.. list-table::
-   :widths: 40 60
-   :class: borderless
-
-   * - .. image:: plots/2025arXiv250814155J.jpeg
-          :width: 100%
-          :target: https://ui.adsabs.harvard.edu/abs/2025arXiv250814155J
-     - **Little Red Dots and their Progenitors from Direct Collapse Black Holes**
-
-       Authors: Jeon, Junehyoung, Liu, Boyuan, Bromm, Volker, Fujimoto, Seiji, Taylor, Anthony J. and others
-
-       August 2025, *Preprint*
-
-       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250814155J>`__ | `[arXiv] <https://arxiv.org/abs/2508.14155>`__
-
-.. list-table::
-   :widths: 40 60
-   :class: borderless
-
-   * - .. image:: plots/2025arXiv250720190V.jpeg
-          :width: 100%
-          :target: https://ui.adsabs.harvard.edu/abs/2025arXiv250720190V
-     - **Interpreting nebular emission lines in the high-redshift Universe**
-
-       Authors: Vijayan, Aswin P., Yates, Robert M., Lovell, Christopher C., Roper, William J., Wilkins, Stephen M. and others
-
-       July 2025, *Preprint*
-
-       `[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250720190V>`__ | `[arXiv] <https://arxiv.org/abs/2507.20190>`__
-
-**Synthesizer: Synthetic Observables For Modern Astronomy**
-
-Authors: Roper, Will J., Lovell, Christopher, Vijayan, Aswin, Wilkins, Stephen, Akins, Hollis and others
-
-June 2025, *Preprint*
-
-`[ADS] <https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R>`__ | `[arXiv] <https://arxiv.org/abs/2506.15811>`__
-
-----
 
 .. list-table::
    :widths: 40 60
