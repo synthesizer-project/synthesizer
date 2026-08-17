@@ -19,6 +19,7 @@ from synthesizer.emission_models.parameters import (
     ParameterUniformDist,
     find_variations,
 )
+from synthesizer.emission_models.transformers import EscapingFraction
 from synthesizer.emission_models.utils import get_param
 
 
@@ -299,3 +300,275 @@ class TestUnexpandedGuards:
                 exceptions.InconsistentArguments, match="expand_models"
             ):
                 model.to_hdf5(hdf.create_group("Model"))
+
+
+@pytest.fixture
+def suffix_test_model(test_grid):
+    r"""Return a small tree with a diamond and string references.
+
+    The tree looks like (arrows point from a model to its dependents)::
+
+        incident --> transmitted --> combined --> scaled
+                 \-------------------^
+
+    "combined" depends on "incident" by two routes (directly and through
+    "transmitted"), making it a diamond. "scaled" scales by the label of
+    "incident", i.e. by a string reference rather than a model object.
+    """
+    from synthesizer.emission_models import StellarEmissionModel
+
+    incident = StellarEmissionModel(
+        label="incident",
+        grid=test_grid,
+        extract="incident",
+    )
+    transmitted = StellarEmissionModel(
+        label="transmitted",
+        apply_to=incident,
+        transformer=EscapingFraction(("fesc",)),
+        fesc=0.1,
+    )
+    combined = StellarEmissionModel(
+        label="combined",
+        combine=(incident, transmitted),
+    )
+    return StellarEmissionModel(
+        label="scaled",
+        combine=(combined,),
+        scale_by="incident",
+    )
+
+
+class TestDownstreamLabels:
+    """Test the dependent walk used to find the models a variation affects."""
+
+    def test_leaf_gives_whole_tree(self, suffix_test_model):
+        """Test walking from a leaf reaches every dependent."""
+        assert suffix_test_model._get_downstream_labels("incident") == {
+            "incident",
+            "transmitted",
+            "combined",
+            "scaled",
+        }
+
+    def test_midtree_excludes_dependencies(self, suffix_test_model):
+        """Test walking from mid tree does not reach what it depends on."""
+        assert suffix_test_model._get_downstream_labels("transmitted") == {
+            "transmitted",
+            "combined",
+            "scaled",
+        }
+
+    def test_root_is_only_itself(self, suffix_test_model):
+        """Test the root has no dependents."""
+        assert suffix_test_model._get_downstream_labels("scaled") == {"scaled"}
+
+    def test_unknown_label_raises(self, suffix_test_model):
+        """Test walking from a label that isn't in the tree raises."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            suffix_test_model._get_downstream_labels("not_a_model")
+
+
+class TestAddLabelSuffix:
+    """Test suffixing every label in a tree."""
+
+    def test_all_labels_suffixed(self, suffix_test_model):
+        """Test every model in the tree gains the suffix."""
+        suffix_test_model.add_label_suffix("fesc_0.10")
+
+        assert set(suffix_test_model._models) == {
+            "incident_fesc_0.10",
+            "transmitted_fesc_0.10",
+            "combined_fesc_0.10",
+            "scaled_fesc_0.10",
+        }
+        assert suffix_test_model.label == "scaled_fesc_0.10"
+
+    def test_string_scale_by_rewritten(self, suffix_test_model):
+        """Test a string scale_by reference follows the relabelling."""
+        suffix_test_model.add_label_suffix("fesc_0.10")
+
+        assert suffix_test_model.scale_by == ("incident_fesc_0.10",)
+
+    def test_model_references_preserved(self, suffix_test_model):
+        """Test object references still point at the right models."""
+        suffix_test_model.add_label_suffix("fesc_0.10")
+
+        combined = suffix_test_model["combined_fesc_0.10"]
+        assert {child.label for child in combined.combine} == {
+            "incident_fesc_0.10",
+            "transmitted_fesc_0.10",
+        }
+        transmitted = suffix_test_model["transmitted_fesc_0.10"]
+        assert transmitted.apply_to.label == "incident_fesc_0.10"
+
+    def test_suffixes_compose(self, suffix_test_model):
+        """Test suffixing twice appends both suffixes."""
+        suffix_test_model.add_label_suffix("a")
+        suffix_test_model.add_label_suffix("b")
+
+        assert suffix_test_model.label == "scaled_a_b"
+
+
+class TestAddLabelSuffixDownstream:
+    """Test suffixing a model and its dependents only."""
+
+    def test_dependencies_keep_labels(self, suffix_test_model):
+        """Test only the model and its dependents are relabelled."""
+        suffix_test_model.add_label_suffix_downstream(
+            "transmitted", "fesc_0.10"
+        )
+
+        assert set(suffix_test_model._models) == {
+            "incident",
+            "transmitted_fesc_0.10",
+            "combined_fesc_0.10",
+            "scaled_fesc_0.10",
+        }
+
+    def test_diamond_relabelled_once(self, suffix_test_model):
+        """Test a dependent reached by two routes is relabelled once."""
+        suffix_test_model.add_label_suffix_downstream("incident", "fesc_0.10")
+
+        assert set(suffix_test_model._models) == {
+            "incident_fesc_0.10",
+            "transmitted_fesc_0.10",
+            "combined_fesc_0.10",
+            "scaled_fesc_0.10",
+        }
+
+    def test_string_scale_by_rewritten(self, suffix_test_model):
+        """Test a string reference to a relabelled model is rewritten."""
+        suffix_test_model.add_label_suffix_downstream("incident", "fesc_0.10")
+
+        assert suffix_test_model.scale_by == ("incident_fesc_0.10",)
+
+    def test_string_scale_by_left_alone(self, suffix_test_model):
+        """Test a string reference to an unaffected model is left alone."""
+        suffix_test_model.add_label_suffix_downstream(
+            "transmitted", "fesc_0.10"
+        )
+
+        assert suffix_test_model.scale_by == ("incident",)
+
+    def test_string_apply_to_rewritten(self, test_grid):
+        """Test a string apply_to reference is rewritten."""
+        from synthesizer.emission_models import StellarEmissionModel
+
+        # A string apply_to means "reuse this emission from the emitter", so
+        # build a tree where that string names a model in the tree
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        model = StellarEmissionModel(
+            label="attenuated",
+            combine=(incident,),
+        )
+        transformed = StellarEmissionModel(
+            label="transformed",
+            apply_to="incident",
+            transformer=EscapingFraction(("fesc",)),
+            fesc=0.1,
+            related_models=model,
+        )
+
+        transformed.add_label_suffix_downstream("transformed", "x")
+
+        assert transformed.apply_to == "incident"
+
+        transformed.add_label_suffix("y")
+
+        assert transformed.apply_to == "incident_y"
+
+    def test_fixed_parameter_strings_left_alone(self, test_grid):
+        """Test emitter attribute aliases are not treated as labels."""
+        from synthesizer.emission_models import StellarEmissionModel
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        model = StellarEmissionModel(
+            label="transmitted",
+            apply_to=incident,
+            transformer=EscapingFraction(("fesc",)),
+            # A string here points at an attribute on the emitter, and happens
+            # to share a name with a model in the tree
+            fesc="incident",
+        )
+
+        model.add_label_suffix("x")
+
+        assert model.fixed_parameters["fesc"] == "incident"
+
+    def test_collision_raises(self, suffix_test_model):
+        """Test relabelling onto an existing label raises."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            suffix_test_model._relabel_models({"incident": "transmitted"})
+
+    def test_duplicate_new_labels_raise(self, suffix_test_model):
+        """Test relabelling two models to the same label raises."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            suffix_test_model._relabel_models(
+                {"incident": "same", "transmitted": "same"}
+            )
+
+    def test_unknown_label_raises(self, suffix_test_model):
+        """Test relabelling a model that isn't in the tree raises."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            suffix_test_model._relabel_models({"not_a_model": "x"})
+
+
+class TestAddLabelPrefix:
+    """Test prefixing every label in a tree.
+
+    add_label_prefix predates the suffix methods and used to relabel by
+    looping over relabel, which does not rewrite string references. It now
+    shares the bulk relabelling path so those references follow the rename.
+    """
+
+    def test_all_labels_prefixed(self, suffix_test_model):
+        """Test every model in the tree gains the prefix."""
+        suffix_test_model.add_label_prefix("stellar")
+
+        assert set(suffix_test_model._models) == {
+            "stellar_incident",
+            "stellar_transmitted",
+            "stellar_combined",
+            "stellar_scaled",
+        }
+        assert suffix_test_model.label == "stellar_scaled"
+
+    def test_string_scale_by_rewritten(self, suffix_test_model):
+        """Test a string scale_by reference follows the prefixing.
+
+        This is a regression test. Prefixing used to leave the string
+        pointing at the old label, silently detaching it from the tree.
+        """
+        suffix_test_model.add_label_prefix("stellar")
+
+        assert suffix_test_model.scale_by == ("stellar_incident",)
+
+    def test_model_references_preserved(self, suffix_test_model):
+        """Test object references still point at the right models."""
+        suffix_test_model.add_label_prefix("stellar")
+
+        combined = suffix_test_model["stellar_combined"]
+        assert {child.label for child in combined.combine} == {
+            "stellar_incident",
+            "stellar_transmitted",
+        }
+        assert (
+            suffix_test_model["stellar_transmitted"].apply_to.label
+            == "stellar_incident"
+        )
+
+    def test_prefix_and_suffix_compose(self, suffix_test_model):
+        """Test a prefix and a suffix can both be applied."""
+        suffix_test_model.add_label_prefix("stellar")
+        suffix_test_model.add_label_suffix("fesc_0.10")
+
+        assert suffix_test_model.label == "stellar_scaled_fesc_0.10"

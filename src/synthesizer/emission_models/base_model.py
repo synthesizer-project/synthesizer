@@ -3211,17 +3211,182 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             prefix (str):
                 The prefix to use when relabelling.
         """
-        # Get list of original labels since relabelling changes the key in
-        # self._models
-        original_labels = list(self._models.keys())
+        self._relabel_models(
+            {label: f"{prefix}_{label}" for label in self._models}
+        )
 
-        # Loop over all original labels and relabel
-        for original_label in original_labels:
-            # Get new label
-            new_label = f"{prefix}_{original_label}"
+    def _get_downstream_labels(self, label):
+        """Get the label of a model and the labels of all its dependents.
 
-            # Relabel. Note: this also updates the self._models dictionary.
-            self.relabel(original_label, new_label)
+        A model's dependents are the models which consume its emission, i.e.
+        its parents in the tree, and their parents in turn. This is the set of
+        models which must be duplicated alongside a model when that model is
+        varied.
+
+        Args:
+            label (str):
+                The label of the model to walk from.
+
+        Returns:
+            set:
+                The label itself along with the labels of every model which
+                depends on it, directly or indirectly.
+        """
+        # Ensure the label exists
+        if label not in self._models:
+            raise exceptions.InconsistentArguments(
+                f"Could not find a model with the label: {label}"
+            )
+
+        # Walk up through the parents collecting everything we touch. Iterate
+        # in label order since _parents is a set of objects and would
+        # otherwise be traversed in a memory address dependent order.
+        downstream = set()
+        pending = [self._models[label]]
+        while len(pending) > 0:
+            model = pending.pop()
+
+            # Skip models we've already collected (a diamond in the tree will
+            # reach the same dependent by more than one route)
+            if model.label in downstream:
+                continue
+
+            downstream.add(model.label)
+
+            pending.extend(
+                sorted(model._parents, key=lambda m: m.label),
+            )
+
+        return downstream
+
+    def _relabel_models(self, label_map):
+        """Relabel a set of models, rewriting any references to them.
+
+        Labels can be referenced by other models as strings (in apply_to,
+        combine, and scale_by) where the string denotes an emission rather than
+        a model object. Any such reference to a model we are relabelling must
+        be rewritten, otherwise the reference either silently detaches from the
+        tree or resolves against a stale emission on the emitter.
+
+        Note that strings in fixed_parameters are deliberately left alone.
+        Those point at attributes of the emitter, not at models.
+
+        Args:
+            label_map (dict):
+                A dictionary of the form {<old_label>: <new_label>} defining
+                the models to relabel.
+
+        Raises:
+            InconsistentArguments
+                If an old label doesn't exist, or a new label is already in
+                use by a model which isn't being relabelled.
+        """
+        # Nothing to do without a mapping
+        if len(label_map) == 0:
+            return
+
+        # Ensure every model we've been asked to relabel exists
+        missing = set(label_map) - set(self._models)
+        if len(missing) > 0:
+            raise exceptions.InconsistentArguments(
+                f"Could not find models with the labels: {sorted(missing)}"
+            )
+
+        # Ensure we aren't about to collide with a label which is staying put.
+        # Note that we don't check against the labels being relabelled since
+        # those are all moving at once.
+        staying = set(self._models) - set(label_map)
+        collisions = staying & set(label_map.values())
+        if len(collisions) > 0:
+            raise exceptions.InconsistentArguments(
+                f"Labels {sorted(collisions)} are already in use."
+            )
+
+        # Ensure the new labels don't collide with each other
+        new_labels = list(label_map.values())
+        if len(set(new_labels)) != len(new_labels):
+            raise exceptions.InconsistentArguments(
+                f"Relabelling would produce duplicate labels: {new_labels}"
+            )
+
+        # Apply the new labels and rewrite any string references. We do this
+        # in a single pass over every model rather than one relabel at a time
+        # to avoid transient label collisions part way through.
+        for model in self._models.values():
+            # Relabel the model itself
+            if model.label in label_map:
+                model.label = label_map[model.label]
+
+            # Rewrite a string apply_to reference
+            if model._is_transforming and isinstance(model.apply_to, str):
+                if model.apply_to in label_map:
+                    model._apply_to = label_map[model.apply_to]
+
+            # Rewrite any string entries in combine
+            if model._is_combining:
+                model._combine = [
+                    label_map.get(child, child)
+                    if isinstance(child, str)
+                    else child
+                    for child in model._combine
+                ]
+
+            # Rewrite any string entries in scale_by. Note that a string here
+            # can also be an emitter attribute, so we only rewrite it when it
+            # matches a model we are relabelling.
+            model._scale_by = tuple(
+                label_map.get(scaler, scaler)
+                if isinstance(scaler, str)
+                else scaler
+                for scaler in model._scale_by
+            )
+
+        # Unpack now we're done to rebuild the label keyed containers
+        self.unpack_model()
+
+    def add_label_suffix(self, suffix):
+        """Re-label all models in the tree by adding a suffix.
+
+        This is the counterpart to add_label_prefix. Where a prefix is
+        typically used to namespace a whole model (e.g. "stellar" vs "agn"), a
+        suffix is typically used to distinguish variations of a model (e.g. a
+        particular escape fraction).
+
+        Args:
+            suffix (str):
+                The suffix to append to every label. An underscore is inserted
+                between the label and the suffix.
+        """
+        self._relabel_models(
+            {label: f"{label}_{suffix}" for label in self._models}
+        )
+
+    def add_label_suffix_downstream(self, label, suffix):
+        """Re-label a model and everything depending on it by adding a suffix.
+
+        Only the given model and the models which consume its emission
+        (directly or indirectly) are relabelled. Anything the model depends on
+        keeps its label, and is therefore still shared with the unmodified
+        tree rather than duplicated.
+
+        This is the relabelling behaviour needed when varying a parameter on a
+        single model: the varied model produces a different emission, so
+        everything downstream of it does too, but everything upstream is
+        unaffected.
+
+        Args:
+            label (str):
+                The label of the model to start from.
+            suffix (str):
+                The suffix to append to the affected labels. An underscore is
+                inserted between the label and the suffix.
+        """
+        self._relabel_models(
+            {
+                downstream_label: f"{downstream_label}_{suffix}"
+                for downstream_label in self._get_downstream_labels(label)
+            }
+        )
 
 
 class StellarEmissionModel(EmissionModel):
