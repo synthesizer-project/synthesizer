@@ -40,6 +40,7 @@ Example usage::
 """
 
 import copy
+import fnmatch
 import sys
 
 import matplotlib.lines as mlines
@@ -1298,19 +1299,83 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Unpack the model now we're done
         self.unpack_model()
 
+    def _expand_label_patterns(self, *patterns):
+        """Expand glob patterns into the labels they match.
+
+        Args:
+            patterns (str):
+                Labels, or glob patterns matching labels (e.g. "*_fesc_0.10").
+                A plain label with no wildcard matches only itself.
+
+        Returns:
+            list:
+                The matching labels, sorted so the result is reproducible.
+
+        Raises:
+            InconsistentArguments
+                If a pattern matches no models.
+        """
+        labels = set()
+        for pattern in patterns:
+            matches = fnmatch.filter(self._models, pattern)
+
+            # A pattern matching nothing is almost always a mistake, and
+            # silently ignoring it would leave the caller thinking it worked
+            if len(matches) == 0:
+                raise exceptions.InconsistentArguments(
+                    f"No models match '{pattern}'. Model has: "
+                    f"{sorted(self._models)}"
+                )
+
+            labels.update(matches)
+
+        return sorted(labels)
+
+    def select(self, *patterns):
+        """Return the models whose labels match the given glob patterns.
+
+        This is the bulk counterpart to indexing a model by label, useful for
+        applying a change to a family of models at once. It is particularly
+        handy after expanding parameter variations, where the variants of a
+        model all share a label prefix or suffix::
+
+            for model in expanded.select("*_fesc_0.10"):
+                model.set_save(False)
+
+        Args:
+            patterns (str):
+                Labels, or glob patterns matching labels. A plain label with no
+                wildcard matches only itself.
+
+        Returns:
+            list:
+                The matching models, ordered by label. Empty if nothing
+                matches, since this is a query rather than a change.
+        """
+        matched = set()
+        for pattern in patterns:
+            matched.update(fnmatch.filter(self._models, pattern))
+
+        return [self._models[label] for label in sorted(matched)]
+
     def save_emission(self, *args):
         """Set the save flag to True for the given emission.
 
         Args:
             args (str):
-                The emission to save.
+                The emission to save. Glob patterns are accepted, so
+                "*_fesc_0.10" will save that variant of every model.
         """
+        # Resolve any patterns before changing anything, so an unmatched
+        # pattern doesn't leave every model with save switched off
+        labels = self._expand_label_patterns(*args)
+
         # First set all models to not save
         self.set_save(False, set_all=True)
 
         # Now set the given spectra to save
-        for arg in args:
-            self[arg].set_save(True)
+        for label in labels:
+            self[label].set_save(True)
 
     def save_spectra(self, *args):
         """Set the save flag to True for the given spectra.
@@ -1319,7 +1384,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         Args:
             args (str):
-                The spectra to save.
+                The spectra to save. Glob patterns are accepted.
         """
         self.save_emission(*args)
 
@@ -1330,7 +1395,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         Args:
             args (str):
-                The lines to save.
+                The lines to save. Glob patterns are accepted.
         """
         self.save_emission(*args)
 

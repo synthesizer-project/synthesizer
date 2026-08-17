@@ -1341,3 +1341,120 @@ class TestExpandEndToEnd:
                 "incident_fesc_0.10",
                 "incident_fesc_0.50",
             }
+
+
+@pytest.fixture
+def expanded_model(varied_model_factory):
+    """Return an expanded tree with three variants of two models."""
+    model = varied_model_factory(
+        transmitted_kwargs={
+            "fesc": ParameterList([0.0, 0.1, 0.5], label_modifier="fesc_%.2f")
+        }
+    )
+    return model.expand_models()
+
+
+class TestSelect:
+    """Test selecting models by glob pattern."""
+
+    def test_selects_a_variant_family(self, expanded_model):
+        """Test a pattern selects every model matching it."""
+        selected = expanded_model.select("*_fesc_0.10")
+
+        assert [model.label for model in selected] == [
+            "combined_fesc_0.10",
+            "transmitted_fesc_0.10",
+        ]
+
+    def test_selects_one_model_family(self, expanded_model):
+        """Test a prefix pattern selects every variant of one model."""
+        selected = expanded_model.select("transmitted_*")
+
+        assert [model.label for model in selected] == [
+            "transmitted_fesc_0.00",
+            "transmitted_fesc_0.10",
+            "transmitted_fesc_0.50",
+        ]
+
+    def test_plain_label_selects_itself(self, expanded_model):
+        """Test a pattern with no wildcard selects only that model."""
+        selected = expanded_model.select("incident")
+
+        assert [model.label for model in selected] == ["incident"]
+
+    def test_multiple_patterns_are_deduplicated(self, expanded_model):
+        """Test overlapping patterns don't return a model twice."""
+        selected = expanded_model.select("transmitted_*", "*_fesc_0.10")
+
+        labels = [model.label for model in selected]
+        assert len(labels) == len(set(labels))
+        assert "transmitted_fesc_0.10" in labels
+
+    def test_ordering_is_reproducible(self, expanded_model):
+        """Test the selection is ordered by label, not by tree traversal."""
+        selected = expanded_model.select("*")
+
+        labels = [model.label for model in selected]
+        assert labels == sorted(labels)
+
+    def test_no_match_is_empty(self, expanded_model):
+        """Test a query which matches nothing returns nothing, not an error."""
+        assert expanded_model.select("*_fesc_0.99") == []
+
+    def test_returns_the_models_themselves(self, expanded_model):
+        """Test the selection returns live models, not copies."""
+        for model in expanded_model.select("transmitted_*"):
+            model.set_save(False)
+
+        assert expanded_model["transmitted_fesc_0.10"].save is False
+        assert expanded_model["combined_fesc_0.10"].save is True
+
+
+class TestSaveEmissionGlobs:
+    """Test the save flag helpers accepting glob patterns."""
+
+    def test_pattern_saves_a_variant_family(self, expanded_model):
+        """Test a pattern saves every model matching it and nothing else."""
+        expanded_model.save_spectra("*_fesc_0.10")
+
+        assert sorted(expanded_model.saved_labels) == [
+            "combined_fesc_0.10",
+            "transmitted_fesc_0.10",
+        ]
+
+    def test_plain_labels_still_work(self, expanded_model):
+        """Test passing exact labels behaves as it always did."""
+        expanded_model.save_spectra("incident", "combined_fesc_0.50")
+
+        assert sorted(expanded_model.saved_labels) == [
+            "combined_fesc_0.50",
+            "incident",
+        ]
+
+    def test_unmatched_pattern_raises(self, expanded_model):
+        """Test an unmatched pattern raises rather than saving nothing.
+
+        Without this the save flags would all be switched off and the caller
+        would be left with an emission model that produces nothing.
+        """
+        with pytest.raises(exceptions.InconsistentArguments):
+            expanded_model.save_spectra("*_fesc_0.99")
+
+    def test_save_flags_untouched_when_raising(self, expanded_model):
+        """Test a failed call leaves the save flags as they were."""
+        before = sorted(expanded_model.saved_labels)
+
+        with pytest.raises(exceptions.InconsistentArguments):
+            expanded_model.save_spectra("*_fesc_0.99")
+
+        assert sorted(expanded_model.saved_labels) == before
+
+    def test_save_lines_accepts_patterns(self, expanded_model):
+        """Test the lines alias also accepts patterns."""
+        expanded_model.save_lines("transmitted_*")
+
+        assert sorted(expanded_model.saved_labels) == [
+            "transmitted_fesc_0.00",
+            "transmitted_fesc_0.10",
+            "transmitted_fesc_0.50",
+        ]
