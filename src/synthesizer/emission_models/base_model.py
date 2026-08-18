@@ -55,7 +55,7 @@ from synthesizer.emission_models.operations import (
     Transformation,
 )
 from synthesizer.emission_models.parameters import VARIATION_TYPES
-from synthesizer.synth_warnings import warn
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity
 from synthesizer.utils.operation_timers import timed, timer
 
@@ -1499,6 +1499,21 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """
         return getattr(self, "_variant_params", {})
 
+    @property
+    def variant_base(self):
+        """Return the label this model's variant family was expanded from.
+
+        Expanding a parameter variation appends a suffix to the label of every
+        affected model. This is the label before any of those suffixes were
+        added, so the variants of a model can be grouped back together.
+
+        Returns:
+            str or None:
+                The original label, or None for any model which isn't the
+                product of an expansion.
+        """
+        return getattr(self, "_variant_base", None)
+
     def expand_models(self):
         """Expand any parameter variations in this tree into new models.
 
@@ -1809,24 +1824,47 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 data=[child.label.encode("utf-8") for child in self._children],
             )
 
-    def plot_emission_tree(
+    def plot_emission_graph(
         self,
         root=None,
         show=True,
         fontsize=10,
-        figsize=(6, 6),
+        figsize=None,
+        layout="layered",
+        collapse_variants=False,
+        min_fontsize=6.0,
     ):
-        """Plot the tree defining the spectra.
+        """Plot the network of models defining the emission.
+
+        The whole network is drawn, including related models, which are roots
+        in their own right. Grid extractions sit along the bottom row with each
+        model above everything it depends on, and arrows point in the direction
+        the emission flows.
 
         Args:
             root (str):
-                If not None this defines the root of a sub tree to plot.
+                If not None only this model and the models it depends on are
+                drawn.
             show (bool):
                 Whether to show the plot.
             fontsize (int):
                 The fontsize to use for the labels.
             figsize (tuple):
-                The size of the figure to plot (width, height).
+                The size of the figure to plot (width, height). By default the
+                figure is sized to fit the network.
+            layout (str):
+                Either "layered" (the default), which needs only networkx, or
+                "dot", which lays the network out with graphviz and needs pydot
+                and the graphviz binary.
+            collapse_variants (bool):
+                Whether to collapse each family of parameter variants into a
+                single node badged with the number of variants it stands for.
+            min_fontsize (float):
+                The size below which labels stop being readable. A network
+                which cannot fit the figure with labels this big grows the
+                figure rather than shrinking them further, so a large network
+                stays as readable as a small one. Pass 0 to let the labels
+                shrink as far as they need to.
 
         Returns:
             fig (matplotlib.figure.Figure):
@@ -1836,16 +1874,42 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """
         # Imported here to avoid a circular import at module load time
         from synthesizer.emission_models.visualise_network import (
-            plot_emission_tree,
+            plot_emission_graph,
         )
 
-        return plot_emission_tree(
+        return plot_emission_graph(
             self,
             root=root,
             show=show,
             fontsize=fontsize,
             figsize=figsize,
+            layout=layout,
+            collapse_variants=collapse_variants,
+            min_fontsize=min_fontsize,
         )
+
+    @deprecated(
+        "is deprecated in favour of plot_emission_graph (an emission model is "
+        "a network rather than a tree) and will be removed in a future version"
+    )
+    def plot_emission_tree(self, *args, **kwargs):
+        """Plot the network of models defining the emission.
+
+        Deprecated alias for plot_emission_graph.
+
+        Args:
+            *args:
+                Positional arguments passed to plot_emission_graph.
+            **kwargs:
+                Keyword arguments passed to plot_emission_graph.
+
+        Returns:
+            fig (matplotlib.figure.Figure):
+                The figure containing the plot.
+            ax (matplotlib.axes.Axes):
+                The axis containing the plot.
+        """
+        return self.plot_emission_graph(*args, **kwargs)
 
     def _apply_overrides(
         self,

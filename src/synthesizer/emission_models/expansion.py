@@ -279,12 +279,20 @@ def _expand_variation(root, roots, label, param, parameter_list):
         copies[label].fixed_parameters[param] = value
 
         # Record what distinguishes every model in this variant's cone, so the
-        # variant a model belongs to is recoverable without parsing labels
+        # variant a model belongs to is recoverable without parsing labels.
+        # The base label is the label before any variation was expanded, which
+        # is what groups a family of variants back together.
         for old_label, new_model in copies.items():
+            old_model = root[old_label]
             new_model._variant_params = {
-                **root[old_label].variant_params,
+                **old_model.variant_params,
                 param: value,
             }
+            new_model._variant_base = (
+                old_model.variant_base
+                if old_model.variant_base is not None
+                else old_label
+            )
 
         for old_root in roots:
             if old_root.label not in cone:

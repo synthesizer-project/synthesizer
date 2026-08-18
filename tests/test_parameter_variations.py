@@ -575,34 +575,6 @@ class TestAddLabelPrefix:
         assert suffix_test_model.label == "stellar_scaled_fesc_0.10"
 
 
-@pytest.fixture
-def energy_balance_model(test_grid):
-    """Return a tree whose generator depends on two other models."""
-    from synthesizer.emission_models import DustEmission, StellarEmissionModel
-    from synthesizer.emission_models.generators.dust.blackbody import (
-        Blackbody,
-    )
-
-    intrinsic = StellarEmissionModel(
-        label="intrinsic",
-        grid=test_grid,
-        extract="incident",
-    )
-    attenuated = StellarEmissionModel(
-        label="attenuated",
-        apply_to=intrinsic,
-        transformer=EscapingFraction(("fesc",)),
-        fesc=0.1,
-    )
-    return DustEmission(
-        dust_emission_model=Blackbody(temperature=50 * unyt.K),
-        emitter="stellar",
-        label="dust_emission",
-        dust_lum_intrinsic=intrinsic,
-        dust_lum_attenuated=attenuated,
-    )
-
-
 class TestCopyNode:
     """Test copying a single model out of a tree."""
 
