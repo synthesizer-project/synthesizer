@@ -230,6 +230,7 @@ _LEGEND_TEXT_PAD = 0.8
 _LEGEND_COLUMN_SPACING = 1.8
 _LEGEND_BORDER_PAD = 0.5
 _LEGEND_AXES_PAD = 0.5
+_LEGEND_SLACK = 0.6
 
 # The space left between two legend groups, in units of the font size, and the
 # most columns any one group is spread over
@@ -2462,22 +2463,36 @@ def _legend_group_width(title, handles, columns):
     """
     entries = _legend_entry_widths(handles)
 
-    # The widest row, rather than assuming every row is full
-    rows = [entries[i : i + columns] for i in range(0, len(entries), columns)]
-    widest = max(
-        (sum(row) + _LEGEND_COLUMN_SPACING * (len(row) - 1) for row in rows),
-        default=0.0,
-    )
+    # Each column is as wide as its widest entry, and matplotlib fills the
+    # columns top to bottom rather than left to right. Measuring the widest row
+    # instead leaves the group narrower than it is drawn, and the group beside
+    # it then overlaps.
+    rows, large = divmod(len(entries), max(columns, 1))
+    width = 0.0
+    start = 0
+    for column in range(max(columns, 1)):
+        height = rows + 1 if column < large else rows
+        if height == 0:
+            continue
 
-    # A long title can be wider than the entries under it
+        width += max(entries[start : start + height])
+        start += height
+
+    width += _LEGEND_COLUMN_SPACING * (max(columns, 1) - 1)
+
+    # A long title can be wider than the entries under it, and it is drawn in
+    # bold, which is wider than the same text measured plain
     heading = TextPath(
         (0, 0),
         title,
         size=1.0,
-        prop=FontProperties(),
+        prop=FontProperties(weight="bold"),
     ).get_extents()
 
-    return max(widest, heading.width) + 2 * _LEGEND_BORDER_PAD
+    # Matplotlib's own padding does not come out exactly as modelled here, so
+    # leave a little slack: the groups are placed by this measurement, and one
+    # which comes out short puts the next group on top of this one.
+    return max(width, heading.width) + 2 * _LEGEND_BORDER_PAD + _LEGEND_SLACK
 
 
 def _legend_bands(groups, shape):

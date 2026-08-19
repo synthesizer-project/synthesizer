@@ -1430,3 +1430,687 @@ class TestSaveEmissionGlobs:
             "transmitted_fesc_0.10",
             "transmitted_fesc_0.50",
         ]
+
+
+class TestSharedDeclarations:
+    """Test one declaration handed to several models is a single variation.
+
+    A premade model passes a parameter like the escape fraction down to every
+    one of its models which needs it. Those are one variation, not one per
+    model, so they have to vary in step rather than multiplying out into a
+    combination for every model that happened to receive it.
+    """
+
+    def test_a_shared_list_varies_in_step(self, test_grid):
+        """Test models given the same list are varied together."""
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.transformers import EscapingFraction
+
+        shared = ParameterList([0.1, 0.5], label_modifier="fesc_%.2f")
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        first = StellarEmissionModel(
+            label="first",
+            apply_to=incident,
+            transformer=EscapingFraction(("fesc",)),
+            fesc=shared,
+        )
+        second = StellarEmissionModel(
+            label="second",
+            apply_to=first,
+            transformer=EscapingFraction(("fesc",)),
+            fesc=shared,
+        )
+
+        expanded = second.expand_models()
+
+        # Two variants, not the four a pair of independent lists would give
+        assert (
+            len(
+                [
+                    label
+                    for label in expanded._models
+                    if label.startswith("second")
+                ]
+            )
+            == 2
+        )
+
+    def test_separate_lists_still_multiply(self, test_grid):
+        """Test equal but separate declarations remain independent.
+
+        The grouping is by declaration, not by value, so two lists which happen
+        to hold the same values are still two variations.
+        """
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.transformers import EscapingFraction
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        first = StellarEmissionModel(
+            label="first",
+            apply_to=incident,
+            transformer=EscapingFraction(("fesc",)),
+            fesc=ParameterList([0.1, 0.5], label_modifier="a_%.2f"),
+        )
+        second = StellarEmissionModel(
+            label="second",
+            apply_to=first,
+            transformer=EscapingFraction(("fesc",)),
+            fesc=ParameterList([0.1, 0.5], label_modifier="b_%.2f"),
+        )
+
+        expanded = second.expand_models()
+
+        assert (
+            len(
+                [
+                    label
+                    for label in expanded._models
+                    if label.startswith("second")
+                ]
+            )
+            == 4
+        )
+
+    def test_a_shared_distribution_is_sampled_once(self, test_grid):
+        """Test models given one distribution get the same sampled values."""
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.transformers import EscapingFraction
+
+        shared = ParameterUniformDist(
+            0.0, 1.0, n=3, seed=42, label_modifier="fesc_%.3f"
+        )
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        first = StellarEmissionModel(
+            label="first",
+            apply_to=incident,
+            transformer=EscapingFraction(("fesc",)),
+            fesc=shared,
+        )
+        second = StellarEmissionModel(
+            label="second",
+            apply_to=first,
+            transformer=EscapingFraction(("fesc",)),
+            fesc=shared,
+        )
+
+        expanded = second.expand_models()
+
+        # Sampling per model would give six variants with mismatched values
+        assert (
+            len(
+                [
+                    label
+                    for label in expanded._models
+                    if label.startswith("second")
+                ]
+            )
+            == 3
+        )
+
+        # And each variant used one value for both models
+        for label, model in expanded.items():
+            if not label.startswith("second"):
+                continue
+            partner = expanded[label.replace("second", "first")]
+            assert (
+                model.fixed_parameters["fesc"]
+                == partner.fixed_parameters["fesc"]
+            )
+
+
+class TestPremadeModelVariations:
+    """Test the machinery on a premade model, as a user would meet it."""
+
+    def test_a_premade_model_expands(self, test_grid):
+        """Test varying one parameter of a premade model."""
+        from synthesizer.emission_models import PacmanEmission
+
+        model = PacmanEmission(
+            test_grid,
+            fesc=ParameterList([0.0, 0.3], label_modifier="fesc_%.1f"),
+        )
+        expanded = model.expand_models()
+
+        assert (
+            len(
+                [
+                    label
+                    for label in expanded._models
+                    if label.startswith("emergent")
+                ]
+            )
+            == 2
+        )
+
+    def test_two_parameters_give_every_combination(self, test_grid):
+        """Test two parameters of a premade model multiply out.
+
+        This is the case which caught a stale dependency left behind by an
+        earlier expansion: the models a replaced model depended on still point
+        back at it, and following those pointers collected models which were no
+        longer in the tree at all.
+        """
+        from synthesizer.emission_models import PacmanEmission
+
+        model = PacmanEmission(
+            test_grid,
+            tau_v=ParameterList([0.1, 0.5, 1.0], label_modifier="tauv_%.1f"),
+            fesc=ParameterList([0.0, 0.3], label_modifier="fesc_%.1f"),
+        )
+        expanded = model.expand_models()
+
+        emergent = [
+            label for label in expanded._models if label.startswith("emergent")
+        ]
+        assert len(emergent) == 6
+
+        # Every combination appears exactly once
+        assert len(set(emergent)) == 6
+
+    def test_the_shared_models_are_not_duplicated(self, test_grid):
+        """Test the parts a variation cannot reach are computed once.
+
+        This is the whole point: the grid extractions do not depend on the
+        escape fraction or the optical depth, so there is no reason to build
+        them again for every combination.
+        """
+        from synthesizer.emission_models import PacmanEmission
+        from synthesizer.emission_models.model_queue import ModelQueue
+
+        model = PacmanEmission(
+            test_grid,
+            tau_v=ParameterList([0.1, 0.5, 1.0], label_modifier="tauv_%.1f"),
+            fesc=ParameterList([0.0, 0.3], label_modifier="fesc_%.1f"),
+        )
+        expanded = model.expand_models()
+        queue = ModelQueue(expanded)
+
+        assert (
+            len(
+                [
+                    label
+                    for label in queue.models
+                    if label.startswith("incident")
+                ]
+            )
+            == 1
+        )
+
+        # And far fewer models than duplicating the whole tree per combination
+        assert len(expanded._models) < 6 * len(model._models)
+
+
+class TestExpansionOrderDoesNotMatter:
+    """Test the result is the same however the expansion order falls out.
+
+    Copying a cone leaves the declarations further up it shared between the
+    copies, so the grouping sees them as one variation. That is fine, and is
+    what makes the expansion robust to the order the variations happen to be
+    expanded in: those copies sit in branches which cannot reach each other, so
+    varying them in step still produces every combination. The invariant is
+    load bearing and worth stating, because the bookkeeping which decides the
+    order cannot always tell which declaration a model is waiting on.
+    """
+
+    def test_a_model_with_two_declarations(self, test_grid):
+        """Test a model holding two declarations expands to the product."""
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.transformers import EscapingFraction
+
+        # The shared declaration sits on both models, the other on one of them,
+        # which makes the order the two are expanded in ambiguous
+        shared = ParameterList([0.1, 0.2], label_modifier="s%.1f")
+        other = ParameterList([1.0, 2.0, 3.0], label_modifier="o%.1f")
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        first = StellarEmissionModel(
+            label="first",
+            apply_to=incident,
+            transformer=EscapingFraction(("fesc",)),
+            fesc=shared,
+            other=other,
+        )
+        second = StellarEmissionModel(
+            label="second",
+            apply_to=first,
+            transformer=EscapingFraction(("fesc",)),
+            fesc=shared,
+        )
+
+        expanded = second.expand_models()
+
+        # Every combination of the two declarations, once each
+        variants = expanded.select("second*")
+        assert len(variants) == 6
+
+        seen = set()
+        for model in variants:
+            # The shared declaration still varies the two models in step
+            assert (
+                model.fixed_parameters["fesc"]
+                == model.apply_to.fixed_parameters["fesc"]
+            )
+            seen.add(
+                (
+                    model.fixed_parameters["fesc"],
+                    model.apply_to.fixed_parameters["other"],
+                )
+            )
+
+        assert seen == {
+            (fesc, other_value)
+            for fesc in (0.1, 0.2)
+            for other_value in (1.0, 2.0, 3.0)
+        }
+
+    def test_the_root_keeps_its_place(self, test_grid):
+        """Test the model the user called is still the root of the result.
+
+        The root is replaced by a copy of itself whenever it falls inside a
+        cone, which happens on nearly every expansion, so it is worth pinning.
+        """
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.transformers import EscapingFraction
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        root = StellarEmissionModel(
+            label="root",
+            apply_to=incident,
+            transformer=EscapingFraction(("fesc",)),
+            fesc=ParameterList([0.1, 0.2], label_modifier="f%.1f"),
+            tau=ParameterList([1.0, 2.0], label_modifier="t%.1f"),
+        )
+
+        expanded = root.expand_models()
+
+        # The root carries one of the variant labels, and the others are all
+        # reachable from it
+        assert expanded.variant_base == "root"
+        assert len(expanded.select("root*")) == 4
+
+
+class TestExplicitLabels:
+    """Test naming the variants directly rather than formatting their values.
+
+    A format string is the natural way to name numbers, but it cannot render an
+    object: a list of dust curves formatted with %s gives labels like
+    "PowerLaw(slope=-1.0)", and those labels are the keys emissions are stored
+    under and the names of groups in an HDF5 file.
+    """
+
+    def test_labels_name_the_variants(self):
+        """Test the suffixes come from the labels given."""
+        plist = ParameterList([0.1, 0.5], labels=["low", "high"])
+
+        assert plist.suffixes == ["_low", "_high"]
+        assert list(plist.items()) == [(0.1, "_low"), (0.5, "_high")]
+
+    def test_a_format_string_still_works(self):
+        """Test the suffixes still come from a format string when given one."""
+        plist = ParameterList([0.1, 0.5], label_modifier="fesc_%.2f")
+
+        assert plist.suffixes == ["_fesc_0.10", "_fesc_0.50"]
+
+    def test_exactly_one_naming_is_required(self):
+        """Test neither or both of the naming arguments is rejected."""
+        with pytest.raises(exceptions.InconsistentArguments, match="exactly"):
+            ParameterList([0.1, 0.5])
+
+        with pytest.raises(exceptions.InconsistentArguments, match="exactly"):
+            ParameterList(
+                [0.1, 0.5],
+                label_modifier="f_%.1f",
+                labels=["low", "high"],
+            )
+
+    def test_a_label_per_value_is_required(self):
+        """Test a mismatched number of labels is rejected."""
+        with pytest.raises(
+            exceptions.InconsistentArguments, match="one label"
+        ):
+            ParameterList([0.1, 0.5, 0.9], labels=["low", "high"])
+
+    def test_labels_must_be_usable_names(self):
+        """Test labels have to be non-empty strings."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            ParameterList([0.1, 0.5], labels=["low", ""])
+
+        with pytest.raises(exceptions.InconsistentArguments):
+            ParameterList([0.1, 0.5], labels=["low", 7])
+
+    def test_duplicate_labels_are_rejected(self):
+        """Test two values cannot end up with the same label."""
+        with pytest.raises(exceptions.InconsistentArguments, match="distinct"):
+            ParameterList([0.1, 0.5], labels=["same", "same"])
+
+    def test_unrenderable_values_say_to_use_labels(self):
+        """Test a format string which cannot render the values explains itself.
+
+        Formatting an object with a numeric format string fails, and the error
+        should point at the argument which does work rather than at printf.
+        """
+        with pytest.raises(exceptions.InconsistentArguments, match="labels"):
+            ParameterList([object(), object()], label_modifier="thing_%.2f")
+
+    def test_a_distribution_can_be_named(self):
+        """Test a sampled variation can use explicit labels too."""
+        plist = ParameterUniformDist(
+            0.0,
+            1.0,
+            n=3,
+            seed=42,
+            labels=["low", "middle", "high"],
+        ).realise()
+
+        assert plist.suffixes == ["_low", "_middle", "_high"]
+        assert len(plist.values) == 3
+
+    def test_a_distribution_needs_exactly_one_naming(self):
+        """Test the same rule applies to a distribution."""
+        with pytest.raises(exceptions.InconsistentArguments, match="exactly"):
+            ParameterUniformDist(0.0, 1.0, n=3)
+
+    def test_labelled_functions_get_readable_labels(self, test_grid):
+        """Test a list of ParameterFunctions produces usable labels.
+
+        Without explicit labels these come out as the repr of the function
+        wrapper, which is unusable as an emission key.
+        """
+        from synthesizer.emission_models import StellarEmissionModel
+        from synthesizer.emission_models.parameters import ParameterFunction
+        from synthesizer.emission_models.transformers import EscapingFraction
+
+        def low(ages):
+            """Return a low escape fraction."""
+            return 0.1 + 0.0 * ages
+
+        def high(ages):
+            """Return a high escape fraction."""
+            return 0.5 + 0.0 * ages
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        model = StellarEmissionModel(
+            label="escaped",
+            apply_to=incident,
+            transformer=EscapingFraction(("fesc",)),
+            fesc=ParameterList(
+                [
+                    ParameterFunction(low, "fesc", ["ages"]),
+                    ParameterFunction(high, "fesc", ["ages"]),
+                ],
+                labels=["low_fesc", "high_fesc"],
+            ),
+        )
+
+        expanded = model.expand_models()
+
+        assert sorted(x.label for x in expanded.select("escaped*")) == [
+            "escaped_high_fesc",
+            "escaped_low_fesc",
+        ]
+
+        # And each variant holds one of the functions, ready to be called
+        for model in expanded.select("escaped*"):
+            assert isinstance(
+                model.fixed_parameters["fesc"], ParameterFunction
+            )
+
+
+class TestVaryingTransformersAndGenerators:
+    """Test varying the objects a model uses, not only its parameters.
+
+    A transformer and a generator are held on the model itself rather than
+    among its fixed parameters, so they need finding and setting separately,
+    but varying one is as reasonable as varying a number.
+    """
+
+    def test_a_transformer_can_be_varied(self, test_grid):
+        """Test a model can be varied over several dust curves."""
+        from synthesizer.emission_models import (
+            AttenuatedEmission,
+            StellarEmissionModel,
+        )
+        from synthesizer.emission_models.attenuation import (
+            Calzetti2000,
+            PowerLaw,
+        )
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        model = AttenuatedEmission(
+            label="attenuated",
+            apply_to=incident,
+            emitter="stellar",
+            tau_v=0.3,
+            dust_curve=ParameterList(
+                [PowerLaw(slope=-1), Calzetti2000()],
+                labels=["powerlaw", "calzetti"],
+            ),
+        )
+
+        expanded = model.expand_models()
+
+        curves = {
+            variant.label: type(variant.transformer).__name__
+            for variant in expanded.select("attenuated*")
+        }
+        assert curves == {
+            "attenuated_powerlaw": "PowerLaw",
+            "attenuated_calzetti": "Calzetti2000",
+        }
+
+        # The extraction underneath is still shared
+        assert len(expanded.select("incident*")) == 1
+
+    def test_a_generator_can_be_varied(self, test_grid):
+        """Test a model can be varied over several dust emission models."""
+        from unyt import K
+
+        from synthesizer.emission_models import (
+            AttenuatedEmission,
+            DustEmission,
+            StellarEmissionModel,
+        )
+        from synthesizer.emission_models.attenuation import PowerLaw
+        from synthesizer.emission_models.generators.dust.blackbody import (
+            Blackbody,
+        )
+        from synthesizer.emission_models.generators.dust.greybody import (
+            Greybody,
+        )
+
+        intrinsic = StellarEmissionModel(
+            label="intrinsic",
+            grid=test_grid,
+            extract="incident",
+        )
+        attenuated = AttenuatedEmission(
+            label="attenuated",
+            apply_to=intrinsic,
+            emitter="stellar",
+            tau_v=0.3,
+            dust_curve=PowerLaw(slope=-1),
+        )
+        model = DustEmission(
+            dust_emission_model=ParameterList(
+                [
+                    Blackbody(temperature=30 * K),
+                    Greybody(temperature=60 * K, emissivity=1.5),
+                ],
+                labels=["blackbody", "greybody"],
+            ),
+            emitter="stellar",
+            label="dust_emission",
+            dust_lum_intrinsic=intrinsic,
+            dust_lum_attenuated=attenuated,
+        )
+
+        expanded = model.expand_models()
+
+        generators = {
+            variant.label: type(variant.generator).__name__
+            for variant in expanded.select("dust_emission*")
+        }
+        assert generators == {
+            "dust_emission_blackbody": "Blackbody",
+            "dust_emission_greybody": "Greybody",
+        }
+
+        # Every candidate generator got the energy balance wiring, not just the
+        # first one
+        for variant in expanded.select("dust_emission*"):
+            assert variant.generator.is_energy_balance
+
+    def test_generating_before_expanding_says_so(self, test_grid):
+        """Test an unexpanded declaration is reported before any work is done.
+
+        A declaration on the transformer would otherwise fail deep inside the
+        calculation, where the message is about a missing method rather than
+        about the model needing expanding.
+        """
+        from synthesizer.emission_models import (
+            AttenuatedEmission,
+            StellarEmissionModel,
+        )
+        from synthesizer.emission_models.attenuation import (
+            Calzetti2000,
+            PowerLaw,
+        )
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        model = AttenuatedEmission(
+            label="attenuated",
+            apply_to=incident,
+            emitter="stellar",
+            tau_v=0.3,
+            dust_curve=ParameterList(
+                [PowerLaw(slope=-1), Calzetti2000()],
+                labels=["powerlaw", "calzetti"],
+            ),
+        )
+
+        with pytest.raises(
+            exceptions.InconsistentArguments, match="expand_models"
+        ) as excinfo:
+            model._check_expanded()
+
+        # And it names the model and what is waiting on it
+        assert "attenuated" in str(excinfo.value)
+        assert "transformer" in str(excinfo.value)
+
+    def test_an_expanded_model_passes_the_check(self, test_grid):
+        """Test the check is happy once the declarations are gone."""
+        from synthesizer.emission_models import (
+            AttenuatedEmission,
+            StellarEmissionModel,
+        )
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        model = AttenuatedEmission(
+            label="attenuated",
+            apply_to=incident,
+            emitter="stellar",
+            tau_v=0.3,
+            dust_curve=ParameterList(
+                [PowerLaw(slope=-1), PowerLaw(slope=-0.7)],
+                labels=["steep", "shallow"],
+            ),
+        )
+
+        # No exception
+        model.expand_models()._check_expanded()
+
+
+class TestLabelClashErrors:
+    """Test the error raised when two models share a label.
+
+    Mixing an expanded tree with the models it was built from puts two
+    different models with the same label in one tree. That has to say so
+    clearly, which means summarising a model which has never been unpacked.
+    """
+
+    def test_a_clash_between_trees_is_reported(self, test_grid):
+        """Test stitching an expanded tree onto its originals raises."""
+        from synthesizer.emission_models import (
+            AttenuatedEmission,
+            StellarEmissionModel,
+        )
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        expanded = AttenuatedEmission(
+            label="attenuated",
+            apply_to=incident,
+            emitter="stellar",
+            tau_v=ParameterList([0.1, 0.3], label_modifier="tau_v_%.1f"),
+            dust_curve=PowerLaw(slope=-1),
+        ).expand_models()
+
+        # The expansion works on a copy, so this combines two models labelled
+        # "incident": the original and the copy inside the expanded tree
+        with pytest.raises(
+            exceptions.InconsistentArguments, match="already in use"
+        ):
+            StellarEmissionModel(
+                label="total",
+                combine=(incident, expanded),
+            )
+
+    def test_a_model_which_was_never_unpacked_can_be_summarised(
+        self, test_grid
+    ):
+        """Test a detached model summarises itself rather than raising."""
+        from synthesizer.emission_models import StellarEmissionModel
+
+        model = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+
+        # A copied node carries no tree until it is unpacked
+        summary = str(model._copy_node())
+
+        assert "incident" in summary.lower()

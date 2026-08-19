@@ -866,3 +866,18 @@ def energy_balance_model(test_grid):
         dust_lum_intrinsic=intrinsic,
         dust_lum_attenuated=attenuated,
     )
+
+
+@pytest.fixture
+def dusty_stellar_model(test_grid):
+    """Return a stellar only model which also generates dust emission."""
+    from synthesizer.emission_models import Greybody, PacmanEmission
+    from synthesizer.emission_models.attenuation import PowerLaw
+
+    return PacmanEmission(
+        grid=test_grid,
+        tau_v=0.3,
+        fesc=0.1,
+        dust_curve=PowerLaw(slope=-1),
+        dust_emission=Greybody(temperature=30 * K, emissivity=2.0),
+    )

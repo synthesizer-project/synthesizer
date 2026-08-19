@@ -584,13 +584,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """Return a string summarising the model."""
         parts = []
 
-        # Summarise models in their discovery order.
-        labels = tuple(self._models.keys())
+        # Summarise models in their discovery order. A model which hasn't been
+        # unpacked has no tree to summarise, so it summarises itself; this is
+        # the case when a model is printed before it has been used, which an
+        # error message may well do.
+        models = list(self._models.values()) or [self]
 
-        for label in labels:
-            # Get the model
-            model = self._models[label]
-
+        for model in models:
             # Make the model title
             parts.append("-")
             parts.append(f"  {model.label}".upper())
@@ -1514,6 +1514,39 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """
         return getattr(self, "_variant_base", None)
 
+    def _check_expanded(self):
+        """Check no parameter variation is still waiting to be expanded.
+
+        A variation is a declaration rather than a value, so a model still
+        holding one cannot generate an emission. Checking the whole tree up
+        front says so plainly, rather than failing somewhere inside the
+        calculation once part of the work has already been done.
+
+        Raises:
+            InconsistentArguments
+                If any model in the tree still holds a declaration.
+        """
+        # Imported here to avoid a circular import at module load time
+        from synthesizer.emission_models.parameters import find_variations
+
+        waiting = {}
+        for label, model in self._models.items():
+            variations = find_variations(model)
+            if len(variations) > 0:
+                waiting[label] = sorted(variations)
+
+        if len(waiting) > 0:
+            described = ", ".join(
+                f"{label} ({', '.join(params)})"
+                for label, params in sorted(waiting.items())
+            )
+            raise exceptions.InconsistentArguments(
+                "Cannot generate an emission from a model which still has "
+                f"parameter variations declared on it: {described}. Call "
+                "expand_models() to turn those declarations into models "
+                "first."
+            )
+
     def expand_models(self):
         """Expand any parameter variations in this tree into new models.
 
@@ -2352,6 +2385,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
+        # A variation is a declaration, not a value, so nothing can be
+        # generated while one is still waiting to be expanded
+        self._check_expanded()
+
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -2711,6 +2748,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate lines attribute of the component
                 (lines/particle_lines)
         """
+        # A variation is a declaration, not a value, so nothing can be
+        # generated while one is still waiting to be expanded
+        self._check_expanded()
+
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -2991,8 +3032,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
             downstream.add(model.label)
 
+            # Only follow parents which are still part of this tree. Replacing
+            # a model, as expanding a parameter variation does, leaves the
+            # models it depended on still pointing back at it, and following
+            # those would collect models which are no longer here at all.
             pending.extend(
-                sorted(model._parents, key=lambda m: m.label),
+                parent
+                for parent in sorted(model._parents, key=lambda m: m.label)
+                if self._models.get(parent.label) is parent
             )
 
         return downstream

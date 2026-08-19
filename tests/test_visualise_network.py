@@ -1755,3 +1755,83 @@ class TestGroupedLegends:
 
         for legend in _legends(ax):
             assert legend.get_title().get_weight() == "bold"
+
+
+class TestLegendWidthMeasurement:
+    """Test the room reserved for a legend matches what gets drawn.
+
+    The groups are placed by measurement, so an estimate which comes out short
+    puts the next group on top of this one. Two things made it come out short:
+    matplotlib fills legend columns top to bottom rather than left to right, so
+    the widest row is not the sum of the entries next to each other; and the
+    titles are drawn in bold, which is wider than the same text measured plain.
+    """
+
+    def test_a_group_is_no_wider_than_reserved(self, dusty_stellar_model):
+        """Test each legend fits in the width it asked for."""
+        from synthesizer.emission_models.visualise_network import (
+            _MIN_LEGEND_FONTSIZE,
+            _legend_group_width,
+            _legend_groups,
+            _legend_shape,
+        )
+
+        fig, ax = dusty_stellar_model.plot_emission_graph(show=False)
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+
+        graph = _build_graph(dusty_stellar_model)
+        groups = _legend_groups(graph)
+        shape = _legend_shape(groups)
+        fontsize = max(
+            ax.texts[0].get_fontsize(),
+            _MIN_LEGEND_FONTSIZE,
+        )
+
+        # Window extents are in pixels, while the reserved widths are in
+        # points, which is also what the axis is in. Convert through the axis
+        # so the two are comparable.
+        inverse = ax.transData.inverted()
+        drawn = {}
+        for legend in _legends(ax):
+            box = legend.get_window_extent(renderer)
+            (x0, _), (x1, _) = inverse.transform(
+                [(box.x0, box.y0), (box.x1, box.y1)]
+            )
+            drawn[legend.get_title().get_text()] = x1 - x0
+
+        for title, handles in groups.items():
+            reserved = (
+                _legend_group_width(title, handles, shape[title][0]) * fontsize
+            )
+            assert drawn[title] <= reserved + 1.0, (
+                f"'{title}' is {drawn[title]:.1f}pt wide but only "
+                f"{reserved:.1f}pt was reserved"
+            )
+
+    def test_dust_emission_does_not_crowd_the_legends(
+        self, dusty_stellar_model
+    ):
+        """Test the groups stay apart when a generator adds an entry.
+
+        Dust emission puts a "Generator Scaling" entry in the relationships
+        group, which is much longer than the others, and a column major fill
+        puts it in the first row where a row major measurement did not expect
+        it.
+        """
+        fig, ax = dusty_stellar_model.plot_emission_graph(show=False)
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+
+        labels = _legend_labels(ax)
+        assert "Generator Scaling" in labels
+
+        boxes = [legend.get_window_extent(renderer) for legend in _legends(ax)]
+        for i, first in enumerate(boxes):
+            for second in boxes[i + 1 :]:
+                if min(first.y1, second.y1) - max(first.y0, second.y0) <= 0:
+                    continue
+
+                assert (
+                    min(first.x1, second.x1) - max(first.x0, second.x0) <= 1.0
+                )

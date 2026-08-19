@@ -221,8 +221,18 @@ class ParameterList:
     that the model should be varied over a set of values. This variation is
     only realised when EmissionModel.expand_models is called, at which point
     the model carrying the list (and every model which depends on it) is
-    duplicated once per value, with each duplicate labelled using the
-    label_modifier.
+    duplicated once per value, with each duplicate labelled to say which value
+    produced it.
+
+    Those labels are how the resulting emissions are addressed, so every value
+    needs one. There are two ways to provide them, and exactly one must be
+    used:
+
+    - label_modifier, a printf style format string applied to each value. This
+      is the natural choice for numbers: "fesc_%.2f" gives "_fesc_0.10".
+    - labels, one name per value. This is the choice for anything a format
+      string cannot sensibly render, such as a list of dust curves or of
+      ParameterFunctions, whose repr would make for an unusable label.
 
     Because a ParameterList is never a usable value, encountering one during
     an emission calculation is an error (get_param will complain and tell the
@@ -232,12 +242,17 @@ class ParameterList:
         values (list):
             The values to vary the parameter over.
         label_modifier (str):
-            A printf style format string used to construct the label suffix
-            for each variant model, e.g. "fesc_%.2f" will produce suffixes
-            like "_fesc_0.10" (expand_models prepends the underscore).
+            The format string used to name each variant, or None if explicit
+            labels were given instead.
+        labels (list):
+            The name given to each variant, or None if a format string was
+            given instead.
+        suffixes (list):
+            The suffix appended to a model's label for each value, including
+            the leading underscore.
     """
 
-    def __init__(self, values, label_modifier):
+    def __init__(self, values, label_modifier=None, labels=None):
         """Initialise the parameter list.
 
         Args:
@@ -245,13 +260,17 @@ class ParameterList:
                 The values to vary the parameter over. Must contain at least
                 one value.
             label_modifier (str):
-                A printf style format string used to construct the label
-                suffix for each variant model (e.g. "fesc_%.2f").
+                A printf style format string used to name each variant (e.g.
+                "fesc_%.2f"). Mutually exclusive with labels.
+            labels (list):
+                A name for each value, used when a format string cannot
+                sensibly render them. Mutually exclusive with label_modifier.
 
         Raises:
             InconsistentArguments
-                If no values are given, if the label_modifier is not a format
-                string, or if two values produce the same label suffix.
+                If no values are given, if neither or both of the naming
+                arguments are given, if they are malformed, or if two values
+                end up with the same label.
         """
         # Store the values, normalising containers to a list but leaving the
         # values themselves (which may carry units) untouched
@@ -263,35 +282,115 @@ class ParameterList:
                 "A ParameterList must contain at least one value."
             )
 
-        # The label modifier must actually include the value, otherwise every
-        # variant would collide
-        if not isinstance(label_modifier, str) or "%" not in label_modifier:
+        # Exactly one way of naming the variants
+        if (label_modifier is None) == (labels is None):
             raise exceptions.InconsistentArguments(
-                "label_modifier must be a printf style format string "
-                "including the value (e.g. 'fesc_%.2f'), got "
-                f"{label_modifier}."
+                "A ParameterList needs exactly one of label_modifier (a "
+                "format string applied to each value, e.g. 'fesc_%.2f') or "
+                "labels (a name for each value, for values a format string "
+                f"cannot render). Got label_modifier={label_modifier} and "
+                f"labels={labels}."
             )
 
         self.label_modifier = label_modifier
+        self.labels = list(labels) if labels is not None else None
 
-        # Eagerly check the suffixes are unique, this is much friendlier than
+        if self.labels is not None:
+            self.suffixes = self._suffixes_from_labels()
+        else:
+            self.suffixes = self._suffixes_from_modifier()
+
+        # Eagerly check the suffixes are unique, which is much friendlier than
         # discovering the collision part way through an expansion. Note that
         # labels are the keys emissions are stored under, so they cannot be
         # allowed to collide.
-        suffixes = [self.suffix(value) for value in self.values]
-        if len(set(suffixes)) != len(suffixes):
+        if len(set(self.suffixes)) != len(self.suffixes):
             # Report only the collisions themselves, listing every value is
             # useless for a large number of values
             duplicates = sorted(
-                {suffix for suffix in suffixes if suffixes.count(suffix) > 1}
+                {
+                    suffix
+                    for suffix in self.suffixes
+                    if self.suffixes.count(suffix) > 1
+                }
             )
             raise exceptions.InconsistentArguments(
-                f"The label_modifier '{label_modifier}' does not produce a "
-                f"unique label for every value ({len(suffixes)} values gave "
-                f"{len(set(suffixes))} unique labels). Colliding labels: "
-                f"{duplicates[:5]}{'...' if len(duplicates) > 5 else ''}. Use "
-                "a format string with more precision."
+                f"{len(self.suffixes)} values gave "
+                f"{len(set(self.suffixes))} unique labels. Colliding labels: "
+                f"{duplicates[:5]}{'...' if len(duplicates) > 5 else ''}. "
+                + (
+                    "Use a format string with more precision."
+                    if self.label_modifier is not None
+                    else "Every label must be distinct."
+                )
             )
+
+    def _suffixes_from_labels(self):
+        """Return the label suffix for each value, from the given names.
+
+        Returns:
+            list:
+                The suffixes, including the leading underscore.
+
+        Raises:
+            InconsistentArguments
+                If the labels don't match the values, or aren't usable names.
+        """
+        if len(self.labels) != len(self.values):
+            raise exceptions.InconsistentArguments(
+                f"Got {len(self.labels)} labels for {len(self.values)} "
+                "values. A ParameterList needs one label per value."
+            )
+
+        for label in self.labels:
+            if not isinstance(label, str) or len(label) == 0:
+                raise exceptions.InconsistentArguments(
+                    f"Labels must be non-empty strings, got {label!r}."
+                )
+
+        return ["_" + label for label in self.labels]
+
+    def _suffixes_from_modifier(self):
+        """Return the label suffix for each value, from the format string.
+
+        Returns:
+            list:
+                The suffixes, including the leading underscore.
+
+        Raises:
+            InconsistentArguments
+                If the format string doesn't include the value, or cannot
+                render it.
+        """
+        # The modifier must actually include the value, otherwise every variant
+        # would collide
+        if (
+            not isinstance(self.label_modifier, str)
+            or "%" not in self.label_modifier
+        ):
+            raise exceptions.InconsistentArguments(
+                "label_modifier must be a printf style format string "
+                "including the value (e.g. 'fesc_%.2f'), got "
+                f"{self.label_modifier}."
+            )
+
+        try:
+            return [self.suffix(value) for value in self.values]
+        except TypeError as e:
+            raise exceptions.InconsistentArguments(
+                f"The label_modifier '{self.label_modifier}' cannot render "
+                f"these values ({e}). Pass labels instead, naming each value, "
+                "which is what anything a format string can't render needs."
+            ) from None
+
+    def items(self):
+        """Iterate over the values and the suffix each one produces.
+
+        Returns:
+            zip:
+                Pairs of (value, suffix).
+        """
+        return zip(self.values, self.suffixes)
 
     def suffix(self, value):
         """Return the label suffix for a single value.
@@ -321,10 +420,13 @@ class ParameterList:
 
     def __repr__(self):
         """Return a string representation of the ParameterList."""
-        return (
-            f"{self.__class__.__name__}({self.values}, "
-            f"label_modifier='{self.label_modifier}')"
+        naming = (
+            f"label_modifier='{self.label_modifier}'"
+            if self.label_modifier is not None
+            else f"labels={self.labels}"
         )
+
+        return f"{self.__class__.__name__}({self.values}, {naming})"
 
 
 class ParameterDistribution:
@@ -355,7 +457,7 @@ class ParameterDistribution:
             for each variant model.
     """
 
-    def __init__(self, n, seed=None, label_modifier=None):
+    def __init__(self, n, seed=None, label_modifier=None, labels=None):
         """Initialise the distribution.
 
         Args:
@@ -365,13 +467,16 @@ class ParameterDistribution:
                 The seed for the random number generator. Pass a seed for a
                 reproducible set of samples.
             label_modifier (str):
-                A printf style format string used to construct the label
-                suffix for each variant model (e.g. "fesc_%.2f"). Required.
+                A printf style format string used to name each variant (e.g.
+                "fesc_%.2f"). Mutually exclusive with labels.
+            labels (list):
+                A name for each of the n samples. Mutually exclusive with
+                label_modifier.
 
         Raises:
             InconsistentArguments
-                If n is not a positive integer or the label_modifier is
-                missing or not a format string.
+                If n is not a positive integer, or the variants are not named
+                by exactly one of the two arguments.
         """
         # We need to sample at least once
         if not isinstance(n, (int, np.integer)) or n < 1:
@@ -379,18 +484,21 @@ class ParameterDistribution:
                 f"n must be a positive integer, got {n}."
             )
 
-        # The label modifier must actually include the value, otherwise every
-        # variant would collide
-        if not isinstance(label_modifier, str) or "%" not in label_modifier:
+        # Exactly one way of naming the variants. The list this realises into
+        # does the detailed checking, but catching it here points at the
+        # declaration the user actually wrote.
+        if (label_modifier is None) == (labels is None):
             raise exceptions.InconsistentArguments(
-                "label_modifier must be a printf style format string "
-                "including the value (e.g. 'fesc_%.2f'), got "
-                f"{label_modifier}."
+                "A ParameterDistribution needs exactly one of label_modifier "
+                "(a format string applied to each sample) or labels (a name "
+                f"for each sample). Got label_modifier={label_modifier} and "
+                f"labels={labels}."
             )
 
         self.n = int(n)
         self.seed = seed
         self.label_modifier = label_modifier
+        self.labels = list(labels) if labels is not None else None
 
     def _sample(self, rng, n):
         """Sample n values from the distribution.
@@ -426,6 +534,7 @@ class ParameterDistribution:
         return ParameterList(
             self._sample(rng, self.n),
             label_modifier=self.label_modifier,
+            labels=self.labels,
         )
 
     def __len__(self):
@@ -450,7 +559,15 @@ class ParameterUniformDist(ParameterDistribution):
             The upper bound of the distribution (exclusive).
     """
 
-    def __init__(self, low, high, n, seed=None, label_modifier=None):
+    def __init__(
+        self,
+        low,
+        high,
+        n,
+        seed=None,
+        label_modifier=None,
+        labels=None,
+    ):
         """Initialise the uniform distribution.
 
         Args:
@@ -463,8 +580,9 @@ class ParameterUniformDist(ParameterDistribution):
             seed (int):
                 The seed for the random number generator.
             label_modifier (str):
-                A printf style format string used to construct the label
-                suffix for each variant model.
+                A printf style format string used to name each variant.
+            labels (list):
+                A name for each sample, instead of a format string.
 
         Raises:
             InconsistentArguments
@@ -475,6 +593,7 @@ class ParameterUniformDist(ParameterDistribution):
             n=n,
             seed=seed,
             label_modifier=label_modifier,
+            labels=labels,
         )
 
         if low >= high:
@@ -555,7 +674,15 @@ class ParameterNormalDist(ParameterDistribution):
             The standard deviation of the distribution.
     """
 
-    def __init__(self, mean, sigma, n, seed=None, label_modifier=None):
+    def __init__(
+        self,
+        mean,
+        sigma,
+        n,
+        seed=None,
+        label_modifier=None,
+        labels=None,
+    ):
         """Initialise the normal distribution.
 
         Args:
@@ -568,8 +695,9 @@ class ParameterNormalDist(ParameterDistribution):
             seed (int):
                 The seed for the random number generator.
             label_modifier (str):
-                A printf style format string used to construct the label
-                suffix for each variant model.
+                A printf style format string used to name each variant.
+            labels (list):
+                A name for each sample, instead of a format string.
 
         Raises:
             InconsistentArguments
@@ -580,6 +708,7 @@ class ParameterNormalDist(ParameterDistribution):
             n=n,
             seed=seed,
             label_modifier=label_modifier,
+            labels=labels,
         )
 
         if sigma <= 0:
@@ -642,8 +771,20 @@ class ParameterLogNormalDist(ParameterNormalDist):
 VARIATION_TYPES = (ParameterList, ParameterDistribution)
 
 
+# The attributes a variation can be declared on which are not fixed
+# parameters. A transformer or a generator is an object rather than a value, so
+# it is held directly on the model rather than in its fixed parameters, but
+# varying one is just as reasonable as varying a number.
+VARIATION_ATTRS = ("transformer", "generator")
+
+
 def find_variations(model):
     """Return the variation markers attached to a model.
+
+    A variation can be declared on a fixed parameter, or on the transformer or
+    generator the model uses, which are held on the model itself rather than
+    among its parameters. Both are reported here keyed by the name the
+    expansion should set, so it does not have to care which is which.
 
     Args:
         model (EmissionModel):
@@ -651,12 +792,38 @@ def find_variations(model):
 
     Returns:
         dict:
-            A dictionary of the form {<param_name>: <marker>} containing every
-            ParameterList/ParameterDistribution in the model's fixed
-            parameters.
+            A dictionary of the form {<name>: <marker>} containing every
+            ParameterList and ParameterDistribution declared on the model.
     """
-    return {
+    found = {
         param: value
         for param, value in model.fixed_parameters.items()
         if isinstance(value, VARIATION_TYPES)
     }
+
+    for attr in VARIATION_ATTRS:
+        value = getattr(model, f"_{attr}", None)
+        if isinstance(value, VARIATION_TYPES):
+            found[attr] = value
+
+    return found
+
+
+def set_variation_value(model, name, value):
+    """Set the value a variation resolved to on a model.
+
+    Args:
+        model (EmissionModel):
+            The model to set it on.
+        name (str):
+            The name the variation was declared under, as reported by
+            find_variations.
+        value:
+            The value this variant uses.
+    """
+    # A transformer or a generator lives on the model itself; everything else
+    # is a fixed parameter
+    if name in VARIATION_ATTRS:
+        setattr(model, f"_{name}", value)
+    else:
+        model.fixed_parameters[name] = value

@@ -35,6 +35,7 @@ from synthesizer import exceptions
 from synthesizer.emission_models.parameters import (
     ParameterDistribution,
     find_variations,
+    set_variation_value,
 )
 
 
@@ -61,92 +62,132 @@ def expand_models(root):
     # different set of values.
     _realise_distributions(working)
 
-    # Expanding a variation turns one root into several, so from here on we
-    # track the roots explicitly rather than leaving them scattered through
-    # related_models. A stale related model reference would resurrect a model
-    # we have already expanded and the expansion would never terminate.
-    roots = _hoist_related_models(working)
+    # Expanding a variation replaces models with copies of them, and a related
+    # model reference left pointing at a replaced model would resurrect it and
+    # the expansion would never end. Rather than track which references are
+    # still live, drop them all and carry every model in one set instead: they
+    # are re-derived at the end.
+    _clear_related_models(working)
+    models = set(working._models.values())
+    designated = working
 
     # Expand one variation at a time, deepest first, until none are left
     while True:
-        combined = _combine_roots(roots)
+        combined = _gather(designated, models)
 
         target = _find_variation_target(combined)
         if target is None:
             break
 
-        roots = _expand_variation(combined, roots, *target)
+        designated, models = _expand_variation(
+            combined,
+            designated,
+            models,
+            *target,
+        )
 
-    return combined
+    return _attach_roots(designated, models)
 
 
-def _hoist_related_models(root):
-    """Collect the related models in a tree as roots in their own right.
+def _clear_related_models(root):
+    """Drop every related model reference in a tree.
 
-    Related models are extra roots: ModelQueue walks them alongside the root
-    model. Gathering them into a single list of roots, and clearing the
-    references, gives the expansion one place to track them.
+    Related models are extra roots, which is how a model tree keeps hold of
+    something not reachable from its own root. During an expansion they would
+    also keep hold of models which have been replaced, so the expansion carries
+    every model in one set instead and puts the references back at the end.
 
     Args:
         root (EmissionModel):
             The root of the tree. Modified in place.
-
-    Returns:
-        list:
-            The root, followed by every related model found in the tree.
     """
-    roots = [root]
-    seen = {root.label}
-
-    # Walk in label order so the root list is reproducible. Note that
-    # root._models already contains the related models, since unpack_model
-    # walks them.
-    for model in sorted(root._models.values(), key=lambda m: m.label):
-        for related in sorted(model.related_models, key=lambda m: m.label):
-            if related.label not in seen:
-                seen.add(related.label)
-                roots.append(related)
-
+    for model in root._models.values():
         model.related_models = set()
 
-    return roots
 
-
-def _combine_roots(roots):
-    """Gather a list of roots back into a single tree.
+def _gather(designated, models):
+    """Gather a set of models into one tree, rooted at a given model.
 
     Args:
-        roots (list):
-            The roots to combine. The first is the root of the resulting tree.
+        designated (EmissionModel):
+            The model to root the tree at.
+        models (set):
+            Every model which must be reachable from it.
 
     Returns:
         EmissionModel:
-            The first root, with the rest attached as related models and the
-            label keyed containers rebuilt.
+            The designated model, with the label keyed containers rebuilt over
+            every model in the set.
     """
-    designated_root = roots[0]
-    designated_root.related_models = set(roots[1:])
-    designated_root.unpack_model()
+    # Anything already reachable through the tree is reached twice here, which
+    # unpacking is happy with: it keys models by label and stops when it meets
+    # one it has already seen.
+    designated.related_models = models - {designated}
+    designated.unpack_model()
 
-    return designated_root
+    return designated
+
+
+def _attach_roots(designated, models):
+    """Finish an expansion by attaching the true roots of the result.
+
+    Args:
+        designated (EmissionModel):
+            The model the result is rooted at.
+        models (set):
+            Every model in the result.
+
+    Returns:
+        EmissionModel:
+            The designated model, holding the other roots as related models.
+    """
+    # Every model is reachable while this is gathered, which is what lets the
+    # parent pointers be rebuilt, and a root is a model nothing depends on
+    _gather(designated, models)
+
+    roots = {model for model in models if len(model._parents) == 0} - {
+        designated
+    }
+
+    designated.related_models = roots
+    designated.unpack_model()
+
+    return designated
 
 
 def _realise_distributions(root):
     """Replace every distribution in a tree with a realised ParameterList.
+
+    A premade model often hands the same declaration to several of its own
+    models, so each distribution is sampled once and the result shared.
+    Sampling per model instead would give each of them different values and
+    turn one variation into several.
 
     Args:
         root (EmissionModel):
             The root of the tree to realise distributions in. Modified in
             place.
     """
+    realised = {}
     for model in root._models.values():
         for param, variation in find_variations(model).items():
-            if isinstance(variation, ParameterDistribution):
-                model.fixed_parameters[param] = variation.realise()
+            if not isinstance(variation, ParameterDistribution):
+                continue
+
+            if id(variation) not in realised:
+                realised[id(variation)] = variation.realise()
+
+            set_variation_value(model, param, realised[id(variation)])
 
 
 def _find_variation_target(root):
     """Find the next variation to expand.
+
+    A single declaration can be attached to several models at once, which is
+    what a premade model does when it hands one escape fraction down to each of
+    the models that needs it. Those are one variation, not several, so they are
+    expanded together: they are recognised by being the same declaration rather
+    than by holding equal values.
 
     Variations are expanded from the bottom of the tree up, so a model is only
     expanded once everything it depends on has been. This is what makes
@@ -159,41 +200,58 @@ def _find_variation_target(root):
 
     Returns:
         tuple or None:
-            The label, parameter name and ParameterList of the variation to
-            expand next, or None when no variations remain.
+            The (label, parameter) pairs sharing one declaration, and the
+            ParameterList they share, or None when no variations remain.
     """
-    # Collect every model still carrying a variation
-    varied = {
-        label: find_variations(model)
-        for label, model in root._models.items()
-        if len(find_variations(model)) > 0
-    }
-    if len(varied) == 0:
+    # Gather where each declaration has ended up, keyed by the declaration
+    # itself rather than by its values
+    groups = {}
+    for label, model in sorted(root._models.items()):
+        for param, variation in sorted(find_variations(model).items()):
+            group, _ = groups.setdefault(id(variation), ([], variation))
+            group.append((label, param))
+
+    if len(groups) == 0:
         return None
 
-    # A model can only be expanded once its dependencies have been, so keep
-    # only those with no varied model among their dependencies
-    ready = [
-        label
-        for label in varied
-        if len(_dependency_labels(root[label]) & set(varied)) == 0
-    ]
+    # Which declaration each model is waiting on
+    waiting = {}
+    for key, (group, _) in groups.items():
+        for label, _param in group:
+            waiting[label] = key
+
+    # A declaration can only be expanded once every declaration its models
+    # depend on has been. Members of the same group don't count: they are one
+    # variation and are expanded in one go.
+    ready = []
+    for key, (group, _) in groups.items():
+        dependencies = set()
+        for label, _param in group:
+            dependencies |= _dependency_labels(root[label])
+
+        blocking = {
+            waiting[label]
+            for label in dependencies
+            if label in waiting and waiting[label] != key
+        }
+        if len(blocking) == 0:
+            ready.append(key)
 
     # A cycle in the tree would leave nothing ready, which unpack_model should
     # already have made impossible
     if len(ready) == 0:
         raise exceptions.InconsistentArguments(
             "Could not find a variation to expand which has no varied "
-            f"dependencies (varied models: {sorted(varied)}). This suggests a "
-            "cyclic dependency in the model tree."
+            f"dependencies (varied models: {sorted(waiting)}). This suggests "
+            "a cyclic dependency in the model tree."
         )
 
     # Sort so the expansion order, and therefore the order suffixes are
     # applied in, is reproducible
-    label = min(ready)
-    param = min(varied[label])
+    key = min(ready, key=lambda key: sorted(groups[key][0]))
+    group, variation = groups[key]
 
-    return label, param, varied[label][param]
+    return sorted(group), variation
 
 
 def _dependency_labels(model):
@@ -227,7 +285,7 @@ def _dependency_labels(model):
     return dependencies
 
 
-def _expand_variation(root, roots, label, param, parameter_list):
+def _expand_variation(root, designated, models, group, parameter_list):
     """Expand a single variation into one model per value.
 
     The varied model and everything depending on it (its cone) is duplicated
@@ -237,56 +295,67 @@ def _expand_variation(root, roots, label, param, parameter_list):
 
     Args:
         root (EmissionModel):
-            The combined view of the forest being expanded, i.e. roots[0] with
-            the other roots attached. Its models are not modified, but they are
-            shared with the returned roots wherever they fall outside the cone.
-        roots (list):
-            The current roots of the forest. The first is the root the user
-            called, and stays the root of the result.
-        label (str):
-            The label of the varied model.
-        param (str):
-            The name of the varied parameter.
+            The gathered view of every model, i.e. the designated model with
+            the rest attached. Models outside the cone are shared with the
+            result rather than copied.
+        designated (EmissionModel):
+            The model the result is rooted at, which stays the root through the
+            expansion so the model the user calls is the model they built.
+        models (set):
+            Every model going into this expansion.
+        group (list):
+            The (label, parameter) pairs sharing this declaration. They are one
+            variation and are expanded together, so a parameter handed to
+            several models varies them in step rather than independently.
         parameter_list (ParameterList):
-            The values to vary the parameter over.
+            The values to vary the parameters over.
 
     Returns:
-        list:
-            The roots of the expanded forest, with the user's root first.
+        designated (EmissionModel):
+            The model the result is rooted at.
+        models (set):
+            Every model coming out of this expansion.
     """
-    # Find everything affected by this variation
-    cone = root._get_downstream_labels(label)
+    # Find everything affected by this variation. A declaration attached to
+    # several models affects everything downstream of any of them.
+    cone = set()
+    for label, _param in group:
+        cone |= root._get_downstream_labels(label)
 
-    # Duplicate the cone once per value, collecting the new roots as we go.
-    # Every root in the cone gains a copy per value, while roots outside it are
-    # untouched and shared between the variants.
-    designated_root = None
-    other_roots = []
-    for value in parameter_list.values:
-        copies = _copy_subgraph(
-            root,
-            cone,
-            suffix=parameter_list.suffix(value),
-        )
+    # The models in the cone are replaced by their copies; everything else
+    # carries straight through and is shared by every variant
+    expanded = {model for model in models if model.label not in cone}
 
-        # The forest is tracked through the root list, so drop the related
-        # model references the copies inherited from the combined view. Leaving
-        # them would resurrect the models this expansion replaces.
+    # The model the result is rooted at is replaced by its copy from the first
+    # value, if it is in the cone at all, so the label the user asked for still
+    # exists on the model they get back
+    designated_label = designated.label
+    first_copies = None
+
+    for value, suffix in parameter_list.items():
+        copies = _copy_subgraph(root, cone, suffix=suffix)
+
+        # Every model is carried in the set, so the copies keep no references
+        # of their own to models this expansion has replaced
         for new_model in copies.values():
             new_model.related_models = set()
 
-        # Fix the parameter on this variant, replacing the declaration
-        copies[label].fixed_parameters[param] = value
+        # Fix the parameters on this variant, replacing the declaration. A
+        # declaration on the transformer or the generator is set on the model
+        # itself rather than among its parameters.
+        for label, param in group:
+            set_variation_value(copies[label], param, value)
 
         # Record what distinguishes every model in this variant's cone, so the
         # variant a model belongs to is recoverable without parsing labels.
         # The base label is the label before any variation was expanded, which
         # is what groups a family of variants back together.
+        varied = {param: value for _label, param in group}
         for old_label, new_model in copies.items():
             old_model = root[old_label]
             new_model._variant_params = {
                 **old_model.variant_params,
-                param: value,
+                **varied,
             }
             new_model._variant_base = (
                 old_model.variant_base
@@ -294,28 +363,15 @@ def _expand_variation(root, roots, label, param, parameter_list):
                 else old_label
             )
 
-        for old_root in roots:
-            if old_root.label not in cone:
-                continue
+        expanded |= set(copies.values())
 
-            # Keep the first copy of the user's root as the root of the result,
-            # so the model they call is still the model they built
-            if old_root is roots[0] and designated_root is None:
-                designated_root = copies[old_root.label]
-            else:
-                other_roots.append(copies[old_root.label])
+        if first_copies is None:
+            first_copies = copies
 
-    # Roots outside the cone survive untouched, shared by every variant
-    for old_root in roots:
-        if old_root.label in cone:
-            continue
+    if designated_label in cone:
+        designated = first_copies[designated_label]
 
-        if old_root is roots[0]:
-            designated_root = old_root
-        else:
-            other_roots.append(old_root)
-
-    return [designated_root, *other_roots]
+    return designated, expanded
 
 
 def _copy_subgraph(root, labels, suffix):
