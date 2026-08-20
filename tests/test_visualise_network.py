@@ -23,14 +23,13 @@ from synthesizer.emission_models.visualise_network import (  # noqa: E402
     _drawn_box,
     _edge_lanes,
     _edge_ports,
-    _elbow_path,
     _emitter_rank,
     _extent,
     _insert_routing_nodes,
     _layout,
     _order_rows,
     _row_gaps,
-    _shape_allowance,
+    _shape_spec,
 )
 
 # Render without a display
@@ -363,48 +362,6 @@ class TestRoutingNodes:
             rows = range(layers[source] + 1, layers[target])
             for placeholder, row in zip(chain, rows):
                 assert routing_layers[placeholder] == row
-
-
-class TestElbowPath:
-    """Test the orthogonal edge routing."""
-
-    def test_straight_edge_is_vertical(self):
-        """Test an edge with nothing in the way goes straight up."""
-        path = _elbow_path((0.0, 0.0), [], (0.0, 10.0), radius=2.0)
-
-        assert np.allclose(path.vertices[:, 0], 0.0)
-
-    def test_offset_edge_starts_and_ends_where_asked(self):
-        """Test the path spans exactly from the source to the target."""
-        path = _elbow_path((0.0, 0.0), [], (20.0, 10.0), radius=2.0)
-
-        assert np.allclose(path.vertices[0], (0.0, 0.0))
-        assert np.allclose(path.vertices[-1], (20.0, 10.0))
-
-        # And it turns, rather than running diagonally
-        assert len(path.vertices) > 2
-
-    def test_turns_happen_between_the_rows(self):
-        """Test the sideways run is in the gap, not level with a box.
-
-        This is what stops an edge crossing a box: it only ever moves sideways
-        in the space between two rows.
-        """
-        path = _elbow_path((0.0, 0.0), [], (20.0, 10.0), radius=0.0)
-
-        for _, y in path.vertices[1:-1]:
-            assert 0.0 < y < 10.0
-
-    def test_waypoints_are_followed(self):
-        """Test a routed edge passes through its reserved column."""
-        path = _elbow_path(
-            (0.0, 0.0),
-            [(-15.0, 10.0)],
-            (5.0, 20.0),
-            radius=0.0,
-        )
-
-        assert np.isclose(path.vertices[:, 0].min(), -15.0)
 
 
 class TestLayout:
@@ -755,8 +712,8 @@ class TestNodeEncodings:
 
         # The two labels differ, so compare against the ratio of their text
         # rather than each other
-        assert _shape_allowance("combine")[0] > 1.0
-        assert _shape_allowance("extract") == (1.0, 1.0)
+        assert _shape_spec("combine")["overshoot"][0] > 1.0
+        assert _shape_spec("extract")["overshoot"] == (1.0, 1.0)
 
         # And the combination's reserved box includes the allowance
         bare = _box_sizes(_build_graph(incident), fontsize=10)["incident"]

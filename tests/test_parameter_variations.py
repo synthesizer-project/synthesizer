@@ -2748,3 +2748,140 @@ class TestDeclarationUnitChecks:
         curve = PowerLaw(slope=declaration)
 
         assert curve.slope is declaration
+
+
+class TestVariantProvenanceInHDF5:
+    """Test a written model records what made it a variant.
+
+    A variant's label is generated, so on its own it is a poor record of the
+    parameters behind it: a label can be anything the user chose. The values
+    are written alongside it so a file can be read without parsing labels or
+    re-running the script which produced it.
+    """
+
+    def _write(self, model, tmp_path):
+        """Write a model to HDF5 and return its group's contents."""
+        import h5py
+
+        with h5py.File(tmp_path / "model.hdf5", "w") as hdf:
+            model.to_hdf5(hdf.create_group(model.label))
+
+        with h5py.File(tmp_path / "model.hdf5", "r") as hdf:
+            group = hdf[model.label]
+            return (
+                dict(group.attrs),
+                dict(group["VariantParameters"].attrs)
+                if "VariantParameters" in group
+                else None,
+            )
+
+    def test_values_are_written(self, test_grid, tmp_path):
+        """Test the varied values are written with the base label."""
+        from synthesizer.emission_models import PacmanEmission
+
+        expanded = PacmanEmission(
+            test_grid,
+            tau_v=ParameterList([0.1, 0.5], label_modifier="tauv%.1f"),
+            fesc=ParameterList([0.0, 0.5], label_modifier="fesc%.1f"),
+        ).expand_models()
+
+        attrs, variant = self._write(
+            expanded["emergent_fesc0.5_tauv0.1"], tmp_path
+        )
+
+        assert attrs["variant_base"] == "emergent"
+        assert variant == {"fesc": 0.5, "tau_v": 0.1}
+
+    def test_units_are_kept(self, test_grid, tmp_path):
+        """Test a varied quantity keeps its units, which HDF5 cannot hold."""
+        from unyt import kelvin
+
+        from synthesizer.emission_models import (
+            AttenuatedEmission,
+            DustEmission,
+            Greybody,
+            StellarEmissionModel,
+        )
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        attenuated = AttenuatedEmission(
+            label="attenuated",
+            apply_to=incident,
+            emitter="stellar",
+            tau_v=0.5,
+            dust_curve=PowerLaw(slope=-1),
+        )
+        expanded = DustEmission(
+            dust_emission_model=Greybody(
+                temperature=ParameterList(
+                    [20 * kelvin, 60 * kelvin],
+                    label_modifier="T%dK",
+                ),
+                emissivity=1.5,
+            ),
+            emitter="stellar",
+            label="dust_emission",
+            dust_lum_intrinsic=incident,
+            dust_lum_attenuated=attenuated,
+        ).expand_models()
+
+        _attrs, variant = self._write(expanded["dust_emission_T60K"], tmp_path)
+
+        assert variant["temperature"] == 60.0
+        assert variant["temperature_units"] == "K"
+
+    def test_an_object_variation_is_described(self, test_grid, tmp_path):
+        """Test a varied dust curve says which curve it was."""
+        from synthesizer.emission_models import (
+            AttenuatedEmission,
+            StellarEmissionModel,
+        )
+        from synthesizer.emission_models.attenuation import (
+            Calzetti2000,
+            PowerLaw,
+        )
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        expanded = AttenuatedEmission(
+            label="attenuated",
+            apply_to=incident,
+            emitter="stellar",
+            tau_v=0.5,
+            dust_curve=ParameterList(
+                [PowerLaw(slope=-1), Calzetti2000()],
+                labels=["powerlaw", "calzetti"],
+            ),
+        ).expand_models()
+
+        _attrs, variant = self._write(
+            expanded["attenuated_calzetti"], tmp_path
+        )
+
+        # The label says "calzetti"; the file says what that was
+        assert "Calzetti2000" in variant["transformer"]
+
+    def test_a_model_which_is_not_a_variant_writes_nothing(
+        self, test_grid, tmp_path
+    ):
+        """Test an ordinary model gains no variant bookkeeping."""
+        from synthesizer.emission_models import StellarEmissionModel
+
+        model = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+
+        attrs, variant = self._write(model, tmp_path)
+
+        assert "variant_base" not in attrs
+        assert variant is None

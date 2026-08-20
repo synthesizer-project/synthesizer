@@ -550,14 +550,14 @@ def _box_sizes(graph, fontsize):
         # Use a fixed height for every box so rows line up, rather than letting
         # descenders and capitals change it label by label
         operation = graph.nodes[node]["operation"]
-        pad = 2.0 * _BOX_PAD * _pad_scale(operation) * fontsize
+        pad = 2.0 * _BOX_PAD * _shape_spec(operation)["pad"] * fontsize
         width = extents.width + pad
         height = fontsize * 1.05 + pad
 
         # Some shapes are drawn outside the box they are given, so the layout
         # has to reserve the room they will really take up, as does the stack a
         # per particle model is drawn as
-        wide, tall = _shape_allowance(operation)
+        wide, tall = _shape_spec(operation)["overshoot"]
         stack = _stack_extent(graph.nodes[node], fontsize)
         sizes[node] = (width * wide + stack, height * tall + stack)
 
@@ -601,7 +601,7 @@ def _drawn_box(data, size, fontsize):
         tuple:
             The (width, height) of the box to draw.
     """
-    wide, tall = _shape_allowance(data["operation"])
+    wide, tall = _shape_spec(data["operation"])["overshoot"]
     stack = _stack_extent(data, fontsize)
 
     return ((size[0] - stack) / wide, (size[1] - stack) / tall)
@@ -1395,66 +1395,6 @@ def _rounded_path(corners, radius):
     return Path(vertices, codes)
 
 
-def _elbow_path(start, waypoints, end, radius):
-    """Build an orthogonal path turning halfway between each pair of levels.
-
-    The path leaves vertically, turns only in the gaps between rows, and
-    arrives vertically. Turning in the gaps keeps it clear of the boxes.
-
-    Args:
-        start (tuple):
-            The point on the source box to leave from.
-        waypoints (list):
-            The reserved points to pass through, bottom to top.
-        end (tuple):
-            The point on the target box to arrive at.
-        radius (float):
-            The corner radius, in points.
-
-    Returns:
-        matplotlib.path.Path:
-            The path.
-    """
-    # A vertical run, a sideways jog halfway between the two levels, then a
-    # vertical run again, for each hop
-    corners = [start]
-    previous = start
-    for point in [*waypoints, end]:
-        if not np.isclose(point[0], previous[0]):
-            middle = (previous[1] + point[1]) / 2.0
-            corners.append((previous[0], middle))
-            corners.append((point[0], middle))
-        corners.append(point)
-        previous = point
-
-    return _rounded_path(corners, radius)
-
-
-def _edge_ends(source_position, source_size, target_position, target_size):
-    """Return where an edge should leave one box and enter another.
-
-    Args:
-        source_position (tuple):
-            The centre of the source box.
-        source_size (tuple):
-            The size of the source box.
-        target_position (tuple):
-            The centre of the target box.
-        target_size (tuple):
-            The size of the target box.
-
-    Returns:
-        tuple:
-            The point to leave from and the point to arrive at.
-    """
-    # Emission flows upwards, so an edge leaves the top of its source and
-    # enters the bottom of its target
-    start = (source_position[0], source_position[1] + source_size[1] / 2.0)
-    end = (target_position[0], target_position[1] - target_size[1] / 2.0)
-
-    return start, end
-
-
 def plot_emission_graph(
     model_tree,
     root=None,
@@ -2041,55 +1981,27 @@ def _box_style(operation, height, fontsize):
             The matplotlib box style.
     """
     return _box_style_for_shape(
-        _shape_of(operation),
+        _shape_spec(operation)["shape"],
         height,
         _TOOTH * fontsize,
     )
 
 
-def _shape_of(operation):
-    """Return the shape used to draw an operation.
+def _shape_spec(operation):
+    """Return how an operation's node is drawn.
 
     Args:
         operation (str):
             A key of _OPERATION_SHAPES, or None.
 
     Returns:
-        str:
-            The shape name.
+        dict:
+            The shape name, the (width, height) factors the drawn shape needs
+            beyond the box it is given, and the factor to scale the label
+            padding by (a shape which curves or bites into its box needs more
+            room around the label than a plain rectangle).
     """
-    return _OPERATION_SHAPES.get(operation, _DEFAULT_SHAPE)["shape"]
-
-
-def _pad_scale(operation):
-    """Return how much padding a shape needs, relative to the base padding.
-
-    A shape whose outline curves or bites into its box needs more room around
-    the label than a plain rectangle does, or the label ends up touching it.
-
-    Args:
-        operation (str):
-            A key of _OPERATION_SHAPES, or None.
-
-    Returns:
-        float:
-            The factor to scale the base padding by.
-    """
-    return _OPERATION_SHAPES.get(operation, _DEFAULT_SHAPE)["pad"]
-
-
-def _shape_allowance(operation):
-    """Return how much bigger a shape is drawn than the box it is given.
-
-    Args:
-        operation (str):
-            A key of _OPERATION_SHAPES, or None.
-
-    Returns:
-        tuple:
-            The (width, height) factors to reserve.
-    """
-    return _OPERATION_SHAPES.get(operation, _DEFAULT_SHAPE)["overshoot"]
+    return _OPERATION_SHAPES.get(operation, _DEFAULT_SHAPE)
 
 
 class _SwatchHandler(HandlerPatch):
@@ -2250,7 +2162,11 @@ def _draw_legends(ax, groups, shape, widths, fontsize):
         ("top", 1.0, "upper left"),
         ("bottom", 0.0, "lower left"),
     ):
-        titles = [title for title in groups if _legend_band(title) == band]
+        titles = [
+            title
+            for title in groups
+            if _LEGEND_PLACEMENT.get(title, "top") == band
+        ]
         if len(titles) == 0:
             continue
 
@@ -2521,7 +2437,11 @@ def _legend_bands(groups, shape):
     width = 0.0
     rows = {"top": 0, "bottom": 0}
     for band in ("top", "bottom"):
-        titles = [title for title in groups if _legend_band(title) == band]
+        titles = [
+            title
+            for title in groups
+            if _LEGEND_PLACEMENT.get(title, "top") == band
+        ]
         if len(titles) == 0:
             continue
 
@@ -2534,20 +2454,6 @@ def _legend_bands(groups, shape):
         rows[band] = max(shape[title][1] for title in titles) + 1
 
     return widths, width, rows
-
-
-def _legend_band(title):
-    """Return whether a legend group sits above or below the network.
-
-    Args:
-        title (str):
-            The group's title.
-
-    Returns:
-        str:
-            Either "top" or "bottom".
-    """
-    return _LEGEND_PLACEMENT.get(title, "top")
 
 
 def _swatch(

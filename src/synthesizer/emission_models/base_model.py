@@ -58,6 +58,7 @@ from synthesizer.emission_models.parameters import VARIATION_TYPES
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity
 from synthesizer.utils.operation_timers import timed, timer
+from synthesizer.utils.util_funcs import hdf5_attr_value
 
 
 class EmissionModel(Extraction, Generation, Transformation, Combination):
@@ -1849,6 +1850,19 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         "expand_models() on the root model first."
                     )
                 fixed_parameters.attrs[key] = value
+
+        # Save what makes this model a variant, if it is one, so the file
+        # records which parameters produced it rather than leaving its label as
+        # the only trace of them
+        if self.variant_base is not None:
+            group.attrs["variant_base"] = self.variant_base
+        if len(self.variant_params) > 0:
+            variant_parameters = group.create_group("VariantParameters")
+            for key, value in self.variant_params.items():
+                stored, units = hdf5_attr_value(value)
+                variant_parameters.attrs[key] = stored
+                if units is not None:
+                    variant_parameters.attrs[f"{key}_units"] = units
 
         # Save the children
         if len(self._children) > 0:

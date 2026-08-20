@@ -849,3 +849,35 @@ def obj_to_hashable(obj):
     # Anything else: bail, we can't hash it
     else:
         raise exceptions.CannotHashThat(f"Unhashable type: {type(obj)}")
+
+
+def hdf5_attr_value(value):
+    """Return a value HDF5 can store as an attribute, and its units.
+
+    HDF5 attributes take numbers, booleans and strings. A unyt quantity is an
+    ndarray subclass, so writing one directly stores the magnitude and silently
+    drops the units; they are returned separately here so a caller can write
+    them alongside. Anything else HDF5 cannot store (a class instance, say) is
+    described by its repr, which records what it was even though it cannot be
+    read back as an object.
+
+    Args:
+        value:
+            The value to store.
+
+    Returns:
+        tuple:
+            The value to store, and the string naming its units, or None when
+            it has none.
+    """
+    # A quantity, whose units would otherwise be silently dropped
+    if hasattr(value, "units"):
+        return float(value.value), str(value.units)
+
+    if isinstance(
+        value,
+        (str, bool, int, float, np.integer, np.floating, np.bool_),
+    ):
+        return value, None
+
+    return repr(value), None
