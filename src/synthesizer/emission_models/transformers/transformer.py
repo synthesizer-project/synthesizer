@@ -90,7 +90,14 @@ class Transformer(ABC):
         """
         pass
 
-    def _extract_params(self, model, emission, emitter, preserve_units=False):
+    def _extract_params(
+        self,
+        model,
+        emission,
+        emitter,
+        obj=None,
+        preserve_units=False,
+    ):
         """Extract the required parameters for the transformation.
 
         This method should look for the required parameters in
@@ -105,6 +112,11 @@ class Transformer(ABC):
                 The emission to transform.
             emitter (Stars/Gas/BlackHole/Galaxy):
                 The object emitting the emission.
+            obj (object, optional):
+                An optional object to look for the parameters on last, after
+                the model, emission and emitter. Transformers which hold their
+                own parameter values should pass themselves here so those
+                values act as the final fallback.
             preserve_units (bool, optional):
                 If True, preserve units on extracted parameter values.
                 Defaults to False.
@@ -119,6 +131,7 @@ class Transformer(ABC):
             model,
             emission,
             emitter,
+            obj=obj,
             preserve_units=preserve_units,
         )
 
