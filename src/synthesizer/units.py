@@ -759,6 +759,17 @@ def _check_arg(units, name, value):
     if value is None:
         return None
 
+    # A parameter declaration (a ParameterList, or a distribution to sample
+    # one from) holds the values rather than being one, so the check is
+    # applied to what it holds and the declaration is rebuilt around the
+    # converted values. It knows how to take itself apart and put itself back
+    # together; this only has to know how to check one value, which is what
+    # this function already does. Duck typed rather than imported to keep the
+    # unit machinery free of emission model imports.
+    convert_values = getattr(value, "_convert_values", None)
+    if convert_values is not None:
+        return convert_values(lambda held: _check_arg(units, name, held))
+
     # Unpack the units from the units dictionary
     expected_units = units[name]
 

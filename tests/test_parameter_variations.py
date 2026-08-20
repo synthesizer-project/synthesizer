@@ -1382,6 +1382,73 @@ class TestSelect:
         assert expanded_model["combined_fesc_0.10"].save is True
 
 
+class TestSettingsAreInherited:
+    """Test a variant inherits the settings of the model it came from."""
+
+    def test_save_flags_are_inherited(self, test_grid):
+        """Test switching off saving before expanding survives expansion."""
+        from synthesizer.emission_models import (
+            AttenuatedEmission,
+            StellarEmissionModel,
+        )
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        attenuated = AttenuatedEmission(
+            label="attenuated",
+            apply_to=incident,
+            emitter="stellar",
+            dust_curve=PowerLaw(slope=-1),
+            tau_v=ParameterList([0.1, 0.5], label_modifier="tauv%.1f"),
+        )
+        total = StellarEmissionModel(
+            label="total",
+            combine=(attenuated, incident),
+        )
+
+        # Only the total is wanted, said before the expansion
+        total.save_spectra("total")
+
+        expanded = total.expand_models()
+
+        # Each variant carries the flag of the model it was copied from
+        assert sorted(expanded.saved_labels) == [
+            "total_tauv0.1",
+            "total_tauv0.5",
+        ]
+
+    def test_per_particle_is_inherited(self, test_grid):
+        """Test another setting also carries into every variant."""
+        from synthesizer.emission_models import (
+            AttenuatedEmission,
+            StellarEmissionModel,
+        )
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        attenuated = AttenuatedEmission(
+            label="attenuated",
+            apply_to=incident,
+            emitter="stellar",
+            dust_curve=PowerLaw(slope=-1),
+            tau_v=ParameterList([0.1, 0.5], label_modifier="tauv%.1f"),
+        )
+        attenuated.set_per_particle(True)
+
+        expanded = attenuated.expand_models()
+
+        for model in expanded.select("attenuated*"):
+            assert model.per_particle is True
+
+
 class TestSaveEmissionGlobs:
     """Test the save flag helpers accepting glob patterns."""
 
@@ -2114,3 +2181,570 @@ class TestLabelClashErrors:
         summary = str(model._copy_node())
 
         assert "incident" in summary.lower()
+
+
+class TestVaryingTransformerAndGeneratorArguments:
+    """Test declaring a variation on an argument of a transformer/generator.
+
+    The arguments of a dust curve or a dust emission model belong to the
+    curve rather than to the model, so a declaration passed to one of them is
+    found by looking inside the object. Each variant gets its own copy of the
+    object with the value substituted, so the copies cannot affect each other
+    or the object the user built.
+    """
+
+    def _attenuated(self, test_grid, curve, **kwargs):
+        """Return an attenuated model using a given dust curve."""
+        from synthesizer.emission_models import (
+            AttenuatedEmission,
+            StellarEmissionModel,
+        )
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        return AttenuatedEmission(
+            label="attenuated",
+            apply_to=incident,
+            emitter="stellar",
+            tau_v=kwargs.pop("tau_v", 0.5),
+            dust_curve=curve,
+            **kwargs,
+        )
+
+    def test_a_transformer_argument_expands(self, test_grid):
+        """Test a declaration on a dust curve argument makes models."""
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        curve = PowerLaw(
+            slope=ParameterList([-1.0, -0.5], label_modifier="slope%.1f")
+        )
+        expanded = self._attenuated(test_grid, curve).expand_models()
+
+        variants = sorted(
+            expanded.select("attenuated*"), key=lambda m: m.label
+        )
+
+        assert [model.label for model in variants] == [
+            "attenuated_slope-0.5",
+            "attenuated_slope-1.0",
+        ]
+
+        # Each variant has its own curve holding its own value
+        assert [model.transformer.slope for model in variants] == [-0.5, -1.0]
+
+        # And the curve the user built is untouched, still holding the
+        # declaration
+        assert isinstance(curve.slope, ParameterList)
+        for model in variants:
+            assert model.transformer is not curve
+
+    def test_the_extraction_is_shared(self, test_grid):
+        """Test only the varied model and its cone are duplicated."""
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        curve = PowerLaw(
+            slope=ParameterList([-1.0, -0.5], label_modifier="slope%.1f")
+        )
+        expanded = self._attenuated(test_grid, curve).expand_models()
+
+        assert len(expanded.select("incident")) == 1
+
+    def test_the_variant_spectra_differ(self, test_grid, particle_stars_A):
+        """Test the substituted value really reaches the calculation."""
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        curve = PowerLaw(
+            slope=ParameterList([-1.0, -0.5], label_modifier="slope%.1f")
+        )
+        expanded = self._attenuated(test_grid, curve).expand_models()
+
+        particle_stars_A.get_spectra(expanded)
+
+        steep = particle_stars_A.spectra[
+            "attenuated_slope-1.0"
+        ].bolometric_luminosity
+        shallow = particle_stars_A.spectra[
+            "attenuated_slope-0.5"
+        ].bolometric_luminosity
+
+        assert not np.isclose(steep, shallow)
+
+    def test_a_generator_argument_expands(self, test_grid):
+        """Test a declaration on a dust emission model argument."""
+        from unyt import kelvin
+
+        from synthesizer.emission_models import (
+            AttenuatedEmission,
+            DustEmission,
+            Greybody,
+            StellarEmissionModel,
+        )
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        attenuated = AttenuatedEmission(
+            label="attenuated",
+            apply_to=incident,
+            emitter="stellar",
+            tau_v=0.5,
+            dust_curve=PowerLaw(slope=-1),
+        )
+        expanded = DustEmission(
+            dust_emission_model=Greybody(
+                temperature=ParameterList(
+                    [20 * kelvin, 60 * kelvin],
+                    label_modifier="T%dK",
+                ),
+                emissivity=1.5,
+            ),
+            emitter="stellar",
+            label="dust_emission",
+            dust_lum_intrinsic=incident,
+            dust_lum_attenuated=attenuated,
+        ).expand_models()
+
+        variants = sorted(
+            expanded.select("dust_emission*"), key=lambda m: m.label
+        )
+
+        assert [model.label for model in variants] == [
+            "dust_emission_T20K",
+            "dust_emission_T60K",
+        ]
+        assert [model.generator.temperature for model in variants] == [
+            20 * kelvin,
+            60 * kelvin,
+        ]
+
+        # The energy balance wiring survived the substitution
+        for model in variants:
+            assert model.generator.is_energy_balance
+
+    def test_a_unit_carrying_argument_expands(self, test_grid):
+        """Test a declaration passes the unit checks on a constructor.
+
+        A constructor argument which must carry units is checked when the
+        object is built, which a declaration cannot satisfy since it holds
+        the values rather than being one.
+        """
+        from unyt import angstrom
+
+        from synthesizer.emission_models.attenuation import Calzetti2000
+
+        curve = Calzetti2000(
+            cent_lam=ParameterList(
+                [2000 * angstrom, 2175 * angstrom],
+                labels=["lam2000", "lam2175"],
+            )
+        )
+        expanded = self._attenuated(test_grid, curve).expand_models()
+
+        variants = sorted(
+            expanded.select("attenuated*"), key=lambda m: m.label
+        )
+
+        assert [model.label for model in variants] == [
+            "attenuated_lam2000",
+            "attenuated_lam2175",
+        ]
+        assert [model.transformer.cent_lam for model in variants] == [
+            2000 * angstrom,
+            2175 * angstrom,
+        ]
+
+    def test_two_arguments_multiply(self, test_grid):
+        """Test two declarations on one object are independent axes."""
+        from synthesizer.emission_models.attenuation import Calzetti2000
+
+        curve = Calzetti2000(
+            slope=ParameterList([0.0, -0.2], label_modifier="slope%.1f"),
+            ampl=ParameterList([0.0, 1.0], label_modifier="ampl%.1f"),
+        )
+        expanded = self._attenuated(test_grid, curve).expand_models()
+
+        assert len(expanded.select("attenuated*")) == 4
+
+    def test_an_argument_and_a_model_parameter_multiply(self, test_grid):
+        """Test a curve argument and a model parameter are independent."""
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        curve = PowerLaw(
+            slope=ParameterList([-1.0, -0.5], label_modifier="slope%.1f")
+        )
+        expanded = self._attenuated(
+            test_grid,
+            curve,
+            tau_v=ParameterList([0.1, 1.0], label_modifier="tauv%.1f"),
+        ).expand_models()
+
+        assert sorted(
+            model.label for model in expanded.select("attenuated*")
+        ) == [
+            "attenuated_tauv0.1_slope-0.5",
+            "attenuated_tauv0.1_slope-1.0",
+            "attenuated_tauv1.0_slope-0.5",
+            "attenuated_tauv1.0_slope-1.0",
+        ]
+
+    def test_a_shared_declaration_couples_two_curves(self, test_grid):
+        """Test one declaration in two curves varies them in step."""
+        from synthesizer.emission_models import (
+            AttenuatedEmission,
+            StellarEmissionModel,
+        )
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        shared = ParameterList([-1.0, -0.5], label_modifier="slope%.1f")
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        first = AttenuatedEmission(
+            label="att1",
+            apply_to=incident,
+            emitter="stellar",
+            tau_v=0.5,
+            dust_curve=PowerLaw(slope=shared),
+        )
+        second = AttenuatedEmission(
+            label="att2",
+            apply_to=first,
+            emitter="stellar",
+            tau_v=0.5,
+            dust_curve=PowerLaw(slope=shared),
+        )
+        expanded = StellarEmissionModel(
+            label="total",
+            combine=(first, second),
+        ).expand_models()
+
+        # Two variants, not four, and the two curves in each agree
+        assert len(expanded.select("total*")) == 2
+        for suffix in ("slope-1.0", "slope-0.5"):
+            assert (
+                expanded[f"att1_{suffix}"].transformer.slope
+                == expanded[f"att2_{suffix}"].transformer.slope
+            )
+
+    def test_a_distribution_inside_a_transformer(self, test_grid):
+        """Test a distribution on a curve argument is realised and expanded."""
+        from synthesizer.emission_models.attenuation import PowerLaw
+        from synthesizer.emission_models.parameters import ParameterNormalDist
+
+        curve = PowerLaw(
+            slope=ParameterNormalDist(
+                -1.0,
+                0.2,
+                3,
+                seed=42,
+                label_modifier="slope%.2f",
+            )
+        )
+        expanded = self._attenuated(test_grid, curve).expand_models()
+
+        variants = expanded.select("attenuated*")
+
+        assert len(variants) == 3
+        assert len({model.transformer.slope for model in variants}) == 3
+
+    def test_variant_params_use_the_bare_name(self, test_grid):
+        """Test the recorded parameter is named as the user named it."""
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        curve = PowerLaw(
+            slope=ParameterList([-1.0, -0.5], label_modifier="slope%.1f")
+        )
+        expanded = self._attenuated(test_grid, curve).expand_models()
+
+        for model in expanded.select("attenuated*"):
+            assert set(model.variant_params) == {"slope"}
+            assert model.variant_params["slope"] == model.transformer.slope
+
+    def test_the_guard_names_the_argument(self, test_grid):
+        """Test generating from an unexpanded model says what is waiting."""
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        curve = PowerLaw(
+            slope=ParameterList([-1.0, -0.5], label_modifier="slope%.1f")
+        )
+        model = self._attenuated(test_grid, curve)
+
+        with pytest.raises(
+            exceptions.InconsistentArguments, match="transformer.slope"
+        ):
+            model._check_expanded()
+
+
+class TestDeclarationUnitChecks:
+    """Test unit checked arguments check the values a declaration holds.
+
+    A constructor argument which must carry units is checked when the object
+    is built, which a declaration cannot satisfy by itself since it holds the
+    values rather than being one. The check is applied to what it holds, so
+    declaring a variation does not buy a way past the unit checks.
+    """
+
+    def _curve(self, cent_lam):
+        """Return a Calzetti curve with a given central wavelength."""
+        from synthesizer.emission_models.attenuation import Calzetti2000
+
+        return Calzetti2000(cent_lam=cent_lam)
+
+    def test_values_are_converted(self, test_grid):
+        """Test values given in other units end up in the expected ones."""
+        from unyt import angstrom, um
+
+        from synthesizer.emission_models import (
+            AttenuatedEmission,
+            StellarEmissionModel,
+        )
+
+        curve = self._curve(
+            ParameterList(
+                [2000 * angstrom, 0.2175 * um],
+                labels=["lam2000", "lam2175"],
+            )
+        )
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        expanded = AttenuatedEmission(
+            label="attenuated",
+            apply_to=incident,
+            emitter="stellar",
+            tau_v=0.5,
+            dust_curve=curve,
+        ).expand_models()
+
+        variants = sorted(
+            expanded.select("attenuated*"), key=lambda m: m.label
+        )
+
+        assert [model.transformer.cent_lam for model in variants] == [
+            2000 * angstrom,
+            2175 * angstrom,
+        ]
+
+        # The labels still name what the user wrote, not what it converted to
+        assert [model.label for model in variants] == [
+            "attenuated_lam2000",
+            "attenuated_lam2175",
+        ]
+
+    def test_a_value_without_units_is_rejected(self):
+        """Test a bare number in a list is caught, not carried through."""
+        from unyt import angstrom
+
+        with pytest.raises(exceptions.MissingUnits, match="cent_lam"):
+            self._curve(
+                ParameterList([2000 * angstrom, 2175], labels=["a", "b"])
+            )
+
+    def test_incompatible_units_are_rejected(self):
+        """Test values in the wrong units are caught."""
+        from unyt import K
+
+        with pytest.raises(exceptions.IncorrectUnits, match="cent_lam"):
+            self._curve(ParameterList([2000 * K, 2175 * K], labels=["a", "b"]))
+
+    def test_a_distribution_is_checked_and_converted(self):
+        """Test a distribution's bounds are checked, and its samples carry."""
+        from unyt import angstrom, um
+
+        from synthesizer.emission_models.parameters import (
+            ParameterUniformDist,
+        )
+
+        curve = self._curve(
+            ParameterUniformDist(
+                0.2 * um,
+                0.25 * um,
+                3,
+                seed=1,
+                label_modifier="lam%.0f",
+            )
+        )
+
+        # The bounds were converted when the curve was built
+        assert curve.cent_lam.low == 2000 * angstrom
+        assert curve.cent_lam.high == 2500 * angstrom
+
+        # And the samples land between them, carrying the units
+        for value in curve.cent_lam.realise().values:
+            assert value.units == angstrom.units
+            assert 2000 * angstrom <= value <= 2500 * angstrom
+
+    def test_a_distribution_without_units_is_rejected(self):
+        """Test a distribution described by bare numbers is caught."""
+        from synthesizer.emission_models.parameters import (
+            ParameterUniformDist,
+        )
+
+        with pytest.raises(exceptions.MissingUnits, match="cent_lam"):
+            self._curve(
+                ParameterUniformDist(2000, 2500, 3, label_modifier="lam%.0f")
+            )
+
+    def test_a_log_space_distribution_needs_its_units_stating(self):
+        """Test a distribution in log10 space is caught without units.
+
+        Its mean and sigma are in log10 space, so they cannot say what units
+        the samples carry. Nothing is guessed: the units have to be stated.
+        """
+        from synthesizer.emission_models.parameters import (
+            ParameterLogNormalDist,
+        )
+
+        with pytest.raises(exceptions.MissingUnits, match="cent_lam"):
+            self._curve(
+                ParameterLogNormalDist(3.3, 0.1, 3, label_modifier="lam%.0f")
+            )
+
+    def test_a_log_space_distribution_works_with_units(self):
+        """Test stating the units is all a log space distribution needs."""
+        from unyt import angstrom
+
+        from synthesizer.emission_models.parameters import (
+            ParameterLogNormalDist,
+        )
+
+        curve = self._curve(
+            ParameterLogNormalDist(
+                3.3,
+                0.05,
+                3,
+                seed=1,
+                label_modifier="lam%.0f",
+                units=angstrom,
+            )
+        )
+
+        for value in curve.cent_lam.realise().values:
+            assert value.units == angstrom.units
+            assert 1000 * angstrom < value < 4000 * angstrom
+
+    def test_magnitudes_with_units_given_are_converted(self):
+        """Test magnitudes with units given are checked and converted."""
+        from unyt import angstrom, um
+
+        from synthesizer.emission_models.parameters import (
+            ParameterUniformDist,
+        )
+
+        curve = self._curve(
+            ParameterUniformDist(
+                0.2,
+                0.25,
+                3,
+                seed=1,
+                label_modifier="lam%.0f",
+                units=um,
+            )
+        )
+
+        # The check converted the units, and the bounds followed
+        assert curve.cent_lam.units == angstrom.units
+        assert curve.cent_lam.low == 2000.0
+        assert curve.cent_lam.high == 2500.0
+
+    def test_units_given_take_the_quantities_with_them(self):
+        """Test stated units win, with any quantities converted into them."""
+        from unyt import angstrom, um
+
+        from synthesizer.emission_models.parameters import (
+            ParameterUniformDist,
+        )
+
+        distribution = ParameterUniformDist(
+            0.2 * um,
+            0.25 * um,
+            3,
+            seed=1,
+            label_modifier="lam%.0f",
+            units=angstrom,
+        )
+
+        assert distribution.units == angstrom.units
+        assert distribution.low == 2000.0
+        assert distribution.high == 2500.0
+
+    def test_units_disagreeing_with_the_values_are_rejected(self):
+        """Test units which cannot describe the values are caught."""
+        from unyt import K, angstrom
+
+        from synthesizer.emission_models.parameters import (
+            ParameterUniformDist,
+        )
+
+        with pytest.raises(
+            exceptions.InconsistentArguments, match="does not agree"
+        ):
+            ParameterUniformDist(
+                2000 * angstrom,
+                2500 * angstrom,
+                3,
+                label_modifier="lam%.0f",
+                units=K,
+            )
+
+    def test_mixed_units_in_a_distribution_are_reconciled(self):
+        """Test a distribution can be described in compatible units."""
+        from unyt import angstrom, um
+
+        from synthesizer.emission_models.parameters import (
+            ParameterUniformDist,
+        )
+
+        distribution = ParameterUniformDist(
+            2000 * angstrom,
+            0.3 * um,
+            3,
+            seed=1,
+            label_modifier="lam%.0f",
+        )
+
+        for value in distribution.realise().values:
+            assert value.units == angstrom.units
+            assert 2000 * angstrom <= value <= 3000 * angstrom
+
+    def test_partial_units_in_a_distribution_are_rejected(self):
+        """Test a distribution half stated in units is caught.
+
+        Reading the bare value as being in the other one's units would be a
+        guess, so it is refused instead.
+        """
+        from unyt import angstrom
+
+        from synthesizer.emission_models.parameters import (
+            ParameterUniformDist,
+        )
+
+        with pytest.raises(
+            exceptions.InconsistentArguments, match="all carry units"
+        ):
+            ParameterUniformDist(
+                2000 * angstrom,
+                3000,
+                3,
+                label_modifier="lam%.0f",
+            )
+
+    def test_a_dimensionless_argument_is_untouched(self):
+        """Test an argument with no expected units keeps its declaration."""
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        declaration = ParameterList([-1.0, -0.5], label_modifier="slope%.1f")
+        curve = PowerLaw(slope=declaration)
+
+        assert curve.slope is declaration

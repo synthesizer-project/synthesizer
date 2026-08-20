@@ -43,9 +43,11 @@ Example usage::
 
 from __future__ import annotations
 
+import copy
 import inspect
 
 import numpy as np
+from unyt.exceptions import UnitConversionError
 
 from synthesizer import exceptions
 
@@ -383,6 +385,31 @@ class ParameterList:
                 "which is what anything a format string can't render needs."
             ) from None
 
+    def _convert_values(self, convert):
+        """Return this list with a check or conversion applied to its values.
+
+        A declaration can be passed to an argument whose units are checked
+        when the object is built, e.g. the central wavelength of a dust curve.
+        The check belongs on the values rather than on the declaration holding
+        them, so it is applied here.
+
+        The labels are left exactly as they were, so naming a variant after
+        the value the user wrote does not change because that value was
+        converted into different units.
+
+        Args:
+            convert (callable):
+                Called with each value, returning the value to keep.
+
+        Returns:
+            ParameterList:
+                A copy of this list holding the converted values.
+        """
+        converted = copy.copy(self)
+        converted.values = [convert(value) for value in self.values]
+
+        return converted
+
     def items(self):
         """Iterate over the values and the suffix each one produces.
 
@@ -455,9 +482,24 @@ class ParameterDistribution:
         label_modifier (str):
             A printf style format string used to construct the label suffix
             for each variant model.
+        units (unyt.Unit):
+            The units the sampled values carry, or None for a dimensionless
+            parameter.
     """
 
-    def __init__(self, n, seed=None, label_modifier=None, labels=None):
+    # The attributes describing this distribution which are in the same space
+    # as the values it samples, and can therefore be stated as quantities
+    # rather than as magnitudes
+    _value_attrs = ()
+
+    def __init__(
+        self,
+        n,
+        seed=None,
+        label_modifier=None,
+        labels=None,
+        units=None,
+    ):
         """Initialise the distribution.
 
         Args:
@@ -472,6 +514,10 @@ class ParameterDistribution:
             labels (list):
                 A name for each of the n samples. Mutually exclusive with
                 label_modifier.
+            units (unyt.Unit):
+                The units the sampled values carry. Pass this when the
+                parameter needs units, or state the distribution with
+                quantities and leave this alone.
 
         Raises:
             InconsistentArguments
@@ -499,6 +545,7 @@ class ParameterDistribution:
         self.seed = seed
         self.label_modifier = label_modifier
         self.labels = list(labels) if labels is not None else None
+        self.units = getattr(units, "units", units)
 
     def _sample(self, rng, n):
         """Sample n values from the distribution.
@@ -519,6 +566,92 @@ class ParameterDistribution:
             "ParameterUniformDist) or define _sample on your own subclass."
         )
 
+    def _adopt_units(self):
+        """Reduce the values describing this distribution to magnitudes.
+
+        A distribution can be stated either as magnitudes with the units given
+        separately, or as quantities carrying their own units, which is the
+        more natural thing to write in a codebase where everything else does.
+        Both are reduced to the same thing here: magnitudes, plus the units
+        the samples will carry. The generators strip units when they sample
+        anyway, so this is what sampling needs, and it leaves one
+        representation to reason about rather than two.
+
+        Called by each flavour once it has stored the values describing it.
+
+        Raises:
+            InconsistentArguments
+                If the values disagree with each other, or with the units the
+                distribution was given.
+        """
+        # Either every value states its units or none of them do. A mixture
+        # would mean guessing what the bare ones were measured in.
+        carried = {
+            attr: hasattr(getattr(self, attr), "units")
+            for attr in self._value_attrs
+        }
+        if len(set(carried.values())) > 1:
+            with_units = sorted(a for a, has in carried.items() if has)
+            without = sorted(a for a, has in carried.items() if not has)
+            raise exceptions.InconsistentArguments(
+                f"The values describing a {self.__class__.__name__} must "
+                "either all carry units or all be magnitudes with the units "
+                f"given by the units argument (got {with_units} with units "
+                f"and {without} without)."
+            )
+
+        for attr in self._value_attrs:
+            value = getattr(self, attr)
+
+            # A magnitude, which the units given (if any) describe
+            if not hasattr(value, "units"):
+                continue
+
+            # A quantity, so it states the units itself. The first one to do
+            # so sets them and the rest are measured against it.
+            if self.units is None:
+                self.units = value.units
+
+            try:
+                setattr(self, attr, float(value.to(self.units).value))
+            except UnitConversionError:
+                raise exceptions.InconsistentArguments(
+                    f"{attr} on a {self.__class__.__name__} is in "
+                    f"{value.units}, which does not agree with the "
+                    f"{self.units} the rest of the distribution is in."
+                ) from None
+
+    def _convert_values(self, convert):
+        """Return this distribution with a check applied to its units.
+
+        A distribution states the units of its samples once, so a check on the
+        values it will produce is a check on those units. Passing one of them
+        through the check both validates it and converts it, and the values
+        describing the distribution follow that conversion so the samples land
+        where they did before.
+
+        Args:
+            convert (callable):
+                Called with a value, returning the value to keep.
+
+        Returns:
+            ParameterDistribution:
+                A copy of this distribution in the checked units.
+        """
+        converted = copy.copy(self)
+
+        # One of the sampled values, checked and converted. A dimensionless
+        # distribution has no units to offer, which is where a distribution
+        # passed to an argument needing units is caught.
+        one = convert(1.0 if self.units is None else 1.0 * self.units)
+
+        converted.units = getattr(one, "units", None)
+        scaling = getattr(one, "value", one)
+        for attr in self._value_attrs:
+            setattr(converted, attr, getattr(self, attr) * scaling)
+
+        return converted
+
     def realise(self):
         """Sample the distribution and return the values as a ParameterList.
 
@@ -531,8 +664,14 @@ class ParameterDistribution:
                 The sampled values, ready to be expanded.
         """
         rng = np.random.default_rng(self.seed)
+        samples = self._sample(rng, self.n)
+
+        # The generators sample magnitudes, so put the units back on
+        if self.units is not None:
+            samples = [sample * self.units for sample in samples]
+
         return ParameterList(
-            self._sample(rng, self.n),
+            samples,
             label_modifier=self.label_modifier,
             labels=self.labels,
         )
@@ -545,7 +684,7 @@ class ParameterDistribution:
         """Return a string representation of the ParameterDistribution."""
         return (
             f"{self.__class__.__name__}(n={self.n}, seed={self.seed}, "
-            f"label_modifier='{self.label_modifier}')"
+            f"units={self.units}, label_modifier='{self.label_modifier}')"
         )
 
 
@@ -559,6 +698,9 @@ class ParameterUniformDist(ParameterDistribution):
             The upper bound of the distribution (exclusive).
     """
 
+    # low and high are in the same space as the sampled values
+    _value_attrs = ("low", "high")
+
     def __init__(
         self,
         low,
@@ -567,6 +709,7 @@ class ParameterUniformDist(ParameterDistribution):
         seed=None,
         label_modifier=None,
         labels=None,
+        units=None,
     ):
         """Initialise the uniform distribution.
 
@@ -583,6 +726,8 @@ class ParameterUniformDist(ParameterDistribution):
                 A printf style format string used to name each variant.
             labels (list):
                 A name for each sample, instead of a format string.
+            units (unyt.Unit):
+                The units the samples carry, if the bounds are magnitudes.
 
         Raises:
             InconsistentArguments
@@ -594,15 +739,21 @@ class ParameterUniformDist(ParameterDistribution):
             seed=seed,
             label_modifier=label_modifier,
             labels=labels,
+            units=units,
         )
-
-        if low >= high:
-            raise exceptions.InconsistentArguments(
-                f"low must be less than high (got low={low}, high={high})."
-            )
 
         self.low = low
         self.high = high
+
+        # Reduce the bounds to magnitudes before comparing them, so bounds
+        # stated in different units are compared in the same ones
+        self._adopt_units()
+
+        if self.low >= self.high:
+            raise exceptions.InconsistentArguments(
+                f"low must be less than high (got low={self.low}, "
+                f"high={self.high})."
+            )
 
     def _sample(self, rng, n):
         """Sample n values uniformly between low and high.
@@ -623,7 +774,7 @@ class ParameterUniformDist(ParameterDistribution):
         """Return a string representation of the ParameterUniformDist."""
         return (
             f"{self.__class__.__name__}(low={self.low}, high={self.high}, "
-            f"n={self.n}, seed={self.seed}, "
+            f"n={self.n}, seed={self.seed}, units={self.units}, "
             f"label_modifier='{self.label_modifier}')"
         )
 
@@ -674,6 +825,9 @@ class ParameterNormalDist(ParameterDistribution):
             The standard deviation of the distribution.
     """
 
+    # mean and sigma are in the same space as the sampled values
+    _value_attrs = ("mean", "sigma")
+
     def __init__(
         self,
         mean,
@@ -682,6 +836,7 @@ class ParameterNormalDist(ParameterDistribution):
         seed=None,
         label_modifier=None,
         labels=None,
+        units=None,
     ):
         """Initialise the normal distribution.
 
@@ -698,6 +853,8 @@ class ParameterNormalDist(ParameterDistribution):
                 A printf style format string used to name each variant.
             labels (list):
                 A name for each sample, instead of a format string.
+            units (unyt.Unit):
+                The units the samples carry, if mean and sigma are magnitudes.
 
         Raises:
             InconsistentArguments
@@ -709,15 +866,18 @@ class ParameterNormalDist(ParameterDistribution):
             seed=seed,
             label_modifier=label_modifier,
             labels=labels,
+            units=units,
         )
-
-        if sigma <= 0:
-            raise exceptions.InconsistentArguments(
-                f"sigma must be greater than zero (got sigma={sigma})."
-            )
 
         self.mean = mean
         self.sigma = sigma
+
+        self._adopt_units()
+
+        if self.sigma <= 0:
+            raise exceptions.InconsistentArguments(
+                f"sigma must be greater than zero (got sigma={self.sigma})."
+            )
 
     def _sample(self, rng, n):
         """Sample n values from the normal distribution.
@@ -739,7 +899,7 @@ class ParameterNormalDist(ParameterDistribution):
         return (
             f"{self.__class__.__name__}(mean={self.mean}, "
             f"sigma={self.sigma}, n={self.n}, seed={self.seed}, "
-            f"label_modifier='{self.label_modifier}')"
+            f"units={self.units}, label_modifier='{self.label_modifier}')"
         )
 
 
@@ -748,7 +908,14 @@ class ParameterLogNormalDist(ParameterNormalDist):
 
     Values are sampled from a normal distribution in log10 space, where mean
     and sigma are given in log10 space, and returned in linear space.
+
+    Since mean and sigma are in log10 space they cannot carry the units of a
+    sample. Give those with the units argument.
     """
+
+    # mean and sigma are in log10 space rather than in the space of the
+    # sampled values, so they are always magnitudes
+    _value_attrs = ()
 
     def _sample(self, rng, n):
         """Sample n values from the log normal distribution.
@@ -781,10 +948,15 @@ VARIATION_ATTRS = ("transformer", "generator")
 def find_variations(model):
     """Return the variation markers attached to a model.
 
-    A variation can be declared on a fixed parameter, or on the transformer or
-    generator the model uses, which are held on the model itself rather than
-    among its parameters. Both are reported here keyed by the name the
-    expansion should set, so it does not have to care which is which.
+    A variation can be declared in three places: on a fixed parameter, on the
+    transformer or generator the model uses, or on an argument of that
+    transformer or generator. The last of these is how the arguments of a dust
+    curve or a dust emission model are varied, e.g. the slope of a PowerLaw,
+    which belong to the curve rather than to the model.
+
+    All three are reported keyed by the name the expansion should set, so it
+    does not have to care which is which. An argument of a transformer or
+    generator is keyed by a dotted name, e.g. "transformer.slope".
 
     Args:
         model (EmissionModel):
@@ -803,8 +975,20 @@ def find_variations(model):
 
     for attr in VARIATION_ATTRS:
         value = getattr(model, f"_{attr}", None)
+
+        # The transformer or generator itself is varied
         if isinstance(value, VARIATION_TYPES):
             found[attr] = value
+            continue
+
+        # One of its arguments is varied. Every attribute is considered, not
+        # only the parameters it declares as required, so that arguments which
+        # are never looked up on the model (a reference wavelength, a flag)
+        # can be varied too.
+        if value is not None:
+            for name, arg in vars(value).items():
+                if isinstance(arg, VARIATION_TYPES):
+                    found[f"{attr}.{name}"] = arg
 
     return found
 
@@ -821,9 +1005,19 @@ def set_variation_value(model, name, value):
         value:
             The value this variant uses.
     """
+    # An argument of a transformer or a generator. The object is copied before
+    # the argument is set on it, because one transformer or generator can be
+    # shared by several models and setting the argument in place would change
+    # it for all of them.
+    if "." in name:
+        attr, arg = name.split(".", 1)
+        varied = copy.copy(getattr(model, f"_{attr}"))
+        setattr(varied, arg, value)
+        setattr(model, f"_{attr}", varied)
+
     # A transformer or a generator lives on the model itself; everything else
     # is a fixed parameter
-    if name in VARIATION_ATTRS:
+    elif name in VARIATION_ATTRS:
         setattr(model, f"_{name}", value)
     else:
         model.fixed_parameters[name] = value

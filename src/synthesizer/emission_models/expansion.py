@@ -350,7 +350,10 @@ def _expand_variation(root, designated, models, group, parameter_list):
         # variant a model belongs to is recoverable without parsing labels.
         # The base label is the label before any variation was expanded, which
         # is what groups a family of variants back together.
-        varied = {param: value for _label, param in group}
+        # An argument of a transformer or generator is reported under a
+        # dotted name, but the bare name is what the user asked for and is
+        # what they will look for here
+        varied = {param.split(".")[-1]: value for _label, param in group}
         for old_label, new_model in copies.items():
             old_model = root[old_label]
             new_model._variant_params = {
