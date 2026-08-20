@@ -8,6 +8,7 @@ expansion of a model tree into its variant models.
 import numpy as np
 import pytest
 import unyt
+from unyt import dimensionless
 
 from synthesizer import exceptions
 from synthesizer.emission_models.parameters import (
@@ -2885,3 +2886,247 @@ class TestVariantProvenanceInHDF5:
 
         assert "variant_base" not in attrs
         assert variant is None
+
+
+class TestPipelineWithVariants:
+    """Test a Pipeline handles an expanded model's labels.
+
+    A Pipeline drives its work by model label and writes its output keyed by
+    the same, so an expansion should be extra keys and nothing more. The
+    example script demonstrates this end to end during the docs build; this
+    keeps it in the test suite as well.
+    """
+
+    def test_photometry_is_written_for_every_variant(
+        self,
+        test_grid,
+        list_of_random_particle_galaxies,
+        uvj_instrument,
+        tmp_path,
+    ):
+        """Test every variant appears in the output, with its parameters."""
+        import h5py
+
+        from synthesizer.emission_models import PacmanEmission
+        from synthesizer.pipeline import Pipeline
+
+        model = PacmanEmission(
+            test_grid,
+            tau_v=ParameterList([0.1, 1.0], label_modifier="tauv%.1f"),
+            fesc=ParameterList([0.0, 0.5], label_modifier="fesc%.1f"),
+        ).expand_models()
+
+        # Only the emergent variants are wanted out the other side
+        model.save_spectra("emergent*")
+        variants = sorted(model.select("emergent*"), key=lambda m: m.label)
+        n_galaxies = len(list_of_random_particle_galaxies)
+
+        pipeline = Pipeline(model, nthreads=1, verbose=0)
+        pipeline.add_galaxies(list_of_random_particle_galaxies)
+        pipeline.get_photometry_luminosities(uvj_instrument)
+        pipeline.run()
+        pipeline.write(str(tmp_path / "out.hdf5"), verbose=0)
+
+        with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+            photometry = hdf["Galaxies/Stars/Photometry/Luminosities"]
+
+            # Four variants of the emergent emission, and nothing else
+            assert set(photometry.keys()) == {
+                model.label for model in variants
+            }
+
+            for variant in variants:
+                for filter_code in uvj_instrument.filters.filter_codes:
+                    lums = photometry[f"{variant.label}/{filter_code}"][:]
+                    assert lums.shape == (n_galaxies,)
+
+                # And the file says what each variant was made of
+                written = hdf[
+                    f"EmissionModel/{variant.label}/VariantParameters"
+                ].attrs
+                assert dict(written) == variant.variant_params
+
+
+class _SlopedTransformer:
+    """A stand in transformer holding a parameter of its own.
+
+    Defined here rather than reusing a dust curve because the point is a
+    transformer the machinery has never seen, holding an argument whose name
+    clashes with a model parameter.
+    """
+
+    def __init__(self, slope):
+        """Store the slope, which may be a declaration."""
+        self._required_params = ("slope",)
+        self.slope = slope
+
+    def _transform(self, emission, emitter, model, *args, **kwargs):
+        """Return the emission unchanged."""
+        return emission
+
+
+class TestVariationsOnUnknownObjects:
+    """Test declarations are found on any transformer, not just known ones.
+
+    find_variations looks at every attribute of a transformer or generator
+    rather than at the parameters it declares as required. That is deliberate:
+    it means an argument which is never looked up on the model can still be
+    varied, and it means a transformer written by a user works the same way as
+    one that ships with synthesizer. The cost is that any attribute holding a
+    declaration is treated as a variation, which these tests pin down.
+    """
+
+    def _varied(self, test_grid, **kwargs):
+        """Return an expanded model using the stand in transformer."""
+        from synthesizer.emission_models import StellarEmissionModel
+
+        incident = StellarEmissionModel(
+            label="incident",
+            grid=test_grid,
+            extract="incident",
+        )
+        return StellarEmissionModel(
+            label="scaled",
+            apply_to=incident,
+            emitter="stellar",
+            **kwargs,
+        ).expand_models()
+
+    def test_a_declaration_on_an_unknown_transformer_is_found(self, test_grid):
+        """Test a transformer synthesizer knows nothing about still expands."""
+        expanded = self._varied(
+            test_grid,
+            transformer=_SlopedTransformer(
+                slope=ParameterList([1.0, 2.0], label_modifier="curve%.0f")
+            ),
+        )
+
+        variants = sorted(expanded.select("scaled*"), key=lambda m: m.label)
+
+        assert [model.label for model in variants] == [
+            "scaled_curve1",
+            "scaled_curve2",
+        ]
+        assert [model.transformer.slope for model in variants] == [1.0, 2.0]
+
+    def test_a_clashing_name_keeps_both_parameters(self, test_grid):
+        """Test a model parameter and an argument of the same name coexist.
+
+        Both are recorded, the transformer's under its qualified name, so
+        neither is silently lost.
+        """
+        expanded = self._varied(
+            test_grid,
+            transformer=_SlopedTransformer(
+                slope=ParameterList([1.0, 2.0], label_modifier="curve%.0f")
+            ),
+            slope=ParameterList([-1.0, -0.5], label_modifier="model%.1f"),
+        )
+
+        variants = sorted(expanded.select("scaled*"), key=lambda m: m.label)
+
+        # Two independent axes, so four variants
+        assert len(variants) == 4
+
+        recorded = variants[0].variant_params
+        assert recorded == {"slope": -0.5, "transformer.slope": 1.0}
+
+    def test_no_clash_keeps_the_bare_name(self, test_grid):
+        """Test the qualified name is only used when it is needed."""
+        expanded = self._varied(
+            test_grid,
+            transformer=_SlopedTransformer(
+                slope=ParameterList([1.0, 2.0], label_modifier="curve%.0f")
+            ),
+        )
+
+        for model in expanded.select("scaled*"):
+            assert set(model.variant_params) == {"slope"}
+
+
+class TestUnseededDistributions:
+    """Test an unseeded distribution says its labels will not stay put.
+
+    The labels naming a distribution's variants are rendered from the sampled
+    values, so without a seed both the values and the labels change every run,
+    and with them the keys the emissions are stored under.
+    """
+
+    def test_no_seed_warns(self):
+        """Test a distribution with a format string and no seed warns."""
+        from synthesizer.emission_models.parameters import (
+            ParameterUniformDist,
+        )
+
+        with pytest.warns(RuntimeWarning, match="different values every run"):
+            ParameterUniformDist(0.1, 0.5, 3, label_modifier="tauv%.2f")
+
+    def test_a_seed_is_silent(self):
+        """Test passing a seed means no warning."""
+        import warnings
+
+        from synthesizer.emission_models.parameters import (
+            ParameterUniformDist,
+        )
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            ParameterUniformDist(
+                0.1, 0.5, 3, seed=42, label_modifier="tauv%.2f"
+            )
+
+    def test_explicit_labels_are_silent(self):
+        """Test named variants don't need a seed to keep their labels.
+
+        The values still change, but the labels do not depend on them, so
+        nothing about the stored emissions moves.
+        """
+        import warnings
+
+        from synthesizer.emission_models.parameters import (
+            ParameterUniformDist,
+        )
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            ParameterUniformDist(0.1, 0.5, 3, labels=["low", "mid", "high"])
+
+
+class TestCopiesShareNothingMutable:
+    """Test a copied model shares no mutable container with its original.
+
+    _copy_node is a shallow copy with an explicit list of containers to copy
+    independently. Anything mutable added to EmissionModel later would be
+    shared by default, and two variants quietly writing to one container is a
+    hard bug to find. This fails if that ever happens.
+    """
+
+    def test_no_container_is_shared(self, test_grid):
+        """Test every dict, list or set on a copy is the copy's own."""
+        from synthesizer.emission_models import BimodalPacmanEmission
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        model = BimodalPacmanEmission(
+            grid=test_grid,
+            dust_curve_ism=PowerLaw(slope=-0.7),
+            dust_curve_birth=PowerLaw(slope=-1.3),
+            age_pivot=7.0 * dimensionless,
+        )
+
+        for original in model._models.values():
+            copied = original._copy_node(label=original.label + "_copy")
+
+            for name, value in vars(original).items():
+                if not isinstance(value, (dict, list, set)):
+                    continue
+
+                # An empty container is a fresh one either way, and the tree
+                # wiring is rebuilt by unpack_model rather than copied
+                if name in ("_children", "_parents", "_models"):
+                    continue
+
+                assert getattr(copied, name) is not value, (
+                    f"{original.label} shares its {name} with its copy, so "
+                    "one variant writing to it would change the other. Copy "
+                    "it in _copy_node."
+                )

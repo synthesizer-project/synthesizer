@@ -50,6 +50,7 @@ import numpy as np
 from unyt.exceptions import UnitConversionError
 
 from synthesizer import exceptions
+from synthesizer.synth_warnings import warn
 
 
 class ParameterFunction:
@@ -539,6 +540,17 @@ class ParameterDistribution:
                 "(a format string applied to each sample) or labels (a name "
                 f"for each sample). Got label_modifier={label_modifier} and "
                 f"labels={labels}."
+            )
+
+        # A label modifier renders the sampled values, so without a seed the
+        # labels themselves change from run to run, and with them the keys the
+        # emissions are stored under and the group names in any file written
+        # from them
+        if seed is None and label_modifier is not None:
+            warn(
+                f"A {type(self).__name__} with no seed will sample different "
+                "values every run, so the labels naming its variants will "
+                "change too. Pass a seed for labels which stay put."
             )
 
         self.n = int(n)

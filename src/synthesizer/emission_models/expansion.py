@@ -29,6 +29,13 @@ The result is a single root model with the other root variants attached as
 related models. ModelQueue treats related models as extra roots and prunes to
 whatever feeds a saved output, so one get_spectra call generates every variant
 while computing the shared, unvaried models exactly once.
+
+Each pass around the loop re-derives the label keyed view of every model (see
+_gather), so the work is proportional to the number of variations times the
+number of models. That is cheap next to generating an emission: a
+BimodalPacmanEmission with three axes expanding into 100 variants and 522
+models takes ~8 ms. Somewhere far beyond that it would be worth expanding a
+variation without rebuilding the whole view each time.
 """
 
 from synthesizer import exceptions
@@ -350,15 +357,11 @@ def _expand_variation(root, designated, models, group, parameter_list):
         # variant a model belongs to is recoverable without parsing labels.
         # The base label is the label before any variation was expanded, which
         # is what groups a family of variants back together.
-        # An argument of a transformer or generator is reported under a
-        # dotted name, but the bare name is what the user asked for and is
-        # what they will look for here
-        varied = {param.split(".")[-1]: value for _label, param in group}
         for old_label, new_model in copies.items():
             old_model = root[old_label]
             new_model._variant_params = {
                 **old_model.variant_params,
-                **varied,
+                **_recorded_params(group, value, old_model.variant_params),
             }
             new_model._variant_base = (
                 old_model.variant_base
@@ -375,6 +378,40 @@ def _expand_variation(root, designated, models, group, parameter_list):
         designated = first_copies[designated_label]
 
     return designated, expanded
+
+
+def _recorded_params(group, value, already_recorded):
+    """Return the varied parameters to record on a variant, and their names.
+
+    An argument of a transformer or generator is found under a dotted name
+    ("transformer.slope"), but the bare name is what the user wrote and is what
+    they will look for, so that is what is recorded. The exception is a clash:
+    if a model parameter and a transformer argument in the same model share a
+    name, recording both under the bare name would lose one of them, so the
+    dotted name is kept for the one which needs qualifying.
+
+    Args:
+        group (list):
+            The (label, parameter) pairs sharing this declaration.
+        value:
+            The value this variant uses.
+        already_recorded (dict):
+            What earlier expansions recorded on this model.
+
+    Returns:
+        dict:
+            The parameters to record, keyed by the name to record them under.
+    """
+    recorded = {}
+    for _label, param in group:
+        bare = param.split(".")[-1]
+
+        # Keep the qualified name when the bare one is taken by a different
+        # parameter, so nothing is silently dropped
+        clashes = bare in already_recorded and already_recorded[bare] != value
+        recorded[param if clashes else bare] = value
+
+    return recorded
 
 
 def _copy_subgraph(root, labels, suffix):
