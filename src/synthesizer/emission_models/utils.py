@@ -137,6 +137,25 @@ def cache_model_params(
         )
 
 
+def get_emission_label(emission):
+    """Return the emission dictionary key for an emission.
+
+    Emissions can be referred to either by their label or by the
+    EmissionModel itself. This resolves either into the label used to key
+    the dictionaries of generated emissions. The label is resolved lazily
+    (rather than stored) so that relabelling a model is picked up.
+
+    Args:
+        emission (EmissionModel/str):
+            The emission, either an EmissionModel or a label.
+
+    Returns:
+        str:
+            The label of the emission.
+    """
+    return getattr(emission, "label", emission)
+
+
 def get_param(
     param,
     model,

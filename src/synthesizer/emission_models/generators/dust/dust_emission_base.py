@@ -17,10 +17,8 @@ from unyt import K, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
-from synthesizer.emission_models.generators.generator import (
-    Generator,
-    emission_label,
-)
+from synthesizer.emission_models.generators.generator import Generator
+from synthesizer.emission_models.utils import get_emission_label
 from synthesizer.units import accepts
 
 if TYPE_CHECKING:
@@ -226,8 +224,8 @@ class DustEmission(Generator):
         required = self._extract_emissions(emissions)
 
         # For ease, unpack the intrinsic and attenuated emissions
-        intrinsic = required[emission_label(self._intrinsic)]
-        attenuated = required[emission_label(self._attenuated)]
+        intrinsic = required[get_emission_label(self._intrinsic)]
+        attenuated = required[get_emission_label(self._attenuated)]
 
         # Calculate the bolometric luminosity absorbed by dust
         ldust = (
@@ -255,7 +253,7 @@ class DustEmission(Generator):
         required = self._extract_emissions(emissions)
 
         # For ease, unpack the scaler emission
-        scaler = required[emission_label(self._scaler)]
+        scaler = required[get_emission_label(self._scaler)]
 
         # Get the bolometric luminosity to scale by
         lscale = scaler.bolometric_luminosity

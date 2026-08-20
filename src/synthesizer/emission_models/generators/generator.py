@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 
 from synthesizer import exceptions
-from synthesizer.emission_models.utils import get_params
+from synthesizer.emission_models.utils import get_emission_label, get_params
 
 
 class Generator(ABC):
@@ -29,9 +29,10 @@ class Generator(ABC):
             available from an emitter or from the EmissionModel itself.
             If they are missing an exception will be raised.
         _required_emissions (tuple):
-            The name of any required emissions needed by the generator
-            when generating an emission. These should be available from
-            the emitter in either "spectra", "particle_spectra", "lines",
+            The required emissions needed by the generator when generating
+            an emission. These can be given either as labels or as the
+            EmissionModels themselves. They should be available from the
+            emitter in either "spectra", "particle_spectra", "lines",
             or "particle_lines" (which is dictated by the current method
             called). If they are missing an exception will be raised.
     """
@@ -46,11 +47,13 @@ class Generator(ABC):
                 available from an emitter or from the EmissionModel itself.
                 If they are missing an exception will be raised.
             required_emissions (tuple, optional):
-                The name of any required emissions needed by the generator
-                when generating an emission. These should be available from
-                the emitter in either "spectra", "particle_spectra", "lines",
-                or "particle_lines" (which is dictated by the current method
-                called). If they are missing an exception will be raised.
+                The required emissions needed by the generator when
+                generating an emission. These can be given either as labels
+                or as the EmissionModels themselves. They should be
+                available from the emitter in either "spectra",
+                "particle_spectra", "lines", or "particle_lines" (which is
+                dictated by the current method called). If they are missing
+                an exception will be raised.
         """
         # Store the parameters this generator will need
         self._required_params = required_params
@@ -172,20 +175,17 @@ class Generator(ABC):
 
         return params
 
-    def _extract_emissions(self, emission_dict, per_particle):
+    def _extract_emissions(self, emission_dict):
         """Extract the required emissions for the generation.
 
-        This method should look for the required emissions in
-        emitter.spectra, or emitter.particle_spectra (depending on whether the
-        model has per_particle set to True or False). If any of the required
-        emissions are missing an exception will be raised.
+        The returned dictionary is keyed by the label of each required
+        emission. If any of the required emissions are missing an exception
+        will be raised.
 
         Args:
             emission_dict (dict):
                 The dictionary containing all emissions generated so far. These
                 can be spectra, particle_spectra, lines, or particle_lines.
-            per_particle (bool):
-                Whether to extract from particle_spectra or spectra.
 
         Returns:
             dict
@@ -193,8 +193,9 @@ class Generator(ABC):
         """
         # Extract the emissions (Missing emissions will return None)
         emissions = {}
-        for emission_name in self._required_emissions:
-            emissions[emission_name] = emission_dict.get(emission_name, None)
+        for emission in self._required_emissions:
+            label = get_emission_label(emission)
+            emissions[label] = emission_dict.get(label, None)
 
         # Check if any of the required emissions are missing
         missing_emissions = [
