@@ -141,10 +141,21 @@ class Transformer(ABC):
         ]
         if len(missing_params) > 0:
             missing_strs = [f"'{s}'" for s in missing_params]
+
+            # Report everywhere we actually looked, including the fallback
+            # object if one was given
+            searched = [
+                "the EmissionModel",
+                "emission (Sed/LineCollection)",
+                "emitter (Stars/BlackHoles/Galaxy)",
+            ]
+            if obj is not None:
+                searched.append(f"the {obj.__class__.__name__} itself")
+            searched_str = f"{', '.join(searched[:-1])}, or {searched[-1]}"
+
             raise exceptions.MissingAttribute(
-                f"{', '.join(missing_strs)} can't be "
-                "found on the EmissionModel, emission (Sed/LineCollection), "
-                f"or emitter (Stars/BlackHoles/Galaxy) "
+                f"{', '.join(missing_strs)} can't be found on "
+                f"{searched_str} "
                 f"(required by {self.__class__.__name__})"
             )
 
