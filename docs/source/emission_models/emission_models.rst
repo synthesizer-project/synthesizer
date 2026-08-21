@@ -34,8 +34,8 @@ In the sections linked below we detail the basic functionality of an ``EmissionM
    model_usage
    premade_models/premade_models
    modify_models
-   model_variations
    custom_models
    attenuation/attenuation
    dust_emission
    combined_models
+   model_variations
