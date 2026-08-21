@@ -19,9 +19,9 @@
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include <Python.h>
-
 #include "../../extensions/numpy_init.h"
+
+#include <Python.h>
 
 /* Local includes */
 #include "../../extensions/property_funcs.h"
@@ -378,8 +378,8 @@ static PyObject *calculate_circular_overlap(PyObject *self, PyObject *args) {
   }
 
   /* Unpack the image and centre from the numpy array. */
-  const double *img = extract_data_double(np_img, "img");
-  const double *cent = extract_data_double(np_cent, "cent");
+  const double *img = extract_data<double>(np_img, "img");
+  const double *cent = extract_data<double>(np_cent, "cent");
 
   /* Is the aperture smaller than a pixel? */
   if (r < 0.5 * res) {

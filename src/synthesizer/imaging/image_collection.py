@@ -132,6 +132,21 @@ class ImageCollection(ImagingBase):
                 self.imgs[f] = img
                 self.filter_codes.append(f)
 
+    def cast(self, dtype):
+        """Cast all images in the collection to a new dtype in place.
+
+        Args:
+            dtype (np.dtype/type):
+                The dtype to cast to.
+
+        Returns:
+            ImageCollection:
+                This collection (to allow chaining).
+        """
+        for img in self.imgs.values():
+            img.cast(dtype)
+        return self
+
     @property
     def shape(self):
         """Return the shape of the image collection.

@@ -48,6 +48,7 @@ from synthesizer.utils.integrate import (
     trapezoid,
 )
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import resolve_out_dtype
 
 
 @accepts(new_lam=angstrom)
@@ -1177,7 +1178,7 @@ class FilterCollection:
         nu=None,
         nthreads=1,
         integration_method="trapz",
-        out_dtype=np.float32,
+        out_dtype=None,
     ):
         """Apply all filters to an array in a single batched integration.
 
@@ -1252,7 +1253,7 @@ class FilterCollection:
             ends,
             nthreads,
             integration_method,
-            out_dtype,
+            resolve_out_dtype(out_dtype),
         )
 
     def unify_with_grid(self, grid, loop_spectra=False):

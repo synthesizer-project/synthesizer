@@ -689,6 +689,7 @@ class TestPipelineOperations:
                 z=1.0,
                 igm=igm,
                 nthreads=7,
+                out_dtype=None,
             )
 
     def test_pipeline_get_observed_spectra_passes_pipeline_nthreads(
@@ -706,13 +707,19 @@ class TestPipelineOperations:
         galaxy.stars = None
         galaxy.black_holes = None
 
-        pipeline.get_observed_spectra(cosmo=cosmo, igm=None, write=False)
+        pipeline.get_observed_spectra(
+            cosmo=cosmo,
+            igm=None,
+            write=False,
+            out_dtype=np.float32,
+        )
         pipeline._get_observed_spectra(galaxy)
 
         galaxy.get_observed_spectra.assert_called_once_with(
             cosmo=cosmo,
             igm=None,
             nthreads=5,
+            out_dtype=np.float32,
         )
 
     def test_run_bare_pipeline(

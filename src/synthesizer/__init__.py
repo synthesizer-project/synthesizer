@@ -40,6 +40,10 @@ from synthesizer.grid import Grid
 from synthesizer.instruments import filters
 from synthesizer.utils import art, integrate, plt, stats, util_funcs
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import (
+    get_default_out_dtype,
+    set_default_out_dtype,
+)
 
 # Define the __all__ variable to control what is imported with
 # 'from synthesizer import *'
@@ -56,6 +60,8 @@ __all__ = [
     "check_openmp",
     "check_atomic_timing",
     "timed",
+    "get_default_out_dtype",
+    "set_default_out_dtype",
     "filters",
     "LineCollection",
     "__version__",

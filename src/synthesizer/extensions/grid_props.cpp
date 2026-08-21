@@ -1,23 +1,23 @@
 
 /* Standard includes */
-#include <stdlib.h>
-
 #include <array>
 #include <iostream>
 #include <ostream>
+#include <stdlib.h>
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include <Python.h>
-
 #include "numpy_init.h"
+
+#include <Python.h>
 
 /* Local includes */
 #include "cpp_to_python.h"
 #include "grid_props.h"
 #include "index_utils.h"
 #include "property_funcs.h"
+#include "python_to_cpp.h"
 #include "timers.h"
 
 /**
@@ -69,6 +69,52 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
              "increased if needed.)",
              ndim, MAX_GRID_NDIM - 1);
     PyErr_SetString(PyExc_ValueError, error_msg);
+    return;
+  }
+
+  /* Validate that all present floating-point inputs are contiguous and share
+   * one supported dtype family before any hot kernels use raw pointers. */
+  PyArrayObject *float_arrays[MAX_GRID_NDIM + 3] = {NULL};
+  const char *float_names[MAX_GRID_NDIM + 3] = {NULL};
+  int float_count = 0;
+
+  if (np_spectra_ != NULL &&
+      reinterpret_cast<PyObject *>(np_spectra_) != Py_None) {
+    float_arrays[float_count] = np_spectra_;
+    float_names[float_count] = "grid_spectra";
+    float_count++;
+  }
+
+  for (int idim = 0; idim < ndim; idim++) {
+    PyArrayObject *np_axis_arr =
+        (PyArrayObject *)PyTuple_GetItem(axes_tuple, idim);
+    if (np_axis_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError,
+                      "[GridProps::GridProps]: Failed to extract axis array.");
+      return;
+    }
+
+    float_arrays[float_count] = np_axis_arr;
+    float_names[float_count] = "grid axis";
+    float_count++;
+  }
+
+  if (np_lam_ != NULL && reinterpret_cast<PyObject *>(np_lam_) != Py_None) {
+    float_arrays[float_count] = np_lam_;
+    float_names[float_count] = "lam";
+    float_count++;
+  }
+
+  if (np_grid_weights_ != NULL &&
+      reinterpret_cast<PyObject *>(np_grid_weights_) != Py_None) {
+    float_arrays[float_count] = np_grid_weights_;
+    float_names[float_count] = "grid_weights";
+    float_count++;
+  }
+
+  if (float_count > 0 &&
+      !is_matching_float_dtypes(float_arrays, float_names, float_count,
+                                &float_typenum_)) {
     return;
   }
 
@@ -194,145 +240,6 @@ std::array<int, MAX_GRID_NDIM + 1> GridProps::unravel_spectra_index(
 }
 
 /**
- * @brief Get the spectra array.
- *
- * @return The spectra array.
- */
-double *GridProps::get_spectra() const {
-  return static_cast<double *>(PyArray_DATA(np_spectra_));
-}
-
-/**
- * @brief Get the value of the spectra at a specific grid index and wavelength
- * index.
- *
- * @param grid_ind: The grid index.
- * @param ilam: The wavelength index.
- * @return The value at the specified grid index and wavelength index.
- */
-double GridProps::get_spectra_at(int grid_ind, int ilam) const {
-  if (grid_ind < 0 || grid_ind >= size) {
-    char error_msg[256];
-    snprintf(error_msg, sizeof(error_msg),
-             "[GridProps::get_spectra_at]: Grid index (%d) out of bounds. "
-             "Valid range is [0, %d).",
-             grid_ind, size);
-    PyErr_SetString(PyExc_IndexError, error_msg);
-    return 0.0;
-  }
-  if (ilam < 0 || ilam >= nlam) {
-    char error_msg[256];
-    snprintf(
-        error_msg, sizeof(error_msg),
-        "[GridProps::get_spectra_at]: Wavelength index (%d) out of bounds. "
-        "Valid range is [0, %d).",
-        ilam, nlam);
-    PyErr_SetString(PyExc_IndexError, error_msg);
-    return 0.0;
-  }
-
-  /* Convert the flat (ravelled) grid index to a multi-dimensional index. */
-  std::array<int, MAX_GRID_NDIM> unraveled_ind = unravel_grid_index(grid_ind);
-
-  /* Get the ravelled spectra index for the given multi-dimensional index
-   * and wavelength index. */
-  int spectra_index = ravel_spectra_index(unraveled_ind, ilam);
-
-  /* Return the value at the spectra index. */
-  return get_double_at(np_spectra_, spectra_index, "spectra");
-}
-
-/**
- * @brief Get the wavelength array.
- *
- * @return The wavelength array.
- */
-double *GridProps::get_lam() const {
-  return static_cast<double *>(PyArray_DATA(np_lam_));
-}
-
-/**
- * @brief Get an axis as an array.
- *
- * @return The axis array for the given dimension.
- */
-double *GridProps::get_axis(int idim) const {
-  if (idim < 0 || idim >= ndim) {
-    PyErr_SetString(PyExc_IndexError,
-                    "[GridProps::get_axis]: Axis index out of bounds.");
-    return NULL;
-  }
-
-  PyArrayObject *np_axis_arr =
-      (PyArrayObject *)PyTuple_GetItem(axes_tuple_, idim);
-  if (np_axis_arr == NULL) {
-    PyErr_SetString(PyExc_ValueError,
-                    "[GridProps::get_axis]: Failed to extract axis array.");
-    return NULL;
-  }
-
-  return static_cast<double *>(PyArray_DATA(np_axis_arr));
-}
-
-/**
- * @brief Get all axes as an array of pointers.
- *
- * @return An array of pointers to the axes arrays.
- */
-std::array<double *, MAX_GRID_NDIM> GridProps::get_all_axes() const {
-  std::array<double *, MAX_GRID_NDIM> axes;
-  for (int idim = 0; idim < ndim; idim++) {
-    double *axis = get_axis(idim);
-    if (axis == NULL) {
-      PyErr_SetString(PyExc_ValueError,
-                      "[GridProps::get_all_axes]: Axis retrieval failed.");
-      return {};
-    }
-    axes[idim] = axis;
-  }
-  return axes;
-}
-
-/**
- * @brief Get the value of an axis at a specific index.
- *
- * @param idim: The dimension index.
- * @param ind: The index in the axis.
- * @return The value at the specified index in the axis.
- */
-double GridProps::get_axis_at(int idim, int ind) const {
-  char fallback_name[64];
-  fallback_name[0] = '\0';
-
-  if (idim >= 0 && idim < ndim && !axis_names_[idim].empty()) {
-    snprintf(fallback_name, sizeof(fallback_name), "%s",
-             axis_names_[idim].c_str());
-  }
-
-  if (fallback_name[0] == '\0') {
-    snprintf(fallback_name, sizeof(fallback_name), "axis %d", idim);
-  }
-
-  const char *array_name = fallback_name;
-
-  if (idim < 0 || idim >= ndim) {
-    PyErr_SetString(PyExc_IndexError,
-                    "[GridProps::get_axis_at]: Axis index out of bounds.");
-    return -1.0;
-  }
-
-  PyArrayObject *np_axis_arr =
-      (PyArrayObject *)PyTuple_GetItem(axes_tuple_, idim);
-  if (np_axis_arr == NULL) {
-    PyErr_SetString(PyExc_ValueError,
-                    "[GridProps::get_axis_at]: Failed to extract axis array.");
-    return -1.0;
-  }
-
-  return get_double_at(np_axis_arr, ind, array_name);
-}
-
-/**
  * @brief Check if grid weights are provided.
  *
  * @return True if grid weights are provided, false otherwise.
@@ -340,39 +247,6 @@ double GridProps::get_axis_at(int idim, int ind) const {
 bool GridProps::has_grid_weights() const {
   return np_grid_weights_ != NULL &&
          reinterpret_cast<PyObject *>(np_grid_weights_) != Py_None;
-}
-
-/**
- * @brief Get the grid weights array.
- *
- * If no grid weights have been provided then an empty array is returned ready
- * to be filled.
- *
- * @return The grid weights array.
- */
-double *GridProps::get_grid_weights() {
-  /* If we already have grid weights, return them. */
-  if (has_grid_weights()) {
-    grid_weights_ = static_cast<double *>(PyArray_DATA(np_grid_weights_));
-    need_grid_weights_ = false;  // We don't need to populate them.
-    return grid_weights_;
-  }
-
-  /* If we don't have grid weights, allocate a new numpy array for filling. */
-  npy_intp np_dims_weights[MAX_GRID_NDIM];
-  for (int i = 0; i < ndim; i++) {
-    np_dims_weights[i] = dims[i];
-  }
-  np_grid_weights_ =
-      (PyArrayObject *)PyArray_ZEROS(ndim, np_dims_weights, NPY_DOUBLE, 0);
-  grid_weights_ = static_cast<double *>(PyArray_DATA(np_grid_weights_));
-  RETURN_IF_PYERR();
-
-  /* Flag that we need to populate the grid weights. */
-  need_grid_weights_ = true;
-  owns_grid_weights_ = true;
-
-  return grid_weights_;
 }
 
 /**
@@ -396,24 +270,6 @@ PyArrayObject *GridProps::get_np_grid_weights() const {
     Py_INCREF(reinterpret_cast<PyObject *>(np_grid_weights_));
   }
   return np_grid_weights_;
-}
-
-/**
- * @brief Get the grid weight at a specific index.
- *
- * @param ind: The index in the grid weights array.
- * @return The grid weight at the specified index.
- */
-double GridProps::get_grid_weight_at(int ind) const {
-  if (!has_grid_weights() && grid_weights_ == NULL) {
-    PyErr_SetString(
-        PyExc_ValueError,
-        "[GridProps::get_grid_weight_at]: "
-        "Grid weights have not been allocated, populated or provided.");
-    return 0.0;
-  }
-
-  return grid_weights_[ind];
 }
 
 /**
@@ -451,3 +307,10 @@ bool GridProps::need_grid_weights() const {
 
   return need_grid_weights_;
 }
+
+/**
+ * @brief Get the shared floating-point dtype used by the grid arrays.
+ *
+ * @return The resolved NumPy typenum, or -1 if no float arrays were provided.
+ */
+int GridProps::get_float_typenum() const { return float_typenum_; }

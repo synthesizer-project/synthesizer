@@ -1375,3 +1375,55 @@ class TestGridInterpolation:
         assert np.allclose(
             sed_exact.lnu[0].value, sed_point.lnu.value, rtol=1e-5
         )
+
+    @pytest.mark.parametrize("method", ["cic", "ngp"])
+    @pytest.mark.parametrize("out_dtype", [np.float32, np.float64])
+    def test_grid_interpolation_out_dtype(self, test_grid, method, out_dtype):
+        """Test the interpolation honours the requested output dtype."""
+        if not test_grid.has_spectra:
+            pytest.skip("Grid has no spectra")
+
+        coords = {}
+        for axis in test_grid.axes:
+            vals = getattr(test_grid, axis)
+            mid_val = vals[len(vals) // 2]
+            coords[axis] = np.array([mid_val.value]) * mid_val.units
+
+        res = test_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident",
+            method=method,
+            out_dtype=out_dtype,
+            **coords,
+        )
+
+        assert res["spectra"].lnu.dtype == np.dtype(out_dtype)
+
+    @pytest.mark.parametrize("method", ["cic", "ngp"])
+    def test_grid_interpolation_float32_grid(self, test_grid, method):
+        """Test interpolating a float32 grid agrees with the float64 grid."""
+        if not test_grid.has_spectra:
+            pytest.skip("Grid has no spectra")
+
+        f32_grid = test_grid.convert_precision(np.float32)
+
+        coords = {}
+        for axis in test_grid.axes:
+            vals = getattr(test_grid, axis)
+            mid_val = vals[len(vals) // 2]
+            coords[axis] = np.array([mid_val.value]) * mid_val.units
+
+        res_f64 = test_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident", method=method, **coords
+        )
+        res_f32 = f32_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident", method=method, **coords
+        )
+
+        # The output dtype is controlled by out_dtype, not the grid dtype.
+        assert res_f32["spectra"].lnu.dtype == np.float64
+
+        assert np.allclose(
+            res_f32["spectra"].lnu.value,
+            res_f64["spectra"].lnu.value,
+            rtol=1e-5,
+        )

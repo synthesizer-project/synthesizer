@@ -372,6 +372,7 @@ def scale_array(
     use_row_scaling_kernel = (
         isinstance(scaling, np.ndarray)
         and array.ndim == 2
+        and array.flags.c_contiguous
         and scaling_ndim == 1
         and scaling.shape[0] == array.shape[0]
         and (
@@ -396,6 +397,7 @@ def scale_array(
     # kernel after materialising the repeated row factor once.
     if (
         array.ndim == 2
+        and array.flags.c_contiguous
         and np.isscalar(scaling)
         and (
             mask is None
@@ -416,7 +418,7 @@ def scale_array(
     ):
         # The kernel expects a per-row vector, so for masked scalar scaling we
         # materialise the obvious repeated row factor once.
-        scaling_arr = np.empty(array.shape[0], dtype=float)
+        scaling_arr = np.empty(array.shape[0], dtype=array.dtype)
         scaling_arr.fill(scaling)
         return scale_spectra_2d(
             array, scaling_arr, mask, lam_mask, nthreads, out

@@ -6,12 +6,11 @@ import inspect
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.utils import (
     depluralize,
-    ensure_array_c_compatible_double,
-    get_attr_c_compatible_double,
     pluralize,
 )
 
@@ -137,6 +136,61 @@ def cache_model_params(
         )
 
 
+def _finalize_param_value(
+    value,
+    param,
+    model,
+    emission,
+    emitter,
+    obj,
+    preserve_units,
+):
+    """Finalise a resolved parameter value before returning it.
+
+    ParameterFunctions are called to produce the concrete value, plain
+    values are cached (when there is a model and emitter to cache against),
+    and units are stripped unless preserve_units was requested.
+
+    Args:
+        value (object):
+            The resolved parameter value or ParameterFunction.
+        param (str):
+            The parameter name (used for caching).
+        model (EmissionModel):
+            The model object.
+        emission (Sed/LineCollection):
+            The emission object.
+        emitter (Stars/Gas/Galaxy):
+            The emitter object.
+        obj (object):
+            An optional additional object parameters were searched on.
+        preserve_units (bool):
+            If False, strip units from unyt values before returning.
+
+    Returns:
+        The finalised parameter value.
+    """
+    if isinstance(value, ParameterFunction):
+        value = value(
+            model,
+            emission,
+            emitter,
+            obj,
+            preserve_units=preserve_units,
+        )
+    elif model is not None and emitter is not None:
+        # Only cache plain values when we are in a cacheable context
+        cache_param(
+            param=param,
+            emitter=emitter,
+            model_label=model.label,
+            value=value,
+        )
+    if not preserve_units and isinstance(value, (unyt_array, unyt_quantity)):
+        value = value.value
+    return value
+
+
 def get_param(
     param,
     model,
@@ -205,41 +259,19 @@ def get_param(
 
     # Check the model's fixed parameters first
     if model is not None and param in model.fixed_parameters:
-        if not isinstance(
-            model.fixed_parameters[param], str
-        ) and not isinstance(
-            model.fixed_parameters[param],
-            ParameterFunction,
-        ):
-            value = model.fixed_parameters[param]
-            if not preserve_units:
-                value = ensure_array_c_compatible_double(value)
-        else:
-            value = model.fixed_parameters[param]
+        value = model.fixed_parameters[param]
 
     # Check the emission next
     elif emission is not None and hasattr(emission, param):
-        value = (
-            getattr(emission, param)
-            if preserve_units
-            else get_attr_c_compatible_double(emission, param)
-        )
+        value = getattr(emission, param)
 
     # Check the emitter
     elif emitter is not None and hasattr(emitter, param):
-        value = (
-            getattr(emitter, param)
-            if preserve_units
-            else get_attr_c_compatible_double(emitter, param)
-        )
+        value = getattr(emitter, param)
 
     # Finally, if we have an additional object, check that
     elif obj is not None and hasattr(obj, param):
-        value = (
-            getattr(obj, param)
-            if preserve_units
-            else get_attr_c_compatible_double(obj, param)
-        )
+        value = getattr(obj, param)
 
     # Do we need to recursively look for the parameter? (We know we're only
     # looking on the emitter at this point)
@@ -265,22 +297,12 @@ def get_param(
             _visited=new_visited,
         )
 
-    # If we found a ParameterFunction, call it to get the value
-    elif value is not None and isinstance(value, ParameterFunction):
-        return value(model, emission, emitter, obj)
-
-    # If we found a value, return it
+    # If we found a value (or a ParameterFunction to produce one), finalise
+    # and return it
     elif value is not None:
-        # Only cache if we are in a cacheable context (have a model
-        # and emitter)
-        if model is not None and emitter is not None:
-            cache_param(
-                param=param,
-                emitter=emitter,
-                model_label=model.label,
-                value=value,
-            )
-        return value
+        return _finalize_param_value(
+            value, param, model, emission, emitter, obj, preserve_units
+        )
 
     # If we were finding a logged parameter but failed, try the non-logged
     # version and log it
@@ -340,18 +362,12 @@ def get_param(
     if value is None and default is not _NO_DEFAULT:
         value = default
 
-    # If we found a value, return it
+    # If we found a value (or a ParameterFunction to produce one), finalise
+    # and return it
     if value is not None:
-        # Only cache if we are in a cacheable context (have a model
-        # and emitter)
-        if model is not None and emitter is not None:
-            cache_param(
-                param=param,
-                emitter=emitter,
-                model_label=model.label,
-                value=value,
-            )
-        return value
+        return _finalize_param_value(
+            value, param, model, emission, emitter, obj, preserve_units
+        )
 
     # Otherwise raise an exception
     else:
@@ -516,7 +532,14 @@ class ParameterFunction:
                     "of the ParameterFunction."
                 )
 
-    def __call__(self, model, emission, emitter, obj=None):
+    def __call__(
+        self,
+        model,
+        emission,
+        emitter,
+        obj=None,
+        preserve_units=False,
+    ):
         """Call the wrapped function with parameters extracted from objects.
 
         This will extract the required parameters from the model, emission,
@@ -532,6 +555,8 @@ class ParameterFunction:
                 The emitter object.
             obj (object, optional):
                 An optional additional object to look for parameters on last.
+            preserve_units (bool, optional):
+                If True, preserve units while resolving function arguments.
 
         Returns:
             value:
@@ -546,6 +571,7 @@ class ParameterFunction:
                 emission,
                 emitter,
                 obj,
+                preserve_units=preserve_units,
             )
 
         # Call the function with the extracted parameters

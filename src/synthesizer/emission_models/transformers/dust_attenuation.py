@@ -266,8 +266,14 @@ class AttenuationLaw(Transformer):
         """
         # Extract the required parameters, falling back to the values the
         # curve itself was constructed with (obj=self) if the model, emission
-        # and emitter say nothing about them
-        params = self._extract_params(model, emission, emitter, obj=self)
+        # and emitter say nothing about them.
+        params = self._extract_params(
+            model,
+            emission,
+            emitter,
+            obj=self,
+            preserve_units=True,
+        )
 
         # Ensure we aren't trying to use a wavelength mask
         if lam_mask is not None:
@@ -1584,6 +1590,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                 valid,
                 None,
                 False,
+                np.float32,
                 (dtg_axis_name,),
             )
 
