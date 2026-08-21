@@ -32,9 +32,11 @@ while computing the shared, unvaried models exactly once.
 
 Each pass around the loop re-derives the label keyed view of every model (see
 _gather), so the work is proportional to the number of variations times the
-number of models. That is cheap next to generating an emission: a
-BimodalPacmanEmission with three axes expanding into 100 variants and 522
-models takes ~8 ms.
+number of models: ~8 ms for 100 variants in 522 models, ~53 s for 20,000
+variants in 50,501. It is paid once whatever follows, so it is cheap next to
+generating those variants for every emitter in a sample. What scales with the
+model count and does not go away is memory: every model holds an emission
+while the tree is being generated.
 """
 
 from synthesizer import exceptions

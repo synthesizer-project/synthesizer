@@ -1482,6 +1482,16 @@ def _fit(
             min(measured.height, _MAX_AUTO_SIZE[1] * 72.0) / 72.0,
         )
 
+    # A network too big to fit even the largest figure has to shrink its labels
+    # past the readable floor. Growing the figure instead has no limit, and an
+    # image beyond about 65,000 pixels on a side cannot be saved at all, so an
+    # enormous network is drawn small rather than not drawn.
+    if (
+        measured.width > _MAX_AUTO_SIZE[0] * 72.0
+        or measured.height > _MAX_AUTO_SIZE[1] * 72.0
+    ):
+        min_fontsize = 0.0
+
     # Shrink the labels until the network fits, but never past the point where
     # they stop being readable. The layout scales with the font size, so one
     # pass gets close and a couple more clean up the difference.
@@ -1514,12 +1524,19 @@ def _fit(
     # A figure size which was asked for is also grown if the network cannot fit
     # inside it with readable labels, since a plot too small to read is no use
     # whatever size it was asked to be.
+    # The growth is bounded by the same maximum, for the same reason: a figure
+    # which cannot be saved is no use. A figure size which asks for more than
+    # the maximum is honoured, it is only the automatic growth which stops.
+    grown = (
+        min(measured.width / 72.0, _MAX_AUTO_SIZE[0]),
+        min(measured.height / 72.0, _MAX_AUTO_SIZE[1]),
+    )
     if auto_size:
-        figsize = (measured.width / 72.0, measured.height / 72.0)
+        figsize = grown
     else:
         figsize = (
-            max(figsize[0], measured.width / 72.0),
-            max(figsize[1], measured.height / 72.0),
+            max(figsize[0], grown[0]),
+            max(figsize[1], grown[1]),
         )
 
     width_pts = figsize[0] * 72.0

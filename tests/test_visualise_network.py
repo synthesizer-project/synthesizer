@@ -1800,3 +1800,60 @@ class TestLegendWidthMeasurement:
                 assert (
                     min(first.x1, second.x1) - max(first.x0, second.x0) <= 1.0
                 )
+
+
+class TestFigureSizeIsBounded:
+    """Test an enormous network shrinks its labels rather than growing.
+
+    A network is normally drawn at the font size asked for, growing the figure
+    to fit it, so a big diagram stays as readable as a small one. That cannot
+    go on forever: a figure beyond about 65,000 pixels on a side cannot be
+    saved at all, so past the maximum size the labels shrink instead, however
+    unreadable that leaves them.
+    """
+
+    def test_a_huge_network_stops_growing(self, test_grid):
+        """Test the figure stops at the maximum instead of growing past it."""
+        from synthesizer.emission_models import PacmanEmission
+        from synthesizer.emission_models.parameters import ParameterList
+        from synthesizer.emission_models.visualise_network import (
+            _MAX_AUTO_SIZE,
+        )
+
+        model = PacmanEmission(
+            test_grid,
+            tau_v=ParameterList(
+                [0.05 * i for i in range(1, 41)],
+                label_modifier="tauv%.2f",
+            ),
+        ).expand_models()
+
+        fig, ax = model.plot_emission_graph(show=False, show_variants=True)
+
+        width, height = fig.get_size_inches()
+        assert width <= _MAX_AUTO_SIZE[0] + 1e-6
+        assert height <= _MAX_AUTO_SIZE[1] + 1e-6
+
+        # It shrank the labels to get there, and it can be drawn
+        assert ax.texts[0].get_fontsize() < 10.0
+        fig.canvas.draw()
+
+    def test_the_readable_floor_gives_way_to_the_maximum(
+        self, monkeypatch, pacman_emission_model
+    ):
+        """Test the labels go below the floor when the figure cannot grow.
+
+        The maximum is shrunk here rather than building a network big enough to
+        need the real one, which would take minutes to lay out.
+        """
+        from synthesizer.emission_models import visualise_network
+
+        monkeypatch.setattr(visualise_network, "_MAX_AUTO_SIZE", (2.0, 1.5))
+
+        fig, ax = pacman_emission_model.plot_emission_graph(
+            show=False,
+            min_fontsize=6.0,
+        )
+
+        assert fig.get_size_inches()[0] <= 2.0 + 1e-6
+        assert ax.texts[0].get_fontsize() < 6.0
