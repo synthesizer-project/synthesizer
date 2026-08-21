@@ -2998,19 +2998,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         return lines, particle_lines
 
-    def add_label_prefix(self, prefix):
-        """Re-labels spectra by adding a prefix.
-
-        This will relabel all spectra in the model by adding a prefix.
-
-        Args:
-            prefix (str):
-                The prefix to use when relabelling.
-        """
-        self._relabel_models(
-            {label: f"{prefix}_{label}" for label in self._models}
-        )
-
     def _get_downstream_labels(self, label):
         """Get the label of a model and the labels of all its dependents.
 
@@ -3145,6 +3132,19 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Unpack now we're done to rebuild the label keyed containers
         self.unpack_model()
+
+    def add_label_prefix(self, prefix):
+        """Re-labels spectra by adding a prefix.
+
+        This will relabel all spectra in the model by adding a prefix.
+
+        Args:
+            prefix (str):
+                The prefix to use when relabelling.
+        """
+        self._relabel_models(
+            {label: f"{prefix}_{label}" for label in self._models}
+        )
 
     def add_label_suffix(self, suffix):
         """Re-label all models in the tree by adding a suffix.

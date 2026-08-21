@@ -257,6 +257,12 @@ _MIN_LEGEND_FONTSIZE = 8.0
 # The prefix used for the placeholders which reserve routing columns
 _ROUTE_PREFIX = "\x00route\x00"
 
+# What one trial layout costs: where everything sits, and the room it needs
+_Measured = namedtuple(
+    "_Measured",
+    ("positions", "sizes", "routes", "width", "height", "legend_height"),
+)
+
 
 def _import_networkx():
     """Import networkx, with a helpful error if it isn't installed.
@@ -497,6 +503,325 @@ def _build_graph(model_tree, root=None, show_variants=False):
     return graph
 
 
+def _swatch(
+    facecolor,
+    edgecolor,
+    label,
+    linestyle="solid",
+    hatch=None,
+    shape="pill",
+    stacked=False,
+):
+    """Return a legend swatch drawn as a small box.
+
+    Args:
+        facecolor (str): The colour to fill the swatch with.
+        edgecolor (str): The colour to outline the swatch with.
+        label (str): The legend label.
+        linestyle (str): The outline style.
+        hatch (str): An optional hatch pattern.
+        shape (str):
+            The box shape, matching the shapes used for the operations.
+        stacked (bool):
+            Whether to draw the swatch as a stack of boxes, as a per particle
+            model is drawn.
+
+    Returns:
+        matplotlib.patches.FancyBboxPatch:
+            The swatch.
+    """
+    swatch = mpatches.FancyBboxPatch(
+        (0.1, 0.1),
+        width=0.5,
+        height=0.1,
+        facecolor=facecolor,
+        edgecolor=edgecolor,
+        linewidth=1.1,
+        label=label,
+        linestyle=linestyle,
+        hatch=hatch,
+        boxstyle="square,pad=0",
+    )
+
+    # Remembered for the legend handler, which rebuilds the box at the swatch's
+    # own size to keep its shape
+    swatch._shape = shape
+    swatch._stacked = stacked
+
+    return swatch
+
+
+def _legend_groups(graph):
+    """Build the legend entries, grouped by what they explain.
+
+    One legend listing every encoding at once takes a lot of reading to find
+    the one entry you were after. Splitting them by the question they answer,
+    how models connect, which component a model belongs to, and what a box
+    itself is saying, means each group can be read on its own.
+
+    Args:
+        graph (networkx.DiGraph): The network.
+
+    Returns:
+        dict:
+            A dictionary of the form {<title>: [<handle>, ...]}, holding only
+            the groups this network has something to say about.
+    """
+    kinds = {data["kind"] for _, _, data in graph.edges(data=True)}
+    nodes = [data for _, data in graph.nodes(data=True)]
+    emitters = {data["emitter"] for data in nodes if not data["external"]}
+    operations = {data["operation"] for data in nodes}
+
+    # How the models are connected
+    connections = [
+        mlines.Line2D(
+            [],
+            [],
+            color=_INK,
+            linestyle=linestyle,
+            lw=0.9,
+            alpha=0.75,
+            label=label,
+        )
+        for kind, (linestyle, label) in _EDGE_STYLES.items()
+        if kind in kinds
+    ]
+
+    # Which component a model acts on, carried by colour
+    components = [
+        _swatch(
+            _EMITTER_COLORS[emitter][1],
+            _EMITTER_COLORS[emitter][0],
+            label=label,
+        )
+        for emitter, label in _EMITTER_LABELS.items()
+        if emitter in emitters
+    ]
+
+    # What the box itself says: the operation, by shape, and then the state of
+    # the emission it produces
+    box = [
+        _swatch(
+            "none",
+            _INK,
+            label=style["label"],
+            shape=style["shape"],
+        )
+        for operation, style in _OPERATION_SHAPES.items()
+        if operation in operations
+    ]
+
+    if any(not data["save"] for data in nodes):
+        box.append(_swatch("#c9ccce", _INK, label="Saved"))
+        box.append(_swatch(_DISCARDED_FILL, _INK, label="Discarded"))
+
+    if any(data["is_masked"] for data in nodes):
+        box.append(
+            _swatch("none", _INK, label="Masked", linestyle=(0, (3, 2)))
+        )
+
+    if any(data["per_particle"] for data in nodes):
+        box.append(
+            _swatch(
+                "none",
+                _INK,
+                label="Per Particle",
+                shape="round",
+                stacked=True,
+            )
+        )
+
+    if any(data["external"] for data in nodes):
+        outline, fill = _EXTERNAL_COLORS
+        box.append(
+            _swatch(
+                fill,
+                outline,
+                label="Reused Emission",
+                linestyle=(0, (1, 2)),
+            )
+        )
+
+    if any(data["count"] > 1 for data in nodes):
+        box.append(_swatch("none", _INK, label="×N Variants"))
+
+    groups = {
+        "Relationships": connections,
+        "Components": components,
+        "Model Properties": box,
+    }
+
+    return {title: entries for title, entries in groups.items() if entries}
+
+
+def _legend_shape(groups):
+    """Work out how each legend group should be laid out.
+
+    Args:
+        groups (dict): The legend entries, grouped by title.
+
+    Returns:
+        dict:
+            A dictionary of the form {<title>: (<columns>, <rows>)}.
+    """
+    shape = {}
+    for title, entries in groups.items():
+        # Two rows keeps the band above the network shallow without making any
+        # group so wide that the three of them stop fitting side by side
+        columns = min(_LEGEND_MAX_COLUMNS, int(np.ceil(len(entries) / 2)))
+        rows = int(np.ceil(len(entries) / columns))
+        shape[title] = (columns, rows)
+
+    return shape
+
+
+def _legend_entry_widths(handles):
+    """Return how wide each legend entry is, in units of the font size.
+
+    The labels are measured with the font that will draw them, since guessing
+    from the character count leaves the legend clipped. Measuring in font size
+    units lets the figure reserve room before a font size has been settled on.
+
+    Args:
+        handles (list): The legend handles.
+
+    Returns:
+        list:
+            The width of each entry.
+    """
+    font = FontProperties()
+
+    widths = []
+    for handle in handles:
+        label = TextPath(
+            (0, 0),
+            handle.get_label(),
+            size=1.0,
+            prop=font,
+        ).get_extents()
+        widths.append(_LEGEND_HANDLE + _LEGEND_TEXT_PAD + label.width)
+
+    return widths
+
+
+def _legend_group_width(title, handles, columns):
+    """Return how wide one legend group needs to be, in font size units.
+
+    Args:
+        title (str): The group's title.
+        handles (list): The group's entries.
+        columns (int): How many columns the group is drawn in.
+
+    Returns:
+        float:
+            The width needed, including the padding around the group.
+    """
+    entries = _legend_entry_widths(handles)
+
+    # Each column is as wide as its widest entry, and matplotlib fills the
+    # columns top to bottom rather than left to right. Measuring the widest row
+    # instead leaves the group narrower than it is drawn, and the group beside
+    # it then overlaps.
+    rows, large = divmod(len(entries), max(columns, 1))
+    width = 0.0
+    start = 0
+    for column in range(max(columns, 1)):
+        height = rows + 1 if column < large else rows
+        if height == 0:
+            continue
+
+        width += max(entries[start : start + height])
+        start += height
+
+    width += _LEGEND_COLUMN_SPACING * (max(columns, 1) - 1)
+
+    # A long title can be wider than the entries under it, and it is drawn in
+    # bold, which is wider than the same text measured plain
+    heading = TextPath(
+        (0, 0),
+        title,
+        size=1.0,
+        prop=FontProperties(weight="bold"),
+    ).get_extents()
+
+    # Matplotlib's own padding does not come out exactly as modelled here, so
+    # leave a little slack: the groups are placed by this measurement, and one
+    # which comes out short puts the next group on top of this one.
+    return max(width, heading.width) + 2 * _LEGEND_BORDER_PAD + _LEGEND_SLACK
+
+
+def _legend_bands(groups, shape):
+    """Return the room the legends need above and below the network.
+
+    Args:
+        groups (dict): The legend entries, grouped by title.
+        shape (dict): How many columns and rows each group is drawn in.
+
+    Returns:
+        widths (dict): The width each group needs, in units of the font size.
+        width (float):
+            The width the widest band needs, in units of the font size.
+        rows (dict):
+            The number of rows taken up above and below the network, keyed by
+            "top" and "bottom", each including the titles.
+    """
+    widths = {
+        title: _legend_group_width(title, handles, shape[title][0])
+        for title, handles in groups.items()
+    }
+
+    width = 0.0
+    rows = {"top": 0, "bottom": 0}
+    for band in ("top", "bottom"):
+        titles = [
+            title
+            for title in groups
+            if _LEGEND_PLACEMENT.get(title, "top") == band
+        ]
+        if len(titles) == 0:
+            continue
+
+        band_width = sum(widths[title] for title in titles)
+        band_width += _LEGEND_GROUP_SPACING * (len(titles) - 1)
+        band_width += 2 * _LEGEND_AXES_PAD
+        width = max(width, band_width)
+
+        # The title sits on a row of its own above each group
+        rows[band] = max(shape[title][1] for title in titles) + 1
+
+    return widths, width, rows
+
+
+def _extent(positions, sizes, routes=None):
+    """Return the bounding box of a laid out network.
+
+    Args:
+        positions (dict): The centre of each node's box.
+        sizes (dict): The box size of each node.
+        routes (dict):
+            The points edges are routed through. These lie outside the boxes,
+            so they have to be included or an edge which swings wide of every
+            box is drawn outside the axes and clipped.
+
+    Returns:
+        tuple:
+            (xmin, xmax, ymin, ymax) in points.
+    """
+    xs = []
+    ys = []
+    for node, (x, y) in positions.items():
+        width, height = sizes[node]
+        xs.extend((x - width / 2.0, x + width / 2.0))
+        ys.extend((y - height / 2.0, y + height / 2.0))
+
+    for waypoints in (routes or {}).values():
+        for x, y in waypoints:
+            xs.append(x)
+            ys.append(y)
+
+    return min(xs), max(xs), min(ys), max(ys)
+
+
 def _node_text(graph, node):
     """Return the text drawn in a node's box.
 
@@ -512,6 +837,39 @@ def _node_text(graph, node):
     if count > 1:
         return f"{node}  ×{count}"
     return node
+
+
+def _stack_extent(data, fontsize):
+    """Return the extra room a stacked box needs, in points.
+
+    Args:
+        data (dict): The node's attributes.
+        fontsize (float): The font size the labels are drawn at.
+
+    Returns:
+        float:
+            The room the offset copies take up beyond the box itself.
+    """
+    if not data["per_particle"]:
+        return 0.0
+
+    return _STACK_COPIES * _STACK_OFFSET * fontsize
+
+
+def _shape_spec(operation):
+    """Return how an operation's node is drawn.
+
+    Args:
+        operation (str): A key of _OPERATION_SHAPES, or None.
+
+    Returns:
+        dict:
+            The shape name, the (width, height) factors the drawn shape needs
+            beyond the box it is given, and the factor to scale the label
+            padding by (a shape which curves or bites into its box needs more
+            room around the label than a plain rectangle).
+    """
+    return _OPERATION_SHAPES.get(operation, _DEFAULT_SHAPE)
 
 
 def _box_sizes(graph, fontsize):
@@ -557,44 +915,6 @@ def _box_sizes(graph, fontsize):
         sizes[node] = (width * wide + stack, height * tall + stack)
 
     return sizes
-
-
-def _stack_extent(data, fontsize):
-    """Return the extra room a stacked box needs, in points.
-
-    Args:
-        data (dict): The node's attributes.
-        fontsize (float): The font size the labels are drawn at.
-
-    Returns:
-        float:
-            The room the offset copies take up beyond the box itself.
-    """
-    if not data["per_particle"]:
-        return 0.0
-
-    return _STACK_COPIES * _STACK_OFFSET * fontsize
-
-
-def _drawn_box(data, size, fontsize):
-    """Return the size of the box a node is actually drawn at, in points.
-
-    The size the layout reserves also covers whatever the shape draws outside
-    its box and the offset copies of a stack, so the box itself is smaller.
-
-    Args:
-        data (dict): The node's attributes.
-        size (tuple): The room reserved for the node.
-        fontsize (float): The font size the labels are drawn at.
-
-    Returns:
-        tuple:
-            The (width, height) of the box to draw.
-    """
-    wide, tall = _shape_spec(data["operation"])["overshoot"]
-    stack = _stack_extent(data, fontsize)
-
-    return ((size[0] - stack) / wide, (size[1] - stack) / tall)
 
 
 def _assign_layers(graph):
@@ -717,29 +1037,6 @@ def _emitter_rank(graph, node):
         return float(_EMITTER_ORDER.index(emitter))
 
     return (len(_EMITTER_ORDER) - 1) / 2.0
-
-
-def _band_loads(graph, layers):
-    """Count the edges which have to get through each band between rows.
-
-    Every one of them turns sideways in that band and needs a lane of its own,
-    so this is what decides how much room the band needs.
-
-    Args:
-        graph (networkx.DiGraph): The network.
-        layers (dict): The row of each node.
-
-    Returns:
-        dict:
-            A dictionary of the form {<row>: <count>} giving the number of
-            edges crossing the band directly above each row.
-    """
-    loads = {}
-    for source, target in graph.edges:
-        for row in range(layers[source], layers[target]):
-            loads[row] = loads.get(row, 0) + 1
-
-    return loads
 
 
 def _order_rows(graph, layers, nsweeps=8):
@@ -1028,6 +1325,29 @@ def _dot_coordinates(graph, sizes, fontsize):
     return {node: (x, highest - y) for node, (x, y) in raw.items()}
 
 
+def _band_loads(graph, layers):
+    """Count the edges which have to get through each band between rows.
+
+    Every one of them turns sideways in that band and needs a lane of its own,
+    so this is what decides how much room the band needs.
+
+    Args:
+        graph (networkx.DiGraph): The network.
+        layers (dict): The row of each node.
+
+    Returns:
+        dict:
+            A dictionary of the form {<row>: <count>} giving the number of
+            edges crossing the band directly above each row.
+    """
+    loads = {}
+    for source, target in graph.edges:
+        for row in range(layers[source], layers[target]):
+            loads[row] = loads.get(row, 0) + 1
+
+    return loads
+
+
 def _layout(graph, layout, fontsize, vgap_scale=1.0):
     """Place every node and route every edge, in points.
 
@@ -1073,43 +1393,6 @@ def _layout(graph, layout, fontsize, vgap_scale=1.0):
     }
 
     return positions, sizes, routes
-
-
-def _extent(positions, sizes, routes=None):
-    """Return the bounding box of a laid out network.
-
-    Args:
-        positions (dict): The centre of each node's box.
-        sizes (dict): The box size of each node.
-        routes (dict):
-            The points edges are routed through. These lie outside the boxes,
-            so they have to be included or an edge which swings wide of every
-            box is drawn outside the axes and clipped.
-
-    Returns:
-        tuple:
-            (xmin, xmax, ymin, ymax) in points.
-    """
-    xs = []
-    ys = []
-    for node, (x, y) in positions.items():
-        width, height = sizes[node]
-        xs.extend((x - width / 2.0, x + width / 2.0))
-        ys.extend((y - height / 2.0, y + height / 2.0))
-
-    for waypoints in (routes or {}).values():
-        for x, y in waypoints:
-            xs.append(x)
-            ys.append(y)
-
-    return min(xs), max(xs), min(ys), max(ys)
-
-
-# What one trial layout costs: where everything sits, and the room it needs
-_Measured = namedtuple(
-    "_Measured",
-    ("positions", "sizes", "routes", "width", "height", "legend_height"),
-)
 
 
 def _fit(
@@ -1294,152 +1577,53 @@ def _fit(
     )
 
 
-def _rounded_path(corners, radius):
-    """Turn a list of corners into a path with rounded turns.
+def _drawn_box(data, size, fontsize):
+    """Return the size of the box a node is actually drawn at, in points.
+
+    The size the layout reserves also covers whatever the shape draws outside
+    its box and the offset copies of a stack, so the box itself is smaller.
 
     Args:
-        corners (list): The corners of the route, in order.
-        radius (float): The corner radius, in points.
+        data (dict): The node's attributes.
+        size (tuple): The room reserved for the node.
+        fontsize (float): The font size the labels are drawn at.
 
     Returns:
-        matplotlib.path.Path:
-            The path.
+        tuple:
+            The (width, height) of the box to draw.
     """
-    # Drop any zero length steps, which would otherwise produce stray corners
-    trimmed = [corners[0]]
-    for point in corners[1:]:
-        if not (
-            np.isclose(point[0], trimmed[-1][0])
-            and np.isclose(point[1], trimmed[-1][1])
-        ):
-            trimmed.append(point)
+    wide, tall = _shape_spec(data["operation"])["overshoot"]
+    stack = _stack_extent(data, fontsize)
 
-    if len(trimmed) < 3:
-        return Path(trimmed, [Path.MOVETO, Path.LINETO])
-
-    # Round each corner with a quadratic curve, pulled back along both of its
-    # legs by no more than half the shorter leg
-    vertices = [trimmed[0]]
-    codes = [Path.MOVETO]
-    for i in range(1, len(trimmed) - 1):
-        before = np.asarray(trimmed[i - 1], dtype=float)
-        corner = np.asarray(trimmed[i], dtype=float)
-        after = np.asarray(trimmed[i + 1], dtype=float)
-
-        into = corner - before
-        out_of = after - corner
-        into_length = np.hypot(*into)
-        out_length = np.hypot(*out_of)
-        if into_length == 0.0 or out_length == 0.0:
-            continue
-
-        pull = min(radius, into_length / 2.0, out_length / 2.0)
-
-        vertices.append(tuple(corner - into / into_length * pull))
-        codes.append(Path.LINETO)
-        vertices.append(tuple(corner))
-        codes.append(Path.CURVE3)
-        vertices.append(tuple(corner + out_of / out_length * pull))
-        codes.append(Path.CURVE3)
-
-    vertices.append(trimmed[-1])
-    codes.append(Path.LINETO)
-
-    return Path(vertices, codes)
+    return ((size[0] - stack) / wide, (size[1] - stack) / tall)
 
 
-def plot_emission_graph(
-    model_tree,
-    root=None,
-    show=True,
-    fontsize=10,
-    figsize=None,
-    layout="layered",
-    show_variants=False,
-    min_fontsize=_MIN_FONTSIZE,
-):
-    """Plot the network of models defining an emission.
-
-    The whole network is drawn, including related models, which are roots in
-    their own right. It reads bottom to top, in the direction the emission
-    flows, with each model sitting below whatever consumes it.
+def _box_style(shape, height, tooth):
+    """Return the matplotlib box style drawing a shape at a given height.
 
     Args:
-        model_tree (EmissionModel): The model whose network is being drawn.
-        root (str):
-            If given, only this model and the models it depends on are drawn.
-        show (bool): Whether to show the plot.
-        fontsize (int):
-            The fontsize to use for the labels. This is reduced if the network
-            doesn't fit the figure.
-        figsize (tuple):
-            The size of the figure to plot (width, height). By default the
-            figure is sized to fit the network.
-        layout (str):
-            Either "layered" (the default), which needs only networkx, or
-            "dot", which lays the network out with graphviz and needs pydot and
-            the graphviz binary.
-        show_variants (bool):
-            Whether to draw every parameter variant as its own node. By
-            default each family of variants is collapsed into a single node
-            badged with the number of models it stands for, since an expansion
-            of any size produces more models than can be read at once. This
-            has no effect on a model which was never expanded.
-        min_fontsize (float):
-            The size below which labels stop being readable. A network which
-            cannot fit the figure with labels this big grows the figure rather
-            than shrinking them further, so a big network stays as readable
-            as a small one. Pass 0 to let the labels shrink as far as needed.
+        shape (str): The shape name.
+        height (float): The height of the box.
+        tooth (float): How deep a scalloped outline's teeth are.
 
     Returns:
-        fig (matplotlib.figure.Figure): The figure containing the plot.
-        ax (matplotlib.axes.Axes): The axis containing the plot.
+        str:
+            The matplotlib box style.
     """
-    graph = _build_graph(
-        model_tree,
-        root=root,
-        show_variants=show_variants,
-    )
+    if shape == "square":
+        return "square,pad=0"
 
-    # Work out the legends first, since they need room above the network
-    groups = _legend_groups(graph)
-    shape = _legend_shape(groups)
-    group_widths, legend_width, legend_rows = _legend_bands(groups, shape)
+    # A pill is a rounded box whose corners are as round as they can get
+    if shape == "pill":
+        return f"round,pad=0,rounding_size={height / 2.0}"
 
-    positions, sizes, routes, fontsize, figsize, limits = _fit(
-        graph,
-        layout,
-        fontsize,
-        figsize,
-        legend_width,
-        legend_rows,
-        min_fontsize,
-    )
+    if shape == "ellipse":
+        return "ellipse,pad=0"
 
-    fig = plt.figure(figsize=figsize)
+    if shape == "roundtooth":
+        return f"roundtooth,pad=0,tooth_size={tooth}"
 
-    # One axis filling the figure, with limits in points, so a data unit is a
-    # point and the boxes are exactly the size the layout assumed
-    ax = fig.add_axes([0.0, 0.0, 1.0, 1.0])
-    ax.set_xlim(limits[0], limits[1])
-    ax.set_ylim(limits[2], limits[3])
-    ax.axis("off")
-
-    _draw_edges(ax, graph, positions, sizes, routes, fontsize)
-    _draw_nodes(ax, graph, positions, sizes, fontsize)
-
-    _draw_legends(
-        ax,
-        groups,
-        shape,
-        group_widths,
-        max(fontsize, _MIN_LEGEND_FONTSIZE),
-    )
-
-    if show:
-        plt.show()
-
-    return fig, ax
+    return f"round,pad=0,rounding_size={height / 4.0}"
 
 
 def _node_outlines(graph, positions, sizes, fontsize):
@@ -1483,38 +1667,6 @@ def _node_outlines(graph, positions, sizes, fontsize):
         )
 
     return outlines
-
-
-def _attachment(outline, centre, reach, x, upward):
-    """Return the point on an outline directly above or below a given x.
-
-    Attaching an edge to the outline rather than to the box's bounding edge
-    matters for the curved and scalloped shapes, where the two are not the same
-    place.
-
-    Args:
-        outline (matplotlib.path.Path): The outline of the box.
-        centre (tuple): The centre of the box, which is inside the outline.
-        reach (float): How far to search from the centre.
-        x (float): The horizontal position to attach at.
-        upward (bool): Whether to attach to the top of the box or the bottom.
-
-    Returns:
-        tuple:
-            The point on the outline.
-    """
-    direction = 1.0 if upward else -1.0
-
-    # Walk out from the centre, which is inside, until we leave the outline
-    inside, outside = centre[1], centre[1] + direction * reach
-    for _ in range(14):
-        middle = (inside + outside) / 2.0
-        if outline.contains_point((x, middle)):
-            inside = middle
-        else:
-            outside = middle
-
-    return (x, inside)
 
 
 def _edge_ports(graph, positions, sizes):
@@ -1668,6 +1820,38 @@ def _edge_lanes(graph, positions, routes, leaving, arriving):
     return lanes
 
 
+def _attachment(outline, centre, reach, x, upward):
+    """Return the point on an outline directly above or below a given x.
+
+    Attaching an edge to the outline rather than to the box's bounding edge
+    matters for the curved and scalloped shapes, where the two are not the same
+    place.
+
+    Args:
+        outline (matplotlib.path.Path): The outline of the box.
+        centre (tuple): The centre of the box, which is inside the outline.
+        reach (float): How far to search from the centre.
+        x (float): The horizontal position to attach at.
+        upward (bool): Whether to attach to the top of the box or the bottom.
+
+    Returns:
+        tuple:
+            The point on the outline.
+    """
+    direction = 1.0 if upward else -1.0
+
+    # Walk out from the centre, which is inside, until we leave the outline
+    inside, outside = centre[1], centre[1] + direction * reach
+    for _ in range(14):
+        middle = (inside + outside) / 2.0
+        if outline.contains_point((x, middle)):
+            inside = middle
+        else:
+            outside = middle
+
+    return (x, inside)
+
+
 def _edge_corners(edge, positions, routes, leaving, arriving, lanes, ends):
     """Return the corners an edge turns through, bottom to top.
 
@@ -1701,6 +1885,60 @@ def _edge_corners(edge, positions, routes, leaving, arriving, lanes, ends):
         corners.append((xs[hop + 1], ys[hop + 1]))
 
     return corners
+
+
+def _rounded_path(corners, radius):
+    """Turn a list of corners into a path with rounded turns.
+
+    Args:
+        corners (list): The corners of the route, in order.
+        radius (float): The corner radius, in points.
+
+    Returns:
+        matplotlib.path.Path:
+            The path.
+    """
+    # Drop any zero length steps, which would otherwise produce stray corners
+    trimmed = [corners[0]]
+    for point in corners[1:]:
+        if not (
+            np.isclose(point[0], trimmed[-1][0])
+            and np.isclose(point[1], trimmed[-1][1])
+        ):
+            trimmed.append(point)
+
+    if len(trimmed) < 3:
+        return Path(trimmed, [Path.MOVETO, Path.LINETO])
+
+    # Round each corner with a quadratic curve, pulled back along both of its
+    # legs by no more than half the shorter leg
+    vertices = [trimmed[0]]
+    codes = [Path.MOVETO]
+    for i in range(1, len(trimmed) - 1):
+        before = np.asarray(trimmed[i - 1], dtype=float)
+        corner = np.asarray(trimmed[i], dtype=float)
+        after = np.asarray(trimmed[i + 1], dtype=float)
+
+        into = corner - before
+        out_of = after - corner
+        into_length = np.hypot(*into)
+        out_length = np.hypot(*out_of)
+        if into_length == 0.0 or out_length == 0.0:
+            continue
+
+        pull = min(radius, into_length / 2.0, out_length / 2.0)
+
+        vertices.append(tuple(corner - into / into_length * pull))
+        codes.append(Path.LINETO)
+        vertices.append(tuple(corner))
+        codes.append(Path.CURVE3)
+        vertices.append(tuple(corner + out_of / out_length * pull))
+        codes.append(Path.CURVE3)
+
+    vertices.append(trimmed[-1])
+    codes.append(Path.LINETO)
+
+    return Path(vertices, codes)
 
 
 def _draw_edges(ax, graph, positions, sizes, routes, fontsize):
@@ -1860,50 +2098,6 @@ def _draw_nodes(ax, graph, positions, sizes, fontsize):
             fontsize=fontsize,
             zorder=4,
         )
-
-
-def _box_style(shape, height, tooth):
-    """Return the matplotlib box style drawing a shape at a given height.
-
-    Args:
-        shape (str): The shape name.
-        height (float): The height of the box.
-        tooth (float): How deep a scalloped outline's teeth are.
-
-    Returns:
-        str:
-            The matplotlib box style.
-    """
-    if shape == "square":
-        return "square,pad=0"
-
-    # A pill is a rounded box whose corners are as round as they can get
-    if shape == "pill":
-        return f"round,pad=0,rounding_size={height / 2.0}"
-
-    if shape == "ellipse":
-        return "ellipse,pad=0"
-
-    if shape == "roundtooth":
-        return f"roundtooth,pad=0,tooth_size={tooth}"
-
-    return f"round,pad=0,rounding_size={height / 4.0}"
-
-
-def _shape_spec(operation):
-    """Return how an operation's node is drawn.
-
-    Args:
-        operation (str): A key of _OPERATION_SHAPES, or None.
-
-    Returns:
-        dict:
-            The shape name, the (width, height) factors the drawn shape needs
-            beyond the box it is given, and the factor to scale the label
-            padding by (a shape which curves or bites into its box needs more
-            room around the label than a plain rectangle).
-    """
-    return _OPERATION_SHAPES.get(operation, _DEFAULT_SHAPE)
 
 
 class _SwatchHandler(HandlerPatch):
@@ -2073,290 +2267,95 @@ def _draw_legends(ax, groups, shape, widths, fontsize):
         ax.add_artist(legend)
 
 
-def _legend_groups(graph):
-    """Build the legend entries, grouped by what they explain.
-
-    One legend listing every encoding at once takes a lot of reading to find
-    the one entry you were after. Splitting them by the question they answer,
-    how models connect, which component a model belongs to, and what a box
-    itself is saying, means each group can be read on its own.
-
-    Args:
-        graph (networkx.DiGraph): The network.
-
-    Returns:
-        dict:
-            A dictionary of the form {<title>: [<handle>, ...]}, holding only
-            the groups this network has something to say about.
-    """
-    kinds = {data["kind"] for _, _, data in graph.edges(data=True)}
-    nodes = [data for _, data in graph.nodes(data=True)]
-    emitters = {data["emitter"] for data in nodes if not data["external"]}
-    operations = {data["operation"] for data in nodes}
-
-    # How the models are connected
-    connections = [
-        mlines.Line2D(
-            [],
-            [],
-            color=_INK,
-            linestyle=linestyle,
-            lw=0.9,
-            alpha=0.75,
-            label=label,
-        )
-        for kind, (linestyle, label) in _EDGE_STYLES.items()
-        if kind in kinds
-    ]
-
-    # Which component a model acts on, carried by colour
-    components = [
-        _swatch(
-            _EMITTER_COLORS[emitter][1],
-            _EMITTER_COLORS[emitter][0],
-            label=label,
-        )
-        for emitter, label in _EMITTER_LABELS.items()
-        if emitter in emitters
-    ]
-
-    # What the box itself says: the operation, by shape, and then the state of
-    # the emission it produces
-    box = [
-        _swatch(
-            "none",
-            _INK,
-            label=style["label"],
-            shape=style["shape"],
-        )
-        for operation, style in _OPERATION_SHAPES.items()
-        if operation in operations
-    ]
-
-    if any(not data["save"] for data in nodes):
-        box.append(_swatch("#c9ccce", _INK, label="Saved"))
-        box.append(_swatch(_DISCARDED_FILL, _INK, label="Discarded"))
-
-    if any(data["is_masked"] for data in nodes):
-        box.append(
-            _swatch("none", _INK, label="Masked", linestyle=(0, (3, 2)))
-        )
-
-    if any(data["per_particle"] for data in nodes):
-        box.append(
-            _swatch(
-                "none",
-                _INK,
-                label="Per Particle",
-                shape="round",
-                stacked=True,
-            )
-        )
-
-    if any(data["external"] for data in nodes):
-        outline, fill = _EXTERNAL_COLORS
-        box.append(
-            _swatch(
-                fill,
-                outline,
-                label="Reused Emission",
-                linestyle=(0, (1, 2)),
-            )
-        )
-
-    if any(data["count"] > 1 for data in nodes):
-        box.append(_swatch("none", _INK, label="×N Variants"))
-
-    groups = {
-        "Relationships": connections,
-        "Components": components,
-        "Model Properties": box,
-    }
-
-    return {title: entries for title, entries in groups.items() if entries}
-
-
-def _legend_shape(groups):
-    """Work out how each legend group should be laid out.
-
-    Args:
-        groups (dict): The legend entries, grouped by title.
-
-    Returns:
-        dict:
-            A dictionary of the form {<title>: (<columns>, <rows>)}.
-    """
-    shape = {}
-    for title, entries in groups.items():
-        # Two rows keeps the band above the network shallow without making any
-        # group so wide that the three of them stop fitting side by side
-        columns = min(_LEGEND_MAX_COLUMNS, int(np.ceil(len(entries) / 2)))
-        rows = int(np.ceil(len(entries) / columns))
-        shape[title] = (columns, rows)
-
-    return shape
-
-
-def _legend_entry_widths(handles):
-    """Return how wide each legend entry is, in units of the font size.
-
-    The labels are measured with the font that will draw them, since guessing
-    from the character count leaves the legend clipped. Measuring in font size
-    units lets the figure reserve room before a font size has been settled on.
-
-    Args:
-        handles (list): The legend handles.
-
-    Returns:
-        list:
-            The width of each entry.
-    """
-    font = FontProperties()
-
-    widths = []
-    for handle in handles:
-        label = TextPath(
-            (0, 0),
-            handle.get_label(),
-            size=1.0,
-            prop=font,
-        ).get_extents()
-        widths.append(_LEGEND_HANDLE + _LEGEND_TEXT_PAD + label.width)
-
-    return widths
-
-
-def _legend_group_width(title, handles, columns):
-    """Return how wide one legend group needs to be, in font size units.
-
-    Args:
-        title (str): The group's title.
-        handles (list): The group's entries.
-        columns (int): How many columns the group is drawn in.
-
-    Returns:
-        float:
-            The width needed, including the padding around the group.
-    """
-    entries = _legend_entry_widths(handles)
-
-    # Each column is as wide as its widest entry, and matplotlib fills the
-    # columns top to bottom rather than left to right. Measuring the widest row
-    # instead leaves the group narrower than it is drawn, and the group beside
-    # it then overlaps.
-    rows, large = divmod(len(entries), max(columns, 1))
-    width = 0.0
-    start = 0
-    for column in range(max(columns, 1)):
-        height = rows + 1 if column < large else rows
-        if height == 0:
-            continue
-
-        width += max(entries[start : start + height])
-        start += height
-
-    width += _LEGEND_COLUMN_SPACING * (max(columns, 1) - 1)
-
-    # A long title can be wider than the entries under it, and it is drawn in
-    # bold, which is wider than the same text measured plain
-    heading = TextPath(
-        (0, 0),
-        title,
-        size=1.0,
-        prop=FontProperties(weight="bold"),
-    ).get_extents()
-
-    # Matplotlib's own padding does not come out exactly as modelled here, so
-    # leave a little slack: the groups are placed by this measurement, and one
-    # which comes out short puts the next group on top of this one.
-    return max(width, heading.width) + 2 * _LEGEND_BORDER_PAD + _LEGEND_SLACK
-
-
-def _legend_bands(groups, shape):
-    """Return the room the legends need above and below the network.
-
-    Args:
-        groups (dict): The legend entries, grouped by title.
-        shape (dict): How many columns and rows each group is drawn in.
-
-    Returns:
-        widths (dict): The width each group needs, in units of the font size.
-        width (float):
-            The width the widest band needs, in units of the font size.
-        rows (dict):
-            The number of rows taken up above and below the network, keyed by
-            "top" and "bottom", each including the titles.
-    """
-    widths = {
-        title: _legend_group_width(title, handles, shape[title][0])
-        for title, handles in groups.items()
-    }
-
-    width = 0.0
-    rows = {"top": 0, "bottom": 0}
-    for band in ("top", "bottom"):
-        titles = [
-            title
-            for title in groups
-            if _LEGEND_PLACEMENT.get(title, "top") == band
-        ]
-        if len(titles) == 0:
-            continue
-
-        band_width = sum(widths[title] for title in titles)
-        band_width += _LEGEND_GROUP_SPACING * (len(titles) - 1)
-        band_width += 2 * _LEGEND_AXES_PAD
-        width = max(width, band_width)
-
-        # The title sits on a row of its own above each group
-        rows[band] = max(shape[title][1] for title in titles) + 1
-
-    return widths, width, rows
-
-
-def _swatch(
-    facecolor,
-    edgecolor,
-    label,
-    linestyle="solid",
-    hatch=None,
-    shape="pill",
-    stacked=False,
+def plot_emission_graph(
+    model_tree,
+    root=None,
+    show=True,
+    fontsize=10,
+    figsize=None,
+    layout="layered",
+    show_variants=False,
+    min_fontsize=_MIN_FONTSIZE,
 ):
-    """Return a legend swatch drawn as a small box.
+    """Plot the network of models defining an emission.
+
+    The whole network is drawn, including related models, which are roots in
+    their own right. It reads bottom to top, in the direction the emission
+    flows, with each model sitting below whatever consumes it.
 
     Args:
-        facecolor (str): The colour to fill the swatch with.
-        edgecolor (str): The colour to outline the swatch with.
-        label (str): The legend label.
-        linestyle (str): The outline style.
-        hatch (str): An optional hatch pattern.
-        shape (str):
-            The box shape, matching the shapes used for the operations.
-        stacked (bool):
-            Whether to draw the swatch as a stack of boxes, as a per particle
-            model is drawn.
+        model_tree (EmissionModel): The model whose network is being drawn.
+        root (str):
+            If given, only this model and the models it depends on are drawn.
+        show (bool): Whether to show the plot.
+        fontsize (int):
+            The fontsize to use for the labels. This is reduced if the network
+            doesn't fit the figure.
+        figsize (tuple):
+            The size of the figure to plot (width, height). By default the
+            figure is sized to fit the network.
+        layout (str):
+            Either "layered" (the default), which needs only networkx, or
+            "dot", which lays the network out with graphviz and needs pydot and
+            the graphviz binary.
+        show_variants (bool):
+            Whether to draw every parameter variant as its own node. By
+            default each family of variants is collapsed into a single node
+            badged with the number of models it stands for, since an expansion
+            of any size produces more models than can be read at once. This
+            has no effect on a model which was never expanded.
+        min_fontsize (float):
+            The size below which labels stop being readable. A network which
+            cannot fit the figure with labels this big grows the figure rather
+            than shrinking them further, so a big network stays as readable
+            as a small one. Pass 0 to let the labels shrink as far as needed.
 
     Returns:
-        matplotlib.patches.FancyBboxPatch:
-            The swatch.
+        fig (matplotlib.figure.Figure): The figure containing the plot.
+        ax (matplotlib.axes.Axes): The axis containing the plot.
     """
-    swatch = mpatches.FancyBboxPatch(
-        (0.1, 0.1),
-        width=0.5,
-        height=0.1,
-        facecolor=facecolor,
-        edgecolor=edgecolor,
-        linewidth=1.1,
-        label=label,
-        linestyle=linestyle,
-        hatch=hatch,
-        boxstyle="square,pad=0",
+    graph = _build_graph(
+        model_tree,
+        root=root,
+        show_variants=show_variants,
     )
 
-    # Remembered for the legend handler, which rebuilds the box at the swatch's
-    # own size to keep its shape
-    swatch._shape = shape
-    swatch._stacked = stacked
+    # Work out the legends first, since they need room above the network
+    groups = _legend_groups(graph)
+    shape = _legend_shape(groups)
+    group_widths, legend_width, legend_rows = _legend_bands(groups, shape)
 
-    return swatch
+    positions, sizes, routes, fontsize, figsize, limits = _fit(
+        graph,
+        layout,
+        fontsize,
+        figsize,
+        legend_width,
+        legend_rows,
+        min_fontsize,
+    )
+
+    fig = plt.figure(figsize=figsize)
+
+    # One axis filling the figure, with limits in points, so a data unit is a
+    # point and the boxes are exactly the size the layout assumed
+    ax = fig.add_axes([0.0, 0.0, 1.0, 1.0])
+    ax.set_xlim(limits[0], limits[1])
+    ax.set_ylim(limits[2], limits[3])
+    ax.axis("off")
+
+    _draw_edges(ax, graph, positions, sizes, routes, fontsize)
+    _draw_nodes(ax, graph, positions, sizes, fontsize)
+
+    _draw_legends(
+        ax,
+        groups,
+        shape,
+        group_widths,
+        max(fontsize, _MIN_LEGEND_FONTSIZE),
+    )
+
+    if show:
+        plt.show()
+
+    return fig, ax
