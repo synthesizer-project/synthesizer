@@ -105,8 +105,7 @@ def _clear_related_models(root):
     every model in one set instead and puts the references back at the end.
 
     Args:
-        root (EmissionModel):
-            The root of the tree. Modified in place.
+        root (EmissionModel): The root of the tree. Modified in place.
     """
     for model in root._models.values():
         model.related_models = set()
@@ -116,10 +115,8 @@ def _gather(designated, models):
     """Gather a set of models into one tree, rooted at a given model.
 
     Args:
-        designated (EmissionModel):
-            The model to root the tree at.
-        models (set):
-            Every model which must be reachable from it.
+        designated (EmissionModel): The model to root the tree at.
+        models (set): Every model which must be reachable from it.
 
     Returns:
         EmissionModel:
@@ -139,10 +136,8 @@ def _attach_roots(designated, models):
     """Finish an expansion by attaching the true roots of the result.
 
     Args:
-        designated (EmissionModel):
-            The model the result is rooted at.
-        models (set):
-            Every model in the result.
+        designated (EmissionModel): The model the result is rooted at.
+        models (set): Every model in the result.
 
     Returns:
         EmissionModel:
@@ -202,8 +197,7 @@ def _find_variation_target(root):
     several copies of this model, each of which is then expanded in turn.
 
     Args:
-        root (EmissionModel):
-            The root of the tree to search.
+        root (EmissionModel): The root of the tree to search.
 
     Returns:
         tuple or None:
@@ -265,8 +259,7 @@ def _dependency_labels(model):
     """Return the labels of everything a model depends on.
 
     Args:
-        model (EmissionModel):
-            The model to walk down from.
+        model (EmissionModel): The model to walk down from.
 
     Returns:
         set:
@@ -308,20 +301,16 @@ def _expand_variation(root, designated, models, group, parameter_list):
         designated (EmissionModel):
             The model the result is rooted at, which stays the root through the
             expansion so the model the user calls is the model they built.
-        models (set):
-            Every model going into this expansion.
+        models (set): Every model going into this expansion.
         group (list):
             The (label, parameter) pairs sharing this declaration. They are one
             variation and are expanded together, so a parameter handed to
             several models varies them in step rather than independently.
-        parameter_list (ParameterList):
-            The values to vary the parameters over.
+        parameter_list (ParameterList): The values to vary the parameters over.
 
     Returns:
-        designated (EmissionModel):
-            The model the result is rooted at.
-        models (set):
-            Every model coming out of this expansion.
+        designated (EmissionModel): The model the result is rooted at.
+        models (set): Every model coming out of this expansion.
     """
     # Find everything affected by this variation. A declaration attached to
     # several models affects everything downstream of any of them.
@@ -391,8 +380,7 @@ def _recorded_params(group, value, already_recorded):
     dotted name is kept for the one which needs qualifying.
 
     Args:
-        group (list):
-            The (label, parameter) pairs sharing this declaration.
+        group (list): The (label, parameter) pairs sharing this declaration.
         value:
             The value this variant uses.
         already_recorded (dict):
@@ -423,10 +411,8 @@ def _copy_subgraph(root, labels, suffix):
     references to copied models are rewritten to follow the relabelling.
 
     Args:
-        root (EmissionModel):
-            The root of the tree the models belong to.
-        labels (set):
-            The labels of the models to copy.
+        root (EmissionModel): The root of the tree the models belong to.
+        labels (set): The labels of the models to copy.
         suffix (str):
             A suffix to append to the label of every copy. Pass an empty
             string to keep the labels as they are.

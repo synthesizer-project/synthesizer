@@ -44,6 +44,8 @@ function of the same name here, so this module does not usually need to be
 imported directly.
 """
 
+from collections import namedtuple
+
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -283,8 +285,7 @@ def _model_labels(model_tree, root=None):
     """Return the labels of the models to draw.
 
     Args:
-        model_tree (EmissionModel):
-            The model whose network is being drawn.
+        model_tree (EmissionModel): The model whose network is being drawn.
         root (str):
             If given, only this model and the models it depends on are drawn.
             Otherwise the whole network is drawn, including related models.
@@ -340,8 +341,7 @@ def _dependency_edges(model):
     """Return the dependencies of a model and how it depends on them.
 
     Args:
-        model (EmissionModel):
-            The model to inspect.
+        model (EmissionModel): The model to inspect.
 
     Returns:
         list:
@@ -379,8 +379,7 @@ def _operation_of(model):
     """Return which operation a model performs.
 
     Args:
-        model (EmissionModel):
-            The model to inspect.
+        model (EmissionModel): The model to inspect.
 
     Returns:
         str or None:
@@ -405,8 +404,7 @@ def _build_graph(model_tree, root=None, show_variants=False):
     direction the emission flows.
 
     Args:
-        model_tree (EmissionModel):
-            The model whose network is being drawn.
+        model_tree (EmissionModel): The model whose network is being drawn.
         root (str):
             If given, only this model and the models it depends on are drawn.
         show_variants (bool):
@@ -503,10 +501,8 @@ def _node_text(graph, node):
     """Return the text drawn in a node's box.
 
     Args:
-        graph (networkx.DiGraph):
-            The network.
-        node (str):
-            The node.
+        graph (networkx.DiGraph): The network.
+        node (str): The node.
 
     Returns:
         str:
@@ -525,10 +521,8 @@ def _box_sizes(graph, fontsize):
     so the layout can guarantee boxes don't overlap.
 
     Args:
-        graph (networkx.DiGraph):
-            The network.
-        fontsize (float):
-            The font size the labels will be drawn at.
+        graph (networkx.DiGraph): The network.
+        fontsize (float): The font size the labels will be drawn at.
 
     Returns:
         dict:
@@ -569,10 +563,8 @@ def _stack_extent(data, fontsize):
     """Return the extra room a stacked box needs, in points.
 
     Args:
-        data (dict):
-            The node's attributes.
-        fontsize (float):
-            The font size the labels are drawn at.
+        data (dict): The node's attributes.
+        fontsize (float): The font size the labels are drawn at.
 
     Returns:
         float:
@@ -591,12 +583,9 @@ def _drawn_box(data, size, fontsize):
     its box and the offset copies of a stack, so the box itself is smaller.
 
     Args:
-        data (dict):
-            The node's attributes.
-        size (tuple):
-            The room reserved for the node.
-        fontsize (float):
-            The font size the labels are drawn at.
+        data (dict): The node's attributes.
+        size (tuple): The room reserved for the node.
+        fontsize (float): The font size the labels are drawn at.
 
     Returns:
         tuple:
@@ -618,8 +607,7 @@ def _assign_layers(graph):
     widest row as wide as the number of grids.
 
     Args:
-        graph (networkx.DiGraph):
-            The network.
+        graph (networkx.DiGraph): The network.
 
     Returns:
         dict:
@@ -665,16 +653,13 @@ def _insert_routing_nodes(graph, layers):
     somewhere to run and can never cross a box.
 
     Args:
-        graph (networkx.DiGraph):
-            The network.
-        layers (dict):
-            The row of each node.
+        graph (networkx.DiGraph): The network.
+        layers (dict): The row of each node.
 
     Returns:
         routing (networkx.DiGraph):
             The network with long edges replaced by chains of placeholders.
-        routing_layers (dict):
-            The row of every node in that network.
+        routing_layers (dict): The row of every node in that network.
         chains (dict):
             A dictionary of the form {(source, target): [<placeholder>, ...]}
             giving the placeholders along each long edge, bottom to top.
@@ -716,10 +701,8 @@ def _emitter_rank(graph, node):
     """Return where a node's emitter sits in the left to right order.
 
     Args:
-        graph (networkx.DiGraph):
-            The network.
-        node (str):
-            The node.
+        graph (networkx.DiGraph): The network.
+        node (str): The node.
 
     Returns:
         float:
@@ -743,10 +726,8 @@ def _band_loads(graph, layers):
     so this is what decides how much room the band needs.
 
     Args:
-        graph (networkx.DiGraph):
-            The network.
-        layers (dict):
-            The row of each node.
+        graph (networkx.DiGraph): The network.
+        layers (dict): The row of each node.
 
     Returns:
         dict:
@@ -771,10 +752,8 @@ def _order_rows(graph, layers, nsweeps=8):
     Args:
         graph (networkx.DiGraph):
             The network, including any routing placeholders.
-        layers (dict):
-            The row of each node.
-        nsweeps (int):
-            How many ordering sweeps to run.
+        layers (dict): The row of each node.
+        nsweeps (int): How many ordering sweeps to run.
 
     Returns:
         dict:
@@ -869,21 +848,18 @@ def _assign_coordinates(
     Args:
         graph (networkx.DiGraph):
             The network, including any routing placeholders.
-        rows (dict):
-            The order of the nodes in each row.
+        rows (dict): The order of the nodes in each row.
         sizes (dict):
             The box size of each node, in points. Routing placeholders are
             absent and are treated as narrow gaps.
-        fontsize (float):
-            The font size the labels will be drawn at.
+        fontsize (float): The font size the labels will be drawn at.
         loads (dict):
             How many edges cross the band above each row, which sets how much
             room that band needs.
         vgap_scale (float):
             A factor applied to the gap between rows. Used to spread the
             network over the height available rather than leaving it in a band.
-        nsweeps (int):
-            How many straightening sweeps to run.
+        nsweeps (int): How many straightening sweeps to run.
 
     Returns:
         dict:
@@ -1006,12 +982,9 @@ def _dot_coordinates(graph, sizes, fontsize):
     """Lay the network out using graphviz, in points.
 
     Args:
-        graph (networkx.DiGraph):
-            The network.
-        sizes (dict):
-            The box size of each node, in points.
-        fontsize (float):
-            The font size the labels will be drawn at.
+        graph (networkx.DiGraph): The network.
+        sizes (dict): The box size of each node, in points.
+        fontsize (float): The font size the labels will be drawn at.
 
     Returns:
         dict:
@@ -1059,20 +1032,14 @@ def _layout(graph, layout, fontsize, vgap_scale=1.0):
     """Place every node and route every edge, in points.
 
     Args:
-        graph (networkx.DiGraph):
-            The network.
-        layout (str):
-            Either "layered" or "dot".
-        fontsize (float):
-            The font size the labels will be drawn at.
-        vgap_scale (float):
-            A factor applied to the gap between rows.
+        graph (networkx.DiGraph): The network.
+        layout (str): Either "layered" or "dot".
+        fontsize (float): The font size the labels will be drawn at.
+        vgap_scale (float): A factor applied to the gap between rows.
 
     Returns:
-        positions (dict):
-            The centre of each node's box.
-        sizes (dict):
-            The box size of each node.
+        positions (dict): The centre of each node's box.
+        sizes (dict): The box size of each node.
         routes (dict):
             The points each edge should be routed through, of the form
             {(source, target): [(x, y), ...]}. Empty for an edge which can go
@@ -1112,10 +1079,8 @@ def _extent(positions, sizes, routes=None):
     """Return the bounding box of a laid out network.
 
     Args:
-        positions (dict):
-            The centre of each node's box.
-        sizes (dict):
-            The box size of each node.
+        positions (dict): The centre of each node's box.
+        sizes (dict): The box size of each node.
         routes (dict):
             The points edges are routed through. These lie outside the boxes,
             so they have to be included or an edge which swings wide of every
@@ -1140,6 +1105,13 @@ def _extent(positions, sizes, routes=None):
     return min(xs), max(xs), min(ys), max(ys)
 
 
+# What one trial layout costs: where everything sits, and the room it needs
+_Measured = namedtuple(
+    "_Measured",
+    ("positions", "sizes", "routes", "width", "height", "legend_height"),
+)
+
+
 def _fit(
     graph,
     layout,
@@ -1158,12 +1130,9 @@ def _fit(
     fits.
 
     Args:
-        graph (networkx.DiGraph):
-            The network.
-        layout (str):
-            Either "layered" or "dot".
-        fontsize (float):
-            The requested font size.
+        graph (networkx.DiGraph): The network.
+        layout (str): Either "layered" or "dot".
+        fontsize (float): The requested font size.
         figsize (tuple):
             The requested figure size in inches, or None to size it to fit.
         legend_width (float):
@@ -1176,18 +1145,13 @@ def _fit(
             grown rather than shrinking the labels past this.
 
     Returns:
-        positions (dict):
-            The centre of each node's box, in points.
-        sizes (dict):
-            The box size of each node, in points.
-        routes (dict):
-            The points each edge should be routed through.
+        positions (dict): The centre of each node's box, in points.
+        sizes (dict): The box size of each node, in points.
+        routes (dict): The points each edge should be routed through.
         fontsize (float):
             The font size to draw at, which may be smaller than requested.
-        figsize (tuple):
-            The figure size to use, in inches.
-        limits (tuple):
-            The axis limits in points, as (xmin, xmax, ymin, ymax).
+        figsize (tuple): The figure size to use, in inches.
+        limits (tuple): The axis limits in points, as (xmin, xmax, ymin, ymax).
 
     Raises:
         InconsistentArguments
@@ -1217,16 +1181,11 @@ def _fit(
         width = max(xmax - xmin, legend_width * legend_size) + 2 * _MARGIN
         height = (ymax - ymin) + 2 * _MARGIN + legend_height
 
-        return positions, sizes, routes, width, height, legend_height
+        return _Measured(
+            positions, sizes, routes, width, height, legend_height
+        )
 
-    (
-        positions,
-        sizes,
-        routes,
-        required_width,
-        required_height,
-        legend_height,
-    ) = _measure(fontsize)
+    measured = _measure(fontsize)
 
     # With no figure size requested, the figure is simply made big enough for
     # the network at the font size asked for. Labels stay the size they were
@@ -1236,8 +1195,8 @@ def _fit(
     auto_size = figsize is None
     if auto_size:
         figsize = (
-            min(required_width, _MAX_AUTO_SIZE[0] * 72.0) / 72.0,
-            min(required_height, _MAX_AUTO_SIZE[1] * 72.0) / 72.0,
+            min(measured.width, _MAX_AUTO_SIZE[0] * 72.0) / 72.0,
+            min(measured.height, _MAX_AUTO_SIZE[1] * 72.0) / 72.0,
         )
 
     # Shrink the labels until the network fits, but never past the point where
@@ -1246,8 +1205,8 @@ def _fit(
     for _ in range(4):
         scale = min(
             1.0,
-            figsize[0] * 72.0 / required_width,
-            figsize[1] * 72.0 / required_height,
+            figsize[0] * 72.0 / measured.width,
+            figsize[1] * 72.0 / measured.height,
         )
         if scale >= 0.999:
             break
@@ -1260,14 +1219,7 @@ def _fit(
                 break
 
         fontsize *= scale
-        (
-            positions,
-            sizes,
-            routes,
-            required_width,
-            required_height,
-            legend_height,
-        ) = _measure(fontsize)
+        measured = _measure(fontsize)
 
         if np.isclose(fontsize, min_fontsize):
             break
@@ -1280,11 +1232,11 @@ def _fit(
     # inside it with readable labels, since a plot too small to read is no use
     # whatever size it was asked to be.
     if auto_size:
-        figsize = (required_width / 72.0, required_height / 72.0)
+        figsize = (measured.width / 72.0, measured.height / 72.0)
     else:
         figsize = (
-            max(figsize[0], required_width / 72.0),
-            max(figsize[1], required_height / 72.0),
+            max(figsize[0], measured.width / 72.0),
+            max(figsize[1], measured.height / 72.0),
         )
 
     width_pts = figsize[0] * 72.0
@@ -1297,20 +1249,13 @@ def _fit(
     # in one step. A few iterations converge on filling the space.
     stretch = 1.0
     for _ in range(4):
-        available = height_pts - 2 * _MARGIN - legend_height
-        content = required_height - 2 * _MARGIN - legend_height
+        available = height_pts - 2 * _MARGIN - measured.legend_height
+        content = measured.height - 2 * _MARGIN - measured.legend_height
         if content <= 0.0 or available <= content * 1.02:
             break
 
         stretch = min(_MAX_VGAP_STRETCH, stretch * available / content)
-        (
-            positions,
-            sizes,
-            routes,
-            required_width,
-            required_height,
-            legend_height,
-        ) = _measure(fontsize, vgap_scale=stretch)
+        measured = _measure(fontsize, vgap_scale=stretch)
 
         if stretch >= _MAX_VGAP_STRETCH:
             break
@@ -1318,10 +1263,12 @@ def _fit(
     # Limits in points, so a data unit is a point and the boxes are drawn at
     # exactly the size the layout assumed. The network is centred, with the
     # legend space left at the top.
-    xmin, xmax, ymin, ymax = _extent(positions, sizes, routes)
+    xmin, xmax, ymin, ymax = _extent(
+        measured.positions, measured.sizes, measured.routes
+    )
     spare = max(
         0.0,
-        height_pts - (ymax - ymin) - 2 * _MARGIN - legend_height,
+        height_pts - (ymax - ymin) - 2 * _MARGIN - measured.legend_height,
     )
     xcentre = (xmin + xmax) / 2.0
 
@@ -1337,17 +1284,22 @@ def _fit(
         ybottom + height_pts,
     )
 
-    return positions, sizes, routes, fontsize, figsize, limits
+    return (
+        measured.positions,
+        measured.sizes,
+        measured.routes,
+        fontsize,
+        figsize,
+        limits,
+    )
 
 
 def _rounded_path(corners, radius):
     """Turn a list of corners into a path with rounded turns.
 
     Args:
-        corners (list):
-            The corners of the route, in order.
-        radius (float):
-            The corner radius, in points.
+        corners (list): The corners of the route, in order.
+        radius (float): The corner radius, in points.
 
     Returns:
         matplotlib.path.Path:
@@ -1413,12 +1365,10 @@ def plot_emission_graph(
     flows, with each model sitting below whatever consumes it.
 
     Args:
-        model_tree (EmissionModel):
-            The model whose network is being drawn.
+        model_tree (EmissionModel): The model whose network is being drawn.
         root (str):
             If given, only this model and the models it depends on are drawn.
-        show (bool):
-            Whether to show the plot.
+        show (bool): Whether to show the plot.
         fontsize (int):
             The fontsize to use for the labels. This is reduced if the network
             doesn't fit the figure.
@@ -1442,10 +1392,8 @@ def plot_emission_graph(
             as a small one. Pass 0 to let the labels shrink as far as needed.
 
     Returns:
-        fig (matplotlib.figure.Figure):
-            The figure containing the plot.
-        ax (matplotlib.axes.Axes):
-            The axis containing the plot.
+        fig (matplotlib.figure.Figure): The figure containing the plot.
+        ax (matplotlib.axes.Axes): The axis containing the plot.
     """
     graph = _build_graph(
         model_tree,
@@ -1498,14 +1446,10 @@ def _node_outlines(graph, positions, sizes, fontsize):
     """Return the outline of every node's box, in points.
 
     Args:
-        graph (networkx.DiGraph):
-            The network.
-        positions (dict):
-            The centre of each node's box.
-        sizes (dict):
-            The box size of each node.
-        fontsize (float):
-            The font size the labels are drawn at.
+        graph (networkx.DiGraph): The network.
+        positions (dict): The centre of each node's box.
+        sizes (dict): The box size of each node.
+        fontsize (float): The font size the labels are drawn at.
 
     Returns:
         dict:
@@ -1528,7 +1472,11 @@ def _node_outlines(graph, positions, sizes, fontsize):
             ),
             box_width,
             box_height,
-            boxstyle=_box_style(data["operation"], box_height, fontsize),
+            boxstyle=_box_style(
+                _shape_spec(data["operation"])["shape"],
+                box_height,
+                _TOOTH * fontsize,
+            ),
         )
         outlines[node] = patch.get_path().transformed(
             patch.get_patch_transform()
@@ -1545,16 +1493,11 @@ def _attachment(outline, centre, reach, x, upward):
     place.
 
     Args:
-        outline (matplotlib.path.Path):
-            The outline of the box.
-        centre (tuple):
-            The centre of the box, which is inside the outline.
-        reach (float):
-            How far to search from the centre.
-        x (float):
-            The horizontal position to attach at.
-        upward (bool):
-            Whether to attach to the top of the box or the bottom.
+        outline (matplotlib.path.Path): The outline of the box.
+        centre (tuple): The centre of the box, which is inside the outline.
+        reach (float): How far to search from the centre.
+        x (float): The horizontal position to attach at.
+        upward (bool): Whether to attach to the top of the box or the bottom.
 
     Returns:
         tuple:
@@ -1583,12 +1526,9 @@ def _edge_ports(graph, positions, sizes):
     box separates them from the start.
 
     Args:
-        graph (networkx.DiGraph):
-            The network.
-        positions (dict):
-            The centre of each node's box.
-        sizes (dict):
-            The box size of each node.
+        graph (networkx.DiGraph): The network.
+        positions (dict): The centre of each node's box.
+        sizes (dict): The box size of each node.
 
     Returns:
         tuple:
@@ -1623,10 +1563,8 @@ def _row_gaps(positions, sizes):
     """Return the empty band between each pair of neighbouring rows.
 
     Args:
-        positions (dict):
-            The centre of each node's box.
-        sizes (dict):
-            The box size of each node.
+        positions (dict): The centre of each node's box.
+        sizes (dict): The box size of each node.
 
     Returns:
         dict:
@@ -1655,6 +1593,24 @@ def _row_gaps(positions, sizes):
     }
 
 
+def _edge_hops(edge, positions, routes, leaving, arriving):
+    """Return the heights an edge passes through and the x of each, bottom up.
+
+    Shared by the two passes over the edges, which would otherwise each build
+    this and could drift apart. The arguments are the layout dictionaries
+    documented on those callers.
+    """
+    levels = [positions[edge[0]][1]]
+    levels.extend(y for _, y in routes.get(edge, []))
+    levels.append(positions[edge[1]][1])
+
+    xs = [leaving[edge]]
+    xs.extend(x for x, _ in routes.get(edge, []))
+    xs.append(arriving[edge])
+
+    return levels, xs
+
+
 def _edge_lanes(graph, positions, routes, leaving, arriving):
     """Give every sideways run of an edge its own height within its gap.
 
@@ -1663,16 +1619,11 @@ def _edge_lanes(graph, positions, routes, leaving, arriving):
     is given its own lane instead.
 
     Args:
-        graph (networkx.DiGraph):
-            The network.
-        positions (dict):
-            The centre of each node's box.
-        routes (dict):
-            The points each edge is routed through.
-        leaving (dict):
-            Where each edge leaves its source.
-        arriving (dict):
-            Where each edge arrives at its target.
+        graph (networkx.DiGraph): The network.
+        positions (dict): The centre of each node's box.
+        routes (dict): The points each edge is routed through.
+        leaving (dict): Where each edge leaves its source.
+        arriving (dict): Where each edge arrives at its target.
 
     Returns:
         dict:
@@ -1684,13 +1635,7 @@ def _edge_lanes(graph, positions, routes, leaving, arriving):
     # Collect the runs which need a lane, grouped by the band they cross
     runs = {}
     for edge in graph.edges:
-        levels = [positions[edge[0]][1]]
-        levels.extend(y for _, y in routes.get(edge, []))
-        levels.append(positions[edge[1]][1])
-
-        xs = [leaving[edge]]
-        xs.extend(x for x, _ in routes.get(edge, []))
-        xs.append(arriving[edge])
+        levels, xs = _edge_hops(edge, positions, routes, leaving, arriving)
 
         for hop in range(len(levels) - 1):
             # A run which doesn't move sideways has nothing to collide with
@@ -1727,20 +1672,13 @@ def _edge_corners(edge, positions, routes, leaving, arriving, lanes, ends):
     """Return the corners an edge turns through, bottom to top.
 
     Args:
-        edge (tuple):
-            The edge.
-        positions (dict):
-            The centre of each node's box.
-        routes (dict):
-            The points each edge is routed through.
-        leaving (dict):
-            Where each edge leaves its source.
-        arriving (dict):
-            Where each edge arrives at its target.
-        lanes (dict):
-            The height each sideways run happens at.
-        ends (tuple):
-            The points on the two outlines the edge runs between.
+        edge (tuple): The edge.
+        positions (dict): The centre of each node's box.
+        routes (dict): The points each edge is routed through.
+        leaving (dict): Where each edge leaves its source.
+        arriving (dict): Where each edge arrives at its target.
+        lanes (dict): The height each sideways run happens at.
+        ends (tuple): The points on the two outlines the edge runs between.
 
     Returns:
         list:
@@ -1748,13 +1686,7 @@ def _edge_corners(edge, positions, routes, leaving, arriving, lanes, ends):
     """
     start, end = ends
 
-    levels = [positions[edge[0]][1]]
-    levels.extend(y for _, y in routes.get(edge, []))
-    levels.append(positions[edge[1]][1])
-
-    xs = [leaving[edge]]
-    xs.extend(x for x, _ in routes.get(edge, []))
-    xs.append(arriving[edge])
+    levels, xs = _edge_hops(edge, positions, routes, leaving, arriving)
 
     ys = [start[1]]
     ys.extend(y for _, y in routes.get(edge, []))
@@ -1775,18 +1707,12 @@ def _draw_edges(ax, graph, positions, sizes, routes, fontsize):
     """Draw every dependency as an arrow.
 
     Args:
-        ax (matplotlib.axes.Axes):
-            The axis to draw on.
-        graph (networkx.DiGraph):
-            The network.
-        positions (dict):
-            The centre of each node's box.
-        sizes (dict):
-            The box size of each node.
-        routes (dict):
-            The points each edge should be routed through.
-        fontsize (float):
-            The font size the labels are drawn at.
+        ax (matplotlib.axes.Axes): The axis to draw on.
+        graph (networkx.DiGraph): The network.
+        positions (dict): The centre of each node's box.
+        sizes (dict): The box size of each node.
+        routes (dict): The points each edge should be routed through.
+        fontsize (float): The font size the labels are drawn at.
     """
     radius = _CORNER * 2.0 * fontsize
     outlines = _node_outlines(graph, positions, sizes, fontsize)
@@ -1843,16 +1769,11 @@ def _draw_nodes(ax, graph, positions, sizes, fontsize):
     """Draw every model as a labelled box.
 
     Args:
-        ax (matplotlib.axes.Axes):
-            The axis to draw on.
-        graph (networkx.DiGraph):
-            The network.
-        positions (dict):
-            The centre of each node's box.
-        sizes (dict):
-            The box size of each node.
-        fontsize (float):
-            The font size to draw the labels at.
+        ax (matplotlib.axes.Axes): The axis to draw on.
+        graph (networkx.DiGraph): The network.
+        positions (dict): The centre of each node's box.
+        sizes (dict): The box size of each node.
+        fontsize (float): The font size to draw the labels at.
     """
     for node, (x, y) in positions.items():
         data = graph.nodes[node]
@@ -1877,7 +1798,11 @@ def _draw_nodes(ax, graph, positions, sizes, fontsize):
         box_width, box_height = _drawn_box(data, (width, height), fontsize)
 
         # The shape carries which operation the model performs
-        boxstyle = _box_style(data["operation"], box_height, fontsize)
+        boxstyle = _box_style(
+            _shape_spec(data["operation"])["shape"],
+            box_height,
+            _TOOTH * fontsize,
+        )
 
         # A dashed outline marks a mask, a dotted one a reused emission
         if data["is_masked"]:
@@ -1937,16 +1862,13 @@ def _draw_nodes(ax, graph, positions, sizes, fontsize):
         )
 
 
-def _box_style_for_shape(shape, height, tooth):
+def _box_style(shape, height, tooth):
     """Return the matplotlib box style drawing a shape at a given height.
 
     Args:
-        shape (str):
-            The shape name.
-        height (float):
-            The height of the box.
-        tooth (float):
-            How deep a scalloped outline's teeth are.
+        shape (str): The shape name.
+        height (float): The height of the box.
+        tooth (float): How deep a scalloped outline's teeth are.
 
     Returns:
         str:
@@ -1968,34 +1890,11 @@ def _box_style_for_shape(shape, height, tooth):
     return f"round,pad=0,rounding_size={height / 4.0}"
 
 
-def _box_style(operation, height, fontsize):
-    """Return the box style used to draw an operation.
-
-    Args:
-        operation (str):
-            A key of _OPERATION_SHAPES, or None.
-        height (float):
-            The height of the box, which sets how round a pill is.
-        fontsize (float):
-            The font size the label is drawn at, which sets the tooth size.
-
-    Returns:
-        str:
-            The matplotlib box style.
-    """
-    return _box_style_for_shape(
-        _shape_spec(operation)["shape"],
-        height,
-        _TOOTH * fontsize,
-    )
-
-
 def _shape_spec(operation):
     """Return how an operation's node is drawn.
 
     Args:
-        operation (str):
-            A key of _OPERATION_SHAPES, or None.
+        operation (str): A key of _OPERATION_SHAPES, or None.
 
     Returns:
         dict:
@@ -2030,20 +1929,14 @@ class _SwatchHandler(HandlerPatch):
         """Build the artists which draw one legend swatch.
 
         Args:
-            legend (matplotlib.legend.Legend):
-                The legend being drawn.
+            legend (matplotlib.legend.Legend): The legend being drawn.
             orig_handle (matplotlib.patches.FancyBboxPatch):
                 The swatch to draw.
-            xdescent (float):
-                The horizontal offset of the swatch box.
-            ydescent (float):
-                The vertical offset of the swatch box.
-            width (float):
-                The width available to the swatch.
-            height (float):
-                The height available to the swatch.
-            fontsize (float):
-                The legend font size.
+            xdescent (float): The horizontal offset of the swatch box.
+            ydescent (float): The vertical offset of the swatch box.
+            width (float): The width available to the swatch.
+            height (float): The height available to the swatch.
+            fontsize (float): The legend font size.
             trans (matplotlib.transforms.Transform):
                 The transform to draw the swatch under.
 
@@ -2061,11 +1954,7 @@ class _SwatchHandler(HandlerPatch):
 
         # A swatch is a different shape of box to a label, so the shape is
         # rebuilt against the swatch's own height
-        boxstyle = _box_style_for_shape(
-            shape,
-            size[1],
-            _swatch_tooth(size[1]),
-        )
+        boxstyle = _box_style(shape, size[1], size[1] * _SWATCH_TOOTH)
 
         artists = []
 
@@ -2114,26 +2003,6 @@ class _SwatchHandler(HandlerPatch):
         return artists
 
 
-def _swatch_tooth(height):
-    """Return the tooth size a legend swatch should use.
-
-    A swatch's job is to be recognisable, not to be a faithful scale model.
-    The boxes use teeth about a ninth of their height, which on something this
-    small reads as a slightly fuzzy edge rather than as scalloped. Deeper teeth
-    read correctly, up to the point where they swallow the straight edges and
-    the shape stops looking like a box at all.
-
-    Args:
-        height (float):
-            The height of the swatch.
-
-    Returns:
-        float:
-            The tooth size.
-    """
-    return height * _SWATCH_TOOTH
-
-
 def _draw_legends(ax, groups, shape, widths, fontsize):
     """Draw the legend groups, in a band above and a band below the network.
 
@@ -2142,16 +2011,11 @@ def _draw_legends(ax, groups, shape, widths, fontsize):
     needs, and each band is centred over the network.
 
     Args:
-        ax (matplotlib.axes.Axes):
-            The axis to draw on.
-        groups (dict):
-            The legend entries, grouped by title.
-        shape (dict):
-            How many columns and rows each group is drawn in.
-        widths (dict):
-            The width each group needs, in units of the font size.
-        fontsize (float):
-            The font size to draw the legends at.
+        ax (matplotlib.axes.Axes): The axis to draw on.
+        groups (dict): The legend entries, grouped by title.
+        shape (dict): How many columns and rows each group is drawn in.
+        widths (dict): The width each group needs, in units of the font size.
+        fontsize (float): The font size to draw the legends at.
     """
     xmin, xmax = ax.get_xlim()
     axis_width = xmax - xmin
@@ -2218,8 +2082,7 @@ def _legend_groups(graph):
     itself is saying, means each group can be read on its own.
 
     Args:
-        graph (networkx.DiGraph):
-            The network.
+        graph (networkx.DiGraph): The network.
 
     Returns:
         dict:
@@ -2317,8 +2180,7 @@ def _legend_shape(groups):
     """Work out how each legend group should be laid out.
 
     Args:
-        groups (dict):
-            The legend entries, grouped by title.
+        groups (dict): The legend entries, grouped by title.
 
     Returns:
         dict:
@@ -2343,8 +2205,7 @@ def _legend_entry_widths(handles):
     units lets the figure reserve room before a font size has been settled on.
 
     Args:
-        handles (list):
-            The legend handles.
+        handles (list): The legend handles.
 
     Returns:
         list:
@@ -2369,12 +2230,9 @@ def _legend_group_width(title, handles, columns):
     """Return how wide one legend group needs to be, in font size units.
 
     Args:
-        title (str):
-            The group's title.
-        handles (list):
-            The group's entries.
-        columns (int):
-            How many columns the group is drawn in.
+        title (str): The group's title.
+        handles (list): The group's entries.
+        columns (int): How many columns the group is drawn in.
 
     Returns:
         float:
@@ -2418,14 +2276,11 @@ def _legend_bands(groups, shape):
     """Return the room the legends need above and below the network.
 
     Args:
-        groups (dict):
-            The legend entries, grouped by title.
-        shape (dict):
-            How many columns and rows each group is drawn in.
+        groups (dict): The legend entries, grouped by title.
+        shape (dict): How many columns and rows each group is drawn in.
 
     Returns:
-        widths (dict):
-            The width each group needs, in units of the font size.
+        widths (dict): The width each group needs, in units of the font size.
         width (float):
             The width the widest band needs, in units of the font size.
         rows (dict):
@@ -2471,16 +2326,11 @@ def _swatch(
     """Return a legend swatch drawn as a small box.
 
     Args:
-        facecolor (str):
-            The colour to fill the swatch with.
-        edgecolor (str):
-            The colour to outline the swatch with.
-        label (str):
-            The legend label.
-        linestyle (str):
-            The outline style.
-        hatch (str):
-            An optional hatch pattern.
+        facecolor (str): The colour to fill the swatch with.
+        edgecolor (str): The colour to outline the swatch with.
+        label (str): The legend label.
+        linestyle (str): The outline style.
+        hatch (str): An optional hatch pattern.
         shape (str):
             The box shape, matching the shapes used for the operations.
         stacked (bool):

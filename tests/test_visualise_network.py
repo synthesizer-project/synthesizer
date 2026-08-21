@@ -698,7 +698,11 @@ class TestNodeEncodings:
         apart at the size these diagrams get drawn at.
         """
         shapes = {
-            operation: _box_style(operation, height=20.0, fontsize=10.0)
+            operation: _box_style(
+                _shape_spec(operation)["shape"],
+                height=20.0,
+                tooth=4.0,
+            )
             for operation in ("extract", "transform", "combine", "generate")
         }
 
@@ -1176,20 +1180,10 @@ class TestLegendSwatchGeometry:
         fraction of their size.
         """
         from synthesizer.emission_models.visualise_network import (
-            _swatch_tooth,
+            _SWATCH_TOOTH,
         )
 
-        for height in (8.0, 13.0, 30.0):
-            ratio = _swatch_tooth(height) / height
-            assert 0.15 <= ratio <= 0.25
-
-    def test_swatch_teeth_scale_with_the_swatch(self):
-        """Test the teeth stay in proportion whatever size the swatch is."""
-        from synthesizer.emission_models.visualise_network import (
-            _swatch_tooth,
-        )
-
-        assert np.isclose(_swatch_tooth(20.0), 2.0 * _swatch_tooth(10.0))
+        assert 0.15 <= _SWATCH_TOOTH <= 0.25
 
 
 def _edge_segments(ax):

@@ -107,8 +107,7 @@ class ParameterFunction:
         that the function takes ready for later extraction.
 
         Args:
-            func (callable):
-                The function to wrap.
+            func (callable): The function to wrap.
             sets (str):
                 A string indicating the attribute on the emitter that this
                 function sets.
@@ -153,12 +152,9 @@ class ParameterFunction:
         parameters.
 
         Args:
-            model (EmissionModel):
-                The model object.
-            emission (Sed/LineCollection):
-                The emission object.
-            emitter (Stars/Gas/Galaxy):
-                The emitter object.
+            model (EmissionModel): The model object.
+            emission (Sed/LineCollection): The emission object.
+            emitter (Stars/Gas/Galaxy): The emitter object.
             obj (object, optional):
                 An optional additional object to look for parameters on last.
 
@@ -242,8 +238,7 @@ class ParameterList:
     user to call expand_models first).
 
     Attributes:
-        values (list):
-            The values to vary the parameter over.
+        values (list): The values to vary the parameter over.
         label_modifier (str):
             The format string used to name each variant, or None if explicit
             labels were given instead.
@@ -475,8 +470,7 @@ class ParameterDistribution:
     stochasticity.
 
     Attributes:
-        n (int):
-            The number of values to sample.
+        n (int): The number of values to sample.
         seed (int):
             The seed for the random number generator. Pass a seed for a
             reproducible set of samples.
@@ -504,8 +498,7 @@ class ParameterDistribution:
         """Initialise the distribution.
 
         Args:
-            n (int):
-                The number of values to sample from the distribution.
+            n (int): The number of values to sample from the distribution.
             seed (int):
                 The seed for the random number generator. Pass a seed for a
                 reproducible set of samples.
@@ -565,8 +558,7 @@ class ParameterDistribution:
         Args:
             rng (numpy.random.Generator):
                 The random number generator to sample with.
-            n (int):
-                The number of values to sample.
+            n (int): The number of values to sample.
 
         Returns:
             list:
@@ -582,12 +574,9 @@ class ParameterDistribution:
         """Reduce the values describing this distribution to magnitudes.
 
         A distribution can be stated either as magnitudes with the units given
-        separately, or as quantities carrying their own units, which is the
-        more natural thing to write in a codebase where everything else does.
-        Both are reduced to the same thing here: magnitudes, plus the units
-        the samples will carry. The generators strip units when they sample
-        anyway, so this is what sampling needs, and it leaves one
-        representation to reason about rather than two.
+        separately, or as quantities carrying their own units. Both end up as
+        magnitudes plus the units the samples will carry, which is what the
+        generators need since they strip units when they sample.
 
         Called by each flavour once it has stored the values describing it.
 
@@ -730,14 +719,11 @@ class ParameterUniformDist(ParameterDistribution):
                 The lower bound of the distribution (inclusive).
             high:
                 The upper bound of the distribution (exclusive).
-            n (int):
-                The number of values to sample.
-            seed (int):
-                The seed for the random number generator.
+            n (int): The number of values to sample.
+            seed (int): The seed for the random number generator.
             label_modifier (str):
                 A printf style format string used to name each variant.
-            labels (list):
-                A name for each sample, instead of a format string.
+            labels (list): A name for each sample, instead of a format string.
             units (unyt.Unit):
                 The units the samples carry, if the bounds are magnitudes.
 
@@ -773,8 +759,7 @@ class ParameterUniformDist(ParameterDistribution):
         Args:
             rng (numpy.random.Generator):
                 The random number generator to sample with.
-            n (int):
-                The number of values to sample.
+            n (int): The number of values to sample.
 
         Returns:
             list:
@@ -804,8 +789,7 @@ class ParameterLogUniformDist(ParameterUniformDist):
         Args:
             rng (numpy.random.Generator):
                 The random number generator to sample with.
-            n (int):
-                The number of values to sample.
+            n (int): The number of values to sample.
 
         Returns:
             list:
@@ -857,14 +841,11 @@ class ParameterNormalDist(ParameterDistribution):
                 The mean of the distribution.
             sigma:
                 The standard deviation of the distribution.
-            n (int):
-                The number of values to sample.
-            seed (int):
-                The seed for the random number generator.
+            n (int): The number of values to sample.
+            seed (int): The seed for the random number generator.
             label_modifier (str):
                 A printf style format string used to name each variant.
-            labels (list):
-                A name for each sample, instead of a format string.
+            labels (list): A name for each sample, instead of a format string.
             units (unyt.Unit):
                 The units the samples carry, if mean and sigma are magnitudes.
 
@@ -897,8 +878,7 @@ class ParameterNormalDist(ParameterDistribution):
         Args:
             rng (numpy.random.Generator):
                 The random number generator to sample with.
-            n (int):
-                The number of values to sample.
+            n (int): The number of values to sample.
 
         Returns:
             list:
@@ -935,8 +915,7 @@ class ParameterLogNormalDist(ParameterNormalDist):
         Args:
             rng (numpy.random.Generator):
                 The random number generator to sample with.
-            n (int):
-                The number of values to sample.
+            n (int): The number of values to sample.
 
         Returns:
             list:
@@ -971,8 +950,7 @@ def find_variations(model):
     generator is keyed by a dotted name, e.g. "transformer.slope".
 
     Args:
-        model (EmissionModel):
-            The model to inspect.
+        model (EmissionModel): The model to inspect.
 
     Returns:
         dict:
@@ -1009,8 +987,7 @@ def set_variation_value(model, name, value):
     """Set the value a variation resolved to on a model.
 
     Args:
-        model (EmissionModel):
-            The model to set it on.
+        model (EmissionModel): The model to set it on.
         name (str):
             The name the variation was declared under, as reported by
             find_variations.
