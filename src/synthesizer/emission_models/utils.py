@@ -373,13 +373,21 @@ def get_param(
 
     # Otherwise raise an exception
     else:
-        raise exceptions.MissingAttribute(
-            f"{param} can't be found on the model "
+        # Report everywhere we looked, including the fallback object if one
+        # was given
+        searched = (
+            f"the model "
             f"({model.label if model is not None else None}),"
             " emission ("
             f"{emission.__class__.__name__ if emission is not None else None}"
             "), or emitter ("
-            f"{emitter.__class__.__name__ if emitter is not None else None})."
+            f"{emitter.__class__.__name__ if emitter is not None else None})"
+        )
+        if obj is not None:
+            searched = searched.replace(", or emitter (", ", emitter (")
+            searched += f", or {obj.__class__.__name__} itself"
+        raise exceptions.MissingAttribute(
+            f"{param} can't be found on {searched}."
         )
 
 

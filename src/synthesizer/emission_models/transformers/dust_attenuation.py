@@ -199,12 +199,13 @@ class AttenuationLaw(Transformer):
         return self._with_params(**dust_curve_kwargs).get_tau(lam)
 
     def _check_required_params(self):
-        """Get the required parameters for the transformer.
+        """Set up the required parameters for the transformer.
 
-        Given the input params, this method will return the required
-        params by looking at required params which have been
-        set as strings or None.
-
+        Every declared parameter remains required so that the standard
+        priority order (model -> emission -> emitter -> curve) applies to all
+        of them. A parameter given a string at initialisation is treated as an
+        alias, i.e. the value will be looked up under that name and passed to
+        the curve under the original name.
         """
         param_values = [
             getattr(self, param, None) for param in self._required_params
@@ -212,11 +213,11 @@ class AttenuationLaw(Transformer):
 
         required_params = []
         for param, value in zip(self._required_params, param_values):
-            if value is None:
-                required_params.append(param)
-            elif isinstance(value, str):
+            if isinstance(value, str):
                 required_params.append(value)
                 self._name_transforms[value] = param
+            else:
+                required_params.append(param)
 
         self._required_params = required_params
 
@@ -246,8 +247,10 @@ class AttenuationLaw(Transformer):
         Returns:
             Line/Sed: The transformed emission.
         """
-        # Extract the required parameters
-        params = self._extract_params(model, emission, emitter)
+        # Extract the required parameters, falling back to the values the
+        # curve itself was constructed with (obj=self) if the model, emission
+        # and emitter say nothing about them
+        params = self._extract_params(model, emission, emitter, obj=self)
 
         # Ensure we aren't trying to use a wavelength mask
         if lam_mask is not None:
