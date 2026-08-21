@@ -121,12 +121,12 @@ class TestBuildGraph:
         assert "intrinsic" in graph.nodes
 
     def test_all_variants_are_included(self, expanded_variants):
-        """Test every variant of an expansion is drawn.
+        """Test every variant of an expansion is reachable.
 
         Variants other than the first are attached as related models, so this
         is the case the original layout got most wrong: it drew one of three.
         """
-        graph = _build_graph(expanded_variants)
+        graph = _build_graph(expanded_variants, show_variants=True)
 
         assert {
             "escaped_fesc_0.10",
@@ -249,32 +249,49 @@ class TestBuildGraph:
 
 
 class TestCollapseVariants:
-    """Test folding a family of variants into one node."""
+    """Test folding a family of variants into one node.
+
+    This is what happens by default: an expansion of any size produces more
+    models than can be read at once, so the variants are only drawn
+    individually when they are asked for.
+    """
 
     def test_variants_collapse_to_one_node(self, expanded_variants):
         """Test a variant family becomes a single node."""
-        graph = _build_graph(expanded_variants, collapse_variants=True)
+        graph = _build_graph(expanded_variants)
 
         assert set(graph.nodes) == {"escaped", "incident"}
 
     def test_collapsed_node_counts_its_variants(self, expanded_variants):
         """Test the collapsed node records how many models it stands for."""
-        graph = _build_graph(expanded_variants, collapse_variants=True)
+        graph = _build_graph(expanded_variants)
 
         assert graph.nodes["escaped"]["count"] == 3
         assert graph.nodes["incident"]["count"] == 1
 
     def test_collapsed_edges_are_deduplicated(self, expanded_variants):
         """Test the three parallel dependencies become one edge."""
-        graph = _build_graph(expanded_variants, collapse_variants=True)
+        graph = _build_graph(expanded_variants)
 
         assert graph.number_of_edges() == 1
         assert graph.has_edge("incident", "escaped")
 
+    def test_variants_can_be_asked_for(self, expanded_variants):
+        """Test every variant is drawn when show_variants is passed."""
+        graph = _build_graph(expanded_variants, show_variants=True)
+
+        assert set(graph.nodes) == {
+            "escaped_fesc_0.10",
+            "escaped_fesc_0.50",
+            "escaped_fesc_0.90",
+            "incident",
+        }
+        assert graph.number_of_edges() == 3
+
     def test_unexpanded_models_are_untouched(self, pacman_emission_model):
-        """Test collapsing does nothing to a model with no variants."""
-        collapsed = _build_graph(pacman_emission_model, collapse_variants=True)
-        full = _build_graph(pacman_emission_model)
+        """Test the collapsing default does nothing without variants."""
+        collapsed = _build_graph(pacman_emission_model)
+        full = _build_graph(pacman_emission_model, show_variants=True)
 
         assert set(collapsed.nodes) == set(full.nodes)
 
@@ -441,8 +458,11 @@ class TestPlotEmissionGraph:
         assert set(pacman_emission_model._models) <= drawn
 
     def test_all_variants_are_drawn(self, expanded_variants):
-        """Test every variant is drawn, not just the first."""
-        fig, ax = expanded_variants.plot_emission_graph(show=False)
+        """Test every variant is drawn when they are asked for."""
+        fig, ax = expanded_variants.plot_emission_graph(
+            show=False,
+            show_variants=True,
+        )
 
         drawn = {text.get_text() for text in ax.texts}
         assert {
@@ -478,10 +498,7 @@ class TestPlotEmissionGraph:
 
     def test_collapsed_variants_are_badged(self, expanded_variants):
         """Test a collapsed family is drawn once with its count."""
-        fig, ax = expanded_variants.plot_emission_graph(
-            show=False,
-            collapse_variants=True,
-        )
+        fig, ax = expanded_variants.plot_emission_graph(show=False)
 
         drawn = {text.get_text() for text in ax.texts}
         assert any("escaped" in text and "3" in text for text in drawn)
@@ -796,10 +813,7 @@ class TestNodeEncodings:
         A small network can need less width than the legend does, so the legend
         would otherwise run off the edge.
         """
-        fig, ax = expanded_variants.plot_emission_graph(
-            show=False,
-            collapse_variants=True,
-        )
+        fig, ax = expanded_variants.plot_emission_graph(show=False)
         renderer = fig.canvas.get_renderer()
 
         figure = fig.bbox

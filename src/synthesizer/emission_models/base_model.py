@@ -1878,7 +1878,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         fontsize=10,
         figsize=None,
         layout="layered",
-        collapse_variants=False,
+        show_variants=False,
         min_fontsize=6.0,
     ):
         """Plot the network of models defining the emission.
@@ -1903,9 +1903,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 Either "layered" (the default), which needs only networkx, or
                 "dot", which lays the network out with graphviz and needs pydot
                 and the graphviz binary.
-            collapse_variants (bool):
-                Whether to collapse each family of parameter variants into a
-                single node badged with the number of variants it stands for.
+            show_variants (bool):
+                Whether to draw every parameter variant as its own node. By
+                default each family of variants is collapsed into a single
+                node badged with the number of models it stands for, since an
+                expansion of any size produces more models than can be read at
+                once. This has no effect on a model which was never expanded.
             min_fontsize (float):
                 The size below which labels stop being readable. A network
                 which cannot fit the figure with labels this big grows the
@@ -1931,7 +1934,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             fontsize=fontsize,
             figsize=figsize,
             layout=layout,
-            collapse_variants=collapse_variants,
+            show_variants=show_variants,
             min_fontsize=min_fontsize,
         )
 

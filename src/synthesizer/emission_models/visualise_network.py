@@ -37,7 +37,7 @@ Example usage::
 
     model.plot_emission_graph()
     model.plot_emission_graph(layout="dot")
-    model.plot_emission_graph(collapse_variants=True)
+    model.plot_emission_graph(show_variants=True)
 
 Note that EmissionModel.plot_emission_graph is a thin wrapper around the
 function of the same name here, so this module does not usually need to be
@@ -398,7 +398,7 @@ def _operation_of(model):
     return None
 
 
-def _build_graph(model_tree, root=None, collapse_variants=False):
+def _build_graph(model_tree, root=None, show_variants=False):
     """Build the network of models as a directed graph.
 
     Edges run from a dependency to the model which consumes it, i.e. in the
@@ -409,9 +409,9 @@ def _build_graph(model_tree, root=None, collapse_variants=False):
             The model whose network is being drawn.
         root (str):
             If given, only this model and the models it depends on are drawn.
-        collapse_variants (bool):
-            Whether to collapse each family of parameter variants into a single
-            node.
+        show_variants (bool):
+            Whether to draw every parameter variant as its own node. By
+            default each family is collapsed into one node.
 
     Returns:
         networkx.DiGraph:
@@ -423,11 +423,12 @@ def _build_graph(model_tree, root=None, collapse_variants=False):
     labels = _model_labels(model_tree, root)
 
     # Work out what each label is drawn as. Collapsing maps every variant of a
-    # model onto its pre-expansion label.
+    # model onto its pre-expansion label, which is the default: a large
+    # expansion has far more models than can be read at once.
     node_of = {}
     for label in labels:
         model = model_tree[label]
-        if collapse_variants and model.variant_base is not None:
+        if not show_variants and model.variant_base is not None:
             node_of[label] = model.variant_base
         else:
             node_of[label] = label
@@ -1402,7 +1403,7 @@ def plot_emission_graph(
     fontsize=10,
     figsize=None,
     layout="layered",
-    collapse_variants=False,
+    show_variants=False,
     min_fontsize=_MIN_FONTSIZE,
 ):
     """Plot the network of models defining an emission.
@@ -1428,10 +1429,12 @@ def plot_emission_graph(
             Either "layered" (the default), which needs only networkx, or
             "dot", which lays the network out with graphviz and needs pydot and
             the graphviz binary.
-        collapse_variants (bool):
-            Whether to collapse each family of parameter variants into a single
-            node, badged with the number of variants it stands for. Useful when
-            an expansion has produced more models than can be read at once.
+        show_variants (bool):
+            Whether to draw every parameter variant as its own node. By
+            default each family of variants is collapsed into a single node
+            badged with the number of models it stands for, since an expansion
+            of any size produces more models than can be read at once. This
+            has no effect on a model which was never expanded.
         min_fontsize (float):
             The size below which labels stop being readable. A network which
             cannot fit the figure with labels this big grows the figure rather
@@ -1447,7 +1450,7 @@ def plot_emission_graph(
     graph = _build_graph(
         model_tree,
         root=root,
-        collapse_variants=collapse_variants,
+        show_variants=show_variants,
     )
 
     # Work out the legends first, since they need room above the network
