@@ -232,7 +232,7 @@ _LEGEND_TEXT_PAD = 0.8
 _LEGEND_COLUMN_SPACING = 1.8
 _LEGEND_BORDER_PAD = 0.5
 _LEGEND_AXES_PAD = 0.5
-_LEGEND_SLACK = 0.6
+_LEGEND_SLACK = 0.7
 
 # The space left between two legend groups, in units of the font size, and the
 # most columns any one group is spread over
