@@ -232,7 +232,8 @@ _LEGEND_TEXT_PAD = 0.8
 _LEGEND_COLUMN_SPACING = 1.8
 _LEGEND_BORDER_PAD = 0.5
 _LEGEND_AXES_PAD = 0.5
-_LEGEND_SLACK = 0.7
+_LEGEND_SLACK = 0.6
+_LEGEND_COLUMN_SLACK = 0.15
 
 # The space left between two legend groups, in units of the font size, and the
 # most columns any one group is spread over
@@ -747,7 +748,12 @@ def _legend_group_width(title, handles, columns):
     # Matplotlib's own padding does not come out exactly as modelled here, so
     # leave a little slack: the groups are placed by this measurement, and one
     # which comes out short puts the next group on top of this one.
-    return max(width, heading.width) + 2 * _LEGEND_BORDER_PAD + _LEGEND_SLACK
+    return (
+        max(width, heading.width)
+        + 2 * _LEGEND_BORDER_PAD
+        + _LEGEND_SLACK
+        + _LEGEND_COLUMN_SLACK * max(columns, 1)
+    )
 
 
 def _legend_bands(groups, shape):
