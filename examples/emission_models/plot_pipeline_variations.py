@@ -182,8 +182,14 @@ if __name__ == "__main__":
         (fesc, blue, red): np.array(
             [
                 magnitude_colour(photometry[model.label], blue, red)
-                for model in variants
-                if model.variant_params["fesc"] == fesc
+                for model in sorted(
+                    (
+                        model
+                        for model in variants
+                        if model.variant_params["fesc"] == fesc
+                    ),
+                    key=lambda model: model.variant_params["tau_v"],
+                )
             ]
         )
         for fesc in fescs

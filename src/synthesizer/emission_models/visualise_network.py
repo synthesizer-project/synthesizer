@@ -281,7 +281,7 @@ def _import_networkx():
     except ImportError:
         raise ImportError(
             "Plotting an emission model network requires networkx. Install it "
-            "with 'pip install synthesizer[EM_networks]' (or "
+            "with 'pip install synthesizer[em-networks]' (or "
             "'pip install networkx')."
         ) from None
 
@@ -1319,7 +1319,7 @@ def _dot_coordinates(graph, sizes, fontsize):
     except Exception as e:
         raise ImportError(
             "The 'dot' layout needs pydot and the graphviz binary. Install "
-            "them with 'pip install synthesizer[EM_networks]' and your "
+            "them with 'pip install synthesizer[em-networks]' and your "
             "system package manager (e.g. 'brew install graphviz'). "
             f"The underlying error was: {e}"
         ) from None

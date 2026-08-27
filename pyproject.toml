@@ -132,7 +132,7 @@ docs = [
 # Emission model network visualisation. networkx provides the graph model and
 # layering, pydot enables the optional graphviz "dot" layout (which also needs
 # the graphviz binary installed separately).
-EM_networks = [
+em-networks = [
     "networkx",
     "pydot",
 ]

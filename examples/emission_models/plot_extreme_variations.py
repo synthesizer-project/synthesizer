@@ -77,7 +77,7 @@ BIRTH_CURVES = [
     Calzetti2000(),
 ]
 
-# What the documentation build can afford: 1,200 variants in 3,301 models
+# What the documentation build can afford: 1,200 variants in 3,076 models
 DOCS_SCALE = {
     "n_fesc": 15,
     "n_curves": 2,
@@ -237,7 +237,7 @@ def expand_and_generate(model, galaxy):
     return expanded, totals
 
 
-def draw_spectra(galaxy, totals, colour_by, label, title):
+def draw_spectra(galaxy, totals, colour_by, label, title, fixed_value=None):
     """Draw every variant, coloured by one of the varied parameters.
 
     Thousands of separate lines are slow to draw one at a time, so they go in
@@ -249,22 +249,24 @@ def draw_spectra(galaxy, totals, colour_by, label, title):
         colour_by (str): The varied parameter which carries the colour.
         label (str): The label for the colour bar.
         title (str): The plot title.
+        fixed_value: The parameter value when it was not varied.
     """
-    values = sorted({model.variant_params[colour_by] for model in totals})
+    variant_values = [
+        model.variant_params.get(colour_by, fixed_value) for model in totals
+    ]
+    values = sorted(set(variant_values))
     colours = plt.cm.magma(np.linspace(0.0, 1.0, len(values)))
 
     segments = []
     line_colours = []
-    for variant in totals:
+    for variant, value in zip(totals, variant_values):
         spectra = galaxy.stars.spectra[variant.label]
         segments.append(
             np.column_stack(
                 [spectra.lam.value, np.clip(spectra.lnu.value, 1e-40, None)]
             )
         )
-        line_colours.append(
-            colours[values.index(variant.variant_params[colour_by])]
-        )
+        line_colours.append(colours[values.index(value)])
 
     fig, ax = plt.subplots(figsize=(9, 5.5), constrained_layout=True)
     ax.add_collection(
@@ -445,6 +447,7 @@ if __name__ == "__main__":
         "fesc",
         r"$f_{\mathrm{esc}}$",
         f"{len(totals)} variants of one model, five axes at once",
+        fixed_value=0.2,
     )
 
     # The network, collapsed. Each family is one node badged with its count,

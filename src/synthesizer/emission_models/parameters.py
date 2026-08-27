@@ -291,7 +291,7 @@ class ParameterList:
             )
 
         self.label_modifier = label_modifier
-        self.labels = list(labels) if labels is not None else None
+        self.labels = labels
 
         if self.labels is not None:
             self.suffixes = self._suffixes_from_labels()
@@ -535,6 +535,14 @@ class ParameterDistribution:
                 f"labels={labels}."
             )
 
+        if labels is not None:
+            labels = list(labels)
+            if len(labels) != n:
+                raise exceptions.InconsistentArguments(
+                    f"labels must contain exactly n={n} entries, got "
+                    f"{len(labels)}."
+                )
+
         # A label modifier renders the sampled values, so without a seed the
         # labels themselves change from run to run, and with them the keys the
         # emissions are stored under and the group names in any file written
@@ -549,7 +557,7 @@ class ParameterDistribution:
         self.n = int(n)
         self.seed = seed
         self.label_modifier = label_modifier
-        self.labels = list(labels) if labels is not None else None
+        self.labels = labels
         self.units = getattr(units, "units", units)
 
     def _sample(self, rng, n):

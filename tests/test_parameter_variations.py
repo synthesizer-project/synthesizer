@@ -114,6 +114,11 @@ class TestParameterDistribution:
         with pytest.raises(exceptions.InconsistentArguments):
             ParameterUniformDist(0.0, 1.0, n=3)
 
+    def test_labels_must_match_sample_count(self):
+        """Test explicit labels name every sample."""
+        with pytest.raises(exceptions.InconsistentArguments, match="n=3"):
+            ParameterUniformDist(0.0, 1.0, n=3, labels=["low", "high"])
+
     def test_realise_returns_parameter_list(self):
         """Test realise produces a ParameterList of the right length."""
         dist = ParameterUniformDist(

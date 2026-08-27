@@ -5,6 +5,10 @@ edges, and the plotting entry point.
 """
 
 import matplotlib
+
+# Render without a display. This must happen before pyplot can be imported.
+matplotlib.use("Agg")
+
 import numpy as np
 import pytest
 
@@ -14,7 +18,7 @@ from synthesizer import exceptions
 # its dependency is absent
 pytest.importorskip("networkx")
 
-from synthesizer.emission_models.visualise_network import (  # noqa: E402
+from synthesizer.emission_models.visualise_network import (  # noqa: E402, I001
     _assign_layers,
     _band_loads,
     _box_sizes,
@@ -31,9 +35,6 @@ from synthesizer.emission_models.visualise_network import (  # noqa: E402
     _row_gaps,
     _shape_spec,
 )
-
-# Render without a display
-matplotlib.use("Agg")
 
 
 @pytest.fixture(autouse=True)
