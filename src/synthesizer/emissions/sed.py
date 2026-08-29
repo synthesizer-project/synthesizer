@@ -1130,7 +1130,7 @@ class Sed:
         return get_quantity_view(self, "_fnu")
 
     @timed("Sed.get_fnu")
-    def get_fnu(self, cosmo, z, igm=None, nthreads=1):
+    def get_fnu(self, cosmo, z, igm=None, nthreads=1, peculiar_velocity=None):
         """Calculate the observed frame spectral energy distribution.
 
         This will also populate the observed wavelength and frequency arrays
@@ -1144,12 +1144,18 @@ class Sed:
             cosmo (astropy.cosmology):
                 astropy cosmology instance.
             z (float):
-                The redshift of the spectra.
+                The cosmological redshift of the spectra (sets luminosity
+                distance and IGM).
             igm (igm):
                 The IGM class. e.g. `synthesizer.igm.Inoue14`.
                 Defaults to None.
             nthreads (int):
                 The number of threads to use for the bulk flux conversion.
+            peculiar_velocity (unyt_quantity/float):
+                Line-of-sight peculiar velocity (positive = receding), a unyt
+                velocity or a float in km/s. Shifts the spectrum to z_obs with
+                1 + z_obs = (1 + z)(1 + v / c); distance and IGM stay at z.
+                Defaults to None (no shift).
 
         Returns:
             fnu (ndarray)
@@ -1164,6 +1170,17 @@ class Sed:
         if self.redshift == 0:
             return self.get_fnu0()
 
+        # Peculiar velocity shifts the spectrum to z_obs without moving the
+        # source; z_obs == z when no velocity is given.
+        if peculiar_velocity is not None:
+            if hasattr(peculiar_velocity, "units"):
+                beta = float((peculiar_velocity / c).to_value(""))
+            else:
+                beta = float(peculiar_velocity) / c.to_value("km/s")
+            z_obs = (1.0 + float(z)) * (1.0 + beta) - 1.0
+        else:
+            z_obs = float(z)
+
         # Ensure the arrays are ready to be handed to the C++
         if self._lnu.dtype != np.float64 or not self._lnu.flags.c_contiguous:
             self._lnu = np.ascontiguousarray(self._lnu, dtype=np.float64)
@@ -1177,8 +1194,11 @@ class Sed:
             self._obsnu = np.empty_like(self._nu)
 
         # Calculate the observed wavelength and frequency
-        one_plus_z = 1.0 + float(z)
+        one_plus_z = 1.0 + z_obs
+        # d_L is set by the cosmological z, rescaled to the observed frame
+        # (factor 1 when there is no peculiar velocity).
         luminosity_distance_cm = get_luminosity_distance(cosmo, z).to_value(cm)
+        luminosity_distance_cm *= one_plus_z / (1.0 + float(z))
         conversion = (
             get_attr_unit_conversion(
                 self.__class__.__dict__["lnu"].unit,

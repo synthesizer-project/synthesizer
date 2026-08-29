@@ -281,7 +281,9 @@ class BaseGalaxy:
 
         return equivalent_widths
 
-    def get_observed_spectra(self, cosmo, igm=Inoue14, nthreads=1):
+    def get_observed_spectra(
+        self, cosmo, igm=Inoue14, nthreads=1, peculiar_velocity=None
+    ):
         """Calculate the observed spectra for all Seds within this galaxy.
 
         This will run Sed.get_fnu(...) and populate Sed.fnu (and sed.obslam
@@ -306,6 +308,10 @@ class BaseGalaxy:
             nthreads (int):
                 The number of threads to use for observer-frame flux
                 conversion.
+            peculiar_velocity (unyt_quantity/float):
+                Line-of-sight peculiar velocity passed to Sed.get_fnu. If
+                None, a `peculiar_velocity` attribute on the galaxy is used if
+                set. Defaults to None.
 
         Raises:
             MissingAttribute
@@ -319,6 +325,10 @@ class BaseGalaxy:
                 " calculated without one."
             )
 
+        # An explicit argument overrides a peculiar_velocity set on the galaxy.
+        if peculiar_velocity is None:
+            peculiar_velocity = getattr(self, "peculiar_velocity", None)
+
         # Loop over all combined spectra
         for sed in self.spectra.values():
             # Calculate the observed spectra
@@ -327,6 +337,7 @@ class BaseGalaxy:
                 z=self.redshift,
                 igm=igm,
                 nthreads=nthreads,
+                peculiar_velocity=peculiar_velocity,
             )
 
         # Do we have stars?
@@ -339,6 +350,7 @@ class BaseGalaxy:
                     z=self.redshift,
                     igm=igm,
                     nthreads=nthreads,
+                    peculiar_velocity=peculiar_velocity,
                 )
 
             # Loop over all stellar particle spectra
@@ -350,6 +362,7 @@ class BaseGalaxy:
                         z=self.redshift,
                         igm=igm,
                         nthreads=nthreads,
+                        peculiar_velocity=peculiar_velocity,
                     )
 
         # Do we have black holes?
@@ -362,6 +375,7 @@ class BaseGalaxy:
                     z=self.redshift,
                     igm=igm,
                     nthreads=nthreads,
+                    peculiar_velocity=peculiar_velocity,
                 )
 
             # Loop over all black hole particle spectra
@@ -373,6 +387,7 @@ class BaseGalaxy:
                         z=self.redshift,
                         igm=igm,
                         nthreads=nthreads,
+                        peculiar_velocity=peculiar_velocity,
                     )
 
     def get_observed_lines(self, cosmo, igm=Inoue14):
