@@ -52,9 +52,9 @@ params = [
 # Custom labels for SommovigoBartlett2026 entries showing the dust
 # mixture and grain-model reference instead of raw parameter values.
 sb26_labels = {
-    10: "SB26 (MW, WD01)",
-    11: "SB26 (SMC, WD01)",
-    12: "SB26 (stellar, HA19)",
+    10: "SB26 (TNG-SKIRT, MW WD01 mix)",
+    11: "SB26 (TNG-SKIRT, SMC WD01 mix)",
+    12: "SB26 (TNG-SKIRT, stellar HA19 mix)",
 }
 
 colors = cmr.take_cmap_colors("cmr.guppy", len(models))
@@ -99,7 +99,6 @@ plt.show()
 # --- Plot 2: SB26 predicted from median TNG galaxy properties ---
 from synthesizer.emission_models.transformers.dust_attenuation import (
     SommovigoBartlett2026,
-    predict_sommovigo_bartlett_2026,
 )
 
 # Median galaxy properties from the combined TNG50+TNG100
@@ -113,21 +112,21 @@ tng_medians = {
 }
 
 dust_models = {
-    "MW (WD01)": "MW",
-    "SMC (WD01)": "SMC",
-    "stellar (HA19)": "stellar",
+    "(TNG-SKIRT, MW WD01 mix)": "MW",
+    "(TNG-SKIRT, SMC WD01 mix)": "SMC",
+    "(TNG-SKIRT, stellar HA19 mix)": "stellar",
 }
 
 dm_colors = {
-    "MW (WD01)": "#3b0f6f",
-    "SMC (WD01)": "#b63679",
-    "stellar (HA19)": "#fd9f6c",
+    "(TNG-SKIRT, MW WD01 mix)": "#3b0f6f",
+    "(TNG-SKIRT, SMC WD01 mix)": "#b63679",
+    "(TNG-SKIRT, stellar HA19 mix)": "#fd9f6c",
 }
 
 fig2, ax2 = plt.subplots(figsize=(8, 6))
 
 for label, dm in dust_models.items():
-    params = predict_sommovigo_bartlett_2026(
+    params = SommovigoBartlett2026.predict(
         **tng_medians,
         dust_model=dm,
         add_noise=False,
