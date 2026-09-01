@@ -307,6 +307,13 @@ class DustEmission(Generator):
         This stores the effective temperature in last_effective_temperature
         which can be returned by temperature_z for labelling. This feature is
         mostly only useful when using the generators in isolation.
+
+        Note that those stored values belong to whichever call ran last. One
+        generator can be attached to several models and used for many
+        emitters, so they say nothing about which emission they came from, and
+        they are not safe to read if generation is ever threaded. See
+        https://github.com/synthesizer-project/synthesizer/issues/1196. Take
+        the returned values instead when it matters which call they came from.
         """
         # Return immediately if we aren't applying cmb heating
         if not self.do_cmb_heating:

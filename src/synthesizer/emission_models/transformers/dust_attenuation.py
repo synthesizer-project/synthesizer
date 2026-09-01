@@ -53,7 +53,6 @@ __all__ = [
     "DraineLiGrainCurves",
 ]
 
-_RESET_SENTINEL = object()
 _DRAINE_LI_MEAN_MOLECULAR_WEIGHT = 1.4
 _HYDROGEN_MASS = 1.6738e-24 * g
 _GAS_MASS_PER_H = (_DRAINE_LI_MEAN_MOLECULAR_WEIGHT * _HYDROGEN_MASS).to(Msun)
@@ -98,8 +97,6 @@ class AttenuationLaw(Transformer):
         # names, e.g. allows the user to set e.g. slope = 'slope_young' on the
         # emitter or model and have that passed to the dust curve as slope
         self._name_transforms = {}
-        # Stores overridden parameters temporarily
-        self._temp_params = {}
         if ("tau_v" not in required_params) and (require_tau_v is True):
             raise exceptions.InconsistentArguments(
                 "AttenuationLaw requires 'tau_v' as a parameter."
@@ -149,15 +146,9 @@ class AttenuationLaw(Transformer):
                 shape for singular tau_v values or (tau_v.size, lam.size)
                 tau_v is an array.
         """
-        # Set any additional parameters on the dust curve
-        self._set_params(**dust_curve_kwargs)
-
-        try:
-            # Get the optical depth at each wavelength
-            tau_x_v = self.get_tau(lam)
-        finally:
-            # Always restore previous state
-            self._reset_params()
+        # Get the optical depth at each wavelength, from a curve carrying any
+        # parameters which were defined on the model or emitter
+        tau_x_v = self._with_params(**dust_curve_kwargs).get_tau(lam)
 
         # Include the V band optical depth in the exponent
         # For a scalar we can just multiply but for an array we need to
@@ -193,27 +184,19 @@ class AttenuationLaw(Transformer):
             **dust_curve_kwargs (dict):
                 Additional keyword arguments to be passed to the dust curve
                 which have been defined on the emitter or model.  These are
-                forwarded to ``_set_params`` before the computation and the
-                original state is restored afterward.
+                applied to a copy of this curve for the computation,
+                leaving this curve unchanged.
 
         Returns:
             np.ndarray of float:
                 The normalised extinction curve ``tau(lambda)/tau(V)``
                 with shape ``lam.shape``.
         """
-        # Push any dynamically-set dust curve parameters onto the instance,
-        # compute the raw normalised extinction curve, then restore the
-        # previous state regardless of exceptions.
-        self._set_params(**dust_curve_kwargs)
-
-        try:
-            # The heavy lifting still lives in get_tau; this helper just gives
-            # callers a clearer, attenuation-specific entry point.
-            return self.get_tau(lam)
-        finally:
-            # Always put the instance back the way we found it so temporary
-            # overrides do not leak into later calls.
-            self._reset_params()
+        # The heavy lifting still lives in get_tau; this helper just gives
+        # callers a clearer, attenuation-specific entry point. Any dynamically
+        # set parameters are applied to a copy, leaving this curve alone for
+        # anything else using it.
+        return self._with_params(**dust_curve_kwargs).get_tau(lam)
 
     def _check_required_params(self):
         """Set up the required parameters for the transformer.
@@ -283,39 +266,34 @@ class AttenuationLaw(Transformer):
             **params,
         )
 
-    def _set_params(self, **params):
-        """Set the parameters of the dust curve.
+    def _with_params(self, **params):
+        """Return this dust curve with a set of parameters applied.
 
-        This method will set any parameters defined in params as attributes
-        of the dust curve. This allows for parameters to be set on the
-        emitter or model and then used by the dust curve.
+        The parameters a dust curve needs can be set on the model or the
+        emitter rather than on the curve itself, in which case they are only
+        known at the point the emission is transformed. They are applied to a
+        copy rather than to the curve itself: one curve can be shared by many
+        models, and mutating it for the duration of a transformation would not
+        survive those models being transformed concurrently.
 
         Args:
             **params (dict):
-                The parameters to set.
-        """
-        # Save existing state of only the attributes we will override,
-        # then apply overrides mapped to the actual attribute names.
-        self._temp_params = {}
-        overrides = {}
-        for key, value in params.items():
-            attr = self._name_transforms.get(key, key)
-            overrides[attr] = value
-        for attr, value in overrides.items():
-            prev = getattr(self, attr, _RESET_SENTINEL)
-            self._temp_params[attr] = prev
-            setattr(self, attr, value)
+                The parameters to apply, keyed by the name they were found
+                under rather than by the attribute they set.
 
-    def _reset_params(self):
-        """Reset the parameters of the dust curve to their previous state."""
-        for attr, prev in self._temp_params.items():
-            if prev is _RESET_SENTINEL:
-                # Attribute did not exist prior to override
-                if hasattr(self, attr):
-                    delattr(self, attr)
-            else:
-                setattr(self, attr, prev)
-        self._temp_params = {}
+        Returns:
+            AttenuationLaw:
+                A copy of this dust curve with the parameters applied, or the
+                curve itself when there are none to apply.
+        """
+        if len(params) == 0:
+            return self
+
+        curve = copy.copy(self)
+        for key, value in params.items():
+            setattr(curve, self._name_transforms.get(key, key), value)
+
+        return curve
 
     @accepts(lam=angstrom)
     def plot_attenuation(
@@ -1692,26 +1670,20 @@ class DraineLiGrainCurves(AttenuationLaw):
                 "not use tau_v. Ignoring tau_v in the calculation."
             )
 
-        # Set any additional parameters on the dust curve
-        self._set_params(**dust_curve_kwargs)
+        # Apply any parameters defined on the model or emitter to a copy, so
+        # this curve is left alone for anything else using it
+        curve = self._with_params(**dust_curve_kwargs)
 
-        try:
-            sigmalos_H = dust_curve_kwargs.get(
-                "sigmalos_H", getattr(self, "sigmalos_H", None)
-            )
-            # Gather sigmalos_* dust components: start with attributes, then
-            # override with kwargs.
-            sigmalos_dust = {}
-            for key in vars(self):
-                if key.startswith("sigmalos_") and key != "sigmalos_H":
-                    sigmalos_dust[key] = getattr(self, key)
-            for key, value in dust_curve_kwargs.items():
-                if key.startswith("sigmalos_") and key != "sigmalos_H":
-                    sigmalos_dust[key] = value
-            # Compute tau_lam directly (tau_v is not used for this model)
-            tau_lam = self.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
-        finally:
-            # Always restore previous state
-            self._reset_params()
+        sigmalos_H = getattr(curve, "sigmalos_H", None)
+
+        # Gather the sigmalos_* dust components
+        sigmalos_dust = {
+            key: getattr(curve, key)
+            for key in vars(curve)
+            if key.startswith("sigmalos_") and key != "sigmalos_H"
+        }
+
+        # Compute tau_lam directly (tau_v is not used for this model)
+        tau_lam = curve.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
 
         return np.exp(-tau_lam)
