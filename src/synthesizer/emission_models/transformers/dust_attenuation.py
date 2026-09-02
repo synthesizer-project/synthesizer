@@ -1267,28 +1267,53 @@ class SommovigoBartlett2026(AttenuationLaw):
 
     def __init__(
         self,
-        B_0=0.025,
-        B_1s=-0.025,
-        B_2s=-0.045,
-        B_3=3.07,
+        B_0="B_0",
+        B_1s="B_1s",
+        B_2s="B_2s",
+        B_3="B_3",
     ):
         """Initialise the dust curve.
+
+        Each parameter is set to a string by default to signal that the
+        parameter should be extracted from an emitter (e.g., stars.B_0). This
+        enables the extraction of different parameters for different galaxies
+        when calling get_spectra. Fixed value defaults are detailed below.
+
+        To populate the parameters on a galaxy call
+        get_dust_curve_params_sommovigobartlett2026 on the galaxy object. This
+        will populate the parameters on the galaxy using the predict method
+        below and storing them on the galaxy's stars object. Then, when
+        calling get_spectra, the parameters will be extracted from each stars
+        object giving a unique attenuation curve for each galaxy.
+
+        Alternatively, the predict method can be called with arbitrary input
+        properties to generate a single attenuation curve with fixed
+        parameters.
 
         Args:
             B_0 (float):
                 UV bump amplitude. Typical range (0, 2.5); strongly
-                dust-model dependent: ~1.2 for MW, ~0 for SMC/stellar.
+                dust-model dependent: ~1.2 for MW, ~0 for SMC/stellar. The
+                default string states that B_0 should be extracted
+                from an emitter, e.g. stars.B_0. For a fixed default value
+                use B_0=0.025.
             B_1s (float):
                 Linear slope term, scaled by 1e-3. The internal
                 parameter B_1 = 1e3 * B_1s. Typical range
-                (-0.15, 0.10).
+                (-0.15, 0.10). The default string states that B_1s should be
+                extracted from an emitter, e.g. stars.B_1s. For a fixed default
+                value use B_1s=-0.025.
             B_2s (float):
                 Slope modulation term, scaled by 1e-3. The internal
                 parameter B_2 = 1e3 * B_2s. Typical range
-                (-2.5, 1.1).
+                (-2.5, 1.1). The default string states that B_2s should be
+                extracted from an emitter, e.g. stars.B_2s. For a fixed default
+                value use B_2s=-0.045.
             B_3 (float):
                 Exponential/curvature parameter. Typical range
-                (0.8, 5.1).
+                (0.8, 5.1). The default string states that B_3 should be
+                extracted from an emitter, e.g. stars.B_3. For a fixed default
+                value use B_3=3.07.
         """
         description = (
             "Four-parameter attenuation curve calibrated on "
