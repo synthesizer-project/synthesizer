@@ -3125,3 +3125,16 @@ class BaseGalaxy:
 
             # Print the table for this model
             print(formatter.get_table(f"Model: {model_label}"))
+
+    def get_dust_curve_parameters_sommovigobartlett2026(self):
+        """Get the dust curve parameters for Sommovigo & Bartlett 2026.
+
+        This method is a perquisite for using the SommovigoBartlett2026 dust
+        curve model without fixing all the dust curve parameters to fixed
+        values.
+
+        Running this function will compute the dust curve parameters based on
+        this galaxies properties and attach them to the stars component ready
+        for using the dust curve transformer in calls to get_spectra.
+        """
+        pass
