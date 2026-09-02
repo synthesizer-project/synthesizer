@@ -3200,10 +3200,10 @@ class BaseGalaxy:
         """
         # Ensure we have both stars and gas components to calculate the
         # parameters from
-        if self.stars is None or self.gas is None:
+        if self.stars is None:
             raise exceptions.MissingAttribute(
-                "SommovigoBartlett2026 parameter prediction requires both "
-                "stellar and gas components."
+                "SommovigoBartlett2026 parameter prediction requires a "
+                "stellar component."
             )
 
         def resolve(value):
@@ -3268,6 +3268,11 @@ class BaseGalaxy:
 
         # Calculate the mass weighted gas phase metallicity if we don't have it
         if z_gas is None:
+            if self.gas is None:
+                raise exceptions.MissingAttribute(
+                    "A gas component is required to calculate z_gas. Pass "
+                    "z_gas directly or as a galaxy attribute instead."
+                )
             gas_mass = np.sum(self.gas.masses)
             if gas_mass <= 0 * Msun:
                 raise exceptions.InconsistentArguments(

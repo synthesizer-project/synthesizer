@@ -144,15 +144,29 @@ def test_sommovigo_bartlett_parameters_from_galaxy_attributes():
     assert params == pytest.approx(expected)
 
 
-def test_sommovigo_bartlett_parameters_require_stars_and_gas():
-    """SB26 galaxy prediction requires both particle components."""
+def test_sommovigo_bartlett_parameters_allow_supplied_gas_metallicity():
+    """A supplied gas metallicity should allow galaxies without gas."""
+    galaxy = Galaxy(stars=_make_particle_galaxy().stars)
+
+    params = galaxy.get_dust_curve_params_sommovigobartlett2026(
+        sigma_sfr=0.01,
+        inclination=45,
+        z_gas=0.02,
+        log10_mstar=10.5,
+        ssfr=0.5,
+    )
+
+    assert params["tau_v"] == galaxy.stars.tau_v
+
+
+def test_sommovigo_bartlett_parameters_require_gas_to_derive_metallicity():
+    """Automatic gas metallicity requires a gas component."""
     galaxy = Galaxy(stars=_make_particle_galaxy().stars)
 
     with pytest.raises(exceptions.MissingAttribute):
         galaxy.get_dust_curve_params_sommovigobartlett2026(
             sigma_sfr=0.01,
             inclination=45,
-            z_gas=0.02,
             log10_mstar=10.5,
             ssfr=0.5,
         )
