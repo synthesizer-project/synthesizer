@@ -5,6 +5,7 @@ import pytest
 from scipy import signal
 from unyt import (
     Hz,
+    K,
     Mpc,
     Msun,
     Myr,
@@ -836,3 +837,47 @@ def stars_with_fake_spectra(test_grid):
         "nebular": Sed(test_grid.lam, lnu=fake_particle_lnu * 0.3),
     }
     return stars
+
+
+@pytest.fixture
+def energy_balance_model(test_grid):
+    """Return a tree whose generator depends on two other models."""
+    from synthesizer.emission_models import DustEmission, StellarEmissionModel
+    from synthesizer.emission_models.generators.dust.blackbody import (
+        Blackbody,
+    )
+    from synthesizer.emission_models.transformers import EscapingFraction
+
+    intrinsic = StellarEmissionModel(
+        label="intrinsic",
+        grid=test_grid,
+        extract="incident",
+    )
+    attenuated = StellarEmissionModel(
+        label="attenuated",
+        apply_to=intrinsic,
+        transformer=EscapingFraction(("fesc",)),
+        fesc=0.1,
+    )
+    return DustEmission(
+        dust_emission_model=Blackbody(temperature=50 * K),
+        emitter="stellar",
+        label="dust_emission",
+        dust_lum_intrinsic=intrinsic,
+        dust_lum_attenuated=attenuated,
+    )
+
+
+@pytest.fixture
+def dusty_stellar_model(test_grid):
+    """Return a stellar only model which also generates dust emission."""
+    from synthesizer.emission_models import Greybody, PacmanEmission
+    from synthesizer.emission_models.attenuation import PowerLaw
+
+    return PacmanEmission(
+        grid=test_grid,
+        tau_v=0.3,
+        fesc=0.1,
+        dust_curve=PowerLaw(slope=-1),
+        dust_emission=Greybody(temperature=30 * K, emissivity=2.0),
+    )
