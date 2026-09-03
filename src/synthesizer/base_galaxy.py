@@ -3151,10 +3151,11 @@ class BaseGalaxy:
         this galaxies properties and attach them to the stars component ready
         for using the dust curve transformer in calls to get_spectra. This
         function will attach:
-            - self.B_0 (uv bump amplitude)
-            - self.B_1s (linear slope term, scaled by 1e-3)
-            - self.B_2s (slope modulation)
-            - self.B_3 (Exponential/curvature parameter)
+            - self.stars.tau_v (V-band optical depth)
+            - self.stars.B_0 (uv bump amplitude)
+            - self.stars.B_1s (linear slope term, scaled by 1e-3)
+            - self.stars.B_2s (slope modulation)
+            - self.stars.B_3 (Exponential/curvature parameter)
 
         Based on (also computed in this function where necessary):
 
