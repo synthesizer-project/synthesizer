@@ -546,11 +546,10 @@ class Stars(StarsComponent):
 
     @accepts(age_offset=yr)
     def get_at_earlier_time(self, age_offset=age_offset):
-        """Get a new Stars object representing the population at age_offset.
+        """Get a Stars object representing the population at an earlier time.
 
-        This is done by applying a lookback time to the age grid and then
-        remapping the SFZH onto the new grid using a particle Stars object to
-        perform the remapping.
+           Apply an age_offset to the SFZH age grid and use the precomputed
+           normalisation to get the current mass.
 
         Args:
             age_offset (unyt_quantity):
@@ -559,19 +558,15 @@ class Stars(StarsComponent):
         Returns:
             Stars: New Stars object on the requested grid.
         """
-        # Calculate the initial mass at the earlier time
-        initial_mass_at_age = self.calculate_initial_mass_at_age(age_offset)
-
-        # Calculate the new SFZH grid at the earlier time
+        # Calculate the new SFZH grid at the earlier time and normalise
+        # so it sums to the appropriate mass.
         sfzh = self._get_sfzh(age_offset=age_offset)
 
-        # Create a new Stars object with the new SFZH grid and initial mass
-        return Stars(
-            self.log10ages,
-            self.metallicities,
-            sfzh=sfzh,
-            initial_mass=initial_mass_at_age,
-        )
+        if getattr(self, "sfzh_normalisation", None) is not None:
+            sfzh = sfzh * self.sfzh_normalisation
+
+        # Create a new Stars object with this SFZH.
+        return Stars(self.log10ages, self.metallicities, sfzh=sfzh)
 
     @timed("Stars.get_mask")
     def get_mask(
