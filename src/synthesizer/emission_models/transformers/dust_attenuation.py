@@ -24,14 +24,18 @@ import numpy as np
 from dust_extinction import grain_models
 from scipy import interpolate
 from unyt import (
+    Gyr,
     Msun,
     angstrom,
     cm,
+    degree,
     g,
+    kpc,
     pc,
     um,
     unyt_array,
     unyt_quantity,
+    yr,
 )
 
 from synthesizer import exceptions
@@ -1267,28 +1271,53 @@ class SommovigoBartlett2026(AttenuationLaw):
 
     def __init__(
         self,
-        B_0=0.025,
-        B_1s=-0.025,
-        B_2s=-0.045,
-        B_3=3.07,
+        B_0="B_0",
+        B_1s="B_1s",
+        B_2s="B_2s",
+        B_3="B_3",
     ):
         """Initialise the dust curve.
+
+        Each parameter is set to a string by default to signal that the
+        parameter should be extracted from an emitter (e.g., stars.B_0). This
+        enables the extraction of different parameters for different galaxies
+        when calling get_spectra. Fixed value defaults are detailed below.
+
+        To populate the parameters on a galaxy call
+        get_dust_curve_params_sommovigobartlett2026 on the galaxy object. This
+        will populate the parameters on the galaxy using the predict method
+        below and storing them on the galaxy's stars object. Then, when
+        calling get_spectra, the parameters will be extracted from each stars
+        object giving a unique attenuation curve for each galaxy.
+
+        Alternatively, the predict method can be called with arbitrary input
+        properties to generate a single attenuation curve with fixed
+        parameters.
 
         Args:
             B_0 (float):
                 UV bump amplitude. Typical range (0, 2.5); strongly
-                dust-model dependent: ~1.2 for MW, ~0 for SMC/stellar.
+                dust-model dependent: ~1.2 for MW, ~0 for SMC/stellar. The
+                default string states that B_0 should be extracted
+                from an emitter, e.g. stars.B_0. For a fixed default value
+                use B_0=0.025.
             B_1s (float):
                 Linear slope term, scaled by 1e-3. The internal
                 parameter B_1 = 1e3 * B_1s. Typical range
-                (-0.15, 0.10).
+                (-0.15, 0.10). The default string states that B_1s should be
+                extracted from an emitter, e.g. stars.B_1s. For a fixed default
+                value use B_1s=-0.025.
             B_2s (float):
                 Slope modulation term, scaled by 1e-3. The internal
                 parameter B_2 = 1e3 * B_2s. Typical range
-                (-2.5, 1.1).
+                (-2.5, 1.1). The default string states that B_2s should be
+                extracted from an emitter, e.g. stars.B_2s. For a fixed default
+                value use B_2s=-0.045.
             B_3 (float):
                 Exponential/curvature parameter. Typical range
-                (0.8, 5.1).
+                (0.8, 5.1). The default string states that B_3 should be
+                extracted from an emitter, e.g. stars.B_3. For a fixed default
+                value use B_3=3.07.
         """
         description = (
             "Four-parameter attenuation curve calibrated on "
@@ -1358,6 +1387,11 @@ class SommovigoBartlett2026(AttenuationLaw):
         return self.get_tau(lam)
 
     @classmethod
+    @accepts(
+        sigma_sfr=Msun / yr / kpc**2,
+        inclination=degree,
+        ssfr=Gyr**-1,
+    )
     def predict(
         cls,
         sigma_sfr,
@@ -1385,17 +1419,17 @@ class SommovigoBartlett2026(AttenuationLaw):
             (https://arxiv.org/abs/2606.10027)
 
         Args:
-            sigma_sfr (float/np.ndarray of float):
+            sigma_sfr (unyt_quantity/unyt_array):
                 Star formation rate surface density
                 [Msun yr^-1 kpc^-2].
-            inclination (float/np.ndarray of float):
+            inclination (unyt_quantity/unyt_array):
                 Galaxy inclination angle [degrees].
             z_gas (float/np.ndarray of float):
                 Gas-phase metallicity as absolute mass fraction
                 (e.g. Zsun = 0.0142, Asplund et al. 2009).
             log10_mstar (float/np.ndarray of float):
                 Log10 stellar mass [log10(Msun)].
-            ssfr (float/np.ndarray of float):
+            ssfr (unyt_quantity/unyt_array):
                 Specific star formation rate [Gyr^-1].
             dust_model (str):
                 Dust mixture model. One of 'MW', 'SMC', or
@@ -1415,9 +1449,10 @@ class SommovigoBartlett2026(AttenuationLaw):
             Get predicted parameters for a single galaxy::
 
                 params = SommovigoBartlett2026.predict(
-                    sigma_sfr=0.01, inclination=60.0,
+                    sigma_sfr=0.01 * Msun / yr / kpc**2,
+                    inclination=60.0 * degree,
                     z_gas=0.02, log10_mstar=10.5,
-                    ssfr=0.5, dust_model='MW',
+                    ssfr=0.5 / Gyr, dust_model='MW',
                 )
                 curve = SommovigoBartlett2026(
                     B_0=params['B_0'],
@@ -1450,6 +1485,7 @@ class SommovigoBartlett2026(AttenuationLaw):
             )
         )
 
+        # Promote all inputs to at least 1D arrays for broadcasting
         sigma_sfr = np.atleast_1d(np.asarray(sigma_sfr, dtype=float))
         inclination = np.atleast_1d(np.asarray(inclination, dtype=float))
         z_gas = np.atleast_1d(np.asarray(z_gas, dtype=float))
@@ -1467,18 +1503,21 @@ class SommovigoBartlett2026(AttenuationLaw):
             sigma_sfr, inclination, z_gas, log10_mstar, ssfr
         )
 
+        # Check for negative values in sigma_sfr, which is physically invalid
         if np.any(sigma_sfr < 0):
             raise exceptions.InconsistentArguments(
                 "sigma_sfr must be non-negative."
             )
 
-        sini = np.sin(inclination * np.pi / 180.0)
+        # Compute the sine of the inclination angle in radians
+        sin_i = np.sin(inclination * np.pi / 180.0)
 
         # Floor small values to avoid log10(0) and 0**negative
-        sini = np.clip(sini, 1e-10, None)
+        sin_i = np.clip(sin_i, 1e-10, None)
         sigma_sfr = np.clip(sigma_sfr, 1e-10, None)
 
         def _noise(sigma, shape):
+            """Helper function to add Gaussian noise if requested."""
             if add_noise:
                 return np.random.normal(0, sigma, size=shape)
             return 0.0
@@ -1496,7 +1535,7 @@ class SommovigoBartlett2026(AttenuationLaw):
         ]
         log10_av = (
             c[0]
-            - c[1] / np.log10(c[2] * sini)
+            - c[1] / np.log10(c[2] * sin_i)
             - c[3] / np.log10(c[4] * f)
             - c[5] * (c[6] * sigma_sfr) ** (-c[7] * z_gas)
             + _noise(0.221, sigma_sfr.shape)
@@ -1507,7 +1546,7 @@ class SommovigoBartlett2026(AttenuationLaw):
         # Step 2: Predict B_1s
         c = [0.0324, 25.5, 2.36, 0.00411, 1.95]
         B_1s = c[0] / A_V * (
-            (c[1] * z_gas) ** (c[2] * sini)
+            (c[1] * z_gas) ** (c[2] * sin_i)
             - c[3] * log10_mstar / np.log10(c[4] * f)
         ) + _noise(0.058, A_V.shape)
         B_1s = np.clip(B_1s, -1.0, 1.0)
@@ -1525,7 +1564,7 @@ class SommovigoBartlett2026(AttenuationLaw):
         ]
         B_3 = (
             -c[0]
-            - c[1] * sini
+            - c[1] * sin_i
             + c[2] * z_gas * (c[3] * A_V) ** (-c[4] * ssfr)
             + c[5] * (c[6] * A_V) ** (-c[7] * f)
             + _noise(0.728, A_V.shape)
