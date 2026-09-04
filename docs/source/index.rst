@@ -62,6 +62,22 @@ Please cite **both** of the following papers (`Lovell et al. 2025 <https://astro
          pages = {9436},
       }
 
+If you use a grid post-processed using our photoionisation package `Syncretize <https://github.com/synthesizer-project/syncretize>`_, please also cite the following paper (`Vijayan et al. 2026 <https://arxiv.org/abs/2607.27467>`_):
+
+.. code-block:: bibtex
+
+      @article{Vijayan2026Photoionisation,
+         author = {Vijayan, Aswin P. and Wilkins, Stephen M. and Newman, Sophie L. and Lovell, Christopher C. and Roper, William J. and Berger, Sabrina and Harvey, Thomas and Turner, Jack C.},
+         journal = {arXiv e-prints},
+         doi = {10.48550/arXiv.2607.27467},
+         year = {2026},
+         month = {jul},
+         eprint = {2607.27467},
+         archivePrefix = {arXiv},
+         primaryClass = {astro-ph.GA},
+         title = {Stellar photoionisation modelling in {SYNTHESIZER}},
+      }
+
 Contributing
 ------------
 
