@@ -37,10 +37,33 @@ DATABASE_FILE = os.path.join(os.path.dirname(__file__), "_data_ids.yml")
 
 # The Synthesizer data service. Files migrated from Box carry a "dataset" key
 # naming their catalogue entry, and are resolved through this API instead of a
-# direct link. Overridable for testing against a development deployment.
-DATA_API_URL = os.environ.get(
-    "SYNTHESIZER_DATA_API_URL", "https://data.synthesizer-project.org"
-).rstrip("/")
+# direct link.
+DATA_API_URL = "https://data.synthesizer-project.org"
+
+# The same service under its Cloudflare workers.dev hostname, tried when the
+# first host cannot be reached.
+#
+# This exists because data.synthesizer-project.org was registered in September
+# 2026, and security products routinely block or TLS-intercept domains they
+# have not seen before. Networks doing so break the API for anyone behind
+# them, while the older workers.dev hostname is unaffected. Both hostnames
+# serve the same Worker, and a download url is always returned relative to
+# whichever host answered, so a fallback resolve stays self-consistent.
+#
+# Remove this once the domain has aged out of "newly registered" categories,
+# which typically takes about a month.
+DATA_API_FALLBACK_URL = (
+    "https://synthesizer-data-api.universe-engine.workers.dev"
+)
+
+# An explicit override replaces both, for testing against a development
+# deployment.
+_API_OVERRIDE = os.environ.get("SYNTHESIZER_DATA_API_URL")
+DATA_API_URLS = (
+    [_API_OVERRIDE.rstrip("/")]
+    if _API_OVERRIDE
+    else [DATA_API_URL, DATA_API_FALLBACK_URL]
+)
 
 
 def load_database_yaml():
@@ -109,14 +132,43 @@ TEST_DATA_TRANSLATION = {
 }
 
 
-def _resolve_release(dataset):
-    """Resolve a catalogue dataset name to its current release.
-
-    Asks the Synthesizer data service which file is currently published for
-    this dataset. The response carries the download location and the expected
-    SHA-256, so the download can be verified once it completes.
+def _request(url, **kwargs):
+    """Make a GET request, turning transport errors into DownloadErrors.
 
     Args:
+        url (str): The url to request.
+        **kwargs: Keyword arguments passed through to requests.get.
+
+    Returns:
+        requests.Response: The response, which may carry any status code.
+
+    Raises:
+        DownloadError:
+            If the server cannot be reached at all. TLS failures get an extra
+            hint, because they are almost always a network that re-signs
+            HTTPS with its own certificate authority rather than a problem
+            with the data service.
+    """
+    try:
+        return requests.get(url, **kwargs)
+    except requests.exceptions.SSLError as e:
+        raise exceptions.DownloadError(
+            f"Could not verify the TLS certificate for {url}: {e}\n"
+            "This usually means the network is inspecting HTTPS traffic with "
+            "its own certificate authority. Point Python at that authority's "
+            "certificate, for example by setting SSL_CERT_FILE or "
+            "REQUESTS_CA_BUNDLE to it, rather than disabling verification."
+        ) from e
+    except requests.RequestException as e:
+        raise exceptions.DownloadError(f"Failed to reach {url}: {e}") from e
+
+
+def _resolve_release_at(base_url, dataset):
+    """Resolve a dataset through one host of the data service.
+
+    Args:
+        base_url (str):
+            The base url of the data service to ask.
         dataset (str):
             The catalogue name of the dataset, as stored in the database yaml.
 
@@ -126,16 +178,13 @@ def _resolve_release(dataset):
 
     Raises:
         DownloadError:
-            If the catalogue cannot be reached, does not know the dataset, or
-            has no file currently published for it.
+            If the host cannot be reached, does not know the dataset, or has
+            no file currently published for it.
     """
-    url = f"{DATA_API_URL}/v1/datasets/{dataset}"
+    url = f"{base_url}/v1/datasets/{dataset}"
 
     # Ask the catalogue for the dataset
-    try:
-        response = requests.get(url, timeout=30)
-    except requests.RequestException as e:
-        raise exceptions.DownloadError(f"Failed to reach {url}: {e}") from e
+    response = _request(url, timeout=30)
 
     # Ensure the request was successful
     if response.status_code != 200:
@@ -152,6 +201,56 @@ def _resolve_release(dataset):
         )
 
     return release
+
+
+def _resolve_release(dataset):
+    """Resolve a catalogue dataset name to its current release.
+
+    Asks the Synthesizer data service which file is currently published for
+    this dataset. The response carries the download location and the expected
+    SHA-256, so the download can be verified once it completes.
+
+    Each known host is tried in turn, so a network that blocks or intercepts
+    one hostname does not make published data unreachable.
+
+    Args:
+        dataset (str):
+            The catalogue name of the dataset, as stored in the database yaml.
+
+    Returns:
+        dict:
+            The current release, including its download url and file details.
+
+    Raises:
+        DownloadError:
+            If no host could resolve the dataset. The reason from every host
+            is included, since they commonly differ.
+    """
+    failures = []
+    for index, base_url in enumerate(DATA_API_URLS):
+        try:
+            release = _resolve_release_at(base_url, dataset)
+        except exceptions.DownloadError as e:
+            failures.append(f"{base_url}: {e}")
+            continue
+
+        # Say so when the primary host had to be skipped, since a silently
+        # different source is exactly the kind of thing that wastes an
+        # afternoon later. The message deliberately omits the dataset name so
+        # that a batch of downloads warns once rather than once per file.
+        if index > 0:
+            warn(
+                f"Could not reach {DATA_API_URLS[0]}, so data is being "
+                f"resolved through {base_url} instead. This usually means "
+                "the network blocks or inspects the primary hostname."
+            )
+
+        return release
+
+    raise exceptions.DownloadError(
+        f"Could not resolve {dataset} through any known host.\n"
+        + "\n".join(failures)
+    )
 
 
 def _download(
@@ -219,7 +318,7 @@ def _download(
     part_path = f"{save_path}.part"
 
     # Download the file
-    response = requests.get(url, stream=True, timeout=(30, 300))
+    response = _request(url, stream=True, timeout=(30, 300))
 
     # Ensure the request was successful
     if response.status_code != 200:
