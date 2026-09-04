@@ -16,6 +16,7 @@ Example Usage:
 """
 
 import argparse
+import hashlib
 import os
 
 import requests
@@ -33,6 +34,13 @@ from synthesizer.instruments import AVAILABLE_INSTRUMENTS
 from synthesizer.synth_warnings import warn
 
 DATABASE_FILE = os.path.join(os.path.dirname(__file__), "_data_ids.yml")
+
+# The Synthesizer data service. Files migrated from Box carry a "dataset" key
+# naming their catalogue entry, and are resolved through this API instead of a
+# direct link. Overridable for testing against a development deployment.
+DATA_API_URL = os.environ.get(
+    "SYNTHESIZER_DATA_API_URL", "https://data.synthesizer-project.org"
+).rstrip("/")
 
 
 def load_database_yaml():
@@ -101,22 +109,78 @@ TEST_DATA_TRANSLATION = {
 }
 
 
+def _resolve_release(dataset):
+    """Resolve a catalogue dataset name to its current release.
+
+    Asks the Synthesizer data service which file is currently published for
+    this dataset. The response carries the download location and the expected
+    SHA-256, so the download can be verified once it completes.
+
+    Args:
+        dataset (str):
+            The catalogue name of the dataset, as stored in the database yaml.
+
+    Returns:
+        dict:
+            The current release, including its download url and file details.
+
+    Raises:
+        DownloadError:
+            If the catalogue cannot be reached, does not know the dataset, or
+            has no file currently published for it.
+    """
+    url = f"{DATA_API_URL}/v1/datasets/{dataset}"
+
+    # Ask the catalogue for the dataset
+    try:
+        response = requests.get(url, timeout=30)
+    except requests.RequestException as e:
+        raise exceptions.DownloadError(f"Failed to reach {url}: {e}") from e
+
+    # Ensure the request was successful
+    if response.status_code != 200:
+        raise exceptions.DownloadError(
+            f"Failed to resolve {dataset} at {url}. "
+            f"Status code: {response.status_code}"
+        )
+
+    # A dataset can exist without a published file, which we cannot download
+    release = response.json().get("current_release")
+    if release is None:
+        raise exceptions.DownloadError(
+            f"The catalogue has no current release for {dataset}."
+        )
+
+    return release
+
+
 def _download(
     filename,
     save_dir,
 ):
     """Download the file from the data server.
 
-    We extract the link for the file and its name on the server from the
-    AVAILABLE_FILES dictionary.
+    Files that have been migrated to the Synthesizer data service carry a
+    "dataset" key in the AVAILABLE_FILES dictionary. These are resolved
+    through the catalogue API, which tells us where the bytes are and what
+    their SHA-256 should be, and the download is verified against it. Files
+    that have not been migrated yet are still fetched from their direct Box
+    link, which cannot tell us anything about the bytes it serves.
 
-    We are now using Box
+    Either way the file is streamed to a temporary path and only moved into
+    place once it has arrived in full, so an interrupted download can never
+    leave a truncated file that looks complete.
 
     Args:
         filename (str):
             The name of the file to download.
         save_dir (str):
             The directory in which to save the file.
+
+    Raises:
+        DownloadError:
+            If the download fails, or the bytes received do not match the
+            digest the catalogue published.
     """
     # Define the filename we will save under (this will ignore any aliases)
     savename = filename
@@ -129,8 +193,19 @@ def _download(
     # Unpack the file details for extraction
     file_details = AVAILABLE_FILES[filename]
 
-    # Unpack the url
-    url = file_details["direct_link"]
+    # Has this file been migrated to the data service? If so the catalogue
+    # tells us where it lives and what it should hash to, otherwise we fall
+    # back to the Box link recorded for it.
+    dataset = file_details.get("dataset")
+    if dataset is not None:
+        release = _resolve_release(dataset)
+        url = release["download_url"]
+        expected_sha256 = release["file"]["sha256"]
+        expected_size = release["file"]["size_bytes"]
+    else:
+        url = file_details["direct_link"]
+        expected_sha256 = None
+        expected_size = 0
 
     # Ensure the save directory exists
     if not os.path.exists(save_dir):
@@ -139,11 +214,12 @@ def _download(
         # Be verbose about the save directory
         print(f"{save_dir} does not exist. Creating it...")
 
-    # Define the save path
+    # Define the save path, and the temporary path we stream to first
     save_path = f"{save_dir}/{savename}"
+    part_path = f"{save_path}.part"
 
     # Download the file
-    response = requests.get(url, stream=True)
+    response = requests.get(url, stream=True, timeout=(30, 300))
 
     # Ensure the request was successful
     if response.status_code != 200:
@@ -152,15 +228,39 @@ def _download(
         )
 
     # Sizes in bytes.
-    total_size = int(response.headers.get("content-length", 0))
+    total_size = int(response.headers.get("content-length", expected_size))
     block_size = 1024
 
+    # Hash as we stream so verification costs no extra pass over the file
+    digest = hashlib.sha256()
+
     # Stream the file to disk with a nice progress bar.
-    with tqdm(total=total_size, unit="B", unit_scale=True) as progress_bar:
-        with open(save_path, "wb") as f:
-            for chunk in response.iter_content(block_size):
-                progress_bar.update(len(chunk))
-                f.write(chunk)
+    try:
+        with tqdm(total=total_size, unit="B", unit_scale=True) as progress_bar:
+            with open(part_path, "wb") as f:
+                for chunk in response.iter_content(block_size):
+                    progress_bar.update(len(chunk))
+                    digest.update(chunk)
+                    f.write(chunk)
+
+        # Did we get the bytes the catalogue promised?
+        if (
+            expected_sha256 is not None
+            and digest.hexdigest() != expected_sha256
+        ):
+            raise exceptions.DownloadError(
+                f"{savename} failed verification. Expected SHA-256 "
+                f"{expected_sha256} but received {digest.hexdigest()}. "
+                "The download was discarded."
+            )
+    except BaseException:
+        # Never leave a partial or unverified file behind
+        if os.path.exists(part_path):
+            os.remove(part_path)
+        raise
+
+    # The file is complete and verified, so move it into place
+    os.replace(part_path, save_path)
 
 
 def download_test_grids(destination):

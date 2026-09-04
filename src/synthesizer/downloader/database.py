@@ -467,6 +467,35 @@ def _ensure_file_has_shared_link(access_token: str, file_id: str) -> dict:
     return _get_file(access_token, file_id)
 
 
+def _preserve_migrated(existing: dict) -> dict:
+    """Carry migrated entries over into a freshly generated database.
+
+    Files that have been migrated to the Synthesizer data service carry a
+    "dataset" key instead of a Box link. They are served from the catalogue
+    and may no longer exist on Box at all, so regenerating this database from
+    Box must keep them rather than reverting them to direct links.
+
+    Args:
+        existing (dict): The database currently on disk, as loaded from YAML.
+
+    Returns:
+        dict: The sections of that database that resolve through the
+        catalogue, ready to be extended with freshly discovered Box files.
+    """
+    # Keep only the entries the catalogue is responsible for.
+    preserved = {}
+    for section, entries in (existing or {}).items():
+        migrated = {
+            name: entry
+            for name, entry in (entries or {}).items()
+            if isinstance(entry, dict) and "dataset" in entry
+        }
+        if migrated:
+            preserved[section] = migrated
+
+    return preserved
+
+
 def _update_box_links_database():
     """Update the local `_data_ids.yml` database of Box downloads.
 
@@ -501,7 +530,13 @@ def _update_box_links_database():
     shared_folder = _get_shared_folder(access_token, SHARED_FOLDER_URL)
     all_files = _get_files_recursive(shared_folder["id"], access_token)
 
-    # Prepare the output structure expected by the downloader code.
+    # Prepare the output structure expected by the downloader code, keeping
+    # any entries that now resolve through the data service.
+    existing = {}
+    if os.path.exists(OUTPUT_YAML):
+        with open(OUTPUT_YAML, "r", encoding="utf-8") as in_file:
+            existing = yaml.safe_load(in_file) or {}
+
     output = {
         "TestData": {},
         "DustData": {},
@@ -510,6 +545,8 @@ def _update_box_links_database():
         "ProductionGrids": {},
         "SynferenceData": {},
     }
+    for section, entries in _preserve_migrated(existing).items():
+        output.setdefault(section, {}).update(entries)
 
     # Walk every file, creating links where needed and writing YAML entries.
     for file_obj, subfolder in all_files:
@@ -533,10 +570,14 @@ def _update_box_links_database():
         # Store the direct download URL in the correct category section.
         direct_url = file_info.get("shared_link", {}).get("download_url")
         category = _categorise_links(subfolder + file_info["name"])
-        output[category][file_info["name"]] = {
-            "file": file_info["name"],
-            "direct_link": direct_url,
-        }
+
+        # Leave migrated files pointing at the catalogue, not back at Box.
+        if "dataset" in output.get(category, {}).get(file_info["name"], {}):
+            print("Skipping migrated file, served by the data service")
+            continue
+
+        # The entry key is the filename, so it needs no "file" field.
+        output[category][file_info["name"]] = {"direct_link": direct_url}
 
     # Write the refreshed Box link database to the expected YAML filename.
     with open(OUTPUT_YAML, "w", encoding="utf-8") as out_file:
