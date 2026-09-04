@@ -1202,3 +1202,55 @@ def test_instrument_hdf5_roundtrip_preserves_specialised_type(
 
     assert isinstance(loaded, expected_type)
     assert loaded == instrument
+
+
+@pytest.mark.parametrize(
+    "instrument",
+    [
+        SpectroscopicInstrument(
+            label="spec-r",
+            lam=np.linspace(1000, 3000, 32) * angstrom,
+            resolving_power=1000.0,
+        ),
+        IntegratedFieldUnit(
+            label="ifu-r",
+            lam=np.linspace(1000, 3000, 32) * angstrom,
+            resolution=1 * arcsecond,
+            resolving_power=500.0,
+        ),
+    ],
+)
+def test_resolving_power_roundtrips(tmp_path, instrument):
+    """A constant resolving_power should be saved and restored."""
+    path = tmp_path / f"{instrument.label}.hdf5"
+
+    with h5py.File(path, "w") as hdf:
+        instrument.to_hdf5(hdf.create_group("Instrument"))
+
+    with h5py.File(path, "r") as hdf:
+        assert hdf["Instrument"].attrs["resolving_power"] == pytest.approx(
+            instrument.resolving_power
+        )
+        loaded = Instrument._from_hdf5(hdf["Instrument"])
+
+    assert loaded.resolving_power == pytest.approx(instrument.resolving_power)
+    assert loaded == instrument
+
+
+def test_callable_resolving_power_is_not_serialised(tmp_path):
+    """A callable resolving_power cannot be written to HDF5 and is dropped."""
+    instrument = SpectroscopicInstrument(
+        label="spec-callable-r",
+        lam=np.linspace(1000, 3000, 32) * angstrom,
+        resolving_power=lambda lam: 1000.0,
+    )
+    path = tmp_path / "spec-callable-r.hdf5"
+
+    with h5py.File(path, "w") as hdf:
+        instrument.to_hdf5(hdf.create_group("Instrument"))
+
+    with h5py.File(path, "r") as hdf:
+        assert "resolving_power" not in hdf["Instrument"].attrs
+        loaded = Instrument._from_hdf5(hdf["Instrument"])
+
+    assert loaded.resolving_power is None
