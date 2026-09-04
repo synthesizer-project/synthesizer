@@ -572,18 +572,20 @@ class Stars(StarsComponent):
         """Get a Stars object representing the population at an earlier time.
 
            Apply an age_offset to the SFZH age grid and use the precomputed
-           normalisation to get the current mass.
+           normalisation to so the new Stars object will have the correct
+           total masses.
 
         Args:
             age_offset (unyt_quantity):
                 The offset to apply to the age grid.
 
         Returns:
-            Stars: New Stars object on the requested grid.
+            Stars:
+                New Stars object on the requested grid.
         """
         # Simply get the normalised SFZH at the earlier time and use it
         # to construct a new Stars object.
-        sfzh = sfzh = self._get_normalised_sfzh(age_offset)
+        sfzh = self._get_normalised_sfzh(age_offset)
 
         return Stars(self.log10ages, self.metallicities, sfzh=sfzh)
 
@@ -1295,7 +1297,8 @@ class Stars(StarsComponent):
                 float in years or a unyt quantity with time units.
 
         Returns:
-            The total initial mass formed prior to this age.
+            unyt_quantity:
+                The total initial mass formed prior to this age.
         """
         # Calculate the normalised SFZH grid and return the total mass.
         sfzh = self._get_normalised_sfzh(age)
@@ -1318,7 +1321,8 @@ class Stars(StarsComponent):
                 used to get the stellar fraction at each SFZH bin.
 
         Returns:
-            The surviving mass formed prior to this age.
+            unyt_quantity:
+                The surviving mass formed prior to this age.
         """
         # Calculate the normalised SFZH grid and return the total
         # surviving mass.
