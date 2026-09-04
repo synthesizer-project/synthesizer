@@ -544,34 +544,50 @@ class Stars(StarsComponent):
         # Finally, calculate the SFZH grid based on the above calculations
         return sf_hist[:, np.newaxis] * metal_dist
 
+    def _get_normalised_sfzh(self, age_offset=None):
+        """Get the correctly mass-scaled SFZH.
+
+        Get the SFZH, optionally at an earlier lookback time, and apply
+        the precomputed normalisation to total mass.
+
+        Args:
+            age_offset (unyt_quantity):
+                The offset to apply to the age grid when calculating the SFZH.
+
+        Returns:
+            np.ndarray:
+                The mass-scaled SFZH grid.
+        """
+        # Get the shape of the SFZH.
+        sfzh = self._get_sfzh(age_offset=age_offset)
+
+        # Apply the normalisation to total mass if available.
+        if getattr(self, "sfzh_normalisation", None) is not None:
+            sfzh = sfzh * self.sfzh_normalisation
+
+        return sfzh
+
     @accepts(age_offset=yr)
     def get_at_earlier_time(self, age_offset=age_offset):
-        """Get a new Stars object representing the population at age_offset.
+        """Get a Stars object representing the population at an earlier time.
 
-        This is done by applying a lookback time to the age grid and then
-        remapping the SFZH onto the new grid using a particle Stars object to
-        perform the remapping.
+           Apply an age_offset to the SFZH age grid and use the precomputed
+           normalisation to so the new Stars object will have the correct
+           total masses.
 
         Args:
             age_offset (unyt_quantity):
                 The offset to apply to the age grid.
 
         Returns:
-            Stars: New Stars object on the requested grid.
+            Stars:
+                New Stars object on the requested grid.
         """
-        # Calculate the initial mass at the earlier time
-        initial_mass_at_age = self.calculate_initial_mass_at_age(age_offset)
+        # Simply get the normalised SFZH at the earlier time and use it
+        # to construct a new Stars object.
+        sfzh = self._get_normalised_sfzh(age_offset)
 
-        # Calculate the new SFZH grid at the earlier time
-        sfzh = self._get_sfzh(age_offset=age_offset)
-
-        # Create a new Stars object with the new SFZH grid and initial mass
-        return Stars(
-            self.log10ages,
-            self.metallicities,
-            sfzh=sfzh,
-            initial_mass=initial_mass_at_age,
-        )
+        return Stars(self.log10ages, self.metallicities, sfzh=sfzh)
 
     @timed("Stars.get_mask")
     def get_mask(
@@ -1272,8 +1288,8 @@ class Stars(StarsComponent):
     def calculate_initial_mass_at_age(self, age):
         """Calculate the initial mass of the stellar population at a given age.
 
-        This is the total mass of stars that were formed at the specified age
-        given the star formation and metal enrichment history.
+        This is the total mass of stars formed that are older than the
+        specified age.
 
         Args:
             age (float or unyt_quantity):
@@ -1281,40 +1297,20 @@ class Stars(StarsComponent):
                 float in years or a unyt quantity with time units.
 
         Returns:
-            The total mass formed prior to this age.
+            unyt_quantity:
+                The total initial mass formed prior to this age.
         """
-        log10ages = self.log10ages
-        sf_hist = self.sf_hist
+        # Calculate the normalised SFZH grid and return the total mass.
+        sfzh = self._get_normalised_sfzh(age)
 
-        # construct log-space bin edges from centres
-        dlog = np.diff(log10ages)
-        edges = np.empty(len(log10ages) + 1)
-
-        edges[1:-1] = 0.5 * (log10ages[1:] + log10ages[:-1])
-        edges[0] = log10ages[0] - dlog[0] / 2
-        edges[-1] = log10ages[-1] + dlog[-1] / 2
-
-        age_edges = 10**edges
-
-        # This calculates the fraction of each bin that is younger than the
-        # specified age, and clips it to be between 0 and 1. So for bins that
-        # are entirely younger than the specified age, this will be 1, for
-        # bins that are entirely older than the specified age, this will be 0,
-        # and for bins that straddle the specified age, this will be inbetween.
-        frac = np.clip(
-            (age_edges[1:] - age.value) / (age_edges[1:] - age_edges[:-1]),
-            0,
-            1,
-        )
-
-        return np.sum(sf_hist * frac) * Msun
+        return np.sum(sfzh) * Msun
 
     @accepts(age=yr)
     def calculate_surviving_mass_at_age(self, age, grid: Grid):
         """Calculate the surviving mass at a given age.
 
-        This is the mass of stars remaining at the specified age given the
-        star formation and metal enrichment history.
+        This is the mass of stars older than the specified age that are
+        surviving at the specified lookback time.
 
         Args:
             age (float or unyt_quantity):
@@ -1325,32 +1321,11 @@ class Stars(StarsComponent):
                 used to get the stellar fraction at each SFZH bin.
 
         Returns:
-            The total mass formed prior to this age.
+            unyt_quantity:
+                The surviving mass formed prior to this age.
         """
-        log10ages = self.log10ages
+        # Calculate the normalised SFZH grid and return the total
+        # surviving mass.
+        sfzh = self._get_normalised_sfzh(age)
 
-        # First calculate the surviving SFH grid
-        surviving_sf_hist = self.calculate_surviving_sfh(grid)
-
-        # construct log-space bin edges from centres
-        dlog = np.diff(log10ages)
-        edges = np.empty(len(log10ages) + 1)
-
-        edges[1:-1] = 0.5 * (log10ages[1:] + log10ages[:-1])
-        edges[0] = log10ages[0] - dlog[0] / 2
-        edges[-1] = log10ages[-1] + dlog[-1] / 2
-
-        age_edges = 10**edges
-
-        # This calculates the fraction of each bin that is younger than the
-        # specified age, and clips it to be between 0 and 1. So for bins that
-        # are entirely younger than the specified age, this will be 1, for
-        # bins that are entirely older than the specified age, this will be 0,
-        # and for bins that straddle the specified age, this will be inbetween.
-        frac = np.clip(
-            (age_edges[1:] - age.value) / (age_edges[1:] - age_edges[:-1]),
-            0,
-            1,
-        )
-
-        return np.sum(surviving_sf_hist * frac) * Msun
+        return np.sum(sfzh * grid.stellar_fraction) * Msun
