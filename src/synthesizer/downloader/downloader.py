@@ -16,7 +16,9 @@ Example Usage:
 """
 
 import argparse
+import hashlib
 import os
+import re
 
 import requests
 import yaml
@@ -33,6 +35,36 @@ from synthesizer.instruments import AVAILABLE_INSTRUMENTS
 from synthesizer.synth_warnings import warn
 
 DATABASE_FILE = os.path.join(os.path.dirname(__file__), "_data_ids.yml")
+
+# The Synthesizer data service. Files migrated from Box carry a "dataset" key
+# naming their catalogue entry, and are resolved through this API instead of a
+# direct link.
+DATA_API_URL = "https://data.synthesizer-project.org"
+
+# The same service under its Cloudflare workers.dev hostname, tried when the
+# first host cannot be reached.
+#
+# This exists because data.synthesizer-project.org was registered in September
+# 2026, and security products routinely block or TLS-intercept domains they
+# have not seen before. Networks doing so break the API for anyone behind
+# them, while the older workers.dev hostname is unaffected. Both hostnames
+# serve the same Worker, and a download url is always returned relative to
+# whichever host answered, so a fallback resolve stays self-consistent.
+#
+# Remove this once the domain has aged out of "newly registered" categories,
+# which typically takes about a month.
+DATA_API_FALLBACK_URL = (
+    "https://synthesizer-data-api.universe-engine.workers.dev"
+)
+
+# An explicit override replaces both, for testing against a development
+# deployment.
+_API_OVERRIDE = os.environ.get("SYNTHESIZER_DATA_API_URL")
+DATA_API_URLS = (
+    [_API_OVERRIDE.rstrip("/")]
+    if _API_OVERRIDE
+    else [DATA_API_URL, DATA_API_FALLBACK_URL]
+)
 
 
 def load_database_yaml():
@@ -101,22 +133,176 @@ TEST_DATA_TRANSLATION = {
 }
 
 
+def _request(url, **kwargs):
+    """Make a GET request, turning transport errors into DownloadErrors.
+
+    Args:
+        url (str): The url to request.
+        **kwargs: Keyword arguments passed through to requests.get.
+
+    Returns:
+        requests.Response: The response, which may carry any status code.
+
+    Raises:
+        DownloadError:
+            If the server cannot be reached at all. TLS failures get an extra
+            hint, because they are almost always a network that re-signs
+            HTTPS with its own certificate authority rather than a problem
+            with the data service.
+    """
+    try:
+        return requests.get(url, **kwargs)
+    except requests.exceptions.SSLError as e:
+        raise exceptions.DownloadError(
+            f"Could not verify the TLS certificate for {url}: {e}\n"
+            "This usually means the network is inspecting HTTPS traffic with "
+            "its own certificate authority. Point Python at that authority's "
+            "certificate, for example by setting SSL_CERT_FILE or "
+            "REQUESTS_CA_BUNDLE to it, rather than disabling verification."
+        ) from e
+    except requests.RequestException as e:
+        raise exceptions.DownloadError(f"Failed to reach {url}: {e}") from e
+
+
+def _continues_from(content_range, offset):
+    """Check a partial response starts at the byte we asked to resume from.
+
+    A server is free to answer a range request with a different range. Its
+    bytes cannot be appended to what we already have, so this decides whether
+    the response can be resumed into or the download must start over.
+
+    Args:
+        content_range (str or None): The response's Content-Range header.
+        offset (int): The byte offset the request asked to resume from.
+
+    Returns:
+        bool: True if the response continues exactly from that offset.
+    """
+    if content_range is None:
+        return False
+
+    match = re.match(r"^bytes\s+(\d+)-", content_range.strip())
+
+    return match is not None and int(match.group(1)) == offset
+
+
+def _resolve_release_at(base_url, dataset):
+    """Resolve a dataset through one host of the data service.
+
+    Args:
+        base_url (str):
+            The base url of the data service to ask.
+        dataset (str):
+            The catalogue name of the dataset, as stored in the database yaml.
+
+    Returns:
+        dict:
+            The current release, including its download url and file details.
+
+    Raises:
+        DownloadError:
+            If the host cannot be reached, does not know the dataset, or has
+            no file currently published for it.
+    """
+    url = f"{base_url}/v1/datasets/{dataset}"
+
+    # Ask the catalogue for the dataset
+    response = _request(url, timeout=30)
+
+    # Ensure the request was successful
+    if response.status_code != 200:
+        raise exceptions.DownloadError(
+            f"Failed to resolve {dataset} at {url}. "
+            f"Status code: {response.status_code}"
+        )
+
+    # A dataset can exist without a published file, which we cannot download
+    release = response.json().get("current_release")
+    if release is None:
+        raise exceptions.DownloadError(
+            f"The catalogue has no current release for {dataset}."
+        )
+
+    return release
+
+
+def _resolve_release(dataset):
+    """Resolve a catalogue dataset name to its current release.
+
+    Asks the Synthesizer data service which file is currently published for
+    this dataset. The response carries the download location and the expected
+    SHA-256, so the download can be verified once it completes.
+
+    Each known host is tried in turn, so a network that blocks or intercepts
+    one hostname does not make published data unreachable.
+
+    Args:
+        dataset (str):
+            The catalogue name of the dataset, as stored in the database yaml.
+
+    Returns:
+        dict:
+            The current release, including its download url and file details.
+
+    Raises:
+        DownloadError:
+            If no host could resolve the dataset. The reason from every host
+            is included, since they commonly differ.
+    """
+    failures = []
+    for index, base_url in enumerate(DATA_API_URLS):
+        try:
+            release = _resolve_release_at(base_url, dataset)
+        except exceptions.DownloadError as e:
+            failures.append(f"{base_url}: {e}")
+            continue
+
+        # Say so when the primary host had to be skipped, since a silently
+        # different source is exactly the kind of thing that wastes an
+        # afternoon later. The message deliberately omits the dataset name so
+        # that a batch of downloads warns once rather than once per file.
+        if index > 0:
+            warn(
+                f"Could not reach {DATA_API_URLS[0]}, so data is being "
+                f"resolved through {base_url} instead. This usually means "
+                "the network blocks or inspects the primary hostname."
+            )
+
+        return release
+
+    raise exceptions.DownloadError(
+        f"Could not resolve {dataset} through any known host.\n"
+        + "\n".join(failures)
+    )
+
+
 def _download(
     filename,
     save_dir,
 ):
     """Download the file from the data server.
 
-    We extract the link for the file and its name on the server from the
-    AVAILABLE_FILES dictionary.
+    Files that have been migrated to the Synthesizer data service carry a
+    "dataset" key in the AVAILABLE_FILES dictionary. These are resolved
+    through the catalogue API, which tells us where the bytes are and what
+    their SHA-256 should be, and the download is verified against it. Files
+    that have not been migrated yet are still fetched from their direct Box
+    link, which cannot tell us anything about the bytes it serves.
 
-    We are now using Box
+    Either way the file is streamed to a temporary path and only moved into
+    place once it has arrived in full, so an interrupted download can never
+    leave a truncated file that looks complete.
 
     Args:
         filename (str):
             The name of the file to download.
         save_dir (str):
             The directory in which to save the file.
+
+    Raises:
+        DownloadError:
+            If the download fails, or the bytes received do not match the
+            digest the catalogue published.
     """
     # Define the filename we will save under (this will ignore any aliases)
     savename = filename
@@ -129,8 +315,19 @@ def _download(
     # Unpack the file details for extraction
     file_details = AVAILABLE_FILES[filename]
 
-    # Unpack the url
-    url = file_details["direct_link"]
+    # Has this file been migrated to the data service? If so the catalogue
+    # tells us where it lives and what it should hash to, otherwise we fall
+    # back to the Box link recorded for it.
+    dataset = file_details.get("dataset")
+    if dataset is not None:
+        release = _resolve_release(dataset)
+        url = release["download_url"]
+        expected_sha256 = release["file"]["sha256"]
+        expected_size = release["file"]["size_bytes"]
+    else:
+        url = file_details["direct_link"]
+        expected_sha256 = None
+        expected_size = 0
 
     # Ensure the save directory exists
     if not os.path.exists(save_dir):
@@ -139,28 +336,121 @@ def _download(
         # Be verbose about the save directory
         print(f"{save_dir} does not exist. Creating it...")
 
-    # Define the save path
+    # Define the save path, and the temporary path we stream to first. When
+    # the catalogue told us the digest, it goes in the temporary name: a
+    # partial download is then only ever resumed into the release it came
+    # from, so a file republished mid-download cannot be spliced together
+    # from two different versions.
     save_path = f"{save_dir}/{savename}"
+    if expected_sha256 is not None:
+        part_path = f"{save_path}.{expected_sha256[:12]}.part"
+    else:
+        part_path = f"{save_path}.part"
+
+    # Pick up where an interrupted attempt left off. Only ever resume a
+    # download whose digest we can check afterwards, since appending to
+    # unverifiable bytes would turn a truncated file into a corrupt one.
+    resume_from = 0
+    if expected_sha256 is not None and os.path.exists(part_path):
+        resume_from = os.path.getsize(part_path)
+        if resume_from >= expected_size:
+            # Already have at least a whole file's worth; verification below
+            # decides whether it is the right one.
+            resume_from = 0
+
+    headers = {}
+    if resume_from > 0:
+        headers["Range"] = f"bytes={resume_from}-"
+        print(f"Resuming {savename} from {resume_from} bytes")
 
     # Download the file
-    response = requests.get(url, stream=True)
+    response = _request(
+        url, stream=True, timeout=(30, 300), headers=headers or None
+    )
+
+    # Only append to the partial file when the response really is the
+    # continuation we asked for. A server may ignore the range and send the
+    # whole file (200), report that our partial is already as long as the
+    # object (416), or answer 206 with some other range; in each case the
+    # partial cannot be appended to and the download starts over.
+    resuming = False
+    if resume_from > 0:
+        if response.status_code == 206 and _continues_from(
+            response.headers.get("Content-Range"), resume_from
+        ):
+            resuming = True
+        else:
+            if response.status_code != 200:
+                # The body in hand is unusable, so ask for the whole file.
+                response = _request(url, stream=True, timeout=(30, 300))
+            resume_from = 0
 
     # Ensure the request was successful
-    if response.status_code != 200:
+    if response.status_code not in (200, 206):
         raise exceptions.DownloadError(
             f"Failed to download {url}. Status code: {response.status_code}"
         )
 
     # Sizes in bytes.
-    total_size = int(response.headers.get("content-length", 0))
+    total_size = (
+        int(response.headers.get("content-length", expected_size))
+        + resume_from
+    )
     block_size = 1024
 
+    # Hash as we stream so verification costs no extra pass over the file,
+    # seeding it with whatever a previous attempt already wrote.
+    digest = hashlib.sha256()
+    if resuming:
+        with open(part_path, "rb") as f:
+            while chunk := f.read(1024 * 1024):
+                digest.update(chunk)
+
     # Stream the file to disk with a nice progress bar.
-    with tqdm(total=total_size, unit="B", unit_scale=True) as progress_bar:
-        with open(save_path, "wb") as f:
-            for chunk in response.iter_content(block_size):
-                progress_bar.update(len(chunk))
-                f.write(chunk)
+    try:
+        with tqdm(
+            total=total_size,
+            initial=resume_from,
+            unit="B",
+            unit_scale=True,
+        ) as progress_bar:
+            with open(part_path, "ab" if resuming else "wb") as f:
+                for chunk in response.iter_content(block_size):
+                    progress_bar.update(len(chunk))
+                    digest.update(chunk)
+                    f.write(chunk)
+    except requests.RequestException as e:
+        # A transfer that dies mid-stream is a download failure like any
+        # other, so it is reported as one rather than as a bare transport
+        # error from deep inside requests.
+        if expected_sha256 is None and os.path.exists(part_path):
+            os.remove(part_path)
+            raise exceptions.DownloadError(
+                f"Download of {savename} was interrupted: {e}"
+            ) from e
+        raise exceptions.DownloadError(
+            f"Download of {savename} was interrupted: {e}. "
+            "Running the same command again will resume it."
+        ) from e
+    except BaseException:
+        # Anything else, including a keyboard interrupt, propagates unchanged
+        # once a partial that cannot be resumed has been cleaned up.
+        if expected_sha256 is None and os.path.exists(part_path):
+            os.remove(part_path)
+        raise
+
+    # Did we get the bytes the catalogue promised? A mismatch means the
+    # partial file is unusable, so it goes rather than poisoning a retry.
+    if expected_sha256 is not None and digest.hexdigest() != expected_sha256:
+        os.remove(part_path)
+        raise exceptions.DownloadError(
+            f"{savename} failed verification. Expected SHA-256 "
+            f"{expected_sha256} but received {digest.hexdigest()}. "
+            "The download was discarded."
+        )
+
+    # The file is complete and verified, so move it into place
+    os.replace(part_path, save_path)
 
 
 def download_test_grids(destination):

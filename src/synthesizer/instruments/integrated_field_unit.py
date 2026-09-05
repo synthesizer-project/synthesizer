@@ -53,6 +53,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         snrs=None,
         noise_maps=None,
         noise_source_maps=None,
+        resolving_power=None,
     ):
         """Initialise an integrated field unit instrument.
 
@@ -83,6 +84,10 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             noise_source_maps (array, optional): An optional array or mapping
                 carrying source noise templates for future correlated-noise IFU
                 machinery.
+            resolving_power (float or callable, optional): Spectral resolving
+                power (R = lambda / delta_lambda) of the instrument. Only a
+                constant value is persisted when the instrument is saved to
+                HDF5.
         """
         # Initialise the shared spectroscopic instrument first
         super().__init__(
@@ -92,6 +97,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             depth_app_radius=depth_app_radius,
             snrs=snrs,
             noise_maps=noise_maps,
+            resolving_power=resolving_power,
         )
 
         # Attach the IFU specific attributes
@@ -606,6 +612,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             "psf_resample_factor": psf_resample_factor,
             "noise_maps": noise_maps,
             "noise_source_maps": noise_source_maps,
+            "resolving_power": group.attrs.get("resolving_power"),
         }
         payload.update(kwargs)
 
@@ -620,4 +627,5 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             psf_resample_factor=payload["psf_resample_factor"],
             noise_maps=payload["noise_maps"],
             noise_source_maps=payload["noise_source_maps"],
+            resolving_power=payload["resolving_power"],
         )
