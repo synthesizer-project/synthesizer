@@ -313,50 +313,98 @@ def _download(
         # Be verbose about the save directory
         print(f"{save_dir} does not exist. Creating it...")
 
-    # Define the save path, and the temporary path we stream to first
+    # Define the save path, and the temporary path we stream to first. When
+    # the catalogue told us the digest, it goes in the temporary name: a
+    # partial download is then only ever resumed into the release it came
+    # from, so a file republished mid-download cannot be spliced together
+    # from two different versions.
     save_path = f"{save_dir}/{savename}"
-    part_path = f"{save_path}.part"
+    if expected_sha256 is not None:
+        part_path = f"{save_path}.{expected_sha256[:12]}.part"
+    else:
+        part_path = f"{save_path}.part"
+
+    # Pick up where an interrupted attempt left off. Only ever resume a
+    # download whose digest we can check afterwards, since appending to
+    # unverifiable bytes would turn a truncated file into a corrupt one.
+    resume_from = 0
+    if expected_sha256 is not None and os.path.exists(part_path):
+        resume_from = os.path.getsize(part_path)
+        if resume_from >= expected_size:
+            # Already have at least a whole file's worth; verification below
+            # decides whether it is the right one.
+            resume_from = 0
+
+    headers = {}
+    if resume_from > 0:
+        headers["Range"] = f"bytes={resume_from}-"
+        print(f"Resuming {savename} from {resume_from} bytes")
 
     # Download the file
-    response = _request(url, stream=True, timeout=(30, 300))
+    response = _request(
+        url, stream=True, timeout=(30, 300), headers=headers or None
+    )
+
+    # A server that honours the range continues the file; one that ignores it
+    # sends the whole thing again, and 416 means our partial file is already
+    # as long as the object. Either way, starting over is correct.
+    resuming = resume_from > 0 and response.status_code == 206
+    if resume_from > 0 and response.status_code in (200, 416):
+        resume_from = 0
+        resuming = False
+        if response.status_code == 416:
+            response = _request(url, stream=True, timeout=(30, 300))
 
     # Ensure the request was successful
-    if response.status_code != 200:
+    if response.status_code not in (200, 206):
         raise exceptions.DownloadError(
             f"Failed to download {url}. Status code: {response.status_code}"
         )
 
     # Sizes in bytes.
-    total_size = int(response.headers.get("content-length", expected_size))
+    total_size = (
+        int(response.headers.get("content-length", expected_size))
+        + resume_from
+    )
     block_size = 1024
 
-    # Hash as we stream so verification costs no extra pass over the file
+    # Hash as we stream so verification costs no extra pass over the file,
+    # seeding it with whatever a previous attempt already wrote.
     digest = hashlib.sha256()
+    if resuming:
+        with open(part_path, "rb") as f:
+            while chunk := f.read(1024 * 1024):
+                digest.update(chunk)
 
     # Stream the file to disk with a nice progress bar.
     try:
-        with tqdm(total=total_size, unit="B", unit_scale=True) as progress_bar:
-            with open(part_path, "wb") as f:
+        with tqdm(
+            total=total_size,
+            initial=resume_from,
+            unit="B",
+            unit_scale=True,
+        ) as progress_bar:
+            with open(part_path, "ab" if resuming else "wb") as f:
                 for chunk in response.iter_content(block_size):
                     progress_bar.update(len(chunk))
                     digest.update(chunk)
                     f.write(chunk)
-
-        # Did we get the bytes the catalogue promised?
-        if (
-            expected_sha256 is not None
-            and digest.hexdigest() != expected_sha256
-        ):
-            raise exceptions.DownloadError(
-                f"{savename} failed verification. Expected SHA-256 "
-                f"{expected_sha256} but received {digest.hexdigest()}. "
-                "The download was discarded."
-            )
     except BaseException:
-        # Never leave a partial or unverified file behind
-        if os.path.exists(part_path):
+        # Keep the partial file when a later attempt can resume it safely,
+        # and discard it otherwise so no truncated file is left looking whole.
+        if expected_sha256 is None and os.path.exists(part_path):
             os.remove(part_path)
         raise
+
+    # Did we get the bytes the catalogue promised? A mismatch means the
+    # partial file is unusable, so it goes rather than poisoning a retry.
+    if expected_sha256 is not None and digest.hexdigest() != expected_sha256:
+        os.remove(part_path)
+        raise exceptions.DownloadError(
+            f"{savename} failed verification. Expected SHA-256 "
+            f"{expected_sha256} but received {digest.hexdigest()}. "
+            "The download was discarded."
+        )
 
     # The file is complete and verified, so move it into place
     os.replace(part_path, save_path)
