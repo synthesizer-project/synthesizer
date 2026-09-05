@@ -1218,6 +1218,24 @@ def test_instrument_hdf5_roundtrip_preserves_specialised_type(
             resolution=1 * arcsecond,
             resolving_power=500.0,
         ),
+        # NumPy scalars are constants too, and only float64 happens to be a
+        # subclass of float, so the rest need covering explicitly.
+        SpectroscopicInstrument(
+            label="spec-r-float32",
+            lam=np.linspace(1000, 3000, 32) * angstrom,
+            resolving_power=np.float32(1000.0),
+        ),
+        SpectroscopicInstrument(
+            label="spec-r-int64",
+            lam=np.linspace(1000, 3000, 32) * angstrom,
+            resolving_power=np.int64(1000),
+        ),
+        IntegratedFieldUnit(
+            label="ifu-r-float32",
+            lam=np.linspace(1000, 3000, 32) * angstrom,
+            resolution=1 * arcsecond,
+            resolving_power=np.float32(500.0),
+        ),
     ],
 )
 def test_resolving_power_roundtrips(tmp_path, instrument):

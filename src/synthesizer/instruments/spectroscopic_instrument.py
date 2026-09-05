@@ -6,6 +6,7 @@ depth, signal-to-noise, and noise-map definitions.
 """
 
 import h5py
+import numpy as np
 from unyt import angstrom, unyt_array
 
 from synthesizer import exceptions
@@ -218,8 +219,11 @@ class SpectroscopicInstrument(InstrumentBase):
 
         # Only a constant resolving power can be represented as an HDF5
         # attribute; a callable resolving_power(wavelength) is not
-        # serialisable and is intentionally dropped here.
-        if isinstance(self.resolving_power, (int, float)):
+        # serialisable and is intentionally dropped here. NumPy scalars count
+        # as constants: np.float32 and np.int64 are not instances of float or
+        # int, so testing those alone would silently discard a resolving
+        # power that came out of an array.
+        if isinstance(self.resolving_power, (int, float, np.number)):
             group.attrs["resolving_power"] = float(self.resolving_power)
 
         ds = group.create_dataset(

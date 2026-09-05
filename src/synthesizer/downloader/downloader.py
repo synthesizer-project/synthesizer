@@ -18,6 +18,7 @@ Example Usage:
 import argparse
 import hashlib
 import os
+import re
 
 import requests
 import yaml
@@ -161,6 +162,28 @@ def _request(url, **kwargs):
         ) from e
     except requests.RequestException as e:
         raise exceptions.DownloadError(f"Failed to reach {url}: {e}") from e
+
+
+def _continues_from(content_range, offset):
+    """Check a partial response starts at the byte we asked to resume from.
+
+    A server is free to answer a range request with a different range. Its
+    bytes cannot be appended to what we already have, so this decides whether
+    the response can be resumed into or the download must start over.
+
+    Args:
+        content_range (str or None): The response's Content-Range header.
+        offset (int): The byte offset the request asked to resume from.
+
+    Returns:
+        bool: True if the response continues exactly from that offset.
+    """
+    if content_range is None:
+        return False
+
+    match = re.match(r"^bytes\s+(\d+)-", content_range.strip())
+
+    return match is not None and int(match.group(1)) == offset
 
 
 def _resolve_release_at(base_url, dataset):
@@ -345,15 +368,22 @@ def _download(
         url, stream=True, timeout=(30, 300), headers=headers or None
     )
 
-    # A server that honours the range continues the file; one that ignores it
-    # sends the whole thing again, and 416 means our partial file is already
-    # as long as the object. Either way, starting over is correct.
-    resuming = resume_from > 0 and response.status_code == 206
-    if resume_from > 0 and response.status_code in (200, 416):
-        resume_from = 0
-        resuming = False
-        if response.status_code == 416:
-            response = _request(url, stream=True, timeout=(30, 300))
+    # Only append to the partial file when the response really is the
+    # continuation we asked for. A server may ignore the range and send the
+    # whole file (200), report that our partial is already as long as the
+    # object (416), or answer 206 with some other range; in each case the
+    # partial cannot be appended to and the download starts over.
+    resuming = False
+    if resume_from > 0:
+        if response.status_code == 206 and _continues_from(
+            response.headers.get("Content-Range"), resume_from
+        ):
+            resuming = True
+        else:
+            if response.status_code != 200:
+                # The body in hand is unusable, so ask for the whole file.
+                response = _request(url, stream=True, timeout=(30, 300))
+            resume_from = 0
 
     # Ensure the request was successful
     if response.status_code not in (200, 206):
@@ -389,9 +419,22 @@ def _download(
                     progress_bar.update(len(chunk))
                     digest.update(chunk)
                     f.write(chunk)
+    except requests.RequestException as e:
+        # A transfer that dies mid-stream is a download failure like any
+        # other, so it is reported as one rather than as a bare transport
+        # error from deep inside requests.
+        if expected_sha256 is None and os.path.exists(part_path):
+            os.remove(part_path)
+            raise exceptions.DownloadError(
+                f"Download of {savename} was interrupted: {e}"
+            ) from e
+        raise exceptions.DownloadError(
+            f"Download of {savename} was interrupted: {e}. "
+            "Running the same command again will resume it."
+        ) from e
     except BaseException:
-        # Keep the partial file when a later attempt can resume it safely,
-        # and discard it otherwise so no truncated file is left looking whole.
+        # Anything else, including a keyboard interrupt, propagates unchanged
+        # once a partial that cannot be resumed has been cleaned up.
         if expected_sha256 is None and os.path.exists(part_path):
             os.remove(part_path)
         raise
