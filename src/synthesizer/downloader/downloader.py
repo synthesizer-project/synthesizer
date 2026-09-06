@@ -164,6 +164,51 @@ def _request(url, **kwargs):
         raise exceptions.DownloadError(f"Failed to reach {url}: {e}") from e
 
 
+# Leading bytes that prove a payload is the format its name claims. Only
+# formats with an unambiguous signature are listed; anything else is accepted
+# as-is rather than guessed at.
+_FORMAT_SIGNATURES = {
+    "hdf5": b"\x89HDF",
+    "h5": b"\x89HDF",
+    "gz": b"\x1f\x8b",
+    "npz": b"PK\x03\x04",
+    "fits": b"SIMPLE",
+}
+
+
+def _reject_error_page(savename, url, path):
+    """Reject a downloaded file that is not the format its name claims.
+
+    A stale Box link answers with an HTML error page and a success status.
+    Without this the page would be written out under a scientific filename
+    and only fail later, deep inside a reader, with a baffling message.
+
+    Files published through the data service are checked by digest instead,
+    which is stronger; this covers the links that have no digest to check.
+
+    Args:
+        savename (str): The name the file will be installed under.
+        url (str): The url the bytes came from, for the error message.
+        path (str): Path to the downloaded file.
+
+    Raises:
+        DownloadError: If the file does not start the way its format requires.
+    """
+    signature = _FORMAT_SIGNATURES.get(savename.rsplit(".", 1)[-1].lower())
+    if signature is None:
+        return
+
+    with open(path, "rb") as f:
+        start = f.read(len(signature))
+
+    if not start.startswith(signature):
+        raise exceptions.DownloadError(
+            f"{url} did not return a {savename.rsplit('.', 1)[-1]} file. "
+            "The link is probably stale, and the response was discarded "
+            "rather than saved under a name implying it is data."
+        )
+
+
 def _continues_from(content_range, offset):
     """Check a partial response starts at the byte we asked to resume from.
 
@@ -391,6 +436,17 @@ def _download(
             f"Failed to download {url}. Status code: {response.status_code}"
         )
 
+    # A stale link can answer with a success status and an error page. When
+    # the server labels it as HTML we can say so before transferring it.
+    content_type = response.headers.get("Content-Type", "")
+    if "text/html" in content_type and not savename.lower().endswith(
+        (".html", ".htm")
+    ):
+        raise exceptions.DownloadError(
+            f"{url} returned an HTML page rather than {savename}. "
+            "The link is probably stale."
+        )
+
     # Sizes in bytes.
     total_size = (
         int(response.headers.get("content-length", expected_size))
@@ -438,6 +494,15 @@ def _download(
         if expected_sha256 is None and os.path.exists(part_path):
             os.remove(part_path)
         raise
+
+    # Without a digest to check, confirm at least that the payload is the
+    # format its name claims before installing it.
+    if expected_sha256 is None:
+        try:
+            _reject_error_page(savename, url, part_path)
+        except exceptions.DownloadError:
+            os.remove(part_path)
+            raise
 
     # Did we get the bytes the catalogue promised? A mismatch means the
     # partial file is unusable, so it goes rather than poisoning a retry.
