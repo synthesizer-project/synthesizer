@@ -155,6 +155,8 @@ GenerationData:
   sed_ssp_M24_vini0.40_Tenc_kr-1.7:
     dataset: generation-sed-ssp-m24-vini0-40-tenc-kr-1-7
 ProductionGrids:
+  relagn_fixed_rad_0.1_reduced_cloudy-c25.00-blr_0.055res.hdf5:
+    dataset: relagn-fixed-rad-0p1-reduced-cloudy-c25p00-blr-0p055res
   bc03-2016-Miles_chabrier-0.1,100_cloudy-c25.00-sps_0.055res.hdf5:
     dataset: bc03-2016-miles-chabrier-0p1-100-cloudy-c25p00-0p055res
   bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps_varied_ionisation_parameter_hydrogen_density_planeparallel.hdf5:
