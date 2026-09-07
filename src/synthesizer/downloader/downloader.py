@@ -231,25 +231,35 @@ def _continues_from(content_range, offset):
     return match is not None and int(match.group(1)) == offset
 
 
-def _resolve_release_at(base_url, dataset):
-    """Resolve a dataset through one host of the data service.
+def _resolve_release_at(base_url, dataset, release_id=None):
+    """Resolve a release through one host of the data service.
+
+    Without a release id this returns whatever the dataset currently
+    publishes. With one it returns that exact release, which is how an entry
+    pins itself to a specific version of a file rather than following
+    updates.
 
     Args:
         base_url (str):
             The base url of the data service to ask.
         dataset (str):
             The catalogue name of the dataset, as stored in the database yaml.
+        release_id (int, optional):
+            A specific release to fetch instead of the current one.
 
     Returns:
         dict:
-            The current release, including its download url and file details.
+            The release, including its download url and file details.
 
     Raises:
         DownloadError:
-            If the host cannot be reached, does not know the dataset, or has
-            no file currently published for it.
+            If the host cannot be reached, does not know the dataset or
+            release, or has no file currently published for the dataset.
     """
-    url = f"{base_url}/v1/datasets/{dataset}"
+    if release_id is not None:
+        url = f"{base_url}/v1/releases/{release_id}"
+    else:
+        url = f"{base_url}/v1/datasets/{dataset}"
 
     # Ask the catalogue for the dataset
     response = _request(url, timeout=30)
@@ -261,8 +271,14 @@ def _resolve_release_at(base_url, dataset):
             f"Status code: {response.status_code}"
         )
 
-    # A dataset can exist without a published file, which we cannot download
-    release = response.json().get("current_release")
+    payload = response.json()
+
+    # A pinned release describes itself; a dataset names its current release,
+    # and may have none at all.
+    if release_id is not None:
+        return payload
+
+    release = payload.get("current_release")
     if release is None:
         raise exceptions.DownloadError(
             f"The catalogue has no current release for {dataset}."
@@ -271,7 +287,7 @@ def _resolve_release_at(base_url, dataset):
     return release
 
 
-def _resolve_release(dataset):
+def _resolve_release(dataset, release_id=None):
     """Resolve a catalogue dataset name to its current release.
 
     Asks the Synthesizer data service which file is currently published for
@@ -284,10 +300,12 @@ def _resolve_release(dataset):
     Args:
         dataset (str):
             The catalogue name of the dataset, as stored in the database yaml.
+        release_id (int, optional):
+            A specific release to fetch instead of the current one.
 
     Returns:
         dict:
-            The current release, including its download url and file details.
+            The release, including its download url and file details.
 
     Raises:
         DownloadError:
@@ -297,7 +315,7 @@ def _resolve_release(dataset):
     failures = []
     for index, base_url in enumerate(DATA_API_URLS):
         try:
-            release = _resolve_release_at(base_url, dataset)
+            release = _resolve_release_at(base_url, dataset, release_id)
         except exceptions.DownloadError as e:
             failures.append(f"{base_url}: {e}")
             continue
@@ -365,7 +383,9 @@ def _download(
     # back to the Box link recorded for it.
     dataset = file_details.get("dataset")
     if dataset is not None:
-        release = _resolve_release(dataset)
+        # An entry may pin a specific release, which is how a superseded file
+        # stays downloadable under its own name after the dataset moves on.
+        release = _resolve_release(dataset, file_details.get("release"))
         url = release["download_url"]
         expected_sha256 = release["file"]["sha256"]
         expected_size = release["file"]["size_bytes"]
