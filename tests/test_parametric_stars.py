@@ -43,6 +43,26 @@ def constant_sfh_stars(test_grid):
         sf_hist=sf_hist,
         metal_dist=metal_dist,
         initial_mass=1e10 * Msun,
+        grid=test_grid,
+    )
+
+
+@pytest.fixture
+def surviving_mass_stars(test_grid):
+    """Constant SFH constructed with surviving_mass."""
+    n_ages = len(test_grid.log10ages)
+    n_metals = len(test_grid.metallicities)
+    # Uniform SFH distributed equally across age bins
+    sf_hist = np.ones(n_ages)
+    sf_hist = sf_hist / sf_hist.sum()  # normalise
+    metal_dist = np.ones(n_metals) / n_metals
+    return Stars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sf_hist=sf_hist,
+        metal_dist=metal_dist,
+        surviving_mass=1e10 * Msun,
+        grid=test_grid,
     )
 
 
@@ -60,6 +80,75 @@ def sfzh_stars(test_grid):
         sfzh=sfzh,
         initial_mass=1e10 * Msun,
     )
+
+
+class TestSurvivingMassNormalisation:
+    """Tests surviving_mass SFZHs have the correct shape."""
+
+    def test_sfzh_normalisation_is_scalar(self, surviving_mass_stars):
+        """sfzh_normalisation must be a scalar."""
+        assert np.shape(surviving_mass_stars.sfzh_normalisation) == ()
+
+    def test_sfzh_shape_preserved(
+        self, constant_sfh_stars, surviving_mass_stars
+    ):
+        """The SFZH shape is preserved.
+
+        The SFZH shape should be the same regardless of whether the
+        initial_mass or surviving_mass is used.
+        """
+        mask = constant_sfh_stars.sfzh > 0
+        ratios = (
+            surviving_mass_stars.sfzh[mask] / constant_sfh_stars.sfzh[mask]
+        )
+        np.testing.assert_allclose(
+            ratios, np.full_like(ratios, ratios[0]), rtol=1e-6
+        )
+
+    def test_constant_sfh_remains_constant(self, surviving_mass_stars):
+        """Check the SFH remains constant.
+
+        The constant_sfh_stars forms the same mass in each age bin, and
+        the same should be true after rescaling.
+        """
+        sf_hist = np.sum(surviving_mass_stars.sfzh, axis=1)
+        np.testing.assert_allclose(
+            sf_hist, np.full_like(sf_hist, sf_hist[0]), rtol=1e-6
+        )
+
+    def test_initial_mass_matches_shape_based_normalisation(
+        self, constant_sfh_stars, surviving_mass_stars, test_grid
+    ):
+        """Check initial masses are consistent.
+
+        The initial_mass computed from surviving_mass must match a
+        single scalar normalisation of the SFZH shape.
+        """
+        surviving_mass = surviving_mass_stars.surviving_mass
+
+        # Use constant_sfh_stars' SFZH as the shape reference.
+        shape_sfzh = constant_sfh_stars.sfzh
+        expected_norm = surviving_mass.to("Msun").value / np.sum(
+            shape_sfzh * test_grid.stellar_fraction
+        )
+        expected_initial_mass = expected_norm * np.sum(shape_sfzh)
+
+        assert surviving_mass_stars.initial_mass.to(
+            "Msun"
+        ).value == pytest.approx(expected_initial_mass, rel=1e-6)
+
+    def test_surviving_mass_matches_requested(self, surviving_mass_stars):
+        """Check the surviving mass matches the requested value.
+
+        Sum of sfzh * stellar_fraction should equal the requested
+        surviving_mass.
+        """
+        recovered = np.sum(
+            surviving_mass_stars.sfzh * surviving_mass_stars.stellar_fraction
+        )
+        assert recovered == pytest.approx(
+            surviving_mass_stars.surviving_mass.to("Msun").value, rel=1e-8
+        )
 
 
 class TestCalculateSurvivingSFZH:

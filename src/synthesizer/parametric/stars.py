@@ -322,9 +322,10 @@ class Stars(StarsComponent):
         # constraint, and if we have been given neither then we can just sum
         # the SFZH grid to get the total initial mass.
         if self.surviving_mass is not None:
+            current_surviving_mass = np.sum(self.sfzh * self.stellar_fraction)
             self.sfzh_normalisation = (
-                self._surviving_mass / self.stellar_fraction
-            ) / np.sum(self.sfzh)
+                self._surviving_mass / current_surviving_mass
+            )
             self.sfzh *= self.sfzh_normalisation
 
             # now calculate the initial mass
