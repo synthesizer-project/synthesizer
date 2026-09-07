@@ -46,6 +46,22 @@ def constant_sfh_stars(test_grid):
     )
 
 
+@pytest.fixture
+def sfzh_stars(test_grid):
+    """Return a parametric Stars constructed from an explicit SFZH."""
+    n_ages = len(test_grid.log10ages)
+    n_metals = len(test_grid.metallicities)
+
+    sfzh = np.ones((n_ages, n_metals))
+
+    return Stars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sfzh=sfzh,
+        initial_mass=1e10 * Msun,
+    )
+
+
 class TestCalculateSurvivingSFZH:
     """Tests for Stars.calculate_surviving_sfzh."""
 
@@ -261,6 +277,26 @@ class TestCalculateInitialMassAtAge:
             result = constant_sfh_stars.calculate_initial_mass_at_age(age)
             assert result <= constant_sfh_stars.initial_mass + 1e-30 * Msun
 
+    def test_nonzero_age_with_sfzh(self, sfzh_stars):
+        """Test that an explicit SFZH works at a non-zero age."""
+        result = sfzh_stars.calculate_initial_mass_at_age(100 * Myr)
+        assert result >= 0 * Msun
+        assert result <= sfzh_stars.initial_mass + 1e-30 * Msun
+
+    def test_nonzero_age_with_array_sfh(self, constant_sfh_stars):
+        """Test that array-based SFH and ZH work at a non-zero age."""
+        result = constant_sfh_stars.calculate_initial_mass_at_age(100 * Myr)
+        assert result >= 0 * Msun
+        assert result <= constant_sfh_stars.initial_mass + 1e-30 * Msun
+
+    def test_sfzh_is_not_modified(self, constant_sfh_stars):
+        """Test that SFZH is unchanged by calculate_initial_mass_at_age."""
+        sfzh = constant_sfh_stars.sfzh.copy()
+
+        constant_sfh_stars.calculate_initial_mass_at_age(100 * Myr)
+
+        np.testing.assert_array_equal(constant_sfh_stars.sfzh, sfzh)
+
 
 class TestCalculateSurvivingMassAtAge:
     """Tests for Stars.calculate_surviving_mass_at_age."""
@@ -368,3 +404,21 @@ class TestCalculateSurvivingMassAtAge:
             5 * Myr, test_grid
         )
         assert result.to("Msun").value > 0
+
+    def test_nonzero_age_with_sfzh(self, sfzh_stars, test_grid):
+        """Test that an explicit SFZH works at a non-zero age."""
+        result = sfzh_stars.calculate_surviving_mass_at_age(
+            100 * Myr, test_grid
+        )
+        initial = sfzh_stars.calculate_initial_mass_at_age(100 * Myr)
+        assert result >= 0 * Msun
+        assert result <= initial + 1e-30 * Msun
+
+    def test_nonzero_age_with_array_sfh(self, constant_sfh_stars, test_grid):
+        """Test that array-based SFH and ZH work at a non-zero age."""
+        result = constant_sfh_stars.calculate_surviving_mass_at_age(
+            100 * Myr, test_grid
+        )
+        initial = constant_sfh_stars.calculate_initial_mass_at_age(100 * Myr)
+        assert result >= 0 * Msun
+        assert result <= initial + 1e-30 * Msun

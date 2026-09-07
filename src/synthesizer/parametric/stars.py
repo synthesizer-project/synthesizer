@@ -544,26 +544,78 @@ class Stars(StarsComponent):
         # Finally, calculate the SFZH grid based on the above calculations
         return sf_hist[:, np.newaxis] * metal_dist
 
-    def _get_normalised_sfzh(self, age_offset=None):
-        """Get the correctly mass-scaled SFZH.
+    def _get_normalised_sfzh(self, age_offset):
+        """Get the correctly mass-scaled SFZH grid at an earlier lookback time.
 
-        Get the SFZH, optionally at an earlier lookback time, and apply
-        the precomputed normalisation to total mass.
+        If this object has a SFZH constructed from continuous functions
+        the shape is re-integrated exactly and scaled by the precomputed
+        normalisation.
+
+        If continuous functions are not available, assume each age bin
+        is uniformly populated and remap the retained mass onto the
+        shifted age grid. Resolution is limited to the object's existing
+        age bins in this case and the two approaches will deviate.
 
         Args:
             age_offset (unyt_quantity):
                 The offset to apply to the age grid when calculating the SFZH.
 
         Returns:
-            np.ndarray:
-                The mass-scaled SFZH grid.
+            sfzh (np.ndarray):
+                The SFZH grid at the earlier lookback time.
         """
-        # Get the shape of the SFZH.
-        sfzh = self._get_sfzh(age_offset=age_offset)
+        # Re-integrate the SFZH over the shifted age bins if it is
+        # function based.
+        if self.sf_hist_func is not None or self.metal_dist_func is not None:
+            sfzh = self._get_sfzh(age_offset=age_offset)
+            if getattr(self, "sfzh_normalisation", None) is not None:
+                sfzh = sfzh * self.sfzh_normalisation
 
-        # Apply the normalisation to total mass if available.
-        if getattr(self, "sfzh_normalisation", None) is not None:
-            sfzh = sfzh * self.sfzh_normalisation
+        # Otherwise, remap the existing SFZH onto the shifted age bins.
+        else:
+            # Construct linear age bins.
+            ages = self.ages.to("yr").value
+            age_edges = np.empty(len(ages) + 1)
+            age_edges[0] = 0.0
+            age_edges[1:-1] = 0.5 * (ages[1:] + ages[:-1])
+            age_edges[-1] = ages[-1]
+
+            offset = age_offset.to("yr").value
+            sfzh = np.zeros_like(self.sfzh)
+
+            # Loop over each bin in the original SFZH.
+            for source_index in range(len(ages)):
+                source_start = age_edges[source_index]
+                source_end = age_edges[source_index + 1]
+                source_width = source_end - source_start
+
+                # Bins entirely younger than age_offset will not contribute.
+                if source_end <= offset:
+                    continue
+
+                # Shift the bin by age_offset.
+                retained_start = max(source_start, offset)
+                shifted_start = retained_start - offset
+                shifted_end = source_end - offset
+
+                # Loop over each bin in the new SFZH and compute the
+                # overlap with the shifted source bin.
+                for destination_index in range(len(ages)):
+                    destination_start = age_edges[destination_index]
+                    destination_end = age_edges[destination_index + 1]
+
+                    overlap_start = max(shifted_start, destination_start)
+                    overlap_end = min(shifted_end, destination_end)
+                    overlap_width = max(0, overlap_end - overlap_start)
+
+                    # If there is overlap, add the appropriate fraction
+                    # of the SFZH.
+                    if overlap_width > 0:
+                        sfzh[destination_index] += (
+                            self.sfzh[source_index]
+                            * overlap_width
+                            / source_width
+                        )
 
         return sfzh
 
