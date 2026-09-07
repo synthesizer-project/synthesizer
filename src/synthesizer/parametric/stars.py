@@ -567,7 +567,7 @@ class Stars(StarsComponent):
         """
         # Re-integrate the SFZH over the shifted age bins if it is
         # function based.
-        if self.sf_hist_func is not None or self.metal_dist_func is not None:
+        if self.sf_hist_func is not None and self.metal_dist_func is not None:
             sfzh = self._get_sfzh(age_offset=age_offset)
             if getattr(self, "sfzh_normalisation", None) is not None:
                 sfzh = sfzh * self.sfzh_normalisation
