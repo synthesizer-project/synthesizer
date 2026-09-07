@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import os
 import re
+from urllib.parse import urlparse
 
 import requests
 import yaml
@@ -287,13 +288,43 @@ def _resolve_release_at(base_url, dataset, release_id=None):
     # A pinned release describes itself; a dataset names its current release,
     # and may have none at all.
     if release_id is not None:
-        return payload
+        release = payload
+    else:
+        release = payload.get("current_release")
+        if release is None:
+            raise exceptions.DownloadError(
+                f"The catalogue has no current release for {dataset}."
+            )
 
-    release = payload.get("current_release")
-    if release is None:
-        raise exceptions.DownloadError(
-            f"The catalogue has no current release for {dataset}."
+    try:
+        download_url = release["download_url"]
+        file_details = release["file"]
+        filename = file_details["filename"]
+        sha256 = file_details["sha256"]
+        size_bytes = file_details["size_bytes"]
+        parsed_url = (
+            urlparse(download_url) if isinstance(download_url, str) else None
         )
+    except (KeyError, TypeError, ValueError) as e:
+        raise exceptions.DownloadError(
+            f"Invalid release metadata from {url}."
+        ) from e
+
+    if (
+        parsed_url is None
+        or parsed_url.scheme not in ("http", "https")
+        or not parsed_url.netloc
+        or not isinstance(filename, str)
+        or filename in ("", ".", "..")
+        or os.path.basename(filename) != filename
+        or "\\" in filename
+        or not isinstance(sha256, str)
+        or re.fullmatch(r"[0-9a-fA-F]{64}", sha256) is None
+        or not isinstance(size_bytes, int)
+        or isinstance(size_bytes, bool)
+        or size_bytes < 0
+    ):
+        raise exceptions.DownloadError(f"Invalid release metadata from {url}.")
 
     return release
 

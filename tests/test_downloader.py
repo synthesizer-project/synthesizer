@@ -366,6 +366,50 @@ def test_an_invalid_catalogue_response_falls_back(
     assert (tmp_path / "test_grid.hdf5").read_bytes() == PAYLOAD
 
 
+def test_incomplete_release_metadata_falls_back(tmp_path, monkeypatch):
+    """Incomplete metadata is a failure local to the answering host."""
+    incomplete = release()
+    del incomplete["current_release"]["file"]["sha256"]
+
+    def fake_get(url, **kwargs):
+        if url.startswith(downloader.DATA_API_URL):
+            return FakeResponse(json_data=incomplete)
+        if "/v1/datasets/" in url:
+            return FakeResponse(
+                json_data=release(base=downloader.DATA_API_FALLBACK_URL)
+            )
+        return FakeResponse(
+            payload=PAYLOAD, headers={"content-length": str(len(PAYLOAD))}
+        )
+
+    monkeypatch.setattr(downloader.requests, "get", fake_get)
+
+    with pytest.warns(RuntimeWarning, match="Could not reach"):
+        downloader.download_dataset("some-new-grid", str(tmp_path))
+
+    assert (tmp_path / "test_grid.hdf5").read_bytes() == PAYLOAD
+
+
+def test_catalogue_filename_cannot_escape_destination(tmp_path, monkeypatch):
+    """Catalogue filenames must be safe basenames before fetching."""
+    malicious = release()
+    malicious["current_release"]["file"]["filename"] = "../escaped.hdf5"
+    calls = []
+
+    def fake_get(url, **kwargs):
+        calls.append(url)
+        return FakeResponse(json_data=malicious)
+
+    monkeypatch.setattr(downloader.requests, "get", fake_get)
+    destination = tmp_path / "downloads"
+
+    with pytest.raises(exceptions.DownloadError, match="Invalid release"):
+        downloader.download_dataset("some-new-grid", str(destination))
+
+    assert all("/v1/datasets/" in url for url in calls)
+    assert not (tmp_path / "escaped.hdf5").exists()
+
+
 def test_all_hosts_failing_reports_every_reason(tmp_path, monkeypatch):
     """When no host works, each host's reason is surfaced."""
 
