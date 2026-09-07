@@ -12,6 +12,7 @@ Example Usage:
     synthesizer-download --test-grids --destination /path/to/destination
     synthesizer-download --dust-grid --destination /path/to/destination
     synthesizer-download --camels-data --destination /path/to/destination
+    synthesizer-download --dataset bpass-2p2p1-bin-chabrier03-0p1-300p0
 
 """
 
@@ -271,7 +272,17 @@ def _resolve_release_at(base_url, dataset, release_id=None):
             f"Status code: {response.status_code}"
         )
 
-    payload = response.json()
+    try:
+        payload = response.json()
+    except ValueError as e:
+        raise exceptions.DownloadError(
+            f"Failed to decode the catalogue response from {url}."
+        ) from e
+
+    if not isinstance(payload, dict):
+        raise exceptions.DownloadError(
+            f"Invalid catalogue response from {url}: expected an object."
+        )
 
     # A pinned release describes itself; a dataset names its current release,
     # and may have none at all.
@@ -394,6 +405,35 @@ def _download(
         expected_sha256 = None
         expected_size = 0
 
+    _fetch(savename, url, expected_sha256, expected_size, save_dir)
+
+
+def _fetch(savename, url, expected_sha256, expected_size, save_dir):
+    """Stream one file to disk and install it once it verifies.
+
+    This is the transfer half of a download, separated from resolution so
+    that both a database entry and a bare catalogue dataset name can reach
+    it once they know where the bytes are.
+
+    Args:
+        savename (str):
+            The name to install the file under.
+        url (str):
+            The location to stream the bytes from.
+        expected_sha256 (str or None):
+            The digest the bytes must hash to, or None when the source is a
+            direct link with nothing to check against.
+        expected_size (int):
+            The size the source reports, used to size the progress bar and to
+            decide whether a partial file is already complete.
+        save_dir (str):
+            The directory in which to save the file.
+
+    Raises:
+        DownloadError:
+            If the download fails, or the bytes received do not match the
+            digest the catalogue published.
+    """
     # Ensure the save directory exists
     if not os.path.exists(save_dir):
         os.makedirs(save_dir, exist_ok=True)
@@ -451,7 +491,7 @@ def _download(
             resume_from = 0
 
     # Ensure the request was successful
-    if response.status_code not in (200, 206):
+    if response.status_code != 200 and not resuming:
         raise exceptions.DownloadError(
             f"Failed to download {url}. Status code: {response.status_code}"
         )
@@ -536,6 +576,32 @@ def _download(
 
     # The file is complete and verified, so move it into place
     os.replace(part_path, save_path)
+
+
+def download_dataset(dataset, destination, release_id=None):
+    """Download one dataset by its catalogue name.
+
+    Unlike every other download here, this needs no entry in the database
+    yaml: the catalogue names the file, states its size and publishes the
+    digest to verify it against. That makes it the command a catalogue page
+    can print for a dataset nothing in Synthesizer knows about yet.
+
+    Args:
+        dataset (str):
+            The catalogue name of the dataset.
+        destination (str):
+            The path to the destination directory.
+        release_id (int, optional):
+            A specific release to fetch instead of the current one.
+    """
+    release = _resolve_release(dataset, release_id)
+    _fetch(
+        release["file"]["filename"],
+        release["download_url"],
+        release["file"]["sha256"],
+        release["file"]["size_bytes"],
+        destination,
+    )
 
 
 def download_test_grids(destination):
@@ -716,6 +782,31 @@ def download():
         ),
     )
 
+    # Add a flag to download one named dataset from the catalogue
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default=None,
+        help=(
+            "Download one dataset by its catalogue name, as listed at "
+            "synthesizer-project.org/syndicate. The file keeps the name the "
+            f"catalogue publishes it under and lands in {GRID_DIR} unless "
+            "--destination says otherwise."
+        ),
+    )
+
+    # Add a flag to pin a release of that dataset
+    parser.add_argument(
+        "--release",
+        type=int,
+        default=None,
+        help=(
+            "Fetch a specific release of --dataset rather than whichever is "
+            "current. Older releases stay downloadable forever, so this is "
+            "how a result is reproduced against the exact file it used."
+        ),
+    )
+
     # Add a flag to go ham and download everything
     parser.add_argument(
         "--all",
@@ -754,6 +845,14 @@ def download():
     all_sim_data = args.all_sim_data
     instruments = args.instruments
     all_instruments = args.all_instruments
+    dataset = args.dataset
+    release_id = args.release
+
+    # A pinned release only means anything alongside the dataset it belongs to
+    if release_id is not None and dataset is None:
+        raise exceptions.InconsistentArguments(
+            "--release pins a release of --dataset, so it needs a dataset."
+        )
 
     # Check if the destination directory exists
     if dest is not None and not os.path.exists(dest):
@@ -778,6 +877,14 @@ def download():
         download_sc_sam_test_data(dest if dest is not None else TEST_DATA_DIR)
         download_instruments(INSTRUMENT_CACHE_DIR, AVAILABLE_INSTRUMENTS)
         return
+
+    # A named dataset?
+    if dataset is not None:
+        download_dataset(
+            dataset,
+            dest if dest is not None else GRID_DIR,
+            release_id,
+        )
 
     # Test data?
     if test:

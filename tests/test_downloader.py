@@ -60,6 +60,8 @@ class FakeResponse:
 
     def json(self):
         """Return the decoded body."""
+        if isinstance(self._json, ValueError):
+            raise self._json
         return self._json
 
     def iter_content(self, block_size):
@@ -133,6 +135,51 @@ def test_migrated_file_resolves_through_the_api(tmp_path, fake_requests):
     saved = tmp_path / "test_grid.hdf5"
     assert saved.read_bytes() == PAYLOAD
     assert not (tmp_path / "test_grid.hdf5.part").exists()
+
+
+def test_a_named_dataset_needs_no_database_entry(tmp_path, fake_requests):
+    """--dataset resolves a catalogue name nothing local knows about."""
+    fake_get, calls = fake_requests
+
+    downloader.download_dataset("some-new-grid", str(tmp_path))
+
+    assert calls[0].endswith("/v1/datasets/some-new-grid")
+    assert "some-new-grid" not in downloader.AVAILABLE_FILES
+
+    # The file lands under the name the catalogue publishes it under.
+    assert (tmp_path / "test_grid.hdf5").read_bytes() == PAYLOAD
+
+
+def test_a_named_dataset_is_still_verified(tmp_path, fake_requests):
+    """A dataset fetched by name is checked against its published digest."""
+    fake_get, _ = fake_requests
+    fake_get.catalogue = release(sha256="0" * 64)
+
+    with pytest.raises(exceptions.DownloadError, match="failed verification"):
+        downloader.download_dataset("some-new-grid", str(tmp_path))
+
+    assert not (tmp_path / "test_grid.hdf5").exists()
+
+
+def test_a_named_dataset_can_pin_a_release(tmp_path, monkeypatch):
+    """--release asks for one release rather than whatever is current."""
+    calls = []
+
+    def fake_get(url, **kwargs):
+        calls.append(url)
+        if "/download" in url:
+            return FakeResponse(
+                payload=PAYLOAD, headers={"content-length": str(len(PAYLOAD))}
+            )
+        # A pinned release describes itself, with no current_release wrapper.
+        return FakeResponse(json_data=release()["current_release"])
+
+    monkeypatch.setattr(downloader.requests, "get", fake_get)
+
+    downloader.download_dataset("some-new-grid", str(tmp_path), 2)
+
+    assert calls[0].endswith("/v1/releases/2")
+    assert (tmp_path / "test_grid.hdf5").read_bytes() == PAYLOAD
 
 
 def test_a_pinned_release_is_fetched_instead_of_the_current_one(
@@ -294,6 +341,31 @@ def test_a_blocked_primary_host_falls_back(tmp_path, monkeypatch):
     assert (tmp_path / "test_grid.hdf5").read_bytes() == PAYLOAD
 
 
+@pytest.mark.parametrize("bad_payload", [ValueError("bad JSON"), []])
+def test_an_invalid_catalogue_response_falls_back(
+    tmp_path, monkeypatch, bad_payload
+):
+    """Malformed catalogue responses are failures local to their host."""
+
+    def fake_get(url, **kwargs):
+        if url.startswith(downloader.DATA_API_URL):
+            return FakeResponse(json_data=bad_payload)
+        if "/v1/datasets/" in url:
+            return FakeResponse(
+                json_data=release(base=downloader.DATA_API_FALLBACK_URL)
+            )
+        return FakeResponse(
+            payload=PAYLOAD, headers={"content-length": str(len(PAYLOAD))}
+        )
+
+    monkeypatch.setattr(downloader.requests, "get", fake_get)
+
+    with pytest.warns(RuntimeWarning, match="Could not reach"):
+        downloader._download("test_grid.hdf5", str(tmp_path))
+
+    assert (tmp_path / "test_grid.hdf5").read_bytes() == PAYLOAD
+
+
 def test_all_hosts_failing_reports_every_reason(tmp_path, monkeypatch):
     """When no host works, each host's reason is surfaced."""
 
@@ -433,6 +505,19 @@ def test_a_server_ignoring_the_range_restarts_cleanly(tmp_path, monkeypatch):
 
     # The stale bytes were overwritten rather than appended to
     assert (tmp_path / "test_grid.hdf5").read_bytes() == PAYLOAD
+
+
+def test_an_unrequested_partial_response_is_rejected(tmp_path, monkeypatch):
+    """A 206 response is valid only for a validated resume request."""
+    monkeypatch.setattr(
+        downloader.requests,
+        "get",
+        lambda url, **kwargs: FakeResponse(status_code=206, payload=PAYLOAD),
+    )
+    name = use_legacy_entry(monkeypatch)
+
+    with pytest.raises(exceptions.DownloadError, match="206"):
+        downloader._download(name, str(tmp_path))
 
 
 @pytest.mark.parametrize(

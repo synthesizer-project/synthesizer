@@ -42,11 +42,8 @@ import yaml
 
 try:
     from box_sdk_gen import BoxOAuth, GetAuthorizeUrlOptions, OAuthConfig
-except ImportError as exc:
-    raise ImportError(
-        "The latest Box SDK is not installed. Please install it with "
-        '`pip install "boxsdk>=10"`.'
-    ) from exc
+except ImportError:
+    BoxOAuth = GetAuthorizeUrlOptions = OAuthConfig = None
 
 
 # Define constants for the Box API and shared folder URL.
@@ -506,6 +503,12 @@ def _update_box_links_database():
         None: The database is written to `OUTPUT_YAML` in the current
         script directory.
     """
+    if BoxOAuth is None:
+        raise ImportError(
+            "The latest Box SDK is not installed. Please install it with "
+            '`pip install "boxsdk>=10"`.'
+        )
+
     # Load the Box OAuth configuration from the local environment.
     client_id = os.getenv("SYNTH_BOX_ID")
     client_secret = os.getenv("SYNTH_BOX_SECRET")
