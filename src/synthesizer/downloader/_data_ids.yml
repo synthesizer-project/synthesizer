@@ -155,6 +155,8 @@ GenerationData:
   sed_ssp_M24_vini0.40_Tenc_kr-1.7:
     dataset: generation-sed-ssp-m24-vini0-40-tenc-kr-1-7
 ProductionGrids:
+  relagn_fixed_rad_efficiency_0.1_reduced_cloudy-c25.00-nlr_0.055res.hdf5:
+    dataset: relagn-fixed-rad-efficiency-0p1-reduced-cloudy-c25p00-nlr-0p055res
   relagn_fixed_rad_0.1_reduced_cloudy-c25.00-blr_0.055res.hdf5:
     dataset: relagn-fixed-rad-0p1-reduced-cloudy-c25p00-blr-0p055res
   bc03-2016-Miles_chabrier-0.1,100_cloudy-c25.00-sps_0.055res.hdf5:
