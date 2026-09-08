@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import os
 import re
+from urllib.parse import urlparse
 
 import requests
 import yaml
@@ -37,9 +38,8 @@ from synthesizer.synth_warnings import warn
 
 DATABASE_FILE = os.path.join(os.path.dirname(__file__), "_data_ids.yml")
 
-# The Synthesizer data service. Files migrated from Box carry a "dataset" key
-# naming their catalogue entry, and are resolved through this API instead of a
-# direct link.
+# The Synthesizer data service. Each file carries a "dataset" key naming its
+# catalogue entry and is resolved through this API.
 DATA_API_URL = "https://data.synthesizer-project.org"
 
 # The same service under its Cloudflare workers.dev hostname, tried when the
@@ -180,12 +180,9 @@ _FORMAT_SIGNATURES = {
 def _reject_error_page(savename, url, path):
     """Reject a downloaded file that is not the format its name claims.
 
-    A stale Box link answers with an HTML error page and a success status.
-    Without this the page would be written out under a scientific filename
-    and only fail later, deep inside a reader, with a baffling message.
-
-    Files published through the data service are checked by digest instead,
-    which is stronger; this covers the links that have no digest to check.
+    A server can answer with an HTML error page and a success status. Without
+    this the page would be written under a scientific filename and only fail
+    later, deep inside a reader, with a baffling message.
 
     Args:
         savename (str): The name the file will be installed under.
@@ -272,18 +269,58 @@ def _resolve_release_at(base_url, dataset, release_id=None):
             f"Status code: {response.status_code}"
         )
 
-    payload = response.json()
+    try:
+        payload = response.json()
+    except ValueError as e:
+        raise exceptions.DownloadError(
+            f"Failed to decode the catalogue response from {url}."
+        ) from e
+
+    if not isinstance(payload, dict):
+        raise exceptions.DownloadError(
+            f"Invalid catalogue response from {url}: expected an object."
+        )
 
     # A pinned release describes itself; a dataset names its current release,
     # and may have none at all.
     if release_id is not None:
-        return payload
+        release = payload
+    else:
+        release = payload.get("current_release")
+        if release is None:
+            raise exceptions.DownloadError(
+                f"The catalogue has no current release for {dataset}."
+            )
 
-    release = payload.get("current_release")
-    if release is None:
-        raise exceptions.DownloadError(
-            f"The catalogue has no current release for {dataset}."
+    try:
+        download_url = release["download_url"]
+        file_details = release["file"]
+        filename = file_details["filename"]
+        sha256 = file_details["sha256"]
+        size_bytes = file_details["size_bytes"]
+        parsed_url = (
+            urlparse(download_url) if isinstance(download_url, str) else None
         )
+    except (KeyError, TypeError, ValueError) as e:
+        raise exceptions.DownloadError(
+            f"Invalid release metadata from {url}."
+        ) from e
+
+    if (
+        parsed_url is None
+        or parsed_url.scheme not in ("http", "https")
+        or not parsed_url.netloc
+        or not isinstance(filename, str)
+        or filename in ("", ".", "..")
+        or os.path.basename(filename) != filename
+        or "\\" in filename
+        or not isinstance(sha256, str)
+        or re.fullmatch(r"[0-9a-fA-F]{64}", sha256) is None
+        or not isinstance(size_bytes, int)
+        or isinstance(size_bytes, bool)
+        or size_bytes < 0
+    ):
+        raise exceptions.DownloadError(f"Invalid release metadata from {url}.")
 
     return release
 
@@ -348,12 +385,9 @@ def _download(
 ):
     """Download the file from the data server.
 
-    Files that have been migrated to the Synthesizer data service carry a
-    "dataset" key in the AVAILABLE_FILES dictionary. These are resolved
-    through the catalogue API, which tells us where the bytes are and what
-    their SHA-256 should be, and the download is verified against it. Files
-    that have not been migrated yet are still fetched from their direct Box
-    link, which cannot tell us anything about the bytes it serves.
+    Files carry a "dataset" key in the AVAILABLE_FILES dictionary. The
+    catalogue API tells us where the bytes are and what their SHA-256 should
+    be, and the download is verified against it.
 
     Either way the file is streamed to a temporary path and only moved into
     place once it has arrived in full, so an interrupted download can never
@@ -386,23 +420,49 @@ def _download(
         if filename in TEST_DATA_TRANSLATION:
             filename = TEST_DATA_TRANSLATION[filename]
         file_details = AVAILABLE_FILES[filename]
-        known_dataset = file_details.get("dataset")
+        try:
+            known_dataset = file_details["dataset"]
+        except KeyError as e:
+            raise exceptions.DownloadError(
+                f"{filename} has no dataset key in {DATABASE_FILE}. "
+                "The local data catalogue may be stale."
+            ) from e
 
-        # Has this known file been migrated to the data service?
-        if known_dataset is not None:
-            # An entry may pin a specific release, which is how a superseded
-            # file stays downloadable under its old name after publication.
-            release = _resolve_release(
-                known_dataset, file_details.get("release")
-            )
-            url = release["download_url"]
-            expected_sha256 = release["file"]["sha256"]
-            expected_size = release["file"]["size_bytes"]
-        else:
-            url = file_details["direct_link"]
-            expected_sha256 = None
-            expected_size = 0
+        # An entry may pin a specific release, which is how a superseded file
+        # stays downloadable under its old name after publication.
+        release = _resolve_release(known_dataset, file_details.get("release"))
+        url = release["download_url"]
+        expected_sha256 = release["file"]["sha256"]
+        expected_size = release["file"]["size_bytes"]
 
+    _fetch(savename, url, expected_sha256, expected_size, save_dir)
+
+
+def _fetch(savename, url, expected_sha256, expected_size, save_dir):
+    """Stream one file to disk and install it once it verifies.
+
+    This is the transfer half of a download, separated from resolution so
+    that both a database entry and a bare catalogue dataset name can reach
+    it once they know where the bytes are.
+
+    Args:
+        savename (str):
+            The name to install the file under.
+        url (str):
+            The location to stream the bytes from.
+        expected_sha256 (str or None):
+            The digest the bytes must hash to, or None when unavailable.
+        expected_size (int):
+            The size the source reports, used to size the progress bar and to
+            decide whether a partial file is already complete.
+        save_dir (str):
+            The directory in which to save the file.
+
+    Raises:
+        DownloadError:
+            If the download fails, or the bytes received do not match the
+            digest the catalogue published.
+    """
     # Ensure the save directory exists
     if not os.path.exists(save_dir):
         os.makedirs(save_dir, exist_ok=True)
@@ -460,13 +520,13 @@ def _download(
             resume_from = 0
 
     # Ensure the request was successful
-    if response.status_code not in (200, 206):
+    if response.status_code != 200 and not resuming:
         raise exceptions.DownloadError(
             f"Failed to download {url}. Status code: {response.status_code}"
         )
 
-    # A stale link can answer with a success status and an error page. When
-    # the server labels it as HTML we can say so before transferring it.
+    # A server can answer with a success status and an error page. When it
+    # labels the response as HTML we can say so before transferring it.
     content_type = response.headers.get("Content-Type", "")
     if "text/html" in content_type and not savename.lower().endswith(
         (".html", ".htm")
@@ -734,7 +794,10 @@ def download():
         "--dataset",
         nargs="+",
         default=[],
-        help="Download one or more datasets by catalogue name.",
+        help=(
+            "Download one or more datasets by catalogue name, as listed at "
+            "synthesizer-project.org/syndex."
+        ),
     )
     parser.add_argument(
         "--release",

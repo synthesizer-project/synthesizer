@@ -175,8 +175,6 @@ ProductionGrids:
     dataset: qsosed-isotropic-hr
   qsosed-isotropic-limited.hdf5:
     dataset: qsosed-isotropic-limited
-  qsosed-isotropic.hdf5:
-    direct_link: https://sussex.box.com/shared/static/qjjztt26jjkiwrci9l9ucwvsflfqdm17.hdf5
   relagn_incident_fixed_rad_efficiency_0p1_reduced.hdf5:
     dataset: relagn-fixed-rad-efficiency-0p1-reduced
   relagn_incident_variable_rad_efficiency_reduced.hdf5:
@@ -192,7 +190,7 @@ ProductionGrids:
   qsosed-test_cloudy-c23.01-nlr-test.hdf5:
     dataset: qsosed-test-nlr-cloudy-c23p01
   relagn_incident_fixed_rad_efficiency_0p1_cloudy-c23.01-nlr.hdf5:
-    direct_link: https://sussex.box.com/shared/static/sna5gnnl6wd4jaa9kpcrbzi0spdnyimk.hdf5
+    dataset: relagn-incident-fixed-rad-efficiency-0p1-cloudy-c23p01-nlr
   relqso-test_cloudy-c23.01-agn-test.hdf5:
     dataset: relqso-test-agn-cloudy-c23p01
   relqso-test_cloudy-c23.01-blr-test.hdf5:
@@ -323,8 +321,6 @@ ProductionGrids:
     dataset: fsps-3p2-mistmiles-chabrier03-5-120
   fsps-3.2-mistmiles_chabrier03-50,120.hdf5:
     dataset: fsps-3p2-mistmiles-chabrier03-50-120
-  maraston05-rhb_bpl-0.1,100-2.35.hdf5:
-    direct_link: https://sussex.box.com/shared/static/q4c0og6ophmb20y34akxfygozrvnebmh.hdf5
   maraston13_kroupa-0.1,100.hdf5:
     dataset: maraston13-kroupa-0p1-100
   maraston13_salpeter-0.1,100.hdf5:
@@ -432,8 +428,6 @@ ProductionGrids:
     dataset: bpass-2p3-bin-bpl-0p1-1p0-300p0-1p3-2p35-cloudy-c23p01-ionising-only
   fsps-3.2-mistmiles_bpl-0.08,0.5,1,120-1.3,2.3,1.5_cloudy-c23.01-sps.hdf5:
     dataset: fsps-3p2-mistmiles-bpl-0p08-0p5-1-120-1p3-2p3-1p5-cloudy-c23p01
-  fsps-3.2-mistmiles_bpl-0.08,0.5,1,120-1.3,2.3,1.6_cloudy-c23.01-sps.hdf5:
-    direct_link: https://sussex.box.com/shared/static/lur3bzi4lpacloz2wbs8d2bqk1av019h.hdf5
   fsps-3.2-mistmiles_bpl-0.08,0.5,1,120-1.3,2.3,1.7_cloudy-c23.01-sps.hdf5:
     dataset: fsps-3p2-mistmiles-bpl-0p08-0p5-1-120-1p3-2p3-1p7-cloudy-c23p01
   fsps-3.2-mistmiles_bpl-0.08,0.5,1,120-1.3,2.3,1.8_cloudy-c23.01-sps.hdf5:
@@ -476,10 +470,8 @@ ProductionGrids:
     dataset: fsps-3p2-mistmiles-chabrier03-0p5-120-cloudy-c23p01
   fsps-3.2-mistmiles_chabrier03-2,120_cloudy-c23.01-sps.hdf5:
     dataset: fsps-3p2-mistmiles-chabrier03-2-120-cloudy-c23p01-ionising-only
-  maraston05-rhb_bpl-0.1,100-2.35_cloudy-c23.01-sps.hdf5:
-    direct_link: https://sussex.box.com/shared/static/mwscapizecr4tzwl117fykc4s39c7xmu.hdf5
   maraston24-Tenc40_kroupa-0.1,100_cloudy-c23.01-sps.hdf5:
-    direct_link: https://sussex.box.com/shared/static/c7s1xxltz5a8fo7gi14howlepbfc3aa1.hdf5
+    dataset: maraston24-tenc0p40-kroupa-0p1-100-cloudy-c23p01
 SVOFilterCache:
   svo_filter_cache.tar.gz:
     dataset: svo-filter-cache
