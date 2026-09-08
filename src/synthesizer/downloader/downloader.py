@@ -12,6 +12,7 @@ Example Usage:
     synthesizer-download --test-grids --destination /path/to/destination
     synthesizer-download --dust-grid --destination /path/to/destination
     synthesizer-download --camels-data --destination /path/to/destination
+    synthesizer-download --dataset grid-one grid-two
 
 """
 
@@ -342,6 +343,8 @@ def _resolve_release(dataset, release_id=None):
 def _download(
     filename,
     save_dir,
+    dataset=None,
+    release_id=None,
 ):
     """Download the file from the data server.
 
@@ -361,38 +364,44 @@ def _download(
             The name of the file to download.
         save_dir (str):
             The directory in which to save the file.
+        dataset (str, optional):
+            A catalogue dataset name, bypassing local aliases.
+        release_id (int, optional):
+            A specific release of the named catalogue dataset.
 
     Raises:
         DownloadError:
             If the download fails, or the bytes received do not match the
             digest the catalogue published.
     """
-    # Define the filename we will save under (this will ignore any aliases)
-    savename = filename
-
-    # Do we have an file with an alias?
-    if filename in TEST_DATA_TRANSLATION:
-        # If the filename is in the translation dict, use the alias
-        filename = TEST_DATA_TRANSLATION[filename]
-
-    # Unpack the file details for extraction
-    file_details = AVAILABLE_FILES[filename]
-
-    # Has this file been migrated to the data service? If so the catalogue
-    # tells us where it lives and what it should hash to, otherwise we fall
-    # back to the Box link recorded for it.
-    dataset = file_details.get("dataset")
     if dataset is not None:
-        # An entry may pin a specific release, which is how a superseded file
-        # stays downloadable under its own name after the dataset moves on.
-        release = _resolve_release(dataset, file_details.get("release"))
+        release = _resolve_release(dataset, release_id)
+        savename = release["file"]["filename"]
         url = release["download_url"]
         expected_sha256 = release["file"]["sha256"]
         expected_size = release["file"]["size_bytes"]
     else:
-        url = file_details["direct_link"]
-        expected_sha256 = None
-        expected_size = 0
+        # Define the filename we will save under (this will ignore aliases).
+        savename = filename
+        if filename in TEST_DATA_TRANSLATION:
+            filename = TEST_DATA_TRANSLATION[filename]
+        file_details = AVAILABLE_FILES[filename]
+        known_dataset = file_details.get("dataset")
+
+        # Has this known file been migrated to the data service?
+        if known_dataset is not None:
+            # An entry may pin a specific release, which is how a superseded
+            # file stays downloadable under its old name after publication.
+            release = _resolve_release(
+                known_dataset, file_details.get("release")
+            )
+            url = release["download_url"]
+            expected_sha256 = release["file"]["sha256"]
+            expected_size = release["file"]["size_bytes"]
+        else:
+            url = file_details["direct_link"]
+            expected_sha256 = None
+            expected_size = 0
 
     # Ensure the save directory exists
     if not os.path.exists(save_dir):
@@ -536,6 +545,11 @@ def _download(
 
     # The file is complete and verified, so move it into place
     os.replace(part_path, save_path)
+
+
+def download_dataset(dataset, destination, release_id=None):
+    """Download one catalogue dataset by name."""
+    _download(dataset, destination, dataset=dataset, release_id=release_id)
 
 
 def download_test_grids(destination):
@@ -716,6 +730,19 @@ def download():
         ),
     )
 
+    parser.add_argument(
+        "--dataset",
+        nargs="+",
+        default=[],
+        help="Download one or more datasets by catalogue name.",
+    )
+    parser.add_argument(
+        "--release",
+        type=int,
+        default=None,
+        help="Fetch a specific release of one named dataset.",
+    )
+
     # Add a flag to go ham and download everything
     parser.add_argument(
         "--all",
@@ -754,6 +781,13 @@ def download():
     all_sim_data = args.all_sim_data
     instruments = args.instruments
     all_instruments = args.all_instruments
+    datasets = args.dataset
+    release_id = args.release
+
+    if release_id is not None and len(datasets) != 1:
+        raise exceptions.InconsistentArguments(
+            "--release can only be used with one --dataset."
+        )
 
     # Check if the destination directory exists
     if dest is not None and not os.path.exists(dest):
@@ -778,6 +812,13 @@ def download():
         download_sc_sam_test_data(dest if dest is not None else TEST_DATA_DIR)
         download_instruments(INSTRUMENT_CACHE_DIR, AVAILABLE_INSTRUMENTS)
         return
+
+    for dataset in datasets:
+        download_dataset(
+            dataset,
+            dest if dest is not None else GRID_DIR,
+            release_id,
+        )
 
     # Test data?
     if test:

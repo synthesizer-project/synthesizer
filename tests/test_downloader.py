@@ -7,6 +7,7 @@ files that have not. No network access happens; requests is monkeypatched.
 
 import hashlib
 import os
+import sys
 
 import pytest
 import yaml
@@ -133,6 +134,66 @@ def test_migrated_file_resolves_through_the_api(tmp_path, fake_requests):
     saved = tmp_path / "test_grid.hdf5"
     assert saved.read_bytes() == PAYLOAD
     assert not (tmp_path / "test_grid.hdf5.part").exists()
+
+
+def test_a_named_dataset_needs_no_database_entry(tmp_path, fake_requests):
+    """A catalogue name can be downloaded without a local alias."""
+    _, calls = fake_requests
+
+    downloader.download_dataset("some-new-grid", str(tmp_path))
+
+    assert calls[0].endswith("/v1/datasets/some-new-grid")
+    assert (tmp_path / "test_grid.hdf5").read_bytes() == PAYLOAD
+
+
+def test_cli_downloads_each_named_dataset(tmp_path, monkeypatch):
+    """--dataset accepts a space-separated list of catalogue names."""
+    calls = []
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "synthesizer-download",
+            "--dataset",
+            "grid-one",
+            "grid-two",
+            "--destination",
+            str(tmp_path),
+        ],
+    )
+    monkeypatch.setattr(
+        downloader,
+        "download_dataset",
+        lambda dataset, destination, release_id: calls.append(
+            (dataset, destination, release_id)
+        ),
+    )
+
+    downloader.download()
+
+    assert calls == [
+        ("grid-one", str(tmp_path), None),
+        ("grid-two", str(tmp_path), None),
+    ]
+
+
+def test_cli_cannot_pin_one_release_for_multiple_datasets(monkeypatch):
+    """One release id cannot describe several named datasets."""
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "synthesizer-download",
+            "--dataset",
+            "grid-one",
+            "grid-two",
+            "--release",
+            "2",
+        ],
+    )
+
+    with pytest.raises(exceptions.InconsistentArguments, match="only.*one"):
+        downloader.download()
 
 
 def test_a_pinned_release_is_fetched_instead_of_the_current_one(
