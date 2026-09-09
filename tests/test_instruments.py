@@ -1272,3 +1272,17 @@ def test_callable_resolving_power_is_not_serialised(tmp_path):
         loaded = Instrument._from_hdf5(hdf["Instrument"])
 
     assert loaded.resolving_power is None
+
+
+@pytest.mark.parametrize(
+    "resolving_power",
+    [True, np.bool_(True), 0, -1.0, np.nan, np.inf, 1 + 2j],
+)
+def test_resolving_power_must_be_positive_number(resolving_power):
+    """Booleans and non-positive constants are not resolving powers."""
+    with pytest.raises(exceptions.InconsistentArguments, match="positive"):
+        SpectroscopicInstrument(
+            label="invalid-r",
+            lam=np.linspace(1000, 3000, 32) * angstrom,
+            resolving_power=resolving_power,
+        )

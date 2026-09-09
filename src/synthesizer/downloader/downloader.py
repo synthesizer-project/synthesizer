@@ -20,6 +20,8 @@ import argparse
 import hashlib
 import os
 import re
+from contextlib import suppress
+from glob import glob
 from urllib.parse import urlparse
 
 import requests
@@ -66,6 +68,10 @@ DATA_API_URLS = (
     if _API_OVERRIDE
     else [DATA_API_URL, DATA_API_FALLBACK_URL]
 )
+
+
+class _RetryableDownloadError(exceptions.DownloadError):
+    """A resolution failure worth trying against another service host."""
 
 
 def load_database_yaml():
@@ -154,7 +160,7 @@ def _request(url, **kwargs):
     try:
         return requests.get(url, **kwargs)
     except requests.exceptions.SSLError as e:
-        raise exceptions.DownloadError(
+        raise _RetryableDownloadError(
             f"Could not verify the TLS certificate for {url}: {e}\n"
             "This usually means the network is inspecting HTTPS traffic with "
             "its own certificate authority. Point Python at that authority's "
@@ -162,7 +168,7 @@ def _request(url, **kwargs):
             "REQUESTS_CA_BUNDLE to it, rather than disabling verification."
         ) from e
     except requests.RequestException as e:
-        raise exceptions.DownloadError(f"Failed to reach {url}: {e}") from e
+        raise _RetryableDownloadError(f"Failed to reach {url}: {e}") from e
 
 
 # Leading bytes that prove a payload is the format its name claims. Only
@@ -264,7 +270,12 @@ def _resolve_release_at(base_url, dataset, release_id=None):
 
     # Ensure the request was successful
     if response.status_code != 200:
-        raise exceptions.DownloadError(
+        error = (
+            _RetryableDownloadError
+            if response.status_code >= 500
+            else exceptions.DownloadError
+        )
+        raise error(
             f"Failed to resolve {dataset} at {url}. "
             f"Status code: {response.status_code}"
         )
@@ -354,7 +365,7 @@ def _resolve_release(dataset, release_id=None):
     for index, base_url in enumerate(DATA_API_URLS):
         try:
             release = _resolve_release_at(base_url, dataset, release_id)
-        except exceptions.DownloadError as e:
+        except _RetryableDownloadError as e:
             failures.append(f"{base_url}: {e}")
             continue
 
@@ -364,9 +375,8 @@ def _resolve_release(dataset, release_id=None):
         # that a batch of downloads warns once rather than once per file.
         if index > 0:
             warn(
-                f"Could not reach {DATA_API_URLS[0]}, so data is being "
-                f"resolved through {base_url} instead. This usually means "
-                "the network blocks or inspects the primary hostname."
+                f"{DATA_API_URLS[0]} was unavailable, so data is being "
+                f"resolved through {base_url} instead."
             )
 
         return release
@@ -435,7 +445,7 @@ def _download(
         expected_sha256 = release["file"]["sha256"]
         expected_size = release["file"]["size_bytes"]
 
-    _fetch(savename, url, expected_sha256, expected_size, save_dir)
+    return _fetch(savename, url, expected_sha256, expected_size, save_dir)
 
 
 def _fetch(savename, url, expected_sha256, expected_size, save_dir):
@@ -537,9 +547,13 @@ def _fetch(savename, url, expected_sha256, expected_size, save_dir):
         )
 
     # Sizes in bytes.
+    content_length = response.headers.get(
+        "content-length", response.headers.get("Content-Length")
+    )
     total_size = (
-        int(response.headers.get("content-length", expected_size))
-        + resume_from
+        int(content_length) + resume_from
+        if content_length is not None
+        else expected_size
     )
     block_size = 1024
 
@@ -569,7 +583,8 @@ def _fetch(savename, url, expected_sha256, expected_size, save_dir):
         # other, so it is reported as one rather than as a bare transport
         # error from deep inside requests.
         if expected_sha256 is None and os.path.exists(part_path):
-            os.remove(part_path)
+            with suppress(FileNotFoundError):
+                os.remove(part_path)
             raise exceptions.DownloadError(
                 f"Download of {savename} was interrupted: {e}"
             ) from e
@@ -581,8 +596,19 @@ def _fetch(savename, url, expected_sha256, expected_size, save_dir):
         # Anything else, including a keyboard interrupt, propagates unchanged
         # once a partial that cannot be resumed has been cleaned up.
         if expected_sha256 is None and os.path.exists(part_path):
-            os.remove(part_path)
+            with suppress(FileNotFoundError):
+                os.remove(part_path)
         raise
+
+    actual_size = os.path.getsize(part_path)
+    if content_length is not None and actual_size != total_size:
+        if expected_sha256 is None:
+            with suppress(FileNotFoundError):
+                os.remove(part_path)
+        raise exceptions.DownloadError(
+            f"Download of {savename} was incomplete. Expected {total_size} "
+            f"bytes but received {actual_size}."
+        )
 
     # Without a digest to check, confirm at least that the payload is the
     # format its name claims before installing it.
@@ -590,26 +616,38 @@ def _fetch(savename, url, expected_sha256, expected_size, save_dir):
         try:
             _reject_error_page(savename, url, part_path)
         except exceptions.DownloadError:
-            os.remove(part_path)
+            with suppress(FileNotFoundError):
+                os.remove(part_path)
             raise
 
     # Did we get the bytes the catalogue promised? A mismatch means the
     # partial file is unusable, so it goes rather than poisoning a retry.
     if expected_sha256 is not None and digest.hexdigest() != expected_sha256:
-        os.remove(part_path)
+        with suppress(FileNotFoundError):
+            os.remove(part_path)
         raise exceptions.DownloadError(
             f"{savename} failed verification. Expected SHA-256 "
             f"{expected_sha256} but received {digest.hexdigest()}. "
             "The download was discarded."
         )
 
+    # A successful replacement makes partials from older releases obsolete.
+    for stale_part in glob(f"{save_path}.*.part"):
+        if stale_part != part_path:
+            with suppress(FileNotFoundError):
+                os.remove(stale_part)
+
     # The file is complete and verified, so move it into place
     os.replace(part_path, save_path)
+    print(f"Downloaded {savename} to {save_path}")
+    return save_path
 
 
 def download_dataset(dataset, destination, release_id=None):
     """Download one catalogue dataset by name."""
-    _download(dataset, destination, dataset=dataset, release_id=release_id)
+    return _download(
+        dataset, destination, dataset=dataset, release_id=release_id
+    )
 
 
 def download_test_grids(destination):
@@ -882,6 +920,8 @@ def download():
             dest if dest is not None else GRID_DIR,
             release_id,
         )
+    if datasets:
+        return
 
     # Test data?
     if test:

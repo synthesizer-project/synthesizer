@@ -117,7 +117,9 @@ def test_migrated_file_resolves_through_the_api(tmp_path, fake_requests):
     assert not (tmp_path / "test_grid.hdf5.part").exists()
 
 
-def test_a_named_dataset_needs_no_database_entry(tmp_path, fake_requests):
+def test_a_named_dataset_needs_no_database_entry(
+    tmp_path, fake_requests, capsys
+):
     """A catalogue name can be downloaded without a local alias."""
     _, calls = fake_requests
 
@@ -125,6 +127,7 @@ def test_a_named_dataset_needs_no_database_entry(tmp_path, fake_requests):
 
     assert calls[0].endswith("/v1/datasets/some-new-grid")
     assert (tmp_path / "test_grid.hdf5").read_bytes() == PAYLOAD
+    assert str(tmp_path / "test_grid.hdf5") in capsys.readouterr().out
 
 
 def test_cli_downloads_each_named_dataset(tmp_path, monkeypatch):
@@ -138,6 +141,7 @@ def test_cli_downloads_each_named_dataset(tmp_path, monkeypatch):
             "--dataset",
             "grid-one",
             "grid-two",
+            "--test-grids",
             "--destination",
             str(tmp_path),
         ],
@@ -148,6 +152,11 @@ def test_cli_downloads_each_named_dataset(tmp_path, monkeypatch):
         lambda dataset, destination, release_id: calls.append(
             (dataset, destination, release_id)
         ),
+    )
+    monkeypatch.setattr(
+        downloader,
+        "download_test_grids",
+        lambda destination: pytest.fail("dataset branch did not return"),
     )
 
     downloader.download()
@@ -310,6 +319,55 @@ def test_digest_mismatch_discards_the_download(tmp_path, fake_requests):
     assert os.listdir(tmp_path) == []
 
 
+def test_concurrent_cleanup_does_not_hide_verification_error(
+    tmp_path, fake_requests, monkeypatch
+):
+    """Another process removing a partial must not replace DownloadError."""
+    fake_get, _ = fake_requests
+    fake_get.catalogue = release(sha256="0" * 64)
+
+    def already_removed(path):
+        raise FileNotFoundError(path)
+
+    monkeypatch.setattr(downloader.os, "remove", already_removed)
+
+    with pytest.raises(exceptions.DownloadError, match="failed verification"):
+        downloader._download("test_grid.hdf5", str(tmp_path))
+
+
+def test_success_discards_partials_from_older_releases(
+    tmp_path, fake_requests
+):
+    """Installing a release removes digest partials it supersedes."""
+    stale = tmp_path / "test_grid.hdf5.deadbeefdead.part"
+    stale.write_bytes(b"old release")
+
+    downloader._download("test_grid.hdf5", str(tmp_path))
+
+    assert not stale.exists()
+
+
+def test_truncated_unverifiable_download_is_not_installed(
+    tmp_path, monkeypatch
+):
+    """Content-Length protects downloads that have no published digest."""
+    monkeypatch.setattr(
+        downloader.requests,
+        "get",
+        lambda url, **kwargs: FakeResponse(
+            payload=PAYLOAD[:8],
+            headers={"Content-Length": str(len(PAYLOAD))},
+        ),
+    )
+
+    with pytest.raises(exceptions.DownloadError, match="incomplete"):
+        downloader._fetch(
+            "grid.hdf5", downloader.DATA_API_URL, None, 0, str(tmp_path)
+        )
+
+    assert os.listdir(tmp_path) == []
+
+
 def test_a_dataset_with_no_release_is_an_error(tmp_path, fake_requests):
     """A catalogue entry with nothing published cannot be downloaded."""
     fake_get, _ = fake_requests
@@ -319,8 +377,8 @@ def test_a_dataset_with_no_release_is_an_error(tmp_path, fake_requests):
         downloader._download("test_grid.hdf5", str(tmp_path))
 
 
-def test_a_failed_resolution_reports_the_status(tmp_path, monkeypatch):
-    """A non-200 from the catalogue is reported, not silently retried."""
+def test_server_failures_try_each_catalogue_host(tmp_path, monkeypatch):
+    """A server failure is retried against each catalogue host."""
     monkeypatch.setattr(
         downloader.requests,
         "get",
@@ -329,6 +387,22 @@ def test_a_failed_resolution_reports_the_status(tmp_path, monkeypatch):
 
     with pytest.raises(exceptions.DownloadError, match="503"):
         downloader._download("test_grid.hdf5", str(tmp_path))
+
+
+def test_an_unknown_dataset_does_not_try_the_fallback(tmp_path, monkeypatch):
+    """A 404 describes the request, so another hostname adds no value."""
+    calls = []
+
+    def fake_get(url, **kwargs):
+        calls.append(url)
+        return FakeResponse(status_code=404)
+
+    monkeypatch.setattr(downloader.requests, "get", fake_get)
+
+    with pytest.raises(exceptions.DownloadError, match="404"):
+        downloader.download_dataset("mistyped-dataset", str(tmp_path))
+
+    assert calls == [f"{downloader.DATA_API_URL}/v1/datasets/mistyped-dataset"]
 
 
 def test_a_blocked_primary_host_falls_back(tmp_path, monkeypatch):
@@ -351,7 +425,7 @@ def test_a_blocked_primary_host_falls_back(tmp_path, monkeypatch):
     monkeypatch.setattr(downloader.requests, "get", fake_get)
 
     # The warning text is wrapped, so match a phrase that cannot be split
-    with pytest.warns(RuntimeWarning, match="Could not reach"):
+    with pytest.warns(RuntimeWarning, match="was unavailable"):
         downloader._download("test_grid.hdf5", str(tmp_path))
 
     # The primary was tried first, then the fallback served the metadata
@@ -364,52 +438,40 @@ def test_a_blocked_primary_host_falls_back(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("bad_payload", [ValueError("bad JSON"), []])
-def test_an_invalid_catalogue_response_falls_back(
+def test_an_invalid_catalogue_response_does_not_fall_back(
     tmp_path, monkeypatch, bad_payload
 ):
-    """Malformed catalogue responses are failures local to their host."""
+    """Malformed metadata is reported without trying another hostname."""
+    calls = []
 
     def fake_get(url, **kwargs):
-        if url.startswith(downloader.DATA_API_URL):
-            return FakeResponse(json_data=bad_payload)
-        if "/v1/datasets/" in url:
-            return FakeResponse(
-                json_data=release(base=downloader.DATA_API_FALLBACK_URL)
-            )
-        return FakeResponse(
-            payload=PAYLOAD, headers={"content-length": str(len(PAYLOAD))}
-        )
+        calls.append(url)
+        return FakeResponse(json_data=bad_payload)
 
     monkeypatch.setattr(downloader.requests, "get", fake_get)
 
-    with pytest.warns(RuntimeWarning, match="Could not reach"):
+    with pytest.raises(exceptions.DownloadError):
         downloader._download("test_grid.hdf5", str(tmp_path))
 
-    assert (tmp_path / "test_grid.hdf5").read_bytes() == PAYLOAD
+    assert len(calls) == 1
 
 
-def test_incomplete_release_metadata_falls_back(tmp_path, monkeypatch):
-    """Incomplete metadata is a failure local to the answering host."""
+def test_incomplete_release_metadata_does_not_fall_back(tmp_path, monkeypatch):
+    """Incomplete metadata is not repaired by changing hostname."""
     incomplete = release()
     del incomplete["current_release"]["file"]["sha256"]
+    calls = []
 
     def fake_get(url, **kwargs):
-        if url.startswith(downloader.DATA_API_URL):
-            return FakeResponse(json_data=incomplete)
-        if "/v1/datasets/" in url:
-            return FakeResponse(
-                json_data=release(base=downloader.DATA_API_FALLBACK_URL)
-            )
-        return FakeResponse(
-            payload=PAYLOAD, headers={"content-length": str(len(PAYLOAD))}
-        )
+        calls.append(url)
+        return FakeResponse(json_data=incomplete)
 
     monkeypatch.setattr(downloader.requests, "get", fake_get)
 
-    with pytest.warns(RuntimeWarning, match="Could not reach"):
+    with pytest.raises(exceptions.DownloadError, match="Invalid release"):
         downloader.download_dataset("some-new-grid", str(tmp_path))
 
-    assert (tmp_path / "test_grid.hdf5").read_bytes() == PAYLOAD
+    assert len(calls) == 1
 
 
 def test_catalogue_filename_cannot_escape_destination(tmp_path, monkeypatch):

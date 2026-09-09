@@ -5,6 +5,8 @@ dimensional spectroscopy. It stores a wavelength grid together with optional
 depth, signal-to-noise, and noise-map definitions.
 """
 
+from numbers import Real
+
 import h5py
 import numpy as np
 from unyt import angstrom, unyt_array
@@ -127,6 +129,19 @@ class SpectroscopicInstrument(InstrumentBase):
                 "You cannot set depths and SNRs at the same time as noise maps"
             )
 
+        if self.resolving_power is not None and not callable(
+            self.resolving_power
+        ):
+            if (
+                isinstance(self.resolving_power, bool)
+                or not isinstance(self.resolving_power, Real)
+                or not np.isfinite(self.resolving_power)
+                or self.resolving_power <= 0
+            ):
+                raise exceptions.InconsistentArguments(
+                    "resolving_power must be a positive number or callable."
+                )
+
     @property
     def instrument_type(self):
         """Return the serialised type tag for this instrument."""
@@ -223,7 +238,9 @@ class SpectroscopicInstrument(InstrumentBase):
         # as constants: np.float32 and np.int64 are not instances of float or
         # int, so testing those alone would silently discard a resolving
         # power that came out of an array.
-        if isinstance(self.resolving_power, (int, float, np.number)):
+        if isinstance(self.resolving_power, Real) and not isinstance(
+            self.resolving_power, bool
+        ):
             group.attrs["resolving_power"] = float(self.resolving_power)
 
         ds = group.create_dataset(
