@@ -391,6 +391,11 @@ def test_server_failures_try_each_catalogue_host(tmp_path, monkeypatch):
 
 def test_an_unknown_dataset_does_not_try_the_fallback(tmp_path, monkeypatch):
     """A 404 describes the request, so another hostname adds no value."""
+    monkeypatch.setattr(
+        downloader,
+        "DATA_API_URLS",
+        [downloader.DATA_API_URL, downloader.DATA_API_FALLBACK_URL],
+    )
     calls = []
 
     def fake_get(url, **kwargs):
@@ -407,6 +412,11 @@ def test_an_unknown_dataset_does_not_try_the_fallback(tmp_path, monkeypatch):
 
 def test_a_blocked_primary_host_falls_back(tmp_path, monkeypatch):
     """A host that cannot be reached is skipped, with a warning."""
+    monkeypatch.setattr(
+        downloader,
+        "DATA_API_URLS",
+        [downloader.DATA_API_URL, downloader.DATA_API_FALLBACK_URL],
+    )
     seen = []
 
     def fake_get(url, **kwargs):
@@ -496,6 +506,11 @@ def test_catalogue_filename_cannot_escape_destination(tmp_path, monkeypatch):
 
 def test_all_hosts_failing_reports_every_reason(tmp_path, monkeypatch):
     """When no host works, each host's reason is surfaced."""
+    monkeypatch.setattr(
+        downloader,
+        "DATA_API_URLS",
+        [downloader.DATA_API_URL, downloader.DATA_API_FALLBACK_URL],
+    )
 
     def fake_get(url, **kwargs):
         if url.startswith(downloader.DATA_API_URL):
