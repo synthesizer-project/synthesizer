@@ -40,11 +40,9 @@ Example usage::
 """
 
 import copy
+import fnmatch
 import sys
 
-import matplotlib.lines as mlines
-import matplotlib.patches as mpatches
-import matplotlib.pyplot as plt
 import numpy as np
 from unyt import unyt_quantity
 
@@ -56,9 +54,11 @@ from synthesizer.emission_models.operations import (
     Generation,
     Transformation,
 )
-from synthesizer.synth_warnings import warn
+from synthesizer.emission_models.parameters import VARIATION_TYPES
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity
 from synthesizer.utils.operation_timers import timed, timer
+from synthesizer.utils.util_funcs import hdf5_attr_value
 
 
 class EmissionModel(Extraction, Generation, Transformation, Combination):
@@ -585,13 +585,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """Return a string summarising the model."""
         parts = []
 
-        # Summarise models in their discovery order.
-        labels = tuple(self._models.keys())
+        # Summarise models in their discovery order. A model which hasn't been
+        # unpacked has no tree to summarise, so it summarises itself; this is
+        # the case when a model is printed before it has been used, which an
+        # error message may well do.
+        models = list(self._models.values()) or [self]
 
-        for label in labels:
-            # Get the model
-            model = self._models[label]
-
+        for model in models:
             # Make the model title
             parts.append("-")
             parts.append(f"  {model.label}".upper())
@@ -1297,19 +1297,83 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Unpack the model now we're done
         self.unpack_model()
 
+    def _expand_label_patterns(self, *patterns):
+        """Expand glob patterns into the labels they match.
+
+        Args:
+            patterns (str):
+                Labels, or glob patterns matching labels (e.g. "*_fesc_0.10").
+                A plain label with no wildcard matches only itself.
+
+        Returns:
+            list:
+                The matching labels, sorted so the result is reproducible.
+
+        Raises:
+            InconsistentArguments
+                If a pattern matches no models.
+        """
+        labels = set()
+        for pattern in patterns:
+            matches = fnmatch.filter(self._models, pattern)
+
+            # A pattern matching nothing is almost always a mistake, and
+            # silently ignoring it would leave the caller thinking it worked
+            if len(matches) == 0:
+                raise exceptions.InconsistentArguments(
+                    f"No models match '{pattern}'. Model has: "
+                    f"{sorted(self._models)}"
+                )
+
+            labels.update(matches)
+
+        return sorted(labels)
+
+    def select(self, *patterns):
+        """Return the models whose labels match the given glob patterns.
+
+        This is the bulk counterpart to indexing a model by label, useful for
+        applying a change to a family of models at once. It is particularly
+        handy after expanding parameter variations, where the variants of a
+        model all share a label prefix or suffix::
+
+            for model in expanded.select("*_fesc_0.10"):
+                model.set_save(False)
+
+        Args:
+            patterns (str):
+                Labels, or glob patterns matching labels. A plain label with no
+                wildcard matches only itself.
+
+        Returns:
+            list:
+                The matching models, ordered by label. Empty if nothing
+                matches, since this is a query rather than a change.
+        """
+        matched = set()
+        for pattern in patterns:
+            matched.update(fnmatch.filter(self._models, pattern))
+
+        return [self._models[label] for label in sorted(matched)]
+
     def save_emission(self, *args):
         """Set the save flag to True for the given emission.
 
         Args:
             args (str):
-                The emission to save.
+                The emission to save. Glob patterns are accepted, so
+                "*_fesc_0.10" will save that variant of every model.
         """
+        # Resolve any patterns before changing anything, so an unmatched
+        # pattern doesn't leave every model with save switched off
+        labels = self._expand_label_patterns(*args)
+
         # First set all models to not save
         self.set_save(False, set_all=True)
 
         # Now set the given spectra to save
-        for arg in args:
-            self[arg].set_save(True)
+        for label in labels:
+            self[label].set_save(True)
 
     def save_spectra(self, *args):
         """Set the save flag to True for the given spectra.
@@ -1318,7 +1382,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         Args:
             args (str):
-                The spectra to save.
+                The spectra to save. Glob patterns are accepted.
         """
         self.save_emission(*args)
 
@@ -1329,7 +1393,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         Args:
             args (str):
-                The lines to save.
+                The lines to save. Glob patterns are accepted.
         """
         self.save_emission(*args)
 
@@ -1421,6 +1485,205 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """Check if the model is masked."""
         return len(self.masks) > 0
 
+    @property
+    def variant_params(self):
+        """Return the parameter values which distinguish this model variant.
+
+        A model produced by expanding a parameter variation records the values
+        which were varied to produce it, so which variant a model (and thus its
+        emission) belongs to can be recovered without parsing its label.
+
+        Returns:
+            dict:
+                A dictionary of the form {<param_name>: <value>}. Empty for any
+                model which isn't the product of an expansion.
+        """
+        return getattr(self, "_variant_params", {})
+
+    @property
+    def variant_base(self):
+        """Return the label this model's variant family was expanded from.
+
+        Expanding a parameter variation appends a suffix to the label of every
+        affected model. This is the label before any of those suffixes were
+        added, so the variants of a model can be grouped back together.
+
+        Returns:
+            str or None:
+                The original label, or None for any model which isn't the
+                product of an expansion.
+        """
+        return getattr(self, "_variant_base", None)
+
+    def _check_expanded(self):
+        """Check no parameter variation is still waiting to be expanded.
+
+        A variation is a declaration rather than a value, so a model still
+        holding one cannot generate an emission. Checking the whole tree up
+        front says so plainly, rather than failing somewhere inside the
+        calculation once part of the work has already been done.
+
+        Raises:
+            InconsistentArguments
+                If any model in the tree still holds a declaration.
+        """
+        # Imported here to avoid a circular import at module load time
+        from synthesizer.emission_models.parameters import find_variations
+
+        waiting = {}
+        for label, model in self._models.items():
+            variations = find_variations(model)
+            if len(variations) > 0:
+                waiting[label] = sorted(variations)
+
+        if len(waiting) > 0:
+            described = ", ".join(
+                f"{label} ({', '.join(params)})"
+                for label, params in sorted(waiting.items())
+            )
+            raise exceptions.InconsistentArguments(
+                "Cannot generate an emission from a model which still has "
+                f"parameter variations declared on it: {described}. Call "
+                "expand_models() to turn those declarations into models "
+                "first."
+            )
+
+    def expand_models(self):
+        """Expand any parameter variations in this tree into new models.
+
+        Passing a ParameterList or ParameterDistribution as a model parameter
+        declares that the model should be varied over a set of values. This
+        method turns those declarations into models: the varied model, and
+        everything which depends on it, is duplicated once per value, with each
+        copy labelled using the variation's label_modifier. Models which the
+        varied model depends on are shared between the copies rather than
+        duplicated, so the parts of the tree unaffected by the variation are
+        only ever computed once.
+
+        This model is not modified. The expansion is performed on a copy.
+
+        The returned root has the other root variants attached as related
+        models, so a single get_spectra call generates every variant. Each
+        variant's emission is stored on the emitter under its own label.
+
+        Returns:
+            EmissionModel:
+                The root of the expanded tree. If nothing in the tree declared
+                a variation this is just a copy of this model.
+        """
+        # Imported here to avoid a circular import at module load time
+        from synthesizer.emission_models.expansion import expand_models
+
+        return expand_models(self)
+
+    @property
+    def _generator_model_attrs(self):
+        """Return the generator attributes which point at other models.
+
+        A generator can depend on other models, either for energy balance
+        (an intrinsic and an attenuated model) or for scaling (a single scaler
+        model). These pointers live on the generator rather than the model, so
+        they need handling separately whenever a model is copied or replaced.
+
+        Returns:
+            tuple:
+                The names of the attributes on this model's generator which
+                currently hold an EmissionModel.
+        """
+        # Only generation models can have generator dependencies
+        if not self._is_generating:
+            return ()
+
+        return tuple(
+            attr
+            for attr in ("_intrinsic", "_attenuated", "_scaler")
+            if isinstance(getattr(self.generator, attr, None), EmissionModel)
+        )
+
+    def _replace_generator_dependency(self, old_model, new_model):
+        """Point a generator dependency at a different model.
+
+        Args:
+            old_model (EmissionModel):
+                The model currently referenced by the generator.
+            new_model (EmissionModel):
+                The model to reference instead.
+        """
+        # Only generation models can have generator dependencies
+        if not self._is_generating:
+            return
+
+        generator = self.generator
+
+        # Swap the scaler, going through the setter so the generator's
+        # energy-balance/scaled flags stay consistent
+        if getattr(generator, "_scaler", None) is old_model:
+            if hasattr(generator, "set_scaler"):
+                generator.set_scaler(new_model)
+            else:
+                generator._scaler = new_model
+
+        # Swap either half of an energy balance pair
+        if getattr(generator, "_intrinsic", None) is old_model:
+            generator.set_energy_balance(new_model, generator._attenuated)
+        if getattr(generator, "_attenuated", None) is old_model:
+            generator.set_energy_balance(generator._intrinsic, new_model)
+
+    def _copy_node(self, label=None):
+        """Return a copy of this single model, detached from any tree.
+
+        The copy shares immutable and expensive state with the original (the
+        grid, the wavelength array, the transformer) but gets its own copies of
+        everything mutable, so that modifying the copy cannot reach back and
+        change the original. The copy has no children or parents; the caller is
+        responsible for wiring it into a tree.
+
+        Note that a generator holding references to other models is also
+        copied. Without this a copy would share its generator with the
+        original, and rewiring the copy's dependencies would silently rewire
+        the original's too.
+
+        Args:
+            label (str):
+                An optional label for the copy. Defaults to the original label,
+                which the caller must then change before the copy shares a tree
+                with the original.
+
+        Returns:
+            EmissionModel:
+                The detached copy.
+        """
+        new_model = copy.copy(self)
+
+        # Apply the new label if we've been given one
+        if label is not None:
+            new_model.label = label
+
+        # Detach from any tree, these are rebuilt by unpack_model
+        new_model._children = set()
+        new_model._parents = set()
+        new_model._models = {}
+        new_model._extract_keys = {}
+        new_model._energy_balance_models = None
+        new_model._scaler_model = None
+
+        # Take independent copies of the mutable state. Without this the copy
+        # and the original would share these containers.
+        new_model.masks = [dict(mask) for mask in self.masks]
+        new_model.fixed_parameters = dict(self.fixed_parameters)
+        new_model.related_models = set(self.related_models)
+        new_model._scale_by = copy.copy(self._scale_by)
+        new_model._post_processing = copy.copy(self._post_processing)
+        if self._is_combining:
+            new_model._combine = list(self._combine)
+
+        # Copy a generator which points at other models so that rewiring this
+        # copy's dependencies leaves the original's alone
+        if len(self._generator_model_attrs) > 0:
+            new_model._generator = copy.copy(self.generator)
+
+        return new_model
+
     def replace_model(self, replace_label, *replacements, new_label=None):
         """Remove a child model from this model.
 
@@ -1479,26 +1742,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
             if model._is_transforming and model.apply_to == replace_model:
                 model._apply_to = new_model
-            if model._is_generating:
-                if (
-                    hasattr(model.generator, "_scaler")
-                    and model.generator._scaler == replace_model
-                ):
-                    model._generator._scaler = new_model
-                if (
-                    hasattr(model.generator, "_intrinsic")
-                    and model.generator._intrinsic == replace_model
-                ):
-                    model._generator.set_energy_balance(
-                        new_model, model.generator._attenuated
-                    )
-                if (
-                    hasattr(model.generator, "_attenuated")
-                    and model.generator._attenuated == replace_model
-                ):
-                    model._generator.set_energy_balance(
-                        model.generator._intrinsic, new_model
-                    )
+            model._replace_generator_dependency(replace_model, new_model)
             if replace_label in model._models:
                 model._models.pop(replace_label)
 
@@ -1599,7 +1843,26 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         "The apply_dust_to argument has been removed. "
                         "Please use apply_to instead."
                     )
+                if isinstance(value, VARIATION_TYPES):
+                    raise exceptions.InconsistentArguments(
+                        f"Cannot write an unexpanded {type(value).__name__} "
+                        f"for '{key}' on model '{self.label}' to HDF5. Call "
+                        "expand_models() on the root model first."
+                    )
                 fixed_parameters.attrs[key] = value
+
+        # Save what makes this model a variant, if it is one, so the file
+        # records which parameters produced it rather than leaving its label as
+        # the only trace of them
+        if self.variant_base is not None:
+            group.attrs["variant_base"] = self.variant_base
+        if len(self.variant_params) > 0:
+            variant_parameters = group.create_group("VariantParameters")
+            for key, value in self.variant_params.items():
+                stored, units = hdf5_attr_value(value)
+                variant_parameters.attrs[key] = stored
+                if units is not None:
+                    variant_parameters.attrs[f"{key}_units"] = units
 
         # Save the children
         if len(self._children) > 0:
@@ -1608,563 +1871,95 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 data=[child.label.encode("utf-8") for child in self._children],
             )
 
-    def _get_tree_levels(self, root):
-        """Get the levels of the tree.
-
-        Args:
-            root (str):
-                The root of the tree to get the levels for.
-
-        Returns:
-            levels (dict):
-                The levels of the models in the tree.
-            links (dict):
-                The links between models.
-            extract_labels (set):
-                The labels of models that are extracting.
-            masked_labels (list):
-                The labels of models that are masked.
-        """
-
-        def _assign_levels(
-            levels,
-            links,
-            extract_labels,
-            masked_labels,
-            model,
-            level,
-        ):
-            """Recursively assign levels to the models.
-
-            Args:
-                levels (dict):
-                    The levels of the models.
-                links (dict):
-                    The links between models.
-                extract_labels (set):
-                    The labels of models that are extracting.
-                masked_labels (list):
-                    The labels of models that are masked.
-                components (dict):
-                    The component each model acts on.
-                model (EmissionModel):
-                    The model to assign the level to.
-                level (int):
-                    The level to assign to the model.
-
-            Returns:
-                levels (dict):
-                    The levels of the models.
-                links (dict):
-                    The links between models.
-                extract_labels (set):
-                    The labels of models that are extracting.
-                masked_labels (list):
-                    The labels of models that are masked.
-                components (dict):
-                    The component each model acts on.
-            """
-            # Get the model label
-            label = model.label
-
-            # Assign the level
-            levels[model.label] = max(levels.get(model.label, level), level)
-
-            # Define the links
-            if model._is_transforming:
-                links.setdefault(label, []).append(
-                    (
-                        model.apply_to.label
-                        if isinstance(model.apply_to, EmissionModel)
-                        else model.apply_to,
-                        "--",
-                    )
-                )
-            if model._is_combining:
-                links.setdefault(label, []).extend(
-                    [
-                        (child.label, "-")
-                        if isinstance(child, EmissionModel)
-                        else (child, "-")
-                        for child in model._combine
-                    ]
-                )
-            if model._is_generating:
-                if model._scaler_model is not None:
-                    links.setdefault(label, []).append(
-                        (
-                            model._scaler_model.label
-                            if isinstance(model._scaler_model, EmissionModel)
-                            else model._scaler_model,
-                            "dotted",
-                        )
-                    )
-                if model._energy_balance_models is not None:
-                    intrinsic, attenuated = model._energy_balance_models
-                    if intrinsic is not None:
-                        links.setdefault(label, []).append(
-                            (
-                                intrinsic.label
-                                if isinstance(intrinsic, EmissionModel)
-                                else intrinsic,
-                                "dotted",
-                            )
-                        )
-                    if attenuated is not None:
-                        links.setdefault(label, []).append(
-                            (
-                                attenuated.label
-                                if isinstance(attenuated, EmissionModel)
-                                else attenuated,
-                                "dotted",
-                            )
-                        )
-
-            if model._is_masked:
-                masked_labels.append(label)
-            if model._is_extracting:
-                extract_labels.add(label)
-
-            # Recurse
-            for child in model._children:
-                (
-                    levels,
-                    links,
-                    extract_labels,
-                    masked_labels,
-                ) = _assign_levels(
-                    levels,
-                    links,
-                    extract_labels,
-                    masked_labels,
-                    child,
-                    level + 1,
-                )
-
-            return levels, links, extract_labels, masked_labels
-
-        # Get the root model
-        root_model = self._models[root]
-
-        # Recursively assign levels
-        (
-            model_levels,
-            links,
-            extract_labels,
-            masked_labels,
-        ) = _assign_levels({}, {}, set(), [], root_model, 0)
-
-        # Unpack the levels
-        levels = {}
-
-        for label, level in model_levels.items():
-            levels.setdefault(level, []).append(label)
-
-        return levels, links, extract_labels, masked_labels
-
-    def _get_model_positions(self, levels, root, ychunk=10.0, xchunk=20.0):
-        """Get the position of each model in the tree.
-
-        Args:
-            levels (dict):
-                The levels of the models in the tree.
-            root (str):
-                The root of the tree to get the positions for.
-            ychunk (float):
-                The vertical spacing between levels.
-            xchunk (float):
-                The horizontal spacing between models.
-
-        Returns:
-            pos (dict):
-                The position of each model in the tree.
-        """
-
-        def _get_parent_pos(pos, model):
-            """Get the position of the parent/s of a model.
-
-            Args:
-                pos (dict):
-                    The position of each model in the tree.
-                model (EmissionModel):
-                    The model to get the parent position for.
-
-            Returns:
-                x (float):
-                    The x position of the parent.
-            """
-            # Get the parents
-            parents = [
-                parent.label
-                for parent in model._parents
-                if parent.label in pos
-            ]
-            if len(set(parents)) == 0:
-                return 0.0
-            elif len(set(parents)) == 1:
-                return pos[parents[0]][0]
-
-            return np.mean([pos[parent][0] for parent in set(parents)])
-
-        def _get_child_pos(x, pos, children, level, xchunk):
-            """Get the position of the children of a model.
-
-            Args:
-                x (float):
-                    The x position of the parent.
-                pos (dict):
-                    The position of each model in the tree.
-                children (list):
-                    The children of the model.
-                level (int):
-                    The level of the children.
-                xchunk (float):
-                    The horizontal spacing between models.
-
-            Returns:
-                pos (dict):
-                    The position of each model in the tree.
-            """
-            # Get the start x
-            start_x = x - (xchunk * (len(children) - 1) / 2.0)
-            for child in children:
-                pos[child] = (start_x, level * ychunk)
-                start_x += xchunk
-            return pos
-
-        def _get_level_pos(pos, level, levels, xchunk, ychunk):
-            """Get the position of the models in a level.
-
-            Args:
-                pos (dict):
-                    The position of each model in the tree.
-                level (int):
-                    The level to get the position for.
-                levels (dict):
-                    The levels of the models in the tree.
-                xchunk (float):
-                    The horizontal spacing between models.
-                ychunk (float):
-                    The vertical spacing between levels.
-
-            Returns:
-                pos (dict):
-                    The position of each model in the tree.
-            """
-            # Get the models in this level
-            models = levels.get(level, [])
-
-            # Get the position of the parents
-            parent_pos = [
-                _get_parent_pos(pos, self._models[model]) for model in models
-            ]
-
-            # Sort models by parent_pos
-            models = [
-                model
-                for _, model in sorted(
-                    zip(parent_pos, models), key=lambda x: x[0]
-                )
-            ]
-
-            # Get the parents
-            parents = []
-            for model in models:
-                parents.extend(
-                    [
-                        parent.label
-                        for parent in self._models[model]._parents
-                        if parent.label in pos
-                    ]
-                )
-
-            # If we only have one parent for this level then we can assign
-            # the position based on the parent
-            if len(set(parents)) == 1:
-                x = _get_parent_pos(pos, self._models[models[0]])
-                pos = _get_child_pos(x, pos, models, level, xchunk)
-            else:
-                # Get the position of the first model
-                x = -xchunk * (len(models) - 1) / 2.0
-
-                # Assign the positions
-                xs = []
-                for model in models:
-                    pos[model] = (x, level * ychunk)
-                    xs.append(x)
-                    x += xchunk
-
-            # Recurse
-            if level + 1 in levels:
-                pos = _get_level_pos(pos, level + 1, levels, xchunk, ychunk)
-
-            return pos
-
-        return _get_level_pos({root: (0.0, 0.0)}, 1, levels, xchunk, ychunk)
-
-    def plot_emission_tree(
+    def plot_emission_graph(
         self,
         root=None,
         show=True,
         fontsize=10,
-        figsize=(6, 6),
+        figsize=None,
+        layout="layered",
+        show_variants=False,
+        min_fontsize=6.0,
     ):
-        """Plot the tree defining the spectra.
+        """Plot the network of models defining the emission.
+
+        The whole network is drawn, including related models, which are roots
+        in their own right. Grid extractions sit along the bottom row with each
+        model above everything it depends on, and arrows point in the direction
+        the emission flows.
 
         Args:
             root (str):
-                If not None this defines the root of a sub tree to plot.
+                If not None only this model and the models it depends on are
+                drawn.
             show (bool):
                 Whether to show the plot.
             fontsize (int):
                 The fontsize to use for the labels.
             figsize (tuple):
-                The size of the figure to plot (width, height).
+                The size of the figure to plot (width, height). By default the
+                figure is sized to fit the network.
+            layout (str):
+                Either "layered" (the default), which needs only networkx, or
+                "dot", which lays the network out with graphviz and needs pydot
+                and the graphviz binary.
+            show_variants (bool):
+                Whether to draw every parameter variant as its own node. By
+                default each family of variants is collapsed into a single
+                node badged with the number of models it stands for, since an
+                expansion of any size produces more models than can be read at
+                once. This has no effect on a model which was never expanded.
+            min_fontsize (float):
+                The size below which labels stop being readable. A network
+                which cannot fit the figure with labels this big grows the
+                figure rather than shrinking them further, so a large network
+                stays as readable as a small one. Pass 0 to let the labels
+                shrink as far as they need to.
+
+        Returns:
+            fig (matplotlib.figure.Figure):
+                The figure containing the plot.
+            ax (matplotlib.axes.Axes):
+                The axis containing the plot.
         """
-        # Get the tree levels
-        levels, links, extract_labels, masked_labels = self._get_tree_levels(
-            root if root is not None else self.label
+        # Imported here to avoid a circular import at module load time
+        from synthesizer.emission_models.visualise_network import (
+            plot_emission_graph,
         )
 
-        # Get the postion of each node
-        pos = self._get_model_positions(
-            levels, root=root if root is not None else self.label
+        return plot_emission_graph(
+            self,
+            root=root,
+            show=show,
+            fontsize=fontsize,
+            figsize=figsize,
+            layout=layout,
+            show_variants=show_variants,
+            min_fontsize=min_fontsize,
         )
 
-        # Keep track of which components are included
-        components = set()
+    @deprecated(
+        "is deprecated in favour of plot_emission_graph (an emission model is "
+        "a network rather than a tree) and will be removed in a future version"
+    )
+    def plot_emission_tree(self, *args, **kwargs):
+        """Plot the network of models defining the emission.
 
-        # We need a flag for the for whether any models are discarded so we
-        # know whether to include it in the legend
-        some_discarded = False
+        Deprecated alias for plot_emission_graph.
 
-        # Define a flag for whether there are per_particle models
-        some_per_particle = False
+        Args:
+            *args:
+                Positional arguments passed to plot_emission_graph.
+            **kwargs:
+                Keyword arguments passed to plot_emission_graph.
 
-        # Plot the tree using Matplotlib
-        fig, ax = plt.subplots(figsize=figsize)
-
-        # Draw nodes with different styles if they are masked
-        for node, (x, y) in pos.items():
-            components.add(self[node].emitter)
-            if self[node].emitter == "stellar":
-                color = "gold"
-            elif self[node].emitter == "blackhole":
-                color = "royalblue"
-            else:
-                color = "forestgreen"
-
-            # If the model isn't saved apply some transparency
-            if not self[node].save:
-                alpha = 0.7
-                some_discarded = True
-            else:
-                alpha = 1.0
-            text = ax.text(
-                x,
-                -y,  # Invert y-axis for bottom-to-top
-                node,
-                ha="center",
-                va="center",
-                bbox=dict(
-                    facecolor=color,
-                    edgecolor="black",
-                    boxstyle="round,pad=0.5"
-                    if node not in extract_labels
-                    else "square,pad=0.5",
-                    alpha=alpha,
-                ),
-                fontsize=fontsize,
-                zorder=1,
-            )
-
-            # If we have a per particle model overlay a hatched box. To make]
-            # this readable we need to overlay a box with a transparent face
-            if self[node].per_particle:
-                some_per_particle = True
-                ax.text(
-                    x,
-                    -y,  # Invert y-axis for bottom-to-top
-                    node,
-                    ha="center",
-                    va="center",
-                    bbox=dict(
-                        facecolor=color,
-                        edgecolor="black",
-                        boxstyle="round,pad=0.5"
-                        if node not in extract_labels
-                        else "square,pad=0.5",
-                        hatch="//",
-                        alpha=0.3,
-                    ),
-                    fontsize=fontsize,
-                    alpha=alpha,
-                    zorder=2,
-                )
-
-            # Used a dashed outline for masked nodes
-            bbox = text.get_bbox_patch()
-            if node in masked_labels:
-                bbox.set_linestyle("dashed")
-
-        # Draw edges with different styles based on link type
-        linestyles = set()
-        for source, targets in links.items():
-            for target, linestyle in targets:
-                if target is None:
-                    continue
-                if target not in pos or source not in pos:
-                    continue
-                linestyles.add(linestyle)
-                sx, sy = pos[source]
-                tx, ty = pos[target]
-                ax.plot(
-                    [sx, tx],
-                    [-sy, -ty],  # Invert y-axis for bottom-to-top
-                    linestyle=linestyle,
-                    color="black",
-                    lw=1,
-                    zorder=0,
-                )
-
-        # Create legend elements
-        handles = []
-        if "--" in linestyles:
-            handles.append(
-                mlines.Line2D(
-                    [],
-                    [],
-                    color="black",
-                    linestyle="dashed",
-                    label="Transformed",
-                )
-            )
-        if "-" in linestyles:
-            handles.append(
-                mlines.Line2D(
-                    [], [], color="black", linestyle="solid", label="Combined"
-                )
-            )
-        if "dotted" in linestyles:
-            handles.append(
-                mlines.Line2D(
-                    [],
-                    [],
-                    color="black",
-                    linestyle="dotted",
-                    label="Generator Scaling",
-                )
-            )
-
-        # Include a component legend element
-        if "stellar" in components:
-            handles.append(
-                mpatches.FancyBboxPatch(
-                    (0.1, 0.1),
-                    width=0.5,
-                    height=0.1,
-                    facecolor="gold",
-                    edgecolor="black",
-                    label="Stellar",
-                    boxstyle="round,pad=0.5",
-                )
-            )
-        if "blackhole" in components:
-            handles.append(
-                mpatches.FancyBboxPatch(
-                    (0.1, 0.1),
-                    width=0.5,
-                    height=0.1,
-                    facecolor="royalblue",
-                    edgecolor="black",
-                    label="Black Hole",
-                    boxstyle="round,pad=0.5",
-                )
-            )
-        if "galaxy" in components:
-            handles.append(
-                mpatches.FancyBboxPatch(
-                    (0.1, 0.1),
-                    width=0.5,
-                    height=0.1,
-                    facecolor="forestgreen",
-                    edgecolor="black",
-                    label="Galaxy",
-                    boxstyle="round,pad=0.5",
-                )
-            )
-
-        # Include a masked legend element if we have masked nodes
-        if len(masked_labels) > 0:
-            handles.append(
-                mpatches.FancyBboxPatch(
-                    (0.1, 0.1),
-                    width=0.5,
-                    height=0.1,
-                    facecolor="none",
-                    edgecolor="black",
-                    label="Masked",
-                    linestyle="dashed",
-                    boxstyle="round,pad=0.5",
-                )
-            )
-
-        # Include a transparent legend element for non-saved nodes if needed
-        if some_discarded:
-            handles.append(
-                mpatches.FancyBboxPatch(
-                    (0.1, 0.1),
-                    width=0.5,
-                    height=0.1,
-                    facecolor="grey",
-                    edgecolor="black",
-                    label="Saved",
-                    boxstyle="round,pad=0.5",
-                )
-            )
-            handles.append(
-                mpatches.FancyBboxPatch(
-                    (0.1, 0.1),
-                    width=0.5,
-                    height=0.1,
-                    facecolor="grey",
-                    edgecolor="black",
-                    label="Discarded",
-                    alpha=0.6,
-                    boxstyle="round,pad=0.5",
-                )
-            )
-
-        # If we have per particle models include them in the legend
-        if some_per_particle:
-            handles.append(
-                mpatches.FancyBboxPatch(
-                    (0.1, 0.1),
-                    width=0.5,
-                    height=0.1,
-                    facecolor="none",
-                    edgecolor="black",
-                    label="Per Particle",
-                    hatch="//",
-                    alpha=0.3,
-                    boxstyle="round,pad=0.5",
-                )
-            )
-
-        # Add legend to the bottom of the plot
-        ax.legend(
-            handles=handles,
-            loc="upper center",
-            frameon=False,
-            bbox_to_anchor=(0.5, 1.1),
-            ncol=6,
-        )
-
-        ax.axis("off")
-        if show:
-            plt.show()
-
-        return fig, ax
+        Returns:
+            fig (matplotlib.figure.Figure):
+                The figure containing the plot.
+            ax (matplotlib.axes.Axes):
+                The axis containing the plot.
+        """
+        return self.plot_emission_graph(*args, **kwargs)
 
     def _apply_overrides(
         self,
@@ -2607,6 +2402,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
+        # A variation is a declaration, not a value, so nothing can be
+        # generated while one is still waiting to be expanded
+        self._check_expanded()
+
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -2966,6 +2765,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate lines attribute of the component
                 (lines/particle_lines)
         """
+        # A variation is a declaration, not a value, so nothing can be
+        # generated while one is still waiting to be expanded
+        self._check_expanded()
+
         # We don't want to modify the original emission model with any
         # modifications made here so we'll make a copy of it (this is a
         # shallow copy so very cheap and doesn't copy any pointed to objects
@@ -3195,6 +2998,141 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         return lines, particle_lines
 
+    def _get_downstream_labels(self, label):
+        """Get the label of a model and the labels of all its dependents.
+
+        A model's dependents are the models which consume its emission, i.e.
+        its parents in the tree, and their parents in turn. This is the set of
+        models which must be duplicated alongside a model when that model is
+        varied.
+
+        Args:
+            label (str):
+                The label of the model to walk from.
+
+        Returns:
+            set:
+                The label itself along with the labels of every model which
+                depends on it, directly or indirectly.
+        """
+        # Ensure the label exists
+        if label not in self._models:
+            raise exceptions.InconsistentArguments(
+                f"Could not find a model with the label: {label}"
+            )
+
+        # Walk up through the parents collecting everything we touch. Iterate
+        # in label order since _parents is a set of objects and would
+        # otherwise be traversed in a memory address dependent order.
+        downstream = set()
+        pending = [self._models[label]]
+        while len(pending) > 0:
+            model = pending.pop()
+
+            # Skip models we've already collected (a diamond in the tree will
+            # reach the same dependent by more than one route)
+            if model.label in downstream:
+                continue
+
+            downstream.add(model.label)
+
+            # Only follow parents which are still part of this tree. Replacing
+            # a model, as expanding a parameter variation does, leaves the
+            # models it depended on still pointing back at it, and following
+            # those would collect models which are no longer here at all.
+            pending.extend(
+                parent
+                for parent in sorted(model._parents, key=lambda m: m.label)
+                if self._models.get(parent.label) is parent
+            )
+
+        return downstream
+
+    def _relabel_models(self, label_map):
+        """Relabel a set of models, rewriting any references to them.
+
+        Labels can be referenced by other models as strings (in apply_to,
+        combine, and scale_by) where the string denotes an emission rather than
+        a model object. Any such reference to a model we are relabelling must
+        be rewritten, otherwise the reference either silently detaches from the
+        tree or resolves against a stale emission on the emitter.
+
+        Note that strings in fixed_parameters are deliberately left alone.
+        Those point at attributes of the emitter, not at models.
+
+        Args:
+            label_map (dict):
+                A dictionary of the form {<old_label>: <new_label>} defining
+                the models to relabel.
+
+        Raises:
+            InconsistentArguments
+                If an old label doesn't exist, or a new label is already in
+                use by a model which isn't being relabelled.
+        """
+        # Nothing to do without a mapping
+        if len(label_map) == 0:
+            return
+
+        # Ensure every model we've been asked to relabel exists
+        missing = set(label_map) - set(self._models)
+        if len(missing) > 0:
+            raise exceptions.InconsistentArguments(
+                f"Could not find models with the labels: {sorted(missing)}"
+            )
+
+        # Ensure we aren't about to collide with a label which is staying put.
+        # Note that we don't check against the labels being relabelled since
+        # those are all moving at once.
+        staying = set(self._models) - set(label_map)
+        collisions = staying & set(label_map.values())
+        if len(collisions) > 0:
+            raise exceptions.InconsistentArguments(
+                f"Labels {sorted(collisions)} are already in use."
+            )
+
+        # Ensure the new labels don't collide with each other
+        new_labels = list(label_map.values())
+        if len(set(new_labels)) != len(new_labels):
+            raise exceptions.InconsistentArguments(
+                f"Relabelling would produce duplicate labels: {new_labels}"
+            )
+
+        # Apply the new labels and rewrite any string references. We do this
+        # in a single pass over every model rather than one relabel at a time
+        # to avoid transient label collisions part way through.
+        for model in self._models.values():
+            # Relabel the model itself
+            if model.label in label_map:
+                model.label = label_map[model.label]
+
+            # Rewrite a string apply_to reference
+            if model._is_transforming and isinstance(model.apply_to, str):
+                if model.apply_to in label_map:
+                    model._apply_to = label_map[model.apply_to]
+
+            # Rewrite any string entries in combine
+            if model._is_combining:
+                model._combine = [
+                    label_map.get(child, child)
+                    if isinstance(child, str)
+                    else child
+                    for child in model._combine
+                ]
+
+            # Rewrite any string entries in scale_by. Note that a string here
+            # can also be an emitter attribute, so we only rewrite it when it
+            # matches a model we are relabelling.
+            model._scale_by = tuple(
+                label_map.get(scaler, scaler)
+                if isinstance(scaler, str)
+                else scaler
+                for scaler in model._scale_by
+            )
+
+        # Unpack now we're done to rebuild the label keyed containers
+        self.unpack_model()
+
     def add_label_prefix(self, prefix):
         """Re-labels spectra by adding a prefix.
 
@@ -3204,17 +3142,53 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             prefix (str):
                 The prefix to use when relabelling.
         """
-        # Get list of original labels since relabelling changes the key in
-        # self._models
-        original_labels = list(self._models.keys())
+        self._relabel_models(
+            {label: f"{prefix}_{label}" for label in self._models}
+        )
 
-        # Loop over all original labels and relabel
-        for original_label in original_labels:
-            # Get new label
-            new_label = f"{prefix}_{original_label}"
+    def add_label_suffix(self, suffix):
+        """Re-label all models in the tree by adding a suffix.
 
-            # Relabel. Note: this also updates the self._models dictionary.
-            self.relabel(original_label, new_label)
+        This is the counterpart to add_label_prefix. Where a prefix is
+        typically used to namespace a whole model (e.g. "stellar" vs "agn"), a
+        suffix is typically used to distinguish variations of a model (e.g. a
+        particular escape fraction).
+
+        Args:
+            suffix (str):
+                The suffix to append to every label. An underscore is inserted
+                between the label and the suffix.
+        """
+        self._relabel_models(
+            {label: f"{label}_{suffix}" for label in self._models}
+        )
+
+    def add_label_suffix_downstream(self, label, suffix):
+        """Re-label a model and everything depending on it by adding a suffix.
+
+        Only the given model and the models which consume its emission
+        (directly or indirectly) are relabelled. Anything the model depends on
+        keeps its label, and is therefore still shared with the unmodified
+        tree rather than duplicated.
+
+        This is the relabelling behaviour needed when varying a parameter on a
+        single model: the varied model produces a different emission, so
+        everything downstream of it does too, but everything upstream is
+        unaffected.
+
+        Args:
+            label (str):
+                The label of the model to start from.
+            suffix (str):
+                The suffix to append to the affected labels. An underscore is
+                inserted between the label and the suffix.
+        """
+        self._relabel_models(
+            {
+                downstream_label: f"{downstream_label}_{suffix}"
+                for downstream_label in self._get_downstream_labels(label)
+            }
+        )
 
 
 class StellarEmissionModel(EmissionModel):

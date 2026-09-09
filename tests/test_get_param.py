@@ -5,8 +5,8 @@ import pytest
 import unyt
 
 from synthesizer import exceptions
+from synthesizer.emission_models.parameters import ParameterFunction
 from synthesizer.emission_models.utils import (
-    ParameterFunction,
     cache_model_params,
     get_param,
 )
