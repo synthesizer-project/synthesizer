@@ -880,8 +880,8 @@ class TestDustGeneratorErrorHandling:
         # Empty emissions dictionary
         empty_emissions = {}
 
-        # Should raise KeyError when trying to access missing emission
-        with pytest.raises(KeyError):
+        # Should raise MissingAttribute when the emission is missing
+        with pytest.raises(exceptions.MissingAttribute):
             bb._generate_spectra(
                 lams=dust_wavelengths,
                 emitter=mock_emitter,
@@ -1033,3 +1033,91 @@ class TestDustGeneratorErrorHandling:
 
         # Reset mock_model for other tests
         mock_model.fixed_parameters = {}
+
+
+class FakeEmissionModel:
+    """A minimal stand in for an EmissionModel carrying only a label."""
+
+    def __init__(self, label):
+        """Initialise the fake model.
+
+        Args:
+            label (str):
+                The label of the fake model.
+        """
+        self.label = label
+
+
+class TestRequiredEmissions:
+    """Tests for the required emissions bookkeeping on dust generators."""
+
+    def test_setters_update_required_emissions(self):
+        """Test the setters keep _required_emissions up to date."""
+        intrinsic = FakeEmissionModel("intrinsic")
+        attenuated = FakeEmissionModel("attenuated")
+        scaler = FakeEmissionModel("scaler")
+
+        bb = Blackbody(temperature=20 * K, scaler=scaler)
+        assert bb._required_emissions == (scaler,)
+
+        # Switching to energy balance must repoint the required emissions
+        bb.set_energy_balance(intrinsic, attenuated)
+        assert bb._required_emissions == (intrinsic, attenuated)
+
+        # And switching back to a scaler must too
+        bb.set_scaler(scaler)
+        assert bb._required_emissions == (scaler,)
+
+    def test_required_emissions_resolve_to_labels(self, mock_emissions):
+        """Test model objects are resolved into emission dictionary keys."""
+        intrinsic = FakeEmissionModel("intrinsic")
+        attenuated = FakeEmissionModel("attenuated")
+
+        bb = Blackbody(
+            temperature=20 * K,
+            intrinsic=intrinsic,
+            attenuated=attenuated,
+        )
+
+        extracted = bb._extract_emissions(mock_emissions)
+        assert extracted["intrinsic"] is mock_emissions["intrinsic"]
+        assert extracted["attenuated"] is mock_emissions["attenuated"]
+
+        # Labels are resolved lazily so relabelling a model is picked up
+        attenuated.label = "test_model"
+        extracted = bb._extract_emissions(mock_emissions)
+        assert extracted["test_model"] is mock_emissions["test_model"]
+
+    def test_missing_emission_raises_missing_attribute(self, mock_emissions):
+        """Test a missing dependency raises MissingAttribute, not KeyError."""
+        bb = Blackbody(
+            temperature=20 * K,
+            intrinsic=FakeEmissionModel("intrinsic"),
+            attenuated=FakeEmissionModel("missing"),
+        )
+
+        with pytest.raises(exceptions.MissingAttribute):
+            bb.get_scaling(None, None, mock_emissions)
+
+        bb.set_scaler(FakeEmissionModel("missing"))
+        with pytest.raises(exceptions.MissingAttribute):
+            bb.get_scaling(None, None, mock_emissions)
+
+    def test_scaling_after_switching_type(self, mock_emissions):
+        """Test the scaling is computed from the emissions set last."""
+        bb = Blackbody(
+            temperature=20 * K,
+            intrinsic=FakeEmissionModel("intrinsic"),
+            attenuated=FakeEmissionModel("attenuated"),
+        )
+
+        ldust = bb.get_scaling(None, None, mock_emissions)
+        assert ldust == (
+            mock_emissions["intrinsic"].bolometric_luminosity
+            - mock_emissions["attenuated"].bolometric_luminosity
+        )
+
+        # Switching to a scaler must use the scaler's luminosity
+        bb.set_scaler(FakeEmissionModel("scaler"))
+        lscale = bb.get_scaling(None, None, mock_emissions)
+        assert lscale == mock_emissions["scaler"].bolometric_luminosity
