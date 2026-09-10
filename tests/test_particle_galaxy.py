@@ -1,8 +1,25 @@
 """Tests for particle galaxy chunking helpers."""
 
 import numpy as np
-from unyt import Hz, Mpc, Msun, Myr, angstrom, erg, km, kpc, s, unyt_array, yr
+import pytest
+from unyt import (
+    Gyr,
+    Hz,
+    Mpc,
+    Msun,
+    Myr,
+    angstrom,
+    degree,
+    erg,
+    km,
+    kpc,
+    s,
+    unyt_array,
+    yr,
+)
 
+from synthesizer import exceptions
+from synthesizer.emission_models.attenuation import SommovigoBartlett2026
 from synthesizer.emissions.line import LineCollection
 from synthesizer.emissions.sed import Sed
 from synthesizer.imaging.image import Image
@@ -76,6 +93,83 @@ def _make_filters():
         },
         new_lam=np.linspace(1000, 4000, 4) * angstrom,
     )
+
+
+def test_sommovigo_bartlett_parameters_from_particles():
+    """SB26 inputs should be derived and attached to the stars."""
+    galaxy = _make_particle_galaxy()
+    params = galaxy.get_dust_curve_params_sommovigobartlett2026(
+        inclination=60 * degree
+    )
+
+    sfr = galaxy.stars.get_sfr(100 * Myr)
+    mstar = np.sum(galaxy.stars.current_masses)
+    expected = SommovigoBartlett2026.predict(
+        sigma_sfr=sfr / (np.pi * galaxy.stars.get_half_mass_radius() ** 2),
+        inclination=60 * degree,
+        z_gas=galaxy.mass_weighted_gas_metallicity,
+        log10_mstar=np.log10(mstar.to("Msun").value),
+        ssfr=(sfr / mstar).to(Gyr**-1),
+    )
+
+    for param in ("tau_v", "B_0", "B_1s", "B_2s", "B_3"):
+        assert params[param] == pytest.approx(expected[param])
+        assert getattr(galaxy.stars, param) == pytest.approx(expected[param])
+
+
+def test_sommovigo_bartlett_parameters_from_galaxy_attributes():
+    """String arguments should resolve overrides on the galaxy."""
+    galaxy = _make_particle_galaxy()
+    galaxy.sb_sigma_sfr = 0.01
+    galaxy.sb_inclination = 45
+    galaxy.sb_z_gas = 0.02
+    galaxy.sb_log10_mstar = 10.5
+    galaxy.sb_ssfr = 0.5
+
+    params = galaxy.get_dust_curve_params_sommovigobartlett2026(
+        sigma_sfr="sb_sigma_sfr",
+        inclination="sb_inclination",
+        z_gas="sb_z_gas",
+        log10_mstar="sb_log10_mstar",
+        ssfr="sb_ssfr",
+    )
+    expected = SommovigoBartlett2026.predict(
+        sigma_sfr=galaxy.sb_sigma_sfr * Msun / yr / kpc**2,
+        inclination=galaxy.sb_inclination * degree,
+        z_gas=galaxy.sb_z_gas,
+        log10_mstar=galaxy.sb_log10_mstar,
+        ssfr=galaxy.sb_ssfr / Gyr,
+    )
+
+    assert params == pytest.approx(expected)
+
+
+def test_sommovigo_bartlett_parameters_allow_supplied_gas_metallicity():
+    """A supplied gas metallicity should allow galaxies without gas."""
+    galaxy = Galaxy(stars=_make_particle_galaxy().stars)
+
+    params = galaxy.get_dust_curve_params_sommovigobartlett2026(
+        sigma_sfr=0.01,
+        inclination=45,
+        z_gas=0.02,
+        log10_mstar=10.5,
+        ssfr=0.5,
+    )
+
+    assert params["tau_v"] == galaxy.stars.tau_v
+
+
+def test_sommovigo_bartlett_parameters_require_gas_to_derive_metallicity():
+    """Automatic gas metallicity requires a gas component."""
+    galaxy = Galaxy(stars=_make_particle_galaxy().stars)
+
+    with pytest.raises(exceptions.MissingAttribute):
+        galaxy.get_dust_curve_params_sommovigobartlett2026(
+            sigma_sfr=0.01,
+            inclination=45,
+            log10_mstar=10.5,
+            ssfr=0.5,
+        )
 
 
 def _make_image_collection(scale):
