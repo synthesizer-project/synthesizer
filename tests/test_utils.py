@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+import unyt
 
 
 class TestPluralization:
@@ -163,3 +164,45 @@ class TestPrecisionConfig:
             assert integrate_last_axis(xs, ys).dtype == np.float32
         finally:
             set_default_out_dtype(np.float64)
+
+
+class TestHDF5AttrValue:
+    """Test coercing a value into something an HDF5 attribute can hold."""
+
+    def test_a_number_is_unchanged(self):
+        """Test a plain number needs no coercion."""
+        from synthesizer.utils.util_funcs import hdf5_attr_value
+
+        assert hdf5_attr_value(0.5) == (0.5, None)
+        assert hdf5_attr_value(3) == (3, None)
+        assert hdf5_attr_value("powerlaw") == ("powerlaw", None)
+        assert hdf5_attr_value(True) == (True, None)
+
+    def test_units_are_returned_separately(self):
+        """Test a quantity's units come back rather than being dropped."""
+        from synthesizer.utils.util_funcs import hdf5_attr_value
+
+        value, units = hdf5_attr_value(60 * unyt.K)
+
+        assert value == 60.0
+        assert not hasattr(value, "units")
+        assert units == "K"
+
+    def test_a_converted_quantity_reports_its_own_units(self):
+        """Test the units returned are the ones the value is in."""
+        from synthesizer.utils.util_funcs import hdf5_attr_value
+
+        value, units = hdf5_attr_value((0.2 * unyt.um).to("angstrom"))
+
+        assert value == 2000.0
+        assert units == "Å"
+
+    def test_anything_else_is_described(self):
+        """Test an object HDF5 cannot store is stored as its repr."""
+        from synthesizer.utils.util_funcs import hdf5_attr_value
+
+        class Thing:
+            def __repr__(self):
+                return "Thing(a=1)"
+
+        assert hdf5_attr_value(Thing()) == ("Thing(a=1)", None)

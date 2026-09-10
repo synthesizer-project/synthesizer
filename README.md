@@ -2,7 +2,7 @@
 
 <img src="https://raw.githubusercontent.com/synthesizer-project/synthesizer/main/docs/source/img/synthesizer_logo.png" align="right" width="140px"/>
 
-[![workflow](https://github.com/synthesizer-project/synthesizer/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/synthesizer-project/synthesizer/actions)
+[![CI](https://github.com/synthesizer-project/synthesizer/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/synthesizer-project/synthesizer/actions/workflows/python-app.yml)
 [![Documentation Status](https://github.com/synthesizer-project/synthesizer/actions/workflows/static.yml/badge.svg)](https://synthesizer-project.github.io/synthesizer/)
 [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/synthesizer-project/synthesizer/blob/main/docs/CONTRIBUTING.md)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
@@ -33,7 +33,7 @@ Various configuration options can also be set at installation (see [here](https:
 
 ## Getting Grids
 
-In most use cases you will need a grid of theoretical spectra. Premade grids can be downloaded from the [grids data server](https://sussex.app.box.com/folder/316830966925?v=SynthesizerGrids).
+In most use cases you will need a grid of theoretical spectra. Browse premade grids in the [Syndex catalogue](https://synthesizer-project.org/syndex), then download one with `synthesizer-download --dataset <name>`.
 
 Note that you can also create your own grids using (or adapting) the [`syncretize` repo](https://github.com/synthesizer-project/syncretize).
 

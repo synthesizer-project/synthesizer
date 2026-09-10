@@ -12,11 +12,17 @@ Example Usage:
     synthesizer-download --test-grids --destination /path/to/destination
     synthesizer-download --dust-grid --destination /path/to/destination
     synthesizer-download --camels-data --destination /path/to/destination
+    synthesizer-download --dataset grid-one grid-two
 
 """
 
 import argparse
+import hashlib
 import os
+import re
+from contextlib import suppress
+from glob import glob
+from urllib.parse import urlparse
 
 import requests
 import yaml
@@ -33,6 +39,39 @@ from synthesizer.instruments import AVAILABLE_INSTRUMENTS
 from synthesizer.synth_warnings import warn
 
 DATABASE_FILE = os.path.join(os.path.dirname(__file__), "_data_ids.yml")
+
+# The Synthesizer data service. Each file carries a "dataset" key naming its
+# catalogue entry and is resolved through this API.
+DATA_API_URL = "https://data.synthesizer-project.org"
+
+# The same service under its Cloudflare workers.dev hostname, tried when the
+# first host cannot be reached.
+#
+# This exists because data.synthesizer-project.org was registered in September
+# 2026, and security products routinely block or TLS-intercept domains they
+# have not seen before. Networks doing so break the API for anyone behind
+# them, while the older workers.dev hostname is unaffected. Both hostnames
+# serve the same Worker, and a download url is always returned relative to
+# whichever host answered, so a fallback resolve stays self-consistent.
+#
+# Remove this once the domain has aged out of "newly registered" categories,
+# which typically takes about a month.
+DATA_API_FALLBACK_URL = (
+    "https://synthesizer-data-api.universe-engine.workers.dev"
+)
+
+# An explicit override replaces both, for testing against a development
+# deployment.
+_API_OVERRIDE = os.environ.get("SYNTHESIZER_DATA_API_URL")
+DATA_API_URLS = (
+    [_API_OVERRIDE.rstrip("/")]
+    if _API_OVERRIDE
+    else [DATA_API_URL, DATA_API_FALLBACK_URL]
+)
+
+
+class _RetryableDownloadError(exceptions.DownloadError):
+    """A resolution failure worth trying against another service host."""
 
 
 def load_database_yaml():
@@ -101,37 +140,339 @@ TEST_DATA_TRANSLATION = {
 }
 
 
+def _request(url, **kwargs):
+    """Make a GET request, turning transport errors into DownloadErrors.
+
+    Args:
+        url (str): The url to request.
+        **kwargs: Keyword arguments passed through to requests.get.
+
+    Returns:
+        requests.Response: The response, which may carry any status code.
+
+    Raises:
+        DownloadError:
+            If the server cannot be reached at all. TLS failures get an extra
+            hint, because they are almost always a network that re-signs
+            HTTPS with its own certificate authority rather than a problem
+            with the data service.
+    """
+    try:
+        return requests.get(url, **kwargs)
+    except requests.exceptions.SSLError as e:
+        raise _RetryableDownloadError(
+            f"Could not verify the TLS certificate for {url}: {e}\n"
+            "This usually means the network is inspecting HTTPS traffic with "
+            "its own certificate authority. Point Python at that authority's "
+            "certificate, for example by setting SSL_CERT_FILE or "
+            "REQUESTS_CA_BUNDLE to it, rather than disabling verification."
+        ) from e
+    except requests.RequestException as e:
+        raise _RetryableDownloadError(f"Failed to reach {url}: {e}") from e
+
+
+# Leading bytes that prove a payload is the format its name claims. Only
+# formats with an unambiguous signature are listed; anything else is accepted
+# as-is rather than guessed at.
+_FORMAT_SIGNATURES = {
+    "hdf5": b"\x89HDF",
+    "h5": b"\x89HDF",
+    "gz": b"\x1f\x8b",
+    "npz": b"PK\x03\x04",
+    "fits": b"SIMPLE",
+}
+
+
+def _reject_error_page(savename, url, path):
+    """Reject a downloaded file that is not the format its name claims.
+
+    A server can answer with an HTML error page and a success status. Without
+    this the page would be written under a scientific filename and only fail
+    later, deep inside a reader, with a baffling message.
+
+    Args:
+        savename (str): The name the file will be installed under.
+        url (str): The url the bytes came from, for the error message.
+        path (str): Path to the downloaded file.
+
+    Raises:
+        DownloadError: If the file does not start the way its format requires.
+    """
+    signature = _FORMAT_SIGNATURES.get(savename.rsplit(".", 1)[-1].lower())
+    if signature is None:
+        return
+
+    with open(path, "rb") as f:
+        start = f.read(len(signature))
+
+    if not start.startswith(signature):
+        raise exceptions.DownloadError(
+            f"{url} did not return a {savename.rsplit('.', 1)[-1]} file. "
+            "The link is probably stale, and the response was discarded "
+            "rather than saved under a name implying it is data."
+        )
+
+
+def _continues_from(content_range, offset):
+    """Check a partial response starts at the byte we asked to resume from.
+
+    A server is free to answer a range request with a different range. Its
+    bytes cannot be appended to what we already have, so this decides whether
+    the response can be resumed into or the download must start over.
+
+    Args:
+        content_range (str or None): The response's Content-Range header.
+        offset (int): The byte offset the request asked to resume from.
+
+    Returns:
+        bool: True if the response continues exactly from that offset.
+    """
+    if content_range is None:
+        return False
+
+    match = re.match(r"^bytes\s+(\d+)-", content_range.strip())
+
+    return match is not None and int(match.group(1)) == offset
+
+
+def _resolve_release_at(base_url, dataset, release_id=None):
+    """Resolve a release through one host of the data service.
+
+    Without a release id this returns whatever the dataset currently
+    publishes. With one it returns that exact release, which is how an entry
+    pins itself to a specific version of a file rather than following
+    updates.
+
+    Args:
+        base_url (str):
+            The base url of the data service to ask.
+        dataset (str):
+            The catalogue name of the dataset, as stored in the database yaml.
+        release_id (int, optional):
+            A specific release to fetch instead of the current one.
+
+    Returns:
+        dict:
+            The release, including its download url and file details.
+
+    Raises:
+        DownloadError:
+            If the host cannot be reached, does not know the dataset or
+            release, or has no file currently published for the dataset.
+    """
+    if release_id is not None:
+        url = f"{base_url}/v1/releases/{release_id}"
+    else:
+        url = f"{base_url}/v1/datasets/{dataset}"
+
+    # Ask the catalogue for the dataset
+    response = _request(url, timeout=30)
+
+    # Ensure the request was successful
+    if response.status_code != 200:
+        error = (
+            _RetryableDownloadError
+            if response.status_code >= 500
+            else exceptions.DownloadError
+        )
+        raise error(
+            f"Failed to resolve {dataset} at {url}. "
+            f"Status code: {response.status_code}"
+        )
+
+    try:
+        payload = response.json()
+    except ValueError as e:
+        raise exceptions.DownloadError(
+            f"Failed to decode the catalogue response from {url}."
+        ) from e
+
+    if not isinstance(payload, dict):
+        raise exceptions.DownloadError(
+            f"Invalid catalogue response from {url}: expected an object."
+        )
+
+    # A pinned release describes itself; a dataset names its current release,
+    # and may have none at all.
+    if release_id is not None:
+        release = payload
+    else:
+        release = payload.get("current_release")
+        if release is None:
+            raise exceptions.DownloadError(
+                f"The catalogue has no current release for {dataset}."
+            )
+
+    try:
+        download_url = release["download_url"]
+        file_details = release["file"]
+        filename = file_details["filename"]
+        sha256 = file_details["sha256"]
+        size_bytes = file_details["size_bytes"]
+        parsed_url = (
+            urlparse(download_url) if isinstance(download_url, str) else None
+        )
+    except (KeyError, TypeError, ValueError) as e:
+        raise exceptions.DownloadError(
+            f"Invalid release metadata from {url}."
+        ) from e
+
+    if (
+        parsed_url is None
+        or parsed_url.scheme not in ("http", "https")
+        or not parsed_url.netloc
+        or not isinstance(filename, str)
+        or filename in ("", ".", "..")
+        or os.path.basename(filename) != filename
+        or "\\" in filename
+        or not isinstance(sha256, str)
+        or re.fullmatch(r"[0-9a-fA-F]{64}", sha256) is None
+        or not isinstance(size_bytes, int)
+        or isinstance(size_bytes, bool)
+        or size_bytes < 0
+    ):
+        raise exceptions.DownloadError(f"Invalid release metadata from {url}.")
+
+    return release
+
+
+def _resolve_release(dataset, release_id=None):
+    """Resolve a catalogue dataset name to its current release.
+
+    Asks the Synthesizer data service which file is currently published for
+    this dataset. The response carries the download location and the expected
+    SHA-256, so the download can be verified once it completes.
+
+    Each known host is tried in turn, so a network that blocks or intercepts
+    one hostname does not make published data unreachable.
+
+    Args:
+        dataset (str):
+            The catalogue name of the dataset, as stored in the database yaml.
+        release_id (int, optional):
+            A specific release to fetch instead of the current one.
+
+    Returns:
+        dict:
+            The release, including its download url and file details.
+
+    Raises:
+        DownloadError:
+            If no host could resolve the dataset. The reason from every host
+            is included, since they commonly differ.
+    """
+    failures = []
+    for index, base_url in enumerate(DATA_API_URLS):
+        try:
+            release = _resolve_release_at(base_url, dataset, release_id)
+        except _RetryableDownloadError as e:
+            failures.append(f"{base_url}: {e}")
+            continue
+
+        # Say so when the primary host had to be skipped, since a silently
+        # different source is exactly the kind of thing that wastes an
+        # afternoon later. The message deliberately omits the dataset name so
+        # that a batch of downloads warns once rather than once per file.
+        if index > 0:
+            warn(
+                f"{DATA_API_URLS[0]} was unavailable, so data is being "
+                f"resolved through {base_url} instead."
+            )
+
+        return release
+
+    raise exceptions.DownloadError(
+        f"Could not resolve {dataset} through any known host.\n"
+        + "\n".join(failures)
+    )
+
+
 def _download(
     filename,
     save_dir,
+    dataset=None,
+    release_id=None,
 ):
     """Download the file from the data server.
 
-    We extract the link for the file and its name on the server from the
-    AVAILABLE_FILES dictionary.
+    Files carry a "dataset" key in the AVAILABLE_FILES dictionary. The
+    catalogue API tells us where the bytes are and what their SHA-256 should
+    be, and the download is verified against it.
 
-    We are now using Box
+    Either way the file is streamed to a temporary path and only moved into
+    place once it has arrived in full, so an interrupted download can never
+    leave a truncated file that looks complete.
 
     Args:
         filename (str):
             The name of the file to download.
         save_dir (str):
             The directory in which to save the file.
+        dataset (str, optional):
+            A catalogue dataset name, bypassing local aliases.
+        release_id (int, optional):
+            A specific release of the named catalogue dataset.
+
+    Raises:
+        DownloadError:
+            If the download fails, or the bytes received do not match the
+            digest the catalogue published.
     """
-    # Define the filename we will save under (this will ignore any aliases)
-    savename = filename
+    if dataset is not None:
+        release = _resolve_release(dataset, release_id)
+        savename = release["file"]["filename"]
+        url = release["download_url"]
+        expected_sha256 = release["file"]["sha256"]
+        expected_size = release["file"]["size_bytes"]
+    else:
+        # Define the filename we will save under (this will ignore aliases).
+        savename = filename
+        if filename in TEST_DATA_TRANSLATION:
+            filename = TEST_DATA_TRANSLATION[filename]
+        file_details = AVAILABLE_FILES[filename]
+        try:
+            known_dataset = file_details["dataset"]
+        except KeyError as e:
+            raise exceptions.DownloadError(
+                f"{filename} has no dataset key in {DATABASE_FILE}. "
+                "The local data catalogue may be stale."
+            ) from e
 
-    # Do we have an file with an alias?
-    if filename in TEST_DATA_TRANSLATION:
-        # If the filename is in the translation dict, use the alias
-        filename = TEST_DATA_TRANSLATION[filename]
+        # An entry may pin a specific release, which is how a superseded file
+        # stays downloadable under its old name after publication.
+        release = _resolve_release(known_dataset, file_details.get("release"))
+        url = release["download_url"]
+        expected_sha256 = release["file"]["sha256"]
+        expected_size = release["file"]["size_bytes"]
 
-    # Unpack the file details for extraction
-    file_details = AVAILABLE_FILES[filename]
+    return _fetch(savename, url, expected_sha256, expected_size, save_dir)
 
-    # Unpack the url
-    url = file_details["direct_link"]
 
+def _fetch(savename, url, expected_sha256, expected_size, save_dir):
+    """Stream one file to disk and install it once it verifies.
+
+    This is the transfer half of a download, separated from resolution so
+    that both a database entry and a bare catalogue dataset name can reach
+    it once they know where the bytes are.
+
+    Args:
+        savename (str):
+            The name to install the file under.
+        url (str):
+            The location to stream the bytes from.
+        expected_sha256 (str or None):
+            The digest the bytes must hash to, or None when unavailable.
+        expected_size (int):
+            The size the source reports, used to size the progress bar and to
+            decide whether a partial file is already complete.
+        save_dir (str):
+            The directory in which to save the file.
+
+    Raises:
+        DownloadError:
+            If the download fails, or the bytes received do not match the
+            digest the catalogue published.
+    """
     # Ensure the save directory exists
     if not os.path.exists(save_dir):
         os.makedirs(save_dir, exist_ok=True)
@@ -139,28 +480,174 @@ def _download(
         # Be verbose about the save directory
         print(f"{save_dir} does not exist. Creating it...")
 
-    # Define the save path
+    # Define the save path, and the temporary path we stream to first. When
+    # the catalogue told us the digest, it goes in the temporary name: a
+    # partial download is then only ever resumed into the release it came
+    # from, so a file republished mid-download cannot be spliced together
+    # from two different versions.
     save_path = f"{save_dir}/{savename}"
+    if expected_sha256 is not None:
+        part_path = f"{save_path}.{expected_sha256[:12]}.part"
+    else:
+        part_path = f"{save_path}.part"
+
+    # Pick up where an interrupted attempt left off. Only ever resume a
+    # download whose digest we can check afterwards, since appending to
+    # unverifiable bytes would turn a truncated file into a corrupt one.
+    resume_from = 0
+    if expected_sha256 is not None and os.path.exists(part_path):
+        resume_from = os.path.getsize(part_path)
+        if resume_from >= expected_size:
+            # Already have at least a whole file's worth; verification below
+            # decides whether it is the right one.
+            resume_from = 0
+
+    headers = {}
+    if resume_from > 0:
+        headers["Range"] = f"bytes={resume_from}-"
+        print(f"Resuming {savename} from {resume_from} bytes")
 
     # Download the file
-    response = requests.get(url, stream=True)
+    response = _request(
+        url, stream=True, timeout=(30, 300), headers=headers or None
+    )
+
+    # Only append to the partial file when the response really is the
+    # continuation we asked for. A server may ignore the range and send the
+    # whole file (200), report that our partial is already as long as the
+    # object (416), or answer 206 with some other range; in each case the
+    # partial cannot be appended to and the download starts over.
+    resuming = False
+    if resume_from > 0:
+        if response.status_code == 206 and _continues_from(
+            response.headers.get("Content-Range"), resume_from
+        ):
+            resuming = True
+        else:
+            if response.status_code != 200:
+                # The body in hand is unusable, so ask for the whole file.
+                response = _request(url, stream=True, timeout=(30, 300))
+            resume_from = 0
 
     # Ensure the request was successful
-    if response.status_code != 200:
+    if response.status_code != 200 and not resuming:
         raise exceptions.DownloadError(
             f"Failed to download {url}. Status code: {response.status_code}"
         )
 
+    # A server can answer with a success status and an error page. When it
+    # labels the response as HTML we can say so before transferring it.
+    content_type = response.headers.get("Content-Type", "")
+    if "text/html" in content_type and not savename.lower().endswith(
+        (".html", ".htm")
+    ):
+        raise exceptions.DownloadError(
+            f"{url} returned an HTML page rather than {savename}. "
+            "The link is probably stale."
+        )
+
     # Sizes in bytes.
-    total_size = int(response.headers.get("content-length", 0))
+    content_length = response.headers.get(
+        "content-length", response.headers.get("Content-Length")
+    )
+    total_size = (
+        int(content_length) + resume_from
+        if content_length is not None
+        else expected_size
+    )
     block_size = 1024
 
+    # Hash as we stream so verification costs no extra pass over the file,
+    # seeding it with whatever a previous attempt already wrote.
+    digest = hashlib.sha256()
+    if resuming:
+        with open(part_path, "rb") as f:
+            while chunk := f.read(1024 * 1024):
+                digest.update(chunk)
+
     # Stream the file to disk with a nice progress bar.
-    with tqdm(total=total_size, unit="B", unit_scale=True) as progress_bar:
-        with open(save_path, "wb") as f:
-            for chunk in response.iter_content(block_size):
-                progress_bar.update(len(chunk))
-                f.write(chunk)
+    try:
+        with tqdm(
+            total=total_size,
+            initial=resume_from,
+            unit="B",
+            unit_scale=True,
+        ) as progress_bar:
+            with open(part_path, "ab" if resuming else "wb") as f:
+                for chunk in response.iter_content(block_size):
+                    progress_bar.update(len(chunk))
+                    digest.update(chunk)
+                    f.write(chunk)
+    except requests.RequestException as e:
+        # A transfer that dies mid-stream is a download failure like any
+        # other, so it is reported as one rather than as a bare transport
+        # error from deep inside requests.
+        if expected_sha256 is None and os.path.exists(part_path):
+            with suppress(FileNotFoundError):
+                os.remove(part_path)
+            raise exceptions.DownloadError(
+                f"Download of {savename} was interrupted: {e}"
+            ) from e
+        raise exceptions.DownloadError(
+            f"Download of {savename} was interrupted: {e}. "
+            "Running the same command again will resume it."
+        ) from e
+    except BaseException:
+        # Anything else, including a keyboard interrupt, propagates unchanged
+        # once a partial that cannot be resumed has been cleaned up.
+        if expected_sha256 is None and os.path.exists(part_path):
+            with suppress(FileNotFoundError):
+                os.remove(part_path)
+        raise
+
+    actual_size = os.path.getsize(part_path)
+    if content_length is not None and actual_size != total_size:
+        if expected_sha256 is None:
+            with suppress(FileNotFoundError):
+                os.remove(part_path)
+        raise exceptions.DownloadError(
+            f"Download of {savename} was incomplete. Expected {total_size} "
+            f"bytes but received {actual_size}."
+        )
+
+    # Without a digest to check, confirm at least that the payload is the
+    # format its name claims before installing it.
+    if expected_sha256 is None:
+        try:
+            _reject_error_page(savename, url, part_path)
+        except exceptions.DownloadError:
+            with suppress(FileNotFoundError):
+                os.remove(part_path)
+            raise
+
+    # Did we get the bytes the catalogue promised? A mismatch means the
+    # partial file is unusable, so it goes rather than poisoning a retry.
+    if expected_sha256 is not None and digest.hexdigest() != expected_sha256:
+        with suppress(FileNotFoundError):
+            os.remove(part_path)
+        raise exceptions.DownloadError(
+            f"{savename} failed verification. Expected SHA-256 "
+            f"{expected_sha256} but received {digest.hexdigest()}. "
+            "The download was discarded."
+        )
+
+    # A successful replacement makes partials from older releases obsolete.
+    for stale_part in glob(f"{save_path}.*.part"):
+        if stale_part != part_path:
+            with suppress(FileNotFoundError):
+                os.remove(stale_part)
+
+    # The file is complete and verified, so move it into place
+    os.replace(part_path, save_path)
+    print(f"Downloaded {savename} to {save_path}")
+    return save_path
+
+
+def download_dataset(dataset, destination, release_id=None):
+    """Download one catalogue dataset by name."""
+    return _download(
+        dataset, destination, dataset=dataset, release_id=release_id
+    )
 
 
 def download_test_grids(destination):
@@ -341,6 +828,22 @@ def download():
         ),
     )
 
+    parser.add_argument(
+        "--dataset",
+        nargs="+",
+        default=[],
+        help=(
+            "Download one or more datasets by catalogue name, as listed at "
+            "synthesizer-project.org/syndex."
+        ),
+    )
+    parser.add_argument(
+        "--release",
+        type=int,
+        default=None,
+        help="Fetch a specific release of one named dataset.",
+    )
+
     # Add a flag to go ham and download everything
     parser.add_argument(
         "--all",
@@ -379,6 +882,13 @@ def download():
     all_sim_data = args.all_sim_data
     instruments = args.instruments
     all_instruments = args.all_instruments
+    datasets = args.dataset
+    release_id = args.release
+
+    if release_id is not None and len(datasets) != 1:
+        raise exceptions.InconsistentArguments(
+            "--release can only be used with one --dataset."
+        )
 
     # Check if the destination directory exists
     if dest is not None and not os.path.exists(dest):
@@ -402,6 +912,15 @@ def download():
         download_camels_data(dest if dest is not None else TEST_DATA_DIR)
         download_sc_sam_test_data(dest if dest is not None else TEST_DATA_DIR)
         download_instruments(INSTRUMENT_CACHE_DIR, AVAILABLE_INSTRUMENTS)
+        return
+
+    for dataset in datasets:
+        download_dataset(
+            dataset,
+            dest if dest is not None else GRID_DIR,
+            release_id,
+        )
+    if datasets:
         return
 
     # Test data?

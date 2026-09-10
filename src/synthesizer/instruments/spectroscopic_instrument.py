@@ -5,7 +5,10 @@ dimensional spectroscopy. It stores a wavelength grid together with optional
 depth, signal-to-noise, and noise-map definitions.
 """
 
+from numbers import Real
+
 import h5py
+import numpy as np
 from unyt import angstrom, unyt_array
 
 from synthesizer import exceptions
@@ -39,6 +42,13 @@ class SpectroscopicInstrument(InstrumentBase):
             this should be a dictionary keyed by the relevant labels.
         noise_maps (unyt_array, optional): An optional array with noise as a
             function of wavelength, in the same units as the spectral noise.
+        resolving_power (float or callable, optional): Resolving power
+            (R = lambda / delta_lambda) of the instrument. May be a constant
+            or a function of wavelength. Only a constant (float/int) value is
+            persisted by :meth:`to_hdf5`; a callable resolving power cannot be
+            serialised to HDF5 and is silently dropped on save (it is not
+            restored on load either, since there is nothing to restore it
+            from).
     """
 
     lam = Quantity("wavelength")
@@ -53,6 +63,7 @@ class SpectroscopicInstrument(InstrumentBase):
         depth_app_radius=None,
         snrs=None,
         noise_maps=None,
+        resolving_power=None,
     ):
         """Initialise a spectroscopic instrument.
 
@@ -73,6 +84,10 @@ class SpectroscopicInstrument(InstrumentBase):
             noise_maps (unyt_array, optional): An optional array with noise as
                 a function of wavelength, in the same units as the spectral
                 noise.
+            resolving_power (float or callable, optional): Resolving power
+                (R = lambda / delta_lambda) of the instrument. May be a
+                constant or a function of wavelength. Only a constant value is
+                persisted when the instrument is saved to HDF5.
         """
         super().__init__(label)
         self.lam = lam
@@ -80,6 +95,7 @@ class SpectroscopicInstrument(InstrumentBase):
         self.depth_app_radius = depth_app_radius
         self.snrs = snrs
         self.noise_maps = noise_maps
+        self.resolving_power = resolving_power
         SpectroscopicInstrument._validate(self)
 
     @timed("SpectroscopicInstrument._validate")
@@ -113,6 +129,19 @@ class SpectroscopicInstrument(InstrumentBase):
                 "You cannot set depths and SNRs at the same time as noise maps"
             )
 
+        if self.resolving_power is not None and not callable(
+            self.resolving_power
+        ):
+            if (
+                isinstance(self.resolving_power, bool)
+                or not isinstance(self.resolving_power, Real)
+                or not np.isfinite(self.resolving_power)
+                or self.resolving_power <= 0
+            ):
+                raise exceptions.InconsistentArguments(
+                    "resolving_power must be a positive number or callable."
+                )
+
     @property
     def instrument_type(self):
         """Return the serialised type tag for this instrument."""
@@ -141,6 +170,7 @@ class SpectroscopicInstrument(InstrumentBase):
             _hashable_state(self.depth_app_radius),
             _hashable_state(self.snrs),
             _hashable_state(self.noise_maps),
+            _hashable_state(self.resolving_power),
         )
 
     @timed("SpectroscopicInstrument.apply_lam_array")
@@ -201,6 +231,17 @@ class SpectroscopicInstrument(InstrumentBase):
         """
         group.attrs["label"] = self.label
         group.attrs["instrument_type"] = self.instrument_type
+
+        # Only a constant resolving power can be represented as an HDF5
+        # attribute; a callable resolving_power(wavelength) is not
+        # serialisable and is intentionally dropped here. NumPy scalars count
+        # as constants: np.float32 and np.int64 are not instances of float or
+        # int, so testing those alone would silently discard a resolving
+        # power that came out of an array.
+        if isinstance(self.resolving_power, Real) and not isinstance(
+            self.resolving_power, bool
+        ):
+            group.attrs["resolving_power"] = float(self.resolving_power)
 
         ds = group.create_dataset(
             "Wavelength", data=self.lam.value, dtype=float
@@ -332,6 +373,7 @@ class SpectroscopicInstrument(InstrumentBase):
             "depth_app_radius": depth_app_radius,
             "snrs": snrs,
             "noise_maps": noise_maps,
+            "resolving_power": group.attrs.get("resolving_power"),
         }
         payload.update(kwargs)
 
@@ -342,4 +384,5 @@ class SpectroscopicInstrument(InstrumentBase):
             depth_app_radius=payload["depth_app_radius"],
             snrs=payload["snrs"],
             noise_maps=payload["noise_maps"],
+            resolving_power=payload["resolving_power"],
         )

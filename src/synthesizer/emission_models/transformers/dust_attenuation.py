@@ -24,14 +24,18 @@ import numpy as np
 from dust_extinction import grain_models
 from scipy import interpolate
 from unyt import (
+    Gyr,
     Msun,
     angstrom,
     cm,
+    degree,
     g,
+    kpc,
     pc,
     um,
     unyt_array,
     unyt_quantity,
+    yr,
 )
 
 from synthesizer import exceptions
@@ -50,10 +54,10 @@ __all__ = [
     "Calzetti2000",
     "GrainModels",
     "ParametricLi08",
+    "SommovigoBartlett2026",
     "DraineLiGrainCurves",
 ]
 
-_RESET_SENTINEL = object()
 _DRAINE_LI_MEAN_MOLECULAR_WEIGHT = 1.4
 _HYDROGEN_MASS = 1.6738e-24 * g
 _GAS_MASS_PER_H = (_DRAINE_LI_MEAN_MOLECULAR_WEIGHT * _HYDROGEN_MASS).to(Msun)
@@ -98,8 +102,6 @@ class AttenuationLaw(Transformer):
         # names, e.g. allows the user to set e.g. slope = 'slope_young' on the
         # emitter or model and have that passed to the dust curve as slope
         self._name_transforms = {}
-        # Stores overridden parameters temporarily
-        self._temp_params = {}
         if ("tau_v" not in required_params) and (require_tau_v is True):
             raise exceptions.InconsistentArguments(
                 "AttenuationLaw requires 'tau_v' as a parameter."
@@ -149,15 +151,9 @@ class AttenuationLaw(Transformer):
                 shape for singular tau_v values or (tau_v.size, lam.size)
                 tau_v is an array.
         """
-        # Set any additional parameters on the dust curve
-        self._set_params(**dust_curve_kwargs)
-
-        try:
-            # Get the optical depth at each wavelength
-            tau_x_v = self.get_tau(lam)
-        finally:
-            # Always restore previous state
-            self._reset_params()
+        # Get the optical depth at each wavelength, from a curve carrying any
+        # parameters which were defined on the model or emitter
+        tau_x_v = self._with_params(**dust_curve_kwargs).get_tau(lam)
 
         # Include the V band optical depth in the exponent
         # For a scalar we can just multiply but for an array we need to
@@ -193,27 +189,19 @@ class AttenuationLaw(Transformer):
             **dust_curve_kwargs (dict):
                 Additional keyword arguments to be passed to the dust curve
                 which have been defined on the emitter or model.  These are
-                forwarded to ``_set_params`` before the computation and the
-                original state is restored afterward.
+                applied to a copy of this curve for the computation,
+                leaving this curve unchanged.
 
         Returns:
             np.ndarray of float:
                 The normalised extinction curve ``tau(lambda)/tau(V)``
                 with shape ``lam.shape``.
         """
-        # Push any dynamically-set dust curve parameters onto the instance,
-        # compute the raw normalised extinction curve, then restore the
-        # previous state regardless of exceptions.
-        self._set_params(**dust_curve_kwargs)
-
-        try:
-            # The heavy lifting still lives in get_tau; this helper just gives
-            # callers a clearer, attenuation-specific entry point.
-            return self.get_tau(lam)
-        finally:
-            # Always put the instance back the way we found it so temporary
-            # overrides do not leak into later calls.
-            self._reset_params()
+        # The heavy lifting still lives in get_tau; this helper just gives
+        # callers a clearer, attenuation-specific entry point. Any dynamically
+        # set parameters are applied to a copy, leaving this curve alone for
+        # anything else using it.
+        return self._with_params(**dust_curve_kwargs).get_tau(lam)
 
     def _check_required_params(self):
         """Set up the required parameters for the transformer.
@@ -289,39 +277,34 @@ class AttenuationLaw(Transformer):
             **params,
         )
 
-    def _set_params(self, **params):
-        """Set the parameters of the dust curve.
+    def _with_params(self, **params):
+        """Return this dust curve with a set of parameters applied.
 
-        This method will set any parameters defined in params as attributes
-        of the dust curve. This allows for parameters to be set on the
-        emitter or model and then used by the dust curve.
+        The parameters a dust curve needs can be set on the model or the
+        emitter rather than on the curve itself, in which case they are only
+        known at the point the emission is transformed. They are applied to a
+        copy rather than to the curve itself: one curve can be shared by many
+        models, and mutating it for the duration of a transformation would not
+        survive those models being transformed concurrently.
 
         Args:
             **params (dict):
-                The parameters to set.
-        """
-        # Save existing state of only the attributes we will override,
-        # then apply overrides mapped to the actual attribute names.
-        self._temp_params = {}
-        overrides = {}
-        for key, value in params.items():
-            attr = self._name_transforms.get(key, key)
-            overrides[attr] = value
-        for attr, value in overrides.items():
-            prev = getattr(self, attr, _RESET_SENTINEL)
-            self._temp_params[attr] = prev
-            setattr(self, attr, value)
+                The parameters to apply, keyed by the name they were found
+                under rather than by the attribute they set.
 
-    def _reset_params(self):
-        """Reset the parameters of the dust curve to their previous state."""
-        for attr, prev in self._temp_params.items():
-            if prev is _RESET_SENTINEL:
-                # Attribute did not exist prior to override
-                if hasattr(self, attr):
-                    delattr(self, attr)
-            else:
-                setattr(self, attr, prev)
-        self._temp_params = {}
+        Returns:
+            AttenuationLaw:
+                A copy of this dust curve with the parameters applied, or the
+                curve itself when there are none to apply.
+        """
+        if len(params) == 0:
+            return self
+
+        curve = copy.copy(self)
+        for key, value in params.items():
+            setattr(curve, self._name_transforms.get(key, key), value)
+
+        return curve
 
     @accepts(lam=angstrom)
     def plot_attenuation(
@@ -1190,6 +1173,496 @@ class ParametricLi08(AttenuationLaw):
         )
 
 
+# Small-grain fractions for each dust mixture used in the
+# SommovigoBartlett2026 galaxy-property prediction pipeline.
+_SB26_DUST_FRACTIONS = {
+    "MW": 0.5968,
+    "SMC": 0.7193,
+    "stellar": 0.3064,
+}
+
+
+@accepts(lam=angstrom)
+def sb26_tau(lam, B_0, B_1s, B_2s, B_3):
+    """Compute V-band normalised optical depth for Sommovigo & Bartlett 2026.
+
+    Four-parameter attenuation curve model calibrated on TNG50/TNG100
+    radiative transfer simulations (SKIRT) across MW, SMC, and stellar
+    dust models. The model consists of three additive components:
+    a UV bump at ~2175 AA, a UV slope with exponential decay
+    toward the optical, and a curvature term controlling far-UV and
+    optical/IR behaviour.
+
+    At the V-band wavelength (5542 AA), the curve evaluates to unity
+    by construction.
+
+    References:
+        Sommovigo, Bartlett et al. 2026 (https://arxiv.org/abs/2606.10027)
+
+    Args:
+        lam (np.ndarray of float):
+            The wavelengths (AA units) at which to calculate the
+            normalised optical depth.
+        B_0 (float):
+            UV bump amplitude. Typical range (0, 2.5); strongly
+            dust-model dependent: ~1.2 for MW, ~0 for SMC/stellar.
+        B_1s (float):
+            Linear slope term, scaled by 1e-3. Typical range
+            (-0.15, 0.10).
+        B_2s (float):
+            Slope modulation term, scaled by 1e-3. Typical range
+            (-2.5, 1.1).
+        B_3 (float):
+            Exponential/curvature parameter. Typical range
+            (0.8, 5.1).
+
+    Returns:
+        np.ndarray of float:
+            V-band normalised optical depth (A_lambda / A_V).
+    """
+    # Convert wavelength to microns and normalise to V-band
+    x = lam.to("um").value / 0.5542
+
+    # Unscale the slope parameters
+    B_1 = 1e3 * B_1s
+    B_2 = 1e3 * B_2s
+
+    # Fixed constants from the model calibration
+    c0, c1, c2, c3, c4 = 0.4002, 285.6, 0.2092, 9.223, 1.016
+
+    return (
+        B_0 * (np.exp(-c1 * (x - c0) ** 2) - np.exp(-c1 * (1.0 - c0) ** 2))
+        + (B_1 + B_2 * (x - c2)) * (x - c2) * (np.exp(-c3 * x) - np.exp(-c3))
+        + np.exp(B_3 * (np.tanh(c4) - np.tanh(c4 * x)))
+    )
+
+
+class SommovigoBartlett2026(AttenuationLaw):
+    """Four-parameter attenuation curve from Sommovigo & Bartlett 2026.
+
+    Attenuation curve model calibrated on TNG50/TNG100 SKIRT radiative
+    transfer simulations (snapnum93, z=0.07) across three dust grain models:
+
+    - **MW**: Weingartner & Draine 2001 (WD01), Milky Way (R_V=3.1)
+    - **SMC**: Weingartner & Draine 2001 (WD01), SMC Bar
+    - **stellar**: Hirashita & Aoyama 2019, log-normal grain size
+      distribution (a0=0.1 um, sigma=0.47)
+
+    The model consists of three additive components: a UV bump term,
+    a UV slope with exponential decay, and a curvature/far-UV term.
+
+    The curve parameters can be predicted from galaxy physical
+    properties using the companion function
+    ``SommovigoBartlett2026.predict``.
+
+    References:
+        Sommovigo, Bartlett et al. 2026 (https://arxiv.org/abs/2606.10027)
+        Weingartner & Draine 2001, ApJ, 548, 296
+        Hirashita & Aoyama 2019, MNRAS, 491, 3844
+
+    Attributes:
+        B_0 (float):
+            UV bump amplitude. Typical range (0, 2.5); strongly
+            dust-model dependent: ~1.2 for MW, ~0 for SMC/stellar.
+        B_1s (float):
+            Linear slope term, scaled by 1e-3. Typical range
+            (-0.15, 0.10).
+        B_2s (float):
+            Slope modulation term, scaled by 1e-3. Typical range
+            (-2.5, 1.1).
+        B_3 (float):
+            Exponential/curvature parameter. Typical range
+            (0.8, 5.1).
+    """
+
+    def __init__(
+        self,
+        B_0="B_0",
+        B_1s="B_1s",
+        B_2s="B_2s",
+        B_3="B_3",
+    ):
+        """Initialise the dust curve.
+
+        Each parameter is set to a string by default to signal that the
+        parameter should be extracted from an emitter (e.g., stars.B_0). This
+        enables the extraction of different parameters for different galaxies
+        when calling get_spectra. Fixed value defaults are detailed below.
+
+        To populate the parameters on a galaxy call
+        get_dust_curve_params_sommovigobartlett2026 on the galaxy object. This
+        will populate the parameters on the galaxy using the predict method
+        below and storing them on the galaxy's stars object. Then, when
+        calling get_spectra, the parameters will be extracted from each stars
+        object giving a unique attenuation curve for each galaxy.
+
+        Alternatively, the predict method can be called with arbitrary input
+        properties to generate a single attenuation curve with fixed
+        parameters.
+
+        Args:
+            B_0 (float):
+                UV bump amplitude. Typical range (0, 2.5); strongly
+                dust-model dependent: ~1.2 for MW, ~0 for SMC/stellar. The
+                default string states that B_0 should be extracted
+                from an emitter, e.g. stars.B_0. For a fixed default value
+                use B_0=0.025.
+            B_1s (float):
+                Linear slope term, scaled by 1e-3. The internal
+                parameter B_1 = 1e3 * B_1s. Typical range
+                (-0.15, 0.10). The default string states that B_1s should be
+                extracted from an emitter, e.g. stars.B_1s. For a fixed default
+                value use B_1s=-0.025.
+            B_2s (float):
+                Slope modulation term, scaled by 1e-3. The internal
+                parameter B_2 = 1e3 * B_2s. Typical range
+                (-2.5, 1.1). The default string states that B_2s should be
+                extracted from an emitter, e.g. stars.B_2s. For a fixed default
+                value use B_2s=-0.045.
+            B_3 (float):
+                Exponential/curvature parameter. Typical range
+                (0.8, 5.1). The default string states that B_3 should be
+                extracted from an emitter, e.g. stars.B_3. For a fixed default
+                value use B_3=3.07.
+        """
+        description = (
+            "Four-parameter attenuation curve calibrated on "
+            "TNG50/TNG100 SKIRT radiative transfer simulations. "
+            "Introduced in Sommovigo & Bartlett 2026."
+        )
+
+        required_params = ("tau_v", "B_0", "B_1s", "B_2s", "B_3")
+
+        AttenuationLaw.__init__(self, description, required_params)
+
+        self.B_0 = B_0
+        self.B_1s = B_1s
+        self.B_2s = B_2s
+        self.B_3 = B_3
+
+        self._check_required_params()
+
+    def __repr__(self):
+        """Return a string representation."""
+        parts = [
+            f"B_0={self.B_0}",
+            f"B_1s={self.B_1s}",
+            f"B_2s={self.B_2s}",
+            f"B_3={self.B_3}",
+        ]
+        return f"SommovigoBartlett2026({', '.join(parts)})"
+
+    @accepts(lam=angstrom)
+    def get_tau(self, lam):
+        """Calculate V-band normalised optical depth.
+
+        Args:
+            lam (float/np.ndarray of float):
+                An array of wavelengths or a single wavelength at which
+                to calculate optical depths (in AA, global unit).
+
+        Returns:
+            float/np.ndarray of float:
+                The V-band normalised optical depth (A_lambda / A_V).
+        """
+        return sb26_tau(
+            lam=lam,
+            B_0=self.B_0,
+            B_1s=self.B_1s,
+            B_2s=self.B_2s,
+            B_3=self.B_3,
+        )
+
+    @accepts(lam=angstrom)
+    def get_tau_at_lam(self, lam):
+        """Calculate optical depth at a wavelength.
+
+        Since the SB26 parametrisation is normalised to A_V by
+        construction (A_lam/A_V = 1 at 5542 AA), this is identical
+        to get_tau.
+
+        Args:
+            lam (float/np.ndarray of float):
+                An array of wavelengths or a single wavelength at which
+                to calculate optical depths (in AA, global unit).
+
+        Returns:
+            float/np.ndarray of float:
+                The optical depth.
+        """
+        return self.get_tau(lam)
+
+    @classmethod
+    @accepts(
+        sigma_sfr=Msun / yr / kpc**2,
+        inclination=degree,
+        ssfr=Gyr**-1,
+    )
+    def predict(
+        cls,
+        sigma_sfr,
+        inclination,
+        z_gas,
+        log10_mstar,
+        ssfr,
+        dust_model="MW",
+        add_noise=False,
+    ):
+        """Predict attenuation curve parameters from galaxy properties.
+
+        Sequential prediction pipeline mapping galaxy physical properties
+        to the SommovigoBartlett2026 attenuation curve parameters. The
+        prediction chain is:
+
+            A_V -> B_1s -> B_3 -> B_0 -> B_2s
+
+        Each parameter depends on galaxy properties and/or previously
+        predicted curve parameters. Calibrated on TNG50/TNG100 SKIRT
+        radiative transfer simulations.
+
+        References:
+            Sommovigo, Bartlett et al. 2026
+            (https://arxiv.org/abs/2606.10027)
+
+        Args:
+            sigma_sfr (unyt_quantity/unyt_array):
+                Star formation rate surface density
+                [Msun yr^-1 kpc^-2].
+            inclination (unyt_quantity/unyt_array):
+                Galaxy inclination angle [degrees].
+            z_gas (float/np.ndarray of float):
+                Gas-phase metallicity as absolute mass fraction
+                (e.g. Zsun = 0.0142, Asplund et al. 2009).
+            log10_mstar (float/np.ndarray of float):
+                Log10 stellar mass [log10(Msun)].
+            ssfr (unyt_quantity/unyt_array):
+                Specific star formation rate [Gyr^-1].
+            dust_model (str):
+                Dust mixture model. One of 'MW', 'SMC', or
+                'stellar'. Selects the small-grain fraction and
+                the B_0 prediction formula.
+            add_noise (bool):
+                If True, add Gaussian scatter matching the intrinsic
+                dispersion of the calibration sample. Default is
+                False.
+
+        Returns:
+            dict:
+                Dictionary with keys 'A_V', 'B_0', 'B_1s', 'B_2s',
+                'B_3', and 'tau_v' (= A_V / 1.086).
+
+        Examples:
+            Get predicted parameters for a single galaxy::
+
+                params = SommovigoBartlett2026.predict(
+                    sigma_sfr=0.01 * Msun / yr / kpc**2,
+                    inclination=60.0 * degree,
+                    z_gas=0.02, log10_mstar=10.5,
+                    ssfr=0.5 / Gyr, dust_model='MW',
+                )
+                curve = SommovigoBartlett2026(
+                    B_0=params['B_0'],
+                    B_1s=params['B_1s'],
+                    B_2s=params['B_2s'],
+                    B_3=params['B_3'],
+                )
+                transmission = curve.get_transmission(
+                    params['tau_v'], lam,
+                )
+        """
+        if dust_model not in _SB26_DUST_FRACTIONS:
+            raise exceptions.InconsistentArguments(
+                f"dust_model must be one of "
+                f"{list(_SB26_DUST_FRACTIONS)}, "
+                f"got '{dust_model}'."
+            )
+
+        f = _SB26_DUST_FRACTIONS[dust_model]
+
+        # Check if all inputs are scalar before promotion
+        scalar_input = all(
+            np.ndim(x) == 0
+            for x in (
+                sigma_sfr,
+                inclination,
+                z_gas,
+                log10_mstar,
+                ssfr,
+            )
+        )
+
+        # Promote all inputs to at least 1D arrays for broadcasting
+        sigma_sfr = np.atleast_1d(np.asarray(sigma_sfr, dtype=float))
+        inclination = np.atleast_1d(np.asarray(inclination, dtype=float))
+        z_gas = np.atleast_1d(np.asarray(z_gas, dtype=float))
+        log10_mstar = np.atleast_1d(np.asarray(log10_mstar, dtype=float))
+        ssfr = np.atleast_1d(np.asarray(ssfr, dtype=float))
+
+        # Broadcast all inputs to a common shape
+        (
+            sigma_sfr,
+            inclination,
+            z_gas,
+            log10_mstar,
+            ssfr,
+        ) = np.broadcast_arrays(
+            sigma_sfr, inclination, z_gas, log10_mstar, ssfr
+        )
+
+        # Check for negative values in sigma_sfr, which is physically invalid
+        if np.any(sigma_sfr < 0):
+            raise exceptions.InconsistentArguments(
+                "sigma_sfr must be non-negative."
+            )
+
+        # Compute the sine of the inclination angle in radians
+        sin_i = np.sin(inclination * np.pi / 180.0)
+
+        # Floor small values to avoid log10(0) and 0**negative
+        sin_i = np.clip(sin_i, 1e-10, None)
+        sigma_sfr = np.clip(sigma_sfr, 1e-10, None)
+
+        def _noise(sigma, shape):
+            """Helper function to add Gaussian noise if requested."""
+            if add_noise:
+                return np.random.normal(0, sigma, size=shape)
+            return 0.0
+
+        # Step 1: Predict A_V
+        c = [
+            0.428,
+            0.00967,
+            0.953,
+            0.00383,
+            1.51,
+            1.68,
+            800.0,
+            4.75,
+        ]
+        log10_av = (
+            c[0]
+            - c[1] / np.log10(c[2] * sin_i)
+            - c[3] / np.log10(c[4] * f)
+            - c[5] * (c[6] * sigma_sfr) ** (-c[7] * z_gas)
+            + _noise(0.221, sigma_sfr.shape)
+        )
+        log10_av = np.clip(log10_av, -5.0, 2.0)
+        A_V = 10.0**log10_av
+
+        # Step 2: Predict B_1s
+        c = [0.0324, 25.5, 2.36, 0.00411, 1.95]
+        B_1s = c[0] / A_V * (
+            (c[1] * z_gas) ** (c[2] * sin_i)
+            - c[3] * log10_mstar / np.log10(c[4] * f)
+        ) + _noise(0.058, A_V.shape)
+        B_1s = np.clip(B_1s, -1.0, 1.0)
+
+        # Step 3: Predict B_3
+        c = [
+            2.1,
+            0.83,
+            51.1,
+            21.2,
+            9.7,
+            3.52,
+            0.0417,
+            0.17,
+        ]
+        B_3 = (
+            -c[0]
+            - c[1] * sin_i
+            + c[2] * z_gas * (c[3] * A_V) ** (-c[4] * ssfr)
+            + c[5] * (c[6] * A_V) ** (-c[7] * f)
+            + _noise(0.728, A_V.shape)
+        )
+        B_3 = np.clip(B_3, 0.03, 10.0)
+
+        # Step 4: Predict B_0 (dust-mixture-dependent formula)
+        if dust_model == "MW":
+            c = [
+                0.662,
+                0.224,
+                0.327,
+                13.8,
+                1.53,
+                23.7,
+                0.112,
+            ]
+            log10_b0 = (
+                c[0] * B_1s
+                + c[1] * B_3
+                - c[2]
+                / B_3
+                * (c[3] * B_1s + c[4] * B_3 + (c[5] * A_V) ** (c[6] * B_3))
+                + _noise(0.072, A_V.shape)
+            )
+        else:
+            c = [
+                0.0413,
+                5.79,
+                10.2,
+                3.78,
+                5.13,
+                7.2,
+                0.379,
+                0.127,
+                2.91,
+            ]
+            log10_b0 = (
+                c[0]
+                * B_3
+                * (
+                    c[1] * A_V
+                    + (c[2] * A_V) ** (c[3] * B_1s)
+                    - c[4] * np.log10(c[5] * B_3)
+                    + (c[6] * f) ** (-c[7] * B_3)
+                )
+                - c[8]
+                + _noise(0.216, A_V.shape)
+            )
+        log10_b0 = np.clip(log10_b0, -5.0, 2.0)
+        B_0 = 10.0**log10_b0
+
+        # Step 5: Predict B_2s
+        c = [
+            0.264,
+            0.129,
+            0.00351,
+            0.776,
+            1.29,
+            5.93,
+            179.0,
+        ]
+        B_2s = (
+            c[0] * B_0
+            + c[1]
+            - f
+            * (
+                c[2] * B_0 ** (-c[3])
+                + c[4] * B_1s * (c[5] * B_1s + np.log10(c[6] * B_0))
+            )
+            + _noise(0.381, A_V.shape)
+        )
+        B_2s = np.clip(B_2s, -5.0, 5.0)
+
+        # Squeeze scalar inputs back to scalars
+        if scalar_input:
+            A_V = A_V.item()
+            B_0 = B_0.item()
+            B_1s = B_1s.item()
+            B_2s = B_2s.item()
+            B_3 = B_3.item()
+
+        return {
+            "A_V": A_V,
+            "tau_v": A_V / 1.086,
+            "B_0": B_0,
+            "B_1s": B_1s,
+            "B_2s": B_2s,
+            "B_3": B_3,
+        }
+
+
 class DraineLiGrainCurves(AttenuationLaw):
     """Draine and Li extinction curves.
 
@@ -1699,26 +2172,20 @@ class DraineLiGrainCurves(AttenuationLaw):
                 "not use tau_v. Ignoring tau_v in the calculation."
             )
 
-        # Set any additional parameters on the dust curve
-        self._set_params(**dust_curve_kwargs)
+        # Apply any parameters defined on the model or emitter to a copy, so
+        # this curve is left alone for anything else using it
+        curve = self._with_params(**dust_curve_kwargs)
 
-        try:
-            sigmalos_H = dust_curve_kwargs.get(
-                "sigmalos_H", getattr(self, "sigmalos_H", None)
-            )
-            # Gather sigmalos_* dust components: start with attributes, then
-            # override with kwargs.
-            sigmalos_dust = {}
-            for key in vars(self):
-                if key.startswith("sigmalos_") and key != "sigmalos_H":
-                    sigmalos_dust[key] = getattr(self, key)
-            for key, value in dust_curve_kwargs.items():
-                if key.startswith("sigmalos_") and key != "sigmalos_H":
-                    sigmalos_dust[key] = value
-            # Compute tau_lam directly (tau_v is not used for this model)
-            tau_lam = self.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
-        finally:
-            # Always restore previous state
-            self._reset_params()
+        sigmalos_H = getattr(curve, "sigmalos_H", None)
+
+        # Gather the sigmalos_* dust components
+        sigmalos_dust = {
+            key: getattr(curve, key)
+            for key in vars(curve)
+            if key.startswith("sigmalos_") and key != "sigmalos_H"
+        }
+
+        # Compute tau_lam directly (tau_v is not used for this model)
+        tau_lam = curve.get_tau_at_lam(lam, sigmalos_H, **sigmalos_dust)
 
         return np.exp(-tau_lam)
