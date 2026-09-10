@@ -68,8 +68,10 @@ class TestPacmanEmission:
         )
 
         # Generate spectra
-        spec = random_part_stars.get_spectra(model)
-        with_fesc_spec = random_part_stars.get_spectra(model_with_fesc)
+        spec = random_part_stars.get_spectra(model, out_dtype=np.float64)
+        with_fesc_spec = random_part_stars.get_spectra(
+            model_with_fesc, out_dtype=np.float64
+        )
 
         assert (
             spec.bolometric_luminosity < with_fesc_spec.bolometric_luminosity

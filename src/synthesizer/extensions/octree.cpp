@@ -6,6 +6,7 @@
 
 /* C headers. */
 #include <float.h>
+#include <limits>
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -21,13 +22,15 @@
 /**
  * @brief Recursively Populates the cell tree until maxdepth is reached.
  *
+ * @tparam Real The floating-point type (float or double).
  * @param c The cell to populate.
  * @param ncells The number of cells.
  * @param maxdepth The maximum depth of the tree.
  * @param depth The current depth.
  * @param min_count The minimum number of particles in a leaf cell.
  */
-static void populate_cell_tree_recursive(struct cell *c, int *ncells,
+template <typename Real>
+static void populate_cell_tree_recursive(struct cell<Real> *c, int *ncells,
                                          int maxdepth, int depth,
                                          int min_count) {
 
@@ -37,7 +40,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
   }
 
   /* Get the particles in this cell. */
-  struct particle *particles = c->particles;
+  struct particle<Real> *particles = c->particles;
   int npart = c->part_count;
 
   /* No point splitting below the maximum smoothing length or if we have too
@@ -47,16 +50,16 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
   }
 
   /* Compute the width at this level. */
-  double width = c->width / 2;
+  Real width = c->width / static_cast<Real>(2.0);
 
   /* We need to split... get the progeny. */
   c->split = 1;
-  c->progeny = new struct cell[8];
+  c->progeny = new struct cell<Real>[8];
   *ncells += 8;
   for (int ip = 0; ip < 8; ip++) {
 
     /* Get this progeny cell. */
-    struct cell *cp = &c->progeny[ip];
+    struct cell<Real> *cp = &c->progeny[ip];
 
     /* Set the cell properties. */
     cp->width = width;
@@ -68,7 +71,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
     if (ip & 1) cp->loc[2] += cp->width;
     cp->split = 0;
     cp->part_count = 0;
-    cp->max_sml_squ = 0;
+    cp->max_sml_squ = static_cast<Real>(0.0);
     cp->depth = depth;
     cp->particles = NULL;
     cp->progeny = NULL;
@@ -80,7 +83,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
   for (int ipart = 0; ipart < npart; ipart++) {
 
     /* Get the position of the particle relative to the parent cell. */
-    double ipos[3] = {
+    Real ipos[3] = {
         particles[ipart].pos[0] - c->loc[0],
         particles[ipart].pos[1] - c->loc[1],
         particles[ipart].pos[2] - c->loc[2],
@@ -106,7 +109,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
     }
 
     /* Allocate the particles. */
-    c->progeny[ip].particles = new struct particle[part_count[ip]];
+    c->progeny[ip].particles = new struct particle<Real>[part_count[ip]];
     c->progeny[ip].part_count = 0;
   }
 
@@ -114,7 +117,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
   for (int ipart = 0; ipart < npart; ipart++) {
 
     /* Get the position of the particle relative to the parent cell. */
-    double ipos[3] = {
+    Real ipos[3] = {
         particles[ipart].pos[0] - c->loc[0],
         particles[ipart].pos[1] - c->loc[1],
         particles[ipart].pos[2] - c->loc[2],
@@ -129,7 +132,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
     int child_index = k + 2 * (j + 2 * i);
 
     /* Assign to the cell. */
-    struct cell *cp = &c->progeny[child_index];
+    struct cell<Real> *cp = &c->progeny[child_index];
     cp->particles[cp->part_count++] = particles[ipart];
 
     /* Updated the maximum smoothing length. */
@@ -141,7 +144,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
 #ifdef WITH_DEBUGGING_CHECKS
   /* Check that the particles have been assigned correctly. */
   for (int ip = 0; ip < 8; ip++) {
-    struct cell *cp = &c->progeny[ip];
+    struct cell<Real> *cp = &c->progeny[ip];
     if (cp->part_count != part_count[ip]) {
       printf("Error: Particles not assigned correctly!\n");
     }
@@ -149,27 +152,30 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
 
   /* Ensure the cell and particle positions agree. */
   for (int ip = 0; ip < 8; ip++) {
-    struct cell *cp = &c->progeny[ip];
+    struct cell<Real> *cp = &c->progeny[ip];
     for (int ipart = 0; ipart < cp->part_count; ipart++) {
-      struct particle *pp = &cp->particles[ipart];
+      struct particle<Real> *pp = &cp->particles[ipart];
 
       if (pp->pos[0] < cp->loc[0] || pp->pos[0] > cp->loc[0] + cp->width) {
         printf(
             "Error: Particle outside cell bounds in x (c->loc[0] = %f, "
             "c->loc[0] + c->width = %f, pp->pos[0] = %f)!\n",
-            cp->loc[0], cp->loc[0] + cp->width, pp->pos[0]);
+            (double)cp->loc[0], (double)(cp->loc[0] + cp->width),
+            (double)pp->pos[0]);
       }
       if (pp->pos[1] < cp->loc[1] || pp->pos[1] > cp->loc[1] + cp->width) {
         printf(
             "Error: Particle outside cell bounds in y (c->loc[1] = %f, "
             "c->loc[1] + c->width = %f, pp->pos[1] = %f)!\n",
-            cp->loc[1], cp->loc[1] + cp->width, pp->pos[1]);
+            (double)cp->loc[1], (double)(cp->loc[1] + cp->width),
+            (double)pp->pos[1]);
       }
       if (pp->pos[2] < cp->loc[2] || pp->pos[2] > cp->loc[2] + cp->width) {
         printf(
             "Error: Particle outside cell bounds in z (c->loc[2] = %f, "
             "c->loc[2] + c->width = %f, pp->pos[2] = %f)!\n",
-            cp->loc[2], cp->loc[2] + cp->width, pp->pos[2]);
+            (double)cp->loc[2], (double)(cp->loc[2] + cp->width),
+            (double)pp->pos[2]);
       }
     }
   }
@@ -177,7 +183,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
 
   /* Recurse... */
   for (int ip = 0; ip < 8; ip++) {
-    struct cell *cp = &c->progeny[ip];
+    struct cell<Real> *cp = &c->progeny[ip];
 
     /* Skip any empty progeny. */
     if (cp->part_count == 0) {
@@ -188,7 +194,8 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
     cp->max_sml_squ = cp->max_sml_squ * cp->max_sml_squ;
 
     /* Go to the next level */
-    populate_cell_tree_recursive(cp, ncells, maxdepth, depth + 1, min_count);
+    populate_cell_tree_recursive<Real>(cp, ncells, maxdepth, depth + 1,
+                                       min_count);
 
     /* Update the maximum depth. */
     if (cp->maxdepth > c->maxdepth) {
@@ -200,6 +207,7 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
 /**
  * @brief Constructs the particles and attaches them to the root cell.
  *
+ * @tparam Real The floating-point type (float or double).
  * @param particles The particles to construct.
  * @param pos The particle positions.
  * @param sml The particle smoothing lengths.
@@ -208,14 +216,18 @@ static void populate_cell_tree_recursive(struct cell *c, int *ncells,
  * @param npart The number of particles.
  * @param root The root cell.
  */
-static void construct_particles(struct particle *particles, const double *pos,
-                                const double *sml, const double *surf_den_vals,
-                                const int npart, struct cell *root) {
+template <typename Real>
+static void construct_particles(struct particle<Real> *particles,
+                                const Real *pos, const Real *sml,
+                                const Real *surf_den_vals, const int npart,
+                                struct cell<Real> *root) {
 
   tic("construct_particles");
 
   /* Create an array to hold the bounds of the particle distribution. */
-  double bounds[6] = {FLT_MAX, 0, FLT_MAX, 0, FLT_MAX, 0};
+  Real bounds[6] = {std::numeric_limits<Real>::max(), static_cast<Real>(0.0),
+                    std::numeric_limits<Real>::max(), static_cast<Real>(0.0),
+                    std::numeric_limits<Real>::max(), static_cast<Real>(0.0)};
 
   /* Loop over gas particles and associate them with the root. We could
    * just attach the pointer but we already need to find the maximum sml in
@@ -246,22 +258,22 @@ static void construct_particles(struct particle *particles, const double *pos,
 
   /* Get the cell width based on the bounds we have found. Note that
    * we are assuming a cubic domain so the maximum width is the width. */
-  double width = bounds[1] - bounds[0];
+  Real width = bounds[1] - bounds[0];
   if (bounds[3] - bounds[2] > width) width = bounds[3] - bounds[2];
   if (bounds[5] - bounds[4] > width) width = bounds[5] - bounds[4];
 
   /* Include a small buffer on the width. */
-  width *= 1.0001;
+  width *= static_cast<Real>(1.0001);
 
   /* Get the geometric mid point. */
-  double mid[3] = {0.5 * (bounds[0] + bounds[1]),
-                   0.5 * (bounds[2] + bounds[3]),
-                   0.5 * (bounds[4] + bounds[5])};
+  Real mid[3] = {static_cast<Real>(0.5) * (bounds[0] + bounds[1]),
+                 static_cast<Real>(0.5) * (bounds[2] + bounds[3]),
+                 static_cast<Real>(0.5) * (bounds[4] + bounds[5])};
 
   /* Recalculate the bounds using the width and midpoint. */
   for (int i = 0; i < 3; i++) {
-    bounds[i * 2] = mid[i] - (0.5 * width);
-    bounds[i * 2 + 1] = mid[i] + (0.5 * width);
+    bounds[i * 2] = mid[i] - (static_cast<Real>(0.5) * width);
+    bounds[i * 2 + 1] = mid[i] + (static_cast<Real>(0.5) * width);
   }
 
   /* Set the root cell properties. */
@@ -286,6 +298,7 @@ static void construct_particles(struct particle *particles, const double *pos,
  * We use a single cell at the root. This is then split into 8 cells, which are
  * then split into 8 cells each, and so on until we reach the maximum depth.
  *
+ * @tparam Real The floating-point type (float or double).
  * @param pos The particle positions.
  * @param sml The particle smoothing lengths.
  * @param surf_den_val The particle value that will be used when calculating
@@ -297,38 +310,40 @@ static void construct_particles(struct particle *particles, const double *pos,
  * @param maxdepth The maximum depth of the tree.
  * @param min_count The minimum number of particles in a leaf cell.
  */
-void construct_cell_tree(const double *pos, const double *sml,
-                         const double *surf_den_val, const int npart,
-                         struct cell *root, int ncells, int maxdepth,
+template <typename Real>
+void construct_cell_tree(const Real *pos, const Real *sml,
+                         const Real *surf_den_val, const int npart,
+                         struct cell<Real> *root, int ncells, int maxdepth,
                          int min_count) {
 
   tic("construct_cell_tree");
 
   /* Set the root cell properties. */
-  root->loc[0] = 0;
-  root->loc[1] = 0;
-  root->loc[2] = 0;
-  root->width = 0;
+  root->loc[0] = static_cast<Real>(0.0);
+  root->loc[1] = static_cast<Real>(0.0);
+  root->loc[2] = static_cast<Real>(0.0);
+  root->width = static_cast<Real>(0.0);
   root->split = 0;
   root->part_count = 0;
-  root->max_sml_squ = 0;
+  root->max_sml_squ = static_cast<Real>(0.0);
   root->depth = 0;
 
   /* Allocate the array of tree particles. */
-  struct particle *parts = new struct particle[npart];
+  struct particle<Real> *parts = new struct particle<Real>[npart];
 
   /* Create the particles and attach them to the root. */
-  construct_particles(parts, pos, sml, surf_den_val, npart, root);
+  construct_particles<Real>(parts, pos, sml, surf_den_val, npart, root);
 
   /* And recurse... */
-  populate_cell_tree_recursive(root, &ncells, maxdepth, 1, min_count);
+  populate_cell_tree_recursive<Real>(root, &ncells, maxdepth, 1, min_count);
 
 #ifdef WITH_DEBUGGING_CHECKS
   printf("Constructed cell tree with %d cells\n", ncells);
   printf("Maximum depth: %d\n", root->maxdepth);
-  printf("Cell bounds: %f %f %f %f %f %f\n", root->loc[0],
-         root->loc[0] + root->width, root->loc[1], root->loc[1] + root->width,
-         root->loc[2], root->loc[2] + root->width);
+  printf("Cell bounds: %f %f %f %f %f %f\n", (double)root->loc[0],
+         (double)(root->loc[0] + root->width), (double)root->loc[1],
+         (double)(root->loc[1] + root->width), (double)root->loc[2],
+         (double)(root->loc[2] + root->width));
 #endif
 
   toc("construct_cell_tree");
@@ -337,12 +352,14 @@ void construct_cell_tree(const double *pos, const double *sml,
 /**
  * @brief Clean up the cell tree recursively.
  *
+ * @tparam Real The floating-point type (float or double).
  * @param c The cell to clean up.
  */
-void cleanup_cell_tree(struct cell *c) {
+template <typename Real>
+void cleanup_cell_tree(struct cell<Real> *c) {
   if (c->split) {
     for (int i = 0; i < 8; i++) {
-      cleanup_cell_tree(&c->progeny[i]);
+      cleanup_cell_tree<Real>(&c->progeny[i]);
     }
     delete[] c->progeny;
   }
@@ -361,18 +378,20 @@ void cleanup_cell_tree(struct cell *c) {
  * @brief A function to compute the minimum possible projected distance between
  * two cells.
  *
+ * @tparam Real The floating-point type (float or double).
  * @param c The cell to test.
  * @param x The x-coordinate.
  * @param y The y-coordinate.
  *
  * @return The distance between the cells.
  */
-double min_projected_dist2(struct cell *c, double x, double y) {
+template <typename Real>
+Real min_projected_dist2(struct cell<Real> *c, Real x, Real y) {
 
   /* Get the minimum separation along each axis (if the point is within the
    * cell along an axis then the separation should be 0). */
-  double dx = 0;
-  double dy = 0;
+  Real dx = static_cast<Real>(0.0);
+  Real dy = static_cast<Real>(0.0);
   if (!(x > c->loc[0] && x < c->loc[0] + c->width)) {
     dx = fmin(fabs(c->loc[0] - x), fabs(c->loc[0] + c->width - x));
   }
@@ -382,3 +401,17 @@ double min_projected_dist2(struct cell *c, double x, double y) {
 
   return dx * dx + dy * dy;
 }
+
+/* Explicit instantiations for float and double. */
+template void construct_cell_tree<float>(const float *, const float *,
+                                         const float *, const int,
+                                         struct cell<float> *, int, int, int);
+template void construct_cell_tree<double>(const double *, const double *,
+                                          const double *, const int,
+                                          struct cell<double> *, int, int,
+                                          int);
+template void cleanup_cell_tree<float>(struct cell<float> *);
+template void cleanup_cell_tree<double>(struct cell<double> *);
+template float min_projected_dist2<float>(struct cell<float> *, float, float);
+template double min_projected_dist2<double>(struct cell<double> *, double,
+                                            double);

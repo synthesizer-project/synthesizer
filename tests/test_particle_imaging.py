@@ -76,6 +76,17 @@ class TestImageGeneration:
         )
         assert np.sum(img.arr) >= 0
 
+    def test_generate_empty_img_hist_preserves_signal_dtype(self):
+        """An empty histogram image should retain the signal precision."""
+        coords = unyt_array(np.empty((0, 3), dtype=np.float32), kpc)
+        signal = unyt_array(np.empty(0, dtype=np.float32), erg / s)
+        img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
+
+        img.generate_img_hist(signal, coords)
+
+        assert img.arr.dtype == np.float32
+        assert img.arr.shape == (10, 10)
+
     def test_get_img_hist_warns_and_delegates(self, mock_particles):
         """Deprecated histogram image wrapper should warn and generate."""
         coords, signal, _ = mock_particles
@@ -2341,3 +2352,72 @@ class TestCombinedModelImaging:
             f"Component-level nebular image flux {image_flux} does not "
             f"match expected {expected_flux}"
         )
+
+
+class TestImageDtypeInheritance:
+    """Test that images inherit the signal dtype without hidden copies."""
+
+    @pytest.mark.parametrize("sig_dtype", [np.float32, np.float64])
+    def test_smoothed_image_inherits_signal_dtype(self, sig_dtype):
+        """Smoothed images should come out at the signal dtype."""
+        from unyt import Hz, erg, kpc, s
+
+        n = 64
+        rng = np.random.default_rng(42)
+        coords = ((rng.random((n, 3)) - 0.5) * 8 * kpc).astype(np.float64)
+        smls = (np.ones(n) * 1.0) * kpc
+        signal = rng.random(n).astype(sig_dtype)
+
+        img = Image(resolution=0.5 * kpc, fov=10 * kpc)
+        img.generate_img_smoothed(
+            signal * erg / s / Hz,
+            coordinates=coords,
+            smoothing_lengths=smls,
+            kernel=Kernel().get_kernel(),
+        )
+        assert img.arr.dtype == sig_dtype
+
+    @pytest.mark.parametrize("sig_dtype", [np.float32, np.float64])
+    def test_hist_image_inherits_signal_dtype(self, sig_dtype):
+        """Histogram images should come out at the signal dtype."""
+        from unyt import Hz, erg, kpc, s
+
+        n = 64
+        rng = np.random.default_rng(42)
+        coords = ((rng.random((n, 3)) - 0.5) * 8 * kpc).astype(np.float64)
+        signal = rng.random(n).astype(sig_dtype)
+
+        img = Image(resolution=0.5 * kpc, fov=10 * kpc)
+        img.generate_img_hist(signal * erg / s / Hz, coordinates=coords)
+        assert img.arr.dtype == sig_dtype
+
+    def test_smoothed_image_supports_float32_geometry(self):
+        """Float32 coordinates/smoothing lengths should work unchanged."""
+        from unyt import Hz, erg, kpc, s
+
+        n = 64
+        rng = np.random.default_rng(42)
+        coords64 = ((rng.random((n, 3)) - 0.5) * 8 * kpc).astype(np.float64)
+        smls64 = (np.ones(n) * 1.0) * kpc
+        signal = rng.random(n).astype(np.float64)
+
+        img64 = Image(resolution=0.5 * kpc, fov=10 * kpc)
+        img64.generate_img_smoothed(
+            signal * erg / s / Hz,
+            coordinates=coords64,
+            smoothing_lengths=smls64,
+            kernel=Kernel().get_kernel(),
+        )
+
+        img32 = Image(resolution=0.5 * kpc, fov=10 * kpc)
+        img32.generate_img_smoothed(
+            signal * erg / s / Hz,
+            coordinates=coords64.astype(np.float32),
+            smoothing_lengths=smls64.astype(np.float32),
+            kernel=Kernel().get_kernel(),
+        )
+
+        # Particles near pixel edges can land one pixel over when their
+        # positions are rounded to float32, so compare the total flux rather
+        # than pixel-by-pixel values.
+        assert np.isclose(img32.arr.sum(), img64.arr.sum(), rtol=1e-4)

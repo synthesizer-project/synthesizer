@@ -1,5 +1,7 @@
 """A test suite for particle based Stars."""
 
+from unittest.mock import MagicMock
+
 import numpy as np
 import pytest
 from unyt import Myr, kpc
@@ -8,6 +10,20 @@ from synthesizer import exceptions
 from synthesizer.exceptions import InconsistentAddition
 from synthesizer.parametric.stars import Stars as ParaStars
 from synthesizer.particle.stars import Stars
+
+
+def test_get_spectra_forwards_out_dtype(particle_stars_A):
+    """Public get_spectra should pass out_dtype through to the backend."""
+    emission_model = MagicMock()
+    emission_model.per_particle = False
+    emission_model.label = "mock"
+    emission_model._get_spectra.return_value = ({"mock": MagicMock()}, {})
+
+    particle_stars_A.get_spectra(emission_model, out_dtype=np.float64)
+
+    assert (
+        emission_model._get_spectra.call_args.kwargs["out_dtype"] is np.float64
+    )
 
 
 def test_cant_add_different_types(particle_stars_A, particle_gas_A):

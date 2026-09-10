@@ -1267,3 +1267,261 @@ class TestLOSColumnDensity:
         assert np.all(coarse_tau > 0.0)
         assert np.all(fine_tau > 0.0)
         assert not np.allclose(coarse_tau, fine_tau, rtol=1e-3, atol=0.0)
+
+
+class TestColumnDensityAccumulationPrecision:
+    """Regression tests for double-precision accumulation in the LOS sums.
+
+    The C extension sums the contribution of every source (gas) particle
+    along each line of sight. With realistic gas neighbour counts (1e5-1e6
+    for a single star in a cosmological zoom-in) summing those
+    contributions directly in float32 accumulates O(sqrt(N)) relative
+    rounding error. The extension accumulates internally in double and
+    only casts down to the requested output precision once at the end, so
+    a float32 in/out calculation should stay within a few float32 ULPs of
+    the float64 reference regardless of how many source particles are
+    summed. These tests build enough source particles that the old
+    accumulate-in-``Real`` behaviour would have failed the tolerance below
+    by two to three orders of magnitude.
+    """
+
+    @staticmethod
+    def _build_inputs(npart_j, rng, dtype):
+        """Build a single-star, many-gas-particle LOS setup at ``dtype``."""
+        kernel_obj = Kernel(name="uniform", binsize=32)
+        proj_kernel = np.ascontiguousarray(
+            kernel_obj.get_kernel(), dtype=dtype
+        )
+        trunc_kernel = np.ascontiguousarray(
+            kernel_obj.get_truncated_los_kernel()[0], dtype=dtype
+        )
+
+        pos_i = np.ascontiguousarray([[0.0, 0.0, 2.0]], dtype=dtype)
+        pos_j = np.ascontiguousarray(
+            np.column_stack(
+                [
+                    rng.uniform(-0.05, 0.05, npart_j),
+                    rng.uniform(-0.05, 0.05, npart_j),
+                    rng.uniform(0.0, 1.9, npart_j),
+                ]
+            ),
+            dtype=dtype,
+        )
+        smls = np.ascontiguousarray(np.full(npart_j, 0.2), dtype=dtype)
+        surf_den_vals = np.ascontiguousarray(
+            np.full(npart_j, 1.0), dtype=dtype
+        )
+
+        return proj_kernel, trunc_kernel, pos_i, pos_j, smls, surf_den_vals
+
+    @pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+    def test_column_density_float32_matches_float64_at_scale(self, force_loop):
+        """A large-N float32 LOS sum should match the float64 reference."""
+        from synthesizer.extensions.column_density import (
+            compute_column_density,
+        )
+
+        rng = np.random.default_rng(0)
+        npart_j = 1_000_000
+
+        (
+            proj_kernel64,
+            trunc_kernel64,
+            pos_i64,
+            pos_j64,
+            smls64,
+            surf_den_vals64,
+        ) = self._build_inputs(npart_j, rng, np.float64)
+
+        kdim = proj_kernel64.size
+        trunc_qdim, zdim = trunc_kernel64.shape
+
+        args64 = (
+            proj_kernel64,
+            trunc_kernel64,
+            pos_i64,
+            pos_j64,
+            smls64,
+            surf_den_vals64,
+            1,
+            npart_j,
+            kdim,
+            trunc_qdim,
+            zdim,
+            1.0,
+            force_loop,
+            8,
+            1,
+        )
+        result64 = compute_column_density(*args64)
+
+        args32 = tuple(
+            arg.astype(np.float32) if isinstance(arg, np.ndarray) else arg
+            for arg in args64
+        )
+        result32 = compute_column_density(*args32)
+
+        assert result32.dtype == np.float32
+        assert np.all(result64 > 0.0)
+        np.testing.assert_allclose(result32, result64, rtol=1e-5, atol=0.0)
+
+    @pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+    def test_column_density_smoothed_float32_matches_float64_at_scale(
+        self, force_loop
+    ):
+        """A large-N float32 smoothed LOS sum should match float64."""
+        from synthesizer.extensions.column_density import (
+            compute_column_density_smoothed,
+        )
+
+        rng = np.random.default_rng(1)
+        npart_j = 500_000
+
+        kernel_obj = Kernel(name="uniform", binsize=32)
+        overlap64, q_grid64, u_grid64, eta_grid64 = (
+            kernel_obj.get_overlap_kernel()
+        )
+        overlap64 = np.ascontiguousarray(overlap64, dtype=np.float64)
+        q_grid64 = np.ascontiguousarray(q_grid64, dtype=np.float64)
+        u_grid64 = np.ascontiguousarray(u_grid64, dtype=np.float64)
+        eta_grid64 = np.ascontiguousarray(eta_grid64, dtype=np.float64)
+
+        (_, _, pos_i64, pos_j64, smls64, surf_den_vals64) = self._build_inputs(
+            npart_j, rng, np.float64
+        )
+        input_smls64 = np.ascontiguousarray([0.1], dtype=np.float64)
+
+        qdim, udim, etadim = q_grid64.size, u_grid64.size, eta_grid64.size
+
+        args64 = (
+            overlap64,
+            q_grid64,
+            u_grid64,
+            eta_grid64,
+            pos_i64,
+            input_smls64,
+            pos_j64,
+            smls64,
+            surf_den_vals64,
+            1,
+            npart_j,
+            qdim,
+            udim,
+            etadim,
+            1.0,
+            force_loop,
+            8,
+            1,
+        )
+        result64 = compute_column_density_smoothed(*args64)
+
+        args32 = tuple(
+            arg.astype(np.float32) if isinstance(arg, np.ndarray) else arg
+            for arg in args64
+        )
+        result32 = compute_column_density_smoothed(*args32)
+
+        assert result32.dtype == np.float32
+        assert np.all(result64 > 0.0)
+        np.testing.assert_allclose(result32, result64, rtol=1e-5, atol=0.0)
+
+    @pytest.mark.parametrize("dtype", [np.float32, np.float64])
+    @pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+    def test_column_density_threaded_matches_serial(self, dtype, force_loop):
+        """Thread-local double buffers must preserve every target result."""
+        from synthesizer.extensions.column_density import (
+            compute_column_density,
+        )
+
+        inputs = list(
+            self._build_inputs(2_000, np.random.default_rng(2), dtype)
+        )
+        inputs[2] = np.ascontiguousarray(
+            np.column_stack(
+                [
+                    np.linspace(-0.03, 0.03, 7),
+                    np.linspace(0.03, -0.03, 7),
+                    np.full(7, 2.0),
+                ]
+            ),
+            dtype=dtype,
+        )
+        proj_kernel, trunc_kernel, pos_i, pos_j, smls, values = inputs
+        args = (
+            proj_kernel,
+            trunc_kernel,
+            pos_i,
+            pos_j,
+            smls,
+            values,
+            pos_i.shape[0],
+            pos_j.shape[0],
+            proj_kernel.size,
+            trunc_kernel.shape[0],
+            trunc_kernel.shape[1],
+            1.0,
+            force_loop,
+            8,
+        )
+
+        serial = compute_column_density(*args, 1)
+        threaded = compute_column_density(*args, 4)
+
+        assert threaded.dtype == dtype
+        np.testing.assert_allclose(threaded, serial, rtol=0.0, atol=0.0)
+
+    @pytest.mark.parametrize("dtype", [np.float32, np.float64])
+    @pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+    def test_smoothed_column_density_threaded_matches_serial(
+        self, dtype, force_loop
+    ):
+        """Threaded smoothed LOS chunks must match serial accumulation."""
+        from synthesizer.extensions.column_density import (
+            compute_column_density_smoothed,
+        )
+
+        kernel_obj = Kernel(name="uniform", binsize=32)
+        overlap, q_grid, u_grid, eta_grid = (
+            np.ascontiguousarray(arr, dtype=dtype)
+            for arr in kernel_obj.get_overlap_kernel()
+        )
+        inputs = list(
+            self._build_inputs(1_000, np.random.default_rng(3), dtype)
+        )
+        pos_i = np.ascontiguousarray(
+            np.column_stack(
+                [
+                    np.linspace(-0.03, 0.03, 7),
+                    np.linspace(0.03, -0.03, 7),
+                    np.full(7, 2.0),
+                ]
+            ),
+            dtype=dtype,
+        )
+        _, _, _, pos_j, smls, values = inputs
+        input_smls = np.ascontiguousarray(np.full(7, 0.1), dtype=dtype)
+        args = (
+            overlap,
+            q_grid,
+            u_grid,
+            eta_grid,
+            pos_i,
+            input_smls,
+            pos_j,
+            smls,
+            values,
+            pos_i.shape[0],
+            pos_j.shape[0],
+            q_grid.size,
+            u_grid.size,
+            eta_grid.size,
+            1.0,
+            force_loop,
+            8,
+        )
+
+        serial = compute_column_density_smoothed(*args, 1)
+        threaded = compute_column_density_smoothed(*args, 4)
+
+        assert threaded.dtype == dtype
+        np.testing.assert_allclose(threaded, serial, rtol=0.0, atol=0.0)

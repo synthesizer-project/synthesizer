@@ -751,6 +751,64 @@ class TestDustGeneratorIntegration:
             assert isinstance(sed, Sed)
             assert np.any(sed.lnu > 0)
 
+    def test_energy_balance_conserves_absorbed_luminosity(
+        self, dust_wavelengths, mock_emitter, mock_model, mock_emissions
+    ):
+        """Energy-balance dust emission must conserve absorbed energy.
+
+        The physical invariant "energy balance" mode is named for: the
+        dust-emitted bolometric luminosity should equal the energy
+        removed from the stellar continuum by attenuation, i.e.
+        intrinsic.bolometric_luminosity - attenuated.bolometric_luminosity.
+        The existing test_energy_balance_scaling only checks the result is
+        a positive, non-empty Sed; it does not check this quantitatively.
+        """
+        temperature = 20 * K
+        expected_ldust = (
+            mock_emissions["intrinsic"].bolometric_luminosity
+            - mock_emissions["attenuated"].bolometric_luminosity
+        )
+
+        generators = [
+            Blackbody(
+                temperature=temperature,
+                intrinsic="intrinsic",
+                attenuated="attenuated",
+            ),
+            Greybody(
+                temperature=temperature,
+                emissivity=1.5,
+                intrinsic="intrinsic",
+                attenuated="attenuated",
+            ),
+            Casey12(
+                temperature=temperature,
+                emissivity=2.0,
+                alpha=2.0,
+                intrinsic="intrinsic",
+                attenuated="attenuated",
+            ),
+        ]
+
+        for gen in generators:
+            sed = gen._generate_spectra(
+                lams=dust_wavelengths,
+                emitter=mock_emitter,
+                model=mock_model,
+                emissions=mock_emissions,
+                redshift=0.0,
+            )
+
+            assert np.isclose(
+                sed.bolometric_luminosity.to("erg/s").value,
+                expected_ldust.to("erg/s").value,
+                rtol=1e-6,
+            ), (
+                f"{gen.__class__.__name__} energy-balance dust emission "
+                f"({sed.bolometric_luminosity}) does not match the "
+                f"absorbed stellar luminosity ({expected_ldust})"
+            )
+
     def test_scaler_scaling(
         self, dust_wavelengths, mock_emitter, mock_model, mock_emissions
     ):

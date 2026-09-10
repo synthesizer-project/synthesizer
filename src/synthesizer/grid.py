@@ -44,6 +44,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import resolve_out_dtype
 from synthesizer.utils.util_funcs import as_contiguous, convert_array_dtype
 
 
@@ -174,8 +175,18 @@ class Grid:
         # Set up cache for stellar fraction
         self._stellar_frac = None
 
-        # Track the target floating-point dtype for lazy-loaded arrays
-        self._dtype = np.float64
+        # Track the target floating-point dtype for all loaded arrays. We
+        # resolve this before reading anything so HDF5 datasets are converted
+        # during the read itself, avoiding a float64 copy of the whole grid
+        # when a reduced precision is requested.
+        if use_precision is not None:
+            self._dtype = np.dtype(use_precision)
+            if self._dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
+                raise exceptions.InconsistentArguments(
+                    "use_precision must be either np.float32 or np.float64"
+                )
+        else:
+            self._dtype = np.dtype(np.float64)
 
         # Get the axes of the grid from the HDF5 file
         self.axes = []  # axes names
@@ -225,6 +236,29 @@ class Grid:
         # because we want to modify self
         if use_precision is not None:
             self.convert_precision(use_precision, inplace=True)
+
+    def _read_floats(self, dset):
+        """Read an HDF5 dataset, converting floats to the target dtype.
+
+        The conversion happens during the read itself (via h5py's astype)
+        so a float64 copy of the data is never materialised when a reduced
+        precision has been requested.
+
+        Args:
+            dset (h5py.Dataset):
+                The dataset to read.
+
+        Returns:
+            np.ndarray:
+                The dataset contents at the grid's target dtype (non-float
+                datasets are returned unchanged).
+        """
+        if (
+            np.issubdtype(dset.dtype, np.floating)
+            and dset.dtype != self._dtype
+        ):
+            return dset.astype(self._dtype)[...]
+        return dset[...]
 
     def _ensure_axis_data_contiguous(self):
         """Ensure stored axis arrays are contiguous."""
@@ -372,7 +406,7 @@ class Grid:
                     )
 
                 # Get the values
-                values = hf["axes"][axis][:]
+                values = self._read_floats(hf["axes"][axis])
 
                 # Set all the axis attributes as is (without accounting
                 # for any log10 conversions needed for extraction)
@@ -401,9 +435,9 @@ class Grid:
             if "log10_specific_ionising_luminosity" in hf.keys():
                 self.log10_specific_ionising_lum = {}
                 for ion in hf["log10_specific_ionising_luminosity"].keys():
-                    self.log10_specific_ionising_lum[ion] = hf[
-                        "log10_specific_ionising_luminosity"
-                    ][ion][:]
+                    self.log10_specific_ionising_lum[ion] = self._read_floats(
+                        hf["log10_specific_ionising_luminosity"][ion]
+                    )
 
     @property
     def stellar_fraction(self):
@@ -483,7 +517,7 @@ class Grid:
                 )
 
             # Read the wavelengths and attach the units stored on the file.
-            lams = hf[spectra_key + "/wavelength"][:]
+            lams = self._read_floats(hf[spectra_key + "/wavelength"])
             lam_units = hf[spectra_key + "/wavelength"].attrs.get("Units")
             if lam_units is None:
                 lam_units = angstrom
@@ -491,7 +525,9 @@ class Grid:
 
             # Get all our spectra
             for spectra_id in spectra_to_read:
-                self.spectra[spectra_id] = hf[spectra_key][spectra_id][:]
+                self.spectra[spectra_id] = self._read_floats(
+                    hf[spectra_key][spectra_id]
+                )
 
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
@@ -530,7 +566,7 @@ class Grid:
             )
 
             # Read the line wavelengths
-            lams = hf["lines"]["wavelength"][...]
+            lams = self._read_floats(hf["lines"]["wavelength"])
             lam_units = hf["lines"]["wavelength"].attrs.get("Units")
             self.line_lams = unyt_array(lams, lam_units).to(angstrom)
 
@@ -541,11 +577,11 @@ class Grid:
 
             # Read the nebular line luminosities and continuums
             self.line_lums["nebular"] = unyt_array(
-                hf["lines"]["luminosity"][...],
+                self._read_floats(hf["lines"]["luminosity"]),
                 lum_units,
             )
             self.line_conts["nebular"] = unyt_array(
-                hf["lines"]["nebular_continuum"][...],
+                self._read_floats(hf["lines"]["nebular_continuum"]),
                 cont_units,
             )
 
@@ -553,32 +589,32 @@ class Grid:
             # called by cloudy, this is the same as nebular in our
             # nomenclature - the line emissions from the birth cloud)
             self.line_lums["linecont"] = unyt_array(
-                hf["lines"]["luminosity"][...],
+                self._read_floats(hf["lines"]["luminosity"]),
                 lum_units,
             )
             self.line_conts["linecont"] = unyt_array(
-                np.zeros(self.line_lums["nebular"].shape),
+                np.zeros(self.line_lums["nebular"].shape, dtype=self._dtype),
                 cont_units,
             )
 
             # Read the nebular continuum luminosities and continuums
             self.line_lums["nebular_continuum"] = unyt_array(
-                np.zeros(self.line_lums["nebular"].shape),
+                np.zeros(self.line_lums["nebular"].shape, dtype=self._dtype),
                 lum_units,
             )
             self.line_conts["nebular_continuum"] = unyt_array(
-                hf["lines"]["nebular_continuum"][...],
+                self._read_floats(hf["lines"]["nebular_continuum"]),
                 cont_units,
             )
 
             # Read the transmitted line luminosities and continuums (the
             # emission transmitted through the birth cloud)
             self.line_lums["transmitted"] = unyt_array(
-                np.zeros(self.line_lums["nebular"].shape),
+                np.zeros(self.line_lums["nebular"].shape, dtype=self._dtype),
                 lum_units,
             )
             self.line_conts["transmitted"] = unyt_array(
-                hf["lines"]["transmitted"][...],
+                self._read_floats(hf["lines"]["transmitted"]),
                 cont_units,
             )
 
@@ -797,7 +833,7 @@ class Grid:
             )
 
             # Read the line wavelengths
-            lams = hf["lines"]["wavelength"][...]
+            lams = self._read_floats(hf["lines"]["wavelength"])
             lam_units = hf["lines"]["wavelength"].attrs.get("Units")
             lams = unyt_array(lams, lam_units).to(angstrom)
 
@@ -1986,7 +2022,13 @@ class Grid:
                 spectra_type=spectra_type,
             )
 
-    def _interpolate_grid_array(self, grid_data, coords, method="cic"):
+    def _interpolate_grid_array(
+        self,
+        grid_data,
+        coords,
+        method="cic",
+        out_dtype=None,
+    ):
         """Perform vectorized N-dimensional interpolation on a grid data array.
 
         Args:
@@ -1998,15 +2040,23 @@ class Grid:
             method (str):
                 The interpolation method, either "cic" (linear) or
                 "ngp" (nearest).
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned array.
 
         Returns:
             np.ndarray or unyt_array:
                 The interpolated values.
         """
+        out_dtype = resolve_out_dtype(out_dtype)
+
         # Extract units if the input is a unyt_array, and work on the
         # raw value array
         units = getattr(grid_data, "units", None)
         grid_val = getattr(grid_data, "value", grid_data)
+
+        # The grid data and its axes must share a single floating point
+        # dtype, so work at the grid's own precision throughout.
+        grid_dtype = self._dtype
 
         # Prepare grid axes coordinate arrays
         grid_axes_list = []
@@ -2018,16 +2068,17 @@ class Grid:
             else:
                 grid_axis = self._extract_axes_values[axis]
             grid_axes_list.append(
-                np.ascontiguousarray(grid_axis, dtype=np.float64)
+                np.ascontiguousarray(grid_axis, dtype=grid_dtype)
             )
         grid_axes_tuple = tuple(grid_axes_list)
 
         # Prepare target coordinate arrays where we want
-        # to evaluate/interpolate
+        # to evaluate/interpolate. These are independent of the grid dtype
+        # but must all share a single dtype with each other.
         target_coords_list = []
         for axis in self.axes:
             target_coords_list.append(
-                np.ascontiguousarray(coords[axis], dtype=np.float64)
+                np.ascontiguousarray(coords[axis], dtype=grid_dtype)
             )
         target_coords_tuple = tuple(target_coords_list)
 
@@ -2042,7 +2093,7 @@ class Grid:
         grid_shape = tuple(len(ax) for ax in grid_axes_list)
         grid_val_reshaped = grid_val.reshape(grid_shape + (n_extra,))
         grid_val_contiguous = np.ascontiguousarray(
-            grid_val_reshaped, dtype=np.float64
+            grid_val_reshaped, dtype=grid_dtype
         )
 
         # Call the C++ extension module
@@ -2055,6 +2106,7 @@ class Grid:
             n_extra,
             method,
             1,  # nthreads (1 by default, runs serial)
+            out_dtype,
             tuple(self.axes),  # property names
         )
 
@@ -2071,6 +2123,7 @@ class Grid:
         self,
         method="cic",
         spectra_type=None,
+        out_dtype=None,
         **kwargs,
     ):
         """Interpolate the grid at the specified axes values.
@@ -2080,6 +2133,8 @@ class Grid:
                 The interpolation method to use. Options are "cic" and "ngp".
             spectra_type (str):
                 The spectra type to extract. Default is None.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the interpolated outputs.
             **kwargs:
                 Coordinate values for each grid axis.
 
@@ -2096,6 +2151,8 @@ class Grid:
             raise exceptions.InconsistentParameter(
                 f"Interpolation method must be 'cic' or 'ngp', not {method}"
             )
+
+        out_dtype = resolve_out_dtype(out_dtype)
 
         if spectra_type is None:
             warn(
@@ -2196,7 +2253,10 @@ class Grid:
                 )
             spectra_grid = self.spectra[spectra_type]
             interp_spectra = self._interpolate_grid_array(
-                spectra_grid, flattened_coords, method=method
+                spectra_grid,
+                flattened_coords,
+                method=method,
+                out_dtype=out_dtype,
             )
             interp_spectra_reshaped = interp_spectra.reshape(
                 coord_shape + (self.nlam,)
@@ -2211,10 +2271,16 @@ class Grid:
                 cont_grid = self.line_conts[spectra_type]
 
                 interp_lum = self._interpolate_grid_array(
-                    lum_grid, flattened_coords, method=method
+                    lum_grid,
+                    flattened_coords,
+                    method=method,
+                    out_dtype=out_dtype,
                 )
                 interp_cont = self._interpolate_grid_array(
-                    cont_grid, flattened_coords, method=method
+                    cont_grid,
+                    flattened_coords,
+                    method=method,
+                    out_dtype=out_dtype,
                 )
 
                 line_lum = interp_lum.reshape(coord_shape + (self.nlines,))
@@ -2248,8 +2314,12 @@ class Grid:
                     if self.line_lams is not None
                     else unyt_array([], "angstrom")
                 )
-                line_lum = np.zeros(coord_shape + (nlines,)) * (erg / s)
-                line_cont = np.zeros(coord_shape + (nlines,)) * (erg / s / Hz)
+                line_lum = np.zeros(
+                    coord_shape + (nlines,), dtype=out_dtype
+                ) * (erg / s)
+                line_cont = np.zeros(
+                    coord_shape + (nlines,), dtype=out_dtype
+                ) * (erg / s / Hz)
                 results["lines"] = LineCollection(
                     line_ids=line_ids,
                     lam=lam,
@@ -2302,7 +2372,10 @@ class Grid:
 
                             # Interpolate dataset
                             interp_ds = self._interpolate_grid_array(
-                                grid_data, flattened_coords, method=method
+                                grid_data,
+                                flattened_coords,
+                                method=method,
+                                out_dtype=out_dtype,
                             )
                             extra_shape = ds_shape[len(grid_shape) :]
                             interp_ds_reshaped = interp_ds.reshape(

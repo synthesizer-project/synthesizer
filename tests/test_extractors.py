@@ -193,6 +193,7 @@ def test_integrated_particle_empty_case(test_grid, nebular_emission_model):
             "cic",
             1,
             False,
+            np.float32,
         )
 
         # Check that warn was called with a message about no particles
@@ -204,6 +205,7 @@ def test_integrated_particle_empty_case(test_grid, nebular_emission_model):
         assert np.array_equal(
             result.lnu, np.zeros(test_grid.nlam) * erg / s / Hz
         )
+        assert result.lnu.dtype == np.float32
 
 
 def test_integrated_particle_masked_empty_case(
@@ -229,6 +231,7 @@ def test_integrated_particle_masked_empty_case(
             "cic",
             1,
             False,
+            np.float32,
         )
 
         # Check that warn was called with a message about filtered particles
@@ -240,6 +243,7 @@ def test_integrated_particle_masked_empty_case(
         assert np.array_equal(
             result.lnu, np.zeros(test_grid.nlam) * erg / s / Hz
         )
+        assert result.lnu.dtype == np.float32
 
 
 @patch(

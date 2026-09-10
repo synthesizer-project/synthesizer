@@ -8,13 +8,12 @@
  * When compiled into another extension, PyInit_weights is dead code.
  *****************************************************************************/
 /* C includes */
+#include <array>
 #include <math.h>
+#include <new>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <array>
-#include <new>
 #include <vector>
 
 /* Python includes */
@@ -23,6 +22,7 @@
 /* Local includes */
 #include "cpp_to_python.h"
 #include "index_utils.h"
+#include "python_to_cpp.h"
 #include "timers.h"
 #ifdef ATOMIC_TIMING
 #include "timers_init.h"
@@ -42,12 +42,18 @@
  * weight across 2^ndim neighboring grid cells based on its fractional
  * distance along each axis.
  *
+ * Accumulation always happens in double precision so reduced precision
+ * inputs/outputs don't degrade the summation over many particles.
+ *
+ * @tparam PartReal The floating-point type of the particle arrays.
+ * @tparam GridReal The floating-point type of the grid axis arrays.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A class containing the particle properties.
- * @param out: The output array. Must have been allocated to grid size.
+ * @param out_arr: The double precision accumulation buffer (grid sized).
  */
+template <typename PartReal, typename GridReal>
 static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
-                                   void *out) {
+                                   double *out_arr) {
   /* Unpack the grid properties. */
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   const int ndim = grid_props->ndim;
@@ -79,9 +85,6 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
     }
   }
 
-  /* Cast the output buffer to a double array. */
-  double *out_arr = static_cast<double *>(out);
-
   /* Loop over particles. */
   for (int p = 0; p < parts->npart; ++p) {
     /* Skip if this particle is masked. */
@@ -90,11 +93,13 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
     }
 
     /* Get this particle's weight and base cell info. */
-    const double weight = parts->get_weight_at(p);
+    const double weight =
+        static_cast<double>(parts->get_weight_at<PartReal>(p));
 
     std::array<int, MAX_GRID_NDIM> part_idx;
-    std::array<double, MAX_GRID_NDIM> axis_frac;
-    get_part_ind_frac_cic(part_idx, axis_frac, grid_props, parts, p);
+    std::array<GridReal, MAX_GRID_NDIM> axis_frac;
+    get_part_ind_frac_cic<PartReal, GridReal>(part_idx, axis_frac, grid_props,
+                                              parts, p);
 
     /* Compute linear index of the “low” corner once */
     const int base_lin = get_flat_index(part_idx, dims.data(), ndim);
@@ -104,17 +109,18 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
       const auto &sc = subcells[ic];
 
       /* Compute the CIC fraction for this corner */
-      double frac = 1.0;
+      GridReal frac = static_cast<GridReal>(1);
       for (int d = 0; d < ndim; ++d) {
-        frac *= sc.offs[d] ? axis_frac[d] : (1.0 - axis_frac[d]);
+        frac *= sc.offs[d] ? axis_frac[d]
+                           : (static_cast<GridReal>(1) - axis_frac[d]);
       }
-      if (frac == 0.0) {
+      if (frac == static_cast<GridReal>(0)) {
         continue;
       }
 
       /* Final flat index = base + precomputed offset */
       const int flat_ind = base_lin + sc.linoff;
-      out_arr[flat_ind] += frac * weight;
+      out_arr[flat_ind] += static_cast<double>(frac) * weight;
     }
   }
 }
@@ -128,19 +134,18 @@ static void weight_loop_cic_serial(GridProps *grid_props, Particles *parts,
  * Each thread accumulates weights into a private local buffer, which is added
  * into the global output array at the end of the thread’s execution.
  *
+ * @tparam PartReal The floating-point type of the particle arrays.
+ * @tparam GridReal The floating-point type of the grid axis arrays.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A class containing the particle properties.
- * @param out_size: The size of the output array. (This will be allocated
- * within this function.)
- * @param out: The output array.
+ * @param out_size: The size of the output array.
+ * @param out_arr: The double precision accumulation buffer (grid sized).
  * @param nthreads: The number of threads to use.
  */
 #ifdef WITH_OPENMP
+template <typename PartReal, typename GridReal>
 static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
-                                int out_size, void *out, int nthreads) {
-
-  /* Convert out. */
-  double *out_arr = static_cast<double *>(out);
+                                int out_size, double *out_arr, int nthreads) {
 
   /* Unpack the grid properties. */
   const std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
@@ -189,12 +194,14 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
       }
 
       /* Get this particle's weight. */
-      const double weight = parts->get_weight_at(p);
+      const double weight =
+          static_cast<double>(parts->get_weight_at<PartReal>(p));
 
       /* Setup the base cell indices and axis fractions. */
       std::array<int, MAX_GRID_NDIM> part_indices;
-      std::array<double, MAX_GRID_NDIM> axis_fracs;
-      get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
+      std::array<GridReal, MAX_GRID_NDIM> axis_fracs;
+      get_part_ind_frac_cic<PartReal, GridReal>(part_indices, axis_fracs,
+                                                grid_props, parts, p);
 
       /* Compute base linear index for the “low” corner once */
       const int base_lin = get_flat_index(part_indices, dims.data(), ndim);
@@ -204,17 +211,18 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
         const auto &sc = subcells[ic];
 
         /* Compute the CIC fraction for this corner */
-        double frac = 1.0;
+        GridReal frac = static_cast<GridReal>(1);
         for (int d = 0; d < ndim; d++) {
-          frac *= sc.offs[d] ? axis_fracs[d] : (1.0 - axis_fracs[d]);
+          frac *= sc.offs[d] ? axis_fracs[d]
+                             : (static_cast<GridReal>(1) - axis_fracs[d]);
         }
-        if (frac == 0.0) {
+        if (frac == static_cast<GridReal>(0)) {
           continue;
         }
 
         /* Accumulate into the thread-local buffer using precomputed offset */
         const int flat_ind = base_lin + sc.linoff;
-        local_out_arr[flat_ind] += frac * weight;
+        local_out_arr[flat_ind] += static_cast<double>(frac) * weight;
       }
     }
 
@@ -236,17 +244,27 @@ static void weight_loop_cic_omp(GridProps *grid_props, Particles *parts,
  * This is a wrapper which calls the correct function based on the number of
  * threads requested and whether OpenMP is available.
  *
+ * All accumulation happens in a double precision scratch buffer which is
+ * cast into the output buffer once at the end, so reduced precision outputs
+ * don't suffer float32 accumulation error over many particles.
+ *
+ * @tparam PartReal The floating-point type of the particle arrays.
+ * @tparam GridReal The floating-point type of the grid axis arrays.
+ * @tparam OutT The floating-point type stored in the output buffer.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
- * @param out_size: The size of the output array. (This will be allocated
- * within this function.)
+ * @param out_size: The size of the output array.
  * @param out: The output array.
  * @param nthreads: The number of threads to use.
  */
+template <typename PartReal, typename GridReal, typename OutT>
 void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
-                     void *out, const int nthreads) {
+                     OutT *out, const int nthreads) {
 
   tic("weight_loop_cic");
+
+  /* Accumulate in double regardless of the requested output precision. */
+  std::vector<double> accum(out_size, 0.0);
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -254,11 +272,13 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    weight_loop_cic_omp(grid_props, parts, out_size, out, nthreads);
+    weight_loop_cic_omp<PartReal, GridReal>(grid_props, parts, out_size,
+                                            accum.data(), nthreads);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    weight_loop_cic_serial(grid_props, parts, out);
+    weight_loop_cic_serial<PartReal, GridReal>(grid_props, parts,
+                                               accum.data());
   }
 
 #else
@@ -266,9 +286,15 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  weight_loop_cic_serial(grid_props, parts, out);
+  weight_loop_cic_serial<PartReal, GridReal>(grid_props, parts, accum.data());
 
 #endif
+
+  /* Fold the double precision accumulation into the output buffer. */
+  for (int i = 0; i < out_size; i++) {
+    out[i] += static_cast<OutT>(accum[i]);
+  }
+
   toc("weight_loop_cic");
 }
 
@@ -278,19 +304,19 @@ void weight_loop_cic(GridProps *grid_props, Particles *parts, int out_size,
  *
  * This is the serial version of the function.
  *
+ * @tparam PartReal The floating-point type of the particle arrays.
+ * @tparam GridReal The floating-point type of the grid axis arrays.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
- * @param out: The output array.
+ * @param out_arr: The double precision accumulation buffer (grid sized).
  */
+template <typename PartReal, typename GridReal>
 static void weight_loop_ngp_serial(GridProps *grid_props, Particles *parts,
-                                   void *out) {
+                                   double *out_arr) {
 
   /* Unpack the grid properties. */
   std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
   const int ndim = grid_props->ndim;
-
-  /* Convert out. */
-  double *out_arr = static_cast<double *>(out);
 
   /* Loop over particles. */
   for (int p = 0; p < parts->npart; p++) {
@@ -301,13 +327,14 @@ static void weight_loop_ngp_serial(GridProps *grid_props, Particles *parts,
     }
 
     /* Get this particle's weight. */
-    const double weight = parts->get_weight_at(p);
+    const double weight =
+        static_cast<double>(parts->get_weight_at<PartReal>(p));
 
     /* Setup the index array. */
     std::array<int, MAX_GRID_NDIM> part_indices;
 
     /* Get the grid indices for the particle. */
-    get_part_inds_ngp(part_indices, grid_props, parts, p);
+    get_part_inds_ngp<PartReal, GridReal>(part_indices, grid_props, parts, p);
 
     /* Unravel the indices. */
     int flat_ind = get_flat_index(part_indices, dims.data(), ndim);
@@ -326,19 +353,18 @@ static void weight_loop_ngp_serial(GridProps *grid_props, Particles *parts,
  * Each thread accumulates weights into a private local buffer, which is added
  * into the global output array at the end of the thread’s execution.
  *
+ * @tparam PartReal The floating-point type of the particle arrays.
+ * @tparam GridReal The floating-point type of the grid axis arrays.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
- * @param out_size: The size of the output array. (This will be allocated
- *                  within this function.)
- * @param out: The output array.
+ * @param out_size: The size of the output array.
+ * @param out_arr: The double precision accumulation buffer (grid sized).
  * @param nthreads: The number of threads to use.
  */
 #ifdef WITH_OPENMP
+template <typename PartReal, typename GridReal>
 static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
-                                int out_size, void *out, int nthreads) {
-
-  /* Convert out. */
-  double *out_arr = static_cast<double *>(out);
+                                int out_size, double *out_arr, int nthreads) {
 
   /* Unpack the grid properties. */
   std::array<int, MAX_GRID_NDIM> dims = grid_props->dims;
@@ -373,13 +399,15 @@ static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
       }
 
       /* Get this particle's weight. */
-      const double weight = parts->get_weight_at(p);
+      const double weight =
+          static_cast<double>(parts->get_weight_at<PartReal>(p));
 
       /* Setup the index array. */
       std::array<int, MAX_GRID_NDIM> part_indices;
 
       /* Get the grid indices for the particle. */
-      get_part_inds_ngp(part_indices, grid_props, parts, p);
+      get_part_inds_ngp<PartReal, GridReal>(part_indices, grid_props, parts,
+                                            p);
 
       /* Unravel the indices. */
       int flat_ind = get_flat_index(part_indices, dims.data(), ndim);
@@ -406,17 +434,27 @@ static void weight_loop_ngp_omp(GridProps *grid_props, Particles *parts,
  * This is a wrapper which calls the correct function based on the number of
  * threads requested and whether OpenMP is available.
  *
+ * All accumulation happens in a double precision scratch buffer which is
+ * cast into the output buffer once at the end, so reduced precision outputs
+ * don't suffer float32 accumulation error over many particles.
+ *
+ * @tparam PartReal The floating-point type of the particle arrays.
+ * @tparam GridReal The floating-point type of the grid axis arrays.
+ * @tparam OutT The floating-point type stored in the output buffer.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param parts: A struct containing the particle properties.
- * @param out_size: The size of the output array. (This will be allocated
- * within this function.)
+ * @param out_size: The size of the output array.
  * @param out: The output array.
  * @param nthreads: The number of threads to use.
  */
+template <typename PartReal, typename GridReal, typename OutT>
 void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
-                     void *out, const int nthreads) {
+                     OutT *out, const int nthreads) {
 
   tic("weight_loop_ngp");
+
+  /* Accumulate in double regardless of the requested output precision. */
+  std::vector<double> accum(out_size, 0.0);
 
   /* Call the correct function for the configuration/number of threads. */
 
@@ -424,11 +462,13 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
 
   /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-    weight_loop_ngp_omp(grid_props, parts, out_size, out, nthreads);
+    weight_loop_ngp_omp<PartReal, GridReal>(grid_props, parts, out_size,
+                                            accum.data(), nthreads);
   }
   /* Otherwise there's no point paying the OpenMP overhead. */
   else {
-    weight_loop_ngp_serial(grid_props, parts, out);
+    weight_loop_ngp_serial<PartReal, GridReal>(grid_props, parts,
+                                               accum.data());
   }
 
 #else
@@ -436,143 +476,34 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
   (void)nthreads;
 
   /* We don't have OpenMP, just call the serial version. */
-  weight_loop_ngp_serial(grid_props, parts, out);
+  weight_loop_ngp_serial<PartReal, GridReal>(grid_props, parts, accum.data());
 
 #endif
+
+  /* Fold the double precision accumulation into the output buffer. */
+  for (int i = 0; i < out_size; i++) {
+    out[i] += static_cast<OutT>(accum[i]);
+  }
+
   toc("weight_loop_ngp");
 }
 
-/**
- * @brief Compute the weight in each grid cell based on the particles.
- *
- * @param grid_props: The Grid object.
- * @param parts: The object containing the particle properties.
- * @param method: The method to use for assigning weights.
- * @param nthreads: The number of threads to use.
- *
- * @return The weights in each grid cell.
- */
-PyObject *compute_grid_weights(PyObject *self, PyObject *args) {
+/* Explicit instantiations to satisfy multi-extension linking. All
+ * (PartReal, GridReal, OutT) combinations are required by the dtype
+ * dispatchers in sfzh and integrated_spectra. */
+#define INSTANTIATE_WEIGHT_LOOPS(PartReal, GridReal, OutT) \
+  template void weight_loop_cic<PartReal, GridReal, OutT>( \
+      GridProps *, Particles *, int, OutT *, const int);   \
+  template void weight_loop_ngp<PartReal, GridReal, OutT>( \
+      GridProps *, Particles *, int, OutT *, const int);
 
-  tic("compute_grid_weights");
-  tic("compute_grid_weights.extract_python_data");
+INSTANTIATE_WEIGHT_LOOPS(float, float, float)
+INSTANTIATE_WEIGHT_LOOPS(float, float, double)
+INSTANTIATE_WEIGHT_LOOPS(float, double, float)
+INSTANTIATE_WEIGHT_LOOPS(float, double, double)
+INSTANTIATE_WEIGHT_LOOPS(double, float, float)
+INSTANTIATE_WEIGHT_LOOPS(double, float, double)
+INSTANTIATE_WEIGHT_LOOPS(double, double, float)
+INSTANTIATE_WEIGHT_LOOPS(double, double, double)
 
-  /* We don't need the self argument but it has to be there. Tell the compiler
-   * we don't care. */
-  (void)self;
-
-  int ndim, npart, nthreads;
-  PyObject *grid_tuple, *part_tuple;
-  PyObject *prop_names = NULL;
-  PyArrayObject *np_part_mass, *np_ndims;
-  char *method;
-
-  if (!PyArg_ParseTuple(args, "OOOOiisi|O", &grid_tuple, &part_tuple,
-                        &np_part_mass, &np_ndims, &ndim, &npart, &method,
-                        &nthreads, &prop_names))
-    return nullptr;
-
-  /* Extract the grid struct. */
-  GridProps *grid_props =
-      new GridProps(/*np_grid_spectra*/ nullptr, grid_tuple,
-                    /*np_lam*/ nullptr, /*np_lam_mask*/ nullptr, 1,
-                    /*np_grid_weights*/ NULL, prop_names);
-
-  RETURN_IF_PYERR();
-
-  /* Create the object that holds the particle properties. */
-  Particles *part_props =
-      new Particles(np_part_mass, /*np_velocities*/ nullptr,
-                    /*np_mask*/ nullptr, part_tuple, prop_names, npart);
-
-  RETURN_IF_PYERR();
-
-  /* Allocate the sfzh array to output. */
-  double *grid_weights = new (std::nothrow) double[grid_props->size]();
-  /* If allocation failed, clean up and return nullptr to propagate the
-   * MemoryError. */
-  if (grid_weights == nullptr) {
-    PyErr_SetString(PyExc_MemoryError, "Could not allocate memory for sfzh.");
-    delete part_props;
-    delete grid_props;
-    return nullptr;
-  }
-
-  toc("compute_grid_weights.extract_python_data");
-
-  /* With everything set up we can compute the weights for each particle using
-   * the requested method. */
-  if (strcmp(method, "cic") == 0) {
-    weight_loop_cic(grid_props, part_props, grid_props->size, grid_weights,
-                    nthreads);
-  } else if (strcmp(method, "ngp") == 0) {
-    weight_loop_ngp(grid_props, part_props, grid_props->size, grid_weights,
-                    nthreads);
-  } else {
-    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method.");
-    /* Clean up all allocated memory before returning nullptr to propagate the
-     * ValueError. */
-    delete part_props;
-    delete grid_props;
-    delete[] grid_weights;
-    return nullptr;
-  }
-
-  /* Check we got the output. (Any error messages will already be set) */
-  if (grid_weights == nullptr) {
-    return nullptr;
-  }
-
-  /* Reconstruct the python array to return. */
-  std::array<npy_intp, MAX_GRID_NDIM> np_dims;
-  for (int idim = 0; idim < grid_props->ndim; idim++) {
-    np_dims[idim] = grid_props->dims[idim];
-  }
-
-  PyArrayObject *out_weights =
-      wrap_array_to_numpy(grid_props->ndim, np_dims.data(), grid_weights);
-
-  /* Clean up memory! */
-  delete part_props;
-  delete grid_props;
-
-  toc("compute_grid_weights");
-
-  return Py_BuildValue("N", out_weights);
-}
-
-/* Below is all the gubbins needed to make the module importable in Python. */
-static PyMethodDef WeightMethods[] = {
-    {"compute_grid_weights", (PyCFunction)compute_grid_weights, METH_VARARGS,
-     "Method for calculating the weights on a grid."},
-    {nullptr, nullptr, 0, nullptr}};
-
-/* Make this importable. */
-static struct PyModuleDef moduledef = {
-    PyModuleDef_HEAD_INIT,
-    "compute_weights",                                    /* m_name */
-    "A module to calculating particle weigths on a grid", /* m_doc */
-    -1,                                                   /* m_size */
-    WeightMethods,                                        /* m_methods */
-    nullptr,                                              /* m_reload */
-    nullptr,                                              /* m_traverse */
-    nullptr,                                              /* m_clear */
-    nullptr,                                              /* m_free */
-};
-
-PyMODINIT_FUNC PyInit_weights(void) {
-  PyObject *m = PyModule_Create(&moduledef);
-  if (m == NULL) return NULL;
-  if (numpy_import() < 0) {
-    PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
-    Py_DECREF(m);
-    return NULL;
-  }
-#ifdef ATOMIC_TIMING
-  if (import_toc_capsule() < 0) {
-    Py_DECREF(m);
-    return NULL;
-  }
-#endif
-  return m;
-}
+#undef INSTANTIATE_WEIGHT_LOOPS

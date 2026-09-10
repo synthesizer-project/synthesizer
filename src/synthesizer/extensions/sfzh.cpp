@@ -3,19 +3,18 @@
  * Calculates weights on an arbitrary dimensional grid given the mass.
  *****************************************************************************/
 /* C includes */
+#include <array>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include <array>
-
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include <Python.h>
-
 #include "numpy_init.h"
+
+#include <Python.h>
 
 /* Local includes */
 #include "cpp_to_python.h"
@@ -23,6 +22,7 @@
 #include "macros.h"
 #include "part_props.h"
 #include "property_funcs.h"
+#include "python_to_cpp.h"
 #include "timers.h"
 #ifdef ATOMIC_TIMING
 #include "timers_init.h"
@@ -42,6 +42,7 @@
  * @param ndim: The number of grid axes.
  * @param npart: The number of particles.
  * @param nlam: The number of wavelength elements.
+ * @param out_dtype: Requested floating-point dtype for the returned SFZH.
  */
 PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
@@ -54,13 +55,15 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   int ndim, npart, nthreads;
   PyObject *grid_tuple, *part_tuple;
   PyObject *prop_names = NULL;
+  PyObject *out_dtype = Py_None;
   PyArrayObject *np_part_mass, *np_ndims;
   PyArrayObject *np_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOiisiO|O", &grid_tuple, &part_tuple,
+  /* Parse the Python-level inputs. */
+  if (!PyArg_ParseTuple(args, "OOOOiisiO|OO", &grid_tuple, &part_tuple,
                         &np_part_mass, &np_ndims, &ndim, &npart, &method,
-                        &nthreads, &np_mask, &prop_names))
+                        &nthreads, &np_mask, &prop_names, &out_dtype))
     return NULL;
 
   /* Extract the grid struct. */
@@ -70,24 +73,67 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
                     /*np_grid_weights*/ NULL, prop_names);
   RETURN_IF_PYERR();
 
+  /* Extract the particle struct. */
   Particles *parts = new Particles(np_part_mass, /*np_velocities*/ NULL,
                                    np_mask, part_tuple, prop_names, npart);
   RETURN_IF_PYERR();
 
-  /* Get the grid weights we'll work on. */
-  double *sfzh = grid_props->get_grid_weights();
-  RETURN_IF_PYERR();
+  /* Resolve the input dtypes. Grid and particle arrays may use different
+   * precisions; each is read at its own width. A typenum of -1 means the
+   * object holds no float arrays at all (unreachable in practice); default
+   * such cases to float64 so the dispatch below never misreads a buffer. */
+  int grid_typenum = grid_props->get_float_typenum();
+  int part_typenum = parts->get_float_typenum();
+  if (grid_typenum == -1) {
+    grid_typenum = NPY_FLOAT64;
+  }
+  if (part_typenum == -1) {
+    part_typenum = NPY_FLOAT64;
+  }
 
-  /* With everything set up we can compute the weights for each particle using
-   * the requested method. */
-  if (strcmp(method, "cic") == 0) {
-    weight_loop_cic(grid_props, parts, grid_props->size, sfzh, nthreads);
-  } else if (strcmp(method, "ngp") == 0) {
-    weight_loop_ngp(grid_props, parts, grid_props->size, sfzh, nthreads);
-  } else {
-    PyErr_SetString(PyExc_ValueError, "Unknown grid assignment method (%s).");
+  /* Default the output to the grid precision family. */
+  int output_typenum = grid_typenum;
+  if (out_dtype != Py_None) {
+    output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
+    if (output_typenum < 0) {
+      delete parts;
+      delete grid_props;
+      return NULL;
+    }
+  }
+
+  /* Check the method is valid before doing any work. */
+  const bool is_cic = strcmp(method, "cic") == 0;
+  if (!is_cic && strcmp(method, "ngp") != 0) {
+    PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",
+                 method);
+    delete parts;
+    delete grid_props;
     return NULL;
   }
+
+  /* Allocate the SFZH array in the requested output precision and compute
+   * the weights for each particle using the requested method. */
+  dispatch_float(part_typenum, [&](auto p) {
+    dispatch_float(grid_typenum, [&](auto g) {
+      dispatch_float(output_typenum, [&](auto o) {
+        using PartReal = decltype(p);
+        using GridReal = decltype(g);
+        using OutT = decltype(o);
+        OutT *sfzh = grid_props->get_grid_weights<OutT>();
+        if (sfzh == NULL || PyErr_Occurred()) {
+          return;
+        }
+        if (is_cic) {
+          weight_loop_cic<PartReal, GridReal, OutT>(
+              grid_props, parts, grid_props->size, sfzh, nthreads);
+        } else {
+          weight_loop_ngp<PartReal, GridReal, OutT>(
+              grid_props, parts, grid_props->size, sfzh, nthreads);
+        }
+      });
+    });
+  });
   RETURN_IF_PYERR();
 
   /* Extract the grid weights we'll write out. */

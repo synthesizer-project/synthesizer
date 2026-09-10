@@ -2,17 +2,44 @@
 
 import numpy as np
 from astropy.cosmology import Planck18
+from synthesizer.extensions.reductions import reduce_particle_spectra
 from unyt import Hz, angstrom, cm, erg, nJy, pc, s
 
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emission_models.attenuation import PowerLaw
-from synthesizer.emissions.sed import Sed
+from synthesizer.emissions import Sed
+from synthesizer.emissions.sed import Sed, integrate_particle_sed
 
 
 def test_sed_empty(empty_sed):
     """Test the empty SED object."""
     all_zeros = not np.any(empty_sed.lnu)
     assert all_zeros
+
+
+def test_sed_init_frequency_matches_wavelength_dtype_family():
+    """The frequency computed in __init__ should track lam's dtype.
+
+    Regression test: dividing by the ``c`` unyt physical constant always
+    upcasts the result to float64 regardless of the dividend's dtype (a
+    unyt quirk, not something specific to Sed), so a naive
+    ``self.nu = c / self.lam`` in Sed.__init__ silently gave every Sed
+    built from a float32 grid a float64 frequency array -- breaking the
+    dtype-family invariant enforced everywhere else in the C extensions.
+    """
+    lam32 = np.linspace(1e3, 1e4, 32).astype(np.float32) * angstrom
+    sed32 = Sed(lam32, np.ones(32, dtype=np.float32) * erg / s / Hz)
+    assert sed32._lam.dtype == np.float32
+    assert sed32._nu.dtype == np.float32
+    np.testing.assert_allclose(
+        sed32._nu,
+        (299792458.0e10 / sed32._lam.astype(np.float64)),
+        rtol=1e-6,
+    )
+
+    lam64 = np.linspace(1e3, 1e4, 32).astype(np.float64) * angstrom
+    sed64 = Sed(lam64, np.ones(32, dtype=np.float64) * erg / s / Hz)
+    assert sed64._nu.dtype == np.float64
 
 
 def test_scale_threaded_row_broadcast_matches_numpy():
@@ -166,3 +193,89 @@ def test_get_fnu_applies_igm_with_observer_frame_wavelengths():
     assert igm.last_z == z
     np.testing.assert_allclose(igm.last_lam_obs.value, sed._obslam)
     np.testing.assert_allclose(fnu.value, 0.5 * baseline.value)
+
+
+def test_reduce_particle_spectra_supports_float32_inputs_and_outputs():
+    """Particle spectra reduction should preserve float32 output requests."""
+    part_spectra = np.arange(15, dtype=np.float32).reshape(3, 5)
+
+    reduced = reduce_particle_spectra(part_spectra, 1, np.float32)
+
+    assert reduced.dtype == np.float32
+    np.testing.assert_allclose(reduced, np.sum(part_spectra, axis=0))
+
+
+def test_reduce_particle_spectra_supports_float64_output_from_float32():
+    """Particle spectra reduction should allow widening the output dtype."""
+    part_spectra = np.arange(15, dtype=np.float32).reshape(3, 5)
+
+    reduced = reduce_particle_spectra(part_spectra, 1, np.float64)
+
+    assert reduced.dtype == np.float64
+    np.testing.assert_allclose(
+        reduced, np.sum(part_spectra.astype(np.float64), axis=0)
+    )
+
+
+def test_integrate_particle_sed_preserves_input_precision():
+    """The Sed reduction helper should keep the luminosity dtype family."""
+    lam = np.linspace(1000.0, 2000.0, 5) * angstrom
+    lnu = (np.arange(15, dtype=np.float32).reshape(3, 5) + 1.0) * erg / s / Hz
+
+    reduced = integrate_particle_sed(Sed(lam=lam, lnu=lnu), nthreads=1)
+
+    assert reduced._lnu.dtype == np.float32
+    np.testing.assert_allclose(reduced._lnu, np.sum(lnu.value, axis=0))
+
+
+def test_get_fnu_inherits_lnu_dtype():
+    """Observed fluxes should inherit the luminosity dtype by default."""
+    lam = np.linspace(1e3, 1e4, 64) * angstrom
+    sed32 = Sed(lam, np.ones(64, dtype=np.float32) * erg / s / Hz)
+    sed32.get_fnu(Planck18, z=1.0)
+    assert sed32._fnu.dtype == np.float32
+
+    sed64 = Sed(lam, np.ones(64, dtype=np.float64) * erg / s / Hz)
+    sed64.get_fnu(Planck18, z=1.0)
+    assert sed64._fnu.dtype == np.float64
+
+
+def test_get_fnu_out_dtype_overrides_lnu_dtype():
+    """An explicit out_dtype should control the flux dtype."""
+    lam = np.linspace(1e3, 1e4, 64) * angstrom
+    sed = Sed(lam, np.ones(64, dtype=np.float64) * erg / s / Hz)
+    sed.get_fnu(Planck18, z=1.0, out_dtype=np.float32)
+    assert sed._fnu.dtype == np.float32
+
+    # And at redshift zero (the get_fnu0 path)
+    sed0 = Sed(lam, np.ones(64, dtype=np.float64) * erg / s / Hz)
+    sed0.get_fnu(Planck18, z=0.0, out_dtype=np.float32)
+    assert sed0._fnu.dtype == np.float32
+
+
+def test_sed_cast():
+    """Sed.cast should cast lnu and fnu in place."""
+    lam = np.linspace(1e3, 1e4, 64) * angstrom
+    sed = Sed(lam, np.ones(64, dtype=np.float64) * erg / s / Hz)
+    sed.get_fnu(Planck18, z=1.0)
+    sed.cast(np.float32)
+    assert sed._lnu.dtype == np.float32
+    assert sed._fnu.dtype == np.float32
+
+
+def test_ionising_photon_production_rate_multidimensional():
+    """The ionising rate must handle multi-spectra Seds.
+
+    Boolean masking the final axis of a 2D array yields a Fortran-ordered
+    result; this is a regression test for that reaching the C extension.
+    """
+    lam = np.logspace(2, 5, 500) * angstrom
+    sed = Sed(lam, np.ones((4, 500)) * erg / s / Hz)
+    rates = sed.calculate_ionising_photon_production_rate()
+    assert rates.shape == (4,)
+    assert np.all(rates.value > 0)
+
+    # And the 1D result should match a single row of the 2D result
+    sed1d = Sed(lam, np.ones(500) * erg / s / Hz)
+    rate1d = sed1d.calculate_ionising_photon_production_rate()
+    assert np.isclose(rates[0].value, rate1d.value)

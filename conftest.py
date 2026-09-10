@@ -44,6 +44,24 @@ from synthesizer.particle import BlackHoles, Galaxy, Gas, Stars
 from synthesizer.photometry import PhotometryCollection
 from synthesizer.pipeline import Pipeline
 
+
+def pytest_configure(config):
+    """Use collision-free IPC sockets for parallel notebook kernels."""
+    if config.getoption("nbmake", default=False) and hasattr(
+        config, "workerinput"
+    ):
+        import os
+
+        from jupyter_client.manager import AsyncKernelManager, KernelManager
+
+        def _worker_ipc_path(_):
+            return f"/tmp/synthesizer-{os.getpid()}-kernel-ipc"
+
+        for manager in (KernelManager, AsyncKernelManager):
+            manager.transport.default_value = "ipc"
+            manager._ip_default = _worker_ipc_path
+
+
 # ============================= DUST GENERATORS ===============================
 
 

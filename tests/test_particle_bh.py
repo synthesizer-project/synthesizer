@@ -1,5 +1,7 @@
 """Test suite for particle based black holes."""
 
+from unittest.mock import MagicMock
+
 import numpy as np
 import pytest
 from unyt import Msun, s, unyt_array
@@ -7,6 +9,24 @@ from unyt import Msun, s, unyt_array
 from synthesizer import exceptions
 from synthesizer.particle.blackholes import BlackHoles
 from synthesizer.utils import scalar_to_array
+
+
+def test_get_spectra_defaults_to_global_out_dtype(particle_black_hole):
+    """get_spectra should defer to the global default output dtype."""
+    from synthesizer.utils.precision import resolve_out_dtype
+
+    emission_model = MagicMock()
+    emission_model.per_particle = False
+    emission_model.label = "mock"
+    emission_model._get_spectra.return_value = ({"mock": MagicMock()}, {})
+
+    particle_black_hole.get_spectra(emission_model)
+
+    # The out_dtype kwarg passes through unresolved (None) and resolves to
+    # the global default (float64 unless changed) at the point of use.
+    passed = emission_model._get_spectra.call_args.kwargs["out_dtype"]
+    assert passed is None
+    assert resolve_out_dtype(passed) == np.float64
 
 
 class TestBlackHolesInit:

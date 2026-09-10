@@ -221,6 +221,27 @@ class TestGetParamParameterFunction:
         result = get_param("scaled", model, None, emitter)
         assert result == 300.0
 
+    def test_get_param_parameter_function_preserves_dependency_units(self):
+        """Test preserve_units flows into ParameterFunction dependencies."""
+
+        def identity(test_unyt):
+            return test_unyt
+
+        model = MockModel()
+        model.fixed_parameters["test_unyt"] = unyt.unyt_array(
+            [1.0, 2.0, 3.0], "Myr"
+        )
+        model.fixed_parameters["computed"] = ParameterFunction(
+            identity, "computed", ["test_unyt"]
+        )
+        emitter = MockEmitter()
+
+        result = get_param(
+            "computed", model, None, emitter, preserve_units=True
+        )
+        assert hasattr(result, "units")
+        assert str(result.units) == "Myr"
+
 
 class TestGetParamLogged:
     """Test log10 parameter handling in get_param."""
@@ -352,24 +373,24 @@ class TestGetParamCaching:
 class TestGetParamArrayConversion:
     """Test C-compatible array conversion in get_param."""
 
-    def test_get_param_converts_list_to_array(self):
-        """Test that lists are converted to numpy arrays."""
+    def test_get_param_keeps_list_values(self):
+        """Test that lists from fixed_parameters are returned unchanged."""
         model = MockModel()
         model.fixed_parameters["test_list"] = [1.0, 2.0, 3.0]
 
         result = get_param("test_list", model, None, None)
-        assert isinstance(result, np.ndarray)
-        assert result.dtype == np.float64
+        assert isinstance(result, list)
+        assert result == [1.0, 2.0, 3.0]
 
-    def test_get_param_converts_float32_to_float64(self):
-        """Test that float32 arrays are converted to float64."""
+    def test_get_param_keeps_float32_array_dtype(self):
+        """Test that float32 arrays are returned with their original dtype."""
         model = MockModel()
         model.fixed_parameters["test_array"] = np.array(
             [1.0, 2.0, 3.0], dtype=np.float32
         )
 
         result = get_param("test_array", model, None, None)
-        assert result.dtype == np.float64
+        assert result.dtype == np.float32
 
     def test_get_param_preserves_unyt_units(self):
         """Test that unyt units are stripped from fixed_parameters."""

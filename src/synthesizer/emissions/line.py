@@ -63,6 +63,7 @@ from synthesizer.emissions.scaling import (
 from synthesizer.emissions.sed import Sed
 from synthesizer.emissions.utils import (
     alias_to_line_id,
+    evaluate_dust_curve_at_dtype,
     get_available_diagram_ids,
     get_available_ratio_ids,
     get_line2index,
@@ -81,6 +82,7 @@ from synthesizer.units import (
 )
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import resolve_out_dtype
 
 
 class LineCollection:
@@ -906,7 +908,7 @@ class LineCollection:
         self.available_diagrams = get_available_diagram_ids(signature)
         return self.available_diagrams
 
-    def get_flux0(self):
+    def get_flux0(self, out_dtype=None):
         """Calculate the rest frame line flux.
 
         Uses a standard distance of 10pc to calculate the flux.
@@ -914,6 +916,11 @@ class LineCollection:
         This will also populate the observed_wavelength attribute with the
         wavelength of the line when observed (which in the rest frame is the
         same as the emitted wavelength).
+
+        Args:
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the flux arrays. If None
+                the fluxes inherit the luminosity's dtype.
 
         Returns:
             flux (unyt_quantity):
@@ -923,6 +930,16 @@ class LineCollection:
         self.flux = self.luminosity / (4 * np.pi * (10 * pc) ** 2)
         self.continuum_flux = self.continuum / (4 * np.pi * (10 * pc) ** 2)
 
+        # Unit arithmetic can promote float32 values, so explicitly restore
+        # the luminosity dtype when no output precision was requested.
+        dtype = (
+            self.luminosity.dtype
+            if out_dtype is None
+            else resolve_out_dtype(out_dtype)
+        )
+        self.flux = self.flux.astype(dtype, copy=False)
+        self.continuum_flux = self.continuum_flux.astype(dtype, copy=False)
+
         # Set the observed wavelength (in this case this is the rest frame
         # wavelength)
         self.obslam = self.lam
@@ -930,7 +947,7 @@ class LineCollection:
         return self.flux
 
     @timed("LineCollection.get_flux")
-    def get_flux(self, cosmo, z, igm=None):
+    def get_flux(self, cosmo, z, igm=None, out_dtype=None):
         """Calculate the line flux given a redshift and cosmology.
 
         This will also populate the observed_wavelength attribute with the
@@ -948,6 +965,9 @@ class LineCollection:
             igm (igm):
                 The IGM class. e.g. `synthesizer.igm.Inoue14`.
                 Defaults to None.
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the flux arrays. If None
+                the fluxes inherit the luminosity's dtype.
 
         Returns:
             flux (unyt_quantity):
@@ -956,7 +976,7 @@ class LineCollection:
         # If the redshift is 0 we can assume a distance of 10pc and ignore
         # the IGM
         if z == 0:
-            return self.get_flux0()
+            return self.get_flux0(out_dtype=out_dtype)
 
         # Get the luminosity distance
         luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
@@ -979,6 +999,16 @@ class LineCollection:
                 igm_transmission = igm.get_transmission(z, self.obslam)
             self.flux *= igm_transmission
             self.continuum_flux *= igm_transmission
+
+        # Unit arithmetic can promote float32 values, so explicitly restore
+        # the luminosity dtype when no output precision was requested.
+        dtype = (
+            self.luminosity.dtype
+            if out_dtype is None
+            else resolve_out_dtype(out_dtype)
+        )
+        self.flux = self.flux.astype(dtype, copy=False)
+        self.continuum_flux = self.continuum_flux.astype(dtype, copy=False)
 
         return self.flux
 
@@ -1329,11 +1359,18 @@ class LineCollection:
             is AttenuationLaw.get_transmission
         ):
             # Pull out just the wavelength-dependent extinction curve once and
-            # reuse it for both luminosity and continuum.
-            tau_x_v = dust_curve.get_extinction_curve(
+            # reuse it for both luminosity and continuum. The curve is
+            # evaluated at the emission dtype (with overflow trapped) so the
+            # attenuation arrays are born at the right precision.
+            lum_dtype = self._luminosity.dtype
+            tau_x_v = evaluate_dust_curve_at_dtype(
+                dust_curve.get_extinction_curve,
+                lum_dtype,
                 self.lam,
                 **dust_curve_kwargs,
             )
+            if isinstance(tau_v, np.ndarray) and tau_v.dtype != lum_dtype:
+                tau_v = tau_v.astype(lum_dtype, copy=False)
             # Both arrays see the same attenuation structure, so we run the
             # same kernel twice rather than building two transmission matrices.
             att_lum = apply_separable_attenuation_2d(
@@ -1357,9 +1394,16 @@ class LineCollection:
                 cont=get_array_quantity_view(att_cont, cont_units),
             )
 
-        # Compute the transmission for the remaining generic cases.
-        transmission = dust_curve.get_transmission(
-            tau_v, self.lam, **dust_curve_kwargs
+        # Compute the transmission for the remaining generic cases. The curve
+        # is evaluated at the emission dtype (with overflow trapped) so the
+        # transmission is born at the right precision rather than computed at
+        # float64 and downcast.
+        transmission = evaluate_dust_curve_at_dtype(
+            dust_curve.get_transmission,
+            self._luminosity.dtype,
+            tau_v,
+            self.lam,
+            **dust_curve_kwargs,
         )
 
         # When attenuation reduces to a wavelength-only transmission curve we

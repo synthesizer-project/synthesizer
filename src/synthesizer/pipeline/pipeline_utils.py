@@ -647,6 +647,27 @@ def discover_dict_structure(data):
     return output_set
 
 
+def cast_products_recursive(store, dtype):
+    """Recursively cast pipeline products in nested dicts to a dtype.
+
+    Walks nested dictionaries and calls ``cast(dtype)`` on any leaf object
+    that supports it (Image, ImageCollection, SpectralCube, Sed). Used to
+    honour a requested output dtype on products whose generation pipeline
+    computes at the source dtype.
+
+    Args:
+        store (dict/object): The nested product store to cast in place.
+        dtype (np.dtype/None): The dtype to cast to. None is a no-op.
+    """
+    if store is None or dtype is None:
+        return
+    if isinstance(store, dict):
+        for value in store.values():
+            cast_products_recursive(value, dtype)
+    elif hasattr(store, "cast"):
+        store.cast(dtype)
+
+
 def count_and_check_dict_recursive(data, prefix=""):
     """Recursively count the number of leaves in a dictionary.
 

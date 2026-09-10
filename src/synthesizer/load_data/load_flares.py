@@ -22,7 +22,9 @@ from synthesizer.load_data.utils import get_begin_end_pointers
 from ..particle.galaxy import Galaxy
 
 
-def load_FLARES(master_file, region, tag, read_abundances=False):
+def load_FLARES(
+    master_file, region, tag, read_abundances=False, dtype=np.float64
+):
     """Load FLARES galaxies from a FLARES master file.
 
     Args:
@@ -36,6 +38,11 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
             Whether to read the abundances of the stars.
             If True, the oxygen and hydrogen abundances are loaded.
             If False, only the metallicity is loaded.
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
 
     Returns:
         galaxies (object):
@@ -89,23 +96,23 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
         )
         if read_abundances:
             galaxies[i].load_stars(
-                imasses[b:e] * Msun,
-                ages[b:e] * yr,
-                metallicities[b:e],
-                s_oxygen=s_oxygen[b:e],
-                s_hydrogen=s_hydrogen[b:e],
-                coordinates=coods[b:e, :] * Mpc,
-                current_masses=masses[b:e] * Msun,
-                smoothing_lengths=s_hsml[b:e] * Mpc,
+                (imasses[b:e] * Msun).astype(dtype),
+                (ages[b:e] * yr).astype(dtype),
+                metallicities[b:e].astype(dtype),
+                s_oxygen=s_oxygen[b:e].astype(dtype),
+                s_hydrogen=s_hydrogen[b:e].astype(dtype),
+                coordinates=(coods[b:e, :] * Mpc).astype(dtype),
+                current_masses=(masses[b:e] * Msun).astype(dtype),
+                smoothing_lengths=(s_hsml[b:e] * Mpc).astype(dtype),
             )
         else:
             galaxies[i].load_stars(
-                imasses[b:e] * Msun,
-                ages[b:e] * yr,
-                metallicities[b:e],
-                coordinates=coods[b:e, :] * Mpc,
-                current_masses=masses[b:e] * Msun,
-                smoothing_lengths=s_hsml[b:e] * Mpc,
+                (imasses[b:e] * Msun).astype(dtype),
+                (ages[b:e] * yr).astype(dtype),
+                metallicities[b:e].astype(dtype),
+                coordinates=(coods[b:e, :] * Mpc).astype(dtype),
+                current_masses=(masses[b:e] * Msun).astype(dtype),
+                smoothing_lengths=(s_hsml[b:e] * Mpc).astype(dtype),
             )
 
     # Get the gas particle begin / end indices
@@ -122,10 +129,10 @@ def load_FLARES(master_file, region, tag, read_abundances=False):
         )
 
         galaxies[i].load_gas(
-            coordinates=g_coods[b:e] * Mpc,
-            masses=g_masses[b:e] * Msun,
-            metallicities=g_metallicities[b:e],
-            smoothing_lengths=g_hsml[b:e] * Mpc,
+            coordinates=(g_coods[b:e] * Mpc).astype(dtype),
+            masses=(g_masses[b:e] * Msun).astype(dtype),
+            metallicities=g_metallicities[b:e].astype(dtype),
+            smoothing_lengths=(g_hsml[b:e] * Mpc).astype(dtype),
         )
 
     return galaxies

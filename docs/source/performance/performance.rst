@@ -11,7 +11,8 @@ We have implemented a number of performance optimisations, including:
 
 - Using C++ extensions for computationally intensive tasks.
 - Using OpenMP for shared memory parallelism to avoid the GIL bottleneck in Python. 
-- Reducing memory allocations and copies as much as possible (including removing copies inherent during ``unyt`` conversion operations). 
+- Reducing memory allocations and copies as much as possible (including removing copies inherent during ``unyt`` conversion operations).
+- User-controllable floating-point precision for inputs and outputs, halving memory footprints where reduced precision is acceptable (see :doc:`precision`).
 
 Profiling Suite
 ~~~~~~~~~~~~~~~
@@ -75,6 +76,7 @@ Performance Benchmarks
 .. toctree::
    :maxdepth: 1
 
+   precision
    particle_wavelength_scaling
    pipeline_profiling
    strong_scaling

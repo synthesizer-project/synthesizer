@@ -2311,6 +2311,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         particle_spectra=None,
         nthreads=1,
         grid_assignment_method="cic",
+        out_dtype=None,
         **fixed_parameters,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -2391,6 +2392,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             grid_assignment_method (str):
                 The method to use when assigning particles to the grid. Options
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted spectra arrays.
             **fixed_parameters (dict):
                 A dictionary of fixed parameters to apply to the model. Each
                 of these will be applied to the model before generating the
@@ -2508,6 +2511,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         verbose=verbose,
                         nthreads=nthreads,
                         grid_assignment_method=grid_assignment_method,
+                        out_dtype=out_dtype,
                     )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
@@ -2677,6 +2681,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         particle_lines=None,
         nthreads=1,
         grid_assignment_method="cic",
+        out_dtype=None,
         **kwargs,
     ):
         """Generate stellar lines as described by the emission model.
@@ -2755,6 +2760,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             grid_assignment_method (str):
                 The method to use when assigning particles to the grid. Options
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted line arrays.
             **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -2886,6 +2893,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         verbose=verbose,
                         nthreads=nthreads,
                         grid_assignment_method=grid_assignment_method,
+                        out_dtype=out_dtype,
                     )
                     if line_lams is None and label in lines:
                         line_lams = lines[label].lam

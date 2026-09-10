@@ -46,7 +46,7 @@ from functools import lru_cache
 from types import MappingProxyType
 
 import numpy as np
-from unyt import angstrom
+from unyt import angstrom, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.units import accepts
@@ -577,3 +577,70 @@ def combine_list_of_seds(sed_list):
         out_sed = out_sed.concat(sed)
 
     return out_sed
+
+
+def _cast_curve_input(value, dtype):
+    """Cast a dust curve input to the requested dtype.
+
+    Only small 1D inputs (tau_v, lam) pass through here so the cast is
+    cheap; the potentially large transmission result is then born at the
+    right precision rather than computed at float64 and downcast.
+
+    Args:
+        value (object):
+            The input value (array, unyt_array, scalar, or None).
+        dtype (np.dtype):
+            The dtype the dust curve should be evaluated at.
+
+    Returns:
+        The input cast to dtype where applicable.
+    """
+    if isinstance(value, unyt_array):
+        if value.dtype != dtype:
+            return unyt_array(
+                value.ndview.astype(dtype),
+                value.units,
+                bypass_validation=True,
+            )
+        return value
+    if isinstance(value, np.ndarray) and value.dtype != dtype:
+        return value.astype(dtype)
+    return value
+
+
+def evaluate_dust_curve_at_dtype(func, dtype, /, *args, **kwargs):
+    """Evaluate a dust curve method at a requested floating-point dtype.
+
+    Array arguments are cast to the target dtype before the call so the
+    result is computed (and allocated) directly at that precision. Overflow
+    during a reduced precision evaluation is trapped and converted into an
+    actionable error instead of silently propagating infs into the spectra.
+
+    Args:
+        func (callable):
+            The dust curve method to call (e.g. get_transmission).
+        dtype (np.dtype):
+            The dtype to evaluate at (the spectra dtype).
+        *args:
+            Positional arguments for func; arrays are cast to dtype.
+        **kwargs:
+            Keyword arguments for func, passed through unchanged.
+
+    Returns:
+        The result of func evaluated at the requested dtype.
+
+    Raises:
+        InconsistentArguments:
+            If the evaluation overflows at the requested precision.
+    """
+    cast_args = [_cast_curve_input(arg, dtype) for arg in args]
+    try:
+        with np.errstate(over="raise"):
+            return func(*cast_args, **kwargs)
+    except FloatingPointError:
+        raise exceptions.InconsistentArguments(
+            f"Overflow while evaluating the dust curve at {np.dtype(dtype)}. "
+            "This attenuation model cannot be represented at reduced "
+            "precision; use float64 spectra (e.g. leave out_dtype unset or "
+            "pass out_dtype=np.float64) when applying it."
+        )
