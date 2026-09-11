@@ -1168,6 +1168,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             set_all (bool):
                 Whether to set the emitter on all models.
         """
+        if vel_shift and any(
+            getattr(model, "_has_velocity_dispersion", False)
+            for model in self._models.values()
+        ):
+            raise exceptions.InconsistentArguments(
+                "vel_shift=True cannot be used with scalar velocity "
+                "dispersion broadening."
+            )
+
         if not set_all:
             self._use_vel_shift = vel_shift
         else:

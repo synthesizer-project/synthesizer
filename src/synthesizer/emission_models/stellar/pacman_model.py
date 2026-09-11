@@ -1,3 +1,4 @@
+# ruff: noqa: D417
 """A module defining the Pacman emission models.
 
 This module defines the PacmanEmission and BimodalPacmanEmission classes which
@@ -70,6 +71,8 @@ from synthesizer.emission_models.stellar.models import (
     NebularLineEmission,
     ReprocessedEmission,
     TransmittedEmission,
+    _broaden_model,
+    _validate_velocity_dispersion,
 )
 
 
@@ -97,6 +100,7 @@ class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
         dust_curve=PowerLaw(),
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
+        velocity_dispersion_starpop=None,
         **kwargs,
     ):
         """Initialize the PacmanEmissionNoEscapeNoDust model.
@@ -127,12 +131,14 @@ class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
         incident = IncidentEmission(
             grid=grid,
             label="incident",
+            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         transmitted = TransmittedEmission(
             grid=grid,
             label="transmitted",
             fesc=0.0,  # No escape fraction
+            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         nebular_line = NebularLineEmission(
@@ -151,6 +157,7 @@ class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
             label="nebular",
             nebular_line=nebular_line,
             nebular_continuum=nebular_continuum,
+            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         reprocessed = ReprocessedEmission(
@@ -202,6 +209,8 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
         stellar_dust=True,
+        velocity_dispersion_starpop=None,
+        velocity_dispersion_total=None,
         **kwargs,
     ):
         """Initialize the PacmanEmissionNoEscapeWithDust model.
@@ -224,6 +233,12 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
             stellar_dust (bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
+            velocity_dispersion_starpop (unyt_quantity):
+                Optional scalar internal stellar-population dispersion applied
+                before dust attenuation.
+            velocity_dispersion_total (unyt_quantity):
+                Optional scalar bulk dispersion applied to final stellar light
+                before adding thermal dust emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -237,12 +252,14 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
         incident = IncidentEmission(
             grid=grid,
             label="incident",
+            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         transmitted = TransmittedEmission(
             grid=grid,
             label="transmitted",
             fesc=0.0,  # No escape fraction
+            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         nebular_line = NebularLineEmission(
@@ -261,6 +278,7 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
             label="nebular",
             nebular_line=nebular_line,
             nebular_continuum=nebular_continuum,
+            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         reprocessed = ReprocessedEmission(
@@ -277,6 +295,9 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
             emitter="stellar",
             tau_v=tau_v,
             **kwargs,
+        )
+        attenuated = _broaden_model(
+            attenuated, "attenuated", velocity_dispersion_total, kwargs
         )
         dust_emission.set_energy_balance(reprocessed, attenuated)
         dust_emission_model = DustEmission(
@@ -327,6 +348,8 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
         fesc="fesc",
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
+        dust_curve=PowerLaw(),
+        velocity_dispersion_starpop=None,
         **kwargs,
     ):
         """Initialize the PacmanEmissionWithEscapeNoDust model.
@@ -363,6 +386,7 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
         incident = IncidentEmission(
             grid=grid,
             label="incident",
+            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         transmitted = TransmittedEmission(
@@ -370,6 +394,7 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             label="transmitted",
             fesc=fesc,
             incident=incident,
+            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         escaped = transmitted["escaped"]
@@ -389,6 +414,7 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             label="nebular",
             nebular_line=nebular_line,
             nebular_continuum=nebular_continuum,
+            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         reprocessed = ReprocessedEmission(
@@ -455,6 +481,8 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
         stellar_dust=True,
+        velocity_dispersion_starpop=None,
+        velocity_dispersion_total=None,
         **kwargs,
     ):
         """Initialize the PacmanEmissionWithEscapeWithDust model.
@@ -479,6 +507,12 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             stellar_dust (bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
+            velocity_dispersion_starpop (unyt_quantity):
+                Optional scalar internal stellar-population dispersion applied
+                before dust attenuation.
+            velocity_dispersion_total (unyt_quantity):
+                Optional scalar bulk dispersion applied to final stellar light
+                before adding thermal dust emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -499,6 +533,7 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
         incident = IncidentEmission(
             grid=grid,
             label="incident",
+            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         transmitted = TransmittedEmission(
@@ -506,6 +541,7 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             label="transmitted",
             fesc=fesc,
             incident=incident,
+            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         escaped = transmitted["escaped"]
@@ -525,6 +561,7 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             label="nebular",
             nebular_line=nebular_line,
             nebular_continuum=nebular_continuum,
+            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         reprocessed = ReprocessedEmission(
@@ -553,6 +590,9 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             attenuated=attenuated,
             escaped=escaped,
             **kwargs,
+        )
+        emergent = _broaden_model(
+            emergent, "emergent", velocity_dispersion_total, kwargs
         )
         dust_emission.set_energy_balance(reprocessed, attenuated)
         dust_emission_model = DustEmission(
@@ -613,6 +653,8 @@ class PacmanEmission:
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
         stellar_dust=True,
+        velocity_dispersion_starpop=None,
+        velocity_dispersion_total=None,
         **kwargs,
     ):
         """Get a PacmanEmission model.
@@ -640,22 +682,39 @@ class PacmanEmission:
             stellar_dust (bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
+            velocity_dispersion_starpop (unyt_quantity):
+                Optional scalar internal stellar-population dispersion applied
+                before dust attenuation.
+            velocity_dispersion_total (unyt_quantity):
+                Optional scalar bulk dispersion applied to final stellar light
+                before adding thermal dust emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
+        velocity_dispersion_starpop = _validate_velocity_dispersion(
+            velocity_dispersion_starpop, kwargs
+        )
+        velocity_dispersion_total = _validate_velocity_dispersion(
+            velocity_dispersion_total, kwargs
+        )
+
         # Are we ignoring the escape fraction?
         if fesc == 0.0 or fesc is None:
             # Do we have a dust emission model?
             if dust_emission is None:
                 # No dust emission, no escape fraction, so we can use the
                 # PacmanEmissionNoEscapeNoDust model
-                return PacmanEmissionNoEscapedNoDust(
+                model = PacmanEmissionNoEscapedNoDust(
                     grid=grid,
                     tau_v=tau_v,
                     dust_curve=dust_curve,
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
+                    velocity_dispersion_starpop=velocity_dispersion_starpop,
                     **kwargs,
+                )
+                return _broaden_model(
+                    model, model.label, velocity_dispersion_total, kwargs
                 )
             else:
                 # We have dust emission, no escape fraction, so we can use the
@@ -668,6 +727,8 @@ class PacmanEmission:
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
                     stellar_dust=stellar_dust,
+                    velocity_dispersion_starpop=velocity_dispersion_starpop,
+                    velocity_dispersion_total=velocity_dispersion_total,
                     **kwargs,
                 )
         # Ok, we have an escape fraction
@@ -676,13 +737,17 @@ class PacmanEmission:
             if dust_emission is None:
                 # No dust emission, so we can use the
                 # PacmanEmissionWithEscapeNoDust model
-                return PacmanEmissionWithEscapedNoDust(
+                model = PacmanEmissionWithEscapedNoDust(
                     grid=grid,
                     tau_v=tau_v,
                     fesc=fesc,
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
+                    velocity_dispersion_starpop=velocity_dispersion_starpop,
                     **kwargs,
+                )
+                return _broaden_model(
+                    model, model.label, velocity_dispersion_total, kwargs
                 )
             else:
                 # We have dust emission, so we can use the
@@ -696,6 +761,8 @@ class PacmanEmission:
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
                     stellar_dust=stellar_dust,
+                    velocity_dispersion_starpop=velocity_dispersion_starpop,
+                    velocity_dispersion_total=velocity_dispersion_total,
                     **kwargs,
                 )
 
@@ -759,6 +826,8 @@ class BimodalPacmanEmissionNoEscapedNoDust(StellarEmissionModel):
         age_pivot=7 * dimensionless,
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
+        velocity_dispersion_young_starpop=None,
+        velocity_dispersion_old_starpop=None,
         **kwargs,
     ):
         """Initialize the BimodalPacmanEmissionNoEscapeNoDust model.
@@ -801,6 +870,7 @@ class BimodalPacmanEmissionNoEscapedNoDust(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=age_pivot,
             mask_op="<",
+            velocity_dispersion=velocity_dispersion_young_starpop,
             **kwargs,
         )
         old_incident = IncidentEmission(
@@ -809,6 +879,7 @@ class BimodalPacmanEmissionNoEscapedNoDust(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=age_pivot,
             mask_op=">=",
+            velocity_dispersion=velocity_dispersion_old_starpop,
             **kwargs,
         )
         incident = StellarEmissionModel(
@@ -825,6 +896,7 @@ class BimodalPacmanEmissionNoEscapedNoDust(StellarEmissionModel):
             mask_thresh=age_pivot,
             mask_op="<",
             fesc=0.0,
+            velocity_dispersion=velocity_dispersion_young_starpop,
             **kwargs,
         )
         old_transmitted = TransmittedEmission(
@@ -834,6 +906,7 @@ class BimodalPacmanEmissionNoEscapedNoDust(StellarEmissionModel):
             mask_thresh=age_pivot,
             mask_op=">=",
             fesc=0.0,
+            velocity_dispersion=velocity_dispersion_old_starpop,
             **kwargs,
         )
         transmitted = StellarEmissionModel(
@@ -882,6 +955,7 @@ class BimodalPacmanEmissionNoEscapedNoDust(StellarEmissionModel):
             label="young_nebular",
             nebular_line=young_nebular_line,
             nebular_continuum=young_nebular_continuum,
+            velocity_dispersion=velocity_dispersion_young_starpop,
             **kwargs,
         )
         old_nebular = NebularEmission(
@@ -889,6 +963,7 @@ class BimodalPacmanEmissionNoEscapedNoDust(StellarEmissionModel):
             label="old_nebular",
             nebular_line=old_nebular_line,
             nebular_continuum=old_nebular_continuum,
+            velocity_dispersion=velocity_dispersion_old_starpop,
             **kwargs,
         )
         nebular = StellarEmissionModel(
@@ -1079,6 +1154,9 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
         stellar_dust=True,
+        velocity_dispersion_young_starpop=None,
+        velocity_dispersion_old_starpop=None,
+        velocity_dispersion_total=None,
         **kwargs,
     ):
         """Initialize the BimodalPacmanEmissionNoEscapeWithDust model.
@@ -1111,6 +1189,13 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             stellar_dust(bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
+            velocity_dispersion_young_starpop (unyt_quantity):
+                Optional scalar internal dispersion for the young population.
+            velocity_dispersion_old_starpop (unyt_quantity):
+                Optional scalar internal dispersion for the old population.
+            velocity_dispersion_total (unyt_quantity):
+                Optional scalar bulk dispersion applied to young and old
+                stellar light before adding thermal dust emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -1128,6 +1213,7 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             mask_attr="log10ages",
             mask_thresh=age_pivot,
             mask_op="<",
+            velocity_dispersion=velocity_dispersion_young_starpop,
             **kwargs,
         )
         old_incident = IncidentEmission(
@@ -1136,6 +1222,7 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             mask_attr="log10ages",
             mask_thresh=age_pivot,
             mask_op=">=",
+            velocity_dispersion=velocity_dispersion_old_starpop,
             **kwargs,
         )
         incident = StellarEmissionModel(
@@ -1152,6 +1239,7 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             mask_thresh=age_pivot,
             mask_op="<",
             fesc=0.0,
+            velocity_dispersion=velocity_dispersion_young_starpop,
             **kwargs,
         )
         old_transmitted = TransmittedEmission(
@@ -1161,6 +1249,7 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             mask_thresh=age_pivot,
             mask_op=">=",
             fesc=0.0,
+            velocity_dispersion=velocity_dispersion_old_starpop,
             **kwargs,
         )
         transmitted = StellarEmissionModel(
@@ -1209,6 +1298,7 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             label="young_nebular",
             nebular_line=young_nebular_line,
             nebular_continuum=young_nebular_continuum,
+            velocity_dispersion=velocity_dispersion_young_starpop,
             **kwargs,
         )
         old_nebular = NebularEmission(
@@ -1216,6 +1306,7 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             label="old_nebular",
             nebular_line=old_nebular_line,
             nebular_continuum=old_nebular_continuum,
+            velocity_dispersion=velocity_dispersion_old_starpop,
             **kwargs,
         )
         nebular = StellarEmissionModel(
@@ -1287,6 +1378,18 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             apply_to=old_reprocessed,
             emitter="stellar",
             **kwargs,
+        )
+        young_attenuated = _broaden_model(
+            young_attenuated,
+            young_attenuated.label,
+            velocity_dispersion_total,
+            kwargs,
+        )
+        old_attenuated = _broaden_model(
+            old_attenuated,
+            "old_attenuated",
+            velocity_dispersion_total,
+            kwargs,
         )
         attenuated = StellarEmissionModel(
             label="attenuated",
@@ -1473,6 +1576,8 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
         fesc="fesc",
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
+        velocity_dispersion_young_starpop=None,
+        velocity_dispersion_old_starpop=None,
         **kwargs,
     ):
         """Initialize the BimodalPacmanEmissionWithEscapeNoDust model.
@@ -1524,6 +1629,7 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=age_pivot,
             mask_op="<",
+            velocity_dispersion=velocity_dispersion_young_starpop,
             **kwargs,
         )
         old_incident = IncidentEmission(
@@ -1532,6 +1638,7 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=age_pivot,
             mask_op=">=",
+            velocity_dispersion=velocity_dispersion_old_starpop,
             **kwargs,
         )
         incident = StellarEmissionModel(
@@ -1550,6 +1657,7 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             fesc=fesc,
             incident=young_incident,
             escaped_label="young_escaped",
+            velocity_dispersion=velocity_dispersion_young_starpop,
             **kwargs,
         )
         old_transmitted = TransmittedEmission(
@@ -1561,6 +1669,7 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             fesc=fesc,
             incident=old_incident,
             escaped_label="old_escaped",
+            velocity_dispersion=velocity_dispersion_old_starpop,
             **kwargs,
         )
         transmitted = StellarEmissionModel(
@@ -1618,6 +1727,7 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             label="young_nebular",
             nebular_line=young_nebular_line,
             nebular_continuum=young_nebular_continuum,
+            velocity_dispersion=velocity_dispersion_young_starpop,
             **kwargs,
         )
         old_nebular = NebularEmission(
@@ -1625,6 +1735,7 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             label="old_nebular",
             nebular_line=old_nebular_line,
             nebular_continuum=old_nebular_continuum,
+            velocity_dispersion=velocity_dispersion_old_starpop,
             **kwargs,
         )
         nebular = StellarEmissionModel(
@@ -1847,6 +1958,9 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
         stellar_dust=True,
+        velocity_dispersion_young_starpop=None,
+        velocity_dispersion_old_starpop=None,
+        velocity_dispersion_total=None,
         **kwargs,
     ):
         """Initialize the BimodalPacmanEmissionWithEscapeWithDust model.
@@ -1881,6 +1995,13 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             stellar_dust(bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
+            velocity_dispersion_young_starpop (unyt_quantity):
+                Optional scalar internal dispersion for the young population.
+            velocity_dispersion_old_starpop (unyt_quantity):
+                Optional scalar internal dispersion for the old population.
+            velocity_dispersion_total (unyt_quantity):
+                Optional scalar bulk dispersion applied to young and old
+                stellar light before adding thermal dust emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -1905,6 +2026,7 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=age_pivot,
             mask_op="<",
+            velocity_dispersion=velocity_dispersion_young_starpop,
             **kwargs,
         )
         old_incident = IncidentEmission(
@@ -1913,6 +2035,7 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             mask_attr="log10ages",
             mask_thresh=age_pivot,
             mask_op=">=",
+            velocity_dispersion=velocity_dispersion_old_starpop,
             **kwargs,
         )
         incident = StellarEmissionModel(
@@ -1931,6 +2054,7 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             fesc=fesc,
             incident=young_incident,
             escaped_label="young_escaped",
+            velocity_dispersion=velocity_dispersion_young_starpop,
             **kwargs,
         )
         old_transmitted = TransmittedEmission(
@@ -1942,6 +2066,7 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             fesc=fesc,
             incident=old_incident,
             escaped_label="old_escaped",
+            velocity_dispersion=velocity_dispersion_old_starpop,
             **kwargs,
         )
         transmitted = StellarEmissionModel(
@@ -1999,6 +2124,7 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             label="young_nebular",
             nebular_line=young_nebular_line,
             nebular_continuum=young_nebular_continuum,
+            velocity_dispersion=velocity_dispersion_young_starpop,
             **kwargs,
         )
         old_nebular = NebularEmission(
@@ -2006,6 +2132,7 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             label="old_nebular",
             nebular_line=old_nebular_line,
             nebular_continuum=old_nebular_continuum,
+            velocity_dispersion=velocity_dispersion_old_starpop,
             **kwargs,
         )
         nebular = StellarEmissionModel(
@@ -2098,6 +2225,18 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             attenuated=old_attenuated,
             escaped=old_escaped,
             **kwargs,
+        )
+        young_emergent = _broaden_model(
+            young_emergent,
+            "young_emergent",
+            velocity_dispersion_total,
+            kwargs,
+        )
+        old_emergent = _broaden_model(
+            old_emergent,
+            "old_emergent",
+            velocity_dispersion_total,
+            kwargs,
         )
         emergent = StellarEmissionModel(
             label="emergent",
@@ -2304,6 +2443,9 @@ class BimodalPacmanEmission:
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
         stellar_dust=True,
+        velocity_dispersion_young_starpop=None,
+        velocity_dispersion_old_starpop=None,
+        velocity_dispersion_total=None,
         **kwargs,
     ):
         """Get a BimodalPacmanEmission model.
@@ -2338,16 +2480,33 @@ class BimodalPacmanEmission:
             stellar_dust(bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
+            velocity_dispersion_young_starpop (unyt_quantity):
+                Optional scalar internal dispersion for the young population.
+            velocity_dispersion_old_starpop (unyt_quantity):
+                Optional scalar internal dispersion for the old population.
+            velocity_dispersion_total (unyt_quantity):
+                Optional scalar bulk dispersion applied to young and old
+                stellar light before adding thermal dust emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
+        velocity_dispersion_young_starpop = _validate_velocity_dispersion(
+            velocity_dispersion_young_starpop, kwargs
+        )
+        velocity_dispersion_old_starpop = _validate_velocity_dispersion(
+            velocity_dispersion_old_starpop, kwargs
+        )
+        velocity_dispersion_total = _validate_velocity_dispersion(
+            velocity_dispersion_total, kwargs
+        )
+
         # Are we ignoring the escape fraction?
         if fesc == 0.0 or fesc is None:
             # Do we have dust emission models?
             if dust_emission_ism is None or dust_emission_birth is None:
                 # No dust emission, no escape fraction, so we can use the
                 # BimodalPacmanEmissionNoEscapeNoDust model
-                return BimodalPacmanEmissionNoEscapedNoDust(
+                model = BimodalPacmanEmissionNoEscapedNoDust(
                     grid=grid,
                     tau_v_ism=tau_v_ism,
                     tau_v_birth=tau_v_birth,
@@ -2356,7 +2515,16 @@ class BimodalPacmanEmission:
                     age_pivot=age_pivot,
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
+                    velocity_dispersion_young_starpop=(
+                        velocity_dispersion_young_starpop
+                    ),
+                    velocity_dispersion_old_starpop=(
+                        velocity_dispersion_old_starpop
+                    ),
                     **kwargs,
+                )
+                return _broaden_model(
+                    model, model.label, velocity_dispersion_total, kwargs
                 )
             else:
                 # We have dust emission, no escape fraction, so we can use the
@@ -2373,6 +2541,13 @@ class BimodalPacmanEmission:
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
                     stellar_dust=stellar_dust,
+                    velocity_dispersion_young_starpop=(
+                        velocity_dispersion_young_starpop
+                    ),
+                    velocity_dispersion_old_starpop=(
+                        velocity_dispersion_old_starpop
+                    ),
+                    velocity_dispersion_total=velocity_dispersion_total,
                     **kwargs,
                 )
         # Ok, we have an escape fraction
@@ -2381,7 +2556,7 @@ class BimodalPacmanEmission:
             if dust_emission_ism is None or dust_emission_birth is None:
                 # No dust emission, so we can use the
                 # BimodalPacmanEmissionWithEscapeNoDust model
-                return BimodalPacmanEmissionWithEscapedNoDust(
+                model = BimodalPacmanEmissionWithEscapedNoDust(
                     grid=grid,
                     tau_v_ism=tau_v_ism,
                     tau_v_birth=tau_v_birth,
@@ -2391,7 +2566,16 @@ class BimodalPacmanEmission:
                     fesc=fesc,
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
+                    velocity_dispersion_young_starpop=(
+                        velocity_dispersion_young_starpop
+                    ),
+                    velocity_dispersion_old_starpop=(
+                        velocity_dispersion_old_starpop
+                    ),
                     **kwargs,
+                )
+                return _broaden_model(
+                    model, model.label, velocity_dispersion_total, kwargs
                 )
             else:
                 # We have dust emission, so we can use the
@@ -2409,6 +2593,13 @@ class BimodalPacmanEmission:
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
                     stellar_dust=stellar_dust,
+                    velocity_dispersion_young_starpop=(
+                        velocity_dispersion_young_starpop
+                    ),
+                    velocity_dispersion_old_starpop=(
+                        velocity_dispersion_old_starpop
+                    ),
+                    velocity_dispersion_total=velocity_dispersion_total,
                     **kwargs,
                 )
 
