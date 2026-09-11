@@ -19,15 +19,25 @@ from synthesizer.emission_models.utils import get_param
 class TestPacmanEmission:
     """Test suite for PacmanEmission."""
 
-    def test_init(self, test_grid):
+    @pytest.mark.parametrize(
+        ("fesc", "with_dust_emission"),
+        ((0.0, False), (0.1, False), (0.0, True), (0.1, True)),
+    )
+    def test_init(self, test_grid, fesc, with_dust_emission):
         """Test the initialization of the PacmanEmission object."""
         # Define the emission model
         dust_curve = Calzetti2000()
+        dust_emission = (
+            Greybody(temperature=20 * K, emissivity=2)
+            if with_dust_emission
+            else None
+        )
         model = PacmanEmission(
             test_grid,
             tau_v=0.33,
             dust_curve=dust_curve,
-            fesc=0.1,
+            dust_emission=dust_emission,
+            fesc=fesc,
             fesc_ly_alpha=0.5,
         )
 

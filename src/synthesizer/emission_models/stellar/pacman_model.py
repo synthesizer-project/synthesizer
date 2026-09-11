@@ -324,10 +324,10 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
         self,
         grid,
         tau_v="tau_v",
-        dust_curve=PowerLaw(),
         fesc="fesc",
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
+        dust_curve=PowerLaw(),
         **kwargs,
     ):
         """Initialize the PacmanEmissionWithEscapeNoDust model.
@@ -337,9 +337,6 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
                 The grid object.
             tau_v (float):
                 The V-band optical depth.
-            dust_curve (synthesizer.emission_models.Transformer):
-                The assumed dust curve. Defaults to `PowerLaw`, with
-                default parameters.
             fesc (float):
                 The escape fraction.
             fesc_ly_alpha (float):
@@ -347,6 +344,9 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             label (str):
                 The label for the total emission model. If `None` this will
                 be set to "emergent".
+            dust_curve (synthesizer.emission_models.Transformer):
+                The assumed dust curve. Defaults to `PowerLaw`, with
+                default parameters.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
