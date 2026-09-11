@@ -22,15 +22,16 @@ class TestPacmanEmission:
     def test_init(self, test_grid):
         """Test the initialization of the PacmanEmission object."""
         # Define the emission model
+        dust_curve = Calzetti2000()
         model = PacmanEmission(
             test_grid,
             tau_v=0.33,
-            dust_curve=PowerLaw(slope=-1),
+            dust_curve=dust_curve,
             fesc=0.1,
             fesc_ly_alpha=0.5,
         )
 
-        assert model["attenuated"].dust_curve.slope == -1
+        assert model["attenuated"].dust_curve is dust_curve
         assert model["attenuated"].fixed_parameters["tau_v"] == 0.33
 
     def test_missing_optical_depth(self, test_grid, random_part_stars):

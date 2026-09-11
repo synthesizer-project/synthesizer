@@ -324,6 +324,7 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
         self,
         grid,
         tau_v="tau_v",
+        dust_curve=PowerLaw(),
         fesc="fesc",
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
@@ -336,6 +337,9 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
                 The grid object.
             tau_v (float):
                 The V-band optical depth.
+            dust_curve (synthesizer.emission_models.Transformer):
+                The assumed dust curve. Defaults to `PowerLaw`, with
+                default parameters.
             fesc (float):
                 The escape fraction.
             fesc_ly_alpha (float):
@@ -405,7 +409,7 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
         )
         attenuated = AttenuatedEmission(
             label="attenuated",
-            dust_curve=PowerLaw(),
+            dust_curve=dust_curve,
             apply_to=reprocessed,
             emitter="stellar",
             tau_v=tau_v,
@@ -679,6 +683,7 @@ class PacmanEmission:
                 return PacmanEmissionWithEscapedNoDust(
                     grid=grid,
                     tau_v=tau_v,
+                    dust_curve=dust_curve,
                     fesc=fesc,
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
