@@ -54,8 +54,8 @@ class TestPacmanEmission:
         assert "emergent_predispersion" in model._models
         assert not model["emergent_predispersion"].save
 
-    def test_total_dispersion_excludes_dust(self, test_grid):
-        """Test total broadening applies before adding dust emission."""
+    def test_total_dispersion_includes_dust(self, test_grid):
+        """Test total broadening applies after adding dust emission."""
         model = PacmanEmission(
             test_grid,
             tau_v=0.33,
@@ -64,12 +64,14 @@ class TestPacmanEmission:
             velocity_dispersion_total=200 * km / s,
         )
 
-        assert {child.label for child in model.combine} == {
+        assert model.transformer.__class__.__name__ == "DopplerBroadening"
+        assert not model["total_predispersion"].save
+        assert {
+            child.label for child in model["total_predispersion"].combine
+        } == {
             "attenuated",
             "dust_emission",
         }
-        assert "attenuated_predispersion" in model._models
-        assert "dust_emission_predispersion" not in model._models
 
     def test_velocity_dispersion_rejects_vel_shift(self, test_grid):
         """Test scalar broadening cannot be combined with particle shifts."""
@@ -211,6 +213,7 @@ class TestPacmanEmission:
             fesc=0.1,
             fesc_ly_alpha=0.5,
             dust_emission=Greybody(temperature=10**4 * K, emissivity=2),
+            velocity_dispersion_total=200 * km / s,
         )
 
         # Generate get_spectra
@@ -555,6 +558,7 @@ class TestCharlotFallEmission:
             tau_v_birth=0.33,
             dust_emission_ism=Greybody(temperature=10**4 * K, emissivity=2),
             dust_emission_birth=Greybody(temperature=10**4 * K, emissivity=2),
+            velocity_dispersion_total=200 * km / s,
         )
 
         # Generate get_spectra
@@ -629,9 +633,14 @@ class TestBimodalPacmanEmission:
             "young_total",
             "old_total",
         }
-        assert "young_attenuated_ism_predispersion" in model._models
-        assert "old_attenuated_predispersion" in model._models
-        assert "dust_emission_predispersion" not in model._models
+        for population in ("young", "old"):
+            total = model[f"{population}_total"]
+            predispersion = model[f"{population}_total_predispersion"]
+            assert total.transformer.__class__.__name__ == "DopplerBroadening"
+            assert not predispersion.save
+            assert f"{population}_dust_emission" in {
+                child.label for child in predispersion.combine
+            }
 
     def test_missing_optical_depth(self, test_grid, random_part_stars):
         """Test the initialization of the BimodalPacmanEmission object."""

@@ -1,9 +1,8 @@
-# ruff: noqa: D417
 """A module defining the Pacman emission models.
 
 This module defines the PacmanEmission and BimodalPacmanEmission classes which
 are used to define the emission models for the Pacman model. Both these models
-combine various differen spectra together to produce a final total emission
+combine various different spectra together to produce a final total emission
 spectrum.
 
 The PacmanEmission model is used to define the emission model for a single
@@ -11,7 +10,7 @@ population of stars. Including both intrinsic and attenuate emission, and
 if a dust emission model is given also dust emission. It includes the option
 to include escaped emission for a given escape fraction, and if a lyman alpha
 escape fraction is given, a more sophisticated nebular emission model is used,
-including line and nebuluar continuum emission.
+including line and nebular continuum emission.
 
 The BimodalPacmanEmission model is similar to the PacmanEmission model but
 splits the emission into a young and old population.
@@ -72,6 +71,7 @@ from synthesizer.emission_models.stellar.models import (
     ReprocessedEmission,
     TransmittedEmission,
     _broaden_model,
+    _init_broadened_model,
     _validate_velocity_dispersion,
 )
 
@@ -118,6 +118,9 @@ class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
             label (str):
                 The label for the total emission model. If `None` this will
                 be set to "attenuated".
+            velocity_dispersion_starpop (unyt.unyt_quantity):
+                Optional scalar internal stellar-population dispersion applied
+                before dust attenuation.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -127,7 +130,8 @@ class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
                 "The PacmanEmission style models require a reprocessed grid."
             )
 
-        # Create the models we need
+        # Internal stellar kinematics act on the incident, transmitted, and
+        # nebular spectra before those components encounter dust attenuation.
         incident = IncidentEmission(
             grid=grid,
             label="incident",
@@ -237,8 +241,8 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
                 Optional scalar internal stellar-population dispersion applied
                 before dust attenuation.
             velocity_dispersion_total (unyt_quantity):
-                Optional scalar bulk dispersion applied to final stellar light
-                before adding thermal dust emission.
+                Optional scalar bulk dispersion applied to final stellar and
+                thermal-dust emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -248,7 +252,8 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
                 "The PacmanEmission style models require a reprocessed grid."
             )
 
-        # Create the models we need
+        # Internal stellar kinematics act on the incident, transmitted, and
+        # nebular spectra before those components encounter dust attenuation.
         incident = IncidentEmission(
             grid=grid,
             label="incident",
@@ -296,9 +301,6 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
             tau_v=tau_v,
             **kwargs,
         )
-        attenuated = _broaden_model(
-            attenuated, "attenuated", velocity_dispersion_total, kwargs
-        )
         dust_emission.set_energy_balance(reprocessed, attenuated)
         dust_emission_model = DustEmission(
             label="dust_emission",
@@ -307,16 +309,18 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
             **kwargs,
         )
 
-        # Finally make the TotalEmission model, this is
-        # dust_emission + attenuated
-        EmissionModel.__init__(
+        # Bulk motion applies after combining all emission from the system,
+        # including thermal dust emission.
+        _init_broadened_model(
             self,
+            "total" if label is None else label,
+            velocity_dispersion_total,
+            kwargs,
+            model_class=EmissionModel,
             grid=grid,
-            label="total" if label is None else label,
             combine=(dust_emission_model, attenuated),
             related_models=(incident,),
             emitter="galaxy" if not stellar_dust else "stellar",
-            **kwargs,
         )
 
 
@@ -366,6 +370,11 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             label (str):
                 The label for the total emission model. If `None` this will
                 be set to "emergent".
+            dust_curve (synthesizer.emission_models.Transformer):
+                The attenuation curve applied to reprocessed emission.
+            velocity_dispersion_starpop (unyt.unyt_quantity):
+                Optional scalar internal stellar-population dispersion applied
+                before dust attenuation.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -382,7 +391,8 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
                 "escape fraction."
             )
 
-        # Create the models we need
+        # Internal stellar kinematics act on the incident, transmitted, and
+        # nebular spectra before those components encounter dust attenuation.
         incident = IncidentEmission(
             grid=grid,
             label="incident",
@@ -511,8 +521,8 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
                 Optional scalar internal stellar-population dispersion applied
                 before dust attenuation.
             velocity_dispersion_total (unyt_quantity):
-                Optional scalar bulk dispersion applied to final stellar light
-                before adding thermal dust emission.
+                Optional scalar bulk dispersion applied to final stellar and
+                thermal-dust emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -529,7 +539,8 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
                 "non-zero escape fraction."
             )
 
-        # Create the models we need
+        # Internal stellar kinematics act on the incident, transmitted, and
+        # nebular spectra before those components encounter dust attenuation.
         incident = IncidentEmission(
             grid=grid,
             label="incident",
@@ -591,9 +602,6 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             escaped=escaped,
             **kwargs,
         )
-        emergent = _broaden_model(
-            emergent, "emergent", velocity_dispersion_total, kwargs
-        )
         dust_emission.set_energy_balance(reprocessed, attenuated)
         dust_emission_model = DustEmission(
             label="dust_emission",
@@ -602,16 +610,18 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             **kwargs,
         )
 
-        # Finally make the TotalEmission model, this is dust_emission +
-        # emergent
-        StellarEmissionModel.__init__(
+        # Bulk motion applies after combining all emission from the system,
+        # including thermal dust emission.
+        _init_broadened_model(
             self,
+            "total" if label is None else label,
+            velocity_dispersion_total,
+            kwargs,
+            model_class=EmissionModel,
             grid=grid,
-            label="total" if label is None else label,
             combine=(dust_emission_model, emergent),
             related_models=(intrinsic,),
             emitter="galaxy" if not stellar_dust else "stellar",
-            **kwargs,
         )
 
 
@@ -686,8 +696,8 @@ class PacmanEmission:
                 Optional scalar internal stellar-population dispersion applied
                 before dust attenuation.
             velocity_dispersion_total (unyt_quantity):
-                Optional scalar bulk dispersion applied to final stellar light
-                before adding thermal dust emission.
+                Optional scalar bulk dispersion applied to all final emission,
+                including thermal dust emission when present.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -853,6 +863,12 @@ class BimodalPacmanEmissionNoEscapedNoDust(StellarEmissionModel):
             label(str):
                 The label for the total emission model. If `None` this will
                 be set to "attenuated".
+            velocity_dispersion_young_starpop (unyt.unyt_quantity):
+                Optional scalar internal dispersion for the young stellar
+                population, applied before dust attenuation.
+            velocity_dispersion_old_starpop (unyt.unyt_quantity):
+                Optional scalar internal dispersion for the old stellar
+                population, applied before dust attenuation.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -863,7 +879,8 @@ class BimodalPacmanEmissionNoEscapedNoDust(StellarEmissionModel):
                 " reprocessed grid."
             )
 
-        # Create the incident models
+        # Apply each population's internal kinematics before combining young
+        # and old spectra or applying either dust screen.
         young_incident = IncidentEmission(
             grid=grid,
             label="young_incident",
@@ -1194,8 +1211,8 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             velocity_dispersion_old_starpop (unyt_quantity):
                 Optional scalar internal dispersion for the old population.
             velocity_dispersion_total (unyt_quantity):
-                Optional scalar bulk dispersion applied to young and old
-                stellar light before adding thermal dust emission.
+                Optional scalar bulk dispersion applied to young and old total
+                emission, including thermal dust emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -1206,7 +1223,8 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
                 "reprocessed grid."
             )
 
-        # Create the incident models
+        # Apply each population's internal kinematics before combining young
+        # and old spectra or applying either dust screen.
         young_incident = IncidentEmission(
             grid=grid,
             label="young_incident",
@@ -1379,18 +1397,6 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             emitter="stellar",
             **kwargs,
         )
-        young_attenuated = _broaden_model(
-            young_attenuated,
-            young_attenuated.label,
-            velocity_dispersion_total,
-            kwargs,
-        )
-        old_attenuated = _broaden_model(
-            old_attenuated,
-            "old_attenuated",
-            velocity_dispersion_total,
-            kwargs,
-        )
         attenuated = StellarEmissionModel(
             label="attenuated",
             combine=(young_attenuated, old_attenuated),
@@ -1456,6 +1462,20 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             combine=(old_dust_emission, old_emergent),
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
+        )
+        # Bulk motion applies to each complete population spectrum, including
+        # thermal dust, while preserving young_total + old_total at the root.
+        young_total = _broaden_model(
+            young_total,
+            "young_total",
+            velocity_dispersion_total,
+            kwargs,
+        )
+        old_total = _broaden_model(
+            old_total,
+            "old_total",
+            velocity_dispersion_total,
+            kwargs,
         )
 
         # Store all models as related
@@ -1605,6 +1625,12 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             label(str):
                 The label for the total emission model. If `None` this will
                 be set to "emergent".
+            velocity_dispersion_young_starpop (unyt.unyt_quantity):
+                Optional scalar internal dispersion for the young stellar
+                population, applied before dust attenuation.
+            velocity_dispersion_old_starpop (unyt.unyt_quantity):
+                Optional scalar internal dispersion for the old stellar
+                population, applied before dust attenuation.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -1622,7 +1648,8 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
                 "non-zero escape fraction."
             )
 
-        # Create the incident models
+        # Apply each population's internal kinematics before combining young
+        # and old spectra or applying either dust screen.
         young_incident = IncidentEmission(
             grid=grid,
             label="young_incident",
@@ -2000,8 +2027,8 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             velocity_dispersion_old_starpop (unyt_quantity):
                 Optional scalar internal dispersion for the old population.
             velocity_dispersion_total (unyt_quantity):
-                Optional scalar bulk dispersion applied to young and old
-                stellar light before adding thermal dust emission.
+                Optional scalar bulk dispersion applied to young and old total
+                emission, including thermal dust emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -2019,7 +2046,8 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
                 "non-zero escape fraction."
             )
 
-        # Create the incident models
+        # Apply each population's internal kinematics before combining young
+        # and old spectra or applying either dust screen.
         young_incident = IncidentEmission(
             grid=grid,
             label="young_incident",
@@ -2226,18 +2254,6 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             escaped=old_escaped,
             **kwargs,
         )
-        young_emergent = _broaden_model(
-            young_emergent,
-            "young_emergent",
-            velocity_dispersion_total,
-            kwargs,
-        )
-        old_emergent = _broaden_model(
-            old_emergent,
-            "old_emergent",
-            velocity_dispersion_total,
-            kwargs,
-        )
         emergent = StellarEmissionModel(
             label="emergent",
             combine=(young_emergent, old_emergent),
@@ -2298,6 +2314,20 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             combine=(old_dust_emission, old_emergent),
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
+        )
+        # Bulk motion applies to each complete population spectrum, including
+        # thermal dust, while preserving young_total + old_total at the root.
+        young_total = _broaden_model(
+            young_total,
+            "young_total",
+            velocity_dispersion_total,
+            kwargs,
+        )
+        old_total = _broaden_model(
+            old_total,
+            "old_total",
+            velocity_dispersion_total,
+            kwargs,
         )
 
         # Store all models as related
@@ -2485,8 +2515,8 @@ class BimodalPacmanEmission:
             velocity_dispersion_old_starpop (unyt_quantity):
                 Optional scalar internal dispersion for the old population.
             velocity_dispersion_total (unyt_quantity):
-                Optional scalar bulk dispersion applied to young and old
-                stellar light before adding thermal dust emission.
+                Optional scalar bulk dispersion applied to young and old total
+                emission, including thermal dust emission when present.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
