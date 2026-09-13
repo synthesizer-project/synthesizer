@@ -327,6 +327,7 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
         fesc="fesc",
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
+        dust_curve=PowerLaw(),
         **kwargs,
     ):
         """Initialize the PacmanEmissionWithEscapeNoDust model.
@@ -343,6 +344,9 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             label (str):
                 The label for the total emission model. If `None` this will
                 be set to "emergent".
+            dust_curve (synthesizer.emission_models.Transformer):
+                The assumed dust curve. Defaults to `PowerLaw`, with
+                default parameters.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -405,7 +409,7 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
         )
         attenuated = AttenuatedEmission(
             label="attenuated",
-            dust_curve=PowerLaw(),
+            dust_curve=dust_curve,
             apply_to=reprocessed,
             emitter="stellar",
             tau_v=tau_v,
@@ -679,6 +683,7 @@ class PacmanEmission:
                 return PacmanEmissionWithEscapedNoDust(
                     grid=grid,
                     tau_v=tau_v,
+                    dust_curve=dust_curve,
                     fesc=fesc,
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
