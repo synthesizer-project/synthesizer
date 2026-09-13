@@ -10,7 +10,10 @@ from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
 
 H = 0.7
 DELTA_T = np.array([2.0, 2.0, 2.0, 2.0])  # Gyr
-LBT_MEAN = np.array([12.0, 8.0, 4.0, 1.0])  # Gyr
+# Lookback time from z=0 to each bin midpoint; the output snapshot sits
+# 3 Gyr back, so ages at the output are [7, 5, 3, 1] Gyr
+LBT_MEAN = np.array([10.0, 8.0, 6.0, 4.0])  # Gyr
+AGES = np.array([7.0, 5.0, 3.0, 1.0])  # Gyr
 IDS = np.array([10, 42, 7], dtype=np.int32)
 SFR = {  # Msun / yr / h, (ngal, nbins)
     "disks": np.array(
@@ -39,13 +42,15 @@ def shark_file(tmp_path):
     fname = tmp_path / "star_formation_histories.hdf5"
     with h5py.File(fname, "w") as hf:
         hf["galaxies/id_galaxy"] = IDS
-        hf["lbt_mean"] = LBT_MEAN
-        hf["delta_t"] = DELTA_T
+        hf["lbt_mean"] = LBT_MEAN.astype(np.float32)
+        hf["delta_t"] = DELTA_T.astype(np.float32)
         hf["cosmology/h"] = H
-        hf["run_info/redshift"] = 0.0
+        hf["run_info/redshift"] = 0.25
         for i, comp in enumerate(SFR):
-            hf[f"{comp}/star_formation_rate_histories"] = SFR[comp]
-            hf[f"{comp}/metallicity_histories"] = _zmet(i)
+            hf[f"{comp}/star_formation_rate_histories"] = SFR[comp].astype(
+                np.float32
+            )
+            hf[f"{comp}/metallicity_histories"] = _zmet(i).astype(np.float32)
     return str(fname)
 
 
@@ -53,6 +58,7 @@ def test_particle_roundtrip(shark_file):
     """Masses, ages, metallicities and ids survive the round trip."""
     galaxies = load_SHARK(shark_file)
     assert [g.id_galaxy for g in galaxies] == [10, 42, 7]
+    assert all(g.redshift == 0.25 for g in galaxies)
 
     # Galaxy 10: disk bins 0 and 2, then merger-bulge bin 1
     stars = galaxies[0].stars
@@ -62,9 +68,11 @@ def test_particle_roundtrip(shark_file):
         np.array([1.0, 2.0, 1.0]) * 2e9 / H,
     )
     np.testing.assert_allclose(
-        stars.ages.to("yr").value, np.array([12.0, 4.0, 8.0]) * 1e9
+        stars.ages.to("yr").value, AGES[[0, 2, 1]] * 1e9, rtol=1e-6
     )
-    np.testing.assert_allclose(stars.metallicities, [0.001, 0.003, 0.004])
+    np.testing.assert_allclose(
+        stars.metallicities, [0.001, 0.003, 0.004], rtol=1e-6
+    )
     np.testing.assert_array_equal(stars.star_component, [0, 0, 1])
 
     # Zero-SFR bins never become particles

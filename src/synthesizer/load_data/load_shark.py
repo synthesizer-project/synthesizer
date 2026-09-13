@@ -30,6 +30,8 @@ Notes:
       returned galaxy, never by row position.
     - SFRs here are in Msun / yr / h, unlike the catalogue ``sfr_*``
       datasets which are in Msun / Gyr / h.
+    - ``lbt_mean`` is the lookback time from z=0, not from the output
+      snapshot; ages are shifted so they are relative to the output.
 """
 
 import h5py
@@ -55,10 +57,10 @@ def load_SHARK(
 
     Each non-zero (time bin, component) entry becomes one stellar
     "particle" with initial mass ``SFR * delta_t / h`` (converted to
-    Msun), age equal to the lookback time to the bin midpoint
-    (``lbt_mean``), and the metallicity of stars formed in that bin.
-    Bins with zero star formation are dropped (SHARK zero-fills bins
-    before a galaxy forms).
+    Msun), age equal to the time from the bin midpoint to the output
+    snapshot, and the metallicity of stars formed in that bin. Bins
+    with zero star formation are dropped (SHARK zero-fills bins before
+    a galaxy forms).
 
     Args:
         fname (str):
@@ -108,7 +110,7 @@ def load_SHARK(
     with h5py.File(fname, "r") as hf:
         h = float(hf["cosmology/h"][()])
         redshift = float(hf["run_info/redshift"][()])
-        lbt_mean = hf["lbt_mean"][:].astype(np.float64)  # Gyr
+        lbt_mean = hf["lbt_mean"][:].astype(np.float64)  # Gyr, from z=0
         delta_t = hf["delta_t"][:].astype(np.float64)  # Gyr
         gal_ids = hf["galaxies/id_galaxy"][:]
         sfrs = [
@@ -119,44 +121,36 @@ def load_SHARK(
             hf[f"{comp}/metallicity_histories"][:] for comp in components
         ]  # absolute Z of stars formed per bin
 
-    nbins = lbt_mean.size
     ncomp = len(components)
 
     # Mass formed per bin [Msun]: SFR [Msun/yr/h] * delta_t [Gyr]
-    mass = np.concatenate(
-        [sfr.astype(np.float64) * delta_t * 1e9 / h for sfr in sfrs],
-        axis=1,
-    )  # (ngal, ncomp * nbins)
+    mass = np.concatenate(sfrs, axis=1) * np.tile(delta_t * 1e9 / h, ncomp)
     zmet = np.concatenate(zmets, axis=1).astype(np.float64)
 
-    # Stellar age at the output snapshot = lookback time to bin midpoint
-    ages = np.tile(lbt_mean * 1e9, ncomp)  # yr
-    tags = np.repeat(np.arange(ncomp, dtype=np.int8), nbins)
+    # Stellar age at the output snapshot [yr]. lbt_mean is measured from
+    # z=0 and the last bin ends at the output, so subtract the lookback
+    # time to the output (the last bin's lower edge)
+    ages = np.tile(lbt_mean - (lbt_mean[-1] - 0.5 * delta_t[-1]), ncomp)
+    ages *= 1e9
+    tags = np.repeat(np.arange(ncomp, dtype=np.int8), delta_t.size)
 
     # Only bins with star formation become particles (zeros pad bins
     # before the galaxy formed, and would otherwise be metallicity
-    # floored)
-    mask = mass > 0
-
-    # Boolean-masking a 2D array flattens in row-major order, so
-    # particles are galaxy-contiguous; index galaxy i via cumulative
-    # per-row counts
-    begin = np.zeros(mask.shape[0] + 1, dtype=np.int64)
-    np.cumsum(mask.sum(axis=1), out=begin[1:])
-    flat_mass = mass[mask]
-    flat_z = zmet[mask]
-    flat_age = np.broadcast_to(ages, mass.shape)[mask]
-    flat_tag = np.broadcast_to(tags, mass.shape)[mask]
+    # floored). nonzero is row-major so particles are galaxy-contiguous
+    gi, bi = np.nonzero(mass > 0)
+    begin = np.searchsorted(gi, np.arange(gal_ids.size + 1))
+    flat_mass, flat_z = mass[gi, bi], zmet[gi, bi]
+    flat_age, flat_tag = ages[bi], tags[bi]
 
     if verbose:
         print(
             f"Loading {gal_ids.size} galaxies "
-            f"({flat_mass.size} particles) at z={redshift:.3f}"
+            f"({gi.size} particles) at z={redshift:.3f}"
         )
 
+    galaxy_cls = ParametricGalaxy if method == "parametric" else ParticleGalaxy
     galaxies = []
-    for i, gal_id in enumerate(gal_ids):
-        b, e = begin[i], begin[i + 1]
+    for gal_id, b, e in zip(gal_ids, begin[:-1], begin[1:]):
         stars = None
         if e > b:
             stars = ParticleStars(
@@ -166,16 +160,13 @@ def load_SHARK(
                 redshift=redshift,
                 star_component=flat_tag[b:e],
             )
+            if method == "parametric":
+                stars = stars.get_sfzh(grid.log10ages, grid.metallicities)
         elif verbose:
             print(f"Galaxy {gal_id} formed no stars in {components}")
 
-        if method == "parametric":
-            if stars is not None:
-                stars = stars.get_sfzh(grid.log10ages, grid.metallicities)
-            gal = ParametricGalaxy(stars=stars, redshift=redshift)
-        else:
-            gal = ParticleGalaxy(stars=stars, redshift=redshift)
-        gal.id_galaxy = int(gal_id)
-        galaxies.append(gal)
+        galaxies.append(
+            galaxy_cls(stars=stars, redshift=redshift, id_galaxy=int(gal_id))
+        )
 
     return galaxies
