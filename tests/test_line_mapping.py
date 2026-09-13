@@ -53,7 +53,11 @@ def particle_galaxy_with_lines(per_particle_nebular_model, line_ids):
         redshift=1.0,
         centre=coordinates.mean(axis=0),
     )
-    galaxy.get_lines(line_ids, per_particle_nebular_model)
+    galaxy.get_lines(
+        line_ids,
+        per_particle_nebular_model,
+        out_dtype=np.float32,
+    )
     galaxy.get_observed_lines(cosmo=cosmo)
     return galaxy
 
@@ -173,6 +177,7 @@ class TestParticleGalaxyLineMaps:
         assert set(imgs.keys()) == set(line_ids)
         for lid in line_ids:
             assert imgs[lid].arr.shape == tuple(imgs.npix)
+            assert imgs[lid].arr.dtype == np.float32
 
     def test_hist_luminosity_maps(self, particle_galaxy_with_lines, line_ids):
         """Histogram luminosity line maps should also work."""
