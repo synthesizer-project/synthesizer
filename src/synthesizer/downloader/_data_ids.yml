@@ -1,4 +1,6 @@
 TestData:
+  golden_pipeline_reference.hdf5:
+    dataset: golden-pipeline-reference
   bpass-2.2.1-bin_chabrier03-0.1,300.0_cloudy-c23.01-sps_updated-star-fraction.hdf5:
     dataset: bpass-2p2p1-bin-chabrier03-0p1-300p0-cloudy-c23p01
   qsosed-test_cloudy-c23.01-agn-test.hdf5:

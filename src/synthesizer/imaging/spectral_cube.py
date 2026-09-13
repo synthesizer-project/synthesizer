@@ -125,6 +125,22 @@ class SpectralCube(ImagingBase):
         self.sed = None
         self.quantity = None
 
+    def cast(self, dtype):
+        """Cast the data cube array to a new floating-point dtype in place.
+
+        Args:
+            dtype (np.dtype/type):
+                The dtype to cast to.
+
+        Returns:
+            SpectralCube:
+                This cube (to allow chaining).
+        """
+        dtype = np.dtype(dtype)
+        if self.arr is not None and self.arr.dtype != dtype:
+            self.arr = self.arr.astype(dtype)
+        return self
+
     @property
     def data_cube(self):
         """Return the data cube.

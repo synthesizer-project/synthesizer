@@ -662,6 +662,7 @@ def download_test_grids(destination):
         "test_grid.hdf5",
         "test_grid_agn-blr.hdf5",
         "test_grid_agn-nlr.hdf5",
+        "golden_pipeline_reference.hdf5",
     ]:
         _download(f, destination)
 

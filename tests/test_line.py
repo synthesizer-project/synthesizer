@@ -385,6 +385,30 @@ class TestLineCollectionFlux:
         expected_flux = lines.luminosity / (4 * np.pi * (10 * pc) ** 2)
         assert np.allclose(flux, expected_flux)
 
+    def test_get_flux0_preserves_float32(self, simple_line_collection):
+        """Rest-frame fluxes should inherit float32 luminosity precision."""
+        lines = simple_line_collection
+        lines.luminosity = (lines.luminosity * 1e-10).astype(np.float32)
+        lines.continuum = (lines.continuum * 1e-10).astype(np.float32)
+
+        flux = lines.get_flux0()
+
+        assert flux.dtype == np.float32
+        assert lines.continuum_flux.dtype == np.float32
+
+    def test_get_flux_honours_and_validates_out_dtype(
+        self, simple_line_collection
+    ):
+        """Observed line fluxes should narrow only to supported dtypes."""
+        lines = simple_line_collection
+
+        flux = lines.get_flux(cosmo, 1.0, out_dtype=np.float32)
+
+        assert flux.dtype == np.float32
+        assert lines.continuum_flux.dtype == np.float32
+        with pytest.raises(ValueError, match="Unsupported output dtype"):
+            lines.get_flux(cosmo, 1.0, out_dtype=np.int32)
+
     @pytest.mark.parametrize("z", [0.1, 1.0, 2.0])
     def test_get_flux(self, simple_line_collection, z, test_grid):
         """Test get_flux method with different redshifts."""
