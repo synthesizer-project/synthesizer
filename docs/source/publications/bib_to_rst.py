@@ -218,19 +218,22 @@ def format_journal_name(journal: str) -> str:
 def get_paper_rst(
     entry: dict,
     max_authors: int = 5,
-    is_last: bool = False,
+    number: int = 0,
 ) -> str:
     """Generates the ReStructuredText (RST) block for a bib entry.
 
     Layout:
-    - If an image exists: Uses a 'list-table' to display Image (Left)
-      and Metadata (Right).
-    - If no image: Standard text block.
+    - Metadata is displayed as a compact line block (numbered title,
+      authors, then date, journal and links).
+    - If an image exists it is placed inside a collapsible dropdown,
+      hidden by default.
 
     Args:
         entry (dict): A single entry from the bibtex database.
         max_authors (int): Maximum number of authors to display.
-        is_last (bool): Whether this is the last entry in the list.
+        number (int): The index shown before the title. Entries are
+            numbered from the bottom of the list upwards, so the oldest
+            paper is 1.
 
     Returns:
         str: The formatted RST string for this entry.
@@ -281,36 +284,26 @@ def get_paper_rst(
     relative_image_path = os.path.join(image_dir, image_filename)
 
     # Build RST for entry
+    # A line block keeps the details on separate lines without the
+    # paragraph spacing a sequence of plain paragraphs would introduce.
+    # The final line lives in its own container alongside the collapsible
+    # figure so that publications.css can render the toggle inline with it.
     rst = ""
 
+    rst += ".. container:: pub-entry\n\n"
+    rst += f"    | **{number}. {title}**\n"
+    rst += f"    | {authors}\n\n"
+    rst += "    .. container:: pub-meta\n\n"
+    rst += f"        {date_str}, *{journal}* — {links_line}\n"
+
     if has_image:
-        # Side-by-side layout using list-table
-        # :class: borderless is useful for Sphinx themes to hide table borders
-        rst += ".. list-table::\n"
-        rst += "   :widths: 40 60\n"
-        rst += "   :class: borderless\n\n"
-
-        # Column 1: The Image
-        rst += f"   * - .. image:: {relative_image_path}\n"
-        rst += "          :width: 100%\n"  # Fills the 40% column width
-        rst += f"          :target: {ads_link}\n"  # Makes the image clickable
-
-        # Column 2: The Text details
-        rst += f"     - **{title}**\n\n"
-        rst += f"       Authors: {authors}\n\n"
-        rst += f"       {date_str}, *{journal}*\n\n"
-        rst += f"       {links_line}\n"
-
-    else:
-        # Fallback layout: Simple vertical text block
-        rst += f"**{title}**\n\n"
-        rst += f"Authors: {authors}\n\n"
-        rst += f"{date_str}, *{journal}*\n\n"
-        rst += f"{links_line}\n"
-
-        # Only add the line if it is NOT the last paper
-        if not is_last:
-            rst += "\n----\n"
+        # Hide the figure behind a collapsible toggle (closed by default)
+        rst += "\n        .. collapse:: Figure\n\n"
+        rst += f"            .. image:: {relative_image_path}\n"
+        rst += "                :width: 60%\n"
+        rst += "                :align: center\n"
+        # Makes the image clickable
+        rst += f"                :target: {ads_link}\n"
 
     # Add a newline between papers
     rst += "\n"
@@ -358,13 +351,12 @@ def generate_rst(config: dict, max_authors: int = 5) -> None:
             rst_content += f.read() + "\n\n"
     else:
         rst_content += header
-    # Generate RST for each entry
+    # Generate RST for each entry, numbering from the bottom of the list
+    # upwards so the oldest paper is 1. Adding a newer paper then leaves
+    # the existing numbers untouched.
     for ii, entry in enumerate(entries):
-        # Check if this is the last item in the list
-        is_last = ii == len(entries) - 1
-
         rst_content += get_paper_rst(
-            entry, max_authors=max_authors, is_last=is_last
+            entry, max_authors=max_authors, number=len(entries) - ii
         )
 
     # Write final output
