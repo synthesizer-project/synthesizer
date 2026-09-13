@@ -626,6 +626,7 @@ class TestBimodalPacmanEmission:
             fesc=0.0,
             dust_emission_ism=Greybody(temperature=20 * K, emissivity=2),
             dust_emission_birth=Greybody(temperature=20 * K, emissivity=2),
+            stellar_dust=False,
             velocity_dispersion_total=200 * km / s,
         )
 
@@ -637,6 +638,7 @@ class TestBimodalPacmanEmission:
             total = model[f"{population}_total"]
             predispersion = model[f"{population}_total_predispersion"]
             assert total.transformer.__class__.__name__ == "DopplerBroadening"
+            assert total.emitter == "galaxy"
             assert not predispersion.save
             assert f"{population}_dust_emission" in {
                 child.label for child in predispersion.combine

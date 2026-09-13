@@ -78,6 +78,7 @@ def _apply_broadening_to_model(model, label, velocity_dispersion, kwargs):
     broadened = model_class(
         label=label,
         apply_to=model,
+        emitter=model.emitter,
         transformer=DopplerBroadening(
             sigma_v_attr="velocity_dispersion",
         ),
