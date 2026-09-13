@@ -79,6 +79,85 @@ def age_lookup_table(cosmo, redshift=0.0, delta_a=1e-3, low_lim=1e-4):
     return scale_factor, ages
 
 
+def split_age_bins(lo, hi, grid_ages):
+    """Split top-hat age bins at every grid age they contain.
+
+    A bin narrower than the grid spacing is returned unchanged (one segment
+    at its midpoint). Wider bins become one segment per grid age they
+    straddle, so a constant SFR across the bin is resolved by the grid.
+
+    Args:
+        lo (np.ndarray of float):
+            Lower (younger) edge of each bin, in years.
+        hi (np.ndarray of float):
+            Upper (older) edge of each bin, in years.
+        grid_ages (np.ndarray of float):
+            Ascending grid ages, in years.
+
+    Returns:
+        tuple: (bin index, midpoint age, width fraction) per segment.
+    """
+    bin_index, mid, frac = [], [], []
+    for b, (a, c) in enumerate(zip(lo, hi)):
+        cuts = np.concatenate(
+            ([a], grid_ages[(grid_ages > a) & (grid_ages < c)], [c])
+        )
+        bin_index.append(np.full(cuts.size - 1, b))
+        mid.append(0.5 * (cuts[1:] + cuts[:-1]))
+        frac.append(np.diff(cuts) / (c - a))
+    return np.concatenate(bin_index), np.concatenate(mid), np.concatenate(frac)
+
+
+def bin_overlap_matrix(lo, hi, grid_ages):
+    """Fraction of each top-hat age bin falling in each grid age cell.
+
+    Cell edges follow ``parametric.Stars``: zero, the linear midpoints
+    between adjacent grid ages, then infinity so mass older than the grid
+    is kept in the last cell.
+
+    Args:
+        lo (np.ndarray of float):
+            Lower (younger) edge of each bin, in years.
+        hi (np.ndarray of float):
+            Upper (older) edge of each bin, in years.
+        grid_ages (np.ndarray of float):
+            Ascending grid ages, in years.
+
+    Returns:
+        np.ndarray of float: (nbin, ngrid) overlap fractions.
+    """
+    lo, hi = lo[:, None], hi[:, None]
+    edges = np.concatenate(
+        ([0.0], 0.5 * (grid_ages[:-1] + grid_ages[1:]), [np.inf])
+    )
+    overlap = np.minimum(hi, edges[1:]) - np.maximum(lo, edges[:-1])
+    return np.clip(overlap, 0.0, None) / (hi - lo)
+
+
+def cic_matrix(values, grid):
+    """Cloud-in-cell weights placing values on an ascending grid.
+
+    Values beyond the grid are clamped to the end points.
+
+    Args:
+        values (np.ndarray of float):
+            The values to place (e.g. log10 metallicities).
+        grid (np.ndarray of float):
+            Ascending grid coordinates.
+
+    Returns:
+        np.ndarray of float: (nvalues, ngrid) weights, each row summing to 1.
+    """
+    x = np.clip(values, grid[0], grid[-1])
+    j = np.clip(np.searchsorted(grid, x, side="right") - 1, 0, grid.size - 2)
+    frac = (x - grid[j]) / (grid[j + 1] - grid[j])
+    weights = np.zeros((x.size, grid.size))
+    rows = np.arange(x.size)
+    weights[rows, j] = 1.0 - frac
+    weights[rows, j + 1] += frac
+    return weights
+
+
 def lookup_age(scale_factor, scale_factors, ages):
     """Look up the age given a scale factor.
 
