@@ -1162,12 +1162,17 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         Only applicable to particle emitters.
 
+        Particle based vel_shift is incompatible with scalar velocity
+        dispersion broadening transformations, so this function will raise an
+        error if both are set.
+
         Args:
             vel_shift (bool):
                 Whether to set the velocity shift flag.
             set_all (bool):
                 Whether to set the emitter on all models.
         """
+        # Check for incompatible velocity dispersion broadening
         if vel_shift and any(
             getattr(model, "_has_velocity_dispersion", False)
             for model in self._models.values()
