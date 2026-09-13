@@ -11,6 +11,7 @@ from synthesizer.emission_models import (
     NebularEmission,
     PacmanEmission,
     ScreenEmission,
+    TotalEmission,
     TransmittedEmission,
 )
 from synthesizer.emission_models.generators.dust.greybody import Greybody
@@ -21,38 +22,43 @@ from synthesizer.emission_models.utils import get_param
 class TestPacmanEmission:
     """Test suite for PacmanEmission."""
 
-    def test_init(self, test_grid):
+    @pytest.mark.parametrize(
+        ("fesc", "with_dust_emission"),
+        ((0.0, False), (0.1, False), (0.0, True), (0.1, True)),
+    )
+    def test_init(self, test_grid, fesc, with_dust_emission):
         """Test the initialization of the PacmanEmission object."""
         # Define the emission model
+        dust_curve = Calzetti2000()
+        dust_emission = (
+            Greybody(temperature=20 * K, emissivity=2)
+            if with_dust_emission
+            else None
+        )
         model = PacmanEmission(
             test_grid,
             tau_v=0.33,
-            dust_curve=PowerLaw(slope=-1),
-            fesc=0.1,
+            dust_curve=dust_curve,
+            dust_emission=dust_emission,
+            fesc=fesc,
             fesc_ly_alpha=0.5,
         )
 
-        assert model["attenuated"].dust_curve.slope == -1
+        assert model["attenuated"].dust_curve is dust_curve
         assert model["attenuated"].fixed_parameters["tau_v"] == 0.33
 
     def test_velocity_dispersion_graph(self, test_grid):
-        """Test star-population and total broadening graph placement."""
+        """Test broadening is applied once to the final emission."""
         model = PacmanEmission(
             test_grid,
             tau_v=0.33,
             fesc=0.1,
-            velocity_dispersion_starpop=100 * km / s,
-            velocity_dispersion_total=200 * km / s,
+            velocity_dispersion=200 * km / s,
         )
 
-        for label in ("incident", "transmitted", "nebular"):
-            assert f"{label}_predispersion" in model._models
-            assert not model[f"{label}_predispersion"].save
-            assert model[label].transformer.__class__.__name__ == (
-                "DopplerBroadening"
-            )
         assert "emergent_predispersion" in model._models
         assert not model["emergent_predispersion"].save
+        assert model.transformer.__class__.__name__ == "DopplerBroadening"
 
     def test_total_dispersion_includes_dust(self, test_grid):
         """Test total broadening applies after adding dust emission."""
@@ -61,7 +67,7 @@ class TestPacmanEmission:
             tau_v=0.33,
             fesc=0.0,
             dust_emission=Greybody(temperature=20 * K, emissivity=2),
-            velocity_dispersion_total=200 * km / s,
+            velocity_dispersion=200 * km / s,
         )
 
         assert model.transformer.__class__.__name__ == "DopplerBroadening"
@@ -80,7 +86,7 @@ class TestPacmanEmission:
                 test_grid,
                 tau_v=0.33,
                 fesc=0.0,
-                velocity_dispersion_starpop=100 * km / s,
+                velocity_dispersion=100 * km / s,
                 vel_shift=True,
             )
 
@@ -88,7 +94,7 @@ class TestPacmanEmission:
             test_grid,
             tau_v=0.33,
             fesc=0.0,
-            velocity_dispersion_total=100 * km / s,
+            velocity_dispersion=100 * km / s,
         )
         with pytest.raises(exceptions.InconsistentArguments):
             model.set_vel_shift(True, set_all=True)
@@ -120,6 +126,20 @@ class TestPacmanEmission:
         assert model.label == "custom_transmitted"
         assert "custom_transmitted_predispersion" in model._models
         assert not model["custom_transmitted_predispersion"].save
+
+    def test_total_emission_velocity_dispersion(self, test_grid):
+        """Test TotalEmission broadens only its final output."""
+        model = TotalEmission(
+            test_grid,
+            dust_curve=PowerLaw(),
+            fesc=0.0,
+            velocity_dispersion=100 * km / s,
+        )
+
+        assert model.transformer.__class__.__name__ == "DopplerBroadening"
+        predispersion_label = f"{model.label}_predispersion"
+        assert predispersion_label in model._models
+        assert not model[predispersion_label].save
 
     def test_individual_model_preserves_root_identity(self, test_grid):
         """Test concrete model wrappers retain their root identity."""
@@ -215,7 +235,7 @@ class TestPacmanEmission:
             fesc=0.1,
             fesc_ly_alpha=0.5,
             dust_emission=Greybody(temperature=10**4 * K, emissivity=2),
-            velocity_dispersion_total=200 * km / s,
+            velocity_dispersion=200 * km / s,
         )
 
         # Generate get_spectra
@@ -560,7 +580,7 @@ class TestCharlotFallEmission:
             tau_v_birth=0.33,
             dust_emission_ism=Greybody(temperature=10**4 * K, emissivity=2),
             dust_emission_birth=Greybody(temperature=10**4 * K, emissivity=2),
-            velocity_dispersion_total=200 * km / s,
+            velocity_dispersion=200 * km / s,
         )
 
         # Generate get_spectra
@@ -600,27 +620,21 @@ class TestBimodalPacmanEmission:
         assert model["old_transmitted"].fixed_parameters["fesc"] == 0.1
 
     def test_velocity_dispersion_graph(self, test_grid):
-        """Test young, old, and total broadening graph placement."""
+        """Test broadening is applied once to the final emission."""
         model = BimodalPacmanEmission(
             test_grid,
             tau_v_ism=0.33,
             tau_v_birth=0.33,
             fesc=0.1,
-            velocity_dispersion_young_starpop=50 * km / s,
-            velocity_dispersion_old_starpop=100 * km / s,
-            velocity_dispersion_total=200 * km / s,
+            velocity_dispersion=200 * km / s,
         )
 
-        for population in ("young", "old"):
-            for component in ("incident", "transmitted", "nebular"):
-                label = f"{population}_{component}_predispersion"
-                assert label in model._models
-                assert not model[label].save
         assert "emergent_predispersion" in model._models
         assert not model["emergent_predispersion"].save
+        assert model.transformer.__class__.__name__ == "DopplerBroadening"
 
-    def test_total_dispersion_preserves_population_totals(self, test_grid):
-        """Test dust models retain young plus old total composition."""
+    def test_total_dispersion_includes_population_totals(self, test_grid):
+        """Test final broadening includes both population totals."""
         model = BimodalPacmanEmission(
             test_grid,
             tau_v_ism=0.33,
@@ -629,21 +643,21 @@ class TestBimodalPacmanEmission:
             dust_emission_ism=Greybody(temperature=20 * K, emissivity=2),
             dust_emission_birth=Greybody(temperature=20 * K, emissivity=2),
             stellar_dust=False,
-            velocity_dispersion_total=200 * km / s,
+            velocity_dispersion=200 * km / s,
         )
 
-        assert {child.label for child in model.combine} == {
+        assert model.transformer.__class__.__name__ == "DopplerBroadening"
+        predispersion = model["total_predispersion"]
+        assert not predispersion.save
+        assert {child.label for child in predispersion.combine} == {
             "young_total",
             "old_total",
         }
         for population in ("young", "old"):
             total = model[f"{population}_total"]
-            predispersion = model[f"{population}_total_predispersion"]
-            assert total.transformer.__class__.__name__ == "DopplerBroadening"
             assert total.emitter == "galaxy"
-            assert not predispersion.save
             assert f"{population}_dust_emission" in {
-                child.label for child in predispersion.combine
+                child.label for child in total.combine
             }
 
     def test_missing_optical_depth(self, test_grid, random_part_stars):

@@ -896,7 +896,6 @@ class TotalEmissionWithEscapedWithDust(StellarEmissionModel):
     of the parameters see the EmissionModel class .
     """
 
-    @accepts(velocity_dispersion_total=km / s)
     def __init__(
         self,
         grid,
@@ -905,8 +904,6 @@ class TotalEmissionWithEscapedWithDust(StellarEmissionModel):
         label="total",
         fesc="fesc",
         fesc_ly_alpha="fesc_ly_alpha",
-        velocity_dispersion_starpop=None,
-        velocity_dispersion_total=None,
         **kwargs,
     ):
         """Initialise the TotalEmission object.
@@ -919,19 +916,12 @@ class TotalEmissionWithEscapedWithDust(StellarEmissionModel):
             label (str): The label for this emission model.
             fesc (float): The escape fraction of the emission.
             fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
-            velocity_dispersion_starpop (unyt.unyt_quantity): Optional scalar
-                internal stellar-population dispersion applied before dust
-                attenuation.
-            velocity_dispersion_total (unyt.unyt_quantity): Optional scalar
-                bulk dispersion applied to the final stellar and thermal-dust
-                emission.
             **kwargs: Additional keyword arguments.
         """
         # Set up models we need to link
         incident = IncidentEmission(
             grid=grid,
             label="incident",
-            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         nebular_line = NebularLineEmission(
@@ -947,14 +937,12 @@ class TotalEmissionWithEscapedWithDust(StellarEmissionModel):
             grid=grid,
             nebular_line=nebular_line,
             nebular_continuum=nebular_continuum,
-            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         transmitted = TransmittedEmission(
             grid=grid,
             fesc=fesc,
             incident=incident,
-            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         reprocessed = ReprocessedEmission(
@@ -985,35 +973,13 @@ class TotalEmissionWithEscapedWithDust(StellarEmissionModel):
             **kwargs,
         )
 
-        # Are we broadening the result?
-        if velocity_dispersion_total is None:
-            StellarEmissionModel.__init__(
-                self,
-                grid=grid,
-                label=label,
-                combine=(emergent, dust_emission),
-                **kwargs,
-            )
-        else:
-            # Bulk motion applies to the complete system, including its dust.
-            # Relative source-dust motion belongs in attenuation instead.
-            predispersion = StellarEmissionModel(
-                grid=grid,
-                label=f"{label}_predispersion",
-                combine=(emergent, dust_emission),
-                save=False,
-                **kwargs,
-            )
-            StellarEmissionModel.__init__(
-                self,
-                label=label,
-                apply_to=predispersion,
-                transformer=DopplerBroadening(
-                    sigma_v_attr="velocity_dispersion"
-                ),
-                velocity_dispersion=velocity_dispersion_total,
-                **kwargs,
-            )
+        StellarEmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            combine=(emergent, dust_emission),
+            **kwargs,
+        )
 
 
 class TotalEmissionNoEscapedWithDust(StellarEmissionModel):
@@ -1026,7 +992,6 @@ class TotalEmissionNoEscapedWithDust(StellarEmissionModel):
     of the parameters see the EmissionModel class .
     """
 
-    @accepts(velocity_dispersion_total=km / s)
     def __init__(
         self,
         grid,
@@ -1034,8 +999,6 @@ class TotalEmissionNoEscapedWithDust(StellarEmissionModel):
         dust_emission_model,
         fesc_ly_alpha="fesc_ly_alpha",
         label="total",
-        velocity_dispersion_starpop=None,
-        velocity_dispersion_total=None,
         **kwargs,
     ):
         """Initialise the TotalEmission object.
@@ -1047,17 +1010,12 @@ class TotalEmissionNoEscapedWithDust(StellarEmissionModel):
                 emission model to use.
             fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
             label (str): The label for this emission model.
-            velocity_dispersion_starpop (unyt_quantity): Optional scalar
-                internal stellar-population dispersion, applied before dust.
-            velocity_dispersion_total (unyt_quantity): Optional scalar bulk
-                dispersion applied to final stellar and thermal-dust emission.
             **kwargs: Additional keyword arguments.
         """
         # Set up models we need to link
         incident = IncidentEmission(
             grid=grid,
             label="incident",
-            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         nebular_line = NebularLineEmission(
@@ -1073,14 +1031,12 @@ class TotalEmissionNoEscapedWithDust(StellarEmissionModel):
             grid=grid,
             nebular_line=nebular_line,
             nebular_continuum=nebular_continuum,
-            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         transmitted = TransmittedEmission(
             grid=grid,
             incident=incident,
             fesc=0.0,
-            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         reprocessed = ReprocessedEmission(
@@ -1103,35 +1059,13 @@ class TotalEmissionNoEscapedWithDust(StellarEmissionModel):
             **kwargs,
         )
 
-        # Are we broadening the result?
-        if velocity_dispersion_total is None:
-            StellarEmissionModel.__init__(
-                self,
-                grid=grid,
-                label=label,
-                combine=(attenuated, dust_emission),
-                **kwargs,
-            )
-        else:
-            # Bulk motion applies to the complete system, including its dust.
-            # Relative source-dust motion belongs in attenuation instead.
-            predispersion = StellarEmissionModel(
-                grid=grid,
-                label=f"{label}_predispersion",
-                combine=(attenuated, dust_emission),
-                save=False,
-                **kwargs,
-            )
-            StellarEmissionModel.__init__(
-                self,
-                label=label,
-                apply_to=predispersion,
-                transformer=DopplerBroadening(
-                    sigma_v_attr="velocity_dispersion"
-                ),
-                velocity_dispersion=velocity_dispersion_total,
-                **kwargs,
-            )
+        StellarEmissionModel.__init__(
+            self,
+            grid=grid,
+            label=label,
+            combine=(attenuated, dust_emission),
+            **kwargs,
+        )
 
 
 class TotalEmissionNoEscapedNoDust:
@@ -1151,7 +1085,6 @@ class TotalEmissionNoEscapedNoDust:
         dust_curve,
         label="attenuated",
         fesc_ly_alpha="fesc_ly_alpha",
-        velocity_dispersion_starpop=None,
         **kwargs,
     ):
         """Initialise the TotalEmissionNoEscapeNoDust object.
@@ -1161,16 +1094,12 @@ class TotalEmissionNoEscapedNoDust:
             dust_curve (AttenuationLaw): The dust curve to use.
             label (str): The label for this emission model.
             fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
-            velocity_dispersion_starpop (unyt.unyt_quantity): Optional scalar
-                internal stellar-population dispersion applied before dust
-                attenuation.
             **kwargs: Additional keyword arguments.
         """
         # Set up models we need to link
         incident = IncidentEmission(
             grid=grid,
             label="incident",
-            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         nebular_line = NebularLineEmission(
@@ -1186,14 +1115,12 @@ class TotalEmissionNoEscapedNoDust:
             grid=grid,
             nebular_line=nebular_line,
             nebular_continuum=nebular_continuum,
-            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         transmitted = TransmittedEmission(
             grid=grid,
             incident=incident,
             fesc=0.0,
-            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         reprocessed = ReprocessedEmission(
@@ -1230,7 +1157,6 @@ class TotalEmissionWithEscapedNoDust:
         fesc="fesc",
         fesc_ly_alpha="fesc_ly_alpha",
         label="total",
-        velocity_dispersion_starpop=None,
         **kwargs,
     ):
         """Initialise the TotalEmissionWithEscapeNoDust object.
@@ -1241,16 +1167,12 @@ class TotalEmissionWithEscapedNoDust:
             fesc (float): The escape fraction of the emission.
             fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
             label (str): The label for this emission model.
-            velocity_dispersion_starpop (unyt.unyt_quantity): Optional scalar
-                internal stellar-population dispersion applied before dust
-                attenuation.
             **kwargs: Additional keyword arguments.
         """
         # Set up models we need to link
         incident = IncidentEmission(
             grid=grid,
             label="incident",
-            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         nebular_line = NebularLineEmission(
@@ -1266,14 +1188,12 @@ class TotalEmissionWithEscapedNoDust:
             grid=grid,
             nebular_line=nebular_line,
             nebular_continuum=nebular_continuum,
-            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         transmitted = TransmittedEmission(
             grid=grid,
             fesc=fesc,
             incident=incident,
-            velocity_dispersion=velocity_dispersion_starpop,
             **kwargs,
         )
         reprocessed = ReprocessedEmission(
@@ -1319,8 +1239,7 @@ class TotalEmission:
         fesc="fesc",
         fesc_ly_alpha="fesc_ly_alpha",
         label="total",
-        velocity_dispersion_starpop=None,
-        velocity_dispersion_total=None,
+        velocity_dispersion=None,
         **kwargs,
     ):
         """Initialise and return the correct TotalEmission object.
@@ -1333,12 +1252,8 @@ class TotalEmission:
             fesc (float): The escape fraction of the emission.
             fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
             label (str): The label for this emission model.
-            velocity_dispersion_starpop (unyt.unyt_quantity): Optional scalar
-                internal stellar-population dispersion applied before dust
-                attenuation.
-            velocity_dispersion_total (unyt.unyt_quantity): Optional scalar
-                bulk dispersion applied to final stellar and thermal-dust
-                emission.
+            velocity_dispersion (unyt.unyt_quantity): Optional scalar velocity
+                dispersion applied to the final emission.
             **kwargs: Additional keyword arguments.
         """
         # If fesc is None or 0.0 then we only need the total emission without
@@ -1352,22 +1267,22 @@ class TotalEmission:
                     dust_curve=dust_curve,
                     label=label,
                     fesc_ly_alpha=fesc_ly_alpha,
-                    velocity_dispersion_starpop=velocity_dispersion_starpop,
                     **kwargs,
                 )
                 return _apply_broadening_to_model(
-                    model, model.label, velocity_dispersion_total, kwargs
+                    model, model.label, velocity_dispersion, kwargs
                 )
             else:
-                return TotalEmissionNoEscapedWithDust(
+                model = TotalEmissionNoEscapedWithDust(
                     grid=grid,
                     dust_curve=dust_curve,
                     dust_emission_model=dust_emission_model,
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
-                    velocity_dispersion_starpop=velocity_dispersion_starpop,
-                    velocity_dispersion_total=velocity_dispersion_total,
                     **kwargs,
+                )
+                return _apply_broadening_to_model(
+                    model, model.label, velocity_dispersion, kwargs
                 )
 
         # Otherwise we need the total emission with the escaped component
@@ -1381,23 +1296,23 @@ class TotalEmission:
                     fesc=fesc,
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
-                    velocity_dispersion_starpop=velocity_dispersion_starpop,
                     **kwargs,
                 )
                 return _apply_broadening_to_model(
-                    model, model.label, velocity_dispersion_total, kwargs
+                    model, model.label, velocity_dispersion, kwargs
                 )
             else:
                 # Otherwise we return the total emission with the escaped
                 # component
-                return TotalEmissionWithEscapedWithDust(
+                model = TotalEmissionWithEscapedWithDust(
                     grid=grid,
                     dust_curve=dust_curve,
                     dust_emission_model=dust_emission_model,
                     fesc=fesc,
                     fesc_ly_alpha=fesc_ly_alpha,
                     label=label,
-                    velocity_dispersion_starpop=velocity_dispersion_starpop,
-                    velocity_dispersion_total=velocity_dispersion_total,
                     **kwargs,
+                )
+                return _apply_broadening_to_model(
+                    model, model.label, velocity_dispersion, kwargs
                 )

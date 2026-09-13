@@ -2,10 +2,8 @@
 Compare stellar velocity dispersion configurations
 ==================================================
 
-This example compares population-scale and total-system Doppler broadening in
-the Pacman stellar emission model. Population broadening is applied before
-dust attenuation, while total broadening is applied to the final combined
-system emission, including thermal dust emission when configured.
+This example compares final-system Doppler broadening in the Pacman stellar
+emission model.
 """
 
 import matplotlib.pyplot as plt
@@ -27,12 +25,8 @@ galaxy = load_CAMELS_IllustrisTNG(
 
 configurations = {
     "No broadening": {},
-    "Starpop only": {"velocity_dispersion_starpop": 100 * km / s},
-    "Total only": {"velocity_dispersion_total": 200 * km / s},
-    "Starpop + total": {
-        "velocity_dispersion_starpop": 100 * km / s,
-        "velocity_dispersion_total": 200 * km / s,
-    },
+    "100 km/s": {"velocity_dispersion": 100 * km / s},
+    "200 km/s": {"velocity_dispersion": 200 * km / s},
 }
 
 spectra = {}
