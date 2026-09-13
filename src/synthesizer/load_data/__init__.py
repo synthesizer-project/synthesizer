@@ -1,4 +1,4 @@
-"""Load simulation particle data into Synthesizer galaxy objects.
+"""Load simulation data into Synthesizer galaxy objects.
 
 Each loader in this module reads particle data from a specific simulation
 and populates :class:`~synthesizer.particle.galaxy.Galaxy` objects with

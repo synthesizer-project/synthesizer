@@ -2,7 +2,7 @@
 
 This script computes the reference output used by
 ``tests/test_pipeline_regression.py`` and writes it to
-``golden_pipeline_reference.npz``.
+``golden_pipeline_reference.hdf5``.
 
 The golden test exists to catch *accidental* numeric drift in the full
 particle -> grid-weighted spectra -> combination -> attenuation ->
@@ -11,13 +11,15 @@ rewritten by the adaptive-precision templating work). It is not a test of
 absolute physical correctness -- that is covered by the analytic/quadrature
 tests elsewhere in the suite -- it is a tripwire for unintended changes.
 
-Only re-run this script and commit the regenerated ``.npz`` file when a
-change to the pipeline is *expected* to alter these numbers, and note why
-in the commit message.
+Only re-run this script when a pipeline change is expected to alter these
+numbers. Publish the regenerated file as the current
+``golden-pipeline-reference`` Syndex release and note why in the commit
+message; the file itself is ignored by Git.
 """
 
 from pathlib import Path
 
+import h5py
 import numpy as np
 from astropy.cosmology import Planck18
 from unyt import Mpc, Msun, Myr
@@ -49,12 +51,24 @@ if __name__ == "__main__":
     sed = stars.get_spectra(model, out_dtype=np.float64)
     fnu = sed.get_fnu(Planck18, z=5.0, out_dtype=np.float64)
 
-    np.savez_compressed(
-        Path(__file__).parent / "golden_pipeline_reference.npz",
-        lam=sed.lam.to("angstrom").value,
-        lnu=sed.lnu.to("erg/s/Hz").value,
-        obslam=sed._obslam,
-        fnu=fnu.to("nJy").value,
-        bolometric_luminosity=sed.bolometric_luminosity.to("erg/s").value,
-    )
-    print("Wrote golden_pipeline_reference.npz")
+    path = Path(__file__).parent / "golden_pipeline_reference.hdf5"
+    datasets = {
+        "lam": (sed.lam.to("angstrom").value, "angstrom"),
+        "lnu": (sed.lnu.to("erg/s/Hz").value, "erg/s/Hz"),
+        "obslam": (sed._obslam, "angstrom"),
+        "fnu": (fnu.to("nJy").value, "nJy"),
+        "bolometric_luminosity": (
+            sed.bolometric_luminosity.to("erg/s").value,
+            "erg/s",
+        ),
+    }
+    with h5py.File(path, "w") as hdf:
+        for name, (data, units) in datasets.items():
+            dataset = hdf.create_dataset(
+                name,
+                data=data,
+                compression="gzip" if np.ndim(data) else None,
+            )
+            dataset.attrs["Units"] = units
+
+    print(f"Wrote {path.name}")

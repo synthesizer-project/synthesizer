@@ -30,7 +30,11 @@ from unyt import Mpc, Msun, deg, km, s, unyt_array, yr
 from unyt.exceptions import UnitConversionError, UnitOperationError
 
 from synthesizer.exceptions import InconsistentArguments, UnmetDependency
-from synthesizer.load_data.utils import age_lookup_table, lookup_age
+from synthesizer.load_data.utils import (
+    age_lookup_table,
+    cast_component_dtype,
+    lookup_age,
+)
 
 try:
     import yt
@@ -1705,30 +1709,6 @@ def _infer_centre(stars, gas, black_holes):
     return None
 
 
-def _cast_component_dtype(component_dict, dtype):
-    """Cast all array values in a component dict to the requested dtype.
-
-    Args:
-        component_dict (dict):
-            Keyword-argument dictionary to pass to ``load_stars`` or
-            ``load_gas``.
-        dtype (type):
-            The target numpy dtype for numerical arrays.
-
-    Returns:
-        dict:
-            A shallow copy of the input with array values cast to ``dtype``.
-    """
-    result = dict(component_dict)
-    for key, value in result.items():
-        if isinstance(value, np.ndarray) and value.dtype in (
-            np.float32,
-            np.float64,
-        ):
-            result[key] = value.astype(dtype, copy=False)
-    return result
-
-
 def load_yt(
     data_source,
     data_containers=None,
@@ -1953,15 +1933,15 @@ def load_yt(
         )
 
         if stars is not None:
-            stars = _cast_component_dtype(stars, dtype)
+            stars = cast_component_dtype(stars, dtype)
             galaxy.load_stars(**stars)
 
         if gas is not None:
-            gas = _cast_component_dtype(gas, dtype)
+            gas = cast_component_dtype(gas, dtype)
             galaxy.load_gas(**gas)
 
         if black_holes is not None:
-            black_holes = _cast_component_dtype(black_holes, dtype)
+            black_holes = cast_component_dtype(black_holes, dtype)
             black_hole_kwargs = dict(black_holes)
             galaxy.black_holes = BlackHoles(
                 masses=black_hole_kwargs.pop("masses"),

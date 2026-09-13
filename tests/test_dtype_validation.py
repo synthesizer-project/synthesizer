@@ -14,6 +14,33 @@ integration.
 
 import numpy as np
 import pytest
+from unyt import Myr
+
+from synthesizer.load_data.utils import cast_component_dtype
+
+
+def test_cast_component_dtype_handles_generic_component_data():
+    """Floating arrays from any component source should cast with units."""
+    ages = np.array([1.0, 2.0], dtype=np.float64) * Myr
+    metallicities = np.array([0.01, 0.02], dtype=np.float16)
+    particle_ids = np.array([1, 2], dtype=np.int64)
+    component = {
+        "ages": ages,
+        "metallicities": metallicities,
+        "particle_ids": particle_ids,
+        "star_forming": np.array([True, False]),
+        "optional": None,
+    }
+
+    cast = cast_component_dtype(component, np.float32)
+
+    assert cast["ages"].dtype == np.float32
+    assert cast["ages"].units == Myr
+    assert cast["metallicities"].dtype == np.float32
+    assert cast["particle_ids"] is particle_ids
+    assert cast["star_forming"] is component["star_forming"]
+    assert cast["optional"] is None
+    assert component["ages"].dtype == np.float64
 
 
 class TestUnsupportedDtypesAreRejected:

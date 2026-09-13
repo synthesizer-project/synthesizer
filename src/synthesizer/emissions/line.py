@@ -1396,8 +1396,8 @@ class LineCollection:
 
         # Compute the transmission for the remaining generic cases. The curve
         # is evaluated at the emission dtype (with overflow trapped) so the
-        # transmission is born at the right precision rather than computed at
-        # float64 and downcast.
+        # transmission is intialised at the right precision rather than
+        # computed at float64 and downcast.
         transmission = evaluate_dust_curve_at_dtype(
             dust_curve.get_transmission,
             self._luminosity.dtype,
