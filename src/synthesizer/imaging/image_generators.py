@@ -377,7 +377,7 @@ def _generate_image_particle_hist(
 
         # Return an empty image if there are no particles
         if signal.size == 0:
-            img.arr = np.zeros(img.npix)
+            img.arr = np.zeros(img.npix, dtype=signal.dtype)
             return img.arr * img.units if img.units is not None else img.arr
 
         # Unpack the image properties and ensure we agree on the units

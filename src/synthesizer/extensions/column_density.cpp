@@ -8,6 +8,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <vector>
 
 /* Python headers. */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
@@ -55,12 +56,16 @@
  *        truncated kernel table.
  * @param zdim The number of LOS-coordinate entries in the truncated table.
  * @param threshold The threshold for the kernel.
+ *
+ * Accumulation happens in double precision regardless of Real so that
+ * summing many (potentially float32) gas particle contributions along a
+ * single line of sight doesn't accumulate float32 rounding error.
  */
 template <typename Real>
 static void los_loop_serial(const Real *pos_i, const Real *pos_j,
                             const Real *smls, const Real *surf_den_vals,
                             const Real *kernel, const Real *truncated_kernel,
-                            Real *surf_dens, const int npart_i,
+                            double *surf_dens, const int npart_i,
                             const int npart_j, const int kdim,
                             const int trunc_qdim, const int zdim,
                             const Real threshold) {
@@ -113,8 +118,9 @@ static void los_loop_serial(const Real *pos_i, const Real *pos_j,
         kvalue = get_kernel_value<Real>(kernel, kdim, q / threshold);
       }
 
-      /* Finally, compute the dust surface density itself. */
-      surf_dens[i] += surf_den_val / (sml * sml) * kvalue;
+      /* Finally, compute the dust surface density itself, accumulating in
+       * double precision. */
+      surf_dens[i] += static_cast<double>(surf_den_val / (sml * sml) * kvalue);
     }
   }
 }
@@ -154,8 +160,9 @@ template <typename Real>
 static void los_loop_omp(const Real *pos_i, const Real *pos_j,
                          const Real *smls, const Real *surf_den_vals,
                          const Real *kernel, const Real *truncated_kernel,
-                         Real *surf_dens, const int npart_i, const int npart_j,
-                         const int kdim, const int trunc_qdim, const int zdim,
+                         double *surf_dens, const int npart_i,
+                         const int npart_j, const int kdim,
+                         const int trunc_qdim, const int zdim,
                          const Real threshold, const int nthreads) {
 
   /* How many particles should each thread get? */
@@ -172,8 +179,9 @@ static void los_loop_omp(const Real *pos_i, const Real *pos_j,
     int end = (tid == nthreads - 1) ? npart_i : (tid + 1) * nparti_per_thread;
 
     /* Get this threads chunk of the results array to write to. We get a chunk
-     * here to avoid cache locality issues. */
-    Real *surf_dens_thread = new Real[end - start]();
+     * here to avoid cache locality issues. Accumulation happens in double
+     * precision to avoid float32 rounding error over many gas particles. */
+    std::vector<double> surf_dens_thread(end - start, 0.0);
 
     /* Loop over particle postions. */
     for (int i = start; i < end; i++) {
@@ -225,8 +233,10 @@ static void los_loop_omp(const Real *pos_i, const Real *pos_j,
           kvalue = get_kernel_value<Real>(kernel, kdim, q / threshold);
         }
 
-        /* Finally, compute the dust surface density itself. */
-        surf_dens_thread[ii] += surf_den_val / (sml * sml) * kvalue;
+        /* Finally, compute the dust surface density itself, accumulating in
+         * double precision. */
+        surf_dens_thread[ii] +=
+            static_cast<double>(surf_den_val / (sml * sml) * kvalue);
       }
     }
 
@@ -237,9 +247,6 @@ static void los_loop_omp(const Real *pos_i, const Real *pos_j,
         surf_dens[i] = surf_dens_thread[i - start];
       }
     }
-
-    /* Clean up the thread's chunk of the results array. */
-    delete[] surf_dens_thread;
   }
 }
 #endif
@@ -273,7 +280,7 @@ static void los_loop_omp(const Real *pos_i, const Real *pos_j,
 template <typename Real>
 static void los_loop(const Real *pos_i, const Real *pos_j, const Real *smls,
                      const Real *surf_den_vals, const Real *kernel,
-                     const Real *truncated_kernel, Real *surf_dens,
+                     const Real *truncated_kernel, double *surf_dens,
                      const int npart_i, const int npart_j, const int kdim,
                      const int trunc_qdim, const int zdim,
                      const Real threshold, const int nthreads) {
@@ -327,28 +334,32 @@ static void los_loop(const Real *pos_i, const Real *pos_j, const Real *smls,
  * @param kernel The projected LOS kernel lookup table.
  * @param truncated_kernel The truncated LOS kernel lookup table storing
  *        cumulative LOS contributions for inside-kernel paths.
+ *
+ * Accumulation happens in double precision regardless of Real so that
+ * summing many (potentially float32) gas particle contributions along a
+ * single line of sight doesn't accumulate float32 rounding error.
  */
 template <typename Real>
-static Real calculate_los_recursive(struct cell<Real> *c, Real x, Real y,
-                                    Real z, Real threshold, int kdim,
-                                    int trunc_qdim, int zdim,
-                                    const Real *kernel,
-                                    const Real *truncated_kernel) {
+static double calculate_los_recursive(struct cell<Real> *c, Real x, Real y,
+                                      Real z, Real threshold, int kdim,
+                                      int trunc_qdim, int zdim,
+                                      const Real *kernel,
+                                      const Real *truncated_kernel) {
 
   /* Early exit if the cell is entirely behind the position. */
   if ((c->loc[2] - threshold * sqrt(c->max_sml_squ)) > z) {
-    return static_cast<Real>(0.0);
+    return 0.0;
   }
 
   /* Early exit if the projected distance between cells is more than the
    * maximum smoothing length in the cell. */
   if (c->max_sml_squ * (threshold * threshold) <
       min_projected_dist2<Real>(c, x, y)) {
-    return static_cast<Real>(0.0);
+    return 0.0;
   }
 
-  /* The line of sight dust surface density. */
-  Real surf_dens = static_cast<Real>(0.0);
+  /* The line of sight dust surface density, accumulated in double. */
+  double surf_dens = 0.0;
 
   /* Is the cell split? */
   if (c->split) {
@@ -413,8 +424,10 @@ static Real calculate_los_recursive(struct cell<Real> *c, Real x, Real y,
         kvalue = get_kernel_value<Real>(kernel, kdim, q / threshold);
       }
 
-      /* Finally, compute the surface density itself. */
-      surf_dens += part->surf_den_var / (part->sml * part->sml) * kvalue;
+      /* Finally, compute the surface density itself, accumulating in
+       * double precision. */
+      surf_dens += static_cast<double>(part->surf_den_var /
+                                       (part->sml * part->sml) * kvalue);
     }
   }
 
@@ -448,9 +461,9 @@ static Real calculate_los_recursive(struct cell<Real> *c, Real x, Real y,
 template <typename Real>
 static void los_tree_serial(struct cell<Real> *root, const Real *pos_i,
                             const Real *kernel, const Real *truncated_kernel,
-                            Real *surf_dens, const int npart_i, const int kdim,
-                            const int trunc_qdim, const int zdim,
-                            const Real threshold) {
+                            double *surf_dens, const int npart_i,
+                            const int kdim, const int trunc_qdim,
+                            const int zdim, const Real threshold) {
 
   /* Loop over the particles we are calculating the surface density for. */
   for (int i = 0; i < npart_i; i++) {
@@ -492,7 +505,7 @@ static void los_tree_serial(struct cell<Real> *root, const Real *pos_i,
 template <typename Real>
 static void los_tree_omp(struct cell<Real> *root, const Real *pos_i,
                          const Real *kernel, const Real *truncated_kernel,
-                         Real *surf_dens, const int npart_i, const int kdim,
+                         double *surf_dens, const int npart_i, const int kdim,
                          const int trunc_qdim, const int zdim,
                          const Real threshold, const int nthreads) {
 
@@ -510,8 +523,9 @@ static void los_tree_omp(struct cell<Real> *root, const Real *pos_i,
     int end = (tid == nthreads - 1) ? npart_i : (tid + 1) * nparti_per_thread;
 
     /* Get this threads chunk of the results array to write to. We get a chunk
-     * here to avoid cache locality issues. */
-    Real *surf_dens_thread = new Real[end - start]();
+     * here to avoid cache locality issues. calculate_los_recursive already
+     * accumulates in double, so this buffer stays double too. */
+    std::vector<double> surf_dens_thread(end - start, 0.0);
 
     /* Loop over the particles we are calculating the surface density for. */
     for (int i = start; i < end; i++) {
@@ -526,12 +540,9 @@ static void los_tree_omp(struct cell<Real> *root, const Real *pos_i,
     /* Copy the results back to the main array. */
 #pragma omp critical
     {
-      memcpy(&surf_dens[start], surf_dens_thread,
-             (end - start) * sizeof(Real));
+      memcpy(&surf_dens[start], surf_dens_thread.data(),
+             (end - start) * sizeof(double));
     }
-
-    /* Clean up the thread-local buffer once its results have been copied. */
-    delete[] surf_dens_thread;
   }
 }
 #endif
@@ -564,7 +575,7 @@ static void los_tree_omp(struct cell<Real> *root, const Real *pos_i,
 template <typename Real>
 static void los_tree(struct cell<Real> *root, const Real *pos_i,
                      const Real *kernel, const Real *truncated_kernel,
-                     Real *surf_dens, const int npart_i, const int kdim,
+                     double *surf_dens, const int npart_i, const int kdim,
                      const int trunc_qdim, const int zdim,
                      const Real threshold, const int nthreads) {
 
@@ -635,24 +646,33 @@ static PyObject *compute_column_density_impl(
   }
   Real *surf_dens = static_cast<Real *>(PyArray_DATA(np_surf_dens));
 
+  /* Accumulate in double regardless of the output precision so that summing
+   * many (potentially float32) gas particle contributions along a single
+   * line of sight doesn't accumulate float32 rounding error. The double
+   * buffer is folded into the Real output array once at the end. */
+  std::vector<double> surf_dens_accum(npart_i, 0.0);
+
   if (force_loop || npart_j < min_count) {
     los_loop<Real>(pos_i, pos_j, smls, surf_den_val, kernel, truncated_kernel,
-                   surf_dens, npart_i, npart_j, kdim, trunc_qdim, zdim,
+                   surf_dens_accum.data(), npart_i, npart_j, kdim, trunc_qdim,
+                   zdim, threshold, nthreads);
+  } else {
+    int ncells = 1;
+    struct cell<Real> *root = new struct cell<Real>;
+
+    construct_cell_tree<Real>(pos_j, smls, surf_den_val, npart_j, root, ncells,
+                              MAX_DEPTH, min_count);
+
+    los_tree<Real>(root, pos_i, kernel, truncated_kernel,
+                   surf_dens_accum.data(), npart_i, kdim, trunc_qdim, zdim,
                    threshold, nthreads);
 
-    return Py_BuildValue("N", np_surf_dens);
+    cleanup_cell_tree<Real>(root);
   }
 
-  int ncells = 1;
-  struct cell<Real> *root = new struct cell<Real>;
-
-  construct_cell_tree<Real>(pos_j, smls, surf_den_val, npart_j, root, ncells,
-                            MAX_DEPTH, min_count);
-
-  los_tree<Real>(root, pos_i, kernel, truncated_kernel, surf_dens, npart_i,
-                 kdim, trunc_qdim, zdim, threshold, nthreads);
-
-  cleanup_cell_tree<Real>(root);
+  for (int i = 0; i < npart_i; i++) {
+    surf_dens[i] = static_cast<Real>(surf_dens_accum[i]);
+  }
 
   return Py_BuildValue("N", np_surf_dens);
 }
@@ -865,9 +885,13 @@ static inline Real calculate_smoothed_pair_contribution(
  * @param threshold The support threshold in units of the smoothing length.
  *
  * @return The LOS surface density contribution from this node.
+ *
+ * Accumulation happens in double precision regardless of Real so that
+ * summing many (potentially float32) source particle contributions along a
+ * single line of sight doesn't accumulate float32 rounding error.
  */
 template <typename Real>
-static Real calculate_los_recursive_smoothed(
+static double calculate_los_recursive_smoothed(
     struct cell<Real> *c, const Real xi, const Real yi, const Real zi,
     const Real hi, const Real *overlap_kernel, const Real *q_grid,
     const Real *u_grid, const Real *eta_grid, const int qdim, const int udim,
@@ -883,18 +907,18 @@ static Real calculate_los_recursive_smoothed(
    * support. */
   const Real cell_z_min = c->loc[2] - support_max;
   if (cell_z_min >= (zi + support_i)) {
-    return static_cast<Real>(0.0);
+    return 0.0;
   }
 
   /* Reject nodes whose projected bounding box stays further away than the
    * combined input and maximum source support. */
   const Real support_sum = support_i + support_max;
   if ((support_sum * support_sum) < min_projected_dist2<Real>(c, xi, yi)) {
-    return static_cast<Real>(0.0);
+    return 0.0;
   }
 
-  /* Accumulate the contribution from this node. */
-  Real surf_dens = static_cast<Real>(0.0);
+  /* Accumulate the contribution from this node, in double. */
+  double surf_dens = 0.0;
 
   if (c->split) {
 
@@ -922,10 +946,11 @@ static Real calculate_los_recursive_smoothed(
     for (int j = 0; j < npart_j; j++) {
       struct particle<Real> *part = &parts[j];
 
-      surf_dens += calculate_smoothed_pair_contribution<Real>(
-          xi, yi, zi, hi, part->pos[0], part->pos[1], part->pos[2], part->sml,
-          part->surf_den_var, overlap_kernel, q_grid, u_grid, eta_grid, qdim,
-          udim, etadim, threshold);
+      surf_dens +=
+          static_cast<double>(calculate_smoothed_pair_contribution<Real>(
+              xi, yi, zi, hi, part->pos[0], part->pos[1], part->pos[2],
+              part->sml, part->surf_den_var, overlap_kernel, q_grid, u_grid,
+              eta_grid, qdim, udim, etadim, threshold));
     }
   }
 
@@ -962,7 +987,7 @@ static void los_loop_smoothed_serial(
     const Real *pos_i, const Real *input_smls, const Real *pos_j,
     const Real *smls, const Real *surf_den_vals, const Real *overlap_kernel,
     const Real *q_grid, const Real *u_grid, const Real *eta_grid,
-    Real *surf_dens, const int npart_i, const int npart_j, const int qdim,
+    double *surf_dens, const int npart_i, const int npart_j, const int qdim,
     const int udim, const int etadim, const Real threshold) {
 
   /* Loop over the input particles. */
@@ -973,12 +998,15 @@ static void los_loop_smoothed_serial(
     const Real zi = pos_i[i * 3 + 2];
     const Real hi = input_smls[i];
 
-    /* Each source particle contributes at most once to this input particle. */
+    /* Each source particle contributes at most once to this input particle.
+     * Accumulate in double so summing many source particles doesn't build up
+     * float32 rounding error. */
     for (int j = 0; j < npart_j; j++) {
-      surf_dens[i] += calculate_smoothed_pair_contribution<Real>(
-          xi, yi, zi, hi, pos_j[j * 3], pos_j[j * 3 + 1], pos_j[j * 3 + 2],
-          smls[j], surf_den_vals[j], overlap_kernel, q_grid, u_grid, eta_grid,
-          qdim, udim, etadim, threshold);
+      surf_dens[i] +=
+          static_cast<double>(calculate_smoothed_pair_contribution<Real>(
+              xi, yi, zi, hi, pos_j[j * 3], pos_j[j * 3 + 1], pos_j[j * 3 + 2],
+              smls[j], surf_den_vals[j], overlap_kernel, q_grid, u_grid,
+              eta_grid, qdim, udim, etadim, threshold));
     }
   }
 }
@@ -1015,7 +1043,7 @@ static void los_loop_smoothed_omp(
     const Real *pos_i, const Real *input_smls, const Real *pos_j,
     const Real *smls, const Real *surf_den_vals, const Real *overlap_kernel,
     const Real *q_grid, const Real *u_grid, const Real *eta_grid,
-    Real *surf_dens, const int npart_i, const int npart_j, const int qdim,
+    double *surf_dens, const int npart_i, const int npart_j, const int qdim,
     const int udim, const int etadim, const Real threshold,
     const int nthreads) {
 
@@ -1027,20 +1055,18 @@ static void los_loop_smoothed_omp(
     int start = tid * nparti_per_thread;
     int end = (tid == nthreads - 1) ? npart_i : (tid + 1) * nparti_per_thread;
 
-    Real *surf_dens_thread = new Real[end - start]();
+    std::vector<double> surf_dens_thread(end - start, 0.0);
 
     los_loop_smoothed_serial<Real>(
         &pos_i[start * 3], &input_smls[start], pos_j, smls, surf_den_vals,
-        overlap_kernel, q_grid, u_grid, eta_grid, surf_dens_thread,
+        overlap_kernel, q_grid, u_grid, eta_grid, surf_dens_thread.data(),
         end - start, npart_j, qdim, udim, etadim, threshold);
 
 #pragma omp critical
     {
-      memcpy(&surf_dens[start], surf_dens_thread,
-             sizeof(Real) * (end - start));
+      memcpy(&surf_dens[start], surf_dens_thread.data(),
+             sizeof(double) * (end - start));
     }
-
-    delete[] surf_dens_thread;
   }
 }
 #endif
@@ -1073,7 +1099,7 @@ static void los_loop_smoothed(const Real *pos_i, const Real *input_smls,
                               const Real *surf_den_vals,
                               const Real *overlap_kernel, const Real *q_grid,
                               const Real *u_grid, const Real *eta_grid,
-                              Real *surf_dens, const int npart_i,
+                              double *surf_dens, const int npart_i,
                               const int npart_j, const int qdim,
                               const int udim, const int etadim,
                               const Real threshold, const int nthreads) {
@@ -1129,7 +1155,7 @@ template <typename Real>
 static void los_tree_smoothed_serial(
     struct cell<Real> *root, const Real *pos_i, const Real *input_smls,
     const Real *overlap_kernel, const Real *q_grid, const Real *u_grid,
-    const Real *eta_grid, Real *surf_dens, const int npart_i, const int qdim,
+    const Real *eta_grid, double *surf_dens, const int npart_i, const int qdim,
     const int udim, const int etadim, const Real threshold) {
 
   for (int i = 0; i < npart_i; i++) {
@@ -1165,7 +1191,7 @@ static void los_tree_smoothed_omp(struct cell<Real> *root, const Real *pos_i,
                                   const Real *input_smls,
                                   const Real *overlap_kernel,
                                   const Real *q_grid, const Real *u_grid,
-                                  const Real *eta_grid, Real *surf_dens,
+                                  const Real *eta_grid, double *surf_dens,
                                   const int npart_i, const int qdim,
                                   const int udim, const int etadim,
                                   const Real threshold, const int nthreads) {
@@ -1178,20 +1204,18 @@ static void los_tree_smoothed_omp(struct cell<Real> *root, const Real *pos_i,
     int start = tid * nparti_per_thread;
     int end = (tid == nthreads - 1) ? npart_i : (tid + 1) * nparti_per_thread;
 
-    Real *surf_dens_thread = new Real[end - start]();
+    std::vector<double> surf_dens_thread(end - start, 0.0);
 
     los_tree_smoothed_serial<Real>(root, &pos_i[start * 3], &input_smls[start],
                                    overlap_kernel, q_grid, u_grid, eta_grid,
-                                   surf_dens_thread, end - start, qdim, udim,
-                                   etadim, threshold);
+                                   surf_dens_thread.data(), end - start, qdim,
+                                   udim, etadim, threshold);
 
 #pragma omp critical
     {
-      memcpy(&surf_dens[start], surf_dens_thread,
-             sizeof(Real) * (end - start));
+      memcpy(&surf_dens[start], surf_dens_thread.data(),
+             sizeof(double) * (end - start));
     }
-
-    delete[] surf_dens_thread;
   }
 }
 #endif
@@ -1220,7 +1244,7 @@ static void los_tree_smoothed(struct cell<Real> *root, const Real *pos_i,
                               const Real *input_smls,
                               const Real *overlap_kernel, const Real *q_grid,
                               const Real *u_grid, const Real *eta_grid,
-                              Real *surf_dens, const int npart_i,
+                              double *surf_dens, const int npart_i,
                               const int qdim, const int udim, const int etadim,
                               const Real threshold, const int nthreads) {
 
@@ -1293,6 +1317,12 @@ static PyObject *compute_column_density_smoothed_impl(
   }
   Real *surf_dens = static_cast<Real *>(PyArray_DATA(np_surf_dens));
 
+  /* Accumulate in double regardless of the output precision so that summing
+   * many (potentially float32) source particle contributions along a single
+   * line of sight doesn't accumulate float32 rounding error. The double
+   * buffer is folded into the Real output array once at the end. */
+  std::vector<double> surf_dens_accum(npart_i, 0.0);
+
   /* No point constructing a source tree if there are too few source particles
    * to justify it, or if we have explicitly been asked to use the loop path.
    */
@@ -1302,38 +1332,40 @@ static PyObject *compute_column_density_smoothed_impl(
     tic("Dispatching smoothed LOS loop path");
     los_loop_smoothed<Real>(pos_i, input_smls, pos_j, smls, surf_den_val,
                             overlap_kernel, q_grid, u_grid, eta_grid,
-                            surf_dens, npart_i, npart_j, qdim, udim, etadim,
-                            threshold, nthreads);
+                            surf_dens_accum.data(), npart_i, npart_j, qdim,
+                            udim, etadim, threshold, nthreads);
     toc("Dispatching smoothed LOS loop path");
 
-    toc("Calculating smoothed surface densities");
+  } else {
 
-    return Py_BuildValue("N", np_surf_dens);
+    /* Allocate the root cell. The tree construction routine will dynamically
+     * allocate progeny cells beneath this root as required. */
+    tic("Constructing smoothed LOS source tree");
+    int ncells = 1;
+    int maxdepth = MAX_DEPTH;
+    struct cell<Real> *root = new struct cell<Real>;
+
+    /* Construct the source-particle cell tree. */
+    construct_cell_tree<Real>(pos_j, smls, surf_den_val, npart_j, root, ncells,
+                              maxdepth, min_count);
+    toc("Constructing smoothed LOS source tree");
+
+    /* Calculate the smoothed LOS surface densities using the tree. */
+    tic("Dispatching smoothed LOS tree path");
+    los_tree_smoothed<Real>(root, pos_i, input_smls, overlap_kernel, q_grid,
+                            u_grid, eta_grid, surf_dens_accum.data(), npart_i,
+                            qdim, udim, etadim, threshold, nthreads);
+    toc("Dispatching smoothed LOS tree path");
+
+    /* Clean up the source-particle cell tree. */
+    tic("Cleaning up smoothed LOS source tree");
+    cleanup_cell_tree<Real>(root);
+    toc("Cleaning up smoothed LOS source tree");
   }
 
-  /* Allocate the root cell. The tree construction routine will dynamically
-   * allocate progeny cells beneath this root as required. */
-  tic("Constructing smoothed LOS source tree");
-  int ncells = 1;
-  int maxdepth = MAX_DEPTH;
-  struct cell<Real> *root = new struct cell<Real>;
-
-  /* Construct the source-particle cell tree. */
-  construct_cell_tree<Real>(pos_j, smls, surf_den_val, npart_j, root, ncells,
-                            maxdepth, min_count);
-  toc("Constructing smoothed LOS source tree");
-
-  /* Calculate the smoothed LOS surface densities using the tree. */
-  tic("Dispatching smoothed LOS tree path");
-  los_tree_smoothed<Real>(root, pos_i, input_smls, overlap_kernel, q_grid,
-                          u_grid, eta_grid, surf_dens, npart_i, qdim, udim,
-                          etadim, threshold, nthreads);
-  toc("Dispatching smoothed LOS tree path");
-
-  /* Clean up the source-particle cell tree. */
-  tic("Cleaning up smoothed LOS source tree");
-  cleanup_cell_tree<Real>(root);
-  toc("Cleaning up smoothed LOS source tree");
+  for (int i = 0; i < npart_i; i++) {
+    surf_dens[i] = static_cast<Real>(surf_dens_accum[i]);
+  }
 
   toc("Calculating smoothed surface densities");
 

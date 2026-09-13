@@ -19,6 +19,7 @@ Example usage::
 
 """
 
+import functools
 import inspect
 import os
 import textwrap
@@ -63,6 +64,7 @@ def deprecated(message=None, category=FutureWarning):
     """
 
     def _deprecated(func):
+        @functools.wraps(func)
         def wrapped(*args, **kwargs):
             # Determine the specific deprecation message
             if message is None:

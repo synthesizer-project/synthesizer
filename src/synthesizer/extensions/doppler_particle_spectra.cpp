@@ -3,6 +3,7 @@
  * Calculates weights on an arbitrary dimensional grid given the mass.
  *****************************************************************************/
 /* C includes */
+#include <algorithm>
 #include <array>
 #include <math.h>
 #include <new>
@@ -114,6 +115,13 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
       std::vector<int> mapped_indices(nlam);
       std::vector<const SpecReal *> cell_spectra_ptrs(ncells);
       std::vector<OutT> cell_weights(ncells);
+      /* A large velocity shift can compress many source wavelength bins
+       * into a handful of output bins. Accumulate each particle's
+       * redistributed spectrum in double here and fold it into the
+       * (possibly float32) output row once per particle, rather than
+       * accumulating directly in OutT, to avoid float32 rounding error
+       * building up over that many additions. */
+      std::vector<double> p_spec_accum(nlam);
 
 #ifdef WITH_OPENMP
       const int thread_count = nthreads > 1 ? nthreads : 1;
@@ -171,6 +179,7 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
         }
 
         OutT *__restrict p_spec = part_spectra + p * nlam;
+        std::fill(p_spec_accum.begin(), p_spec_accum.end(), 0.0);
         for (size_t il = 0; il < nlam; ++il) {
           OutT total = static_cast<OutT>(0);
           for (int icell = 0; icell < nvalid_cells; ++icell) {
@@ -188,8 +197,12 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
           const OutT frac_s =
               static_cast<OutT>((lam_s - wavelength[ils - 1]) /
                                 (wavelength[ils] - wavelength[ils - 1]));
-          p_spec[ils - 1] += (static_cast<OutT>(1) - frac_s) * total;
-          p_spec[ils] += frac_s * total;
+          p_spec_accum[ils - 1] +=
+              static_cast<double>((static_cast<OutT>(1) - frac_s) * total);
+          p_spec_accum[ils] += static_cast<double>(frac_s * total);
+        }
+        for (size_t ilam = 0; ilam < nlam; ++ilam) {
+          p_spec[ilam] += static_cast<OutT>(p_spec_accum[ilam]);
         }
       }
     }
@@ -203,6 +216,10 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
     {
       std::vector<SpecReal> shifted_wavelengths(nlam);
       std::vector<int> mapped_indices(nlam);
+      /* See the CIC branch above: accumulate each particle's redistributed
+       * spectrum in double and fold it into the output row once per
+       * particle, rather than accumulating directly in OutT. */
+      std::vector<double> p_spec_accum(nlam);
 
 #ifdef WITH_OPENMP
       const int thread_count = nthreads > 1 ? nthreads : 1;
@@ -241,6 +258,7 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
         const SpecReal *__restrict cell_spectra =
             grid_spectra + static_cast<size_t>(grid_ind) * nlam;
         OutT *__restrict p_spec = part_spectra + p * nlam;
+        std::fill(p_spec_accum.begin(), p_spec_accum.end(), 0.0);
 
         for (size_t ilam = 0; ilam < nlam; ++ilam) {
           const int ilam_shifted = mapped_indices[ilam];
@@ -260,9 +278,13 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
           const OutT grid_spectra_value =
               static_cast<OutT>(cell_spectra[ilam]) * weight;
 
-          p_spec[ilam_shifted - 1] +=
-              (static_cast<OutT>(1) - frac_shifted) * grid_spectra_value;
-          p_spec[ilam_shifted] += frac_shifted * grid_spectra_value;
+          p_spec_accum[ilam_shifted - 1] += static_cast<double>(
+              (static_cast<OutT>(1) - frac_shifted) * grid_spectra_value);
+          p_spec_accum[ilam_shifted] +=
+              static_cast<double>(frac_shifted * grid_spectra_value);
+        }
+        for (size_t ilam = 0; ilam < nlam; ++ilam) {
+          p_spec[ilam] += static_cast<OutT>(p_spec_accum[ilam]);
         }
       }
     }

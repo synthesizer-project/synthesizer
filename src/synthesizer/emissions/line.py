@@ -82,6 +82,7 @@ from synthesizer.units import (
 )
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import resolve_out_dtype
 
 
 class LineCollection:
@@ -970,12 +971,15 @@ class LineCollection:
         self.flux = self.luminosity / (4 * np.pi * (10 * pc) ** 2)
         self.continuum_flux = self.continuum / (4 * np.pi * (10 * pc) ** 2)
 
-        # Honour any requested output dtype (the fluxes otherwise inherit
-        # the luminosity dtype)
-        if out_dtype is not None:
-            dtype = np.dtype(out_dtype)
-            self.flux = self.flux.astype(dtype, copy=False)
-            self.continuum_flux = self.continuum_flux.astype(dtype, copy=False)
+        # Unit arithmetic can promote float32 values, so explicitly restore
+        # the luminosity dtype when no output precision was requested.
+        dtype = (
+            self.luminosity.dtype
+            if out_dtype is None
+            else resolve_out_dtype(out_dtype)
+        )
+        self.flux = self.flux.astype(dtype, copy=False)
+        self.continuum_flux = self.continuum_flux.astype(dtype, copy=False)
 
         # Set the observed wavelength (in this case this is the rest frame
         # wavelength)
@@ -1037,12 +1041,15 @@ class LineCollection:
             self.flux *= igm_transmission
             self.continuum_flux *= igm_transmission
 
-        # Honour any requested output dtype (the fluxes otherwise inherit
-        # the luminosity dtype)
-        if out_dtype is not None:
-            dtype = np.dtype(out_dtype)
-            self.flux = self.flux.astype(dtype, copy=False)
-            self.continuum_flux = self.continuum_flux.astype(dtype, copy=False)
+        # Unit arithmetic can promote float32 values, so explicitly restore
+        # the luminosity dtype when no output precision was requested.
+        dtype = (
+            self.luminosity.dtype
+            if out_dtype is None
+            else resolve_out_dtype(out_dtype)
+        )
+        self.flux = self.flux.astype(dtype, copy=False)
+        self.continuum_flux = self.continuum_flux.astype(dtype, copy=False)
 
         return self.flux
 
@@ -1430,8 +1437,8 @@ class LineCollection:
 
         # Compute the transmission for the remaining generic cases. The curve
         # is evaluated at the emission dtype (with overflow trapped) so the
-        # transmission is born at the right precision rather than computed at
-        # float64 and downcast.
+        # transmission is intialised at the right precision rather than
+        # computed at float64 and downcast.
         transmission = evaluate_dust_curve_at_dtype(
             dust_curve.get_transmission,
             self._luminosity.dtype,

@@ -134,8 +134,14 @@ class Sed:
         # Set the wavelength
         self.lam = lam
 
-        # Calculate frequency
-        self.nu = c / self.lam
+        # Write directly into the target dtype; unyt otherwise promotes this
+        # division to float64.
+        self._nu = np.empty_like(self._lam)
+        np.divide(
+            c,
+            get_quantity_view(self, "_lam"),
+            out=get_quantity_view(self, "_nu"),
+        )
 
         # If no lnu is provided create an empty array with the same shape as
         # lam.

@@ -17,6 +17,28 @@ Example usage::
 """
 
 from synthesizer.emission_models.base_model import EmissionModel
+from synthesizer.emission_models.parameters import ParameterList
+
+
+def _each_generator(generator):
+    """Iterate over the generators a generator argument stands for.
+
+    A generator argument is usually one generator, but it can also be a
+    declaration that the model should be varied over several of them, in which
+    case whatever is being set up has to be set up on each.
+
+    Args:
+        generator (Generator/ParameterList):
+            The generator, or a declaration listing several.
+
+    Returns:
+        list:
+            The generators.
+    """
+    if isinstance(generator, ParameterList):
+        return list(generator.values)
+
+    return [generator]
 
 
 class DustEmission(EmissionModel):
@@ -59,11 +81,14 @@ class DustEmission(EmissionModel):
                 parent class.
         """
         # Attach both models if they are not None to the dust emission
-        # generator
+        # generator. The generator can also be a declaration that it should be
+        # varied over several generators, in which case each of them needs the
+        # same wiring.
         if dust_lum_intrinsic is not None and dust_lum_attenuated is not None:
-            dust_emission_model.set_energy_balance(
-                dust_lum_intrinsic, dust_lum_attenuated
-            )
+            for generator in _each_generator(dust_emission_model):
+                generator.set_energy_balance(
+                    dust_lum_intrinsic, dust_lum_attenuated
+                )
         EmissionModel.__init__(
             self,
             grid=grid,
