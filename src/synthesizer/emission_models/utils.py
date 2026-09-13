@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from unyt import unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 
@@ -17,8 +18,6 @@ from synthesizer.emission_models.parameters import (  # noqa: F401
 )
 from synthesizer.utils import (
     depluralize,
-    ensure_array_c_compatible_double,
-    get_attr_c_compatible_double,
     pluralize,
 )
 
@@ -144,6 +143,38 @@ def cache_model_params(
         )
 
 
+def _finalize_param_value(
+    value,
+    param,
+    model,
+    emission,
+    emitter,
+    obj,
+    preserve_units,
+):
+    """Call parameter functions, cache values, and optionally strip units."""
+    if isinstance(value, ParameterFunction):
+        value = value(
+            model,
+            emission,
+            emitter,
+            obj,
+            preserve_units=preserve_units,
+        )
+    elif model is not None and emitter is not None:
+        cache_param(
+            param=param,
+            emitter=emitter,
+            model_label=model.label,
+            value=value,
+        )
+
+    if not preserve_units and isinstance(value, (unyt_array, unyt_quantity)):
+        value = value.value
+
+    return value
+
+
 def get_emission_label(emission):
     """Return the emission dictionary key for an emission.
 
@@ -242,41 +273,19 @@ def get_param(
                 "models before generating an emission."
             )
 
-        if not isinstance(
-            model.fixed_parameters[param], str
-        ) and not isinstance(
-            model.fixed_parameters[param],
-            ParameterFunction,
-        ):
-            value = model.fixed_parameters[param]
-            if not preserve_units:
-                value = ensure_array_c_compatible_double(value)
-        else:
-            value = model.fixed_parameters[param]
+        value = model.fixed_parameters[param]
 
     # Check the emission next
     elif emission is not None and hasattr(emission, param):
-        value = (
-            getattr(emission, param)
-            if preserve_units
-            else get_attr_c_compatible_double(emission, param)
-        )
+        value = getattr(emission, param)
 
     # Check the emitter
     elif emitter is not None and hasattr(emitter, param):
-        value = (
-            getattr(emitter, param)
-            if preserve_units
-            else get_attr_c_compatible_double(emitter, param)
-        )
+        value = getattr(emitter, param)
 
     # Finally, if we have an additional object, check that
     elif obj is not None and hasattr(obj, param):
-        value = (
-            getattr(obj, param)
-            if preserve_units
-            else get_attr_c_compatible_double(obj, param)
-        )
+        value = getattr(obj, param)
 
     # Do we need to recursively look for the parameter? (We know we're only
     # looking on the emitter at this point)
@@ -302,22 +311,11 @@ def get_param(
             _visited=new_visited,
         )
 
-    # If we found a ParameterFunction, call it to get the value
-    elif value is not None and isinstance(value, ParameterFunction):
-        return value(model, emission, emitter, obj)
-
-    # If we found a value, return it
+    # If we found a value (or a ParameterFunction to produce one), finalise it
     elif value is not None:
-        # Only cache if we are in a cacheable context (have a model
-        # and emitter)
-        if model is not None and emitter is not None:
-            cache_param(
-                param=param,
-                emitter=emitter,
-                model_label=model.label,
-                value=value,
-            )
-        return value
+        return _finalize_param_value(
+            value, param, model, emission, emitter, obj, preserve_units
+        )
 
     # If we were finding a logged parameter but failed, try the non-logged
     # version and log it
@@ -377,18 +375,11 @@ def get_param(
     if value is None and default is not _NO_DEFAULT:
         value = default
 
-    # If we found a value, return it
+    # If we found a value (or a ParameterFunction to produce one), finalise it
     if value is not None:
-        # Only cache if we are in a cacheable context (have a model
-        # and emitter)
-        if model is not None and emitter is not None:
-            cache_param(
-                param=param,
-                emitter=emitter,
-                model_label=model.label,
-                value=value,
-            )
-        return value
+        return _finalize_param_value(
+            value, param, model, emission, emitter, obj, preserve_units
+        )
 
     # Otherwise raise an exception
     else:
