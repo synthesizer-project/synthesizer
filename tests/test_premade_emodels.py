@@ -94,14 +94,14 @@ class TestPacmanEmission:
             model.set_vel_shift(True, set_all=True)
 
     @pytest.mark.parametrize(
-        "velocity_dispersion",
-        (100, [100] * km / s, -1 * km / s, np.nan * km / s, 1 * K),
+        "velocity_dispersion, exception",
+        ((100, exceptions.MissingUnits), (1 * K, exceptions.IncorrectUnits)),
     )
-    def test_velocity_dispersion_requires_valid_scalar(
-        self, test_grid, velocity_dispersion
+    def test_velocity_dispersion_units(
+        self, test_grid, velocity_dispersion, exception
     ):
-        """Test velocity dispersion validation."""
-        with pytest.raises(exceptions.InconsistentArguments):
+        """Test velocity dispersion units are enforced by accepts."""
+        with pytest.raises(exception):
             TransmittedEmission(
                 test_grid,
                 velocity_dispersion=velocity_dispersion,

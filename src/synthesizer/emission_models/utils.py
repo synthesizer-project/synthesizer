@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from unyt import km, s
 
 from synthesizer import exceptions
 
@@ -15,6 +16,7 @@ from synthesizer.emission_models.parameters import (  # noqa: F401
     VARIATION_TYPES,
     ParameterFunction,
 )
+from synthesizer.units import accepts
 from synthesizer.utils import (
     depluralize,
     ensure_array_c_compatible_double,
@@ -29,6 +31,61 @@ if TYPE_CHECKING:
 
 # A sentinel object for detecting if a default value was provided
 _NO_DEFAULT = object()
+
+
+@accepts(velocity_dispersion=km / s)
+def _apply_broadening_to_model(model, label, velocity_dispersion, kwargs):
+    """Wrap an existing model in a scalar Doppler broadening transformation.
+
+    Args:
+        model (EmissionModel):
+            The model whose output spectrum will be broadened.
+        label (str):
+            The label for the broadened output model.
+        velocity_dispersion (unyt.unyt_quantity):
+            Scalar velocity dispersion. ``None`` disables broadening.
+        kwargs (dict):
+            Additional keyword arguments for the broadened model.
+
+    Returns:
+        EmissionModel:
+            The original model when broadening is disabled, otherwise a model
+            applying ``DopplerBroadening`` to the original model.
+
+    """
+    # Local imports avoid a cycle because base_model imports this module.
+    from synthesizer.emission_models.base_model import (
+        EmissionModel,
+        StellarEmissionModel,
+    )
+    from synthesizer.emission_models.transformers import DopplerBroadening
+
+    # If broadening is disabled, return the original model unchanged.
+    if velocity_dispersion is None:
+        return model
+
+    # Keep the requested label on the public output. The unbroadened spectrum
+    # remains in the graph for evaluation but is not saved separately.
+    predispersion_label = f"{label}_predispersion"
+    model._relabel_models({model.label: predispersion_label})
+    model.set_save(False)
+
+    # Preserve galaxy-level models when broadening a total containing dust
+    # emission; component-only models retain their stellar emitter type.
+    model_class = (
+        StellarEmissionModel if model.emitter == "stellar" else EmissionModel
+    )
+    broadened = model_class(
+        label=label,
+        apply_to=model,
+        transformer=DopplerBroadening(
+            sigma_v_attr="velocity_dispersion",
+        ),
+        velocity_dispersion=velocity_dispersion,
+        **kwargs,
+    )
+
+    return broadened
 
 
 def cache_param(

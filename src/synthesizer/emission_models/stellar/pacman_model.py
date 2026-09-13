@@ -51,7 +51,7 @@ Example::
 
 from copy import deepcopy
 
-from unyt import dimensionless
+from unyt import dimensionless, km, s
 
 from synthesizer.emission_models.attenuation import Calzetti2000, PowerLaw
 from synthesizer.emission_models.base_model import (
@@ -70,10 +70,10 @@ from synthesizer.emission_models.stellar.models import (
     NebularLineEmission,
     ReprocessedEmission,
     TransmittedEmission,
-    _broaden_model,
-    _init_broadened_model,
-    _validate_velocity_dispersion,
 )
+from synthesizer.emission_models.transformers import DopplerBroadening
+from synthesizer.emission_models.utils import _apply_broadening_to_model
+from synthesizer.units import accepts
 
 
 class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
@@ -204,6 +204,7 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
         - total: the final total combined emission.
     """
 
+    @accepts(velocity_dispersion_total=km / s)
     def __init__(
         self,
         grid,
@@ -309,19 +310,42 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
             **kwargs,
         )
 
-        # Bulk motion applies after combining all emission from the system,
-        # including thermal dust emission.
-        _init_broadened_model(
-            self,
-            "total" if label is None else label,
-            velocity_dispersion_total,
-            kwargs,
-            model_class=EmissionModel,
-            grid=grid,
-            combine=(dust_emission_model, attenuated),
-            related_models=(incident,),
-            emitter="galaxy" if not stellar_dust else "stellar",
-        )
+        label = "total" if label is None else label
+        emitter = "galaxy" if not stellar_dust else "stellar"
+        # Are we broadening the result?
+        if velocity_dispersion_total is None:
+            EmissionModel.__init__(
+                self,
+                grid=grid,
+                label=label,
+                combine=(dust_emission_model, attenuated),
+                related_models=(incident,),
+                emitter=emitter,
+                **kwargs,
+            )
+        else:
+            # Bulk motion applies after combining all system emission,
+            # including thermal dust emission.
+            predispersion = EmissionModel(
+                grid=grid,
+                label=f"{label}_predispersion",
+                combine=(dust_emission_model, attenuated),
+                related_models=(incident,),
+                emitter=emitter,
+                save=False,
+                **kwargs,
+            )
+            EmissionModel.__init__(
+                self,
+                label=label,
+                apply_to=predispersion,
+                transformer=DopplerBroadening(
+                    sigma_v_attr="velocity_dispersion"
+                ),
+                velocity_dispersion=velocity_dispersion_total,
+                emitter=emitter,
+                **kwargs,
+            )
 
 
 class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
@@ -481,6 +505,7 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
         - total: the final total combined emission.
     """
 
+    @accepts(velocity_dispersion_total=km / s)
     def __init__(
         self,
         grid,
@@ -610,19 +635,42 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             **kwargs,
         )
 
-        # Bulk motion applies after combining all emission from the system,
-        # including thermal dust emission.
-        _init_broadened_model(
-            self,
-            "total" if label is None else label,
-            velocity_dispersion_total,
-            kwargs,
-            model_class=EmissionModel,
-            grid=grid,
-            combine=(dust_emission_model, emergent),
-            related_models=(intrinsic,),
-            emitter="galaxy" if not stellar_dust else "stellar",
-        )
+        label = "total" if label is None else label
+        emitter = "galaxy" if not stellar_dust else "stellar"
+        # Are we broadening the result?
+        if velocity_dispersion_total is None:
+            EmissionModel.__init__(
+                self,
+                grid=grid,
+                label=label,
+                combine=(dust_emission_model, emergent),
+                related_models=(intrinsic,),
+                emitter=emitter,
+                **kwargs,
+            )
+        else:
+            # Bulk motion applies after combining all system emission,
+            # including thermal dust emission.
+            predispersion = EmissionModel(
+                grid=grid,
+                label=f"{label}_predispersion",
+                combine=(dust_emission_model, emergent),
+                related_models=(intrinsic,),
+                emitter=emitter,
+                save=False,
+                **kwargs,
+            )
+            EmissionModel.__init__(
+                self,
+                label=label,
+                apply_to=predispersion,
+                transformer=DopplerBroadening(
+                    sigma_v_attr="velocity_dispersion"
+                ),
+                velocity_dispersion=velocity_dispersion_total,
+                emitter=emitter,
+                **kwargs,
+            )
 
 
 class PacmanEmission:
@@ -701,13 +749,6 @@ class PacmanEmission:
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
-        velocity_dispersion_starpop = _validate_velocity_dispersion(
-            velocity_dispersion_starpop, kwargs
-        )
-        velocity_dispersion_total = _validate_velocity_dispersion(
-            velocity_dispersion_total, kwargs
-        )
-
         # Are we ignoring the escape fraction?
         if fesc == 0.0 or fesc is None:
             # Do we have a dust emission model?
@@ -723,7 +764,7 @@ class PacmanEmission:
                     velocity_dispersion_starpop=velocity_dispersion_starpop,
                     **kwargs,
                 )
-                return _broaden_model(
+                return _apply_broadening_to_model(
                     model, model.label, velocity_dispersion_total, kwargs
                 )
             else:
@@ -756,7 +797,7 @@ class PacmanEmission:
                     velocity_dispersion_starpop=velocity_dispersion_starpop,
                     **kwargs,
                 )
-                return _broaden_model(
+                return _apply_broadening_to_model(
                     model, model.label, velocity_dispersion_total, kwargs
                 )
             else:
@@ -1465,13 +1506,13 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
         )
         # Bulk motion applies to each complete population spectrum, including
         # thermal dust, while preserving young_total + old_total at the root.
-        young_total = _broaden_model(
+        young_total = _apply_broadening_to_model(
             young_total,
             "young_total",
             velocity_dispersion_total,
             kwargs,
         )
-        old_total = _broaden_model(
+        old_total = _apply_broadening_to_model(
             old_total,
             "old_total",
             velocity_dispersion_total,
@@ -2317,13 +2358,13 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
         )
         # Bulk motion applies to each complete population spectrum, including
         # thermal dust, while preserving young_total + old_total at the root.
-        young_total = _broaden_model(
+        young_total = _apply_broadening_to_model(
             young_total,
             "young_total",
             velocity_dispersion_total,
             kwargs,
         )
-        old_total = _broaden_model(
+        old_total = _apply_broadening_to_model(
             old_total,
             "old_total",
             velocity_dispersion_total,
@@ -2520,16 +2561,6 @@ class BimodalPacmanEmission:
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
-        velocity_dispersion_young_starpop = _validate_velocity_dispersion(
-            velocity_dispersion_young_starpop, kwargs
-        )
-        velocity_dispersion_old_starpop = _validate_velocity_dispersion(
-            velocity_dispersion_old_starpop, kwargs
-        )
-        velocity_dispersion_total = _validate_velocity_dispersion(
-            velocity_dispersion_total, kwargs
-        )
-
         # Are we ignoring the escape fraction?
         if fesc == 0.0 or fesc is None:
             # Do we have dust emission models?
@@ -2553,7 +2584,7 @@ class BimodalPacmanEmission:
                     ),
                     **kwargs,
                 )
-                return _broaden_model(
+                return _apply_broadening_to_model(
                     model, model.label, velocity_dispersion_total, kwargs
                 )
             else:
@@ -2604,7 +2635,7 @@ class BimodalPacmanEmission:
                     ),
                     **kwargs,
                 )
-                return _broaden_model(
+                return _apply_broadening_to_model(
                     model, model.label, velocity_dispersion_total, kwargs
                 )
             else:
