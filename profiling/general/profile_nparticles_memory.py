@@ -109,11 +109,11 @@ def profile_nparticles_memory(
 
     # Extract the FilterCollection from the instrument
     # Small set (3 filters) - select first 3 filters
-    filter_codes_3 = instrument.available_filters[:3]
+    filter_codes_3 = instrument.filters.filter_codes[:3]
     filters_3 = instrument.filters.select(*filter_codes_3)
 
     # Large set (8 filters) - use all available filters
-    filters_10 = instrument.filters.select(*instrument.available_filters)
+    filters_10 = instrument.filters
 
     # Particle counts to test
     # Reduced max to 10^5 for memory safety/speed in this context,

@@ -60,7 +60,7 @@ def photometry_strong_scaling(
     webb_inst = get_test_instrument(grid)
 
     # Select the requested number of filters
-    available_filters = webb_inst.available_filters[:nfilters]
+    available_filters = webb_inst.filters.filter_codes[:nfilters]
     filters = webb_inst.filters.select(*available_filters)
 
     # Generate the star formation metallicity history
