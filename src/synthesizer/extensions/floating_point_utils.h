@@ -13,10 +13,15 @@
  */
 template <typename Real>
 static inline bool is_nan_bits(Real value) {
+
+  /* Check that the type is either 32-bit or 64-bit float, we don't support
+   * other sizes here. */
   static_assert(
       sizeof(Real) == sizeof(uint32_t) || sizeof(Real) == sizeof(uint64_t),
       "is_nan_bits only supports 32-bit and 64-bit floats");
 
+  /* Check the IEEE-754 representation of the float to determine if
+   * it is NaN. */
   if constexpr (sizeof(Real) == sizeof(uint32_t)) {
     uint32_t bits;
     std::memcpy(&bits, &value, sizeof(bits));
