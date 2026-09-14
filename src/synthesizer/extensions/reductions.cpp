@@ -26,6 +26,7 @@
 
 /* Local includes */
 #include "cpp_to_python.h"
+#include "floating_point_utils.h"
 #include "python_to_cpp.h"
 #include "reductions.h"
 #include "timers.h"
@@ -279,6 +280,124 @@ PyObject *reduce_particle_spectra(PyObject *self, PyObject *args) {
   });
 }
 
+/**
+ * @brief Combine equally shaped per-particle spectra, ignoring NaNs.
+ *
+ * Inputs must be C-contiguous 2D arrays sharing one supported floating-point
+ * dtype. The output is allocated in that dtype and populated in one pass, so
+ * no input conversion or temporary boolean-index arrays are needed.
+ */
+PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
+  (void)self;
+
+  PyObject *inputs_sequence;
+  int nthreads;
+  if (!PyArg_ParseTuple(args, "Oi", &inputs_sequence, &nthreads)) {
+    return NULL;
+  }
+
+  PyObject *inputs_fast = PySequence_Fast(
+      inputs_sequence, "inputs must be a sequence of 2D NumPy arrays.");
+  if (inputs_fast == NULL) {
+    return NULL;
+  }
+
+  const Py_ssize_t ninputs = PySequence_Fast_GET_SIZE(inputs_fast);
+  if (ninputs == 0) {
+    Py_DECREF(inputs_fast);
+    PyErr_SetString(PyExc_ValueError,
+                    "inputs must contain at least one array.");
+    return NULL;
+  }
+
+  PyObject **items = PySequence_Fast_ITEMS(inputs_fast);
+  std::vector<PyArrayObject *> arrays;
+  arrays.reserve((size_t)ninputs);
+
+  npy_intp nrow = -1;
+  npy_intp nlam = -1;
+  int input_typenum = -1;
+  for (Py_ssize_t i = 0; i < ninputs; ++i) {
+    if (!PyArray_Check(items[i])) {
+      Py_DECREF(inputs_fast);
+      PyErr_SetString(PyExc_TypeError, "all inputs must be NumPy arrays.");
+      return NULL;
+    }
+
+    auto *array = reinterpret_cast<PyArrayObject *>(items[i]);
+    if (PyArray_NDIM(array) != 2) {
+      Py_DECREF(inputs_fast);
+      PyErr_SetString(PyExc_ValueError, "all inputs must be 2D arrays.");
+      return NULL;
+    }
+    if (!is_c_contiguous(array, "inputs") ||
+        !is_float32_or_float64(array, "inputs")) {
+      Py_DECREF(inputs_fast);
+      return NULL;
+    }
+
+    if (i == 0) {
+      nrow = PyArray_DIM(array, 0);
+      nlam = PyArray_DIM(array, 1);
+      input_typenum = PyArray_TYPE(array);
+    } else if (PyArray_DIM(array, 0) != nrow ||
+               PyArray_DIM(array, 1) != nlam) {
+      Py_DECREF(inputs_fast);
+      PyErr_SetString(PyExc_ValueError,
+                      "all inputs must have the same shape.");
+      return NULL;
+    } else if (PyArray_TYPE(array) != input_typenum) {
+      Py_DECREF(inputs_fast);
+      PyErr_SetString(PyExc_TypeError,
+                      "all inputs must have the same floating-point dtype.");
+      return NULL;
+    }
+
+    arrays.push_back(array);
+  }
+
+  tic("combine_spectra_2d");
+  PyObject *result =
+      dispatch_float(input_typenum, [&](auto value) -> PyObject * {
+        using Real = decltype(value);
+        const size_t size = (size_t)PyArray_SIZE(arrays[0]);
+        Real *output = new (std::nothrow) Real[size];
+        if (output == NULL) {
+          PyErr_NoMemory();
+          return NULL;
+        }
+
+        std::vector<const Real *> input_ptrs;
+        input_ptrs.reserve((size_t)ninputs);
+        for (PyArrayObject *array : arrays) {
+          input_ptrs.push_back(data_ptr<const Real>(array));
+        }
+
+#ifdef WITH_OPENMP
+#pragma omp parallel for num_threads(nthreads) \
+    schedule(static) if (nthreads > 1)
+#endif
+        for (npy_intp index = 0; index < (npy_intp)size; ++index) {
+          Real total = 0;
+          for (const Real *input : input_ptrs) {
+            const Real element = input[index];
+            if (!is_nan_bits(element)) {
+              total += element;
+            }
+          }
+          output[index] = total;
+        }
+
+        npy_intp output_dims[2] = {nrow, nlam};
+        return reinterpret_cast<PyObject *>(
+            wrap_array_to_numpy<Real>(2, output_dims, output));
+      });
+  toc("combine_spectra_2d");
+
+  Py_DECREF(inputs_fast);
+  return result;
+}
+
 template void reduce_spectra<float, float>(float *, const float *, int, int,
                                            int);
 template void reduce_spectra<float, double>(double *, const float *, int, int,
@@ -293,6 +412,8 @@ static PyMethodDef ReductionMethods[] = {
     {"reduce_particle_spectra", (PyCFunction)reduce_particle_spectra,
      METH_VARARGS,
      "Reduce per-particle spectra to a single integrated spectrum."},
+    {"combine_spectra_2d", (PyCFunction)combine_spectra_2d, METH_VARARGS,
+     "Combine 2D per-particle spectra without temporary arrays."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */
