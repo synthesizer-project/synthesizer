@@ -8,7 +8,7 @@ These classes should not be used directly.
 """
 
 import numpy as np
-from unyt import Hz, erg, s
+from unyt import Hz, erg, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.emission_models.extractors.extractor import (
@@ -20,8 +20,12 @@ from synthesizer.emission_models.extractors.extractor import (
 )
 from synthesizer.emission_models.utils import cache_model_params
 from synthesizer.emissions import LineCollection, Sed, integrate_particle_sed
+from synthesizer.extensions.reductions import (
+    combine_spectra_2d,
+    reduce_particle_spectra,
+)
 from synthesizer.grid import Template
-from synthesizer.utils.operation_timers import timer
+from synthesizer.utils.operation_timers import timed, timer
 
 
 class Extraction:
@@ -66,6 +70,7 @@ class Extraction:
         # peculiar velocities? (Particle Only!)
         self._use_vel_shift = vel_shift
 
+    @timed("Extraction._extract_spectra")
     def _extract_spectra(
         self,
         this_model,
@@ -403,6 +408,7 @@ class Generation:
         # Attach the emission generation model
         self._generator = generator
 
+    @timed("Generation._generate_spectra")
     def _generate_spectra(
         self,
         this_model,
@@ -687,6 +693,7 @@ class Transformation:
             else self._apply_to.label
         )
 
+    @timed("Transformation._transform_emission")
     def _transform_emission(
         self,
         this_model,
@@ -838,6 +845,7 @@ class Combination:
             for model in self._combine
         ]
 
+    @timed("Combination._combine_spectra")
     def _combine_spectra(
         self,
         emission_model,
@@ -868,50 +876,49 @@ class Combination:
             dict:
                 The dictionary of spectra.
         """
-        # Create an empty spectra to add to
+        labels = this_model._combine_labels
+        arrays = tuple(
+            (
+                particle_spectra[label]._lnu
+                if this_model.per_particle
+                else spectra[label]._lnu
+            )
+            for label in labels
+        )
+
         if this_model.per_particle:
+            out_lnu = combine_spectra_2d(arrays, nthreads)
             out_spec = Sed(
                 emission_model.lam,
-                lnu=np.zeros_like(
-                    particle_spectra[this_model._combine_labels[0]]._lnu
-                )
-                * erg
-                / s
-                / Hz,
+                lnu=unyt_array(out_lnu, erg / s / Hz, bypass_validation=True),
+            )
+            particle_spectra[this_model.label] = out_spec
+
+            reduced_lnu = reduce_particle_spectra(
+                out_lnu, nthreads, out_lnu.dtype
+            )
+            spectra[this_model.label] = Sed(
+                emission_model.lam,
+                lnu=unyt_array(
+                    reduced_lnu, erg / s / Hz, bypass_validation=True
+                ),
             )
         else:
             out_spec = Sed(
                 emission_model.lam,
-                lnu=np.zeros_like(spectra[this_model._combine_labels[0]]._lnu)
-                * erg
-                / s
-                / Hz,
+                lnu=unyt_array(
+                    np.zeros_like(arrays[0]),
+                    erg / s / Hz,
+                    bypass_validation=True,
+                ),
             )
-
-        # Combine the spectra
-        for combine_label in this_model._combine_labels:
-            if this_model.per_particle:
-                nan_mask = np.isnan(particle_spectra[combine_label]._lnu)
-                out_spec._lnu[~nan_mask] += particle_spectra[
-                    combine_label
-                ]._lnu[~nan_mask]
-            else:
-                nan_mask = np.isnan(spectra[combine_label]._lnu)
-                out_spec._lnu[~nan_mask] += spectra[combine_label]._lnu[
-                    ~nan_mask
-                ]
+            for arr in arrays:
+                nan_mask = np.isnan(arr)
+                out_spec._lnu[~nan_mask] += arr[~nan_mask]
+            spectra[this_model.label] = out_spec
 
         # Cache the model on the emitter
         cache_model_params(this_model, emitter)
-
-        # Store the spectra in the right place (integrating if we need to)
-        if this_model.per_particle:
-            particle_spectra[this_model.label] = out_spec
-            spectra[this_model.label] = integrate_particle_sed(
-                out_spec, nthreads
-            )
-        else:
-            spectra[this_model.label] = out_spec
 
         return spectra, particle_spectra
 
