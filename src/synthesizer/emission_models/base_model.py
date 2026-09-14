@@ -55,6 +55,7 @@ from synthesizer.emission_models.operations import (
     Transformation,
 )
 from synthesizer.emission_models.parameters import VARIATION_TYPES
+from synthesizer.emission_models.transformers import DopplerBroadening
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity
 from synthesizer.utils.operation_timers import timed, timer
@@ -794,6 +795,17 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if model.label not in self._models:
                 self._unpack_model_recursively(model)
 
+        # Particle velocity shifts and scalar broadening describe alternative
+        # kinematic treatments and cannot coexist in one model graph.
+        if any(model.vel_shift for model in self._models.values()) and any(
+            isinstance(model.transformer, DopplerBroadening)
+            for model in self._models.values()
+        ):
+            raise exceptions.InconsistentArguments(
+                "vel_shift=True cannot be used with scalar velocity "
+                "dispersion broadening."
+            )
+
         # Now we've worked through the full tree we can set parent pointers
         for model in self._models.values():
             for child in model._children:
@@ -1162,12 +1174,26 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         Only applicable to particle emitters.
 
+        Particle based vel_shift is incompatible with scalar velocity
+        dispersion broadening transformations, so this function will raise an
+        error if both are set.
+
         Args:
             vel_shift (bool):
                 Whether to set the velocity shift flag.
             set_all (bool):
                 Whether to set the emitter on all models.
         """
+        # Check before mutation so a failed update leaves the graph unchanged.
+        if vel_shift and any(
+            isinstance(model.transformer, DopplerBroadening)
+            for model in self._models.values()
+        ):
+            raise exceptions.InconsistentArguments(
+                "vel_shift=True cannot be used with scalar velocity "
+                "dispersion broadening."
+            )
+
         if not set_all:
             self._use_vel_shift = vel_shift
         else:
