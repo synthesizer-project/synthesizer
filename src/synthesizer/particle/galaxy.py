@@ -33,7 +33,7 @@ from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
 from synthesizer.synth_warnings import warn
-from synthesizer.units import accepts, unyt_to_ndview
+from synthesizer.units import accepts, get_quantity_unit, unyt_to_ndview
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import resolve_out_dtype
@@ -1163,7 +1163,7 @@ class Galaxy(BaseGalaxy):
         # Divide out the mass contribution, handling zero contribution pixels
         img = weighted_img.arr
         img[img > 0] /= mass_img.arr[mass_img.arr > 0]
-        img *= self.stars.ages.units
+        img *= get_quantity_unit(self.stars, "ages")
 
         return Image(
             resolution=resolution,
@@ -1224,7 +1224,7 @@ class Galaxy(BaseGalaxy):
         # Divide out the mass contribution, handling zero contribution pixels
         img = weighted_img.arr
         img[img > 0] /= mass_img.arr[mass_img.arr > 0]
-        img *= self.stars.ages.units
+        img *= get_quantity_unit(self.stars, "ages")
 
         return Image(
             resolution=resolution,
@@ -1271,11 +1271,12 @@ class Galaxy(BaseGalaxy):
             Image: The SFR image.
         """
         # Convert the age bin if necessary
+        age_unit = get_quantity_unit(self.stars, "ages")
         if isinstance(age_bin, unyt_quantity):
-            if age_bin.units != self.stars.ages.units:
-                age_bin = age_bin.to(self.stars.ages.units)
+            if age_bin.units != age_unit:
+                age_bin = age_bin.to(age_unit)
         else:
-            age_bin *= self.stars.ages.units
+            age_bin *= age_unit
 
         # Get the mask for stellar particles in the age bin
         mask = self.stars.ages < age_bin
@@ -1342,11 +1343,12 @@ class Galaxy(BaseGalaxy):
             Image: The sSFR image.
         """
         # Convert the age bin if necessary
+        age_unit = get_quantity_unit(self.stars, "ages")
         if isinstance(age_bin, unyt_quantity):
-            if age_bin.units != self.stars.ages.units:
-                age_bin = age_bin.to(self.stars.ages.units)
+            if age_bin.units != age_unit:
+                age_bin = age_bin.to(age_unit)
         else:
-            age_bin *= self.stars.ages.units
+            age_bin *= age_unit
 
         # Get the mask for stellar particles in the age bin
         mask = self.stars.ages < age_bin

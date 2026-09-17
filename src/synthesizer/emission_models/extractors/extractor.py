@@ -30,7 +30,7 @@ from synthesizer.extensions.particle_spectra import (
     compute_particle_seds,
 )
 from synthesizer.synth_warnings import warn
-from synthesizer.units import unyt_to_ndview
+from synthesizer.units import get_quantity_unit, unyt_to_ndview
 from synthesizer.utils.operation_timers import timed, timer
 from synthesizer.utils.precision import resolve_out_dtype
 
@@ -635,7 +635,7 @@ class DopplerShiftedParticleExtractor(Extractor):
                     "velocity shifted spectra requested but no "
                     "star velocities provided."
                 )
-            vel_units = emitter.velocities.units
+            vel_units = get_quantity_unit(emitter, "velocities")
 
             # If nthreads is -1 then use all available threads
             if nthreads == -1:
@@ -770,7 +770,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
                     "velocity shifted spectra requested but no "
                     "star velocities provided."
                 )
-            vel_units = emitter.velocities.units
+            vel_units = get_quantity_unit(emitter, "velocities")
 
             # If nthreads is -1 then use all available threads
             if nthreads == -1:
