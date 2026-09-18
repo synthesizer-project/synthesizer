@@ -17,10 +17,6 @@
 #include <new>
 #include <vector>
 
-#ifdef WITH_OPENMP
-#include <omp.h>
-#endif
-
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
@@ -60,98 +56,42 @@ static inline Real nan_to_zero(Real value) {
   return is_nan_bits(value) ? static_cast<Real>(0) : value;
 }
 
-/* Rows summed in the input precision before the running total is widened.
- *
- * Adding float32 rows straight into a double accumulator forces a widening
- * conversion on every element and halves the usable vector width: measured
- * 21 GB/s against 52 GB/s for a same-width accumulation. Summing a block of
- * rows at the input precision and folding that block into the double total
- * keeps the inner loop at one width, while the rounding error grows with the
- * block length rather than with the particle count. At this block size the
- * result sits 4.3e-8 from the all-double answer for 100k float32 rows, which
- * is inside float32's own epsilon. */
-static const size_t REDUCE_BLOCK = 128;
-
-/**
- * @brief Sum a range of per-particle spectra into a double accumulator.
- *
- * @tparam Real The floating-point type of the input per-particle spectra.
- *
- * @param accum: The double precision accumulator, length nlam.
- * @param part_spectra: The per-particle spectra array.
- * @param start: The first particle in this range.
- * @param end: One past the last particle in this range.
- * @param nlam: The number of wavelengths in the spectra.
- * @param block: Scratch of length nlam used to sum a block of rows at the
- *     input precision, or NULL to sum straight into the accumulator.
- */
-template <typename Real>
-static void reduce_spectra_range(double *accum, const Real *part_spectra,
-                                 size_t start, size_t end, int nlam,
-                                 Real *block) {
-
-  /* Without a scratch buffer, or when the input is already double precision
-   * and there is no widening to avoid, sum straight into the accumulator. */
-  if (block == NULL || sizeof(Real) == sizeof(double)) {
-    for (size_t p = start; p < end; p++) {
-      const Real *__restrict row = part_spectra + p * nlam;
-      for (int ilam = 0; ilam < nlam; ilam++) {
-        accum[ilam] += static_cast<double>(row[ilam]);
-      }
-    }
-    return;
-  }
-
-  /* Otherwise sum a block of rows at the input precision. */
-  for (size_t p0 = start; p0 < end; p0 += REDUCE_BLOCK) {
-    const size_t p1 = (p0 + REDUCE_BLOCK < end) ? p0 + REDUCE_BLOCK : end;
-
-    for (int ilam = 0; ilam < nlam; ilam++) {
-      block[ilam] = static_cast<Real>(0);
-    }
-
-    for (size_t p = p0; p < p1; p++) {
-      const Real *__restrict row = part_spectra + p * nlam;
-      for (int ilam = 0; ilam < nlam; ilam++) {
-        block[ilam] += row[ilam];
-      }
-    }
-
-    for (int ilam = 0; ilam < nlam; ilam++) {
-      accum[ilam] += static_cast<double>(block[ilam]);
-    }
-  }
-}
-
 /**
  * @brief Reduce Npart spectra to integrated spectra in serial.
  *
  * @tparam Real The floating-point type of the input per-particle spectra.
+ * @tparam OutT The floating-point type stored in the reduced spectrum.
  *
- * @param accum: The double precision accumulator, length nlam.
+ * @param spectra: The output array to accumulate the spectra.
  * @param part_spectra: The per-particle spectra array.
  * @param nlam: The number of wavelengths in the spectra.
  * @param npart: The number of particles.
  */
 template <typename Real>
 static void reduce_spectra_serial(double *accum, const Real *part_spectra,
-                                  int nlam, int npart, bool blocked) {
-  std::vector<Real> block(blocked ? nlam : 0);
-  reduce_spectra_range<Real>(accum, part_spectra, 0,
-                             static_cast<size_t>(npart), nlam,
-                             blocked ? block.data() : NULL);
+                                  int nlam, int npart) {
+
+  /* Cast npart to size_t for safety in the loop. */
+  size_t npart_size = static_cast<size_t>(npart);
+
+  /* Loop over particles. */
+  for (size_t p = 0; p < npart_size; p++) {
+    const Real *__restrict part_spectra_row = part_spectra + p * nlam;
+
+    /* Loop over wavelengths. */
+    for (int ilam = 0; ilam < nlam; ilam++) {
+      accum[ilam] += static_cast<double>(part_spectra_row[ilam]);
+    }
+  }
 }
 
 /**
  * @brief Reduce Npart spectra to integrated spectra in parallel.
  *
- * Each thread sums its own particle range into a private accumulator and the
- * accumulators are folded together once at the end, so there is no sharing on
- * the hot loop.
- *
  * @tparam Real The floating-point type of the input per-particle spectra.
+ * @tparam OutT The floating-point type stored in the reduced spectrum.
  *
- * @param accum: The double precision accumulator, length nlam.
+ * @param spectra: The output array to accumulate the spectra.
  * @param part_spectra: The per-particle spectra array.
  * @param nlam: The number of wavelengths in the spectra.
  * @param npart: The number of particles.
@@ -160,28 +100,31 @@ static void reduce_spectra_serial(double *accum, const Real *part_spectra,
 #ifdef WITH_OPENMP
 template <typename Real>
 static void reduce_spectra_parallel(double *accum, const Real *part_spectra,
-                                    int nlam, int npart, int nthreads,
-                                    bool blocked) {
+                                    int nlam, int npart, int nthreads) {
 
-  const size_t npart_size = static_cast<size_t>(npart);
+  /* Cast npart to size_t for safety in the loop. */
+  size_t npart_size = static_cast<size_t>(npart);
 
+  /* Loop over particles in parallel. */
+#if defined(_OPENMP) && _OPENMP >= 201511
+#pragma omp parallel for num_threads(nthreads) reduction(+ : accum[ : nlam])
+  for (size_t p = 0; p < npart_size; p++) {
+    const Real *__restrict part_spectra_row = part_spectra + p * nlam;
+    for (int ilam = 0; ilam < nlam; ilam++) {
+      accum[ilam] += static_cast<double>(part_spectra_row[ilam]);
+    }
+  }
+#else  // OpenMP < 4.5 or no array reduction support
 #pragma omp parallel num_threads(nthreads)
   {
     std::vector<double> local(nlam, 0.0);
-    std::vector<Real> block(blocked ? nlam : 0);
-
-    const int nthr = omp_get_num_threads();
-    const int tid = omp_get_thread_num();
-    const size_t per_thread = (npart_size + nthr - 1) / nthr;
-    const size_t start = static_cast<size_t>(tid) * per_thread;
-    const size_t end =
-        (start + per_thread < npart_size) ? start + per_thread : npart_size;
-
-    if (start < end) {
-      reduce_spectra_range<Real>(local.data(), part_spectra, start, end, nlam,
-                                 blocked ? block.data() : NULL);
+#pragma omp for nowait schedule(static)
+    for (size_t p = 0; p < npart; p++) {
+      const Real *__restrict part_spectra_row = part_spectra + p * nlam;
+      for (int ilam = 0; ilam < nlam; ilam++) {
+        local[ilam] += static_cast<double>(part_spectra_row[ilam]);
+      }
     }
-
 #pragma omp critical
     {
       for (int ilam = 0; ilam < nlam; ilam++) {
@@ -189,6 +132,7 @@ static void reduce_spectra_parallel(double *accum, const Real *part_spectra,
       }
     }
   }
+#endif  // WITH_OPENMP
 }
 #endif
 
@@ -210,28 +154,20 @@ void reduce_spectra(OutT *spectra, const Real *part_spectra, int nlam,
 
   tic("reduce_spectra");
 
-  /* The running total is always double precision so a reduced precision
-   * output doesn't accumulate error over many particles. */
+  /* Accumulate in double regardless of the requested output precision so
+   * reduced precision outputs don't suffer float32 accumulation error over
+   * many particles. */
   std::vector<double> accum(nlam, 0.0);
-
-  /* Sum blocks of rows at the input precision only when the result is stored
-   * at that precision too. The blocking error is then the same order as the
-   * rounding the store already incurs, while a float64 output keeps the exact
-   * double precision accumulation it asked for. */
-  const bool blocked =
-      sizeof(Real) == sizeof(float) && sizeof(OutT) == sizeof(float);
 
   if (nthreads > 1) {
 #ifdef WITH_OPENMP
     reduce_spectra_parallel<Real>(accum.data(), part_spectra, nlam, npart,
-                                  nthreads, blocked);
+                                  nthreads);
 #else
-    reduce_spectra_serial<Real>(accum.data(), part_spectra, nlam, npart,
-                                blocked);
+    reduce_spectra_serial<Real>(accum.data(), part_spectra, nlam, npart);
 #endif
   } else {
-    reduce_spectra_serial<Real>(accum.data(), part_spectra, nlam, npart,
-                                blocked);
+    reduce_spectra_serial<Real>(accum.data(), part_spectra, nlam, npart);
   }
 
   /* Fold the double precision accumulation into the output buffer. */
