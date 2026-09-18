@@ -81,7 +81,7 @@ from synthesizer.units import (
     get_quantity_unit,
 )
 from synthesizer.utils import TableFormatter
-from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.operation_timers import timed, timer
 from synthesizer.utils.precision import resolve_out_dtype
 
 
@@ -1002,53 +1002,59 @@ class LineCollection:
             return self.get_flux0(out_dtype=out_dtype)
 
         # Get the luminosity distance
-        luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
+        with timer("LineCollection.get_flux.distance"):
+            luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
         # Unit arithmetic can promote float32 values, so explicitly restore
         # the luminosity dtype when no output precision was requested.
-        dtype = (
-            self._luminosity.dtype
-            if out_dtype is None
-            else resolve_out_dtype(out_dtype)
-        )
-        distance_factor = 4 * np.pi * luminosity_distance**2
-        self.flux = (
-            get_array_quantity_view(
-                self._luminosity, get_quantity_unit(self, "luminosity")
+        with timer("LineCollection.get_flux.distance_factor"):
+            dtype = (
+                self._luminosity.dtype
+                if out_dtype is None
+                else resolve_out_dtype(out_dtype)
             )
-            / distance_factor
-        ).astype(dtype, copy=False)
-        self.continuum_flux = (
-            get_array_quantity_view(
-                self._continuum, get_quantity_unit(self, "continuum")
-            )
-            / distance_factor
-        ).astype(dtype, copy=False)
+            distance_factor = 4 * np.pi * luminosity_distance**2
+        with timer("LineCollection.get_flux.scale_luminosity"):
+            self.flux = (
+                get_array_quantity_view(
+                    self._luminosity, get_quantity_unit(self, "luminosity")
+                )
+                / distance_factor
+            ).astype(dtype, copy=False)
+        with timer("LineCollection.get_flux.scale_continuum"):
+            self.continuum_flux = (
+                get_array_quantity_view(
+                    self._continuum, get_quantity_unit(self, "continuum")
+                )
+                / distance_factor
+            ).astype(dtype, copy=False)
 
         # Set the observed wavelength
-        self.obslam = get_array_quantity_view(
-            self._lam * (1 + z), get_quantity_unit(self, "lam")
-        )
+        with timer("LineCollection.get_flux.obslam"):
+            self.obslam = get_array_quantity_view(
+                self._lam * (1 + z), get_quantity_unit(self, "lam")
+            )
 
         # If we are applying an IGM model apply it
         if igm is not None:
-            # Support both class references and instantiated objects
-            if callable(igm):
-                igm_transmission = igm().get_transmission(
-                    z,
-                    get_array_quantity_view(
-                        self._obslam, get_quantity_unit(self, "obslam")
-                    ),
-                )
-            else:
-                igm_transmission = igm.get_transmission(
-                    z,
-                    get_array_quantity_view(
-                        self._obslam, get_quantity_unit(self, "obslam")
-                    ),
-                )
-            self._flux *= igm_transmission
-            self._continuum_flux *= igm_transmission
+            with timer("LineCollection.get_flux.igm"):
+                # Support both class references and instantiated objects
+                if callable(igm):
+                    igm_transmission = igm().get_transmission(
+                        z,
+                        get_array_quantity_view(
+                            self._obslam, get_quantity_unit(self, "obslam")
+                        ),
+                    )
+                else:
+                    igm_transmission = igm.get_transmission(
+                        z,
+                        get_array_quantity_view(
+                            self._obslam, get_quantity_unit(self, "obslam")
+                        ),
+                    )
+                self._flux *= igm_transmission
+                self._continuum_flux *= igm_transmission
 
         return self.flux
 

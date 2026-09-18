@@ -743,27 +743,28 @@ class Transformation:
             isinstance(apply_to, LineCollection)
             and this_model._lam_mask is not None
         ):
-            # Get the line wavelengths
-            line_lams = apply_to.lam
+            with timer("Transformation._transform_emission.line_lam_mask"):
+                # Get the line wavelengths
+                line_lams = apply_to.lam
 
-            # Get the indices that would bin the lines into the
-            # spectra grid wavelength array
-            raw_indices = np.digitize(
-                line_lams,
-                lam,
-                right=False,
-            )
+                # Get the indices that would bin the lines into the
+                # spectra grid wavelength array
+                raw_indices = np.digitize(
+                    line_lams,
+                    lam,
+                    right=False,
+                )
 
-            # Translate these indices into a mask
-            lam_mask = np.zeros(apply_to.nlines, dtype=bool)
-            for i, raw in enumerate(raw_indices):
-                # Skip lines outside the grid: raw == 0 (below first edge)
-                # or raw == nlam (at/above last edge)
-                if raw == 0 or raw == lam.size:
-                    continue
-                grid_ix = raw - 1
-                if this_model._lam_mask[grid_ix]:
-                    lam_mask[i] = True
+                # Translate these indices into a mask
+                lam_mask = np.zeros(apply_to.nlines, dtype=bool)
+                for i, raw in enumerate(raw_indices):
+                    # Skip lines outside the grid: raw == 0 (below first edge)
+                    # or raw == nlam (at/above last edge)
+                    if raw == 0 or raw == lam.size:
+                        continue
+                    grid_ix = raw - 1
+                    if this_model._lam_mask[grid_ix]:
+                        lam_mask[i] = True
 
         else:
             # Otherwise we can just use the lam_mask as is
@@ -780,17 +781,19 @@ class Transformation:
         )
 
         # Cache the model on the emitter
-        cache_model_params(this_model, emitter)
+        with timer("Transformation._transform_emission.cache_params"):
+            cache_model_params(this_model, emitter)
 
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_emissions[this_model.label] = emission
-            if isinstance(emission, Sed):
-                emissions[this_model.label] = integrate_particle_sed(
-                    emission, nthreads
-                )
-            else:
-                emissions[this_model.label] = emission.sum()
+            with timer("Transformation._transform_emission.integrate"):
+                if isinstance(emission, Sed):
+                    emissions[this_model.label] = integrate_particle_sed(
+                        emission, nthreads
+                    )
+                else:
+                    emissions[this_model.label] = emission.sum()
         else:
             emissions[this_model.label] = emission
 

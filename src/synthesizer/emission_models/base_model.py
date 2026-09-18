@@ -2840,11 +2840,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Collect existing spectra from all emitters for scaling purposes
         spectra = {}
         particle_spectra = {}
-        for emitter in emitters.values():
-            if hasattr(emitter, "spectra"):
-                spectra.update(emitter.spectra)
-            if hasattr(emitter, "particle_spectra"):
-                particle_spectra.update(emitter.particle_spectra)
+        with timer("EmissionModel._get_lines.collect_emitter_spectra"):
+            for emitter in emitters.values():
+                if hasattr(emitter, "spectra"):
+                    spectra.update(emitter.spectra)
+                if hasattr(emitter, "particle_spectra"):
+                    particle_spectra.update(emitter.particle_spectra)
 
         # Cache a representative wavelength array before any eager deletion.
         line_lams = None
@@ -2876,27 +2877,29 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
             # Build the combined mask once for operations that use it.
             this_mask = None
-            for mask_dict in this_model.masks:
-                this_mask = emitter.get_mask(
-                    **mask_dict,
-                    mask=this_mask,
-                    attr_override_obj=this_model,
-                )
+            with timer("EmissionModel._get_lines.build_mask"):
+                for mask_dict in this_model.masks:
+                    this_mask = emitter.get_mask(
+                        **mask_dict,
+                        mask=this_mask,
+                        attr_override_obj=this_model,
+                    )
 
             # Dispatch to the appropriate operation for this model.
             if this_model._is_extracting:
                 try:
-                    lines, particle_lines = self._extract_lines(
-                        line_ids,
-                        this_model,
-                        emitters,
-                        lines,
-                        particle_lines,
-                        verbose=verbose,
-                        nthreads=nthreads,
-                        grid_assignment_method=grid_assignment_method,
-                        out_dtype=out_dtype,
-                    )
+                    with timer("EmissionModel._get_lines.extract"):
+                        lines, particle_lines = self._extract_lines(
+                            line_ids,
+                            this_model,
+                            emitters,
+                            lines,
+                            particle_lines,
+                            verbose=verbose,
+                            nthreads=nthreads,
+                            grid_assignment_method=grid_assignment_method,
+                            out_dtype=out_dtype,
+                        )
                     if line_lams is None and label in lines:
                         line_lams = lines[label].lam
                 except Exception as e:
@@ -2909,13 +2912,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_combining:
                 try:
-                    lines, particle_lines = self._combine_lines(
-                        emission_model,
-                        lines,
-                        particle_lines,
-                        this_model,
-                        emitter,
-                    )
+                    with timer("EmissionModel._get_lines.combine"):
+                        lines, particle_lines = self._combine_lines(
+                            emission_model,
+                            lines,
+                            particle_lines,
+                            this_model,
+                            emitter,
+                        )
                     if line_lams is None and label in lines:
                         line_lams = lines[label].lam
                 except Exception as e:
@@ -2948,17 +2952,18 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_generating:
                 try:
-                    lines, particle_lines = self._generate_lines(
-                        this_model,
-                        emission_model,
-                        lines,
-                        particle_lines,
-                        emitter,
-                        line_lams,
-                        line_ids,
-                        spectra,
-                        particle_spectra,
-                    )
+                    with timer("EmissionModel._get_lines.generate"):
+                        lines, particle_lines = self._generate_lines(
+                            this_model,
+                            emission_model,
+                            lines,
+                            particle_lines,
+                            emitter,
+                            line_lams,
+                            line_ids,
+                            spectra,
+                            particle_spectra,
+                        )
                     if line_lams is None and label in lines:
                         line_lams = lines[label].lam
                 except Exception as e:
