@@ -35,6 +35,7 @@ def int_spectra_strong_scaling(
     gam,
     low_thresh,
     paper_style,
+    grid_precision,
 ):
     """Profile the cpu time usage of the particle spectra calculation."""
     Path(out_dir).mkdir(parents=True, exist_ok=True)
@@ -42,7 +43,7 @@ def int_spectra_strong_scaling(
     # Define the grid
     grid_name = "test_grid"
 
-    grid = Grid(grid_name)
+    grid = Grid(grid_name, use_precision=grid_precision)
 
     # Get the emission model
     model = IncidentEmission(grid)
@@ -160,6 +161,14 @@ if __name__ == "__main__":
         "smaller proportions).",
     )
 
+    args.add_argument(
+        "--grid-precision",
+        choices=("float32", "float64"),
+        default="float64",
+        help="Precision to load the grid arrays at. float32 halves the grid "
+        "read traffic in the extraction kernels.",
+    )
+
     args = args.parse_args()
 
     # Check for atomic timing
@@ -180,4 +189,5 @@ if __name__ == "__main__":
         args.grid_assign,
         args.low_thresh,
         args.paper_style,
+        args.grid_precision,
     )

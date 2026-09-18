@@ -34,6 +34,28 @@
 #include "timers_init.h"
 #endif
 
+/* The combine loop below is emitted once per specialised input count, so the
+ * OpenMP directive has to come from a macro. It expands to nothing when the
+ * build has no OpenMP support. */
+#ifdef WITH_OPENMP
+#define SYNTH_COMBINE_PRAGMA \
+  _Pragma("omp parallel for num_threads(nthr) schedule(static)")
+#else
+#define SYNTH_COMBINE_PRAGMA
+#endif
+
+/**
+ * @brief Return a value, or zero when it is NaN.
+ *
+ * Used instead of a branch so the combine loop stays vectorisable.
+ *
+ * @param value: The value to test.
+ */
+template <typename Real>
+static inline Real nan_to_zero(Real value) {
+  return is_nan_bits(value) ? static_cast<Real>(0) : value;
+}
+
 /**
  * @brief Reduce Npart spectra to integrated spectra in serial.
  *
@@ -373,20 +395,48 @@ PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
           input_ptrs.push_back(data_ptr<const Real>(array));
         }
 
-#ifdef WITH_OPENMP
-#pragma omp parallel for num_threads(nthreads) \
-    schedule(static) if (nthreads > 1)
-#endif
-        for (npy_intp index = 0; index < (npy_intp)size; ++index) {
-          Real total = 0;
-          for (const Real *input : input_ptrs) {
-            const Real element = input[index];
-            if (!is_nan_bits(element)) {
-              total += element;
+        /* The input count is a runtime value and the NaN test was a
+         * branch, which together stopped the loop vectorising. Specialising
+         * the small counts and selecting rather than branching lets it
+         * vectorise. */
+        const Real *const *ins = input_ptrs.data();
+        const int nin = (int)ninputs;
+        const int nthr = nthreads > 1 ? nthreads : 1;
+        (void)nthr; /* Only read by the OpenMP directive. */
+
+#define SYNTH_COMBINE_INPUTS(N)                                       \
+  case N: {                                                           \
+    const Real *in[N];                                                \
+    for (int k = 0; k < N; k++) in[k] = ins[k];                       \
+    SYNTH_COMBINE_PRAGMA                                              \
+    for (npy_intp index = 0; index < (npy_intp)size; ++index) {       \
+      Real total = 0;                                                 \
+      for (int k = 0; k < N; k++) total += nan_to_zero(in[k][index]); \
+      output[index] = total;                                          \
+    }                                                                 \
+    break;                                                            \
+  }
+
+        switch (nin) {
+          SYNTH_COMBINE_INPUTS(1)
+          SYNTH_COMBINE_INPUTS(2)
+          SYNTH_COMBINE_INPUTS(3)
+          SYNTH_COMBINE_INPUTS(4)
+          SYNTH_COMBINE_INPUTS(5)
+          SYNTH_COMBINE_INPUTS(6)
+          default: {
+            SYNTH_COMBINE_PRAGMA
+            for (npy_intp index = 0; index < (npy_intp)size; ++index) {
+              Real total = 0;
+              for (int k = 0; k < nin; k++) {
+                total += nan_to_zero(ins[k][index]);
+              }
+              output[index] = total;
             }
+            break;
           }
-          output[index] = total;
         }
+#undef SYNTH_COMBINE_INPUTS
 
         npy_intp output_dims[2] = {nrow, nlam};
         return reinterpret_cast<PyObject *>(

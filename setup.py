@@ -22,6 +22,16 @@ Example:
     ```bash
     CFLAGS="-O3 -march=native" pip install .
     ```
+
+    To build for the instruction set of the machine doing the build, which is
+    worth roughly a doubling of vector width on any current HPC CPU, run:
+
+    ```bash
+    NATIVE=1 pip install .
+    ```
+
+    The resulting binary will not run on an older CPU, so only use it when the
+    build machine and the run machine have the same architecture.
 """
 
 import logging
@@ -107,6 +117,7 @@ INCLUDES = os.environ.get("EXTRA_INCLUDES", "")
 WITH_OPENMP = os.environ.get("WITH_OPENMP", "")
 WITH_DEBUGGING_CHECKS = "ENABLE_DEBUGGING_CHECKS" in os.environ
 RUTHLESS = "RUTHLESS" in os.environ
+NATIVE = "NATIVE" in os.environ
 ATOMIC_TIMING = "ATOMIC_TIMING" in os.environ
 
 # Define the log file
@@ -146,6 +157,7 @@ logger.info(f"### System platform: {sys.platform}")
 logger.info(f"### CFLAGS: {CFLAGS}")
 logger.info(f"### LDFLAGS: {LDFLAGS}")
 logger.info(f"### WITH_OPENMP: {WITH_OPENMP}")
+logger.info(f"### NATIVE: {NATIVE}")
 logger.info(f"### EXTRA_INCLUDES: {INCLUDES}")
 if WITH_DEBUGGING_CHECKS:
     logger.info(f"### WITH_DEBUGGING_CHECKS: {WITH_DEBUGGING_CHECKS}")
@@ -214,6 +226,42 @@ if RUTHLESS:
         default_compile_flags.append("-Werror")
         default_compile_flags.append("-Wall")
         default_compile_flags.append("-Wextra")
+
+# Target the build machine's own instruction set when asked. Without this the
+# compiler emits baseline x86-64, i.e. SSE2 only: 128-bit vectors, half the
+# width of the AVX2 every current HPC CPU has. The flag is opt-in because the
+# resulting binary will not run on an older CPU, which matters when the login
+# node and the compute nodes differ or when a wheel is being built.
+if NATIVE:
+    if sys.platform == "win32":
+        arch_flags = ["/arch:AVX2"]
+    elif sys.platform == "darwin":
+        arch_flags = ["-mcpu=native"]
+    else:
+        arch_flags = ["-march=native", "-mtune=native"]
+    if has_flags(compiler, arch_flags):
+        default_compile_flags.extend(arch_flags)
+    else:
+        logger.info(f"### NATIVE requested but {arch_flags} not supported")
+
+# Extensions are shared libraries, so by default the compiler must assume any
+# global function can be interposed at load time and routes internal calls
+# through the PLT. Nothing here is meant to be interposed, and switching it off
+# lets those calls inline.
+if sys.platform not in ("win32", "darwin"):
+    if has_flags(compiler, ["-fno-semantic-interposition"]):
+        default_compile_flags.append("-fno-semantic-interposition")
+
+# Warn when the build is left on the baseline target, since that halves the
+# usable vector width on every kernel.
+if not NATIVE and not any(
+    f.startswith(("-march", "-mcpu", "-mavx", "/arch")) for f in CFLAGS.split()
+):
+    logger.info(
+        "### No architecture flag set: building for baseline x86-64 (SSE2). "
+        "Use NATIVE=1, or set an explicit -march in CFLAGS, to use this "
+        "machine's vector instructions."
+    )
 
 # Get user specified flags
 compile_flags = CFLAGS.split()

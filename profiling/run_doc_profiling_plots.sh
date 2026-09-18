@@ -33,6 +33,7 @@ PIPELINE_THREADS=8
 SCALING_THREADS=8
 STRONG_THREADS=32
 STRONG_AVERAGES=10
+GRID_PRECISION=float64
 OUTPUT_ROOT="profiling/outputs"
 
 # Parse command line arguments
@@ -52,6 +53,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--strong-averages)
 		STRONG_AVERAGES="$2"
+		shift 2
+		;;
+	--grid-precision)
+		GRID_PRECISION="$2"
 		shift 2
 		;;
 	--output-dir)
@@ -262,7 +267,8 @@ python profiling/scaling/strong_scaling_int_spectra.py \
 	--max_threads $STRONG_THREADS \
 	--nstars 1000000 \
 	--average_over $STRONG_AVERAGES \
-	--low_thresh 0.01
+	--low_thresh 0.01 \
+	--grid-precision $GRID_PRECISION
 
 echo "Running particle spectra strong scaling..."
 python profiling/scaling/strong_scaling_part_spectra.py \
@@ -271,7 +277,8 @@ python profiling/scaling/strong_scaling_part_spectra.py \
 	--max_threads $STRONG_THREADS \
 	--nstars 10000 \
 	--average_over $STRONG_AVERAGES \
-	--low_thresh 0.01
+	--low_thresh 0.01 \
+	--grid-precision $GRID_PRECISION
 
 echo "Running LOS column density strong scaling..."
 python profiling/scaling/strong_scaling_los_col_den.py \
@@ -281,7 +288,8 @@ python profiling/scaling/strong_scaling_los_col_den.py \
 	--nstars 1000000 \
 	--ngas 1000000 \
 	--average_over $STRONG_AVERAGES \
-	--low_thresh 0.01
+	--low_thresh 0.01 \
+	--grid-precision $GRID_PRECISION
 
 echo "Running imaging strong scaling..."
 python profiling/scaling/strong_scaling_images.py \
@@ -290,7 +298,8 @@ python profiling/scaling/strong_scaling_images.py \
 	--max_threads $STRONG_THREADS \
 	--nstars 10000 \
 	--average_over $STRONG_AVERAGES \
-	--low_thresh 0.01
+	--low_thresh 0.01 \
+	--grid-precision $GRID_PRECISION
 
 cp "$TIMING_ANALYSIS_DIR/timing_comparison.png" \
 	"$FINAL_PLOTS_DIR/pipeline_timing_scaling.png"

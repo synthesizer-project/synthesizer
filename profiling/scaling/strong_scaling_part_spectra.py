@@ -36,6 +36,7 @@ def part_spectra_strong_scaling(
     low_thresh,
     doppler,
     paper_style,
+    grid_precision,
     out_dtype,
 ):
     """Profile the cpu time usage of the particle spectra calculation."""
@@ -44,7 +45,7 @@ def part_spectra_strong_scaling(
     # Define the grid
     grid_name = "test_grid"
 
-    grid = Grid(grid_name)
+    grid = Grid(grid_name, use_precision=grid_precision)
 
     # Get the emission model
     model = IncidentEmission(grid, vel_shift=doppler, per_particle=True)
@@ -195,6 +196,14 @@ if __name__ == "__main__":
         help="Requested output precision. Defaults to inherited precision.",
     )
 
+    args.add_argument(
+        "--grid-precision",
+        choices=("float32", "float64"),
+        default="float64",
+        help="Precision to load the grid arrays at. float32 halves the grid "
+        "read traffic in the extraction kernels.",
+    )
+
     args = args.parse_args()
 
     # Check for atomic timing
@@ -216,5 +225,6 @@ if __name__ == "__main__":
         args.low_thresh,
         args.doppler,
         args.paper_style,
+        args.grid_precision,
         args.out_dtype,
     )

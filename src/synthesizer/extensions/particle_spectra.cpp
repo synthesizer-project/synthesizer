@@ -20,6 +20,7 @@
 #include <Python.h>
 
 /* Local includes */
+#include "cell_accumulation.h"
 #include "cpp_to_python.h"
 #include "grid_props.h"
 #include "macros.h"
@@ -252,14 +253,9 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
     OutT *__restrict part_spec = part_spectra + p * nlam;
 
     /* Add all grid cell contributions to the spectra. */
-    for (size_t ilam = 0; ilam < nlam; ilam++) {
-      OutT spec_val = static_cast<OutT>(0);
-      for (int icell = 0; icell < nvalid_cells; icell++) {
-        spec_val = std::fma(static_cast<OutT>(cell_spectra_ptrs[icell][ilam]),
-                            cell_weights[icell], spec_val);
-      }
-      part_spec[ilam] = spec_val;
-    }
+    accumulate_cell_spectra<SpecReal, OutT>(cell_spectra_ptrs.data(),
+                                            cell_weights.data(), nvalid_cells,
+                                            part_spec, nlam);
   }
 }
 
@@ -557,15 +553,9 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
       OutT *__restrict part_spec = part_spectra + p * nlam;
 
       /* Add all grid cell contributions to the spectra. */
-      for (size_t ilam = 0; ilam < nlam; ilam++) {
-        OutT spec_val = static_cast<OutT>(0);
-        for (int icell = 0; icell < nvalid_cells; icell++) {
-          spec_val =
-              std::fma(static_cast<OutT>(cell_spectra_ptrs[icell][ilam]),
-                       cell_weights[icell], spec_val);
-        }
-        part_spec[ilam] = spec_val;
-      }
+      accumulate_cell_spectra<SpecReal, OutT>(cell_spectra_ptrs.data(),
+                                              cell_weights.data(),
+                                              nvalid_cells, part_spec, nlam);
     }
   }
 }
@@ -1161,13 +1151,38 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* Define the output dimensions. */
   npy_intp np_part_dims[2] = {npart, nlam};
 
-  /* Allocate the particle spectra in the requested output precision. */
+  /* The extraction kernels assign (not accumulate) every wavelength of every
+   * row they visit, so the buffer only has to be zeroed when a mask can leave
+   * part of it untouched: a wavelength mask skips columns and a particle mask
+   * skips whole rows. Without either, zeroing is a redundant full pass over
+   * the output. */
+  const bool needs_zeroing =
+      has_lam_mask || (np_mask != NULL && (PyObject *)np_mask != Py_None &&
+                       PyArray_Check((PyObject *)np_mask));
+
   PyArrayObject *np_part_spectra =
-      (PyArrayObject *)PyArray_ZEROS(2, np_part_dims, output_typenum, 0);
+      (PyArrayObject *)PyArray_SimpleNew(2, np_part_dims, output_typenum);
   if (np_part_spectra == NULL) {
     delete part_props;
     delete grid_props;
     return NULL;
+  }
+
+  /* When the fill is needed, run it over the same static particle blocks the
+   * kernels use. On a NUMA node that makes the thread which will later write
+   * each row the one that first touches its pages, so the pages are placed on
+   * that thread's node rather than all on the allocating thread's. */
+  if (needs_zeroing) {
+    char *out_bytes = static_cast<char *>(PyArray_DATA(np_part_spectra));
+    const size_t row_bytes =
+        static_cast<size_t>(nlam) * PyArray_ITEMSIZE(np_part_spectra);
+#ifdef WITH_OPENMP
+#pragma omp parallel for num_threads(nthreads) \
+    schedule(static) if (nthreads > 1)
+#endif
+    for (npy_intp p = 0; p < npart; p++) {
+      memset(out_bytes + static_cast<size_t>(p) * row_bytes, 0, row_bytes);
+    }
   }
 
   toc("compute_particle_seds.setup_output_arrays");
