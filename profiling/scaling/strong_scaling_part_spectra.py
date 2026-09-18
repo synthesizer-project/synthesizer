@@ -36,6 +36,7 @@ def part_spectra_strong_scaling(
     low_thresh,
     doppler,
     paper_style,
+    out_dtype,
 ):
     """Profile the cpu time usage of the particle spectra calculation."""
     Path(out_dir).mkdir(parents=True, exist_ok=True)
@@ -71,27 +72,36 @@ def part_spectra_strong_scaling(
     # Get spectra in serial first to get over any overhead due to linking
     # the first time the function is called
     print("Initial serial spectra calculation")
-    stars.get_spectra(model, nthreads=1, grid_assignment_method=gam)
+    dtype = None if out_dtype is None else np.dtype(out_dtype)
+    stars.get_spectra(
+        model,
+        nthreads=1,
+        grid_assignment_method=gam,
+        out_dtype=dtype,
+    )
     print()
 
     # Define the log and plot output paths
+    precision_suffix = "" if dtype is None else f"_{dtype.name}"
     if doppler:
         log_outpath = (
             f"{out_dir}/{basename}_part_spectra_{gam}_"
-            f"totThreads{max_threads}_nstars{nstars}_doppler.log"
+            f"totThreads{max_threads}_nstars{nstars}_doppler"
+            f"{precision_suffix}.log"
         )
         plot_outpath = (
             f"{out_dir}/{basename}_part_spectra_{gam}_"
-            f"totThreads{max_threads}_nstars{nstars}_doppler.png"
+            f"totThreads{max_threads}_nstars{nstars}_doppler"
+            f"{precision_suffix}.png"
         )
     else:
         log_outpath = (
             f"{out_dir}/{basename}_part_spectra_{gam}_"
-            f"totThreads{max_threads}_nstars{nstars}.log"
+            f"totThreads{max_threads}_nstars{nstars}{precision_suffix}.log"
         )
         plot_outpath = (
             f"{out_dir}/{basename}_part_spectra_{gam}_"
-            f"totThreads{max_threads}_nstars{nstars}.png"
+            f"totThreads{max_threads}_nstars{nstars}{precision_suffix}.png"
         )
 
     # Run the scaling test
@@ -104,6 +114,7 @@ def part_spectra_strong_scaling(
         {
             "emission_model": model,
             "grid_assignment_method": gam,
+            "out_dtype": dtype,
         },
         total_msg="Generating spectra",
         low_thresh=low_thresh,
@@ -177,6 +188,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Whether to apply velocity shifts to the spectra calculation.",
     )
+    args.add_argument(
+        "--out-dtype",
+        choices=("float32", "float64"),
+        default=None,
+        help="Requested output precision. Defaults to inherited precision.",
+    )
 
     args = args.parse_args()
 
@@ -199,4 +216,5 @@ if __name__ == "__main__":
         args.low_thresh,
         args.doppler,
         args.paper_style,
+        args.out_dtype,
     )

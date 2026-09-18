@@ -940,23 +940,32 @@ class LineCollection:
             flux (unyt_quantity):
                 Flux of the line in units of erg/s/cm2 by default.
         """
-        # Compute flux
-        self.flux = self.luminosity / (4 * np.pi * (10 * pc) ** 2)
-        self.continuum_flux = self.continuum / (4 * np.pi * (10 * pc) ** 2)
-
         # Unit arithmetic can promote float32 values, so explicitly restore
         # the luminosity dtype when no output precision was requested.
         dtype = (
-            self.luminosity.dtype
+            self._luminosity.dtype
             if out_dtype is None
             else resolve_out_dtype(out_dtype)
         )
-        self.flux = self.flux.astype(dtype, copy=False)
-        self.continuum_flux = self.continuum_flux.astype(dtype, copy=False)
+        distance_factor = 4 * np.pi * (10 * pc) ** 2
+        self.flux = (
+            get_array_quantity_view(
+                self._luminosity, get_quantity_unit(self, "luminosity")
+            )
+            / distance_factor
+        ).astype(dtype, copy=False)
+        self.continuum_flux = (
+            get_array_quantity_view(
+                self._continuum, get_quantity_unit(self, "continuum")
+            )
+            / distance_factor
+        ).astype(dtype, copy=False)
 
         # Set the observed wavelength (in this case this is the rest frame
         # wavelength)
-        self.obslam = self.lam
+        self.obslam = get_array_quantity_view(
+            self._lam.copy(), get_quantity_unit(self, "lam")
+        )
 
         return self.flux
 
@@ -995,34 +1004,51 @@ class LineCollection:
         # Get the luminosity distance
         luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
-        # Compute flux and observed continuum
-        self.flux = self.luminosity / (4 * np.pi * luminosity_distance**2)
-        self.continuum_flux = self.continuum / (
-            4 * np.pi * luminosity_distance**2
+        # Unit arithmetic can promote float32 values, so explicitly restore
+        # the luminosity dtype when no output precision was requested.
+        dtype = (
+            self._luminosity.dtype
+            if out_dtype is None
+            else resolve_out_dtype(out_dtype)
         )
+        distance_factor = 4 * np.pi * luminosity_distance**2
+        self.flux = (
+            get_array_quantity_view(
+                self._luminosity, get_quantity_unit(self, "luminosity")
+            )
+            / distance_factor
+        ).astype(dtype, copy=False)
+        self.continuum_flux = (
+            get_array_quantity_view(
+                self._continuum, get_quantity_unit(self, "continuum")
+            )
+            / distance_factor
+        ).astype(dtype, copy=False)
 
         # Set the observed wavelength
-        self.obslam = self.lam * (1 + z)
+        self.obslam = get_array_quantity_view(
+            self._lam * (1 + z), get_quantity_unit(self, "lam")
+        )
 
         # If we are applying an IGM model apply it
         if igm is not None:
             # Support both class references and instantiated objects
             if callable(igm):
-                igm_transmission = igm().get_transmission(z, self.obslam)
+                igm_transmission = igm().get_transmission(
+                    z,
+                    get_array_quantity_view(
+                        self._obslam, get_quantity_unit(self, "obslam")
+                    ),
+                )
             else:
-                igm_transmission = igm.get_transmission(z, self.obslam)
-            self.flux *= igm_transmission
-            self.continuum_flux *= igm_transmission
-
-        # Unit arithmetic can promote float32 values, so explicitly restore
-        # the luminosity dtype when no output precision was requested.
-        dtype = (
-            self.luminosity.dtype
-            if out_dtype is None
-            else resolve_out_dtype(out_dtype)
-        )
-        self.flux = self.flux.astype(dtype, copy=False)
-        self.continuum_flux = self.continuum_flux.astype(dtype, copy=False)
+                igm_transmission = igm.get_transmission(
+                    z,
+                    get_array_quantity_view(
+                        self._obslam, get_quantity_unit(self, "obslam")
+                    ),
+                )
+            self._flux *= igm_transmission
+            self._continuum_flux *= igm_transmission
 
         return self.flux
 
