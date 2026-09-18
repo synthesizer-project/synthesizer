@@ -71,6 +71,8 @@ while [[ $# -gt 0 ]]; do
 		echo "  --scaling-threads N     Number of threads for particle/wavelength scaling (default: 8)"
 		echo "  --strong-threads N      Max threads for strong scaling tests (default: 32)"
 		echo "  --strong-averages N     Number of averages for strong scaling (default: 10)"
+		echo "  --grid-precision DTYPE  Precision to load the grid at, float32 or"
+		echo "                          float64 (default: float64)"
 		echo "  --output-dir PATH       Output root directory (default: profiling/outputs)"
 		echo "  -h, --help             Show this help message"
 		echo ""
