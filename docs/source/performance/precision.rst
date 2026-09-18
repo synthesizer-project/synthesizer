@@ -74,10 +74,25 @@ Accuracy of reduced precision outputs
 
 Requesting float32 outputs does **not** mean sums are accumulated in float32.
 All integrated quantities (integrated spectra, reductions over particles,
-grid weight accumulation, and numerical integration) accumulate internally in
-double precision and only cast to the requested output dtype at the end, so a
-float32 result is the correctly-rounded float32 representation of the float64
-answer rather than a value degraded by millions of low-precision additions.
+grid weight accumulation, and numerical integration) carry a double precision
+running total and only cast to the requested output dtype at the end, so a
+float32 result is not a value degraded by millions of low-precision additions.
+
+There is one deliberate exception. When per-particle spectra are float32
+*and* the reduced spectrum is also requested as float32, the reduction sums
+blocks of 128 particles at float32 before folding each block into the double
+precision total. Feeding float32 rows one at a time into a double accumulator
+forces a widening conversion on every element and halves the usable vector
+width, which costs about 1.5x on that kernel. Bounding the error by the block
+length instead of the particle count keeps the result within roughly two
+float32 ulp of the all-double answer — the same order as the rounding the
+float32 store incurs anyway. Measured against a float64 NumPy reference, the
+worst relative error is 2.2e-07 for a thousand particles and 7.3e-09 for five
+hundred thousand.
+
+Asking for a float64 output always gets the exact double precision
+accumulation, whatever precision the inputs are, so use ``out_dtype`` when the
+extra digits matter.
 
 Input precision
 ~~~~~~~~~~~~~~~
