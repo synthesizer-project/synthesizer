@@ -32,10 +32,16 @@ Interleaving the pages across all domains lifts that cap:
     SYNTHESIZER_NUMA_INTERLEAVE=1 python my_script.py
 
 The variable is read when ``synthesizer`` is imported, before any grid or
-output array exists, and applies an interleave policy to everything allocated
-afterwards. ``numactl --interleave=all <command>`` does the same thing from
-outside the process and needs no support from Synthesizer; the two measure the
-same to within a few percent.
+output array exists. The policy covers the thread that sets it and any thread
+that thread creates later, which is what matters here: a page is placed on the
+domain of whichever thread first touches it, and the large arrays are
+allocated and filled by the main Python thread. OpenMP workers are spawned
+after the import and inherit the policy, so the output rows they first touch
+are interleaved as well. ``numactl --interleave=all <command>`` sets the same
+policy from outside the process and needs no support from Synthesizer; the two
+measure the same to within a few percent. Use ``numactl`` if your own threads
+exist and allocate before Synthesizer is imported, since those keep the
+default policy.
 
 Interleaving is not free. Below about eight threads everything a thread reads
 would otherwise have been local, and spreading it costs 5-20%. It is off by
