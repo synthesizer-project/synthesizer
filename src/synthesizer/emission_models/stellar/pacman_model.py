@@ -2,7 +2,7 @@
 
 This module defines the PacmanEmission and BimodalPacmanEmission classes which
 are used to define the emission models for the Pacman model. Both these models
-combine various differen spectra together to produce a final total emission
+combine various different spectra together to produce a final total emission
 spectrum.
 
 The PacmanEmission model is used to define the emission model for a single
@@ -10,7 +10,7 @@ population of stars. Including both intrinsic and attenuate emission, and
 if a dust emission model is given also dust emission. It includes the option
 to include escaped emission for a given escape fraction, and if a lyman alpha
 escape fraction is given, a more sophisticated nebular emission model is used,
-including line and nebuluar continuum emission.
+including line and nebular continuum emission.
 
 The BimodalPacmanEmission model is similar to the PacmanEmission model but
 splits the emission into a young and old population.
@@ -71,6 +71,7 @@ from synthesizer.emission_models.stellar.models import (
     ReprocessedEmission,
     TransmittedEmission,
 )
+from synthesizer.emission_models.utils import _apply_broadening_to_model
 
 
 class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
@@ -123,7 +124,8 @@ class PacmanEmissionNoEscapedNoDust(StellarEmissionModel):
                 "The PacmanEmission style models require a reprocessed grid."
             )
 
-        # Create the models we need
+        # Internal stellar kinematics act on the incident, transmitted, and
+        # nebular spectra before those components encounter dust attenuation.
         incident = IncidentEmission(
             grid=grid,
             label="incident",
@@ -233,7 +235,8 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
                 "The PacmanEmission style models require a reprocessed grid."
             )
 
-        # Create the models we need
+        # Internal stellar kinematics act on the incident, transmitted, and
+        # nebular spectra before those components encounter dust attenuation.
         incident = IncidentEmission(
             grid=grid,
             label="incident",
@@ -286,8 +289,6 @@ class PacmanEmissionNoEscapedWithDust(EmissionModel):
             **kwargs,
         )
 
-        # Finally make the TotalEmission model, this is
-        # dust_emission + attenuated
         EmissionModel.__init__(
             self,
             grid=grid,
@@ -363,7 +364,6 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
                 "escape fraction."
             )
 
-        # Create the models we need
         incident = IncidentEmission(
             grid=grid,
             label="incident",
@@ -499,7 +499,6 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
                 "non-zero escape fraction."
             )
 
-        # Create the models we need
         incident = IncidentEmission(
             grid=grid,
             label="incident",
@@ -566,9 +565,7 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             **kwargs,
         )
 
-        # Finally make the TotalEmission model, this is dust_emission +
-        # emergent
-        StellarEmissionModel.__init__(
+        EmissionModel.__init__(
             self,
             grid=grid,
             label="total" if label is None else label,
@@ -617,6 +614,7 @@ class PacmanEmission:
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
         stellar_dust=True,
+        velocity_dispersion=None,
         **kwargs,
     ):
         """Get a PacmanEmission model.
@@ -644,6 +642,9 @@ class PacmanEmission:
             stellar_dust (bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
+            velocity_dispersion (unyt_quantity):
+                Optional scalar velocity dispersion applied to the final
+                emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -653,7 +654,7 @@ class PacmanEmission:
             if dust_emission is None:
                 # No dust emission, no escape fraction, so we can use the
                 # PacmanEmissionNoEscapeNoDust model
-                return PacmanEmissionNoEscapedNoDust(
+                model = PacmanEmissionNoEscapedNoDust(
                     grid=grid,
                     tau_v=tau_v,
                     dust_curve=dust_curve,
@@ -661,10 +662,13 @@ class PacmanEmission:
                     label=label,
                     **kwargs,
                 )
+                return _apply_broadening_to_model(
+                    model, model.label, velocity_dispersion, kwargs
+                )
             else:
                 # We have dust emission, no escape fraction, so we can use the
                 # PacmanEmissionNoEscapeWithDust model
-                return PacmanEmissionNoEscapedWithDust(
+                model = PacmanEmissionNoEscapedWithDust(
                     grid=grid,
                     tau_v=tau_v,
                     dust_curve=dust_curve,
@@ -673,6 +677,9 @@ class PacmanEmission:
                     label=label,
                     stellar_dust=stellar_dust,
                     **kwargs,
+                )
+                return _apply_broadening_to_model(
+                    model, model.label, velocity_dispersion, kwargs
                 )
         # Ok, we have an escape fraction
         else:
@@ -680,7 +687,7 @@ class PacmanEmission:
             if dust_emission is None:
                 # No dust emission, so we can use the
                 # PacmanEmissionWithEscapeNoDust model
-                return PacmanEmissionWithEscapedNoDust(
+                model = PacmanEmissionWithEscapedNoDust(
                     grid=grid,
                     tau_v=tau_v,
                     dust_curve=dust_curve,
@@ -689,10 +696,13 @@ class PacmanEmission:
                     label=label,
                     **kwargs,
                 )
+                return _apply_broadening_to_model(
+                    model, model.label, velocity_dispersion, kwargs
+                )
             else:
                 # We have dust emission, so we can use the
                 # PacmanEmissionWithEscapeWithDust model
-                return PacmanEmissionWithEscapedWithDust(
+                model = PacmanEmissionWithEscapedWithDust(
                     grid=grid,
                     tau_v=tau_v,
                     dust_curve=dust_curve,
@@ -702,6 +712,9 @@ class PacmanEmission:
                     label=label,
                     stellar_dust=stellar_dust,
                     **kwargs,
+                )
+                return _apply_broadening_to_model(
+                    model, model.label, velocity_dispersion, kwargs
                 )
 
 
@@ -1359,7 +1372,6 @@ class BimodalPacmanEmissionNoEscapedWithDust(EmissionModel):
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
-
         # Store all models as related
         related_models = (
             young_incident,
@@ -2165,7 +2177,6 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             emitter="galaxy" if not stellar_dust else "stellar",
             **kwargs,
         )
-
         # Store all models as related
         related_models = (
             young_incident,
@@ -2309,6 +2320,7 @@ class BimodalPacmanEmission:
         fesc_ly_alpha="fesc_ly_alpha",
         label=None,
         stellar_dust=True,
+        velocity_dispersion=None,
         **kwargs,
     ):
         """Get a BimodalPacmanEmission model.
@@ -2343,6 +2355,9 @@ class BimodalPacmanEmission:
             stellar_dust(bool):
                 If `True`, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
+            velocity_dispersion (unyt_quantity):
+                Optional scalar velocity dispersion applied to the final
+                emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -2352,7 +2367,7 @@ class BimodalPacmanEmission:
             if dust_emission_ism is None or dust_emission_birth is None:
                 # No dust emission, no escape fraction, so we can use the
                 # BimodalPacmanEmissionNoEscapeNoDust model
-                return BimodalPacmanEmissionNoEscapedNoDust(
+                model = BimodalPacmanEmissionNoEscapedNoDust(
                     grid=grid,
                     tau_v_ism=tau_v_ism,
                     tau_v_birth=tau_v_birth,
@@ -2363,10 +2378,13 @@ class BimodalPacmanEmission:
                     label=label,
                     **kwargs,
                 )
+                return _apply_broadening_to_model(
+                    model, model.label, velocity_dispersion, kwargs
+                )
             else:
                 # We have dust emission, no escape fraction, so we can use the
                 # BimodalPacmanEmissionNoEscapeWithDust model
-                return BimodalPacmanEmissionNoEscapedWithDust(
+                model = BimodalPacmanEmissionNoEscapedWithDust(
                     grid=grid,
                     tau_v_ism=tau_v_ism,
                     tau_v_birth=tau_v_birth,
@@ -2379,6 +2397,9 @@ class BimodalPacmanEmission:
                     label=label,
                     stellar_dust=stellar_dust,
                     **kwargs,
+                )
+                return _apply_broadening_to_model(
+                    model, model.label, velocity_dispersion, kwargs
                 )
         # Ok, we have an escape fraction
         else:
@@ -2386,7 +2407,7 @@ class BimodalPacmanEmission:
             if dust_emission_ism is None or dust_emission_birth is None:
                 # No dust emission, so we can use the
                 # BimodalPacmanEmissionWithEscapeNoDust model
-                return BimodalPacmanEmissionWithEscapedNoDust(
+                model = BimodalPacmanEmissionWithEscapedNoDust(
                     grid=grid,
                     tau_v_ism=tau_v_ism,
                     tau_v_birth=tau_v_birth,
@@ -2398,10 +2419,13 @@ class BimodalPacmanEmission:
                     label=label,
                     **kwargs,
                 )
+                return _apply_broadening_to_model(
+                    model, model.label, velocity_dispersion, kwargs
+                )
             else:
                 # We have dust emission, so we can use the
                 # BimodalPacmanEmissionWithEscapeWithDust model
-                return BimodalPacmanEmissionWithEscapedWithDust(
+                model = BimodalPacmanEmissionWithEscapedWithDust(
                     grid=grid,
                     tau_v_ism=tau_v_ism,
                     tau_v_birth=tau_v_birth,
@@ -2415,6 +2439,9 @@ class BimodalPacmanEmission:
                     label=label,
                     stellar_dust=stellar_dust,
                     **kwargs,
+                )
+                return _apply_broadening_to_model(
+                    model, model.label, velocity_dispersion, kwargs
                 )
 
 
