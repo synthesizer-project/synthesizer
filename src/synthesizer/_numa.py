@@ -16,9 +16,20 @@ would otherwise have been local, and spreading it costs 5-20%. It is therefore
 opt-in, via the ``SYNTHESIZER_NUMA_INTERLEAVE`` environment variable, and only
 worth setting for runs using more cores than one NUMA domain holds.
 
-``numactl --interleave=all <command>`` does the same thing from outside the
+``numactl --interleave=all <command>`` sets the same policy from outside the
 process and needs no cooperation from Synthesizer. This module exists for the
 cases where the command line is not the caller's to change.
+
+The policy is per thread: it applies to the thread that sets it and to threads
+that thread creates afterwards, not to threads that already exist. That is
+enough here because a page is placed on the domain of whichever thread first
+touches it, and the arrays that matter are allocated and filled by the main
+Python thread, which is the one that imports this package. OpenMP workers do
+not exist yet at import and inherit the policy when they are spawned, so the
+output rows they first touch are interleaved too. The gap is a caller that
+creates threads before importing Synthesizer and allocates large arrays on
+them; those threads keep the default policy, and such a caller should use
+``numactl`` instead.
 """
 
 import ctypes
@@ -28,22 +39,28 @@ __all__ = ["maybe_interleave_memory"]
 
 
 def maybe_interleave_memory():
-    """Interleave this process's memory across all NUMA domains, if asked.
+    """Interleave this thread's memory across all NUMA domains, if asked.
 
-    Only acts when SYNTHESIZER_NUMA_INTERLEAVE is set to a truthy value. The
-    policy applies to allocations made after this call, so it has to run before
-    any grid or output array is created, i.e. at import time.
+    Only acts when SYNTHESIZER_NUMA_INTERLEAVE is set to a truthy value.
+
+    The policy covers the calling thread and any thread it creates later, and
+    governs where a page lands when it is first touched, so this has to run
+    before any grid or output array is created, i.e. at import time.
 
     Returns:
         bool:
             True if the interleave policy was applied, False otherwise.
+            libnuma's setter returns void and documents no error contract, so
+            failure is inferred from errno and a false negative is possible.
     """
     flag = os.environ.get("SYNTHESIZER_NUMA_INTERLEAVE", "")
     if flag.lower() in ("", "0", "false", "no"):
         return False
 
     try:
-        libnuma = ctypes.CDLL("libnuma.so.1")
+        # use_errno lets ctypes carry the C errno across the call, which is the
+        # only failure signal the void setter below leaves behind.
+        libnuma = ctypes.CDLL("libnuma.so.1", use_errno=True)
     except OSError:
         # No libnuma (not Linux, or numactl not installed).
         return False
@@ -60,7 +77,12 @@ def maybe_interleave_memory():
 
         libnuma.numa_set_interleave_mask.argtypes = [ctypes.c_void_p]
         libnuma.numa_set_interleave_mask.restype = None
+
+        # Clear errno first so anything we read afterwards came from this call.
+        ctypes.set_errno(0)
         libnuma.numa_set_interleave_mask(all_nodes)
+        if ctypes.get_errno() != 0:
+            return False
     except (AttributeError, ValueError):
         return False
 
