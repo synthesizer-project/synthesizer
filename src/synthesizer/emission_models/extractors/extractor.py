@@ -30,7 +30,7 @@ from synthesizer.extensions.particle_spectra import (
     compute_particle_seds,
 )
 from synthesizer.synth_warnings import warn
-from synthesizer.units import unyt_to_ndview
+from synthesizer.units import get_quantity_unit
 from synthesizer.utils.operation_timers import timed, timer
 from synthesizer.utils.precision import resolve_out_dtype
 
@@ -173,7 +173,10 @@ class Extractor(ABC):
                 and isinstance(value, (unyt_array, unyt_quantity))
                 and value.units != units
             ):
-                value = unyt_to_ndview(value, units)
+                # Convert out of place: this value came off the emitter, so
+                # it is a view onto the emitter's stored array and converting
+                # it in place would rewrite the particle data.
+                value = value.to(units).ndview
             elif isinstance(value, (unyt_array, unyt_quantity)):
                 value = value.value
 
@@ -369,7 +372,9 @@ class IntegratedParticleExtractor(Extractor):
                 self._grid.grid_name
             ] = grid_weights
 
-        return Sed(model.lam, spec * erg / s / Hz)
+        return Sed(
+            model.lam, unyt_array(spec, erg / s / Hz, bypass_validation=True)
+        )
 
     @timed("IntegratedParticleExtractor.generate_line")
     def generate_line(
@@ -633,7 +638,7 @@ class DopplerShiftedParticleExtractor(Extractor):
                     "velocity shifted spectra requested but no "
                     "star velocities provided."
                 )
-            vel_units = emitter.velocities.units
+            vel_units = get_quantity_unit(emitter, "velocities")
 
             # If nthreads is -1 then use all available threads
             if nthreads == -1:
@@ -662,8 +667,14 @@ class DopplerShiftedParticleExtractor(Extractor):
         )
 
         # Make the Sed objects themselves
-        part_sed = Sed(model.lam, spec * erg / s / Hz)
-        integrated_sed = Sed(model.lam, integrated_spec * erg / s / Hz)
+        part_sed = Sed(
+            model.lam,
+            unyt_array(spec, erg / s / Hz, bypass_validation=True),
+        )
+        integrated_sed = Sed(
+            model.lam,
+            unyt_array(integrated_spec, erg / s / Hz, bypass_validation=True),
+        )
 
         return part_sed, integrated_sed
 
@@ -762,7 +773,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
                     "velocity shifted spectra requested but no "
                     "star velocities provided."
                 )
-            vel_units = emitter.velocities.units
+            vel_units = get_quantity_unit(emitter, "velocities")
 
             # If nthreads is -1 then use all available threads
             if nthreads == -1:
@@ -790,7 +801,10 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             emitter_attr_names,
         )
 
-        return Sed(model.lam, integrated_spec * erg / s / Hz)
+        return Sed(
+            model.lam,
+            unyt_array(integrated_spec, erg / s / Hz, bypass_validation=True),
+        )
 
     def generate_line(self, *args, **kwargs):
         """Doppler shifted line luminosities make no sense."""
@@ -1205,19 +1219,28 @@ class ParticleExtractor(Extractor):
                 self._grid.grid_name
             ] = grid_weights
 
-        # Make the LineCollection objects themselves
-        part_line = LineCollection(
-            line_ids=self._grid.line_ids,
-            lam=self._line_lams,
-            lum=lum * erg / s,
-            cont=cont * erg / s / Hz,
-        )
-        integrated_line = LineCollection(
-            line_ids=self._grid.line_ids,
-            lam=self._line_lams,
-            lum=integrated_lum * erg / s,
-            cont=integrated_cont * erg / s / Hz,
-        )
+        # Make the LineCollection objects themselves. The arrays come straight
+        # back from the extensions with nothing else referencing them, so the
+        # units go on as a view: `lum * erg / s` would copy a whole
+        # (nparticle, nline) array, four times over, as the Sed path above
+        # already avoids.
+        with timer("ParticleExtractor.generate_line.build_collections"):
+            part_line = LineCollection(
+                line_ids=self._grid.line_ids,
+                lam=self._line_lams,
+                lum=unyt_array(lum, erg / s, bypass_validation=True),
+                cont=unyt_array(cont, erg / s / Hz, bypass_validation=True),
+            )
+            integrated_line = LineCollection(
+                line_ids=self._grid.line_ids,
+                lam=self._line_lams,
+                lum=unyt_array(
+                    integrated_lum, erg / s, bypass_validation=True
+                ),
+                cont=unyt_array(
+                    integrated_cont, erg / s / Hz, bypass_validation=True
+                ),
+            )
 
         return part_line, integrated_line
 
@@ -1289,7 +1312,9 @@ class IntegratedParametricExtractor(Extractor):
             resolve_out_dtype(out_dtype), copy=False
         )
 
-        return Sed(model.lam, spec * erg / s / Hz)
+        return Sed(
+            model.lam, unyt_array(spec, erg / s / Hz, bypass_validation=True)
+        )
 
     def generate_line(
         self,

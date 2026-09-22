@@ -8,7 +8,7 @@ These classes should not be used directly.
 """
 
 import numpy as np
-from unyt import Hz, erg, s
+from unyt import Hz, erg, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.emission_models.extractors.extractor import (
@@ -21,6 +21,7 @@ from synthesizer.emission_models.extractors.extractor import (
 from synthesizer.emission_models.utils import cache_model_params
 from synthesizer.emissions import LineCollection, Sed, integrate_particle_sed
 from synthesizer.grid import Template
+from synthesizer.units import get_quantity_unit
 from synthesizer.utils.operation_timers import timer
 
 
@@ -967,8 +968,16 @@ class Combination:
         out_lines = LineCollection(
             line_ids=template.line_ids,
             lam=template.lam,
-            lum=out_luminosity * template.luminosity.units,
-            cont=out_continuum * template.continuum.units,
+            lum=unyt_array(
+                out_luminosity,
+                get_quantity_unit(template, "luminosity"),
+                bypass_validation=True,
+            ),
+            cont=unyt_array(
+                out_continuum,
+                get_quantity_unit(template, "continuum"),
+                bypass_validation=True,
+            ),
         )
 
         # Cache the model on the emitter

@@ -644,17 +644,21 @@ class LineCollection:
             # Create the new line (converting to unyt_arrays)
             new_line = LineCollection(
                 line_ids=line_ids,
-                lam=unyt_array(lam, self.lam.units),
-                lum=unyt_array(lum, self.luminosity.units),
-                cont=unyt_array(cont, self.continuum.units),
+                lam=unyt_array(lam, get_quantity_unit(self, "lam")),
+                lum=unyt_array(lum, get_quantity_unit(self, "luminosity")),
+                cont=unyt_array(cont, get_quantity_unit(self, "continuum")),
             )
 
             # Copy over the flux and observed wavelength if they exist
             if len(flux) > 0:
-                new_line.flux = unyt_array(flux, self.flux.units)
-                new_line.obslam = unyt_array(obslam, self.obslam.units)
+                new_line.flux = unyt_array(
+                    flux, get_quantity_unit(self, "flux")
+                )
+                new_line.obslam = unyt_array(
+                    obslam, get_quantity_unit(self, "obslam")
+                )
                 new_line.continuum_flux = unyt_array(
-                    cont_flux, self.continuum_flux.units
+                    cont_flux, get_quantity_unit(self, "continuum_flux")
                 )
 
             return new_line
@@ -672,15 +676,15 @@ class LineCollection:
                 line_ids=[line_id],
                 lam=unyt_array(
                     [self.lam[self.line2index[line_id]]],
-                    self.lam.units,
+                    get_quantity_unit(self, "lam"),
                 ),
                 lum=unyt_array(
                     [self.luminosity[..., self.line2index[line_id]]],
-                    self.luminosity.units,
+                    get_quantity_unit(self, "luminosity"),
                 ),
                 cont=unyt_array(
                     [self.continuum[..., self.line2index[line_id]]],
-                    self.continuum.units,
+                    get_quantity_unit(self, "continuum"),
                 ),
             )
 
@@ -688,15 +692,15 @@ class LineCollection:
             if self.flux is not None:
                 new_line.flux = unyt_array(
                     [self.flux[..., self.line2index[line_id]]],
-                    self.flux.units,
+                    get_quantity_unit(self, "flux"),
                 )
                 new_line.continuum_flux = unyt_array(
                     [self.continuum_flux[..., self.line2index[line_id]]],
-                    self.continuum_flux.units,
+                    get_quantity_unit(self, "continuum_flux"),
                 )
                 new_line.obslam = unyt_array(
                     [self.obslam[self.line2index[line_id]]],
-                    self.obslam.units,
+                    get_quantity_unit(self, "obslam"),
                 )
 
             return new_line
@@ -743,20 +747,30 @@ class LineCollection:
             # individual lines)
             new_line = LineCollection(
                 line_ids=[line_id],
-                lam=unyt_array([new_lam / len(line_ids)], self.lam.units),
-                lum=unyt_array([new_lum], self.luminosity.units),
-                cont=unyt_array([new_cont], self.continuum.units),
+                lam=unyt_array(
+                    [new_lam / len(line_ids)], get_quantity_unit(self, "lam")
+                ),
+                lum=unyt_array(
+                    [new_lum], get_quantity_unit(self, "luminosity")
+                ),
+                cont=unyt_array(
+                    [new_cont], get_quantity_unit(self, "continuum")
+                ),
             )
 
             # Copy over the flux and observed wavelength if they exist
             # (converting the wavelength to the mean of the individual lines)
             if self.flux is not None:
-                new_line.flux = unyt_array([new_flux], self.flux.units)
+                new_line.flux = unyt_array(
+                    [new_flux], get_quantity_unit(self, "flux")
+                )
                 new_line.continuum_flux = unyt_array(
-                    [new_obs_cont], self.continuum_flux.units
+                    [new_obs_cont],
+                    get_quantity_unit(self, "continuum_flux"),
                 )
                 new_line.obslam = unyt_array(
-                    [new_obslam / len(line_ids)], self.obslam.units
+                    [new_obslam / len(line_ids)],
+                    get_quantity_unit(self, "obslam"),
                 )
 
             return new_line
@@ -1666,9 +1680,15 @@ class LineCollection:
 
         return LineCollection(
             line_ids=blended_line_ids,
-            lam=blended_line_lams * self.lam.units,
-            lum=blended_line_lums * self.luminosity.units,
-            cont=blended_line_conts * self.continuum.units,
+            lam=get_array_quantity_view(
+                blended_line_lams, get_quantity_unit(self, "lam")
+            ),
+            lum=get_array_quantity_view(
+                blended_line_lums, get_quantity_unit(self, "luminosity")
+            ),
+            cont=get_array_quantity_view(
+                blended_line_conts, get_quantity_unit(self, "continuum")
+            ),
         )
 
     @accepts(sed_lam=angstrom)

@@ -29,6 +29,7 @@ import shutil
 from functools import wraps
 from inspect import Parameter, signature
 
+import numpy
 import yaml
 from unyt import (
     Unit,
@@ -555,6 +556,13 @@ class Quantity:
         if value is None:
             return None
 
+        # Attach the unit as a view. `value * self.unit` would copy the whole
+        # buffer on every attribute read, which dominated the line pipeline.
+        # This is only safe because nothing converts units in place any more;
+        # if that changes, a conversion here would rewrite the stored array.
+        if isinstance(value, numpy.ndarray):
+            return get_array_quantity_view(value, self.unit)
+
         return value * self.unit
 
     def __set__(self, obj, value):
@@ -575,7 +583,10 @@ class Quantity:
         # is already in the default unit system
         if isinstance(value, (unyt_quantity, unyt_array)):
             if value.units != self.unit and value.units != dimensionless:
-                value = unyt_to_ndview(value, self.unit)
+                # Convert out of place. The value being assigned is not ours:
+                # attribute reads hand back views onto the stored buffer, so
+                # `b.lnu = a.lnu` in mismatched units would rewrite a's data.
+                value = value.to(self.unit).ndview
             else:
                 value = value.ndview
 
@@ -604,30 +615,32 @@ def has_units(x):
 
 
 def unyt_to_ndview(arr, unit=None):
-    """Extract the underlying data from a `unyt_array` or `unyt_quantity`.
+    """Return the raw buffer of a `unyt_array` or `unyt_quantity`.
 
-    An ndview is a pointer to the underlying data of a `unyt_array` or
-    `unyt_quantity`.
+    The point of this helper is to hand downstream NumPy code a plain ndarray
+    so it does not pay unyt's ufunc dispatch on every operation, and to do so
+    without copying. Nothing is ever copied here: with no unit, or a unit the
+    array already carries, the buffer comes back untouched, and a unit that
+    differs is converted in place before the buffer is returned.
 
-    This is a helper function to enable the extraction of the underlying data
-    from a `unyt_array` or `unyt_quantity` WITHOUT making a copy of the data.
-    This is possible with the `ndview` property on a `unyt_array` or
-    `unyt_quantity`, however, this is not implemented with an inplace unit
-    conversion.
-
-    This function can either be used to extract the underlying data in the
-    existing units, or to convert inplace to a new unit and then return the
-    view (an operation not implemented in unyt to date, as far as I can tell).
+    THE CALLER MUST OWN ``arr``. Converting in place rewrites its values, so
+    passing an array that anything else holds a reference to will silently
+    change that other thing's data. In practice that means passing an array
+    you just computed, not one read back off an object: attribute reads return
+    views onto the stored buffer, so converting one corrupts the object it
+    came from. Callers holding an array they do not own should convert it
+    themselves with ``arr.to(unit)``, which copies, and take the ndview of the
+    result.
 
     Args:
         arr (unyt_array/unyt_quantity): The unyt_array or unyt_quantity to
-            extract the data from.
+            extract the data from. Must be owned by the caller.
         unit (unyt.unit_object.Unit): The unit to convert to. If None, the
             existing unit is used. If the unit is not compatible with the
             existing unit, an error will be raised.
 
     Returns:
-        np.ndarray: The underlying data as a numpy array WITHOUT doing a copy.
+        np.ndarray: The underlying data as a numpy array, WITHOUT a copy.
 
     Raises:
         UnitConversionError: If the unit is not compatible with the existing
@@ -637,17 +650,19 @@ def unyt_to_ndview(arr, unit=None):
     if unit is None:
         return arr.ndview
 
+    # Coerce before comparing: callers pass units as strings (grid axis units
+    # are stored that way) and a unyt Unit never compares equal to a str, so a
+    # raw comparison reports a difference even when there is none and we copy
+    # the buffer to convert something into the units it is already in.
+    if not isinstance(unit, Unit):
+        unit = Unit(unit)
+
     # If the units are the same then just return the ndview
     if arr.units == unit:
         return arr.ndview
 
-    # Ok, we need to do a conversion. We'll do this inplace and then
-    # return the ndview
-    # NOTE: for some reason this method of conversion can lead to very small
-    # precision differences vs the to, to_value (etc.) methods. In reality
-    # these differences are negligible but they can lead to exact comparisons
-    # failing. This is fine as long as np.isclose/np.allclose is used to check
-    # for equality.
+    # A conversion is needed, and the caller owns arr, so do it in place and
+    # hand back the buffer without allocating anything.
     arr.convert_to_units(unit)
     return arr.ndview
 
@@ -670,10 +685,13 @@ def _raise_or_convert(expected_unit, name, value):
     """
     # Handle the unyt_array/unyt_quantity cases
     if isinstance(value, (unyt_array, unyt_quantity)):
-        # We know we have units but are they compatible?
+        # We know we have units but are they compatible? Convert out of place:
+        # this runs from the @accepts decorator, so converting in place would
+        # rewrite the array the caller passed in as a side effect of calling
+        # the function.
         if value.units != expected_unit:
             try:
-                value.convert_to_units(expected_unit)
+                return value.to(expected_unit)
             except UnitConversionError:
                 raise exceptions.IncorrectUnits(
                     f"{name} passed with incompatible units. "

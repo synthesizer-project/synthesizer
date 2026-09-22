@@ -41,7 +41,7 @@ from synthesizer.data.initialise import get_grids_dir
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.grid_interpolation import interpolate_grid_array
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, get_quantity_unit
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import resolve_out_dtype
@@ -2286,14 +2286,18 @@ class Grid:
                 line_lum = interp_lum.reshape(coord_shape + (self.nlines,))
                 line_cont = interp_cont.reshape(coord_shape + (self.nlines,))
 
-                # Wrap in LineCollection object, ensuring correct unyt units
+                # Wrap in LineCollection object, ensuring correct unyt units.
+                # Convert out of place so nothing that might share these
+                # buffers is rewritten underneath us.
                 if isinstance(line_lum, unyt_array):
-                    line_lum.convert_to_units(erg / s)
+                    if line_lum.units != erg / s:
+                        line_lum = line_lum.to(erg / s)
                 else:
                     line_lum = unyt_array(line_lum, erg / s)
 
                 if isinstance(line_cont, unyt_array):
-                    line_cont.convert_to_units(erg / s / Hz)
+                    if line_cont.units != erg / s / Hz:
+                        line_cont = line_cont.to(erg / s / Hz)
                 else:
                     line_cont = unyt_array(line_cont, (erg / s / Hz))
 
@@ -2734,14 +2738,15 @@ class Grid:
             r"\mathrm{ M_\odot}^{-1}]$"
         )
 
-        ax.set_title(f"Wavelength: {self.lam[0]:.2f}{self.lam.units}")
+        lam_unit = get_quantity_unit(self, "lam")
+        ax.set_title(f"Wavelength: {self.lam[0]:.2f}{lam_unit}")
         ax.set_xlabel("$\\log_{10}(\\mathrm{age}/\\mathrm{yr})$")
         ax.set_ylabel("$Z$")
 
         def update(i):
             # Update the image for the ith frame
             img.set_data(spectra[:, :, i])
-            ax.set_title(f"Wavelength: {self.lam[i]:.2f}{self.lam.units}")
+            ax.set_title(f"Wavelength: {self.lam[i]:.2f}{lam_unit}")
             return [
                 img,
             ]

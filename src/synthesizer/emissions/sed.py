@@ -184,14 +184,16 @@ class Sed:
 
             # Create a new sed object with the first Lnu dimension collapsed
             new_sed = Sed(
-                self.lam, np.nansum(self._lnu, axis=sum_over) * self.lnu.units
+                self.lam,
+                np.nansum(self._lnu, axis=sum_over)
+                * get_quantity_unit(self, "lnu"),
             )
 
             # If fnu exists, sum that too
             if self.fnu is not None:
-                new_sed.fnu = (
-                    np.nansum(self._fnu, axis=sum_over) * self.fnu.units
-                )
+                new_sed.fnu = np.nansum(
+                    self._fnu, axis=sum_over
+                ) * get_quantity_unit(self, "fnu")
                 new_sed.obsnu = self.obsnu
                 new_sed.obslam = self.obslam
                 new_sed.redshift = self.redshift
@@ -255,7 +257,7 @@ class Sed:
             # Concatenate this lnu array
             new_lnu = np.concatenate((new_lnu, other_lnu))
 
-        return Sed(self.lam, new_lnu * self.lnu.units)
+        return Sed(self.lam, new_lnu * get_quantity_unit(self, "lnu"))
 
     def __sub__(self, second_sed):
         """Subtract one Sed from another.
@@ -663,7 +665,11 @@ class Sed:
         )
 
         # Return the bolometric luminosity with units
-        return integral * self.lnu.units * self.nu.units
+        return (
+            integral
+            * get_quantity_unit(self, "lnu")
+            * get_quantity_unit(self, "nu")
+        )
 
     @property
     def _bolometric_luminosity(self):
@@ -696,7 +702,9 @@ class Sed:
             unyt_array:
                 The luminosity (lnu) at the provided wavelength.
         """
-        return interp1d(self._nu, self._lnu, kind=kind)(nu) * self.lnu.units
+        return interp1d(self._nu, self._lnu, kind=kind)(
+            nu
+        ) * get_quantity_unit(self, "lnu")
 
     @accepts(lam=angstrom)
     def get_lnu_at_lam(self, lam, kind=False):
@@ -715,7 +723,9 @@ class Sed:
             luminosity (unyt-array):
                 The luminosity (lnu) at the provided wavelength.
         """
-        return interp1d(self._lam, self._lnu, kind=kind)(lam) * self.lnu.units
+        return interp1d(self._lam, self._lnu, kind=kind)(
+            lam
+        ) * get_quantity_unit(self, "lnu")
 
     @timed("Sed.measure_bolometric_luminosity")
     def measure_bolometric_luminosity(
@@ -756,7 +766,11 @@ class Sed:
             method=integration_method,
             out_dtype=np.float64,
         )
-        return integral * self.lnu.units * self.nu.units
+        return (
+            integral
+            * get_quantity_unit(self, "lnu")
+            * get_quantity_unit(self, "nu")
+        )
 
     @accepts(window=angstrom)
     def measure_window_luminosity(
@@ -797,7 +811,7 @@ class Sed:
                 nthreads=nthreads,
                 method=integration_method,
             )
-            * self.lnu.units
+            * get_quantity_unit(self, "lnu")
             * Hz
         )
 
@@ -836,17 +850,12 @@ class Sed:
         if integration_method == "average":
             # Apply to the correct axis of the spectra
             if self.ndim >= 2:
-                lnu = (
-                    np.array(
-                        [
-                            np.sum(_lnu * transmission) / np.sum(transmission)
-                            for _lnu in self._lnu.reshape(
-                                -1, self._lnu.shape[-1]
-                            )
-                        ]
-                    )
-                    * self.lnu.units
-                )
+                lnu = np.array(
+                    [
+                        np.sum(_lnu * transmission) / np.sum(transmission)
+                        for _lnu in self._lnu.reshape(-1, self._lnu.shape[-1])
+                    ]
+                ) * get_quantity_unit(self, "lnu")
 
                 lnu = lnu.reshape(self._lnu.shape[:-1])
 
@@ -871,9 +880,9 @@ class Sed:
             )
 
             # Compute lnu
-            lnu = lum / tran * self.lnu.units
+            lnu = lum / tran * get_quantity_unit(self, "lnu")
 
-        return lnu.to(self.lnu.units)
+        return lnu.to(get_quantity_unit(self, "lnu"))
 
     @accepts(blue=angstrom, red=angstrom)
     def measure_break(self, blue, red, nthreads=1, integration_method="trapz"):
@@ -1411,10 +1420,12 @@ class Sed:
             continuum = (
                 np.column_stack(
                     continuum_fits[0]
-                    * feature_lam.to(self.lam.units).value[:, np.newaxis]
+                    * feature_lam.to(get_quantity_unit(self, "lam")).value[
+                        :, np.newaxis
+                    ]
                 )
                 + continuum_fits[1][:, np.newaxis]
-            ) * self.lnu.units
+            ) * get_quantity_unit(self, "lnu")
 
             # Define the continuum subtracted spectrum for all SEDs
             feature_lum = self.lnu[:, transmission]
@@ -1437,9 +1448,12 @@ class Sed:
 
             # Use the continuum fit to define the continuum
             continuum = (
-                (continuum_fit[0] * feature_lam.to(self.lam.units).value)
+                (
+                    continuum_fit[0]
+                    * feature_lam.to(get_quantity_unit(self, "lam")).value
+                )
                 + continuum_fit[1]
-            ) * self.lnu.units
+            ) * get_quantity_unit(self, "lnu")
 
             # Define the continuum subtracted spectrum
             feature_lum = self.lnu[transmission]
@@ -1522,23 +1536,20 @@ class Sed:
         )
 
         # Instantiate the new Sed
-        sed = Sed(new_lam, new_spectra * self.lnu.units)
+        sed = Sed(new_lam, new_spectra * get_quantity_unit(self, "lnu"))
 
         # If self also has fnu we should resample those too and store the
         # shifted wavelengths and frequencies
         if self.fnu is not None:
             sed.obslam = sed.lam * (1.0 + self.redshift)
             sed.obsnu = sed.nu / (1.0 + self.redshift)
-            sed.fnu = (
-                spectres(
-                    sed._obslam,
-                    self._obslam,
-                    self._fnu,
-                    fill=0.0,
-                    verbose=False,
-                )
-                * self.fnu.units
-            )
+            sed.fnu = spectres(
+                sed._obslam,
+                self._obslam,
+                self._fnu,
+                fill=0.0,
+                verbose=False,
+            ) * get_quantity_unit(self, "fnu")
             sed.redshift = self.redshift
 
         # Clean up nans, we shouldn't get them but they do appear sometimes...
@@ -1967,7 +1978,9 @@ class Sed:
             verbose=False,
         )
         new_flat_lnu[~flat_mask] = flat_lnu[~flat_mask]
-        new_lnu = new_flat_lnu.reshape(self._lnu.shape) * self.lnu.units
+        new_lnu = new_flat_lnu.reshape(self._lnu.shape) * get_quantity_unit(
+            self, "lnu"
+        )
 
         # Return new Sed or modify in place
         if inplace:
@@ -2812,4 +2825,7 @@ def integrate_particle_sed(sed, nthreads=1):
     # Reduce the per-particle spectra in C++ and rebuild a unit-aware Sed on
     # the original wavelength grid.
     reduced_lnu = reduce_particle_spectra(sed._lnu, nthreads, sed._lnu.dtype)
-    return Sed(sed.lam, reduced_lnu * sed.lnu.units)
+    return Sed(
+        sed.lam,
+        get_array_quantity_view(reduced_lnu, get_quantity_unit(sed, "lnu")),
+    )
