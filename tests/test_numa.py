@@ -5,9 +5,17 @@ import pytest
 from synthesizer._numa import maybe_interleave_memory
 
 
-@pytest.mark.parametrize("value", ["", "0", "false", "no", "FALSE"])
+@pytest.mark.parametrize(
+    "value",
+    ["", "0", "false", "no", "FALSE", "off", "OFF", " 0 ", "maybe"],
+)
 def test_interleave_off_by_default(monkeypatch, value):
-    """The policy is only applied when the environment asks for it."""
+    """The policy is only applied when the environment asks for it.
+
+    Anything that is not an explicit yes leaves the policy alone. "off" is the
+    one that matters: the docs say the feature is off by default, so it is
+    what a user reaches for, and a deny list would have read it as a yes.
+    """
     monkeypatch.setenv("SYNTHESIZER_NUMA_INTERLEAVE", value)
     assert maybe_interleave_memory() is False
 
