@@ -93,3 +93,35 @@ def resolve_out_dtype(out_dtype):
     if out_dtype is None:
         return _default_out_dtype
     return _validate_dtype(out_dtype)
+
+
+def scalar_like(value, ref):
+    """Return a scalar typed to match a reference array's dtype.
+
+    NumPy's weak scalar rule normally keeps a bare Python float from widening
+    a reduced precision array, but unyt does not honour it: arithmetic between
+    a float32 unyt_array and a Python float still produces float64. Typing the
+    scalar against the array keeps such an expression at the precision that
+    was asked for.
+
+    Non-floating reference dtypes are left alone, since typing a float against
+    an integer array would truncate it.
+
+    Args:
+        value (float/int):
+            The scalar to type.
+        ref (np.ndarray/unyt_array):
+            The array whose dtype the scalar should take.
+
+    Returns:
+        np.floating/float/int:
+            ``value`` as a scalar of ``ref``'s dtype, or unchanged when that
+            dtype is not a floating one.
+
+    Raises:
+        AttributeError:
+            If ``ref`` has no dtype, i.e. is not an array.
+    """
+    if ref.dtype.kind != "f":
+        return value
+    return ref.dtype.type(value)
