@@ -2662,6 +2662,7 @@ class Pipeline:
         galaxy.get_observed_lines(
             cosmo=op_kwargs["cosmo"],
             igm=op_kwargs["igm"],
+            nthreads=self.nthreads,
             out_dtype=self._out_dtypes.get("observed_lines"),
         )
 

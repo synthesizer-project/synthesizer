@@ -2919,6 +2919,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                             particle_lines,
                             this_model,
                             emitter,
+                            nthreads=nthreads,
                         )
                     if line_lams is None and label in lines:
                         line_lams = lines[label].lam
@@ -2963,6 +2964,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                             line_ids,
                             spectra,
                             particle_spectra,
+                            nthreads=nthreads,
                         )
                     if line_lams is None and label in lines:
                         line_lams = lines[label].lam
