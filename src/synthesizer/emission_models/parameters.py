@@ -144,7 +144,14 @@ class ParameterFunction:
                     "of the ParameterFunction."
                 )
 
-    def __call__(self, model, emission, emitter, obj=None):
+    def __call__(
+        self,
+        model,
+        emission,
+        emitter,
+        obj=None,
+        preserve_units=False,
+    ):
         """Call the wrapped function with parameters extracted from objects.
 
         This will extract the required parameters from the model, emission,
@@ -157,6 +164,8 @@ class ParameterFunction:
             emitter (Stars/Gas/Galaxy): The emitter object.
             obj (object, optional):
                 An optional additional object to look for parameters on last.
+            preserve_units (bool, optional):
+                If True, preserve units while resolving function arguments.
 
         Returns:
             value:
@@ -176,6 +185,7 @@ class ParameterFunction:
                 emission,
                 emitter,
                 obj,
+                preserve_units=preserve_units,
             )
 
         # Call the function with the extracted parameters

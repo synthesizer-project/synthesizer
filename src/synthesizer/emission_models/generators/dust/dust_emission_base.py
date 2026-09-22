@@ -18,6 +18,7 @@ from unyt import K, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.generator import Generator
+from synthesizer.emission_models.utils import get_emission_label
 from synthesizer.units import accepts
 
 if TYPE_CHECKING:
@@ -185,7 +186,7 @@ class DustEmission(Generator):
         """
         self.is_energy_balance = True
         self.is_scaled = False
-        self.required_emissions = (intrinsic, attenuated)
+        self._required_emissions = (intrinsic, attenuated)
         self._intrinsic = intrinsic
         self._attenuated = attenuated
         self._scaler = None
@@ -199,7 +200,7 @@ class DustEmission(Generator):
         """
         self.is_energy_balance = False
         self.is_scaled = True
-        self.required_emissions = (scaler,)
+        self._required_emissions = (scaler,)
         self._intrinsic = None
         self._attenuated = None
         self._scaler = scaler
@@ -218,21 +219,13 @@ class DustEmission(Generator):
             unyt_quantity:
                 The bolometric luminosity absorbed by dust.
         """
-        # For ease, unpack the intrinsic and attenuated emissions
-        # Handle both string labels and EmissionModel objects
-        intrinsic_key = (
-            self._intrinsic.label
-            if hasattr(self._intrinsic, "label")
-            else self._intrinsic
-        )
-        attenuated_key = (
-            self._attenuated.label
-            if hasattr(self._attenuated, "label")
-            else self._attenuated
-        )
+        # Extract the required emissions (this will raise if any of them
+        # are missing)
+        required = self._extract_emissions(emissions)
 
-        intrinsic = emissions[intrinsic_key]
-        attenuated = emissions[attenuated_key]
+        # For ease, unpack the intrinsic and attenuated emissions
+        intrinsic = required[get_emission_label(self._intrinsic)]
+        attenuated = required[get_emission_label(self._attenuated)]
 
         # Calculate the bolometric luminosity absorbed by dust
         ldust = (
@@ -255,14 +248,12 @@ class DustEmission(Generator):
             unyt_quantity:
                 The bolometric luminosity to scale the dust emission by.
         """
+        # Extract the required emissions (this will raise if the scaler is
+        # missing)
+        required = self._extract_emissions(emissions)
+
         # For ease, unpack the scaler emission
-        # Handle both string labels and EmissionModel objects
-        scaler_key = (
-            self._scaler.label
-            if hasattr(self._scaler, "label")
-            else self._scaler
-        )
-        scaler = emissions[scaler_key]
+        scaler = required[get_emission_label(self._scaler)]
 
         # Get the bolometric luminosity to scale by
         lscale = scaler.bolometric_luminosity

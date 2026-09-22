@@ -55,6 +55,7 @@ from synthesizer.emission_models.operations import (
     Transformation,
 )
 from synthesizer.emission_models.parameters import VARIATION_TYPES
+from synthesizer.emission_models.transformers import DopplerBroadening
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity
 from synthesizer.utils.operation_timers import timed, timer
@@ -794,6 +795,17 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if model.label not in self._models:
                 self._unpack_model_recursively(model)
 
+        # Particle velocity shifts and scalar broadening describe alternative
+        # kinematic treatments and cannot coexist in one model graph.
+        if any(model.vel_shift for model in self._models.values()) and any(
+            isinstance(model.transformer, DopplerBroadening)
+            for model in self._models.values()
+        ):
+            raise exceptions.InconsistentArguments(
+                "vel_shift=True cannot be used with scalar velocity "
+                "dispersion broadening."
+            )
+
         # Now we've worked through the full tree we can set parent pointers
         for model in self._models.values():
             for child in model._children:
@@ -1162,12 +1174,26 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         Only applicable to particle emitters.
 
+        Particle based vel_shift is incompatible with scalar velocity
+        dispersion broadening transformations, so this function will raise an
+        error if both are set.
+
         Args:
             vel_shift (bool):
                 Whether to set the velocity shift flag.
             set_all (bool):
                 Whether to set the emitter on all models.
         """
+        # Check before mutation so a failed update leaves the graph unchanged.
+        if vel_shift and any(
+            isinstance(model.transformer, DopplerBroadening)
+            for model in self._models.values()
+        ):
+            raise exceptions.InconsistentArguments(
+                "vel_shift=True cannot be used with scalar velocity "
+                "dispersion broadening."
+            )
+
         if not set_all:
             self._use_vel_shift = vel_shift
         else:
@@ -2311,6 +2337,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         particle_spectra=None,
         nthreads=1,
         grid_assignment_method="cic",
+        out_dtype=None,
         **fixed_parameters,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -2391,6 +2418,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             grid_assignment_method (str):
                 The method to use when assigning particles to the grid. Options
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted spectra arrays.
             **fixed_parameters (dict):
                 A dictionary of fixed parameters to apply to the model. Each
                 of these will be applied to the model before generating the
@@ -2508,6 +2537,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         verbose=verbose,
                         nthreads=nthreads,
                         grid_assignment_method=grid_assignment_method,
+                        out_dtype=out_dtype,
                     )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
@@ -2677,6 +2707,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         particle_lines=None,
         nthreads=1,
         grid_assignment_method="cic",
+        out_dtype=None,
         **kwargs,
     ):
         """Generate stellar lines as described by the emission model.
@@ -2755,6 +2786,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             grid_assignment_method (str):
                 The method to use when assigning particles to the grid. Options
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted line arrays.
             **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -2886,6 +2919,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         verbose=verbose,
                         nthreads=nthreads,
                         grid_assignment_method=grid_assignment_method,
+                        out_dtype=out_dtype,
                     )
                     if line_lams is None and label in lines:
                         line_lams = lines[label].lam

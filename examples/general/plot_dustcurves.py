@@ -8,7 +8,7 @@ Plot dust curves
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Angstrom, um, unyt_quantity
+from unyt import Angstrom, Gyr, Msun, degree, kpc, um, unyt_quantity, yr
 
 from synthesizer.emission_models import attenuation
 
@@ -104,11 +104,11 @@ from synthesizer.emission_models.transformers.dust_attenuation import (
 # Median galaxy properties from the combined TNG50+TNG100
 # sample in Sommovigo & Bartlett (2026)
 tng_medians = {
-    "sigma_sfr": 0.0213,
-    "inclination": 65.63,
+    "sigma_sfr": 0.0213 * Msun / yr / kpc**2,
+    "inclination": 65.63 * degree,
     "z_gas": 0.0202,
     "log10_mstar": 10.17,
-    "ssfr": 0.0956,
+    "ssfr": 0.0956 / Gyr,
 }
 
 dust_models = {

@@ -24,14 +24,18 @@ import numpy as np
 from dust_extinction import grain_models
 from scipy import interpolate
 from unyt import (
+    Gyr,
     Msun,
     angstrom,
     cm,
+    degree,
     g,
+    kpc,
     pc,
     um,
     unyt_array,
     unyt_quantity,
+    yr,
 )
 
 from synthesizer import exceptions
@@ -41,6 +45,7 @@ from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import scalar_like
 
 this_dir, this_filename = os.path.split(__file__)
 
@@ -250,8 +255,14 @@ class AttenuationLaw(Transformer):
         """
         # Extract the required parameters, falling back to the values the
         # curve itself was constructed with (obj=self) if the model, emission
-        # and emitter say nothing about them
-        params = self._extract_params(model, emission, emitter, obj=self)
+        # and emitter say nothing about them.
+        params = self._extract_params(
+            model,
+            emission,
+            emitter,
+            obj=self,
+            preserve_units=True,
+        )
 
         # Ensure we aren't trying to use a wavelength mask
         if lam_mask is not None:
@@ -459,7 +470,9 @@ class PowerLaw(AttenuationLaw):
         Returns:
             float/np.ndarray of float: The optical depth.
         """
-        return (lam / (5500.0 * angstrom)) ** self.slope
+        return (lam / (scalar_like(5500.0, lam) * angstrom)) ** scalar_like(
+            self.slope, lam
+        )
 
     @accepts(lam=angstrom)
     def get_tau(self, lam):
@@ -474,7 +487,7 @@ class PowerLaw(AttenuationLaw):
             float/np.ndarray of float: The optical depth.
         """
         return self.get_tau_at_lam(lam) / self.get_tau_at_lam(
-            5500.0 * angstrom
+            scalar_like(5500.0, lam) * angstrom
         )
 
 
@@ -507,13 +520,21 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
             given wavelength
     """
     # Performing some unit conversions to match the
-    # Calzetti curve units which are in um
-    _lam = np.linspace(0.01, 3.0, 10000, endpoint=True) * um
-    _cent_lam = cent_lam.to("um")
-    _gamma = gamma.to("um")
-    lam_v = 0.55  # in um
+    # Calzetti curve units which are in um.
+    #
+    # The internal grid and the bump parameters are built at the wavelength
+    # dtype and handled as plain arrays in um. The curve is evaluated on its
+    # own fixed grid rather than on the caller's wavelengths, so building that
+    # grid in double precision would hand back a double precision curve
+    # whatever was asked for, and unyt arithmetic would widen it again even if
+    # it did not.
+    dtype = lam.dtype if lam.dtype.kind == "f" else np.dtype(np.float64)
+    _lam = np.linspace(0.01, 3.0, 10000, endpoint=True, dtype=dtype)
+    _cent_lam = dtype.type(cent_lam.to_value("um"))
+    _gamma = dtype.type(gamma.to_value("um"))
+    lam_v = dtype.type(0.55)  # in um
 
-    k_lam = np.zeros_like(_lam.value)
+    k_lam = np.zeros_like(_lam)
 
     # Masking for different regimes in the Calzetti curve
     ok1 = (_lam >= 0.12) * (_lam < 0.63)  # 0.12um<=lam<0.63um
@@ -522,23 +543,23 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     if np.sum(ok1) > 0:  # equation 1
         k_lam[ok1] = (
             -2.156
-            + (1.509 / _lam.value[ok1])
-            - (0.198 / _lam.value[ok1] ** 2)
-            + (0.011 / _lam.value[ok1] ** 3)
+            + (1.509 / _lam[ok1])
+            - (0.198 / _lam[ok1] ** 2)
+            + (0.011 / _lam[ok1] ** 3)
         )
         func = interpolate.interp1d(
-            _lam.value[ok1], k_lam[ok1], fill_value="extrapolate"
+            _lam[ok1], k_lam[ok1], fill_value="extrapolate"
         )
     else:
         func = None
     if np.sum(ok2) > 0:  # equation 2
-        k_lam[ok2] = -1.857 + (1.040 / _lam.value[ok2])
+        k_lam[ok2] = -1.857 + (1.040 / _lam[ok2])
     if np.sum(ok3) > 0:
         # This will never be none
         if func is None:
             raise exceptions.InconsistentArguments("No data in the UV-optical")
         # Extrapolating the 0.12um<=lam<0.63um regime
-        k_lam[ok3] = func(_lam.value[ok3])
+        k_lam[ok3] = func(_lam[ok3])
 
     # Using the Calzetti attenuation curve normalised
     # to Av=4.05
@@ -557,13 +578,15 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     # Normalising with the value at 0.55um, to obtain
     # normalised optical depth
     tau_x_v = (k_lam + D_lam) / k_v
-    tau_x = tau_x_v * (_lam.value / lam_v) ** slope
+    tau_x = tau_x_v * (_lam / lam_v) ** slope
 
     func = interpolate.interp1d(
         _lam, tau_x, bounds_error=False, fill_value=(tau_x[0], tau_x[-1])
     )
 
-    return func(lam.to("um"))
+    # Query at the wavelength dtype: unyt's own conversion widens, and a
+    # widened query would pull a widened result back out of the interpolation.
+    return func(np.asarray(lam.to_value("um"), dtype=dtype))
 
 
 class Calzetti2000(AttenuationLaw):
@@ -726,6 +749,14 @@ class MWN18(AttenuationLaw):
     def get_tau(self, lam, interp="cubic"):
         """Calculate V-band normalised optical depth.
 
+        The result is returned at the dtype of ``lam``. Note that the spline
+        interpolation kinds are evaluated in double precision inside SciPy
+        whatever they are given, so a float32 request is computed in double
+        and narrowed on return rather than being computed in float32
+        throughout. The answer is therefore slightly more accurate than a true
+        float32 evaluation would be, not less, and the tabulated curve is
+        bounded well inside the float32 range so narrowing cannot overflow.
+
         Args:
             lam (float/array, float):
                 An array of wavelengths or a single wavlength at which to
@@ -738,15 +769,27 @@ class MWN18(AttenuationLaw):
                 second or third order. Uses scipy.interpolate.interp1d.
 
         Returns:
-            float/array, float: The optical depth.
+            float/array, float: The optical depth, at ``lam``'s dtype.
         """
+        # Build the interpolation at the wavelength dtype. The tabulated curve
+        # is stored in double precision, and interpolating it would hand back a
+        # double precision result whatever precision was asked for. The table
+        # is 251 points, so typing it costs nothing, and the interpolator is
+        # rebuilt on every call regardless.
+        dtype = lam.dtype if lam.dtype.kind == "f" else np.dtype(np.float64)
         func = interpolate.interp1d(
-            self.data.f.mw_df_lam[::-1],
-            self.data.f.mw_df_chi[::-1],
+            np.asarray(self.data.f.mw_df_lam[::-1], dtype=dtype),
+            np.asarray(self.data.f.mw_df_chi[::-1], dtype=dtype),
             kind=interp,
             fill_value="extrapolate",
         )
-        return func(lam) / self.tau_lam_v
+        out = func(np.asarray(lam, dtype=dtype)) / dtype.type(self.tau_lam_v)
+
+        # SciPy evaluates spline interpolation in double whatever it is handed,
+        # so unlike the analytic curves this one cannot be kept narrow all the
+        # way through. Return it at the requested precision: the caller checks
+        # that the curve matches the spectra dtype and will refuse a mismatch.
+        return out.astype(dtype, copy=False)
 
     @accepts(lam=angstrom)
     def get_tau_at_lam(self, lam, interp="cubic"):
@@ -1267,28 +1310,53 @@ class SommovigoBartlett2026(AttenuationLaw):
 
     def __init__(
         self,
-        B_0=0.025,
-        B_1s=-0.025,
-        B_2s=-0.045,
-        B_3=3.07,
+        B_0="B_0",
+        B_1s="B_1s",
+        B_2s="B_2s",
+        B_3="B_3",
     ):
         """Initialise the dust curve.
+
+        Each parameter is set to a string by default to signal that the
+        parameter should be extracted from an emitter (e.g., stars.B_0). This
+        enables the extraction of different parameters for different galaxies
+        when calling get_spectra. Fixed value defaults are detailed below.
+
+        To populate the parameters on a galaxy call
+        get_dust_curve_params_sommovigobartlett2026 on the galaxy object. This
+        will populate the parameters on the galaxy using the predict method
+        below and storing them on the galaxy's stars object. Then, when
+        calling get_spectra, the parameters will be extracted from each stars
+        object giving a unique attenuation curve for each galaxy.
+
+        Alternatively, the predict method can be called with arbitrary input
+        properties to generate a single attenuation curve with fixed
+        parameters.
 
         Args:
             B_0 (float):
                 UV bump amplitude. Typical range (0, 2.5); strongly
-                dust-model dependent: ~1.2 for MW, ~0 for SMC/stellar.
+                dust-model dependent: ~1.2 for MW, ~0 for SMC/stellar. The
+                default string states that B_0 should be extracted
+                from an emitter, e.g. stars.B_0. For a fixed default value
+                use B_0=0.025.
             B_1s (float):
                 Linear slope term, scaled by 1e-3. The internal
                 parameter B_1 = 1e3 * B_1s. Typical range
-                (-0.15, 0.10).
+                (-0.15, 0.10). The default string states that B_1s should be
+                extracted from an emitter, e.g. stars.B_1s. For a fixed default
+                value use B_1s=-0.025.
             B_2s (float):
                 Slope modulation term, scaled by 1e-3. The internal
                 parameter B_2 = 1e3 * B_2s. Typical range
-                (-2.5, 1.1).
+                (-2.5, 1.1). The default string states that B_2s should be
+                extracted from an emitter, e.g. stars.B_2s. For a fixed default
+                value use B_2s=-0.045.
             B_3 (float):
                 Exponential/curvature parameter. Typical range
-                (0.8, 5.1).
+                (0.8, 5.1). The default string states that B_3 should be
+                extracted from an emitter, e.g. stars.B_3. For a fixed default
+                value use B_3=3.07.
         """
         description = (
             "Four-parameter attenuation curve calibrated on "
@@ -1358,6 +1426,11 @@ class SommovigoBartlett2026(AttenuationLaw):
         return self.get_tau(lam)
 
     @classmethod
+    @accepts(
+        sigma_sfr=Msun / yr / kpc**2,
+        inclination=degree,
+        ssfr=Gyr**-1,
+    )
     def predict(
         cls,
         sigma_sfr,
@@ -1385,17 +1458,17 @@ class SommovigoBartlett2026(AttenuationLaw):
             (https://arxiv.org/abs/2606.10027)
 
         Args:
-            sigma_sfr (float/np.ndarray of float):
+            sigma_sfr (unyt_quantity/unyt_array):
                 Star formation rate surface density
                 [Msun yr^-1 kpc^-2].
-            inclination (float/np.ndarray of float):
+            inclination (unyt_quantity/unyt_array):
                 Galaxy inclination angle [degrees].
             z_gas (float/np.ndarray of float):
                 Gas-phase metallicity as absolute mass fraction
                 (e.g. Zsun = 0.0142, Asplund et al. 2009).
             log10_mstar (float/np.ndarray of float):
                 Log10 stellar mass [log10(Msun)].
-            ssfr (float/np.ndarray of float):
+            ssfr (unyt_quantity/unyt_array):
                 Specific star formation rate [Gyr^-1].
             dust_model (str):
                 Dust mixture model. One of 'MW', 'SMC', or
@@ -1415,9 +1488,10 @@ class SommovigoBartlett2026(AttenuationLaw):
             Get predicted parameters for a single galaxy::
 
                 params = SommovigoBartlett2026.predict(
-                    sigma_sfr=0.01, inclination=60.0,
+                    sigma_sfr=0.01 * Msun / yr / kpc**2,
+                    inclination=60.0 * degree,
                     z_gas=0.02, log10_mstar=10.5,
-                    ssfr=0.5, dust_model='MW',
+                    ssfr=0.5 / Gyr, dust_model='MW',
                 )
                 curve = SommovigoBartlett2026(
                     B_0=params['B_0'],
@@ -1450,6 +1524,7 @@ class SommovigoBartlett2026(AttenuationLaw):
             )
         )
 
+        # Promote all inputs to at least 1D arrays for broadcasting
         sigma_sfr = np.atleast_1d(np.asarray(sigma_sfr, dtype=float))
         inclination = np.atleast_1d(np.asarray(inclination, dtype=float))
         z_gas = np.atleast_1d(np.asarray(z_gas, dtype=float))
@@ -1467,18 +1542,21 @@ class SommovigoBartlett2026(AttenuationLaw):
             sigma_sfr, inclination, z_gas, log10_mstar, ssfr
         )
 
+        # Check for negative values in sigma_sfr, which is physically invalid
         if np.any(sigma_sfr < 0):
             raise exceptions.InconsistentArguments(
                 "sigma_sfr must be non-negative."
             )
 
-        sini = np.sin(inclination * np.pi / 180.0)
+        # Compute the sine of the inclination angle in radians
+        sin_i = np.sin(inclination * np.pi / 180.0)
 
         # Floor small values to avoid log10(0) and 0**negative
-        sini = np.clip(sini, 1e-10, None)
+        sin_i = np.clip(sin_i, 1e-10, None)
         sigma_sfr = np.clip(sigma_sfr, 1e-10, None)
 
         def _noise(sigma, shape):
+            """Helper function to add Gaussian noise if requested."""
             if add_noise:
                 return np.random.normal(0, sigma, size=shape)
             return 0.0
@@ -1496,7 +1574,7 @@ class SommovigoBartlett2026(AttenuationLaw):
         ]
         log10_av = (
             c[0]
-            - c[1] / np.log10(c[2] * sini)
+            - c[1] / np.log10(c[2] * sin_i)
             - c[3] / np.log10(c[4] * f)
             - c[5] * (c[6] * sigma_sfr) ** (-c[7] * z_gas)
             + _noise(0.221, sigma_sfr.shape)
@@ -1507,7 +1585,7 @@ class SommovigoBartlett2026(AttenuationLaw):
         # Step 2: Predict B_1s
         c = [0.0324, 25.5, 2.36, 0.00411, 1.95]
         B_1s = c[0] / A_V * (
-            (c[1] * z_gas) ** (c[2] * sini)
+            (c[1] * z_gas) ** (c[2] * sin_i)
             - c[3] * log10_mstar / np.log10(c[4] * f)
         ) + _noise(0.058, A_V.shape)
         B_1s = np.clip(B_1s, -1.0, 1.0)
@@ -1525,7 +1603,7 @@ class SommovigoBartlett2026(AttenuationLaw):
         ]
         B_3 = (
             -c[0]
-            - c[1] * sini
+            - c[1] * sin_i
             + c[2] * z_gas * (c[3] * A_V) ** (-c[4] * ssfr)
             + c[5] * (c[6] * A_V) ** (-c[7] * f)
             + _noise(0.728, A_V.shape)
@@ -2018,6 +2096,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                 valid,
                 None,
                 False,
+                np.float32,
                 (dtg_axis_name,),
             )
 

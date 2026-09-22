@@ -4,14 +4,18 @@ The class described in this module should never be directly instantiated. It
 only contains common attributes and methods to reduce boilerplate.
 """
 
-from unyt import Mpc, arcsecond, kpc, pc
+import numpy as np
+from unyt import Gyr, Mpc, Msun, Myr, arcsecond, degree, kpc, pc, yr
 
 from synthesizer import exceptions
 from synthesizer.cosmology import (
     get_angular_diameter_distance,
     get_luminosity_distance,
 )
-from synthesizer.emission_models.attenuation import Inoue14
+from synthesizer.emission_models.attenuation import (
+    Inoue14,
+    SommovigoBartlett2026,
+)
 from synthesizer.emissions import Sed, plot_observed_spectra, plot_spectra
 from synthesizer.grid import Grid
 from synthesizer.imaging.data_cube_generators import (
@@ -281,7 +285,9 @@ class BaseGalaxy:
 
         return equivalent_widths
 
-    def get_observed_spectra(self, cosmo, igm=Inoue14, nthreads=1):
+    def get_observed_spectra(
+        self, cosmo, igm=Inoue14, nthreads=1, out_dtype=None
+    ):
         """Calculate the observed spectra for all Seds within this galaxy.
 
         This will run Sed.get_fnu(...) and populate Sed.fnu (and sed.obslam
@@ -306,6 +312,9 @@ class BaseGalaxy:
             nthreads (int):
                 The number of threads to use for observer-frame flux
                 conversion.
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the flux arrays. If None
+                the fluxes inherit the source spectra dtype.
 
         Raises:
             MissingAttribute
@@ -327,6 +336,7 @@ class BaseGalaxy:
                 z=self.redshift,
                 igm=igm,
                 nthreads=nthreads,
+                out_dtype=out_dtype,
             )
 
         # Do we have stars?
@@ -339,6 +349,7 @@ class BaseGalaxy:
                     z=self.redshift,
                     igm=igm,
                     nthreads=nthreads,
+                    out_dtype=out_dtype,
                 )
 
             # Loop over all stellar particle spectra
@@ -350,6 +361,7 @@ class BaseGalaxy:
                         z=self.redshift,
                         igm=igm,
                         nthreads=nthreads,
+                        out_dtype=out_dtype,
                     )
 
         # Do we have black holes?
@@ -362,6 +374,7 @@ class BaseGalaxy:
                     z=self.redshift,
                     igm=igm,
                     nthreads=nthreads,
+                    out_dtype=out_dtype,
                 )
 
             # Loop over all black hole particle spectra
@@ -373,9 +386,10 @@ class BaseGalaxy:
                         z=self.redshift,
                         igm=igm,
                         nthreads=nthreads,
+                        out_dtype=out_dtype,
                     )
 
-    def get_observed_lines(self, cosmo, igm=Inoue14):
+    def get_observed_lines(self, cosmo, igm=Inoue14, out_dtype=None):
         """Calculate the observed lines for all Line objects.
 
         This will run Line.get_fnu(...) and populate Line.fnu (and Line.obslam
@@ -397,6 +411,9 @@ class BaseGalaxy:
             igm (igm):
                 The object describing the intergalactic medium (defaults to
                 Inoue14).
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the flux arrays. If None
+                the fluxes inherit the line luminosity dtype.
 
         Raises:
             MissingAttribute
@@ -416,6 +433,7 @@ class BaseGalaxy:
                 cosmo=cosmo,
                 z=self.redshift,
                 igm=igm,
+                out_dtype=out_dtype,
             )
 
         # Do we have stars?
@@ -427,6 +445,7 @@ class BaseGalaxy:
                     cosmo=cosmo,
                     z=self.redshift,
                     igm=igm,
+                    out_dtype=out_dtype,
                 )
 
             # Loop over all stellar particle lines
@@ -438,6 +457,7 @@ class BaseGalaxy:
                         cosmo=cosmo,
                         z=self.redshift,
                         igm=igm,
+                        out_dtype=out_dtype,
                     )
 
         # Do we have black holes?
@@ -449,6 +469,7 @@ class BaseGalaxy:
                     cosmo=cosmo,
                     z=self.redshift,
                     igm=igm,
+                    out_dtype=out_dtype,
                 )
 
             # Loop over all black hole particle lines
@@ -459,6 +480,7 @@ class BaseGalaxy:
                         cosmo=cosmo,
                         z=self.redshift,
                         igm=igm,
+                        out_dtype=out_dtype,
                     )
 
     def get_spectra_combined(self):
@@ -505,7 +527,14 @@ class BaseGalaxy:
             if len(lst) > 1:
                 self.spectra[key] = sum(lst)
 
-    def get_photo_lnu(self, filters, verbose=True, nthreads=1, limit_to=None):
+    def get_photo_lnu(
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        limit_to=None,
+        out_dtype=None,
+    ):
         """Calculate luminosity photometry using a FilterCollection object.
 
         Photometry is calculated in spectral luminosity density units.
@@ -522,6 +551,8 @@ class BaseGalaxy:
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             PhotometryCollection:
@@ -568,6 +599,7 @@ class BaseGalaxy:
                 verbose,
                 nthreads=nthreads,
                 limit_to=star_labels,
+                out_dtype=out_dtype,
             )
 
             # If we have particle spectra do that too (not applicable to
@@ -578,6 +610,7 @@ class BaseGalaxy:
                     verbose,
                     nthreads=nthreads,
                     limit_to=part_star_labels,
+                    out_dtype=out_dtype,
                 )
 
         # Get black hole photometry
@@ -587,6 +620,7 @@ class BaseGalaxy:
                 verbose,
                 nthreads=nthreads,
                 limit_to=bh_labels,
+                out_dtype=out_dtype,
             )
 
             # If we have particle spectra do that too (not applicable to
@@ -597,6 +631,7 @@ class BaseGalaxy:
                     verbose,
                     nthreads=nthreads,
                     limit_to=part_bh_labels,
+                    out_dtype=out_dtype,
                 )
 
         # Get the combined photometry
@@ -606,9 +641,17 @@ class BaseGalaxy:
                 filters,
                 verbose,
                 nthreads=nthreads,
+                out_dtype=out_dtype,
             )
 
-    def get_photo_fnu(self, filters, verbose=True, nthreads=1, limit_to=None):
+    def get_photo_fnu(
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        limit_to=None,
+        out_dtype=None,
+    ):
         """Calculate flux photometry using a FilterCollection object.
 
         Photometry is calculated in spectral flux density units.
@@ -625,6 +668,8 @@ class BaseGalaxy:
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             PhotometryCollection:
@@ -671,6 +716,7 @@ class BaseGalaxy:
                 verbose,
                 nthreads=nthreads,
                 limit_to=star_labels,
+                out_dtype=out_dtype,
             )
 
             # If we have particle spectra do that too (not applicable to
@@ -681,6 +727,7 @@ class BaseGalaxy:
                     verbose,
                     nthreads=nthreads,
                     limit_to=part_star_labels,
+                    out_dtype=out_dtype,
                 )
 
         # Get black hole photometry
@@ -690,6 +737,7 @@ class BaseGalaxy:
                 verbose,
                 nthreads=nthreads,
                 limit_to=bh_labels,
+                out_dtype=out_dtype,
             )
 
             # If we have particle spectra do that too (not applicable to
@@ -700,6 +748,7 @@ class BaseGalaxy:
                     verbose,
                     nthreads=nthreads,
                     limit_to=part_bh_labels,
+                    out_dtype=out_dtype,
                 )
 
         # Get the combined photometry
@@ -709,6 +758,7 @@ class BaseGalaxy:
                 filters,
                 verbose,
                 nthreads=nthreads,
+                out_dtype=out_dtype,
             )
 
     def get_surviving_mass(self, grid: Grid, **kwargs):
@@ -1073,6 +1123,7 @@ class BaseGalaxy:
         mask=None,
         vel_shift=None,
         verbose=True,
+        out_dtype=None,
         **kwargs,
     ):
         """Generate spectra as described by the emission model.
@@ -1128,6 +1179,8 @@ class BaseGalaxy:
                 then the velocity shift is applied when generating all spectra.
             verbose (bool):
                 Are we talking?
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted spectra arrays.
             kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -1149,6 +1202,7 @@ class BaseGalaxy:
             mask=mask,
             vel_shift=vel_shift,
             verbose=verbose,
+            out_dtype=out_dtype,
             **kwargs,
         )
 
@@ -1208,6 +1262,7 @@ class BaseGalaxy:
         covering_fraction=None,
         mask=None,
         verbose=True,
+        out_dtype=None,
         **kwargs,
     ):
         """Generate lines as described by the emission model.
@@ -1262,6 +1317,8 @@ class BaseGalaxy:
                       a particular model.
             verbose (bool):
                 Are we talking?
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted line arrays.
             kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -1283,6 +1340,7 @@ class BaseGalaxy:
             covering_fraction=covering_fraction,
             mask=mask,
             verbose=verbose,
+            out_dtype=out_dtype,
             **kwargs,
         )
 
@@ -2501,6 +2559,7 @@ class BaseGalaxy:
         self,
         instrument,
         limit_to=None,
+        out_dtype=None,
     ):
         """Get spectroscopy for the galaxy based on a specific instrument.
 
@@ -2516,6 +2575,9 @@ class BaseGalaxy:
                 If None, then spectroscopy is calculated for all spectra in
                 the galaxy. If a string or list of strings is provided, then
                 spectroscopy is only calculated for the specified spectra.
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the resulting spectra.
+                If None the spectroscopy inherits the source spectra dtype.
 
         Returns:
             dict
@@ -2554,15 +2616,21 @@ class BaseGalaxy:
             spectrum = instrument.apply_lam_array(self.spectra[label])
             if instrument.can_do_noisy_spectroscopy:
                 spectrum = instrument.apply_noise(spectrum)
+            if out_dtype is not None:
+                spectrum.cast(out_dtype)
             self.spectroscopy[instrument.label][label] = spectrum
 
         # Do the stars level spectra
         if self.stars is not None:
-            self.stars.get_spectroscopy(instrument, limit_to=limit_to)
+            self.stars.get_spectroscopy(
+                instrument, limit_to=limit_to, out_dtype=out_dtype
+            )
 
         # Do the black holes level spectra
         if self.black_holes is not None:
-            self.black_holes.get_spectroscopy(instrument, limit_to=limit_to)
+            self.black_holes.get_spectroscopy(
+                instrument, limit_to=limit_to, out_dtype=out_dtype
+            )
 
         return self.spectroscopy[instrument.label]
 
@@ -3125,3 +3193,183 @@ class BaseGalaxy:
 
             # Print the table for this model
             print(formatter.get_table(f"Model: {model_label}"))
+
+    def get_dust_curve_params_sommovigobartlett2026(
+        self,
+        sigma_sfr=None,
+        inclination=None,
+        z_gas=None,
+        log10_mstar=None,
+        ssfr=None,
+        sfr_timescale=100 * Myr,
+        dust_model="MW",
+        add_noise=False,
+    ):
+        """Get the dust curve parameters for Sommovigo & Bartlett 2026.
+
+        This method is a perquisite for using the SommovigoBartlett2026 dust
+        curve model without fixing all the dust curve parameters to fixed
+        values.
+
+        Running this function will compute the dust curve parameters based on
+        this galaxies properties and attach them to the stars component ready
+        for using the dust curve transformer in calls to get_spectra. This
+        function will attach:
+            - self.stars.tau_v (V-band optical depth)
+            - self.stars.B_0 (uv bump amplitude)
+            - self.stars.B_1s (linear slope term, scaled by 1e-3)
+            - self.stars.B_2s (slope modulation)
+            - self.stars.B_3 (Exponential/curvature parameter)
+
+        Based on (also computed in this function where necessary):
+
+            - Star formation rate surface density (sigma_SFR)
+            - inclination
+            - Gas phase metallicity (Z_gas, averaged over the galaxy)
+            - Log 10 of the stellar mass (log10(M_star))
+            - Specific star formation rate (sSFR)
+
+        Each galaxy property can be provided directly, named by a string
+        referring to an attribute on this galaxy, or left as None to calculate
+        it from the attached particle data.
+
+        Args:
+            sigma_sfr (unyt_quantity/float/str):
+                Star formation rate surface density. Unitless values are
+                interpreted as Msun / yr / kpc**2.
+            inclination (unyt_quantity/float/str):
+                Inclination angle. Unitless values are interpreted as degrees.
+                If None, an isotropically distributed inclination is drawn.
+            z_gas (float/str):
+                Gas mass-weighted metallicity as an absolute mass fraction.
+            log10_mstar (float/str):
+                Log10 of the stellar mass in Msun.
+            ssfr (unyt_quantity/float/str):
+                Specific star formation rate. Unitless values are interpreted
+                as Gyr**-1.
+            sfr_timescale (unyt_quantity):
+                Timescale over which the star formation rate is averaged.
+                Defaults to 100 Myr, matching the model calibration.
+            dust_model (str):
+                Dust mixture model. One of 'MW', 'SMC', or
+                'stellar'. Selects the small-grain fraction and
+                the B_0 prediction formula.
+            add_noise (bool):
+                If True, add Gaussian scatter matching the intrinsic
+                dispersion of the calibration sample. Default is
+                False.
+
+        Returns:
+            dict:
+                Predicted attenuation parameters, including A_V and tau_v.
+        """
+        # Ensure we have both stars and gas components to calculate the
+        # parameters from
+        if self.stars is None:
+            raise exceptions.MissingAttribute(
+                "SommovigoBartlett2026 parameter prediction requires a "
+                "stellar component."
+            )
+
+        def resolve(value):
+            """Unpack a parameter value.
+
+            A local version of get_params to resolve the value of a parameter,
+            whether it's a string referring to an attribute or a direct value.
+            """
+            if not isinstance(value, str):
+                return value
+            if not hasattr(self, value):
+                raise exceptions.MissingAttribute(
+                    f"Galaxy has no attribute '{value}'."
+                )
+            return getattr(self, value)
+
+        # Resolve all the parameters, whether they are direct values or strings
+        sigma_sfr = resolve(sigma_sfr)
+        inclination = resolve(inclination)
+        z_gas = resolve(z_gas)
+        log10_mstar = resolve(log10_mstar)
+        ssfr = resolve(ssfr)
+
+        # Calculate the star formation rate if we don't have sigma_sfr or ssfr
+        sfr = (
+            self.stars.get_sfr(sfr_timescale)
+            if sigma_sfr is None or ssfr is None
+            else None
+        )
+
+        # Calculate the stellar mass if we don't have log10_mstar or ssfr
+        if log10_mstar is None or ssfr is None:
+            if self.stars.current_masses is None:
+                raise exceptions.MissingAttribute(
+                    "Stellar current masses are required to predict the "
+                    "SommovigoBartlett2026 parameters."
+                )
+            mstar = np.sum(self.stars.current_masses)
+            if mstar <= 0 * Msun:
+                raise exceptions.InconsistentArguments(
+                    "Total stellar mass must be positive."
+                )
+
+        # Calculate the star formation rate surface density if we don't have it
+        if sigma_sfr is None:
+            radius = self.stars.get_half_mass_radius()
+            if radius <= 0 * kpc:
+                raise exceptions.InconsistentArguments(
+                    "Stellar half-mass radius must be positive."
+                )
+            sigma_sfr = sfr / (np.pi * radius**2)
+        elif not hasattr(sigma_sfr, "units"):
+            sigma_sfr = sigma_sfr * Msun / yr / kpc**2
+
+        # Sample an inclination if a specific one was not provided
+        if inclination is None:
+            inclination = (
+                np.degrees(np.arccos(np.random.uniform(0.0, 1.0))) * degree
+            )
+        elif not hasattr(inclination, "units"):
+            inclination = inclination * degree
+
+        # Calculate the mass weighted gas phase metallicity if we don't have it
+        if z_gas is None:
+            if self.gas is None:
+                raise exceptions.MissingAttribute(
+                    "A gas component is required to calculate z_gas. Pass "
+                    "z_gas directly or as a galaxy attribute instead."
+                )
+            gas_mass = np.sum(self.gas.masses)
+            if gas_mass <= 0 * Msun:
+                raise exceptions.InconsistentArguments(
+                    "Total gas mass must be positive."
+                )
+            z_gas = np.sum(self.gas.masses * self.gas.metallicities) / gas_mass
+
+        # Calculate the log10 of the stellar mass if we don't have it
+        if log10_mstar is None:
+            log10_mstar = np.log10(mstar.to("Msun").value)
+
+        # Calculate the specific star formation rate if we don't have it
+        if ssfr is None:
+            ssfr = (sfr / mstar).to(Gyr**-1)
+        elif not hasattr(ssfr, "units"):
+            ssfr = ssfr / Gyr
+
+        # Now we have all the parameters we need, we can call the predict
+        # class method to get the dust curve parameters
+        params = SommovigoBartlett2026.predict(
+            sigma_sfr=sigma_sfr,
+            inclination=inclination,
+            z_gas=z_gas,
+            log10_mstar=log10_mstar,
+            ssfr=ssfr,
+            dust_model=dust_model,
+            add_noise=add_noise,
+        )
+
+        # Attach the parameters to the stars component for later use by the
+        # dust curve transformer
+        for param in ("tau_v", "B_0", "B_1s", "B_2s", "B_3"):
+            setattr(self.stars, param, params[param])
+
+        return params

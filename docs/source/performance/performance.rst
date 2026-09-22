@@ -11,7 +11,33 @@ We have implemented a number of performance optimisations, including:
 
 - Using C++ extensions for computationally intensive tasks.
 - Using OpenMP for shared memory parallelism to avoid the GIL bottleneck in Python. 
-- Reducing memory allocations and copies as much as possible (including removing copies inherent during ``unyt`` conversion operations). 
+- Reducing memory allocations and copies as much as possible (including removing copies inherent during ``unyt`` conversion operations).
+- User-controllable floating-point precision for inputs and outputs, halving memory footprints where reduced precision is acceptable (see :doc:`precision`).
+
+Build options
+~~~~~~~~~~~~~
+
+By default the extensions are compiled for the baseline target of whatever
+architecture you are on. On x86-64 that means SSE2 and 128-bit vectors, while
+every current HPC CPU has AVX2 or wider, so the default build leaves half the
+vector width unused. Set ``NATIVE=1`` to compile for the instruction set of the
+machine doing the build:
+
+.. code-block:: bash
+
+    NATIVE=1 WITH_OPENMP=1 pip install .
+
+This is opt-in rather than the default because the resulting binary will not
+run on an older CPU. That matters in two common cases: when a cluster's login
+node and its compute nodes are different generations, and when building a
+wheel for distribution. Build on a node of the same generation as the one you
+will run on, or pass an explicit target such as ``CFLAGS="-march=znver2"``
+instead. A build left on the baseline says so in ``build_synth.log``.
+
+On an AMD EPYC 7H12 this is worth about 1.2x on the CIC spectra extraction at
+one thread, and about 2.2x on the separable attenuation kernel, where the
+architecture flag is what lets the C library replace its scalar ``exp`` with a
+vector one.
 
 Profiling Suite
 ~~~~~~~~~~~~~~~
@@ -75,6 +101,7 @@ Performance Benchmarks
 .. toctree::
    :maxdepth: 1
 
+   precision
    particle_wavelength_scaling
    pipeline_profiling
    strong_scaling

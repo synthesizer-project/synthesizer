@@ -30,7 +30,6 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
                      PyObject *part_names_tuple, int npart_)
     : np_weights_(np_weights),
       np_velocities_(np_velocities),
-      velocities_(NULL),
       velocity_ndim_(0),
       velocity_ncomp_(0),
       np_mask_(np_mask),
@@ -41,24 +40,58 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
   /* Assign the number of particles. */
   npart = npart_;
 
-  if (np_velocities_ != NULL) {
+  /* Validate that all floating-point particle inputs are contiguous and share
+   * one supported dtype family before any typed kernels use raw pointers. */
+  PyArrayObject *float_arrays[MAX_GRID_NDIM + 2] = {NULL};
+  const char *float_names[MAX_GRID_NDIM + 2] = {NULL};
+  int float_count = 0;
+
+  if (np_weights_ != NULL &&
+      reinterpret_cast<PyObject *>(np_weights_) != Py_None) {
+    float_arrays[float_count] = np_weights_;
+    float_names[float_count] = "weights";
+    float_count++;
+  }
+
+  if (np_velocities_ != NULL &&
+      reinterpret_cast<PyObject *>(np_velocities_) != Py_None) {
+    float_arrays[float_count] = np_velocities_;
+    float_names[float_count] = "velocities";
+    float_count++;
+  }
+
+  if (part_tuple_ != NULL && PyTuple_Check(part_tuple_)) {
+    const Py_ssize_t n_props = PyTuple_Size(part_tuple_);
+    for (Py_ssize_t i = 0; i < n_props; i++) {
+      PyObject *item = PyTuple_GetItem(part_tuple_, i);
+      if (item == NULL) {
+        PyErr_SetString(PyExc_ValueError,
+                        "[Particles::Particles]: Failed to extract particle "
+                        "property array.");
+        return;
+      }
+      if (!PyArray_Check(item)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "[Particles::Particles]: Particle properties must be "
+                        "numpy arrays.");
+        return;
+      }
+      PyArrayObject *np_part_arr = reinterpret_cast<PyArrayObject *>(item);
+      float_arrays[float_count] = np_part_arr;
+      float_names[float_count] = "particle property";
+      float_count++;
+    }
+  }
+
+  if (float_count > 0 &&
+      !is_matching_float_dtypes(float_arrays, float_names, float_count,
+                                &float_typenum_)) {
+    return;
+  }
+
+  if (np_velocities_ != NULL &&
+      reinterpret_cast<PyObject *>(np_velocities_) != Py_None) {
     velocity_ndim_ = PyArray_NDIM(np_velocities_);
-
-    if (PyArray_TYPE(np_velocities_) != NPY_FLOAT64) {
-      PyErr_SetString(PyExc_TypeError,
-                      "[Particles.__init__]: Array 'velocities' must be of "
-                      "type float64.");
-      toc("Particles.__init__");
-      return;
-    }
-
-    if (!PyArray_ISCONTIGUOUS(np_velocities_)) {
-      PyErr_SetString(PyExc_ValueError,
-                      "[Particles.__init__]: Array 'velocities' must be "
-                      "contiguous.");
-      toc("Particles.__init__");
-      return;
-    }
 
     if (velocity_ndim_ == 1) {
       if (PyArray_DIM(np_velocities_, 0) < npart) {
@@ -97,8 +130,6 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
       toc("Particles.__init__");
       return;
     }
-
-    velocities_ = static_cast<const double *>(PyArray_DATA(np_velocities_));
   }
 
   if (part_names_tuple != NULL && PySequence_Check(part_names_tuple) &&
@@ -156,161 +187,11 @@ Particles::~Particles() {
 }
 
 /**
- * @brief Get the weights of the particles.
+ * @brief Get the resolved floating-point dtype used by particle arrays.
  *
- * @return The weights of the particles.
+ * @return The resolved NumPy typenum, or -1 if no float arrays were provided.
  */
-double *Particles::get_weights() const {
-  return (double *)PyArray_DATA(np_weights_);
-}
-
-/**
- * @brief Get the velocities of the particles.
- *
- * @return The velocities of the particles.
- */
-double *Particles::get_velocities() const {
-  return (double *)PyArray_DATA(np_velocities_);
-}
-
-/**
- * @brief Get the properties of the particles.
- *
- * @return The properties of the particles.
- */
-double **Particles::get_all_props(int ndim) const {
-  /* Allocate a single array for particle properties. */
-  double **part_props = new double *[ndim];
-  if (part_props == NULL) {
-    PyErr_SetString(PyExc_MemoryError,
-                    "Failed to allocate memory for part_props.");
-    return NULL;
-  }
-
-  /* Unpack the particle property arrays into a single contiguous array. */
-  for (int idim = 0; idim < ndim; idim++) {
-
-    /* Extract the data from the numpy array. */
-    PyArrayObject *np_part_arr =
-        (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
-    if (np_part_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-      return NULL;
-    }
-    part_props[idim] = (double *)PyArray_DATA(np_part_arr);
-  }
-
-  /* Success. */
-  return part_props;
-}
-
-/**
- * @brief Get the properties of the particles.
- *
- * @return The properties of the particles.
- */
-double *Particles::get_part_props(int idim) const {
-  /* Get the array stored at idim. */
-  PyArrayObject *np_part_arr =
-      (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
-  if (np_part_arr == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-    return NULL;
-  }
-
-  /* Extract the data from the numpy array. */
-  double *part_arr = (double *)PyArray_DATA(np_part_arr);
-  if (part_arr == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-    return NULL;
-  }
-  return part_arr;
-}
-
-/**
- * @brief Get the weight of a particle at a given index.
- *
- * @param pind: The index of the particle.
- * @return The weight of the particle at the given index.
- */
-double Particles::get_weight_at(int pind) const {
-  return get_double_at(np_weights_, pind, "weights");
-}
-
-/**
- * @brief Get the velocity of a particle at a given index.
- *
- * @param pind: The index of the particle.
- * @return The velocity of the particle at the given index.
- */
-double Particles::get_vel_at(int pind) const {
-  if (velocity_ndim_ == 1) {
-    return velocities_[pind];
-  }
-  return velocities_[static_cast<npy_intp>(pind) * velocity_ncomp_ + 2];
-}
-
-/**
- * @brief Get the mask of a particle at a given index.
- *
- * @param pind: The index of the particle.
- * @return The mask of the particle at the given index.
- */
-npy_bool Particles::get_mask_at(int pind) const {
-  /* If the mask is NULL, return true (i.e. not masked). */
-  if (np_mask_ == NULL) {
-    return true;
-  }
-
-  /* If the mask is Py_None, return true (i.e. not masked). */
-  if (reinterpret_cast<PyObject *>(np_mask_) == Py_None) {
-    return true;
-  }
-
-  /* Otherwise, is this element masked? */
-  return get_bool_at(np_mask_, pind, "mask");
-}
-
-/**
- * @brief Get the property of a particle at a given index.
- *
- * @param idim: The index of the property.
- * @param pind: The index of the particle.
- * @return The property of the particle at the given index.
- */
-double Particles::get_part_prop_at(int idim, int pind) const {
-  char fallback_name[64];
-  fallback_name[0] = '\0';
-
-  if (idim >= 0 && idim < static_cast<int>(part_names_.size()) &&
-      !part_names_[idim].empty()) {
-    snprintf(fallback_name, sizeof(fallback_name), "%s",
-             part_names_[idim].c_str());
-  }
-
-  if (fallback_name[0] == '\0') {
-    snprintf(fallback_name, sizeof(fallback_name), "particle property %d",
-             idim);
-  }
-
-  const char *array_name = fallback_name;
-
-  /* Get the array stored at idim. */
-  PyArrayObject *np_part_arr =
-      (PyArrayObject *)PyTuple_GetItem(part_tuple_, idim);
-  if (np_part_arr == NULL) {
-    PyErr_SetString(PyExc_ValueError, "Failed to extract part_arr.");
-    return std::numeric_limits<double>::quiet_NaN();
-  }
-
-  /* If we have a size 1 array then we have a fixed scalar value. In this case
-   * we return the first element. */
-  if (PyArray_SIZE(np_part_arr) == 1) {
-    return get_double_at(np_part_arr, 0, array_name);
-  }
-
-  return get_double_at(np_part_arr, pind, array_name);
-}
+int Particles::get_float_typenum() const { return float_typenum_; }
 
 /**
  * @brief Check if a particle is masked.
@@ -331,235 +212,4 @@ bool Particles::part_is_masked(int pind) const {
 
   /* Otherwise, is this element masked? */
   return !get_bool_at(np_mask_, pind, "mask");
-}
-
-/**
- * @brief Get the grid indices and fractions for a particle using CIC.
- *
- * This function computes the indices of the grid cells that a particle
- * occupies, along with the fractions of the particle's mass in each cell.
- *
- * This is the serial version of the function.
- *
- * @param GridProps: The properties of the grid.
- * @param parts: The particle properties.
- */
-static void get_particle_indices_and_fracs_serial(GridProps *grid_props,
-                                                  Particles *parts) {
-
-  /* Unpack the grid properties. */
-  const int ndim = grid_props->ndim;
-
-  // Pre-allocate exactly npart slots to avoid resizing
-  parts->grid_indices.resize(parts->npart);
-  parts->grid_fracs.resize(parts->npart * ndim);
-
-  /* Loop over particles. */
-  for (int p = 0; p < parts->npart; p++) {
-
-    /* Skip masked particles. */
-    if (parts->part_is_masked(p)) {
-      parts->grid_indices[p] = -1;
-      for (int idim = 0; idim < ndim; idim++) {
-        parts->grid_fracs[p * ndim + idim] = 0.0;
-      }
-      continue;
-    }
-
-    /* Get the grid indices and cell fractions for the particle. */
-    std::array<int, MAX_GRID_NDIM> part_indices;
-    std::array<double, MAX_GRID_NDIM> axis_fracs;
-    get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
-
-    /* Compute base linear index for this particle */
-    const int grid_ind = grid_props->ravel_grid_index(part_indices);
-
-    /* Store the grid indices and fractions in the particle class. */
-    parts->grid_indices[p] = grid_ind;
-
-    /* Store the per‐dimension fraction in the particle class. */
-    for (int idim = 0; idim < ndim; idim++) {
-      parts->grid_fracs[p * ndim + idim] = axis_fracs[idim];
-    }
-  }
-}
-
-/**
- * @brief Get the grid indices and fractions for a particle using CIC.
- *
- * This function computes the indices of the grid cells that a particle
- * occupies, along with the fractions of the particle's mass in each cell.
- *
- * This is the parallel version of the function.
- *
- * @param grid_props: The properties of the grid.
- * @param parts: The particle properties.
- * @param nthreads: The number of threads to use for parallel processing.
- */
-static void get_particle_indices_and_fracs_parallel(GridProps *grid_props,
-                                                    Particles *parts,
-                                                    int nthreads) {
-
-  // Unpack the grid properties.
-  const int ndim = grid_props->ndim;
-  const int npart = parts->npart;
-
-  // Pre-allocate exactly npart slots so we can write into slices on
-  // each thread without resizing.
-  parts->grid_indices.resize(npart);
-  parts->grid_fracs.resize(npart * ndim);
-
-#pragma omp parallel for num_threads(nthreads) schedule(static)
-  // Loop over particles in parallel
-  for (int p = 0; p < npart; p++) {
-
-    // Skip masked particles
-    if (parts->part_is_masked(p)) {
-      parts->grid_indices[p] = -1;
-      for (int d = 0; d < ndim; d++) {
-        parts->grid_fracs[p * ndim + d] = 0.0;
-      }
-      continue;
-    }
-
-    // Get the grid indices and cell fractions for the particle.
-    std::array<int, MAX_GRID_NDIM> part_indices;
-    std::array<double, MAX_GRID_NDIM> axis_fracs;
-    get_part_ind_frac_cic(part_indices, axis_fracs, grid_props, parts, p);
-
-    // Compute base linear index for this particle
-    int grid_ind = grid_props->ravel_grid_index(part_indices);
-    parts->grid_indices[p] = grid_ind;
-
-    // Store the per‐dimension fractions
-    for (int d = 0; d < ndim; d++) {
-      parts->grid_fracs[p * ndim + d] = axis_fracs[d];
-    }
-  }
-}
-
-/**
- * @brief Calculate the grid indices and fractions for all particles.
- *
- * This is a wrapper function that calls the correct version based on
- * the number of threads requested or whether OpenMP is available.
- *
- * @param grid_props: A struct containing the properties along each grid axis.
- * @param parts: A struct containing the particle properties.
- * @param nthreads: The number of threads to use.
- */
-void get_particle_indices_and_fracs(GridProps *grid_props, Particles *parts,
-                                    int nthreads) {
-
-  tic("get_particle_indices_and_fracs");
-
-#ifdef WITH_OPENMP
-  if (nthreads > 1) {
-    get_particle_indices_and_fracs_parallel(grid_props, parts, nthreads);
-  } else {
-    get_particle_indices_and_fracs_serial(grid_props, parts);
-  }
-#else
-  get_particle_indices_and_fracs_serial(grid_props, parts);
-#endif /* WITH_OPENMP */
-
-  toc("get_particle_indices_and_fracs");
-}
-
-/**
- * @brief Get the grid indices for a particle using Nearest Grid Point (NGP).
- *
- * This is the serial version of the function.
- *
- * @param GridProps: The properties of the grid.
- * @param parts: The particle properties.
- */
-static void get_particle_indices_serial(GridProps *grid_props,
-                                        Particles *parts) {
-
-  // Pre-allocate exactly npart slots to avoid resizing
-  parts->grid_indices.resize(parts->npart);
-
-  /* Loop over particles. */
-  for (int p = 0; p < parts->npart; p++) {
-
-    /* Skip masked particles. */
-    if (parts->part_is_masked(p)) {
-      parts->grid_indices[p] = -1;
-      continue;
-    }
-
-    /* Get the grid indices and cell fractions for the particle. */
-    std::array<int, MAX_GRID_NDIM> part_indices;
-    get_part_inds_ngp(part_indices, grid_props, parts, p);
-
-    /* Compute the flattened grid index for this particle and store it. */
-    const int grid_ind = grid_props->ravel_grid_index(part_indices);
-    parts->grid_indices[p] = grid_ind;
-  }
-}
-
-/**
- * @brief Get the grid indices for a particle using Nearest Grid Point (NGP).
- *
- * This is the parallel version of the function.
- *
- * @param grid_props: The properties of the grid.
- * @param parts: The particle properties.
- * @param nthreads: The number of threads to use for parallel processing.
- */
-static void get_particle_indices_parallel(GridProps *grid_props,
-                                          Particles *parts, int nthreads) {
-  const int npart = parts->npart;
-
-  // Pre-allocate exactly npart slots so we can write into slices on
-  // each thread without resizing.
-  parts->grid_indices.resize(npart);
-
-#pragma omp parallel for num_threads(nthreads) schedule(static)
-  // Loop over particles in parallel
-  for (int p = 0; p < npart; p++) {
-
-    // Skip masked particles
-    if (parts->part_is_masked(p)) {
-      parts->grid_indices[p] = -1;
-      continue;
-    }
-
-    // Get the grid indices for the particle.
-    std::array<int, MAX_GRID_NDIM> part_indices;
-    get_part_inds_ngp(part_indices, grid_props, parts, p);
-
-    // Compute the flattened grid index for this particle and store it.
-    int grid_ind = grid_props->ravel_grid_index(part_indices);
-    parts->grid_indices[p] = grid_ind;
-  }
-}
-
-/**
- * @brief Calculate the grid indices for all particles.
- *
- * This is a wrapper function that calls the correct version based on
- * the number of threads requested or whether OpenMP is available.
- *
- * @param grid_props: A struct containing the properties along each grid axis.
- * @param parts: A struct containing the particle properties.
- * @param nthreads: The number of threads to use.
- */
-void get_particle_indices(GridProps *grid_props, Particles *parts,
-                          int nthreads) {
-
-  tic("get_particle_indices");
-
-#ifdef WITH_OPENMP
-  if (nthreads > 1) {
-    get_particle_indices_parallel(grid_props, parts, nthreads);
-  } else {
-    get_particle_indices_serial(grid_props, parts);
-  }
-#else
-  get_particle_indices_serial(grid_props, parts);
-#endif /* WITH_OPENMP */
-
-  toc("get_particle_indices");
 }
