@@ -14,10 +14,12 @@ import threading
 import time
 from pathlib import Path
 
+import numpy as np
 import psutil
 from astropy.cosmology import Planck18
 from unyt import kpc
 
+from synthesizer import set_default_out_dtype
 from synthesizer.grid import Grid
 from synthesizer.pipeline import Pipeline
 from synthesizer.utils.operation_timers import OperationTimers
@@ -40,6 +42,7 @@ def run_pipeline_with_memory(
     include_observer_frame: bool = False,
     sample_freq_hz: float = 1000.0,
     nthreads: int = 1,
+    grid_precision: str = "float64",
 ) -> tuple[list, float]:
     """Run full Pipeline and collect memory samples at specified frequency.
 
@@ -53,6 +56,8 @@ def run_pipeline_with_memory(
             observer-frame/flux operations. Defaults to False.
         sample_freq_hz (float, optional): Memory sampling frequency in Hz.
             Defaults to 1000.0.
+        grid_precision (str, optional): Precision to load the grid at.
+            Defaults to float64.
         nthreads (int, optional): Number of threads for Pipeline.
             Defaults to 1.
 
@@ -85,7 +90,7 @@ def run_pipeline_with_memory(
     start_time = time.perf_counter()
 
     # Setup - load grid
-    grid = Grid("test_grid")
+    grid = Grid("test_grid", use_precision=grid_precision)
 
     # Build test data
     galaxies = build_test_galaxies(grid, nparticles, ngalaxies, seed)
@@ -178,6 +183,20 @@ def main() -> None:
     parser.add_argument(
         "--ngalaxies", type=int, default=10, help="Number of galaxies"
     )
+    parser.add_argument(
+        "--grid-precision",
+        choices=("float32", "float64"),
+        default="float64",
+        help="Precision to load the grid at. Must match --out-dtype, since "
+        "Synthesizer never casts between precisions behind the scenes.",
+    )
+    parser.add_argument(
+        "--out-dtype",
+        choices=("float32", "float64"),
+        default=None,
+        help="Requested output precision. Defaults to the global default. "
+        "float32 halves the size of every generated array.",
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument(
         "--fov-kpc",
@@ -225,6 +244,10 @@ def main() -> None:
         particles_str += ", observer-frame=True"
     print(f"Profiling Pipeline memory ({particles_str})...")
 
+    # Set the requested output precision globally before anything allocates.
+    if args.out_dtype is not None:
+        set_default_out_dtype(np.dtype(args.out_dtype))
+
     # Run pipeline with memory sampling
     samples, total_time = run_pipeline_with_memory(
         args.nparticles,
@@ -234,6 +257,7 @@ def main() -> None:
         args.include_observer_frame,
         args.sample_freq,
         args.nthreads,
+        args.grid_precision,
     )
 
     # Write CSV with all samples

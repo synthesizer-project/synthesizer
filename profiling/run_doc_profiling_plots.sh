@@ -141,6 +141,8 @@ for npart in 100 500 1000 5000 10000 100000; do
 		--ngalaxies 10 \
 		--nthreads $PIPELINE_THREADS \
 		--out_dir "$TIMING_DIR" \
+		--grid-precision $GRID_PRECISION \
+		--out-dtype $GRID_PRECISION \
 		--include-observer-frame
 done
 
@@ -158,6 +160,8 @@ python profiling/pipeline/profile_memory.py \
 	--nthreads $PIPELINE_THREADS \
 	--out_dir "$MEMORY_DIR" \
 	--sample-freq 5000 \
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION \
 	--include-observer-frame
 
 python profiling/pipeline/profile_memory.py \
@@ -167,6 +171,8 @@ python profiling/pipeline/profile_memory.py \
 	--nthreads $PIPELINE_THREADS \
 	--out_dir "$MEMORY_DIR" \
 	--sample-freq 3000 \
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION \
 	--include-observer-frame
 
 python profiling/pipeline/profile_memory.py \
@@ -176,6 +182,8 @@ python profiling/pipeline/profile_memory.py \
 	--nthreads $PIPELINE_THREADS \
 	--out_dir "$MEMORY_DIR" \
 	--sample-freq 2000 \
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION \
 	--include-observer-frame
 
 python profiling/pipeline/profile_memory.py \
@@ -185,6 +193,8 @@ python profiling/pipeline/profile_memory.py \
 	--nthreads $PIPELINE_THREADS \
 	--out_dir "$MEMORY_DIR" \
 	--sample-freq 1000 \
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION \
 	--include-observer-frame
 
 python profiling/pipeline/profile_memory.py \
@@ -194,6 +204,8 @@ python profiling/pipeline/profile_memory.py \
 	--nthreads $PIPELINE_THREADS \
 	--out_dir "$MEMORY_DIR" \
 	--sample-freq 500 \
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION \
 	--include-observer-frame
 
 python profiling/pipeline/profile_memory.py \
@@ -203,6 +215,8 @@ python profiling/pipeline/profile_memory.py \
 	--nthreads $PIPELINE_THREADS \
 	--out_dir "$MEMORY_DIR" \
 	--sample-freq 250 \
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION \
 	--include-observer-frame
 
 echo ""
