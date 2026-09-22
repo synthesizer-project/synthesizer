@@ -2,8 +2,14 @@
 
 import numpy as np
 import pytest
+from synthesizer.extensions.timers import (
+    get_operation_names,
+    get_operation_timings,
+    reset_timings,
+)
 from unyt import Mpc, Msun, Myr, pc, unyt_array
 
+from synthesizer import check_atomic_timing
 from synthesizer.exceptions import InconsistentArguments
 from synthesizer.kernel_functions import Kernel
 from synthesizer.particle import Galaxy, Gas, Stars
@@ -481,6 +487,48 @@ class TestLOSColumnDensity:
             assert result.shape == (one_star.nparticles,)
             assert np.all(result == 0.0)
             assert hasattr(result, "units")
+
+    @pytest.mark.skipif(
+        not check_atomic_timing(),
+        reason="LOS phase timings require an ATOMIC_TIMING build.",
+    )
+    @pytest.mark.parametrize(
+        "as_points", [True, False], ids=["point", "smooth"]
+    )
+    @pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+    def test_column_density_phase_timers(
+        self, one_star, one_gas_front, as_points, force_loop
+    ):
+        """LOS calls expose one balanced entry for each executed phase."""
+        reset_timings()
+        one_star.get_los_column_density(
+            one_gas_front,
+            ["masses", "dust_masses"],
+            self._kernel(),
+            as_points=as_points,
+            force_loop=force_loop,
+            min_count=1,
+        )
+
+        mode = "point" if as_points else "smoothed"
+        path = "loop" if force_loop else "tree_query"
+        expected = {
+            "Particles.get_los_column_density.prepare_inputs": "Python",
+            "Particles.get_los_column_density.compute": "Python",
+            "Particles.get_los_column_density.attach_units": "Python",
+            f"column_density.{mode}.{path}": "C",
+            f"column_density.{mode}.pack_output": "C",
+        }
+        if not force_loop:
+            expected[f"column_density.{mode}.tree_cleanup"] = "C"
+            expected["construct_cell_tree"] = "C"
+
+        names = set(get_operation_names())
+        assert expected.keys() <= names
+        for operation, source in expected.items():
+            _, count, measured_source = get_operation_timings(operation)
+            assert count == 1
+            assert measured_source == source
 
     def test_column_density_zero_particle_returns_unitful_array(
         self, one_gas_front

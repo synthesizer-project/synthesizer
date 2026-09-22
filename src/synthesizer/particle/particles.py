@@ -1439,17 +1439,18 @@ class Particles:
             )
 
         def finalise(raw):
-            results = tuple(
-                unyt_array(
-                    raw[index],
-                    units,
-                    bypass_validation=True,
+            with timer("Particles.get_los_column_density.attach_units"):
+                results = tuple(
+                    unyt_array(
+                        raw[index],
+                        units,
+                        bypass_validation=True,
+                    )
+                    for index, units in enumerate(column_density_units)
                 )
-                for index, units in enumerate(column_density_units)
-            )
-            if output_attrs is not None:
-                for attr, result in zip(output_attrs, results):
-                    setattr(self, attr, result)
+                if output_attrs is not None:
+                    for attr, result in zip(output_attrs, results):
+                        setattr(self, attr, result)
             return results[0] if scalar_input else results
 
         # If have no particles return 0
@@ -1463,8 +1464,8 @@ class Particles:
         # Compute the column density. Smoothed input particles use a dedicated
         # extension path based on the overlap kernel table.
         if as_points:
-            col_den = compute_column_density(
-                *self._prepare_los_args(
+            with timer("Particles.get_los_column_density.prepare_inputs"):
+                los_args = self._prepare_los_args(
                     other_parts,
                     density_attrs,
                     kernel,
@@ -1474,9 +1475,11 @@ class Particles:
                     min_count,
                     nthreads,
                 )
-            )
+
+            with timer("Particles.get_los_column_density.compute"):
+                col_den = compute_column_density(*los_args)
         else:
-            with timer("Particles.get_los_column_density.prepare_smoothed"):
+            with timer("Particles.get_los_column_density.prepare_inputs"):
                 smoothed_args = self._prepare_smoothed_los_args(
                     other_parts,
                     density_attrs,
@@ -1488,7 +1491,7 @@ class Particles:
                     nthreads,
                 )
 
-            with timer("Particles.get_los_column_density.compute_smoothed"):
+            with timer("Particles.get_los_column_density.compute"):
                 col_den = compute_column_density_smoothed(*smoothed_args)
 
         return finalise(col_den)

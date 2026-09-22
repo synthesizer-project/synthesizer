@@ -351,7 +351,7 @@ static void los_loop(const Real *pos_i, const Real *pos_j, const Real *smls,
                      const int zdim, const Real threshold,
                      const int nthreads) {
 
-  tic("los_loop");
+  tic("column_density.point.loop");
 
 #ifdef WITH_OPENMP
 
@@ -376,7 +376,7 @@ static void los_loop(const Real *pos_i, const Real *pos_j, const Real *smls,
                         kdim, trunc_qdim, zdim, threshold);
 
 #endif
-  toc("los_loop");
+  toc("column_density.point.loop");
 }
 
 /**
@@ -657,7 +657,7 @@ static void los_tree(struct cell<Real> *root, const Real *pos_i,
                      const int trunc_qdim, const int zdim,
                      const Real threshold, const int nthreads) {
 
-  tic("los_tree");
+  tic("column_density.point.tree_query");
 
 #ifdef WITH_OPENMP
 
@@ -681,7 +681,7 @@ static void los_tree(struct cell<Real> *root, const Real *pos_i,
                         surf_dens, npart_i, kdim, trunc_qdim, zdim, threshold);
 
 #endif
-  toc("los_tree");
+  toc("column_density.point.tree_query");
 }
 
 /**
@@ -758,12 +758,16 @@ static PyObject *compute_column_density_impl(
                    surf_dens_accum.data(), npart_i, kdim, trunc_qdim, zdim,
                    threshold, nthreads);
 
+    tic("column_density.point.tree_cleanup");
     cleanup_cell_tree<Real>(root);
+    toc("column_density.point.tree_cleanup");
   }
 
+  tic("column_density.point.pack_output");
   for (int i = 0; i < nattrs * npart_i; i++) {
     surf_dens[i] = static_cast<Real>(surf_dens_accum[i]);
   }
+  toc("column_density.point.pack_output");
 
   return Py_BuildValue("N", np_surf_dens);
 }
@@ -803,8 +807,6 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
           &np_pos_j, &np_smls, &py_surf_den_vals, &npart_i, &npart_j, &kdim,
           &trunc_qdim, &zdim, &threshold, &force_loop, &min_count, &nthreads))
     return NULL;
-
-  tic("compute_column_density");
 
   /* Quick check to make sure our inputs are valid. */
   if (npart_i == 0) {
@@ -1222,7 +1224,7 @@ static void los_loop_smoothed(const Real *pos_i, const Real *input_smls,
                               const int udim, const int etadim,
                               const Real threshold, const int nthreads) {
 
-  tic("Loop surface density calculation with smoothed inputs");
+  tic("column_density.smoothed.loop");
 
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
@@ -1244,7 +1246,7 @@ static void los_loop_smoothed(const Real *pos_i, const Real *input_smls,
                                  etadim, threshold);
 #endif
 
-  toc("Loop surface density calculation with smoothed inputs");
+  toc("column_density.smoothed.loop");
 }
 
 /**
@@ -1371,7 +1373,7 @@ static void los_tree_smoothed(struct cell<Real> *root, const Real *pos_i,
                               const int qdim, const int udim, const int etadim,
                               const Real threshold, const int nthreads) {
 
-  tic("Recursive surface density calculation with smoothed inputs");
+  tic("column_density.smoothed.tree_query");
 
 #ifdef WITH_OPENMP
   if (nthreads > 1) {
@@ -1391,7 +1393,7 @@ static void los_tree_smoothed(struct cell<Real> *root, const Real *pos_i,
       surf_den_vals, surf_dens, npart_i, qdim, udim, etadim, threshold);
 #endif
 
-  toc("Recursive surface density calculation with smoothed inputs");
+  toc("column_density.smoothed.tree_query");
 }
 
 /**
@@ -1464,18 +1466,15 @@ static PyObject *compute_column_density_smoothed_impl(
   if (force_loop || npart_j < min_count) {
 
     /* Use the simple pairwise loop over input and source particles. */
-    tic("Dispatching smoothed LOS loop path");
     los_loop_smoothed<Real>(pos_i, input_smls, pos_j, smls, surf_den_vals,
                             overlap_kernel, q_grid, u_grid, eta_grid,
                             surf_dens_accum.data(), npart_i, npart_j, qdim,
                             udim, etadim, threshold, nthreads);
-    toc("Dispatching smoothed LOS loop path");
 
   } else {
 
     /* Allocate the root cell. The tree construction routine will dynamically
      * allocate progeny cells beneath this root as required. */
-    tic("Constructing smoothed LOS source tree");
     int ncells = 1;
     int maxdepth = MAX_DEPTH;
     struct cell<Real> *root = new struct cell<Real>;
@@ -1483,27 +1482,24 @@ static PyObject *compute_column_density_smoothed_impl(
     /* Construct the source-particle cell tree. */
     construct_cell_tree<Real>(pos_j, smls, surf_den_vals[0], npart_j, root,
                               ncells, maxdepth, min_count);
-    toc("Constructing smoothed LOS source tree");
 
     /* Calculate the smoothed LOS surface densities using the tree. */
-    tic("Dispatching smoothed LOS tree path");
     los_tree_smoothed<Real>(root, pos_i, input_smls, overlap_kernel, q_grid,
                             u_grid, eta_grid, surf_den_vals,
                             surf_dens_accum.data(), npart_i, qdim, udim,
                             etadim, threshold, nthreads);
-    toc("Dispatching smoothed LOS tree path");
 
     /* Clean up the source-particle cell tree. */
-    tic("Cleaning up smoothed LOS source tree");
+    tic("column_density.smoothed.tree_cleanup");
     cleanup_cell_tree<Real>(root);
-    toc("Cleaning up smoothed LOS source tree");
+    toc("column_density.smoothed.tree_cleanup");
   }
 
+  tic("column_density.smoothed.pack_output");
   for (int i = 0; i < nattrs * npart_i; i++) {
     surf_dens[i] = static_cast<Real>(surf_dens_accum[i]);
   }
-
-  toc("Calculating smoothed surface densities");
+  toc("column_density.smoothed.pack_output");
 
   return Py_BuildValue("N", np_surf_dens);
 }
@@ -1545,8 +1541,6 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
                         &force_loop, &min_count, &nthreads)) {
     return NULL;
   }
-
-  tic("Calculating smoothed surface densities");
 
   /* Quick check to make sure our inputs are valid. */
   if (npart_i == 0) {
