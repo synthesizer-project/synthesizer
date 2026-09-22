@@ -17,10 +17,11 @@ We have implemented a number of performance optimisations, including:
 Build options
 ~~~~~~~~~~~~~
 
-By default the extensions are compiled for baseline x86-64, which means SSE2
-and 128-bit vectors. Every current HPC CPU has AVX2 or wider, so the default
-build leaves half the vector width unused. Set ``NATIVE=1`` to compile for the
-instruction set of the machine doing the build:
+By default the extensions are compiled for the baseline target of whatever
+architecture you are on. On x86-64 that means SSE2 and 128-bit vectors, while
+every current HPC CPU has AVX2 or wider, so the default build leaves half the
+vector width unused. Set ``NATIVE=1`` to compile for the instruction set of the
+machine doing the build:
 
 .. code-block:: bash
 

@@ -117,7 +117,7 @@ INCLUDES = os.environ.get("EXTRA_INCLUDES", "")
 WITH_OPENMP = os.environ.get("WITH_OPENMP", "")
 WITH_DEBUGGING_CHECKS = "ENABLE_DEBUGGING_CHECKS" in os.environ
 RUTHLESS = "RUTHLESS" in os.environ
-NATIVE = "NATIVE" in os.environ
+NATIVE = os.environ.get("NATIVE", "0").lower() in ("1", "true", "yes", "on")
 ATOMIC_TIMING = "ATOMIC_TIMING" in os.environ
 
 # Define the log file
@@ -228,10 +228,11 @@ if RUTHLESS:
         default_compile_flags.append("-Wextra")
 
 # Target the build machine's own instruction set when asked. Without this the
-# compiler emits baseline x86-64, i.e. SSE2 only: 128-bit vectors, half the
-# width of the AVX2 every current HPC CPU has. The flag is opt-in because the
-# resulting binary will not run on an older CPU, which matters when the login
-# node and the compute nodes differ or when a wheel is being built.
+# compiler emits the baseline for the architecture, which on x86-64 means SSE2
+# only: 128-bit vectors, half the width of the AVX2 every current HPC CPU has.
+# The flag is opt-in because the resulting binary will not run on an older CPU,
+# which matters when the login node and the compute nodes differ or when a
+# wheel is being built.
 if NATIVE:
     if sys.platform == "win32":
         arch_flags = ["/arch:AVX2"]
@@ -258,9 +259,10 @@ if not NATIVE and not any(
     f.startswith(("-march", "-mcpu", "-mavx", "/arch")) for f in CFLAGS.split()
 ):
     logger.info(
-        "### No architecture flag set: building for baseline x86-64 (SSE2). "
-        "Use NATIVE=1, or set an explicit -march in CFLAGS, to use this "
-        "machine's vector instructions."
+        "### No architecture flag set: building for the baseline target of "
+        "this architecture, so machine-specific vector instructions are "
+        "unused. Set NATIVE=1, or an explicit target in CFLAGS, to enable "
+        "them."
     )
 
 # Get user specified flags
