@@ -30,7 +30,7 @@ from synthesizer.extensions.particle_spectra import (
     compute_particle_seds,
 )
 from synthesizer.synth_warnings import warn
-from synthesizer.units import get_quantity_unit, unyt_to_ndview
+from synthesizer.units import get_quantity_unit
 from synthesizer.utils.operation_timers import timed, timer
 from synthesizer.utils.precision import resolve_out_dtype
 
@@ -173,7 +173,10 @@ class Extractor(ABC):
                 and isinstance(value, (unyt_array, unyt_quantity))
                 and value.units != units
             ):
-                value = unyt_to_ndview(value, units)
+                # Convert out of place: this value came off the emitter, so
+                # it is a view onto the emitter's stored array and converting
+                # it in place would rewrite the particle data.
+                value = value.to(units).ndview
             elif isinstance(value, (unyt_array, unyt_quantity)):
                 value = value.value
 
@@ -1216,19 +1219,28 @@ class ParticleExtractor(Extractor):
                 self._grid.grid_name
             ] = grid_weights
 
-        # Make the LineCollection objects themselves
-        part_line = LineCollection(
-            line_ids=self._grid.line_ids,
-            lam=self._line_lams,
-            lum=lum * erg / s,
-            cont=cont * erg / s / Hz,
-        )
-        integrated_line = LineCollection(
-            line_ids=self._grid.line_ids,
-            lam=self._line_lams,
-            lum=integrated_lum * erg / s,
-            cont=integrated_cont * erg / s / Hz,
-        )
+        # Make the LineCollection objects themselves. The arrays come straight
+        # back from the extensions with nothing else referencing them, so the
+        # units go on as a view: `lum * erg / s` would copy a whole
+        # (nparticle, nline) array, four times over, as the Sed path above
+        # already avoids.
+        with timer("ParticleExtractor.generate_line.build_collections"):
+            part_line = LineCollection(
+                line_ids=self._grid.line_ids,
+                lam=self._line_lams,
+                lum=unyt_array(lum, erg / s, bypass_validation=True),
+                cont=unyt_array(cont, erg / s / Hz, bypass_validation=True),
+            )
+            integrated_line = LineCollection(
+                line_ids=self._grid.line_ids,
+                lam=self._line_lams,
+                lum=unyt_array(
+                    integrated_lum, erg / s, bypass_validation=True
+                ),
+                cont=unyt_array(
+                    integrated_cont, erg / s / Hz, bypass_validation=True
+                ),
+            )
 
         return part_line, integrated_line
 

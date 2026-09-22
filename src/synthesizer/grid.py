@@ -2286,14 +2286,18 @@ class Grid:
                 line_lum = interp_lum.reshape(coord_shape + (self.nlines,))
                 line_cont = interp_cont.reshape(coord_shape + (self.nlines,))
 
-                # Wrap in LineCollection object, ensuring correct unyt units
+                # Wrap in LineCollection object, ensuring correct unyt units.
+                # Convert out of place so nothing that might share these
+                # buffers is rewritten underneath us.
                 if isinstance(line_lum, unyt_array):
-                    line_lum.convert_to_units(erg / s)
+                    if line_lum.units != erg / s:
+                        line_lum = line_lum.to(erg / s)
                 else:
                     line_lum = unyt_array(line_lum, erg / s)
 
                 if isinstance(line_cont, unyt_array):
-                    line_cont.convert_to_units(erg / s / Hz)
+                    if line_cont.units != erg / s / Hz:
+                        line_cont = line_cont.to(erg / s / Hz)
                 else:
                     line_cont = unyt_array(line_cont, (erg / s / Hz))
 
