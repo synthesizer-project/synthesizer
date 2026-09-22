@@ -1,9 +1,11 @@
 """A test suite for testing the Sed class."""
 
 import numpy as np
+import pytest
 from astropy.cosmology import Planck18
+from synthesizer.extensions.observed_spectra import compute_fnu
 from synthesizer.extensions.reductions import reduce_particle_spectra
-from unyt import Hz, angstrom, cm, erg, nJy, pc, s
+from unyt import Hz, angstrom, c, cm, erg, nJy, pc, s
 
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emission_models.attenuation import PowerLaw
@@ -279,3 +281,34 @@ def test_ionising_photon_production_rate_multidimensional():
     sed1d = Sed(lam, np.ones(500) * erg / s / Hz)
     rate1d = sed1d.calculate_ionising_photon_production_rate()
     assert np.isclose(rates[0].value, rate1d.value)
+
+
+def test_compute_fnu_rejects_non_contiguous_inputs():
+    """Strided inputs must be rejected rather than silently misread.
+
+    The kernel walks lnu/lam/nu as flat buffers, so a strided view would
+    read the wrong elements. ``PyArray_FromAny`` with ``ENSUREARRAY`` only
+    guarantees a base ndarray, not a contiguous one.
+    """
+    lam = np.linspace(1000.0, 2000.0, 10)
+    nu = (c / (lam * angstrom)).to(Hz).value
+    lnu = np.ones((4, 10))
+    out = np.zeros((4, 10))
+
+    def call(lnu_arr, lam_arr, nu_arr):
+        compute_fnu(
+            lnu_arr, lam_arr, nu_arr, 1.0, 1.0, 1, out, None, None, None
+        )
+
+    # The contiguous case is the control: it must not raise.
+    call(lnu, lam, nu)
+
+    # Slicing the last axis of a 2D array gives a strided view.
+    with pytest.raises(ValueError, match="lnu must be C-contiguous"):
+        call(np.ones((4, 20))[:, ::2], lam, nu)
+
+    with pytest.raises(ValueError, match="lam must be C-contiguous"):
+        call(lnu, np.linspace(1000.0, 2000.0, 20)[::2], nu)
+
+    with pytest.raises(ValueError, match="nu must be C-contiguous"):
+        call(lnu, lam, np.linspace(1e14, 1e15, 20)[::2])
