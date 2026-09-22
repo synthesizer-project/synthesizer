@@ -20,9 +20,18 @@
 #include "timers.h"
 #include "timers_init.h"
 
-/* Vectorisation hint for the element loops. Under OpenMP this is "omp simd",
- * which on GCC/glibc also lets the transcendental calls below be replaced by
- * their vector libm equivalents. It expands to nothing without OpenMP. */
+/* Vectorisation hint for the per element loops below.
+ *
+ * This has to be a macro rather than a bare "#pragma omp simd" because the
+ * pragma must disappear entirely in builds without OpenMP, where the compiler
+ * would otherwise warn about an unknown pragma, and -Werror builds would fail.
+ * _Pragma is the form of #pragma that can be produced by a macro.
+ *
+ * It matters most for the attenuation kernels: on GCC with glibc, marking the
+ * loop simd is what allows the scalar exp call to be replaced with its vector
+ * libm equivalent, which is worth roughly 2x there. That substitution also
+ * needs an architecture flag, so it only happens in builds that pass one (see
+ * NATIVE in setup.py). */
 #ifdef WITH_OPENMP
 #define SYNTH_SIMD _Pragma("omp simd")
 #else

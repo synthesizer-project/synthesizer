@@ -34,16 +34,6 @@
 #include "timers_init.h"
 #endif
 
-/* The combine loop below is emitted once per specialised input count, so the
- * OpenMP directive has to come from a macro. It expands to nothing when the
- * build has no OpenMP support. */
-#ifdef WITH_OPENMP
-#define SYNTH_COMBINE_PRAGMA \
-  _Pragma("omp parallel for num_threads(nthr) schedule(static)")
-#else
-#define SYNTH_COMBINE_PRAGMA
-#endif
-
 /**
  * @brief Return a value, or zero when it is NaN.
  *
@@ -54,6 +44,88 @@
 template <typename Real>
 static inline Real nan_to_zero(Real value) {
   return is_nan_bits(value) ? static_cast<Real>(0) : value;
+}
+
+/**
+ * @brief Sum a fixed number of equally shaped arrays, ignoring NaNs.
+ *
+ * N is a template parameter rather than an argument so the compiler knows the
+ * trip count of the inner loop and can unroll it, which is what lets the outer
+ * loop vectorise. With a runtime count it can do neither.
+ *
+ * @tparam N The number of input arrays, known at compile time.
+ * @tparam Real The floating-point type of the inputs and output.
+ *
+ * @param ins: The input arrays.
+ * @param output: The destination array.
+ * @param size: The number of elements in each array.
+ * @param nthreads: The number of threads to use.
+ */
+template <int N, typename Real>
+static void combine_n_arrays(const Real *const *ins, Real *output, size_t size,
+                             int nthreads) {
+  const Real *in[N];
+  for (int k = 0; k < N; k++) {
+    in[k] = ins[k];
+  }
+
+#ifdef WITH_OPENMP
+#pragma omp parallel for num_threads(nthreads) schedule(static)
+#endif
+  for (npy_intp index = 0; index < (npy_intp)size; ++index) {
+    Real total = 0;
+    for (int k = 0; k < N; k++) {
+      total += nan_to_zero(in[k][index]);
+    }
+    output[index] = total;
+  }
+}
+
+/**
+ * @brief Sum a runtime number of equally shaped arrays, ignoring NaNs.
+ *
+ * Dispatches to a version compiled for the exact input count where there is
+ * one; see combine_n_arrays for why that matters. Larger counts fall through
+ * to a generic loop.
+ *
+ * @tparam Real The floating-point type of the inputs and output.
+ *
+ * @param ins: The input arrays.
+ * @param nin: The number of input arrays.
+ * @param output: The destination array.
+ * @param size: The number of elements in each array.
+ * @param nthreads: The number of threads to use.
+ */
+template <typename Real>
+static void combine_arrays(const Real *const *ins, int nin, Real *output,
+                           size_t size, int nthreads) {
+  switch (nin) {
+    case 1:
+      return combine_n_arrays<1>(ins, output, size, nthreads);
+    case 2:
+      return combine_n_arrays<2>(ins, output, size, nthreads);
+    case 3:
+      return combine_n_arrays<3>(ins, output, size, nthreads);
+    case 4:
+      return combine_n_arrays<4>(ins, output, size, nthreads);
+    case 5:
+      return combine_n_arrays<5>(ins, output, size, nthreads);
+    case 6:
+      return combine_n_arrays<6>(ins, output, size, nthreads);
+    default:
+      break;
+  }
+
+#ifdef WITH_OPENMP
+#pragma omp parallel for num_threads(nthreads) schedule(static)
+#endif
+  for (npy_intp index = 0; index < (npy_intp)size; ++index) {
+    Real total = 0;
+    for (int k = 0; k < nin; k++) {
+      total += nan_to_zero(ins[k][index]);
+    }
+    output[index] = total;
+  }
 }
 
 /**
@@ -395,48 +467,10 @@ PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
           input_ptrs.push_back(data_ptr<const Real>(array));
         }
 
-        /* The input count is a runtime value and the NaN test was a
-         * branch, which together stopped the loop vectorising. Specialising
-         * the small counts and selecting rather than branching lets it
-         * vectorise. */
-        const Real *const *ins = input_ptrs.data();
-        const int nin = (int)ninputs;
-        const int nthr = nthreads > 1 ? nthreads : 1;
-        (void)nthr; /* Only read by the OpenMP directive. */
-
-#define SYNTH_COMBINE_INPUTS(N)                                       \
-  case N: {                                                           \
-    const Real *in[N];                                                \
-    for (int k = 0; k < N; k++) in[k] = ins[k];                       \
-    SYNTH_COMBINE_PRAGMA                                              \
-    for (npy_intp index = 0; index < (npy_intp)size; ++index) {       \
-      Real total = 0;                                                 \
-      for (int k = 0; k < N; k++) total += nan_to_zero(in[k][index]); \
-      output[index] = total;                                          \
-    }                                                                 \
-    break;                                                            \
-  }
-
-        switch (nin) {
-          SYNTH_COMBINE_INPUTS(1)
-          SYNTH_COMBINE_INPUTS(2)
-          SYNTH_COMBINE_INPUTS(3)
-          SYNTH_COMBINE_INPUTS(4)
-          SYNTH_COMBINE_INPUTS(5)
-          SYNTH_COMBINE_INPUTS(6)
-          default: {
-            SYNTH_COMBINE_PRAGMA
-            for (npy_intp index = 0; index < (npy_intp)size; ++index) {
-              Real total = 0;
-              for (int k = 0; k < nin; k++) {
-                total += nan_to_zero(ins[k][index]);
-              }
-              output[index] = total;
-            }
-            break;
-          }
-        }
-#undef SYNTH_COMBINE_INPUTS
+        /* The input count is a runtime value and the NaN test used to be a
+         * branch, which together stopped this loop vectorising. */
+        combine_arrays<Real>(input_ptrs.data(), (int)ninputs, output, size,
+                             nthreads > 1 ? nthreads : 1);
 
         npy_intp output_dims[2] = {nrow, nlam};
         return reinterpret_cast<PyObject *>(

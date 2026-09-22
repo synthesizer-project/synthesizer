@@ -20,7 +20,6 @@
 #include <Python.h>
 
 /* Local includes */
-#include "cell_accumulation.h"
 #include "cpp_to_python.h"
 #include "grid_props.h"
 #include "macros.h"
@@ -32,6 +31,106 @@
 #include "timers_init.h"
 #endif
 #include "weights.h"
+
+/**
+ * @brief Accumulate a fixed number of weighted grid rows into one output row.
+ *
+ * Computes out[ilam] = sum over the N cells of cells[i][ilam] * weights[i].
+ *
+ * N is a template parameter rather than an argument so the compiler knows the
+ * trip count of the inner loop. That lets it unroll the cell loop, which in
+ * turn lets it vectorise the wavelength loop: with a runtime count it can do
+ * neither, and the accumulation runs scalar at roughly a quarter of the
+ * memory bandwidth this access pattern can reach.
+ *
+ * @tparam N The number of contributing rows, known at compile time.
+ * @tparam SpecReal The floating-point type of the grid spectra.
+ * @tparam OutT The floating-point type of the output buffer.
+ *
+ * @param cells: The grid spectra rows contributing to this particle.
+ * @param weights: The weight applied to each contributing row.
+ * @param out: The destination row.
+ * @param nlam: The number of wavelength bins.
+ */
+template <int N, typename SpecReal, typename OutT>
+static void accumulate_n_cells(const SpecReal *const *cells,
+                               const OutT *weights, OutT *__restrict out,
+                               size_t nlam) {
+
+  /* Copy the pointers and weights into fixed size local arrays so the
+   * compiler can see they do not change across the wavelength loop. */
+  const SpecReal *c[N];
+  OutT w[N];
+  for (int i = 0; i < N; i++) {
+    c[i] = cells[i];
+    w[i] = weights[i];
+  }
+
+#pragma omp simd
+  for (size_t ilam = 0; ilam < nlam; ilam++) {
+    OutT spec_val = static_cast<OutT>(0);
+    for (int i = 0; i < N; i++) {
+      spec_val += static_cast<OutT>(c[i][ilam]) * w[i];
+    }
+    out[ilam] = spec_val;
+  }
+}
+
+/**
+ * @brief Accumulate the weighted grid rows of one particle.
+ *
+ * Computes out[ilam] = sum_icell cells[icell][ilam] * weights[icell].
+ *
+ * A CIC patch contributes at most 2^ndim cells and cells with a zero fraction
+ * are dropped, so the count is only known at runtime. Dispatching on it here
+ * hands each case to a version compiled for that exact count; see
+ * accumulate_n_cells for why that matters. Grids with more dimensions than we
+ * specialise for fall through to a generic loop.
+ *
+ * @tparam SpecReal The floating-point type of the grid spectra.
+ * @tparam OutT The floating-point type of the output buffer.
+ *
+ * @param cells: The grid spectra rows contributing to this particle.
+ * @param weights: The weight applied to each contributing row.
+ * @param ncells: The number of contributing rows (1 to 2^ndim).
+ * @param out: The destination row.
+ * @param nlam: The number of wavelength bins.
+ */
+template <typename SpecReal, typename OutT>
+static void accumulate_cell_spectra(const SpecReal *const *cells,
+                                    const OutT *weights, int ncells,
+                                    OutT *__restrict out, size_t nlam) {
+  switch (ncells) {
+    case 1:
+      return accumulate_n_cells<1>(cells, weights, out, nlam);
+    case 2:
+      return accumulate_n_cells<2>(cells, weights, out, nlam);
+    case 3:
+      return accumulate_n_cells<3>(cells, weights, out, nlam);
+    case 4:
+      return accumulate_n_cells<4>(cells, weights, out, nlam);
+    case 5:
+      return accumulate_n_cells<5>(cells, weights, out, nlam);
+    case 6:
+      return accumulate_n_cells<6>(cells, weights, out, nlam);
+    case 7:
+      return accumulate_n_cells<7>(cells, weights, out, nlam);
+    case 8:
+      return accumulate_n_cells<8>(cells, weights, out, nlam);
+    default:
+      break;
+  }
+
+  /* More cells than we specialise for (grids with ndim > 3). */
+  for (size_t ilam = 0; ilam < nlam; ilam++) {
+    OutT spec_val = static_cast<OutT>(0);
+    for (int icell = 0; icell < ncells; icell++) {
+      spec_val = std::fma(static_cast<OutT>(cells[icell][ilam]),
+                          weights[icell], spec_val);
+    }
+    out[ilam] = spec_val;
+  }
+}
 
 /**
  * @brief This calculates particle spectra using a cloud in cell approach.
