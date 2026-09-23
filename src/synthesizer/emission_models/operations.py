@@ -7,6 +7,8 @@ model. The correct operation is instantiated in EmissionMode._init_operations.
 These classes should not be used directly.
 """
 
+import os
+
 import numpy as np
 from unyt import Hz, erg, s, unyt_array
 
@@ -887,6 +889,9 @@ class Combination:
         )
 
         if this_model.per_particle:
+            if nthreads == -1:
+                nthreads = os.cpu_count() or 1
+
             out_lnu = combine_spectra_2d(arrays, nthreads)
             out_spec = Sed(
                 emission_model.lam,
