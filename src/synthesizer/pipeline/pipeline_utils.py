@@ -1,6 +1,5 @@
 """A submodule with helpers for writing out Synthesizer pipeline results."""
 
-import copy
 import inspect
 import sys
 from collections import defaultdict
@@ -106,9 +105,15 @@ def accumulate_pipeline_results_from_child(parent, *children):
         if current is None:
             return other
 
-        # Handle the dictionary recursive case
+        # Handle the dictionary recursive case. A shallow copy is enough:
+        # every entry this loop touches is replaced by whatever combine
+        # returns, and the entries it does not touch are carried over
+        # unchanged, so nothing here ever mutates a value in place. Copying
+        # deeply instead duplicated the parent's entire accumulated state on
+        # every child merged, which is quadratic in the number of children and
+        # was the dominant cost of running with max_npart set.
         if isinstance(current, dict):
-            combined = copy.deepcopy(current)
+            combined = dict(current)
             for key, value in other.items():
                 combined[key] = combine(combined.get(key), value)
             return combined
