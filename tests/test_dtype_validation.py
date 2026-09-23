@@ -131,7 +131,7 @@ class TestUnsupportedDtypesAreRejected:
                 pos_i,
                 pos_j,
                 smls,
-                surf_den_vals,
+                (surf_den_vals,),
                 1,
                 1,
                 8,
