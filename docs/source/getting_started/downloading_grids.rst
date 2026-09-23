@@ -42,4 +42,6 @@ To reproduce a specific published version, select one dataset and pin its releas
 
     synthesizer-download --dataset grid-one --release 42
 
+The `Syndex documentation <https://synthesizer-project.org/syndex/docs/>`_ describes what each type of dataset holds, how to cite it, and how to contribute your own.
+
 For development and testing, ``SYNTHESIZER_DATA_API_URL`` overrides the catalogue API host.
