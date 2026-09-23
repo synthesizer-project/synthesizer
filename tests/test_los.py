@@ -2,8 +2,14 @@
 
 import numpy as np
 import pytest
+from synthesizer.extensions.timers import (
+    get_operation_names,
+    get_operation_timings,
+    reset_timings,
+)
 from unyt import Mpc, Msun, Myr, pc, unyt_array
 
+from synthesizer import check_atomic_timing
 from synthesizer.exceptions import InconsistentArguments
 from synthesizer.kernel_functions import Kernel
 from synthesizer.particle import Galaxy, Gas, Stars
@@ -400,6 +406,129 @@ class TestLOSColumnDensity:
         assert col_den.units == expected_units
         assert one_star.sigmalos_mass.units == expected_units
         assert col_den is one_star.sigmalos_mass
+
+    @pytest.mark.parametrize(
+        "as_points", [True, False], ids=["point", "smooth"]
+    )
+    @pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+    def test_multiple_column_densities_match_scalar_calls(
+        self, one_star, one_gas_front, as_points, force_loop
+    ):
+        """Multiple properties share one traversal without changing values."""
+        one_gas_front.mass_lengths = one_gas_front.masses * Mpc
+        kernel = self._kernel()
+        kwargs = {
+            "as_points": as_points,
+            "force_loop": force_loop,
+            "min_count": 1,
+        }
+
+        expected_mass = one_star.get_los_column_density(
+            one_gas_front, "masses", kernel, **kwargs
+        )
+        expected_mass_length = one_star.get_los_column_density(
+            one_gas_front, "mass_lengths", kernel, **kwargs
+        )
+        measured = one_star.get_los_column_density(
+            one_gas_front,
+            ["masses", "mass_lengths"],
+            kernel,
+            column_density_attr=["sigmalos_mass", "sigmalos_mass_length"],
+            **kwargs,
+        )
+
+        assert isinstance(measured, tuple)
+        assert len(measured) == 2
+        assert measured[0].units == expected_mass.units
+        assert measured[1].units == expected_mass_length.units
+        np.testing.assert_allclose(measured[0], expected_mass)
+        np.testing.assert_allclose(measured[1], expected_mass_length)
+        assert one_star.sigmalos_mass is measured[0]
+        assert one_star.sigmalos_mass_length is measured[1]
+
+    def test_multiple_column_density_attrs_must_match(
+        self, one_star, one_gas_front
+    ):
+        """Multiple properties require matching output names."""
+        with pytest.raises(InconsistentArguments, match="must match"):
+            one_star.get_los_column_density(
+                one_gas_front,
+                ["masses", "dust_masses"],
+                self._kernel(),
+                column_density_attr="sigmalos",
+            )
+
+        with pytest.raises(InconsistentArguments, match="at least one"):
+            one_star.get_los_column_density(
+                one_gas_front,
+                [],
+                self._kernel(),
+            )
+
+    def test_multiple_column_densities_empty_source(self, one_star):
+        """Empty sources return one unitful result per property."""
+        empty_gas = Gas(
+            masses=np.array([]) * Msun,
+            metallicities=np.array([]),
+            redshift=0.0,
+            coordinates=np.empty((0, 3)) * Mpc,
+            dust_to_metal_ratio=1.0,
+            smoothing_lengths=np.array([]) * Mpc,
+        )
+
+        results = one_star.get_los_column_density(
+            empty_gas,
+            ["masses", "dust_masses"],
+            self._kernel(),
+        )
+
+        assert len(results) == 2
+        for result in results:
+            assert result.shape == (one_star.nparticles,)
+            assert np.all(result == 0.0)
+            assert hasattr(result, "units")
+
+    @pytest.mark.skipif(
+        not check_atomic_timing(),
+        reason="LOS phase timings require an ATOMIC_TIMING build.",
+    )
+    @pytest.mark.parametrize(
+        "as_points", [True, False], ids=["point", "smooth"]
+    )
+    @pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+    def test_column_density_phase_timers(
+        self, one_star, one_gas_front, as_points, force_loop
+    ):
+        """LOS calls expose one balanced entry for each executed phase."""
+        reset_timings()
+        one_star.get_los_column_density(
+            one_gas_front,
+            ["masses", "dust_masses"],
+            self._kernel(),
+            as_points=as_points,
+            force_loop=force_loop,
+            min_count=1,
+        )
+
+        mode = "point" if as_points else "smoothed"
+        path = "loop" if force_loop else "tree_query"
+        expected = {
+            "Particles.get_los_column_density.prepare_inputs": "Python",
+            "Particles.get_los_column_density.compute": "Python",
+            "Particles.get_los_column_density.attach_units": "Python",
+            f"column_density.{mode}.{path}": "C",
+            f"column_density.{mode}.pack_output": "C",
+        }
+        if not force_loop:
+            expected[f"column_density.{mode}.tree_cleanup"] = "C"
+            expected["construct_cell_tree"] = "C"
+
+        names = set(get_operation_names())
+        assert expected.keys() <= names
+        for operation, source in expected.items():
+            _, count, measured_source = get_operation_timings(operation)
+            assert count == 1
+            assert measured_source == source
 
     def test_column_density_zero_particle_returns_unitful_array(
         self, one_gas_front
@@ -1342,7 +1471,7 @@ class TestColumnDensityAccumulationPrecision:
             pos_i64,
             pos_j64,
             smls64,
-            surf_den_vals64,
+            (surf_den_vals64,),
             1,
             npart_j,
             kdim,
@@ -1356,7 +1485,11 @@ class TestColumnDensityAccumulationPrecision:
         result64 = compute_column_density(*args64)
 
         args32 = tuple(
-            arg.astype(np.float32) if isinstance(arg, np.ndarray) else arg
+            arg.astype(np.float32)
+            if isinstance(arg, np.ndarray)
+            else tuple(value.astype(np.float32) for value in arg)
+            if isinstance(arg, tuple)
+            else arg
             for arg in args64
         )
         result32 = compute_column_density(*args32)
@@ -1402,7 +1535,7 @@ class TestColumnDensityAccumulationPrecision:
             input_smls64,
             pos_j64,
             smls64,
-            surf_den_vals64,
+            (surf_den_vals64,),
             1,
             npart_j,
             qdim,
@@ -1416,7 +1549,11 @@ class TestColumnDensityAccumulationPrecision:
         result64 = compute_column_density_smoothed(*args64)
 
         args32 = tuple(
-            arg.astype(np.float32) if isinstance(arg, np.ndarray) else arg
+            arg.astype(np.float32)
+            if isinstance(arg, np.ndarray)
+            else tuple(value.astype(np.float32) for value in arg)
+            if isinstance(arg, tuple)
+            else arg
             for arg in args64
         )
         result32 = compute_column_density_smoothed(*args32)
@@ -1453,7 +1590,7 @@ class TestColumnDensityAccumulationPrecision:
             pos_i,
             pos_j,
             smls,
-            values,
+            (values,),
             pos_i.shape[0],
             pos_j.shape[0],
             proj_kernel.size,
@@ -1509,7 +1646,7 @@ class TestColumnDensityAccumulationPrecision:
             input_smls,
             pos_j,
             smls,
-            values,
+            (values,),
             pos_i.shape[0],
             pos_j.shape[0],
             q_grid.size,
