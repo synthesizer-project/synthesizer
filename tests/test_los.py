@@ -1662,3 +1662,109 @@ class TestColumnDensityAccumulationPrecision:
 
         assert threaded.dtype == dtype
         np.testing.assert_allclose(threaded, serial, rtol=0.0, atol=0.0)
+
+
+@pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+def test_column_density_supports_independent_dtypes(force_loop):
+    """Kernel, particle, value, and output precision can differ."""
+    from synthesizer.extensions.column_density import compute_column_density
+
+    kernel_obj = Kernel(name="uniform", binsize=16)
+    kernel = np.ascontiguousarray(kernel_obj.get_kernel(), dtype=np.float32)
+    truncated = np.ascontiguousarray(
+        kernel_obj.get_truncated_los_kernel()[0], dtype=np.float32
+    )
+    pos_i = np.ascontiguousarray([[0.0, 0.0, 2.0]], dtype=np.float64)
+    pos_j = np.ascontiguousarray(
+        [[0.0, 0.0, 0.0], [0.1, 0.0, 1.0]], dtype=np.float64
+    )
+    smls = np.ascontiguousarray([0.5, 0.5], dtype=np.float64)
+    values = np.ascontiguousarray([2.0, 3.0], dtype=np.float32)
+
+    result = compute_column_density(
+        kernel,
+        truncated,
+        pos_i,
+        pos_j,
+        smls,
+        (values,),
+        1,
+        2,
+        kernel.size,
+        truncated.shape[0],
+        truncated.shape[1],
+        1.0,
+        force_loop,
+        1,
+        1,
+        np.float64,
+    )
+
+    assert result.dtype == np.float64
+    assert result[0, 0] > 0.0
+
+
+def test_column_density_respects_output_dtype(one_star, one_gas_front):
+    """Public LOS API forwards independent output precision."""
+    result = one_star.get_los_column_density(
+        one_gas_front,
+        "masses",
+        Kernel(name="uniform", binsize=16),
+        out_dtype=np.float32,
+    )
+
+    assert result.dtype == np.float32
+
+
+@pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+def test_smoothed_column_density_supports_independent_dtypes(force_loop):
+    """Smoothed LOS dispatch also separates all precision groups."""
+    from synthesizer.extensions.column_density import (
+        compute_column_density_smoothed,
+    )
+
+    kernel_obj = Kernel(
+        name="uniform",
+        binsize=16,
+        overlap_q_binsize=8,
+        overlap_u_binsize=8,
+        overlap_eta_binsize=8,
+        overlap_build_ndim=4,
+    )
+    overlap_arrays = tuple(
+        np.ascontiguousarray(array, dtype=np.float32)
+        for array in kernel_obj.get_overlap_kernel()
+    )
+    overlap, q_grid, u_grid, eta_grid = overlap_arrays
+    pos_i = np.ascontiguousarray([[0.0, 0.0, 2.0]], dtype=np.float64)
+    input_smls = np.ascontiguousarray([0.25], dtype=np.float64)
+    pos_j = np.ascontiguousarray(
+        [[0.0, 0.0, 0.0], [0.1, 0.0, 1.0]], dtype=np.float64
+    )
+    smls = np.ascontiguousarray([0.5, 0.5], dtype=np.float64)
+    values = np.ascontiguousarray([2.0, 3.0], dtype=np.float32)
+
+    result = compute_column_density_smoothed(
+        overlap,
+        q_grid,
+        u_grid,
+        eta_grid,
+        pos_i,
+        input_smls,
+        pos_j,
+        smls,
+        (values,),
+        1,
+        2,
+        q_grid.size,
+        u_grid.size,
+        eta_grid.size,
+        1.0,
+        force_loop,
+        1,
+        1,
+        np.float64,
+    )
+
+    assert result.dtype == np.float64
+    assert result[0, 0] > 0.0
