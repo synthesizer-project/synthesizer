@@ -367,6 +367,29 @@ class TestLineCollectionOperations:
             isinstance(line, LineCollection) for line in collected_lines
         )
 
+    def test_keys(self, simple_line_collection):
+        """Test the dict-like keys() method."""
+        assert list(simple_line_collection.keys()) == [
+            "O III 5007 A",
+            "H 1 6563 A",
+        ]
+
+    def test_items(self, simple_line_collection):
+        """Test the dict-like items() method."""
+        items = list(simple_line_collection.items())
+        assert [line_id for line_id, _ in items] == [
+            "O III 5007 A",
+            "H 1 6563 A",
+        ]
+        for line_id, line in items:
+            assert isinstance(line, LineCollection)
+            assert line.line_ids[0] == line_id
+
+    def test_contains(self, simple_line_collection):
+        """Test the dict-like __contains__ method."""
+        assert "O III 5007 A" in simple_line_collection
+        assert "not a line" not in simple_line_collection
+
 
 class TestLineCollectionFlux:
     """Test flux calculation methods."""
