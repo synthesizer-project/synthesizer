@@ -29,6 +29,7 @@ from unyt import Mpc, Msun, Myr, km, s, unyt_quantity, yr
 from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
 from synthesizer.grid import Grid
+from synthesizer.mesh import MeshableComponent
 from synthesizer.parametric import SFH
 from synthesizer.parametric import Stars as Para_Stars
 from synthesizer.particle.particles import Particles
@@ -127,7 +128,7 @@ def _evaluate_md_on_grid(metal_dist_func, metallicities, nsub=100):
     return metal_dist
 
 
-class Stars(Particles, StarsComponent):
+class Stars(Particles, StarsComponent, MeshableComponent):
     """The base Stars class.
 
     This contains all data a collection of stars could contain. It inherits
@@ -171,7 +172,13 @@ class Stars(Particles, StarsComponent):
             The escape fractions of each stellar particle (i.e. the fraction of
             incident photons that escape the galaxy unreprocessed by the
             interstellar medium).
+        meshes (Meshes):
+            Attributes deposited onto a shared mesh (see ``get_meshes``), or
+            None if no meshes have been made.
     """
+
+    # Weight intensive mesh fields by the initial masses by default
+    _mesh_default_weight = "initial_masses"
 
     # Define the allowed attributes
     attrs = [
@@ -381,6 +388,9 @@ class Stars(Particles, StarsComponent):
         # to a parametric galaxy
         self.sfzh = None
         self.sfh = None
+
+        # Meshes of stellar attributes, populated by get_meshes
+        self.meshes = None
 
     def get_sfr(self, timescale=10 * Myr):
         """Return the star formation rate of the stellar particles.

@@ -20,6 +20,7 @@ from unyt import Mpc, Msun, km, s
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
+from synthesizer.mesh import MeshableComponent
 from synthesizer.particle.particles import Particles
 from synthesizer.particle.resample_utils import (
     resample_by_mode,
@@ -38,7 +39,7 @@ from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.util_funcs import combine_arrays
 
 
-class Gas(Particles, Component):
+class Gas(Particles, Component, MeshableComponent):
     """The particle Gas class.
 
     This contains all data a collection of gas particles
@@ -75,6 +76,9 @@ class Gas(Particles, Component):
         star_forming (np.ndarray of bool):
             A boolean array indicating whether each gas particle is
             star forming or not.
+        meshes (Meshes):
+            Attributes deposited onto a shared mesh (see ``get_meshes``), or
+            None if no meshes have been made.
     """
 
     # Define the allowed attributes
@@ -219,6 +223,9 @@ class Gas(Particles, Component):
 
             self.dust_to_metal_ratio[self.dust_masses == 0.0] = 0.0
             self.dust_to_metal_ratio[self.metallicities == 0.0] = 0.0
+
+        # Meshes of gas attributes, populated by get_meshes
+        self.meshes = None
 
         # Check the arguments we've been given
         self._check_gas_args()
