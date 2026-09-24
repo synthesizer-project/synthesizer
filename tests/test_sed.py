@@ -3,17 +3,17 @@
 import numpy as np
 import pytest
 from astropy.cosmology import Planck18
+from synthesizer.extensions.observed_spectra import compute_fnu
+from synthesizer.extensions.reductions import (
+    combine_spectra_2d,
+    reduce_particle_spectra,
+)
 from unyt import Hz, angstrom, c, cm, erg, nJy, pc, s
 
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.emissions import Sed
 from synthesizer.emissions.sed import Sed, integrate_particle_sed
-from synthesizer.extensions.observed_spectra import compute_fnu
-from synthesizer.extensions.reductions import (
-    combine_spectra_2d,
-    reduce_particle_spectra,
-)
 
 
 def test_sed_empty(empty_sed):
@@ -302,8 +302,8 @@ def test_compute_fnu_rejects_non_contiguous_inputs():
     """Strided inputs must be rejected rather than silently misread.
 
     The kernel walks lnu/lam/nu as flat buffers, so a strided view would
-    read the wrong elements. ``PyArray_FromAny`` with ``ENSUREARRAY`` only
-    guarantees a base ndarray, not a contiguous one.
+    read the wrong elements. The guard lives in ``is_matching_float_dtypes``;
+    this test catches any regression that loosens it.
     """
     lam = np.linspace(1000.0, 2000.0, 10)
     nu = (c / (lam * angstrom)).to(Hz).value
@@ -319,11 +319,11 @@ def test_compute_fnu_rejects_non_contiguous_inputs():
     call(lnu, lam, nu)
 
     # Slicing the last axis of a 2D array gives a strided view.
-    with pytest.raises(ValueError, match="lnu must be C-contiguous"):
+    with pytest.raises(ValueError, match="'lnu' is not stored contiguously"):
         call(np.ones((4, 20))[:, ::2], lam, nu)
 
-    with pytest.raises(ValueError, match="lam must be C-contiguous"):
+    with pytest.raises(ValueError, match="'lam' is not stored contiguously"):
         call(lnu, np.linspace(1000.0, 2000.0, 20)[::2], nu)
 
-    with pytest.raises(ValueError, match="nu must be C-contiguous"):
+    with pytest.raises(ValueError, match="'nu' is not stored contiguously"):
         call(lnu, lam, np.linspace(1e14, 1e15, 20)[::2])

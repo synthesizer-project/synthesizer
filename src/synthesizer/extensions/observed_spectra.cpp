@@ -233,21 +233,6 @@ PyObject *compute_fnu(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* The kernel walks lnu/lam/nu as flat contiguous buffers, so a strided or
-   * transposed input would silently read the wrong elements. PyArray_FromAny
-   * with NPY_ARRAY_ENSUREARRAY above only guarantees a base ndarray, not a
-   * contiguous one, so the layout has to be checked here. */
-  if (!is_c_contiguous(np_lnu, "lnu") || !is_c_contiguous(np_lam, "lam") ||
-      !is_c_contiguous(np_nu, "nu")) {
-    Py_DECREF(np_lnu);
-    Py_DECREF(np_lam);
-    Py_DECREF(np_nu);
-    Py_DECREF(np_fnu_out);
-    Py_XDECREF(np_obslam_out);
-    Py_XDECREF(np_obsnu_out);
-    return NULL;
-  }
-
   if (out_typenum < 0) out_typenum = input_typenum;
 
   /* Ensure the provided outputs match the requested dtype and memory layout so
