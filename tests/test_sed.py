@@ -2,7 +2,10 @@
 
 import numpy as np
 from astropy.cosmology import Planck18
-from synthesizer.extensions.reductions import reduce_particle_spectra
+from synthesizer.extensions.reductions import (
+    combine_spectra_2d,
+    reduce_particle_spectra,
+)
 from unyt import Hz, angstrom, cm, erg, nJy, pc, s
 
 from synthesizer.cosmology import get_luminosity_distance
@@ -215,6 +218,18 @@ def test_reduce_particle_spectra_supports_float64_output_from_float32():
     np.testing.assert_allclose(
         reduced, np.sum(part_spectra.astype(np.float64), axis=0)
     )
+
+
+def test_combine_spectra_supports_adaptive_precision_and_nan_masks():
+    """Spectrum combination should preserve dtype and ignore NaNs."""
+    for dtype in (np.float32, np.float64):
+        first = np.array([[1.0, np.nan], [3.0, 4.0]], dtype=dtype)
+        second = np.array([[5.0, 6.0], [np.nan, 8.0]], dtype=dtype)
+
+        combined = combine_spectra_2d((first, second), 2)
+
+        assert combined.dtype == dtype
+        np.testing.assert_allclose(combined, [[6.0, 6.0], [3.0, 12.0]])
 
 
 def test_integrate_particle_sed_preserves_input_precision():
