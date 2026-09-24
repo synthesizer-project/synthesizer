@@ -885,6 +885,11 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
             The intrinsic emission
         attenuated (BlackHoleEmissionModel):
             The attenuated emission
+        energy_balance_intrinsic (BlackHoleEmissionModel):
+            The inclination averaged emission used for energy balance
+        energy_balance_attenuated (BlackHoleEmissionModel):
+            The attenuated inclination averaged emission used for energy
+            balance
         diffuse_dust_emission (BlackHoleEmissionModel):
             The diffuse dust emission
     """
@@ -966,11 +971,36 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
             **kwargs,
         )
 
+        # The diffuse dust surrounds the AGN and so absorbs the inclination
+        # averaged emission, not the emission along the observer's line of
+        # sight (which for a face-on disc overestimates the true luminosity).
+        # We therefore construct the energy budget from the averaged disc
+        # emission (which already removes the fraction absorbed by the torus)
+        # alongside the line regions and the torus.
+        self.energy_balance_intrinsic = BlackHoleEmissionModel(
+            label="energy_balance_intrinsic",
+            combine=(
+                self.intrinsic.disc_averaged,
+                self.intrinsic.nlr,
+                self.intrinsic.blr,
+                self.intrinsic.torus,
+            ),
+            **kwargs,
+        )
+        self.energy_balance_attenuated = AttenuatedEmission(
+            dust_curve=diffuse_dust_curve,
+            apply_to=self.energy_balance_intrinsic,
+            tau_v=tau_v,
+            emitter="blackhole",
+            label="energy_balance_attenuated",
+            **kwargs,
+        )
+
         # Add diffuse dust emission
         self.diffuse_dust_emission = DustEmission(
             dust_emission_model=diffuse_dust_emission_model,
-            dust_lum_intrinsic=self.intrinsic,
-            dust_lum_attenuated=self.attenuated,
+            dust_lum_intrinsic=self.energy_balance_intrinsic,
+            dust_lum_attenuated=self.energy_balance_attenuated,
             emitter="blackhole",
             label="diffuse_dust_emission",
             **kwargs,
@@ -985,6 +1015,8 @@ class UnifiedAGNWithDiffuseDustAttenuationAndEmission(BlackHoleEmissionModel):
             related_models=(
                 self.intrinsic,
                 self.attenuated,
+                self.energy_balance_intrinsic,
+                self.energy_balance_attenuated,
                 self.diffuse_dust_emission,
             ),
             **kwargs,

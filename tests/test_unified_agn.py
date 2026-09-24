@@ -413,6 +413,23 @@ class TestUnifiedAGN:
             2000.0 * km / s
         )
 
+    def test_diffuse_dust_energy_balance_is_inclination_averaged(
+        self,
+        test_grid,
+    ):
+        """Test diffuse dust energy balance uses the averaged emission."""
+        model = make_unified_agn(test_grid, variant="total")
+        generator = model["diffuse_dust_emission"].generator
+
+        assert generator._intrinsic.label == "energy_balance_intrinsic"
+        assert generator._attenuated.label == "energy_balance_attenuated"
+        assert {child.label for child in generator._intrinsic.combine} == {
+            "disc_averaged",
+            "nlr",
+            "blr",
+            "torus",
+        }
+
     def test_invalid_disc_transmission_raises(self, test_grid):
         """Test invalid transmission options are rejected."""
         with pytest.raises(InconsistentParameter):
