@@ -108,6 +108,13 @@ class Extractor(ABC):
         # Attach the weight variable we'll extract from the emitter
         self._weight_var = grid._weight_var
 
+        # The name used for the weights in extension error messages
+        self._weight_label = (
+            "automatic unit weights"
+            if self._weight_var in [None, "None"]
+            else str(self._weight_var)
+        )
+
         # Attach the spectra and line grids to the Extractor object
 
         if extract in grid.available_spectra_emissions:
@@ -192,9 +199,13 @@ class Extractor(ABC):
 
         # Also extract the weight variable
         if self._weight_var in [None, "None"]:
-            # If no weight variable is provided, use a weight of 1.0
+            # If no weight variable is provided, use a weight of 1.0 at the
+            # same precision as the extracted attributes (the extension
+            # requires the weights and attributes to share a dtype)
             if hasattr(emitter, "nparticles"):
-                weight = np.ones(emitter.nparticles)
+                weight = np.ones(
+                    emitter.nparticles, dtype=np.result_type(*extracted)
+                )
             else:
                 weight = 1.0
         else:
@@ -339,7 +350,7 @@ class IntegratedParticleExtractor(Extractor):
 
         # Compute the integrated lnu array (this is attached to an Sed
         # object elsewhere)
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         spec, grid_weights = compute_integrated_sed(
             self._spectra_grid,
             self._grid_axes,
@@ -462,7 +473,7 @@ class IntegratedParticleExtractor(Extractor):
             grid_dims[-1] = self._grid.nlines
 
         # Compute the integrated line lum array
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         lum, grid_weights = compute_integrated_sed(
             self._line_lum_grid,
             self._grid_axes,
@@ -640,7 +651,7 @@ class DopplerShiftedParticleExtractor(Extractor):
                 nthreads = os.cpu_count()
 
         # Compute the lnu array
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         spec, integrated_spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
             self._grid._lam,
@@ -769,7 +780,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
                 nthreads = os.cpu_count()
 
         # Compute the lnu array
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         _, integrated_spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
             self._grid._lam,
@@ -913,7 +924,7 @@ class ParticleExtractor(Extractor):
         # particle spectra extraction no longer reduces to the integrated
         # spectra; the integrated machinery is cheaper than reducing the full
         # per-particle spectra array.
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         if mask is None:
             grid_weights = emitter._grid_weights.get(
                 grid_assignment_method.lower(), {}
@@ -1109,7 +1120,7 @@ class ParticleExtractor(Extractor):
         # Get the grid_weights if they exist and we don't have a mask. The
         # integrated line spectra are computed through the integrated machinery
         # rather than by reducing the per-particle line arrays.
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         if mask is None:
             grid_weights = emitter._grid_weights.get(
                 grid_assignment_method.lower(), {}

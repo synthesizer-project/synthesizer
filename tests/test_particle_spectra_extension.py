@@ -243,6 +243,38 @@ def test_compute_particle_seds_supports_float32_input_and_output():
     assert part_spectra.dtype == np.float32
 
 
+def test_compute_particle_seds_mixed_particle_dtypes_error_names_arrays():
+    """A mixed particle group should list every array and the fix."""
+    grid_spectra, axes, part_props, weights, grid_dims = (
+        _particle_spectra_inputs()
+    )
+    part_props = (part_props[0].astype(np.float32),)
+
+    with pytest.raises(TypeError) as excinfo:
+        compute_particle_seds(
+            grid_spectra,
+            axes,
+            part_props,
+            weights,
+            grid_dims,
+            1,
+            weights.size,
+            grid_spectra.shape[-1],
+            "ngp",
+            1,
+            None,
+            None,
+            False,
+            np.float64,
+            ("log10ages", "initial_masses"),
+        )
+
+    msg = str(excinfo.value)
+    assert "initial_masses: float64" in msg
+    assert "log10ages: float32" in msg
+    assert "convert the one mismatched array (log10ages) to float64" in msg
+
+
 def test_compute_particle_seds_supports_float64_output_from_float32_input():
     """Particle spectra output dtype should be independently configurable."""
     nlam = 5

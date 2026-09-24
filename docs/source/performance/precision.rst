@@ -112,7 +112,8 @@ Mixing precisions
 Within one logical group of arrays (e.g. the arrays making up a grid, or the
 property arrays describing a particle distribution) all floating-point arrays
 must share a single dtype — float32 or float64. If they don't, Synthesizer
-raises a ``TypeError`` naming the offending array.
+raises a ``TypeError`` listing every array in the group with its dtype
+and naming the ones that need converting.
 
 *Between* groups, precisions can be mixed freely: float32 particle data can
 be combined with a float64 grid (and vice versa), and the output dtype is
@@ -127,12 +128,17 @@ errors like:
 
 .. code-block:: text
 
-    TypeError: ages must share the same floating-point dtype as masses
-    (got float64 and float32). Cast the offending array (e.g. with
-    arr.astype(np.float32)) or, for grid arrays, load the grid at the
-    matching precision with Grid(..., use_precision=...).
+    TypeError: These arrays are used together and must all have the same
+    precision (all float32 or all float64), but they are mixed:
+        initial_masses: float64
+        log10ages: float32
+        metallicities: float32
+    To fix this, convert the one mismatched array (initial_masses) to
+    float32, e.g. arr = arr.astype(np.float32), or convert all of them to
+    float64. Synthesizer never converts arrays for you because that would
+    silently create copies of potentially very large arrays.
 
-This means one array in a group doesn't match its siblings. Fix it at the
+This means some arrays in a group don't match their siblings. Fix it at the
 source — load the data at a consistent precision, or cast the named array
 once yourself — rather than working around it per call.
 

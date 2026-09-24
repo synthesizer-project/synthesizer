@@ -8,6 +8,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
 #include <vector>
 
 /* Python headers. */
@@ -27,6 +28,24 @@
 #ifdef ATOMIC_TIMING
 #include "timers_init.h"
 #endif
+
+/**
+ * @brief Build readable labels for the column density attribute arrays.
+ *
+ * @param arrays The attribute arrays, in the order they were requested.
+ * @return One label per array, e.g. "column density attribute 2 of 3".
+ */
+static std::vector<std::string> column_attr_labels(
+    const std::vector<PyArrayObject *> &arrays) {
+  std::vector<std::string> labels;
+  labels.reserve(arrays.size());
+  for (size_t i = 0; i < arrays.size(); ++i) {
+    labels.push_back("column density attribute " + std::to_string(i + 1) +
+                     " of " + std::to_string(arrays.size()) +
+                     " (absorbing particles)");
+  }
+  return labels;
+}
 
 /**
  * @brief Validate a Python sequence of source-property arrays.
@@ -850,12 +869,16 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
                                                np_pos_i, np_pos_j, np_smls};
   float_arrays.insert(float_arrays.end(), np_surf_den_vals.begin(),
                       np_surf_den_vals.end());
-  std::vector<const char *> float_names(float_arrays.size(), "surf_den_vals");
-  float_names[0] = "kernel";
-  float_names[1] = "truncated_kernel";
-  float_names[2] = "pos_i";
-  float_names[3] = "pos_j";
-  float_names[4] = "smls";
+  std::vector<std::string> attr_labels = column_attr_labels(np_surf_den_vals);
+  std::vector<const char *> float_names = {
+      "kernel table (Kernel.get_kernel())",
+      "truncated kernel table (Kernel.get_truncated_los_kernel())",
+      "coordinates of the particles receiving column densities",
+      "coordinates of the absorbing particles",
+      "smoothing_lengths of the absorbing particles"};
+  for (const std::string &label : attr_labels) {
+    float_names.push_back(label.c_str());
+  }
   int input_typenum = -1;
   if (!is_matching_float_dtypes(float_arrays.data(), float_names.data(),
                                 static_cast<int>(float_arrays.size()),
@@ -1574,15 +1597,19 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
       np_pos_i,          np_input_smls, np_pos_j,  np_smls};
   float_arrays.insert(float_arrays.end(), np_surf_den_vals.begin(),
                       np_surf_den_vals.end());
-  std::vector<const char *> float_names(float_arrays.size(), "surf_den_vals");
-  float_names[0] = "overlap_kernel";
-  float_names[1] = "q_grid";
-  float_names[2] = "u_grid";
-  float_names[3] = "eta_grid";
-  float_names[4] = "pos_i";
-  float_names[5] = "input_smls";
-  float_names[6] = "pos_j";
-  float_names[7] = "smls";
+  std::vector<std::string> attr_labels = column_attr_labels(np_surf_den_vals);
+  std::vector<const char *> float_names = {
+      "overlap kernel table (Kernel.get_overlap_kernel())",
+      "overlap kernel q grid",
+      "overlap kernel u grid",
+      "overlap kernel eta grid",
+      "coordinates of the particles receiving column densities",
+      "smoothing_lengths of the particles receiving column densities",
+      "coordinates of the absorbing particles",
+      "smoothing_lengths of the absorbing particles"};
+  for (const std::string &label : attr_labels) {
+    float_names.push_back(label.c_str());
+  }
   int input_typenum = -1;
   if (!is_matching_float_dtypes(float_arrays.data(), float_names.data(),
                                 static_cast<int>(float_arrays.size()),

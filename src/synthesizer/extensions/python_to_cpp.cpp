@@ -8,6 +8,9 @@
 /* Local includes */
 #include "python_to_cpp.h"
 
+/* Standard includes */
+#include <string>
+
 /**
  * @brief Convert a NumPy typenum into a readable dtype string.
  *
@@ -35,6 +38,33 @@ const char *typenum_to_string(int typenum) {
 }
 
 /**
+ * @brief Get the readable dtype name of an array (e.g. "float16", "int64").
+ *
+ * Unlike typenum_to_string this handles every NumPy dtype, so errors can say
+ * exactly what the user passed.
+ *
+ * @param np_arr: The NumPy array.
+ *
+ * @return The dtype name.
+ */
+static std::string dtype_name(PyArrayObject *np_arr) {
+  PyObject *str =
+      PyObject_Str(reinterpret_cast<PyObject *>(PyArray_DESCR(np_arr)));
+  if (str == NULL) {
+    PyErr_Clear();
+    return typenum_to_string(PyArray_TYPE(np_arr));
+  }
+  const char *utf8 = PyUnicode_AsUTF8(str);
+  std::string name =
+      utf8 != NULL ? utf8 : typenum_to_string(PyArray_TYPE(np_arr));
+  if (utf8 == NULL) {
+    PyErr_Clear();
+  }
+  Py_DECREF(str);
+  return name;
+}
+
+/**
  * @brief Check whether an array is C-contiguous.
  *
  * @param np_arr: The NumPy array to validate.
@@ -46,7 +76,12 @@ bool is_c_contiguous(PyArrayObject *np_arr, const char *name) {
 
   /* Reject arrays that would force strided access in the hot kernels. */
   if (!PyArray_IS_C_CONTIGUOUS(np_arr)) {
-    PyErr_Format(PyExc_ValueError, "%s must be C-contiguous.", name);
+    PyErr_Format(PyExc_ValueError,
+                 "'%s' is not stored contiguously in memory (this usually "
+                 "happens after slicing with a step or transposing). Make a "
+                 "contiguous copy with np.ascontiguousarray(arr) before "
+                 "passing it in.",
+                 name);
     return false;
   }
 
@@ -63,12 +98,14 @@ bool is_c_contiguous(PyArrayObject *np_arr, const char *name) {
  */
 bool is_float32_or_float64(PyArrayObject *np_arr, const char *name) {
 
-  /* For the first mixed-precision pass we support only float32 and float64. */
+  /* We support only float32 and float64. */
   const int typenum = PyArray_TYPE(np_arr);
   if (typenum != NPY_FLOAT32 && typenum != NPY_FLOAT64) {
     PyErr_Format(PyExc_TypeError,
-                 "%s must have dtype float32 or float64 (got %s).", name,
-                 typenum_to_string(typenum));
+                 "'%s' has dtype %s, but Synthesizer only accepts float32 or "
+                 "float64 arrays. Convert it with arr.astype(np.float64) (or "
+                 "np.float32 to save memory).",
+                 name, dtype_name(np_arr).c_str());
     return false;
   }
 
@@ -109,9 +146,9 @@ int promoted_float_typenum(int lhs, int rhs) {
 /**
  * @brief Check whether a list of arrays share one floating-point dtype.
  *
- * This helper enforces the initial precision contract used by the migrated
- * extensions: every floating-point input array must be contiguous and must
- * have the same dtype, either float32 or float64.
+ * Every array must be contiguous and must have the same dtype, either float32
+ * or float64. On failure the error lists every array with its dtype and says
+ * exactly which arrays need converting, so users can fix all of them at once.
  *
  * @param arrays: Array of NumPy array pointers to validate.
  * @param names: Matching array names. (For error messages)
@@ -130,47 +167,67 @@ bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
     return false;
   }
 
-  /* Walk through the arrays and check that they are all contiguous, have a
-   * supported floating-point dtype, and share the same dtype family. */
-  int shared_typenum = -1;
+  /* Report every array with an unsupported dtype in one go. */
+  std::string unsupported;
   for (int i = 0; i < count; ++i) {
-
-    /* Grab the array and name for this iteration. */
-    PyArrayObject *np_arr = arrays[i];
-    const char *name = names[i];
-
-    /* Every floating-point input must be contiguous and use a supported
-     * precision family before we enter a typed kernel. */
-    if (!is_c_contiguous(np_arr, name) ||
-        !is_float32_or_float64(np_arr, name)) {
-      return false;
-    }
-
-    /* What type have we got? */
-    const int typenum = PyArray_TYPE(np_arr);
-
-    /* The first array sets the shared dtype we require from the rest. */
-    if (shared_typenum == -1) {
-      shared_typenum = typenum;
-      continue;
-    }
-
-    /* Stop early if any input array deviates from the shared dtype. */
-    if (typenum != shared_typenum) {
-      PyErr_Format(PyExc_TypeError,
-                   "%s must share the same floating-point dtype as %s "
-                   "(got %s and %s). Cast the offending array (e.g. with "
-                   "arr.astype(np.float32)) or, for grid arrays, load the "
-                   "grid at the matching precision with "
-                   "Grid(..., use_precision=...). Synthesizer never casts "
-                   "behind the scenes as this would produce hidden copies.",
-                   name, names[0], typenum_to_string(typenum),
-                   typenum_to_string(shared_typenum));
-      return false;
+    if (!is_supported_float_typenum(PyArray_TYPE(arrays[i]))) {
+      unsupported +=
+          "\n    " + std::string(names[i]) + ": " + dtype_name(arrays[i]);
     }
   }
+  if (!unsupported.empty()) {
+    PyErr_Format(PyExc_TypeError,
+                 "Synthesizer only accepts float32 or float64 arrays, but "
+                 "these have a different dtype:%s\nConvert them with "
+                 "arr.astype(np.float64) (or np.float32 to save memory).",
+                 unsupported.c_str());
+    return false;
+  }
 
-  /* Return the shared dtype so the caller can dispatch to the right kernel. */
-  *resolved_typenum = shared_typenum;
-  return true;
+  /* Every input must be contiguous before we hand out raw pointers. */
+  int n32 = 0;
+  for (int i = 0; i < count; ++i) {
+    if (!is_c_contiguous(arrays[i], names[i])) {
+      return false;
+    }
+    n32 += PyArray_TYPE(arrays[i]) == NPY_FLOAT32;
+  }
+
+  /* All the same? Then we're done. */
+  if (n32 == 0 || n32 == count) {
+    *resolved_typenum = PyArray_TYPE(arrays[0]);
+    return true;
+  }
+
+  /* Mixed precision. Suggest converting the minority to the majority, and
+   * float32 up to float64 on a tie so no precision is lost. */
+  const bool to64 = n32 <= count - n32;
+  const int from_typenum = to64 ? NPY_FLOAT32 : NPY_FLOAT64;
+  const char *to_name = to64 ? "float64" : "float32";
+  const char *from_name = to64 ? "float32" : "float64";
+  std::string listing;
+  std::string offenders;
+  int n_offenders = 0;
+  for (int i = 0; i < count; ++i) {
+    const int typenum = PyArray_TYPE(arrays[i]);
+    listing +=
+        "\n    " + std::string(names[i]) + ": " + typenum_to_string(typenum);
+    if (typenum == from_typenum) {
+      offenders += (offenders.empty() ? "" : ", ") + std::string(names[i]);
+      n_offenders++;
+    }
+  }
+  PyErr_Format(
+      PyExc_TypeError,
+      "These arrays are used together and must all have the same "
+      "precision (all float32 or all float64), but they are "
+      "mixed:%s\nTo fix this, convert %s (%s) to %s, e.g. "
+      "arr = arr.astype(np.%s), or convert all of them to %s. "
+      "Synthesizer never converts arrays for you because that "
+      "would silently create copies of potentially very large "
+      "arrays.",
+      listing.c_str(),
+      n_offenders == 1 ? "the one mismatched array" : "the mismatched arrays",
+      offenders.c_str(), to_name, to_name, from_name);
+  return false;
 }

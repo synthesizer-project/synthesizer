@@ -892,7 +892,7 @@ class Combination:
             if nthreads == -1:
                 nthreads = os.cpu_count() or 1
 
-            out_lnu = combine_spectra_2d(arrays, nthreads)
+            out_lnu = combine_spectra_2d(arrays, nthreads, labels)
             out_spec = Sed(
                 emission_model.lam,
                 lnu=unyt_array(out_lnu, erg / s / Hz, bypass_validation=True),

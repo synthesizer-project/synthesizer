@@ -80,11 +80,10 @@ PyObject *evaluate_kernel(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  const int input_typenum = PyArray_TYPE(np_radii);
-  if (input_typenum != NPY_FLOAT32 && input_typenum != NPY_FLOAT64) {
-    PyErr_SetString(PyExc_TypeError, "radii must be float32 or float64.");
+  if (!is_float32_or_float64(np_radii, "radii")) {
     return NULL;
   }
+  const int input_typenum = PyArray_TYPE(np_radii);
 
   /* Dispatch: call the matching typed kernel for the input dtype. */
   return dispatch_float(input_typenum, [&](auto v) -> PyObject * {
