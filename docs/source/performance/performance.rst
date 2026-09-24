@@ -11,7 +11,72 @@ We have implemented a number of performance optimisations, including:
 
 - Using C++ extensions for computationally intensive tasks.
 - Using OpenMP for shared memory parallelism to avoid the GIL bottleneck in Python. 
-- Reducing memory allocations and copies as much as possible (including removing copies inherent during ``unyt`` conversion operations). 
+- Reducing memory allocations and copies as much as possible (including removing copies inherent during ``unyt`` conversion operations).
+- User-controllable floating-point precision for inputs and outputs, halving memory footprints where reduced precision is acceptable (see :doc:`precision`).
+
+Build options
+~~~~~~~~~~~~~
+
+By default the extensions are compiled for the baseline target of whatever
+architecture you are on. On x86-64 that means SSE2 and 128-bit vectors, while
+every current HPC CPU has AVX2 or wider, so the default build leaves half the
+vector width unused. Set ``NATIVE=1`` to compile for the instruction set of the
+machine doing the build:
+
+.. code-block:: bash
+
+    NATIVE=1 WITH_OPENMP=1 pip install .
+
+This is opt-in rather than the default because the resulting binary will not
+run on an older CPU. That matters in two common cases: when a cluster's login
+node and its compute nodes are different generations, and when building a
+wheel for distribution. Build on a node of the same generation as the one you
+will run on, or pass an explicit target such as ``CFLAGS="-march=znver2"``
+instead. A build left on the baseline says so in ``build_synth.log``.
+
+On an AMD EPYC 7H12 this is worth about 1.2x on the CIC spectra extraction at
+one thread, and about 2.2x on the separable attenuation kernel, where the
+architecture flag is what lets the C library replace its scalar ``exp`` with a
+vector one.
+
+NUMA memory placement
+~~~~~~~~~~~~~~~~~~~~~
+
+Grids and output buffers are allocated and filled by a single Python thread,
+so every page of them lands on one NUMA domain. Threads running on the other
+domains then read all of that data remotely, and the total bandwidth is capped
+by one memory controller no matter how many threads are used. On a COSMA8
+node (two EPYC 7H12, eight NUMA domains of sixteen cores) that caps every
+streaming kernel near 37 GB/s, which shows up as scaling that flattens out
+once the thread count passes the size of a single domain.
+
+Interleaving the pages across all domains lifts that cap:
+
+.. code-block:: bash
+
+    SYNTHESIZER_NUMA_INTERLEAVE=1 python my_script.py
+
+The variable is read when ``synthesizer`` is imported, before any grid or
+output array exists. The policy applies to the importing thread and to threads
+it creates afterwards, which covers the large arrays because they are
+allocated and filled by the main Python thread, and covers the OpenMP workers
+because they are normally spawned later and inherit it.
+
+``numactl --interleave=all <command>`` sets the same policy from outside the
+process and needs no support from Synthesizer; the two measure the same to
+within a few percent. Prefer ``numactl`` whenever threads may already exist
+when Synthesizer is imported, since those keep the default policy. That
+includes threads you started yourself, and also the OpenMP pool, which
+persists once created: if anything ran a parallel region earlier in the same
+process, a SciPy or scikit-learn call for instance, those workers predate the
+import and will not pick the policy up.
+
+Interleaving is not free. Below about eight threads everything a thread reads
+would otherwise have been local, and spreading it costs 5-20%. It is off by
+default and only worth setting when using more cores than one NUMA domain
+holds. On a two-socket EPYC 7H12 node (eight domains of sixteen cores) it is
+worth 1.9x at 32 threads and 2.2x at 64 on particle spectra extraction, and
+3.2x and 5.4x respectively on the flux conversion and scaling kernels.
 
 Profiling Suite
 ~~~~~~~~~~~~~~~
@@ -75,6 +140,7 @@ Performance Benchmarks
 .. toctree::
    :maxdepth: 1
 
+   precision
    particle_wavelength_scaling
    pipeline_profiling
    strong_scaling

@@ -1,5 +1,12 @@
 """The main module for the synthesizer package."""
 
+# Apply the NUMA memory policy before anything allocates, since the policy only
+# affects later allocations. This is a no-op unless SYNTHESIZER_NUMA_INTERLEAVE
+# is set.
+from synthesizer._numa import maybe_interleave_memory
+
+maybe_interleave_memory()
+
 # Get the initialisation and data directory stuff we need before importing
 # the rest of the package.
 from synthesizer.data.initialise import (
@@ -40,6 +47,10 @@ from synthesizer.grid import Grid
 from synthesizer.instruments import filters
 from synthesizer.utils import art, integrate, plt, stats, util_funcs
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import (
+    get_default_out_dtype,
+    set_default_out_dtype,
+)
 
 # Define the __all__ variable to control what is imported with
 # 'from synthesizer import *'
@@ -56,6 +67,8 @@ __all__ = [
     "check_openmp",
     "check_atomic_timing",
     "timed",
+    "get_default_out_dtype",
+    "set_default_out_dtype",
     "filters",
     "LineCollection",
     "__version__",

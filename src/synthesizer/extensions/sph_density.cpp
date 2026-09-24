@@ -10,18 +10,17 @@
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
 #define NO_IMPORT_ARRAY
-#include <Python.h>
-
-#include <cmath>
-#include <memory>
-#include <vector>
-
 #include "cpp_to_python.h"
 #include "kernel_extensions/kernel_functions.h"
 #include "numpy_init.h"
 #include "octree.h"
 #include "property_funcs.h"
 #include "timers.h"
+
+#include <Python.h>
+#include <cmath>
+#include <memory>
+#include <vector>
 #ifdef ATOMIC_TIMING
 #include "timers_init.h"
 #endif
@@ -65,7 +64,7 @@ static void decref_attribute_views(std::vector<AttributeView> &views) {
  *
  * @return The squared distance between the query point and the cell bounds.
  */
-static double min_squared_dist_to_cell(struct cell *c, const double x,
+static double min_squared_dist_to_cell(cell<double> *c, const double x,
                                        const double y, const double z) {
   double dx = 0.0;
   double dy = 0.0;
@@ -104,8 +103,8 @@ static double min_squared_dist_to_cell(struct cell *c, const double x,
  * @param query_index The row index for this query point in the output buffers.
  */
 static void accumulate_sph_query_recursive(
-    struct cell *c, const double qx, const double qy, const double qz,
-    kernel_func kernel, const double *masses,
+    cell<double> *c, const double qx, const double qy, const double qz,
+    kernel_func<double> kernel, const double *masses,
     const std::vector<AttributeView> &attr_views, double &density_out,
     const std::vector<double *> &attr_buffers, const npy_intp query_index) {
   if (min_squared_dist_to_cell(c, qx, qy, qz) > c->max_sml_squ) {
@@ -114,7 +113,7 @@ static void accumulate_sph_query_recursive(
 
   if (c->split) {
     for (int ip = 0; ip < 8; ++ip) {
-      struct cell *cp = &c->progeny[ip];
+      cell<double> *cp = &c->progeny[ip];
       if (cp->part_count == 0) {
         continue;
       }
@@ -125,10 +124,10 @@ static void accumulate_sph_query_recursive(
     return;
   }
 
-  struct particle *parts = c->particles;
+  particle<double> *parts = c->particles;
   const int npart = c->part_count;
   for (int ip = 0; ip < npart; ++ip) {
-    const struct particle *part = &parts[ip];
+    const particle<double> *part = &parts[ip];
     const double dx = qx - part->pos[0];
     const double dy = qy - part->pos[1];
     const double dz = qz - part->pos[2];
@@ -261,7 +260,7 @@ PyObject *evaluate_sph_density(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  kernel_func kernel = get_kernel_function(kernel_name);
+  kernel_func<double> kernel = get_kernel_function<double>(kernel_name);
   if (kernel == NULL) {
     PyErr_SetString(PyExc_ValueError, "Kernel name not defined.");
     return NULL;
@@ -313,12 +312,12 @@ PyObject *evaluate_sph_density(PyObject *self, PyObject *args) {
   }
 
   const double *query_positions =
-      extract_data_double(np_query_positions, "query_positions");
+      extract_data<double>(np_query_positions, "query_positions");
   const double *particle_positions =
-      extract_data_double(np_particle_positions, "particle_positions");
+      extract_data<double>(np_particle_positions, "particle_positions");
   const double *smoothing_lengths =
-      extract_data_double(np_smoothing_lengths, "smoothing_lengths");
-  const double *masses = extract_data_double(np_masses, "masses");
+      extract_data<double>(np_smoothing_lengths, "smoothing_lengths");
+  const double *masses = extract_data<double>(np_masses, "masses");
   if (PyErr_Occurred()) {
     decref_attribute_views(attr_views);
     Py_DECREF(attribute_fast);
@@ -336,10 +335,10 @@ PyObject *evaluate_sph_density(PyObject *self, PyObject *args) {
    * though this evaluator only needs positions, smoothing lengths, and the
    * original particle indices stored on each tree node. */
   std::unique_ptr<double[]> surf_den_dummy(new double[n_part]());
-  struct cell *root = new struct cell;
-  construct_cell_tree(particle_positions, smoothing_lengths,
-                      surf_den_dummy.get(), static_cast<int>(n_part), root, 1,
-                      maxdepth, min_count);
+  cell<double> *root = new cell<double>;
+  construct_cell_tree<double>(particle_positions, smoothing_lengths,
+                              surf_den_dummy.get(), static_cast<int>(n_part),
+                              root, 1, maxdepth, min_count);
 
   /* Keep raw row pointers to the output buffers so the recursive walker can
    * write contributions without unpacking smart pointers at every hit. */
@@ -364,7 +363,7 @@ PyObject *evaluate_sph_density(PyObject *self, PyObject *args) {
                                    attr_buffer_ptrs, iq);
   }
 
-  cleanup_cell_tree(root);
+  cleanup_cell_tree<double>(root);
 
   npy_intp density_dims[1] = {n_query};
   PyArrayObject *np_density =

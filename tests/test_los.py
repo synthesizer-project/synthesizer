@@ -2,8 +2,14 @@
 
 import numpy as np
 import pytest
+from synthesizer.extensions.timers import (
+    get_operation_names,
+    get_operation_timings,
+    reset_timings,
+)
 from unyt import Mpc, Msun, Myr, pc, unyt_array
 
+from synthesizer import check_atomic_timing
 from synthesizer.exceptions import InconsistentArguments
 from synthesizer.kernel_functions import Kernel
 from synthesizer.particle import Galaxy, Gas, Stars
@@ -400,6 +406,129 @@ class TestLOSColumnDensity:
         assert col_den.units == expected_units
         assert one_star.sigmalos_mass.units == expected_units
         assert col_den is one_star.sigmalos_mass
+
+    @pytest.mark.parametrize(
+        "as_points", [True, False], ids=["point", "smooth"]
+    )
+    @pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+    def test_multiple_column_densities_match_scalar_calls(
+        self, one_star, one_gas_front, as_points, force_loop
+    ):
+        """Multiple properties share one traversal without changing values."""
+        one_gas_front.mass_lengths = one_gas_front.masses * Mpc
+        kernel = self._kernel()
+        kwargs = {
+            "as_points": as_points,
+            "force_loop": force_loop,
+            "min_count": 1,
+        }
+
+        expected_mass = one_star.get_los_column_density(
+            one_gas_front, "masses", kernel, **kwargs
+        )
+        expected_mass_length = one_star.get_los_column_density(
+            one_gas_front, "mass_lengths", kernel, **kwargs
+        )
+        measured = one_star.get_los_column_density(
+            one_gas_front,
+            ["masses", "mass_lengths"],
+            kernel,
+            column_density_attr=["sigmalos_mass", "sigmalos_mass_length"],
+            **kwargs,
+        )
+
+        assert isinstance(measured, tuple)
+        assert len(measured) == 2
+        assert measured[0].units == expected_mass.units
+        assert measured[1].units == expected_mass_length.units
+        np.testing.assert_allclose(measured[0], expected_mass)
+        np.testing.assert_allclose(measured[1], expected_mass_length)
+        assert one_star.sigmalos_mass is measured[0]
+        assert one_star.sigmalos_mass_length is measured[1]
+
+    def test_multiple_column_density_attrs_must_match(
+        self, one_star, one_gas_front
+    ):
+        """Multiple properties require matching output names."""
+        with pytest.raises(InconsistentArguments, match="must match"):
+            one_star.get_los_column_density(
+                one_gas_front,
+                ["masses", "dust_masses"],
+                self._kernel(),
+                column_density_attr="sigmalos",
+            )
+
+        with pytest.raises(InconsistentArguments, match="at least one"):
+            one_star.get_los_column_density(
+                one_gas_front,
+                [],
+                self._kernel(),
+            )
+
+    def test_multiple_column_densities_empty_source(self, one_star):
+        """Empty sources return one unitful result per property."""
+        empty_gas = Gas(
+            masses=np.array([]) * Msun,
+            metallicities=np.array([]),
+            redshift=0.0,
+            coordinates=np.empty((0, 3)) * Mpc,
+            dust_to_metal_ratio=1.0,
+            smoothing_lengths=np.array([]) * Mpc,
+        )
+
+        results = one_star.get_los_column_density(
+            empty_gas,
+            ["masses", "dust_masses"],
+            self._kernel(),
+        )
+
+        assert len(results) == 2
+        for result in results:
+            assert result.shape == (one_star.nparticles,)
+            assert np.all(result == 0.0)
+            assert hasattr(result, "units")
+
+    @pytest.mark.skipif(
+        not check_atomic_timing(),
+        reason="LOS phase timings require an ATOMIC_TIMING build.",
+    )
+    @pytest.mark.parametrize(
+        "as_points", [True, False], ids=["point", "smooth"]
+    )
+    @pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+    def test_column_density_phase_timers(
+        self, one_star, one_gas_front, as_points, force_loop
+    ):
+        """LOS calls expose one balanced entry for each executed phase."""
+        reset_timings()
+        one_star.get_los_column_density(
+            one_gas_front,
+            ["masses", "dust_masses"],
+            self._kernel(),
+            as_points=as_points,
+            force_loop=force_loop,
+            min_count=1,
+        )
+
+        mode = "point" if as_points else "smoothed"
+        path = "loop" if force_loop else "tree_query"
+        expected = {
+            "Particles.get_los_column_density.prepare_inputs": "Python",
+            "Particles.get_los_column_density.compute": "Python",
+            "Particles.get_los_column_density.attach_units": "Python",
+            f"column_density.{mode}.{path}": "C",
+            f"column_density.{mode}.pack_output": "C",
+        }
+        if not force_loop:
+            expected[f"column_density.{mode}.tree_cleanup"] = "C"
+            expected["construct_cell_tree"] = "C"
+
+        names = set(get_operation_names())
+        assert expected.keys() <= names
+        for operation, source in expected.items():
+            _, count, measured_source = get_operation_timings(operation)
+            assert count == 1
+            assert measured_source == source
 
     def test_column_density_zero_particle_returns_unitful_array(
         self, one_gas_front
@@ -1267,3 +1396,269 @@ class TestLOSColumnDensity:
         assert np.all(coarse_tau > 0.0)
         assert np.all(fine_tau > 0.0)
         assert not np.allclose(coarse_tau, fine_tau, rtol=1e-3, atol=0.0)
+
+
+class TestColumnDensityAccumulationPrecision:
+    """Regression tests for double-precision accumulation in the LOS sums.
+
+    The C extension sums the contribution of every source (gas) particle
+    along each line of sight. With realistic gas neighbour counts (1e5-1e6
+    for a single star in a cosmological zoom-in) summing those
+    contributions directly in float32 accumulates O(sqrt(N)) relative
+    rounding error. The extension accumulates internally in double and
+    only casts down to the requested output precision once at the end, so
+    a float32 in/out calculation should stay within a few float32 ULPs of
+    the float64 reference regardless of how many source particles are
+    summed. These tests build enough source particles that the old
+    accumulate-in-``Real`` behaviour would have failed the tolerance below
+    by two to three orders of magnitude.
+    """
+
+    @staticmethod
+    def _build_inputs(npart_j, rng, dtype):
+        """Build a single-star, many-gas-particle LOS setup at ``dtype``."""
+        kernel_obj = Kernel(name="uniform", binsize=32)
+        proj_kernel = np.ascontiguousarray(
+            kernel_obj.get_kernel(), dtype=dtype
+        )
+        trunc_kernel = np.ascontiguousarray(
+            kernel_obj.get_truncated_los_kernel()[0], dtype=dtype
+        )
+
+        pos_i = np.ascontiguousarray([[0.0, 0.0, 2.0]], dtype=dtype)
+        pos_j = np.ascontiguousarray(
+            np.column_stack(
+                [
+                    rng.uniform(-0.05, 0.05, npart_j),
+                    rng.uniform(-0.05, 0.05, npart_j),
+                    rng.uniform(0.0, 1.9, npart_j),
+                ]
+            ),
+            dtype=dtype,
+        )
+        smls = np.ascontiguousarray(np.full(npart_j, 0.2), dtype=dtype)
+        surf_den_vals = np.ascontiguousarray(
+            np.full(npart_j, 1.0), dtype=dtype
+        )
+
+        return proj_kernel, trunc_kernel, pos_i, pos_j, smls, surf_den_vals
+
+    @pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+    def test_column_density_float32_matches_float64_at_scale(self, force_loop):
+        """A large-N float32 LOS sum should match the float64 reference."""
+        from synthesizer.extensions.column_density import (
+            compute_column_density,
+        )
+
+        rng = np.random.default_rng(0)
+        npart_j = 1_000_000
+
+        (
+            proj_kernel64,
+            trunc_kernel64,
+            pos_i64,
+            pos_j64,
+            smls64,
+            surf_den_vals64,
+        ) = self._build_inputs(npart_j, rng, np.float64)
+
+        kdim = proj_kernel64.size
+        trunc_qdim, zdim = trunc_kernel64.shape
+
+        args64 = (
+            proj_kernel64,
+            trunc_kernel64,
+            pos_i64,
+            pos_j64,
+            smls64,
+            (surf_den_vals64,),
+            1,
+            npart_j,
+            kdim,
+            trunc_qdim,
+            zdim,
+            1.0,
+            force_loop,
+            8,
+            1,
+        )
+        result64 = compute_column_density(*args64)
+
+        args32 = tuple(
+            arg.astype(np.float32)
+            if isinstance(arg, np.ndarray)
+            else tuple(value.astype(np.float32) for value in arg)
+            if isinstance(arg, tuple)
+            else arg
+            for arg in args64
+        )
+        result32 = compute_column_density(*args32)
+
+        assert result32.dtype == np.float32
+        assert np.all(result64 > 0.0)
+        np.testing.assert_allclose(result32, result64, rtol=1e-5, atol=0.0)
+
+    @pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+    def test_column_density_smoothed_float32_matches_float64_at_scale(
+        self, force_loop
+    ):
+        """A large-N float32 smoothed LOS sum should match float64."""
+        from synthesizer.extensions.column_density import (
+            compute_column_density_smoothed,
+        )
+
+        rng = np.random.default_rng(1)
+        npart_j = 500_000
+
+        kernel_obj = Kernel(name="uniform", binsize=32)
+        overlap64, q_grid64, u_grid64, eta_grid64 = (
+            kernel_obj.get_overlap_kernel()
+        )
+        overlap64 = np.ascontiguousarray(overlap64, dtype=np.float64)
+        q_grid64 = np.ascontiguousarray(q_grid64, dtype=np.float64)
+        u_grid64 = np.ascontiguousarray(u_grid64, dtype=np.float64)
+        eta_grid64 = np.ascontiguousarray(eta_grid64, dtype=np.float64)
+
+        (_, _, pos_i64, pos_j64, smls64, surf_den_vals64) = self._build_inputs(
+            npart_j, rng, np.float64
+        )
+        input_smls64 = np.ascontiguousarray([0.1], dtype=np.float64)
+
+        qdim, udim, etadim = q_grid64.size, u_grid64.size, eta_grid64.size
+
+        args64 = (
+            overlap64,
+            q_grid64,
+            u_grid64,
+            eta_grid64,
+            pos_i64,
+            input_smls64,
+            pos_j64,
+            smls64,
+            (surf_den_vals64,),
+            1,
+            npart_j,
+            qdim,
+            udim,
+            etadim,
+            1.0,
+            force_loop,
+            8,
+            1,
+        )
+        result64 = compute_column_density_smoothed(*args64)
+
+        args32 = tuple(
+            arg.astype(np.float32)
+            if isinstance(arg, np.ndarray)
+            else tuple(value.astype(np.float32) for value in arg)
+            if isinstance(arg, tuple)
+            else arg
+            for arg in args64
+        )
+        result32 = compute_column_density_smoothed(*args32)
+
+        assert result32.dtype == np.float32
+        assert np.all(result64 > 0.0)
+        np.testing.assert_allclose(result32, result64, rtol=1e-5, atol=0.0)
+
+    @pytest.mark.parametrize("dtype", [np.float32, np.float64])
+    @pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+    def test_column_density_threaded_matches_serial(self, dtype, force_loop):
+        """Thread-local double buffers must preserve every target result."""
+        from synthesizer.extensions.column_density import (
+            compute_column_density,
+        )
+
+        inputs = list(
+            self._build_inputs(2_000, np.random.default_rng(2), dtype)
+        )
+        inputs[2] = np.ascontiguousarray(
+            np.column_stack(
+                [
+                    np.linspace(-0.03, 0.03, 7),
+                    np.linspace(0.03, -0.03, 7),
+                    np.full(7, 2.0),
+                ]
+            ),
+            dtype=dtype,
+        )
+        proj_kernel, trunc_kernel, pos_i, pos_j, smls, values = inputs
+        args = (
+            proj_kernel,
+            trunc_kernel,
+            pos_i,
+            pos_j,
+            smls,
+            (values,),
+            pos_i.shape[0],
+            pos_j.shape[0],
+            proj_kernel.size,
+            trunc_kernel.shape[0],
+            trunc_kernel.shape[1],
+            1.0,
+            force_loop,
+            8,
+        )
+
+        serial = compute_column_density(*args, 1)
+        threaded = compute_column_density(*args, 4)
+
+        assert threaded.dtype == dtype
+        np.testing.assert_allclose(threaded, serial, rtol=0.0, atol=0.0)
+
+    @pytest.mark.parametrize("dtype", [np.float32, np.float64])
+    @pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+    def test_smoothed_column_density_threaded_matches_serial(
+        self, dtype, force_loop
+    ):
+        """Threaded smoothed LOS chunks must match serial accumulation."""
+        from synthesizer.extensions.column_density import (
+            compute_column_density_smoothed,
+        )
+
+        kernel_obj = Kernel(name="uniform", binsize=32)
+        overlap, q_grid, u_grid, eta_grid = (
+            np.ascontiguousarray(arr, dtype=dtype)
+            for arr in kernel_obj.get_overlap_kernel()
+        )
+        inputs = list(
+            self._build_inputs(1_000, np.random.default_rng(3), dtype)
+        )
+        pos_i = np.ascontiguousarray(
+            np.column_stack(
+                [
+                    np.linspace(-0.03, 0.03, 7),
+                    np.linspace(0.03, -0.03, 7),
+                    np.full(7, 2.0),
+                ]
+            ),
+            dtype=dtype,
+        )
+        _, _, _, pos_j, smls, values = inputs
+        input_smls = np.ascontiguousarray(np.full(7, 0.1), dtype=dtype)
+        args = (
+            overlap,
+            q_grid,
+            u_grid,
+            eta_grid,
+            pos_i,
+            input_smls,
+            pos_j,
+            smls,
+            (values,),
+            pos_i.shape[0],
+            pos_j.shape[0],
+            q_grid.size,
+            u_grid.size,
+            eta_grid.size,
+            1.0,
+            force_loop,
+            8,
+        )
+
+        serial = compute_column_density_smoothed(*args, 1)
+        threaded = compute_column_density_smoothed(*args, 4)
+
+        assert threaded.dtype == dtype
+        np.testing.assert_allclose(threaded, serial, rtol=0.0, atol=0.0)

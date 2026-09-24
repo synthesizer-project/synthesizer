@@ -7,8 +7,10 @@ model. The correct operation is instantiated in EmissionMode._init_operations.
 These classes should not be used directly.
 """
 
+import os
+
 import numpy as np
-from unyt import Hz, erg, s
+from unyt import Hz, erg, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.emission_models.extractors.extractor import (
@@ -20,8 +22,12 @@ from synthesizer.emission_models.extractors.extractor import (
 )
 from synthesizer.emission_models.utils import cache_model_params
 from synthesizer.emissions import LineCollection, Sed, integrate_particle_sed
+from synthesizer.extensions.reductions import (
+    combine_spectra_2d,
+    reduce_particle_spectra,
+)
 from synthesizer.grid import Template
-from synthesizer.utils.operation_timers import timer
+from synthesizer.utils.operation_timers import timed, timer
 
 
 class Extraction:
@@ -66,6 +72,7 @@ class Extraction:
         # peculiar velocities? (Particle Only!)
         self._use_vel_shift = vel_shift
 
+    @timed("Extraction._extract_spectra")
     def _extract_spectra(
         self,
         this_model,
@@ -75,6 +82,7 @@ class Extraction:
         verbose,
         nthreads,
         grid_assignment_method,
+        out_dtype,
     ):
         """Extract spectra from the grid.
 
@@ -95,6 +103,8 @@ class Extraction:
                 The method to use when assigning particles to the grid.
                 Options are 'cic' (cloud-in-cell) and 'ngp' (nearest
                 grid point).
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted spectra arrays.
 
         Returns:
             dict:
@@ -162,6 +172,7 @@ class Extraction:
             grid_assignment_method=grid_assignment_method,
             nthreads=nthreads,
             do_grid_check=False,
+            out_dtype=out_dtype,
         )
 
         # Cache the model on the emitter
@@ -186,6 +197,7 @@ class Extraction:
         verbose,
         nthreads,
         grid_assignment_method,
+        out_dtype,
     ):
         """Extract lines from the grid.
 
@@ -208,6 +220,8 @@ class Extraction:
                 The method to use when assigning particles to the grid.
                 Options are 'cic' (cloud-in-cell) and 'ngp' (nearest
                 grid point).
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned line arrays.
 
         Returns:
             dict:
@@ -323,6 +337,7 @@ class Extraction:
             grid_assignment_method=grid_assignment_method,
             nthreads=nthreads,
             do_grid_check=False,
+            out_dtype=out_dtype,
         )
 
         # Cache the model on the emitter
@@ -395,6 +410,7 @@ class Generation:
         # Attach the emission generation model
         self._generator = generator
 
+    @timed("Generation._generate_spectra")
     def _generate_spectra(
         self,
         this_model,
@@ -679,6 +695,7 @@ class Transformation:
             else self._apply_to.label
         )
 
+    @timed("Transformation._transform_emission")
     def _transform_emission(
         self,
         this_model,
@@ -830,6 +847,7 @@ class Combination:
             for model in self._combine
         ]
 
+    @timed("Combination._combine_spectra")
     def _combine_spectra(
         self,
         emission_model,
@@ -860,50 +878,52 @@ class Combination:
             dict:
                 The dictionary of spectra.
         """
-        # Create an empty spectra to add to
+        labels = this_model._combine_labels
+        arrays = tuple(
+            (
+                particle_spectra[label]._lnu
+                if this_model.per_particle
+                else spectra[label]._lnu
+            )
+            for label in labels
+        )
+
         if this_model.per_particle:
+            if nthreads == -1:
+                nthreads = os.cpu_count() or 1
+
+            out_lnu = combine_spectra_2d(arrays, nthreads)
             out_spec = Sed(
                 emission_model.lam,
-                lnu=np.zeros_like(
-                    particle_spectra[this_model._combine_labels[0]]._lnu
-                )
-                * erg
-                / s
-                / Hz,
+                lnu=unyt_array(out_lnu, erg / s / Hz, bypass_validation=True),
+            )
+            particle_spectra[this_model.label] = out_spec
+
+            reduced_lnu = reduce_particle_spectra(
+                out_lnu, nthreads, out_lnu.dtype
+            )
+            spectra[this_model.label] = Sed(
+                emission_model.lam,
+                lnu=unyt_array(
+                    reduced_lnu, erg / s / Hz, bypass_validation=True
+                ),
             )
         else:
             out_spec = Sed(
                 emission_model.lam,
-                lnu=np.zeros_like(spectra[this_model._combine_labels[0]]._lnu)
-                * erg
-                / s
-                / Hz,
+                lnu=unyt_array(
+                    np.zeros_like(arrays[0]),
+                    erg / s / Hz,
+                    bypass_validation=True,
+                ),
             )
-
-        # Combine the spectra
-        for combine_label in this_model._combine_labels:
-            if this_model.per_particle:
-                nan_mask = np.isnan(particle_spectra[combine_label]._lnu)
-                out_spec._lnu[~nan_mask] += particle_spectra[
-                    combine_label
-                ]._lnu[~nan_mask]
-            else:
-                nan_mask = np.isnan(spectra[combine_label]._lnu)
-                out_spec._lnu[~nan_mask] += spectra[combine_label]._lnu[
-                    ~nan_mask
-                ]
+            for arr in arrays:
+                nan_mask = np.isnan(arr)
+                out_spec._lnu[~nan_mask] += arr[~nan_mask]
+            spectra[this_model.label] = out_spec
 
         # Cache the model on the emitter
         cache_model_params(this_model, emitter)
-
-        # Store the spectra in the right place (integrating if we need to)
-        if this_model.per_particle:
-            particle_spectra[this_model.label] = out_spec
-            spectra[this_model.label] = integrate_particle_sed(
-                out_spec, nthreads
-            )
-        else:
-            spectra[this_model.label] = out_spec
 
         return spectra, particle_spectra
 
@@ -940,8 +960,14 @@ class Combination:
             in_lines = lines
 
         template = in_lines[this_model._combine_labels[0]]
-        out_luminosity = np.zeros_like(template._luminosity)
-        out_continuum = np.zeros_like(template._continuum)
+        out_luminosity = np.zeros(
+            template._luminosity.shape,
+            dtype=template._luminosity.dtype,
+        )
+        out_continuum = np.zeros(
+            template._continuum.shape,
+            dtype=template._continuum.dtype,
+        )
 
         # Combine raw arrays directly and construct one LineCollection at the
         # end to avoid repeated constructor and metadata work in hot loops.

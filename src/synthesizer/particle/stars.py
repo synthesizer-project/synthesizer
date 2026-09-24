@@ -944,11 +944,20 @@ class Stars(Particles, StarsComponent):
         **Default modes per attribute:**
 
         - ``initial_masses``, ``current_masses`` → ``"proportional"``
+        - ``softening_lengths`` → scaled by ``resample_factor ** (-1/3)``
+          and tiled, like ``smoothing_lengths``
         - ``ages``, ``metallicities``, ``alpha_enhancement``, ``s_oxygen``,
-          ``s_hydrogen`` → ``"duplicated"``
-        - ``tau_v``, ``softening_lengths`` → ``"duplicated"`` if per-particle,
-          kept as-is if scalar
+          ``s_hydrogen``, ``tau_v`` → ``"duplicated"`` if per-particle, kept
+          as-is if scalar
         - ``**kwargs`` extras → ``"duplicated"``
+
+        .. warning::
+
+            Optical depths need special treatment. Per-particle ``tau_v`` is
+            duplicated by default, which is appropriate for simple dust-screen
+            optical depths. If ``tau_v`` was derived from line-of-sight column
+            densities, recompute the line-of-sight optical depths on the
+            resampled distribution to remain self-consistent.
 
         When *sfzh*, *sfh*, or *metal_dist* are provided, ages and
         metallicities are sampled from those distributions; *attr_modes*
@@ -1358,11 +1367,8 @@ class Stars(Particles, StarsComponent):
                 and hasattr(softening_lengths, "shape")
                 and softening_lengths.ndim >= 1
             ):
-                new_softening = resample_by_mode(
-                    to_resample[11],
-                    attr_modes.get("softening_lengths", "duplicated"),
-                    resample_factor,
-                    rng,
+                new_softening = resample_smoothing_lengths(
+                    to_resample[11], resample_factor
                 )
             else:
                 new_softening = softening_lengths
@@ -1647,18 +1653,15 @@ class Stars(Particles, StarsComponent):
                 else None
             )
 
-            # Softening lengths only need resampling if it's an array of values
-            # for each particle, if it's a single value we just keep it as-is
+            # Softening lengths are length scales, so scale them like
+            # smoothing lengths to conserve the represented volume.
             if (
                 softening_lengths is not None
                 and hasattr(softening_lengths, "shape")
                 and softening_lengths.ndim >= 1
             ):
-                new_softening = resample_by_mode(
-                    to_resample[11],
-                    attr_modes.get("softening_lengths", "duplicated"),
-                    resample_factor,
-                    rng,
+                new_softening = resample_smoothing_lengths(
+                    to_resample[11], resample_factor
                 )
             else:
                 new_softening = softening_lengths
@@ -1977,17 +1980,15 @@ class Stars(Particles, StarsComponent):
         """
         # Set up the inputs to the C function.
         grid_props = [
-            np.ascontiguousarray(log10ages, dtype=np.float64),
-            np.ascontiguousarray(log10metallicities, dtype=np.float64),
+            log10ages,
+            log10metallicities,
         ]
         part_props = [
-            np.ascontiguousarray(self.log10ages, dtype=np.float64),
-            np.ascontiguousarray(self.log10metallicities, dtype=np.float64),
+            self.log10ages,
+            self.log10metallicities,
         ]
         prop_names = ("log10ages", "log10metallicities")
-        part_mass = np.ascontiguousarray(
-            self._initial_masses, dtype=np.float64
-        )
+        part_mass = self._initial_masses
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(len(part_mass))
@@ -2154,15 +2155,13 @@ class Stars(Particles, StarsComponent):
         """
         # Set up the inputs to the C function.
         grid_props = [
-            np.ascontiguousarray(log10ages, dtype=np.float64),
+            log10ages,
         ]
         part_props = [
-            np.ascontiguousarray(self.log10ages, dtype=np.float64),
+            self.log10ages,
         ]
         prop_names = ("log10ages",)
-        part_mass = np.ascontiguousarray(
-            self._initial_masses, dtype=np.float64
-        )
+        part_mass = self._initial_masses
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(len(part_mass))
@@ -2312,15 +2311,13 @@ class Stars(Particles, StarsComponent):
         """
         # Set up the inputs to the C function.
         grid_props = [
-            np.ascontiguousarray(metallicities, dtype=np.float64),
+            metallicities,
         ]
         part_props = [
-            np.ascontiguousarray(self.metallicities, dtype=np.float64),
+            self.metallicities,
         ]
         prop_names = ("metallicities",)
-        part_mass = np.ascontiguousarray(
-            self._initial_masses, dtype=np.float64
-        )
+        part_mass = self._initial_masses
 
         # Make sure we set the number of particles to the size of the mask
         npart = np.int32(len(part_mass))

@@ -22,6 +22,16 @@ Example:
     ```bash
     CFLAGS="-O3 -march=native" pip install .
     ```
+
+    To build for the instruction set of the machine doing the build, which is
+    worth roughly a doubling of vector width on any current HPC CPU, run:
+
+    ```bash
+    NATIVE=1 pip install .
+    ```
+
+    The resulting binary will not run on an older CPU, so only use it when the
+    build machine and the run machine have the same architecture.
 """
 
 import logging
@@ -107,6 +117,7 @@ INCLUDES = os.environ.get("EXTRA_INCLUDES", "")
 WITH_OPENMP = os.environ.get("WITH_OPENMP", "")
 WITH_DEBUGGING_CHECKS = "ENABLE_DEBUGGING_CHECKS" in os.environ
 RUTHLESS = "RUTHLESS" in os.environ
+NATIVE = os.environ.get("NATIVE", "0").lower() in ("1", "true", "yes", "on")
 ATOMIC_TIMING = "ATOMIC_TIMING" in os.environ
 
 # Define the log file
@@ -146,6 +157,7 @@ logger.info(f"### System platform: {sys.platform}")
 logger.info(f"### CFLAGS: {CFLAGS}")
 logger.info(f"### LDFLAGS: {LDFLAGS}")
 logger.info(f"### WITH_OPENMP: {WITH_OPENMP}")
+logger.info(f"### NATIVE: {NATIVE}")
 logger.info(f"### EXTRA_INCLUDES: {INCLUDES}")
 if WITH_DEBUGGING_CHECKS:
     logger.info(f"### WITH_DEBUGGING_CHECKS: {WITH_DEBUGGING_CHECKS}")
@@ -214,6 +226,44 @@ if RUTHLESS:
         default_compile_flags.append("-Werror")
         default_compile_flags.append("-Wall")
         default_compile_flags.append("-Wextra")
+
+# Target the build machine's own instruction set when asked. Without this the
+# compiler emits the baseline for the architecture, which on x86-64 means SSE2
+# only: 128-bit vectors, half the width of the AVX2 every current HPC CPU has.
+# The flag is opt-in because the resulting binary will not run on an older CPU,
+# which matters when the login node and the compute nodes differ or when a
+# wheel is being built.
+if NATIVE:
+    if sys.platform == "win32":
+        arch_flags = ["/arch:AVX2"]
+    elif sys.platform == "darwin":
+        arch_flags = ["-mcpu=native"]
+    else:
+        arch_flags = ["-march=native", "-mtune=native"]
+    if has_flags(compiler, arch_flags):
+        default_compile_flags.extend(arch_flags)
+    else:
+        logger.info(f"### NATIVE requested but {arch_flags} not supported")
+
+# Extensions are shared libraries, so by default the compiler must assume any
+# global function can be interposed at load time and routes internal calls
+# through the PLT. Nothing here is meant to be interposed, and switching it off
+# lets those calls inline.
+if sys.platform not in ("win32", "darwin"):
+    if has_flags(compiler, ["-fno-semantic-interposition"]):
+        default_compile_flags.append("-fno-semantic-interposition")
+
+# Warn when the build is left on the baseline target, since that halves the
+# usable vector width on every kernel.
+if not NATIVE and not any(
+    f.startswith(("-march", "-mcpu", "-mavx", "/arch")) for f in CFLAGS.split()
+):
+    logger.info(
+        "### No architecture flag set: building for the baseline target of "
+        "this architecture, so machine-specific vector instructions are "
+        "unused. Set NATIVE=1, or an explicit target in CFLAGS, to enable "
+        "them."
+    )
 
 # Get user specified flags
 compile_flags = CFLAGS.split()
@@ -288,11 +338,12 @@ extensions = [
         include_dirs=include_dirs + ["src/synthesizer/extensions"],
     ),
     create_extension(
-        "synthesizer.extensions.weights",
+        "synthesizer.extensions.grid_interpolation",
         [
-            "src/synthesizer/extensions/weights.cpp",
+            "src/synthesizer/extensions/grid_interpolation.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
             "src/synthesizer/extensions/part_props.cpp",
             "src/synthesizer/extensions/grid_props.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
@@ -305,7 +356,9 @@ extensions = [
         "synthesizer.extensions.reductions",
         [
             "src/synthesizer/extensions/reductions.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
             "src/synthesizer/extensions/timers.cpp",
         ],
         compile_flags=compile_flags,
@@ -318,6 +371,8 @@ extensions = [
             "src/synthesizer/extensions/spectra_operations.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
             "src/synthesizer/extensions/timers.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -329,6 +384,8 @@ extensions = [
             "src/synthesizer/extensions/observed_spectra.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
             "src/synthesizer/extensions/timers.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
+            "src/synthesizer/extensions/cpp_to_python.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -341,6 +398,7 @@ extensions = [
             "src/synthesizer/extensions/weights.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
             "src/synthesizer/extensions/part_props.cpp",
             "src/synthesizer/extensions/grid_props.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
@@ -356,6 +414,7 @@ extensions = [
             "src/synthesizer/extensions/weights.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
             "src/synthesizer/extensions/part_props.cpp",
             "src/synthesizer/extensions/grid_props.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
@@ -372,6 +431,7 @@ extensions = [
             "src/synthesizer/extensions/weights.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
             "src/synthesizer/extensions/part_props.cpp",
             "src/synthesizer/extensions/grid_props.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
@@ -389,6 +449,7 @@ extensions = [
             "src/synthesizer/extensions/octree.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
             "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,
@@ -401,6 +462,7 @@ extensions = [
             "src/synthesizer/extensions/weights.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
             "src/synthesizer/extensions/part_props.cpp",
             "src/synthesizer/extensions/grid_props.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
@@ -416,6 +478,7 @@ extensions = [
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/octree.cpp",
             "src/synthesizer/extensions/cpp_to_python.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
             "src/synthesizer/extensions/part_props.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
             "src/synthesizer/extensions/grid_props.cpp",
@@ -443,6 +506,7 @@ extensions = [
         "synthesizer.extensions.photometry",
         [
             "src/synthesizer/extensions/photometry.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/cpp_to_python.cpp",
             "src/synthesizer/extensions/part_props.cpp",
@@ -459,6 +523,7 @@ extensions = [
             "src/synthesizer/imaging/extensions/circular_aperture.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
         ],
         compile_flags=compile_flags,
         links=link_args,

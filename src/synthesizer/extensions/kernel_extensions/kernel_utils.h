@@ -18,27 +18,29 @@
  *
  * Values outside the tabulated support are taken to be zero.
  *
+ * @tparam Real The floating-point type (float or double).
  * @param kernel The 1D kernel lookup table.
  * @param kdim The number of entries in the kernel lookup table.
  * @param q The dimensionless radius at which to evaluate the kernel.
  *
  * @return The interpolated kernel value.
  */
-static inline double get_kernel_value(const double *kernel, const int kdim,
-                                      const double q) {
+template <typename Real>
+static inline Real get_kernel_value(const Real *kernel, const int kdim,
+                                    const Real q) {
 
   /* Early exit for outside the kernel. */
-  if (q < 0.0 || q >= 1.0) {
-    return 0.0;
+  if (q < static_cast<Real>(0.0) || q >= static_cast<Real>(1.0)) {
+    return static_cast<Real>(0.0);
   }
 
   /* Map the dimensionless radius to the kernel.*/
-  const double scaled = q * (kdim - 1);
+  const Real scaled = q * static_cast<Real>(kdim - 1);
   const int index = static_cast<int>(scaled);
   const int next_index = std::min(kdim - 1, index + 1);
 
   /* Calculate the fractional distance between the two kernel samples. */
-  const double frac = scaled - index;
+  const Real frac = scaled - index;
 
   /* Linearly interpolate and return the kernel value. */
   return kernel[index] + frac * (kernel[next_index] - kernel[index]);
@@ -52,6 +54,7 @@ static inline double get_kernel_value(const double *kernel, const int kdim,
  * from coordinate to tabulated index, removing the binary search cost from the
  * hot pair-evaluation path.
  *
+ * @tparam Real The floating-point type (float or double).
  * @param value The coordinate to locate.
  * @param min_value The lower coordinate bound of the grid.
  * @param max_value The upper coordinate bound of the grid.
@@ -59,31 +62,32 @@ static inline double get_kernel_value(const double *kernel, const int kdim,
  * @param index The returned lower interpolation index.
  * @param frac The returned fractional position within that cell.
  */
-static inline void get_uniform_interp_index(const double value,
-                                            const double min_value,
-                                            const double max_value,
+template <typename Real>
+static inline void get_uniform_interp_index(const Real value,
+                                            const Real min_value,
+                                            const Real max_value,
                                             const int dim, int &index,
-                                            double &frac) {
+                                            Real &frac) {
 
   if (dim <= 1) {
     index = 0;
-    frac = 0.0;
+    frac = static_cast<Real>(0.0);
     return;
   }
 
   if (value <= min_value) {
     index = 0;
-    frac = 0.0;
+    frac = static_cast<Real>(0.0);
     return;
   }
   if (value >= max_value) {
     index = dim - 2;
-    frac = 1.0;
+    frac = static_cast<Real>(1.0);
     return;
   }
 
-  const double scaled = (value - min_value) * (static_cast<double>(dim - 1) /
-                                               (max_value - min_value));
+  const Real scaled = (value - min_value) *
+                      (static_cast<Real>(dim - 1) / (max_value - min_value));
   index = static_cast<int>(scaled);
   frac = scaled - index;
 }
@@ -95,6 +99,7 @@ static inline void get_uniform_interp_index(const double value,
  * entries are uniform in log(eta). This helper converts eta to log-space and
  * performs the same direct affine mapping used for the uniform q and u axes.
  *
+ * @tparam Real The floating-point type (float or double).
  * @param value The coordinate to locate.
  * @param min_value The lower coordinate bound of the grid.
  * @param max_value The upper coordinate bound of the grid.
@@ -102,33 +107,34 @@ static inline void get_uniform_interp_index(const double value,
  * @param index The returned lower interpolation index.
  * @param frac The returned fractional position within that cell.
  */
-static inline void get_geometric_interp_index(const double value,
-                                              const double min_value,
-                                              const double max_value,
+template <typename Real>
+static inline void get_geometric_interp_index(const Real value,
+                                              const Real min_value,
+                                              const Real max_value,
                                               const int dim, int &index,
-                                              double &frac) {
+                                              Real &frac) {
 
   if (dim <= 1) {
     index = 0;
-    frac = 0.0;
+    frac = static_cast<Real>(0.0);
     return;
   }
 
   if (value <= min_value) {
     index = 0;
-    frac = 0.0;
+    frac = static_cast<Real>(0.0);
     return;
   }
   if (value >= max_value) {
     index = dim - 2;
-    frac = 1.0;
+    frac = static_cast<Real>(1.0);
     return;
   }
 
-  const double log_min = std::log(min_value);
-  const double log_max = std::log(max_value);
-  const double scaled = (std::log(value) - log_min) *
-                        (static_cast<double>(dim - 1) / (log_max - log_min));
+  const Real log_min = std::log(min_value);
+  const Real log_max = std::log(max_value);
+  const Real scaled = (std::log(value) - log_min) *
+                      (static_cast<Real>(dim - 1) / (log_max - log_min));
   index = static_cast<int>(scaled);
   frac = scaled - index;
 }
@@ -142,6 +148,7 @@ static inline void get_geometric_interp_index(const double value,
  * given LOS coordinate and is used when building the smoothed-input overlap
  * table.
  *
+ * @tparam Real The floating-point type (float or double).
  * @param kernel The 2D truncated LOS kernel lookup table stored in row-major
  *        order with projected-separation index first.
  * @param kdim The number of projected-separation entries.
@@ -151,39 +158,42 @@ static inline void get_geometric_interp_index(const double value,
  *
  * @return The interpolated cumulative LOS kernel value.
  */
-static inline double get_truncated_kernel_value(const double *kernel,
-                                                const int kdim, const int zdim,
-                                                const double q,
-                                                const double z) {
+template <typename Real>
+static inline Real get_truncated_kernel_value(const Real *kernel,
+                                              const int kdim, const int zdim,
+                                              const Real q, const Real z) {
 
   /* Early exit for outside the projected kernel support. */
-  if (q < 0.0 || q >= 1.0) {
-    return 0.0;
+  if (q < static_cast<Real>(0.0) || q >= static_cast<Real>(1.0)) {
+    return static_cast<Real>(0.0);
   }
 
   /* Clamp the LOS coordinate to the tabulated support range. */
-  const double clamped_z = std::max(-1.0, std::min(1.0, z));
+  const Real clamped_z =
+      std::max(static_cast<Real>(-1.0), std::min(static_cast<Real>(1.0), z));
 
   /* Locate the interpolation cell in projected separation. */
-  const double scaled_q = q * (kdim - 1);
+  const Real scaled_q = q * static_cast<Real>(kdim - 1);
   const int q_index = static_cast<int>(scaled_q);
   const int q_next = std::min(kdim - 1, q_index + 1);
-  const double q_frac = scaled_q - q_index;
+  const Real q_frac = scaled_q - q_index;
 
   /* Locate the interpolation cell in LOS coordinate. */
-  const double scaled_z = 0.5 * (clamped_z + 1.0) * (zdim - 1);
+  const Real scaled_z = static_cast<Real>(0.5) *
+                        (clamped_z + static_cast<Real>(1.0)) *
+                        static_cast<Real>(zdim - 1);
   const int z_index = static_cast<int>(scaled_z);
   const int z_next = std::min(zdim - 1, z_index + 1);
-  const double z_frac = scaled_z - z_index;
+  const Real z_frac = scaled_z - z_index;
 
   /* Bilinearly interpolate the cumulative kernel table. */
-  const double v00 = kernel[q_index * zdim + z_index];
-  const double v01 = kernel[q_index * zdim + z_next];
-  const double v10 = kernel[q_next * zdim + z_index];
-  const double v11 = kernel[q_next * zdim + z_next];
+  const Real v00 = kernel[q_index * zdim + z_index];
+  const Real v01 = kernel[q_index * zdim + z_next];
+  const Real v10 = kernel[q_next * zdim + z_index];
+  const Real v11 = kernel[q_next * zdim + z_next];
 
-  const double vz0 = v00 + z_frac * (v01 - v00);
-  const double vz1 = v10 + z_frac * (v11 - v10);
+  const Real vz0 = v00 + z_frac * (v01 - v00);
+  const Real vz1 = v10 + z_frac * (v11 - v10);
   return vz0 + q_frac * (vz1 - vz0);
 }
 
@@ -219,6 +229,7 @@ static inline double get_truncated_kernel_value(const double *kernel,
  * in log-space, the interpolation cell is located with direct index arithmetic
  * rather than generic binary searches.
  *
+ * @tparam Real The floating-point type (float or double).
  * @param kernel The overlap kernel table.
  * @param q_grid The projected-overlap coordinate grid.
  * @param u_grid The LOS-offset coordinate grid.
@@ -232,32 +243,34 @@ static inline double get_truncated_kernel_value(const double *kernel,
  *
  * @return The interpolated overlap-kernel value.
  */
-static inline double get_overlap_kernel_value(
-    const double *kernel, const double *q_grid, const double *u_grid,
-    const double *eta_grid, const int qdim, const int udim, const int etadim,
-    const double q, const double u, const double eta) {
+template <typename Real>
+static inline Real get_overlap_kernel_value(
+    const Real *kernel, const Real *q_grid, const Real *u_grid,
+    const Real *eta_grid, const int qdim, const int udim, const int etadim,
+    const Real q, const Real u, const Real eta) {
 
   /* Outside the projected or LOS support there is no contribution. */
-  if (q < 0.0 || q >= 1.0 || u <= -1.0) {
-    return 0.0;
+  if (q < static_cast<Real>(0.0) || q >= static_cast<Real>(1.0) ||
+      u <= static_cast<Real>(-1.0)) {
+    return static_cast<Real>(0.0);
   }
 
   /* Clamp the LOS offset to the saturated fully-front face of the table. */
-  const double clamped_u = std::min(u, 1.0);
+  const Real clamped_u = std::min(u, static_cast<Real>(1.0));
 
   /* Locate the interpolation cell on each axis. */
   int q_index = 0;
   int u_index = 0;
   int eta_index = 0;
-  double q_frac = 0.0;
-  double u_frac = 0.0;
-  double eta_frac = 0.0;
-  get_uniform_interp_index(q, q_grid[0], q_grid[qdim - 1], qdim, q_index,
-                           q_frac);
-  get_uniform_interp_index(clamped_u, u_grid[0], u_grid[udim - 1], udim,
-                           u_index, u_frac);
-  get_geometric_interp_index(eta, eta_grid[0], eta_grid[etadim - 1], etadim,
-                             eta_index, eta_frac);
+  Real q_frac = static_cast<Real>(0.0);
+  Real u_frac = static_cast<Real>(0.0);
+  Real eta_frac = static_cast<Real>(0.0);
+  get_uniform_interp_index<Real>(q, q_grid[0], q_grid[qdim - 1], qdim, q_index,
+                                 q_frac);
+  get_uniform_interp_index<Real>(clamped_u, u_grid[0], u_grid[udim - 1], udim,
+                                 u_index, u_frac);
+  get_geometric_interp_index<Real>(eta, eta_grid[0], eta_grid[etadim - 1],
+                                   etadim, eta_index, eta_frac);
 
   /* Get the upper interpolation indices, handling edge-clamped lookups. */
   const int q_next = std::min(qdim - 1, q_index + 1);
@@ -270,23 +283,23 @@ static inline double get_overlap_kernel_value(
   };
 
   /* Interpolate along the eta direction first on each q/u corner. */
-  const double c000 = value_at(q_index, u_index, eta_index);
-  const double c001 = value_at(q_index, u_index, eta_next);
-  const double c010 = value_at(q_index, u_next, eta_index);
-  const double c011 = value_at(q_index, u_next, eta_next);
-  const double c100 = value_at(q_next, u_index, eta_index);
-  const double c101 = value_at(q_next, u_index, eta_next);
-  const double c110 = value_at(q_next, u_next, eta_index);
-  const double c111 = value_at(q_next, u_next, eta_next);
+  const Real c000 = value_at(q_index, u_index, eta_index);
+  const Real c001 = value_at(q_index, u_index, eta_next);
+  const Real c010 = value_at(q_index, u_next, eta_index);
+  const Real c011 = value_at(q_index, u_next, eta_next);
+  const Real c100 = value_at(q_next, u_index, eta_index);
+  const Real c101 = value_at(q_next, u_index, eta_next);
+  const Real c110 = value_at(q_next, u_next, eta_index);
+  const Real c111 = value_at(q_next, u_next, eta_next);
 
-  const double c00 = c000 + eta_frac * (c001 - c000);
-  const double c01 = c010 + eta_frac * (c011 - c010);
-  const double c10 = c100 + eta_frac * (c101 - c100);
-  const double c11 = c110 + eta_frac * (c111 - c110);
+  const Real c00 = c000 + eta_frac * (c001 - c000);
+  const Real c01 = c010 + eta_frac * (c011 - c010);
+  const Real c10 = c100 + eta_frac * (c101 - c100);
+  const Real c11 = c110 + eta_frac * (c111 - c110);
 
   /* Then interpolate along the LOS-offset direction. */
-  const double c0 = c00 + u_frac * (c01 - c00);
-  const double c1 = c10 + u_frac * (c11 - c10);
+  const Real c0 = c00 + u_frac * (c01 - c00);
+  const Real c1 = c10 + u_frac * (c11 - c10);
 
   /* Finally interpolate along the projected-separation direction. */
   return c0 + q_frac * (c1 - c0);
