@@ -8,6 +8,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
 #include <vector>
 
 /* Python headers. */
@@ -27,6 +28,38 @@
 #ifdef ATOMIC_TIMING
 #include "timers_init.h"
 #endif
+
+/**
+ * @brief Build readable names for the column density attribute arrays.
+ *
+ * @param py_names Optional sequence of attribute names (may be NULL/None).
+ * @param n The number of attribute arrays.
+ * @return One name per array, e.g. "dust_masses of the absorbing particles",
+ *         falling back to "column density attribute 1" etc.
+ */
+static std::vector<std::string> density_attr_names(PyObject *py_names,
+                                                   const size_t n) {
+  std::vector<std::string> names;
+  names.reserve(n);
+  for (size_t i = 0; i < n; ++i) {
+    std::string name = "column density attribute " + std::to_string(i + 1);
+    if (py_names != NULL && py_names != Py_None &&
+        PySequence_Check(py_names) &&
+        static_cast<Py_ssize_t>(i) < PySequence_Size(py_names)) {
+      PyObject *item = PySequence_GetItem(py_names, i);
+      const char *utf8 = (item != NULL && PyUnicode_Check(item))
+                             ? PyUnicode_AsUTF8(item)
+                             : NULL;
+      if (utf8 != NULL) {
+        name = std::string(utf8) + " of the absorbing particles";
+      }
+      Py_XDECREF(item);
+    }
+    PyErr_Clear();
+    names.push_back(name);
+  }
+  return names;
+}
 
 /**
  * @brief Validate a Python sequence of source-property arrays.
@@ -823,12 +856,13 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
       *np_smls;
   PyObject *py_surf_den_vals;
   PyObject *out_dtype = Py_None;
+  PyObject *py_attr_names = Py_None;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOiiiiidiii|O", &np_kernel,
+  if (!PyArg_ParseTuple(args, "OOOOOOiiiiidiii|OO", &np_kernel,
                         &np_truncated_kernel, &np_pos_i, &np_pos_j, &np_smls,
                         &py_surf_den_vals, &npart_i, &npart_j, &kdim,
                         &trunc_qdim, &zdim, &threshold, &force_loop,
-                        &min_count, &nthreads, &out_dtype))
+                        &min_count, &nthreads, &out_dtype, &py_attr_names))
     return NULL;
 
   /* Quick check to make sure our inputs are valid. */
@@ -897,8 +931,12 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  std::vector<const char *> value_names(np_surf_den_vals.size(),
-                                        "surf_den_vals");
+  std::vector<std::string> value_labels =
+      density_attr_names(py_attr_names, np_surf_den_vals.size());
+  std::vector<const char *> value_names;
+  for (const std::string &label : value_labels) {
+    value_names.push_back(label.c_str());
+  }
   int value_typenum = -1;
   if (!is_matching_float_dtypes(np_surf_den_vals.data(), value_names.data(),
                                 static_cast<int>(np_surf_den_vals.size()),
@@ -1601,12 +1639,14 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
       *np_pos_i, *np_input_smls, *np_pos_j, *np_smls;
   PyObject *py_surf_den_vals;
   PyObject *out_dtype = Py_None;
+  PyObject *py_attr_names = Py_None;
 
-  if (!PyArg_ParseTuple(args, "OOOOOOOOOiiiiidiii|O", &np_overlap_kernel,
+  if (!PyArg_ParseTuple(args, "OOOOOOOOOiiiiidiii|OO", &np_overlap_kernel,
                         &np_q_grid, &np_u_grid, &np_eta_grid, &np_pos_i,
                         &np_input_smls, &np_pos_j, &np_smls, &py_surf_den_vals,
                         &npart_i, &npart_j, &qdim, &udim, &etadim, &threshold,
-                        &force_loop, &min_count, &nthreads, &out_dtype)) {
+                        &force_loop, &min_count, &nthreads, &out_dtype,
+                        &py_attr_names)) {
     return NULL;
   }
 
@@ -1668,8 +1708,12 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  std::vector<const char *> value_names(np_surf_den_vals.size(),
-                                        "surf_den_vals");
+  std::vector<std::string> value_labels =
+      density_attr_names(py_attr_names, np_surf_den_vals.size());
+  std::vector<const char *> value_names;
+  for (const std::string &label : value_labels) {
+    value_names.push_back(label.c_str());
+  }
   int value_typenum = -1;
   if (!is_matching_float_dtypes(np_surf_den_vals.data(), value_names.data(),
                                 static_cast<int>(np_surf_den_vals.size()),

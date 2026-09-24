@@ -486,6 +486,19 @@ class Kernel:
         """Get the dimensionless LOS truncation bins for the 2D lookup."""
         return np.linspace(-1.0, 1.0, self.truncated_z_binsize + 1)
 
+    def _build_truncated_los_kernel(self):
+        """Build the truncated LOS kernel table and its grids in float64.
+
+        Returns:
+            tuple:
+                The float64 truncated kernel table and the radial and
+                LOS-coordinate grids that index it.
+        """
+        bins = self._get_bins(self.truncated_q_binsize)
+        z_bins = self._get_z_bins()
+        kernel = compute_truncated_los_kernel(bins, z_bins, self.name)
+        return kernel, bins, z_bins
+
     @timed("Kernel.get_truncated_los_kernel")
     def get_truncated_los_kernel(self):
         """Compute the truncated LOS kernel lookup table.
@@ -511,17 +524,8 @@ class Kernel:
                 z_bins.astype(self.dtype, copy=False),
             )
 
-        # Get the projected-separation and LOS-coordinate bins and set up the
-        # output.
-        bins = self._get_bins(self.truncated_q_binsize)
-        z_bins = self._get_z_bins()
-        kernel = compute_truncated_los_kernel(
-            bins,
-            z_bins,
-            self.name,
-        )
-
-        # Cache it at the requested precision.
+        # Build the table (in float64) and cache it at the requested precision.
+        kernel, bins, z_bins = self._build_truncated_los_kernel()
         self._truncated_los_kernel = kernel.astype(self.dtype, copy=False)
 
         return (
@@ -586,11 +590,20 @@ class Kernel:
         # Get the truncated LOS kernel table, we need this to evaluate the
         # truncated LOS contribution at each sample point inside the input
         # kernel when building the overlap table. The build always works in
-        # float64, whatever dtype the tables are stored at.
-        truncated_kernel, trunc_q, trunc_z = (
-            table.astype(np.float64, copy=False)
-            for table in self.get_truncated_los_kernel()
-        )
+        # float64, so if the stored table is at reduced precision we rebuild
+        # it at float64 rather than promoting the rounded values.
+        if self.dtype == np.float64:
+            truncated_kernel, trunc_q, trunc_z = (
+                self.get_truncated_los_kernel()
+            )
+        else:
+            truncated_kernel, trunc_q, trunc_z = (
+                self._build_truncated_los_kernel()
+            )
+            if self._truncated_los_kernel is None:
+                self._truncated_los_kernel = truncated_kernel.astype(
+                    self.dtype
+                )
 
         # Build the overlap kernel
         kernel = compute_overlap_kernel(

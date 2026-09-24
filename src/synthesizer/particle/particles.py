@@ -1140,6 +1140,7 @@ class Particles:
             min_count,
             nthreads,
             out_dtype,
+            tuple(attrs),
         )
 
     def _prepare_smoothed_los_args(
@@ -1299,6 +1300,7 @@ class Particles:
             min_count,
             nthreads,
             out_dtype,
+            tuple(attrs),
         )
 
     @timed("Particles.get_los_column_density")
@@ -1431,7 +1433,6 @@ class Particles:
             )
 
         column_density_units = []
-        density_dtypes = []
         for attr in density_attrs:
             density = getattr(other_parts, attr, None)
             if density is None:
@@ -1451,12 +1452,7 @@ class Particles:
             column_density_units.append(
                 density.units / other_parts.coordinates.units**2
             )
-            density_dtypes.append(density.dtype)
 
-        if len(set(density_dtypes)) != 1:
-            raise exceptions.InconsistentArguments(
-                "All density attributes must have the same dtype."
-            )
         output_dtype = resolve_out_dtype(out_dtype)
 
         def finalise(raw):

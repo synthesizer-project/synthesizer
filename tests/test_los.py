@@ -1841,3 +1841,17 @@ def test_column_density_mixed_collection_precision(
     assert result.dtype == np.float32
     assert np.all(reference.value > 0)
     np.testing.assert_allclose(result.value, reference.value, rtol=1e-5)
+
+
+def test_column_density_dtype_error_names_attributes(one_star, one_gas_front):
+    """A mismatched density attribute is named in the dtype error."""
+    one_gas_front.dust_masses = unyt_array(
+        one_gas_front.dust_masses.value.astype(np.float32), "Msun"
+    )
+
+    with pytest.raises(TypeError, match="dust_masses of the absorbing"):
+        one_star.get_los_column_density(
+            one_gas_front,
+            ["masses", "dust_masses"],
+            Kernel(name="uniform", binsize=16),
+        )

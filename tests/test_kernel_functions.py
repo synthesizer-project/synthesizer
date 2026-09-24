@@ -258,6 +258,11 @@ def test_kernel_dtype_sets_every_table_dtype():
         assert table64.dtype == np.float64
         np.testing.assert_allclose(table32, table64, rtol=1e-6, atol=1e-7)
 
+    # The overlap table must be built from the float64 truncated table and
+    # only rounded at the end, so it matches the float64 table exactly once
+    # cast
+    np.testing.assert_array_equal(tables32[4], tables64[4].astype(np.float32))
+
 
 def test_kernel_hdf5_round_trip_preserves_dtype(tmp_path):
     """A saved float32 kernel reloads as float32 unless overridden."""
