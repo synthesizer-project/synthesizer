@@ -454,7 +454,8 @@ class BlackholesComponent(Component):
         Physical constants (c, Lsun) and scalar defaults (e.g. epsilon=0.1)
         are float64, so arithmetic with them promotes float32 black hole
         properties. Derived properties should keep the precision of the
-        masses they were computed from.
+        masses they were computed from, but only where their values fit
+        (luminosities in erg/s do not fit in float32 and stay float64).
 
         Args:
             arr (unyt_array/np.ndarray):
@@ -495,9 +496,9 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole bolometric luminosity
         """
-        self.bolometric_luminosity = self._like_mass(
-            self.epsilon * self.accretion_rate * c**2
-        )
+        # NOTE: this deliberately stays float64. Bolometric luminosities
+        # (~1e45 erg/s) overflow float32.
+        self.bolometric_luminosity = self.epsilon * self.accretion_rate * c**2
 
         return self.bolometric_luminosity
 
@@ -512,9 +513,9 @@ class BlackholesComponent(Component):
         # L_Edd = 4*pi*G*mp*c*M/sigma_thompson = 1.257e38 * M/Msun erg/s
         # Converting to solar luminosities:
         # L_Edd = 1.257e38 / 3.828e33 = 3.284e4 Lsun/Msun
-        self.eddington_luminosity = self._like_mass(
-            3.284e4 * self._mass * Lsun
-        )
+        # NOTE: this deliberately stays float64, converting it to erg/s would
+        # overflow float32.
+        self.eddington_luminosity = 3.284e4 * self._mass * Lsun
 
         return self.eddington_luminosity
 
@@ -531,7 +532,7 @@ class BlackholesComponent(Component):
             self.eddington_luminosity.units
         ).ndview
         edd_lum = self._eddington_luminosity
-        self.eddington_ratio = bol_lum / edd_lum
+        self.eddington_ratio = self._like_mass(bol_lum / edd_lum)
 
         return self.eddington_ratio
 
@@ -558,8 +559,13 @@ class BlackholesComponent(Component):
             unyt_array
                 The black hole accretion rate in units of the Eddington rate.
         """
-        self.accretion_rate_eddington = (
-            self._bolometric_luminosity / self._eddington_luminosity
+        # Convert to matching units before dividing (the bolometric
+        # luminosity is stored in erg/s and the Eddington luminosity in Lsun)
+        bol_lum = self.bolometric_luminosity.to(
+            self.eddington_luminosity.units
+        ).ndview
+        self.accretion_rate_eddington = self._like_mass(
+            bol_lum / self._eddington_luminosity
         )
 
         return self.accretion_rate_eddington
