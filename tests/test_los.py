@@ -1768,3 +1768,55 @@ def test_smoothed_column_density_supports_independent_dtypes(force_loop):
 
     assert result.dtype == np.float64
     assert result[0, 0] > 0.0
+
+
+@pytest.mark.parametrize("as_points", [True, False], ids=["points", "smooth"])
+def test_column_density_all_float32_with_float32_kernel(as_points):
+    """All-float32 particles and kernel work through the public API."""
+
+    def make(dtype):
+        star = Stars(
+            initial_masses=unyt_array(np.array([1.0], dtype=dtype), "Msun"),
+            ages=unyt_array(np.array([1.0], dtype=dtype), "Myr"),
+            metallicities=np.array([0.02], dtype=dtype),
+            redshift=0.0,
+            coordinates=unyt_array(
+                np.array([[0.0, 0.0, 1.0]], dtype=dtype), "Mpc"
+            ),
+            smoothing_lengths=unyt_array(np.array([0.5], dtype=dtype), "Mpc"),
+        )
+        gas = Gas(
+            masses=unyt_array(np.array([1e6, 2e6], dtype=dtype), "Msun"),
+            metallicities=np.array([0.01, 0.01], dtype=dtype),
+            redshift=0.0,
+            coordinates=unyt_array(
+                np.array([[0.0, 0.0, 0.0], [0.1, 0.0, 0.5]], dtype=dtype),
+                "Mpc",
+            ),
+            smoothing_lengths=unyt_array(
+                np.array([1.0, 1.0], dtype=dtype), "Mpc"
+            ),
+            dust_to_metal_ratio=1.0,
+        )
+        kernel = Kernel(
+            name="uniform",
+            binsize=64,
+            overlap_q_binsize=8,
+            overlap_u_binsize=8,
+            overlap_eta_binsize=8,
+            overlap_build_ndim=4,
+            dtype=dtype,
+        )
+        return star.get_los_column_density(
+            gas,
+            "masses",
+            kernel,
+            as_points=as_points,
+            out_dtype=dtype,
+        )
+
+    result32 = make(np.float32)
+    result64 = make(np.float64)
+
+    assert result32.dtype == np.float32
+    np.testing.assert_allclose(result32.value, result64.value, rtol=1e-5)

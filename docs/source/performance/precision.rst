@@ -106,6 +106,24 @@ float32 grid itself. An already-loaded grid can also be converted after the
 fact with :meth:`~synthesizer.grid.Grid.convert_precision` (this one does
 copy, since the float64 data already exists).
 
+Kernels
+^^^^^^^
+
+The SPH kernel lookup tables used for line-of-sight column densities (and
+smoothed imaging) take a ``dtype`` argument:
+
+.. code-block:: python
+
+    from synthesizer.kernel_functions import Kernel
+
+    kernel = Kernel("sph_anarchy", dtype=np.float32)
+
+The tables are always built in float64 for accuracy and then stored at the
+requested dtype, so a float32 kernel halves their memory. The kernel is its own
+precision group, so a float64 kernel can still be used with float32 particles
+(and vice versa). A saved kernel reloads at the dtype it was saved at, or at
+the dtype passed to ``Kernel.load(path, dtype=...)``.
+
 Mixing precisions
 ~~~~~~~~~~~~~~~~~
 
