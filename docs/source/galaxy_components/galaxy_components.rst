@@ -26,6 +26,13 @@ In the following pages we describe these components, and how to initialise them 
    gas
    blackholes
 
+Particle ``Gas`` and ``Stars`` components can also deposit their attributes onto uniform or adaptively refined meshes, stored on the component as ``meshes``. This is demonstrated in the example below.
+
+.. toctree::
+   :maxdepth: 1
+
+   meshes
+
 
 The Galaxy Object
 ~~~~~~~~~~~~~~~~~
