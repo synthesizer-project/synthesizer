@@ -133,8 +133,9 @@ must share a single dtype — float32 or float64. If they don't, Synthesizer
 raises a ``TypeError`` naming the offending array.
 
 *Between* groups, precisions can be mixed freely: float32 particle data can
-be combined with a float64 grid (and vice versa), and the output dtype is
-independent of both. Each array is read at its own precision inside the C++
+be combined with a float64 grid (and vice versa), float32 stars can have
+line-of-sight column densities computed through float64 gas, and the output
+dtype is independent of all of them. Each array is read at its own precision inside the C++
 kernels; nothing is cast or copied.
 
 Understanding the errors

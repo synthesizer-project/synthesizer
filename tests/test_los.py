@@ -1771,33 +1771,53 @@ def test_smoothed_column_density_supports_independent_dtypes(force_loop):
 
 
 @pytest.mark.parametrize("as_points", [True, False], ids=["points", "smooth"])
-def test_column_density_all_float32_with_float32_kernel(as_points):
-    """All-float32 particles and kernel work through the public API."""
+@pytest.mark.parametrize(
+    "star_dtype, gas_dtype",
+    [
+        (np.float32, np.float32),
+        (np.float32, np.float64),
+        (np.float64, np.float32),
+    ],
+    ids=["f32-f32", "f32stars-f64gas", "f64stars-f32gas"],
+)
+def test_column_density_mixed_collection_precision(
+    as_points, star_dtype, gas_dtype
+):
+    """Stars and gas may each use their own precision via the public API.
 
-    def make(dtype):
+    This also covers dust masses derived from a scalar dust-to-metal ratio,
+    which must keep the gas precision.
+    """
+
+    def column_density(star_dtype, gas_dtype):
         star = Stars(
-            initial_masses=unyt_array(np.array([1.0], dtype=dtype), "Msun"),
-            ages=unyt_array(np.array([1.0], dtype=dtype), "Myr"),
-            metallicities=np.array([0.02], dtype=dtype),
+            initial_masses=unyt_array(
+                np.array([1.0], dtype=star_dtype), "Msun"
+            ),
+            ages=unyt_array(np.array([1.0], dtype=star_dtype), "Myr"),
+            metallicities=np.array([0.02], dtype=star_dtype),
             redshift=0.0,
             coordinates=unyt_array(
-                np.array([[0.0, 0.0, 1.0]], dtype=dtype), "Mpc"
+                np.array([[0.0, 0.0, 1.0]], dtype=star_dtype), "Mpc"
             ),
-            smoothing_lengths=unyt_array(np.array([0.5], dtype=dtype), "Mpc"),
+            smoothing_lengths=unyt_array(
+                np.array([0.5], dtype=star_dtype), "Mpc"
+            ),
         )
         gas = Gas(
-            masses=unyt_array(np.array([1e6, 2e6], dtype=dtype), "Msun"),
-            metallicities=np.array([0.01, 0.01], dtype=dtype),
+            masses=unyt_array(np.array([1e6, 2e6], dtype=gas_dtype), "Msun"),
+            metallicities=np.array([0.01, 0.01], dtype=gas_dtype),
             redshift=0.0,
             coordinates=unyt_array(
-                np.array([[0.0, 0.0, 0.0], [0.1, 0.0, 0.5]], dtype=dtype),
+                np.array([[0.0, 0.0, 0.0], [0.1, 0.0, 0.5]], dtype=gas_dtype),
                 "Mpc",
             ),
             smoothing_lengths=unyt_array(
-                np.array([1.0, 1.0], dtype=dtype), "Mpc"
+                np.array([1.0, 1.0], dtype=gas_dtype), "Mpc"
             ),
-            dust_to_metal_ratio=1.0,
+            dust_to_metal_ratio=0.3,
         )
+        assert gas.dust_masses.dtype == gas_dtype
         kernel = Kernel(
             name="uniform",
             binsize=64,
@@ -1805,18 +1825,19 @@ def test_column_density_all_float32_with_float32_kernel(as_points):
             overlap_u_binsize=8,
             overlap_eta_binsize=8,
             overlap_build_ndim=4,
-            dtype=dtype,
+            dtype=star_dtype,
         )
         return star.get_los_column_density(
             gas,
-            "masses",
+            "dust_masses",
             kernel,
             as_points=as_points,
-            out_dtype=dtype,
+            out_dtype=np.float32,
         )
 
-    result32 = make(np.float32)
-    result64 = make(np.float64)
+    result = column_density(star_dtype, gas_dtype)
+    reference = column_density(np.float64, np.float64)
 
-    assert result32.dtype == np.float32
-    np.testing.assert_allclose(result32.value, result64.value, rtol=1e-5)
+    assert result.dtype == np.float32
+    assert np.all(reference.value > 0)
+    np.testing.assert_allclose(result.value, reference.value, rtol=1e-5)

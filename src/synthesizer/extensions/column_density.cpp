@@ -120,7 +120,7 @@ static bool unpack_density_arrays(PyObject *values, const int npart,
  */
 template <typename PartReal, typename KernelReal, typename ValueReal>
 static void los_loop_serial(
-    const PartReal *pos_i, const PartReal *pos_j, const PartReal *smls,
+    const FloatView pos_i, const PartReal *pos_j, const PartReal *smls,
     const std::vector<const ValueReal *> &surf_den_vals,
     const KernelReal *kernel, const KernelReal *truncated_kernel,
     double *surf_dens, const int npart_i, const int npart_j, const int nattrs,
@@ -130,9 +130,9 @@ static void los_loop_serial(
   /* Loop over particle postions. */
   for (int i = 0; i < npart_i; i++) {
 
-    PartReal x = pos_i[i * 3];
-    PartReal y = pos_i[i * 3 + 1];
-    PartReal z = pos_i[i * 3 + 2];
+    PartReal x = pos_i.get<PartReal>(i * 3);
+    PartReal y = pos_i.get<PartReal>(i * 3 + 1);
+    PartReal z = pos_i.get<PartReal>(i * 3 + 2);
 
     /* Loop over other particle postions. */
     for (int j = 0; j < npart_j; j++) {
@@ -220,7 +220,7 @@ static void los_loop_serial(
  */
 #ifdef WITH_OPENMP
 template <typename PartReal, typename KernelReal, typename ValueReal>
-static void los_loop_omp(const PartReal *pos_i, const PartReal *pos_j,
+static void los_loop_omp(const FloatView pos_i, const PartReal *pos_j,
                          const PartReal *smls,
                          const std::vector<const ValueReal *> &surf_den_vals,
                          const KernelReal *kernel,
@@ -255,9 +255,9 @@ static void los_loop_omp(const PartReal *pos_i, const PartReal *pos_j,
       /* Get the relative index. */
       int ii = i - start;
 
-      PartReal x = pos_i[i * 3];
-      PartReal y = pos_i[i * 3 + 1];
-      PartReal z = pos_i[i * 3 + 2];
+      PartReal x = pos_i.get<PartReal>(i * 3);
+      PartReal y = pos_i.get<PartReal>(i * 3 + 1);
+      PartReal z = pos_i.get<PartReal>(i * 3 + 2);
 
       for (int j = 0; j < npart_j; j++) {
 
@@ -351,7 +351,7 @@ static void los_loop_omp(const PartReal *pos_i, const PartReal *pos_j,
  * @param nthreads The number of threads to use.
  */
 template <typename PartReal, typename KernelReal, typename ValueReal>
-static void los_loop(const PartReal *pos_i, const PartReal *pos_j,
+static void los_loop(const FloatView pos_i, const PartReal *pos_j,
                      const PartReal *smls,
                      const std::vector<const ValueReal *> &surf_den_vals,
                      const KernelReal *kernel,
@@ -541,7 +541,7 @@ static void calculate_los_recursive(
  */
 template <typename PartReal, typename KernelReal, typename ValueReal>
 static void los_tree_serial(
-    struct cell<PartReal> *root, const PartReal *pos_i,
+    struct cell<PartReal> *root, const FloatView pos_i,
     const KernelReal *kernel, const KernelReal *truncated_kernel,
     const std::vector<const ValueReal *> &surf_den_vals, double *surf_dens,
     const int npart_i, const int kdim, const int trunc_qdim, const int zdim,
@@ -553,9 +553,9 @@ static void los_tree_serial(
     /* Start at the root. We'll recurse through the tree to the leaves
      * skipping all cells out of range of this particle. */
     calculate_los_recursive<PartReal, KernelReal, ValueReal>(
-        root, pos_i[i * 3], pos_i[i * 3 + 1], pos_i[i * 3 + 2], threshold,
-        kdim, trunc_qdim, zdim, kernel, truncated_kernel, surf_den_vals,
-        surf_dens, i, npart_i);
+        root, pos_i.get<PartReal>(i * 3), pos_i.get<PartReal>(i * 3 + 1),
+        pos_i.get<PartReal>(i * 3 + 2), threshold, kdim, trunc_qdim, zdim,
+        kernel, truncated_kernel, surf_den_vals, surf_dens, i, npart_i);
   }
 }
 
@@ -586,7 +586,7 @@ static void los_tree_serial(
  */
 #ifdef WITH_OPENMP
 template <typename PartReal, typename KernelReal, typename ValueReal>
-static void los_tree_omp(struct cell<PartReal> *root, const PartReal *pos_i,
+static void los_tree_omp(struct cell<PartReal> *root, const FloatView pos_i,
                          const KernelReal *kernel,
                          const KernelReal *truncated_kernel,
                          const std::vector<const ValueReal *> &surf_den_vals,
@@ -620,9 +620,10 @@ static void los_tree_omp(struct cell<PartReal> *root, const PartReal *pos_i,
       /* Start at the root. We'll recurse through the tree to the leaves
        * skipping all cells out of range of this particle. */
       calculate_los_recursive<PartReal, KernelReal, ValueReal>(
-          root, pos_i[i * 3], pos_i[i * 3 + 1], pos_i[i * 3 + 2], threshold,
-          kdim, trunc_qdim, zdim, kernel, truncated_kernel, surf_den_vals,
-          surf_dens_thread.data(), i - start, thread_npart);
+          root, pos_i.get<PartReal>(i * 3), pos_i.get<PartReal>(i * 3 + 1),
+          pos_i.get<PartReal>(i * 3 + 2), threshold, kdim, trunc_qdim, zdim,
+          kernel, truncated_kernel, surf_den_vals, surf_dens_thread.data(),
+          i - start, thread_npart);
     }
 
     /* Copy the results back to the main array. */
@@ -664,7 +665,7 @@ static void los_tree_omp(struct cell<PartReal> *root, const PartReal *pos_i,
  * @param nthreads The number of threads to use.
  */
 template <typename PartReal, typename KernelReal, typename ValueReal>
-static void los_tree(struct cell<PartReal> *root, const PartReal *pos_i,
+static void los_tree(struct cell<PartReal> *root, const FloatView pos_i,
                      const KernelReal *kernel,
                      const KernelReal *truncated_kernel,
                      const std::vector<const ValueReal *> &surf_den_vals,
@@ -722,7 +723,7 @@ static PyObject *compute_column_density_impl(
   const KernelReal *kernel = extract_data<KernelReal>(np_kernel, "kernel");
   const KernelReal *truncated_kernel =
       extract_data<KernelReal>(np_truncated_kernel, "truncated_kernel");
-  const PartReal *pos_i = extract_data<PartReal>(np_pos_i, "pos_i");
+  const FloatView pos_i(np_pos_i);
   const PartReal *pos_j = extract_data<PartReal>(np_pos_j, "pos_j");
   const PartReal *smls = extract_data<PartReal>(np_smls, "smls");
   /* Keep pointers into the Python-owned source arrays. The argument tuple owns
@@ -738,7 +739,7 @@ static PyObject *compute_column_density_impl(
     surf_den_vals.push_back(values);
   }
 
-  if (kernel == NULL || truncated_kernel == NULL || pos_i == NULL ||
+  if (kernel == NULL || truncated_kernel == NULL || pos_i.data == NULL ||
       pos_j == NULL || smls == NULL) {
     return NULL;
   }
@@ -875,10 +876,23 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  PyArrayObject *particle_arrays[] = {np_pos_i, np_pos_j, np_smls};
-  const char *particle_names[] = {"pos_i", "pos_j", "smls"};
+  /* The particles receiving column densities are read once each, so they
+   * can have their own precision without joining the templated groups. */
+  PyArrayObject *target_arrays[] = {np_pos_i};
+  const char *target_names[] = {
+      "coordinates of the particles receiving column densities"};
+  int target_typenum = -1;
+  if (!is_matching_float_dtypes(target_arrays, target_names, 1,
+                                &target_typenum)) {
+    return NULL;
+  }
+
+  PyArrayObject *particle_arrays[] = {np_pos_j, np_smls};
+  const char *particle_names[] = {
+      "coordinates of the absorbing particles",
+      "smoothing_lengths of the absorbing particles"};
   int particle_typenum = -1;
-  if (!is_matching_float_dtypes(particle_arrays, particle_names, 3,
+  if (!is_matching_float_dtypes(particle_arrays, particle_names, 2,
                                 &particle_typenum)) {
     return NULL;
   }
@@ -1140,7 +1154,7 @@ static void calculate_los_recursive_smoothed(
  */
 template <typename PartReal, typename KernelReal, typename ValueReal>
 static void los_loop_smoothed_serial(
-    const PartReal *pos_i, const PartReal *input_smls, const PartReal *pos_j,
+    const FloatView pos_i, const FloatView input_smls, const PartReal *pos_j,
     const PartReal *smls, const std::vector<const ValueReal *> &surf_den_vals,
     const KernelReal *overlap_kernel, const KernelReal *q_grid,
     const KernelReal *u_grid, const KernelReal *eta_grid, double *surf_dens,
@@ -1150,10 +1164,10 @@ static void los_loop_smoothed_serial(
   /* Loop over the input particles. */
   for (int i = 0; i < npart_i; i++) {
 
-    const PartReal xi = pos_i[i * 3];
-    const PartReal yi = pos_i[i * 3 + 1];
-    const PartReal zi = pos_i[i * 3 + 2];
-    const PartReal hi = input_smls[i];
+    const PartReal xi = pos_i.get<PartReal>(i * 3);
+    const PartReal yi = pos_i.get<PartReal>(i * 3 + 1);
+    const PartReal zi = pos_i.get<PartReal>(i * 3 + 2);
+    const PartReal hi = input_smls.get<PartReal>(i);
 
     /* Each source particle contributes at most once to this input particle.
      * Accumulate in double so summing many source particles doesn't build up
@@ -1201,7 +1215,7 @@ static void los_loop_smoothed_serial(
  */
 template <typename PartReal, typename KernelReal, typename ValueReal>
 static void los_loop_smoothed_omp(
-    const PartReal *pos_i, const PartReal *input_smls, const PartReal *pos_j,
+    const FloatView pos_i, const FloatView input_smls, const PartReal *pos_j,
     const PartReal *smls, const std::vector<const ValueReal *> &surf_den_vals,
     const KernelReal *overlap_kernel, const KernelReal *q_grid,
     const KernelReal *u_grid, const KernelReal *eta_grid, double *surf_dens,
@@ -1221,9 +1235,10 @@ static void los_loop_smoothed_omp(
     std::vector<double> surf_dens_thread(nattrs * thread_npart, 0.0);
 
     los_loop_smoothed_serial<PartReal, KernelReal, ValueReal>(
-        &pos_i[start * 3], &input_smls[start], pos_j, smls, surf_den_vals,
-        overlap_kernel, q_grid, u_grid, eta_grid, surf_dens_thread.data(),
-        thread_npart, npart_j, qdim, udim, etadim, threshold);
+        pos_i.offset(start * 3), input_smls.offset(start), pos_j, smls,
+        surf_den_vals, overlap_kernel, q_grid, u_grid, eta_grid,
+        surf_dens_thread.data(), thread_npart, npart_j, qdim, udim, etadim,
+        threshold);
 
 #pragma omp critical
     {
@@ -1261,7 +1276,7 @@ static void los_loop_smoothed_omp(
  */
 template <typename PartReal, typename KernelReal, typename ValueReal>
 static void los_loop_smoothed(
-    const PartReal *pos_i, const PartReal *input_smls, const PartReal *pos_j,
+    const FloatView pos_i, const FloatView input_smls, const PartReal *pos_j,
     const PartReal *smls, const std::vector<const ValueReal *> &surf_den_vals,
     const KernelReal *overlap_kernel, const KernelReal *q_grid,
     const KernelReal *u_grid, const KernelReal *eta_grid, double *surf_dens,
@@ -1317,8 +1332,8 @@ static void los_loop_smoothed(
  */
 template <typename PartReal, typename KernelReal, typename ValueReal>
 static void los_tree_smoothed_serial(
-    struct cell<PartReal> *root, const PartReal *pos_i,
-    const PartReal *input_smls, const KernelReal *overlap_kernel,
+    struct cell<PartReal> *root, const FloatView pos_i,
+    const FloatView input_smls, const KernelReal *overlap_kernel,
     const KernelReal *q_grid, const KernelReal *u_grid,
     const KernelReal *eta_grid,
     const std::vector<const ValueReal *> &surf_den_vals, double *surf_dens,
@@ -1327,7 +1342,8 @@ static void los_tree_smoothed_serial(
 
   for (int i = 0; i < npart_i; i++) {
     calculate_los_recursive_smoothed<PartReal, KernelReal, ValueReal>(
-        root, pos_i[i * 3], pos_i[i * 3 + 1], pos_i[i * 3 + 2], input_smls[i],
+        root, pos_i.get<PartReal>(i * 3), pos_i.get<PartReal>(i * 3 + 1),
+        pos_i.get<PartReal>(i * 3 + 2), input_smls.get<PartReal>(i),
         overlap_kernel, q_grid, u_grid, eta_grid, qdim, udim, etadim,
         threshold, surf_den_vals, surf_dens, i, npart_i);
   }
@@ -1355,8 +1371,8 @@ static void los_tree_smoothed_serial(
  */
 template <typename PartReal, typename KernelReal, typename ValueReal>
 static void los_tree_smoothed_omp(
-    struct cell<PartReal> *root, const PartReal *pos_i,
-    const PartReal *input_smls, const KernelReal *overlap_kernel,
+    struct cell<PartReal> *root, const FloatView pos_i,
+    const FloatView input_smls, const KernelReal *overlap_kernel,
     const KernelReal *q_grid, const KernelReal *u_grid,
     const KernelReal *eta_grid,
     const std::vector<const ValueReal *> &surf_den_vals, double *surf_dens,
@@ -1376,9 +1392,9 @@ static void los_tree_smoothed_omp(
     std::vector<double> surf_dens_thread(nattrs * thread_npart, 0.0);
 
     los_tree_smoothed_serial<PartReal, KernelReal, ValueReal>(
-        root, &pos_i[start * 3], &input_smls[start], overlap_kernel, q_grid,
-        u_grid, eta_grid, surf_den_vals, surf_dens_thread.data(), thread_npart,
-        qdim, udim, etadim, threshold);
+        root, pos_i.offset(start * 3), input_smls.offset(start),
+        overlap_kernel, q_grid, u_grid, eta_grid, surf_den_vals,
+        surf_dens_thread.data(), thread_npart, qdim, udim, etadim, threshold);
 
 #pragma omp critical
     {
@@ -1413,8 +1429,8 @@ static void los_tree_smoothed_omp(
  */
 template <typename PartReal, typename KernelReal, typename ValueReal>
 static void los_tree_smoothed(
-    struct cell<PartReal> *root, const PartReal *pos_i,
-    const PartReal *input_smls, const KernelReal *overlap_kernel,
+    struct cell<PartReal> *root, const FloatView pos_i,
+    const FloatView input_smls, const KernelReal *overlap_kernel,
     const KernelReal *q_grid, const KernelReal *u_grid,
     const KernelReal *eta_grid,
     const std::vector<const ValueReal *> &surf_den_vals, double *surf_dens,
@@ -1470,9 +1486,8 @@ static PyObject *compute_column_density_smoothed_impl(
   const KernelReal *u_grid = extract_data<KernelReal>(np_u_grid, "u_grid");
   const KernelReal *eta_grid =
       extract_data<KernelReal>(np_eta_grid, "eta_grid");
-  const PartReal *pos_i = extract_data<PartReal>(np_pos_i, "pos_i");
-  const PartReal *input_smls =
-      extract_data<PartReal>(np_input_smls, "input_smls");
+  const FloatView pos_i(np_pos_i);
+  const FloatView input_smls(np_input_smls);
   const PartReal *pos_j = extract_data<PartReal>(np_pos_j, "pos_j");
   const PartReal *smls = extract_data<PartReal>(np_smls, "smls");
   /* Keep pointers into the Python-owned source arrays. The argument tuple owns
@@ -1489,7 +1504,7 @@ static PyObject *compute_column_density_smoothed_impl(
   }
 
   if (overlap_kernel == NULL || q_grid == NULL || u_grid == NULL ||
-      eta_grid == NULL || pos_i == NULL || input_smls == NULL ||
+      eta_grid == NULL || pos_i.data == NULL || input_smls.data == NULL ||
       pos_j == NULL || smls == NULL) {
     return NULL;
   }
@@ -1631,11 +1646,24 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  PyArrayObject *particle_arrays[] = {np_pos_i, np_input_smls, np_pos_j,
-                                      np_smls};
-  const char *particle_names[] = {"pos_i", "input_smls", "pos_j", "smls"};
+  /* The particles receiving column densities are read once each, so they
+   * can have their own precision without joining the templated groups. */
+  PyArrayObject *target_arrays[] = {np_pos_i, np_input_smls};
+  const char *target_names[] = {
+      "coordinates of the particles receiving column densities",
+      "smoothing_lengths of the particles receiving column densities"};
+  int target_typenum = -1;
+  if (!is_matching_float_dtypes(target_arrays, target_names, 2,
+                                &target_typenum)) {
+    return NULL;
+  }
+
+  PyArrayObject *particle_arrays[] = {np_pos_j, np_smls};
+  const char *particle_names[] = {
+      "coordinates of the absorbing particles",
+      "smoothing_lengths of the absorbing particles"};
   int particle_typenum = -1;
-  if (!is_matching_float_dtypes(particle_arrays, particle_names, 4,
+  if (!is_matching_float_dtypes(particle_arrays, particle_names, 2,
                                 &particle_typenum)) {
     return NULL;
   }
