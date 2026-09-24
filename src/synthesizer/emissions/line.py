@@ -76,6 +76,7 @@ from synthesizer.extensions.spectra_operations import (
 from synthesizer.synth_warnings import warn
 from synthesizer.units import (
     Quantity,
+    Units,
     accepts,
     get_array_quantity_view,
     get_quantity_unit,
@@ -137,7 +138,11 @@ class LineCollection:
     obslam = Quantity("wavelength")
     vacuum_wavelength = Quantity("wavelength")
 
-    @accepts(lam=angstrom, lum=erg / s, cont=erg / s / Hz)
+    @accepts(
+        lam=angstrom,
+        lum=Units().luminosity,
+        cont=Units().luminosity_density_frequency,
+    )
     @timed("LineCollection.__init__")
     def __init__(self, line_ids, lam, lum, cont, description=None):
         """Initialise the collection of emission lines.

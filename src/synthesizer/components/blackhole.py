@@ -6,11 +6,11 @@ BlackholesComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import G, Lsun, Msun, c, cm, deg, erg, km, s, yr
+from unyt import G, Lsun, Msun, c, cm, deg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, Units, accepts, get_quantity_unit
 from synthesizer.utils import (
     TableFormatter,
     array_to_scalar,
@@ -102,7 +102,7 @@ class BlackholesComponent(Component):
         mass=Msun.in_base("galactic"),
         accretion_rate=Msun.in_base("galactic") / yr,
         inclination=deg,
-        bolometric_luminosity=erg / s,
+        bolometric_luminosity=Units().luminosity,
         hydrogen_density_blr=cm**-3,
         hydrogen_density_nlr=cm**-3,
         velocity_dispersion_blr=km / s,
@@ -454,8 +454,9 @@ class BlackholesComponent(Component):
         Physical constants (c, Lsun) and scalar defaults (e.g. epsilon=0.1)
         are float64, so arithmetic with them promotes float32 black hole
         properties. Derived properties should keep the precision of the
-        masses they were computed from, but only where their values fit
-        (luminosities in erg/s do not fit in float32 and stay float64).
+        masses they were computed from, but only where their values fit (e.g.
+        a bolometric luminosity fits in float32 in Lsun but not in erg/s, so
+        with erg/s luminosities it stays float64).
 
         Args:
             arr (unyt_array/np.ndarray):
@@ -467,6 +468,8 @@ class BlackholesComponent(Component):
         """
         dtype = getattr(self.mass, "dtype", None)
         if dtype is None or dtype.kind != "f":
+            return arr
+        if np.max(np.abs(np.asarray(arr)), initial=0.0) > np.finfo(dtype).max:
             return arr
         return arr.astype(dtype, copy=False)
 
@@ -496,9 +499,11 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole bolometric luminosity
         """
-        # NOTE: this deliberately stays float64. Bolometric luminosities
-        # (~1e45 erg/s) overflow float32.
-        self.bolometric_luminosity = self.epsilon * self.accretion_rate * c**2
+        self.bolometric_luminosity = self._like_mass(
+            (self.epsilon * self.accretion_rate * c**2).to(
+                get_quantity_unit(self, "bolometric_luminosity")
+            )
+        )
 
         return self.bolometric_luminosity
 
@@ -513,9 +518,9 @@ class BlackholesComponent(Component):
         # L_Edd = 4*pi*G*mp*c*M/sigma_thompson = 1.257e38 * M/Msun erg/s
         # Converting to solar luminosities:
         # L_Edd = 1.257e38 / 3.828e33 = 3.284e4 Lsun/Msun
-        # NOTE: this deliberately stays float64, converting it to erg/s would
-        # overflow float32.
-        self.eddington_luminosity = 3.284e4 * self._mass * Lsun
+        self.eddington_luminosity = self._like_mass(
+            3.284e4 * self._mass * Lsun
+        )
 
         return self.eddington_luminosity
 

@@ -117,7 +117,9 @@ class TestTemplateGeneration:
         assert isinstance(scaled_sed, Sed)
 
         # Check that scaling was applied correctly
-        assert np.isclose(scaled_sed._bolometric_luminosity, bol_lum.value)
+        assert np.isclose(
+            scaled_sed.bolometric_luminosity.to("erg/s").value, 1.0e45
+        )
 
     def test_bh_template_model(
         self,

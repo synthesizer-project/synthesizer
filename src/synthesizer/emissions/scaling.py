@@ -108,9 +108,11 @@ def normalise_scaling_for_units(scaling, units):
             f"Incompatible units {units} and {scaling.units}"
         )
 
-    # The kernels operate on raw doubles, so once the units are compatible we
-    # convert into the target units and strip the unit wrapper.
-    return scaling.to(units).value
+    # Once the units are compatible we convert into the target units and
+    # strip the unit wrapper. The conversion is done at float64 since
+    # converting a reduced precision scaling into the target units can
+    # overflow (e.g. a float32 luminosity in Lsun converted to erg/s).
+    return scaling.astype(np.float64).to(units).value
 
 
 def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
@@ -146,6 +148,9 @@ def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
 
     # Continuum-compatible scaling can be pushed onto luminosity by
     # multiplying through by nu.
+    # Convert at float64 so reduced precision scalings can't overflow when
+    # converted into the target units
+    scaling = scaling.astype(np.float64)
     if cont_units.dimensions == scaling.units.dimensions:
         scaling_cont = scaling.to(cont_units).value
         scaling_lum = (scaling * nu).to(lum_units).value
@@ -580,6 +585,8 @@ def scale_array(
         # This is the last-resort broadcast shape we still support: treat the
         # scaling as living one axis above the data and let NumPy broadcast.
         work = scaling[..., np.newaxis] * work
+        if array.dtype.kind == "f":
+            work = work.astype(array.dtype, copy=False)
         if mask is not None:
             raise exceptions.InconsistentMultiplication(
                 "Masking is not supported for scaling arrays with "

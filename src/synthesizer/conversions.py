@@ -29,7 +29,7 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.synth_warnings import warn
-from synthesizer.units import accepts
+from synthesizer.units import Units, accepts
 
 # When converting between spatial and angular distances at z=0, we adopt a
 # "local distance" convention of placing the object at 10 pc, this is also
@@ -245,7 +245,7 @@ def apparent_mag_to_fnu(app_mag):
     return 10**9 * 10 ** (-0.4 * (app_mag - 8.9)) * nJy
 
 
-@accepts(lam=angstrom, llam=erg / s / angstrom)
+@accepts(lam=angstrom, llam=Units().luminosity_density_wavelength)
 def llam_to_lnu(lam, llam):
     """Convert spectral luminosity density per wavelength to per frequency.
 

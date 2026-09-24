@@ -165,6 +165,43 @@ class BlackHoles(Particles, BlackholesComponent):
                 Any parameter for the emission models can be provided as kwargs
                 here to override the defaults of the emission models.
         """
+        # Accept the singular names (as used by the component and parametric
+        # black holes) as aliases of the plural arguments. Left in kwargs
+        # they would collide with the plural values passed to the component.
+        aliases = {
+            "accretion_rate": "accretion_rates",
+            "accretion_rate_eddington": "accretion_rates_eddington",
+            "epsilon": "epsilons",
+            "inclination": "inclinations",
+            "spin": "spins",
+            "metallicity": "metallicities",
+        }
+        plural_values = {
+            "accretion_rates": accretion_rates,
+            "accretion_rates_eddington": accretion_rates_eddington,
+            "epsilons": epsilons,
+            "inclinations": inclinations,
+            "spins": spins,
+            "metallicities": metallicities,
+        }
+        for singular, plural in aliases.items():
+            if singular not in kwargs:
+                continue
+            # epsilons has a default so only a non-default value conflicts
+            default = 0.1 if plural == "epsilons" else None
+            if plural_values[plural] is not default:
+                raise exceptions.InconsistentArguments(
+                    f"Both {singular} and {plural} were passed, please pass "
+                    f"only one of them."
+                )
+            plural_values[plural] = kwargs.pop(singular)
+        accretion_rates = plural_values["accretion_rates"]
+        accretion_rates_eddington = plural_values["accretion_rates_eddington"]
+        epsilons = plural_values["epsilons"]
+        inclinations = plural_values["inclinations"]
+        spins = plural_values["spins"]
+        metallicities = plural_values["metallicities"]
+
         # Handle singular values being passed (arrays are just returned)
         masses = scalar_to_array(masses)
         accretion_rates = scalar_to_array(accretion_rates)

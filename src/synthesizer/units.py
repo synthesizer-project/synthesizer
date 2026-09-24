@@ -27,6 +27,7 @@ Example usage:
 import os
 import shutil
 from functools import wraps
+from importlib import resources
 from inspect import Parameter, signature
 
 import yaml
@@ -436,8 +437,12 @@ class Units(metaclass=UnitSingleton):
         # yaml file then do so now
         self._preserve_orig_units()
 
-        # Construct the dictionary to write out
-        new_units = {}
+        # Construct the dictionary to write out. Record the current units file
+        # version so these deliberate choices are never treated as old
+        # defaults needing migration.
+        with resources.open_text("synthesizer", "default_units.yml") as f:
+            version = yaml.safe_load(f).get("Version", 1)
+        new_units = {"Version": version}
         new_units["UnitCategories"] = {}
         for key, unit in self._units.items():
             new_units["UnitCategories"][key] = {"unit": str(unit)}

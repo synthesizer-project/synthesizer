@@ -34,10 +34,13 @@ def planck(frequency, temperature):
         unyt_quantity: Spectral luminosity density in erg/s/Hz.
     """
     # Planck's law: B(ν, T) = (2*h*ν^3) / (c^2 * (exp(hν / kT) - 1))
+    # NOTE: exp overflows far into the Wien tail, which correctly gives a
+    # spectral radiance of 0, so the overflow warning is suppressed
     exponent = (const.h * frequency) / (const.kb * temperature)
-    spectral_radiance = (2 * const.h * frequency**3) / (
-        const.c**2 * (np.exp(exponent) - 1)
-    )
+    with np.errstate(over="ignore"):
+        spectral_radiance = (2 * const.h * frequency**3) / (
+            const.c**2 * (np.exp(exponent) - 1)
+        )
 
     # Convert from spectral radiance density to spectral luminosity density,
     # here we'll assume a luminosity distance of 10 pc
@@ -432,9 +435,16 @@ def combine_arrays(arr1, arr2, verbose=False):
     elif arr1.ndim == 0 or arr2.ndim == 0:
         return None
 
-    # If both are not None then combine them
-    else:
-        return np.concatenate([arr1, arr2])
+    # If both are not None then combine them. Arrays with compatible but
+    # different units (e.g. ages in yr and Myr) are combined in the units of
+    # the first.
+    if (
+        isinstance(arr1, unyt_array)
+        and isinstance(arr2, unyt_array)
+        and arr1.units != arr2.units
+    ):
+        arr2 = arr2.to(arr1.units)
+    return np.concatenate([arr1, arr2])
 
 
 def pluralize(word: str) -> str:

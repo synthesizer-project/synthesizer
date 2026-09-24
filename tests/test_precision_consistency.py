@@ -7,7 +7,20 @@ a mixed-precision error or silently promoting the output.
 
 import numpy as np
 import pytest
-from unyt import Hz, K, Msun, Myr, angstrom, erg, kpc, s, unyt_array
+from unyt import (
+    Hz,
+    K,
+    Msun,
+    Myr,
+    angstrom,
+    deg,
+    erg,
+    km,
+    kpc,
+    s,
+    unyt_array,
+    yr,
+)
 
 from synthesizer import exceptions
 from synthesizer.emission_models import IncidentEmission, PacmanEmission
@@ -20,7 +33,7 @@ from synthesizer.emission_models.transformers import (
 )
 from synthesizer.emissions import Sed
 from synthesizer.grid import Grid
-from synthesizer.particle import Stars
+from synthesizer.particle import BlackHoles, Stars
 
 
 def _stars(dtype, n=4):
@@ -141,3 +154,113 @@ def test_line_subset_is_contiguous(test_grid):
     assert lines._luminosity.flags.c_contiguous
     assert lines._continuum.flags.c_contiguous
     lines.scale(np.ones(stars.nparticles))
+
+
+def test_logged_grid_axes_use_grid_units():
+    """Logged attributes are compared in the grid axis units.
+
+    Black hole masses are stored in Msun but the test AGN grid's mass axis
+    is in kg, so log10(mass) must be shifted into log10(kg) before
+    extraction.
+    """
+    from synthesizer.emission_models import UnifiedAGN
+    from synthesizer.emission_models.extractors import extractor
+
+    blr = Grid("test_grid_agn-blr.hdf5")
+    nlr = Grid("test_grid_agn-nlr.hdf5")
+    bh = BlackHoles(
+        masses=unyt_array(np.array([1e8, 1e9]), Msun),
+        accretion_rates=unyt_array(np.ones(2), Msun / yr),
+        inclinations=np.zeros(2) * deg,
+        coordinates=np.zeros((2, 3)) * kpc,
+        metallicities=np.full(2, 0.01),
+    )
+
+    seen = []
+    original = extractor.Extractor.get_emitter_attrs
+
+    def spy(self, emitter, model, do_grid_check):
+        values, weight = original(self, emitter, model, do_grid_check)
+        for name, value in zip(self._emitter_attributes, values):
+            if name == "log10mass":
+                seen.append(value)
+        return values, weight
+
+    extractor.Extractor.get_emitter_attrs = spy
+    try:
+        bh.get_spectra(
+            UnifiedAGN(
+                nlr_grid=nlr,
+                blr_grid=blr,
+                torus_emission_model=Greybody(
+                    temperature=1000 * K, emissivity=2
+                ),
+                per_particle=True,
+            )
+        )
+    finally:
+        extractor.Extractor.get_emitter_attrs = original
+
+    expected = np.log10((np.array([1e8, 1e9]) * Msun).to("kg").value)
+    assert seen
+    for value in seen:
+        np.testing.assert_allclose(value, expected)
+
+
+def test_black_holes_accept_singular_argument_names():
+    """Singular names are aliases of the plural black hole arguments."""
+    bh = BlackHoles(
+        masses=np.full(2, 1e8) * Msun,
+        accretion_rate_eddington=np.full(2, 0.1),
+    )
+    np.testing.assert_allclose(bh.accretion_rates_eddington, 0.1)
+
+    with pytest.raises(exceptions.InconsistentArguments, match="only one"):
+        BlackHoles(
+            masses=np.full(2, 1e8) * Msun,
+            accretion_rate_eddington=np.full(2, 0.1),
+            accretion_rates_eddington=np.full(2, 0.2),
+        )
+
+
+def test_broadening_keeps_sed_precision():
+    """Broadening and resampling keep the precision of the Sed."""
+    sed = _sed32(nspec=3)
+
+    assert sed.doppler_broaden(100 * km / s)._lnu.dtype == np.float32
+    resampled = sed.get_resampled_sed(new_lam=sed.lam[::2])
+    assert resampled._lnu.dtype == np.float32
+
+
+@pytest.mark.parametrize("img_type", ["hist", "smoothed"])
+def test_image_normalisation_does_not_overflow(img_type):
+    """Normalised float32 images don't overflow before normalising.
+
+    signal * normalisation (1e30 * 1e10) exceeds float32, while the
+    normalised image (1e30) does not.
+    """
+    from synthesizer.imaging import Image
+    from synthesizer.kernel_functions import Kernel
+
+    rng = np.random.default_rng(0)
+    n = 50
+    coords = unyt_array(rng.uniform(-0.4, 0.4, (n, 3)).astype(np.float32), kpc)
+    signal = unyt_array(np.full(n, 1e30, np.float32), erg / s)
+    norm = unyt_array(np.full(n, 1e10, np.float32), Msun)
+
+    img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
+    if img_type == "hist":
+        img.generate_img_hist(signal, coords, normalisation=norm)
+    else:
+        img.generate_img_smoothed(
+            signal,
+            coordinates=coords,
+            smoothing_lengths=unyt_array(np.full(n, 0.05, np.float32), kpc),
+            kernel=Kernel(),
+            normalisation=norm,
+        )
+
+    arr = np.asarray(img.arr)
+    assert arr.dtype == np.float32
+    assert not np.any(np.isinf(arr))
+    np.testing.assert_allclose(arr[np.isfinite(arr)], 1e30, rtol=1e-5)

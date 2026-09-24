@@ -9,6 +9,8 @@
 #include "python_to_cpp.h"
 
 /* Standard includes */
+#include <cmath>
+#include <limits>
 #include <string>
 
 /**
@@ -200,8 +202,24 @@ bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
   }
 
   /* Mixed precision. Suggest converting the minority to the majority, and
-   * float32 up to float64 on a tie so no precision is lost. */
-  const bool to64 = n32 <= count - n32;
+   * float32 up to float64 on a tie so no precision is lost. Never suggest
+   * converting to float32 if any float64 array holds values too large for
+   * it (e.g. luminosities in erg/s), since following that advice would
+   * overflow. */
+  bool to64 = n32 <= count - n32;
+  for (int i = 0; i < count && !to64; ++i) {
+    if (PyArray_TYPE(arrays[i]) != NPY_FLOAT64) {
+      continue;
+    }
+    const double *data = static_cast<const double *>(PyArray_DATA(arrays[i]));
+    const npy_intp size = PyArray_SIZE(arrays[i]);
+    for (npy_intp j = 0; j < size; ++j) {
+      if (std::fabs(data[j]) > std::numeric_limits<float>::max()) {
+        to64 = true;
+        break;
+      }
+    }
+  }
   const int from_typenum = to64 ? NPY_FLOAT32 : NPY_FLOAT64;
   const char *to_name = to64 ? "float64" : "float32";
   const char *from_name = to64 ? "float32" : "float64";

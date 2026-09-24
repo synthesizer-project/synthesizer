@@ -79,6 +79,47 @@ double precision and only cast to the requested output dtype at the end, so a
 float32 result is the correctly-rounded float32 representation of the float64
 answer rather than a value degraded by millions of low-precision additions.
 
+Units and the float32 range
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+float32 can only represent values up to about 3.4e38. Luminosities exceed
+that in cgs units for realistic sources: line luminosities (1e40–1e45 erg/s)
+and black hole bolometric luminosities (~1e45 erg/s). Synthesizer therefore
+stores luminosities in solar luminosities by default (the ``luminosity`` unit
+category is ``Lsun``), which keeps them comfortably within the float32 range.
+Spectral densities (e.g. ``lnu`` in erg/s/Hz) fit in float32 and keep their
+cgs units. Grids are converted to these internal units when they are loaded, so
+this makes no difference to the results; only the units of the returned
+arrays change, and you can convert them with ``.to("erg/s")`` as usual.
+
+If your units file predates this change and still uses the old ``erg / s``
+defaults, it is updated once automatically; any units you customised are left
+alone. You can switch back to erg/s in the units file if you prefer, but
+float32 luminosities may then overflow.
+
+A few quantities are always computed at float64, whatever ``out_dtype``
+says, because they don't fit in float32 in their natural units or because
+they are cheap scalars: bolometric and window luminosities, ionising photon
+production rates (~1e53 s^-1 and beyond), and ``Sed.llam`` (luminosity
+densities per unit wavelength reach ~1e43 erg/s/Å; it is computed on access
+from ``lnu``, which stays at your chosen precision).
+
+As a safety net, the particle spectra kernels check each particle's weight
+against the output precision. A weight too large for it (for example a
+bolometric luminosity in erg/s with float32 outputs) is applied at float64
+instead, so the result is still correct, and a ``RuntimeWarning`` tells you
+this happened. If a resulting value itself is too large for the output
+precision you get a ``RuntimeWarning`` saying it overflowed to ``inf``.
+
+Two limits remain your responsibility:
+
+- Converting large float32 values to other units happens at float32 in unyt
+  and can overflow (e.g. a float32 mass of 1e8 Msun converted to grams).
+  Convert to float64 first: ``arr.astype(np.float64).to("g")``.
+- Very small values can underflow float32 (below ~1e-38), e.g. extreme-UV
+  fluxes of high redshift sources in erg/s/cm²/Hz. Use float64 outputs if
+  you need those.
+
 Input precision
 ~~~~~~~~~~~~~~~
 

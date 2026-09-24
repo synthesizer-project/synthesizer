@@ -389,13 +389,15 @@ def _generate_image_particle_hist(
         coordinates = coordinates.to_value(spatial_units)
 
     with timer("_generate_image_particle_hist.generate"):
+        # The image inherits the signal's precision
+        sig_dtype = getattr(signal, "dtype", None)
+
         # Include normalisation in the original signal if we have one
-        # (we'll divide by it later)
+        # (we'll divide by it later). This weighted copy is made at float64
+        # since signal * normalisation can overflow float32 even when the
+        # normalised image fits.
         if normalisation is not None:
-            # Make sure we are working on a copy of the signal so as not to
-            # modify the original
-            signal = signal.copy()
-            signal *= normalisation.value
+            signal = signal.astype(np.float64) * normalisation.value
 
         img.arr = np.histogram2d(
             coordinates[:, 0],
@@ -406,12 +408,6 @@ def _generate_image_particle_hist(
             ),
             weights=signal,
         )[0]
-
-        # The histogram computes in float64; cast the (small) image back so
-        # it inherits the signal dtype.
-        sig_dtype = getattr(signal, "dtype", None)
-        if sig_dtype is not None and img.arr.dtype != sig_dtype:
-            img.arr = img.arr.astype(sig_dtype)
 
     # Normalise the image by the normalisation if applicable
     if normalisation is not None:
@@ -427,6 +423,11 @@ def _generate_image_particle_hist(
             )[0]
 
             img.arr /= norm_img
+
+    # The histogram computes in float64; cast the (small) image back so it
+    # inherits the signal dtype.
+    if sig_dtype is not None and img.arr.dtype != sig_dtype:
+        img.arr = img.arr.astype(sig_dtype)
 
     return img
 
@@ -584,12 +585,14 @@ def _generate_image_particle_smoothed(
         _coords[:, 1] += fov[1] / 2.0
         _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
 
-        # Apply normalisation to original signal if needed
+        # The image inherits the signal's precision
+        sig_dtype = getattr(signal, "dtype", None)
+
+        # Apply normalisation to original signal if needed. This weighted
+        # copy is made at float64 since signal * normalisation can overflow
+        # float32 even when the normalised image fits.
         if normalisation is not None:
-            # Make sure we are working on a copy of the signal so as not to
-            # modify the original
-            signal = signal.copy()
-            signal *= normalisation.value
+            signal = signal.astype(np.float64) * normalisation.value
 
     # Convert the public kernel input into the lookup array used by the
     # smoothing backend.
@@ -633,8 +636,11 @@ def _generate_image_particle_smoothed(
                 nthreads=nthreads,
             )
 
-            # Normalise the image by the normalisation property
-            img.arr /= norm_img.arr
+            # Normalise the image by the normalisation property and
+            # restore the signal's precision
+            img.arr = img.arr / norm_img.arr
+            if sig_dtype is not None:
+                img.arr = img.arr.astype(sig_dtype, copy=False)
 
     return img
 
@@ -757,11 +763,14 @@ def _generate_images_particle_smoothed(
         _coords[:, 1] += fov[1] / 2.0
         _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
 
-        # Apply normalisation to original signal if needed
+        # The images inherit the signals' precision
+        sig_dtype = signals.dtype
+
+        # Apply normalisation to original signal if needed. This weighted
+        # copy is made at float64 since signal * normalisation can overflow
+        # float32 even when the normalised images fit.
         if normalisations is not None:
-            # Make sure we are working on a copy of the signals so as not to
-            # modify the original
-            signals = signals.copy()
+            signals = signals.astype(np.float64)
 
             # Apply the normalisation to the corresponding signal
             for ind, key in enumerate(labels):
@@ -820,8 +829,11 @@ def _generate_images_particle_smoothed(
                     nthreads=nthreads,
                 )
 
-                # Normalise the image by the normalisation property
-                imgs[key].arr /= norm_img.arr
+                # Normalise the image by the normalisation property and
+                # restore the signals' precision
+                imgs[key].arr = (imgs[key].arr / norm_img.arr).astype(
+                    sig_dtype, copy=False
+                )
 
     return imgs
 

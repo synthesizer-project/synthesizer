@@ -1633,7 +1633,8 @@ class Stars(Particles, StarsComponent):
             setattr(self, attr, attr_array)
 
         # Recalculate log attributes
-        self.log10ages = np.log10(self.ages)
+        # (log10ages is in years, matching StellarComponent)
+        self.log10ages = np.log10(self.ages.to(yr))
         self.log10metallicities = np.log10(self.metallicities)
 
         # Set resampled flag

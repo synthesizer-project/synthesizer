@@ -21,6 +21,7 @@
 
 /* Local includes */
 #include "cpp_to_python.h"
+#include "floating_point_utils.h"
 #include "grid_props.h"
 #include "macros.h"
 #include "part_props.h"
@@ -204,6 +205,8 @@ static void spectra_loop_cic_with_lam_mask_serial(
     /* Compute base linear index for this particle */
     /* Cache particle weight and base-cell information once. */
     const PartReal w_p = parts->get_weight_at<PartReal>(p);
+    double w_scale;
+    const OutT w_out = split_weight<OutT>(static_cast<double>(w_p), w_scale);
     std::array<int, MAX_GRID_NDIM> part_indices;
     std::array<SpecReal, MAX_GRID_NDIM> axis_fracs;
     get_part_ind_frac_cic<PartReal, SpecReal>(part_indices, axis_fracs,
@@ -226,7 +229,7 @@ static void spectra_loop_cic_with_lam_mask_serial(
       }
 
       /* Define the weighted contribution from this cell. */
-      const OutT weight = static_cast<OutT>(frac) * static_cast<OutT>(w_p);
+      const OutT weight = static_cast<OutT>(frac) * w_out;
 
       /* Compute grid cell index via base + precomputed offset */
       const int grid_ind = base_linidx + sc.linoff;
@@ -249,6 +252,7 @@ static void spectra_loop_cic_with_lam_mask_serial(
       }
       part_spec[ilam] = spec_val;
     }
+    apply_weight_scale(part_spec, nlam, w_scale);
   }
 }
 
@@ -320,6 +324,8 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
     /* Compute base linear index for this particle */
     /* Cache particle weight and base-cell information once. */
     const PartReal w_p = parts->get_weight_at<PartReal>(p);
+    double w_scale;
+    const OutT w_out = split_weight<OutT>(static_cast<double>(w_p), w_scale);
     std::array<int, MAX_GRID_NDIM> part_indices;
     std::array<SpecReal, MAX_GRID_NDIM> axis_fracs;
     get_part_ind_frac_cic<PartReal, SpecReal>(part_indices, axis_fracs,
@@ -342,7 +348,7 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
       }
 
       /* Define the weighted contribution from this cell. */
-      const OutT weight = static_cast<OutT>(frac) * static_cast<OutT>(w_p);
+      const OutT weight = static_cast<OutT>(frac) * w_out;
 
       /* Compute grid cell index via base + precomputed offset */
       const int grid_ind = base_linidx + sc.linoff;
@@ -359,6 +365,7 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
     accumulate_cell_spectra<SpecReal, OutT>(cell_spectra_ptrs.data(),
                                             cell_weights.data(), nvalid_cells,
                                             part_spec, nlam);
+    apply_weight_scale(part_spec, nlam, w_scale);
   }
 }
 
@@ -485,6 +492,8 @@ static void spectra_loop_cic_with_lam_mask_omp(
       /* Compute base linear index for this particle */
       /* Cache particle weight and base-cell information once. */
       const PartReal w_p = parts->get_weight_at<PartReal>(p);
+      double w_scale;
+      const OutT w_out = split_weight<OutT>(static_cast<double>(w_p), w_scale);
       std::array<int, MAX_GRID_NDIM> part_indices;
       std::array<SpecReal, MAX_GRID_NDIM> axis_fracs;
       get_part_ind_frac_cic<PartReal, SpecReal>(part_indices, axis_fracs,
@@ -508,7 +517,7 @@ static void spectra_loop_cic_with_lam_mask_omp(
         }
 
         /* Define the weighted contribution from this cell. */
-        const OutT weight = static_cast<OutT>(frac) * static_cast<OutT>(w_p);
+        const OutT weight = static_cast<OutT>(frac) * w_out;
 
         /* Compute grid cell index via base + precomputed offset */
         const int grid_ind = base_linidx + sc.linoff;
@@ -532,6 +541,7 @@ static void spectra_loop_cic_with_lam_mask_omp(
         }
         part_spec[ilam] = spec_val;
       }
+      apply_weight_scale(part_spec, nlam, w_scale);
     }
   }
 }
@@ -619,6 +629,8 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
       /* Compute base linear index for this particle */
       /* Cache particle weight and base-cell information once. */
       const PartReal w_p = parts->get_weight_at<PartReal>(p);
+      double w_scale;
+      const OutT w_out = split_weight<OutT>(static_cast<double>(w_p), w_scale);
       std::array<int, MAX_GRID_NDIM> part_indices;
       std::array<SpecReal, MAX_GRID_NDIM> axis_fracs;
       get_part_ind_frac_cic<PartReal, SpecReal>(part_indices, axis_fracs,
@@ -642,7 +654,7 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
         }
 
         /* Define the weighted contribution from this cell. */
-        const OutT weight = static_cast<OutT>(frac) * static_cast<OutT>(w_p);
+        const OutT weight = static_cast<OutT>(frac) * w_out;
 
         /* Compute grid cell index via base + precomputed offset */
         const int grid_ind = base_linidx + sc.linoff;
@@ -659,6 +671,7 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
       accumulate_cell_spectra<SpecReal, OutT>(cell_spectra_ptrs.data(),
                                               cell_weights.data(),
                                               nvalid_cells, part_spec, nlam);
+      apply_weight_scale(part_spec, nlam, w_scale);
     }
   }
 }
@@ -798,7 +811,9 @@ static void spectra_loop_ngp_with_lam_mask_serial(
         get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
     /* Get the weight of this particle. */
-    const OutT weight = static_cast<OutT>(parts->get_weight_at<PartReal>(p));
+    double w_scale;
+    const OutT weight = split_weight<OutT>(
+        static_cast<double>(parts->get_weight_at<PartReal>(p)), w_scale);
     const SpecReal *__restrict cell_spectra =
         grid_spectra + static_cast<size_t>(grid_ind) * nlam;
     OutT *__restrict part_spec = part_spectra + p * nlam;
@@ -811,6 +826,7 @@ static void spectra_loop_ngp_with_lam_mask_serial(
       /* Assign to this particle's spectra array. */
       part_spec[ilam] = spec_val * weight;
     }
+    apply_weight_scale(part_spec, nlam, w_scale);
   }
 }
 
@@ -857,7 +873,9 @@ static void spectra_loop_ngp_no_lam_mask_serial(GridProps *grid_props,
         get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
     /* Get the weight of this particle. */
-    const OutT weight = static_cast<OutT>(parts->get_weight_at<PartReal>(p));
+    double w_scale;
+    const OutT weight = split_weight<OutT>(
+        static_cast<double>(parts->get_weight_at<PartReal>(p)), w_scale);
     const SpecReal *__restrict cell_spectra =
         grid_spectra + static_cast<size_t>(grid_ind) * nlam;
     OutT *__restrict part_spec = part_spectra + p * nlam;
@@ -869,6 +887,7 @@ static void spectra_loop_ngp_no_lam_mask_serial(GridProps *grid_props,
       /* Assign to this particle's spectra array. */
       part_spec[ilam] = spec_val * weight;
     }
+    apply_weight_scale(part_spec, nlam, w_scale);
   }
 }
 
@@ -978,7 +997,9 @@ static void spectra_loop_ngp_with_lam_mask_omp(
           get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
       /* Get the weight of this particle. */
-      const OutT weight = static_cast<OutT>(parts->get_weight_at<PartReal>(p));
+      double w_scale;
+      const OutT weight = split_weight<OutT>(
+          static_cast<double>(parts->get_weight_at<PartReal>(p)), w_scale);
       const SpecReal *__restrict cell_spectra =
           grid_spectra + static_cast<size_t>(grid_ind) * nlam;
 
@@ -994,6 +1015,8 @@ static void spectra_loop_ngp_with_lam_mask_omp(
         /* Assign to this particle's spectra array. */
         this_part_spectra[ilam] = spec_val * weight;
       }
+
+      apply_weight_scale(this_part_spectra.data(), nlam, w_scale);
 
       /* Copy the entire spectrum at once into the output array. */
       memcpy(local_part_spectra + (p - start_idx) * nlam,
@@ -1070,7 +1093,9 @@ static void spectra_loop_ngp_no_lam_mask_omp(GridProps *grid_props,
           get_flat_index(part_indices, dims.data(), grid_props->ndim);
 
       /* Get the weight of this particle. */
-      const OutT weight = static_cast<OutT>(parts->get_weight_at<PartReal>(p));
+      double w_scale;
+      const OutT weight = split_weight<OutT>(
+          static_cast<double>(parts->get_weight_at<PartReal>(p)), w_scale);
       const SpecReal *__restrict cell_spectra =
           grid_spectra + static_cast<size_t>(grid_ind) * nlam;
 
@@ -1081,6 +1106,8 @@ static void spectra_loop_ngp_no_lam_mask_omp(GridProps *grid_props,
         /* Assign to this particle's spectra array. */
         this_part_spectra[ilam] = spec_val * weight;
       }
+
+      apply_weight_scale(this_part_spectra.data(), nlam, w_scale);
 
       /* Copy the entire spectrum at once into the output array. */
       memcpy(local_part_spectra + (p - start_idx) * nlam,
@@ -1292,6 +1319,7 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /* With everything set up we can compute the spectra for each particle
    * using the requested method. */
+  reset_precision_flags();
   if (strcmp(method, "cic") == 0) {
     dispatch_float(part_typenum, [&](auto p) {
       dispatch_float(grid_typenum, [&](auto g) {
@@ -1333,6 +1361,12 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* Clean up memory! */
   delete part_props;
   delete grid_props;
+
+  /* Warn about any weights or values too large for the output precision. */
+  if (!warn_precision_flags(typenum_to_string(output_typenum))) {
+    Py_DECREF(np_part_spectra);
+    return NULL;
+  }
 
   toc("compute_particle_seds");
 

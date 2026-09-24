@@ -18,13 +18,13 @@ Example usages::
 """
 
 import numpy as np
-from unyt import Msun, cm, deg, erg, km, kpc, s, yr
+from unyt import Msun, cm, deg, km, kpc, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.blackhole import BlackholesComponent
 from synthesizer.emission_models.utils import get_param
 from synthesizer.parametric.morphology import PointSource
-from synthesizer.units import accepts
+from synthesizer.units import Units, accepts
 from synthesizer.utils.operation_timers import timed
 
 
@@ -42,7 +42,7 @@ class BlackHole(BlackholesComponent):
         accretion_rate=Msun.in_base("galactic") / yr,
         inclination=deg,
         offset=kpc,
-        bolometric_luminosity=erg / s,
+        bolometric_luminosity=Units().luminosity,
         hydrogen_density_blr=1 / cm**3,
         hydrogen_density_nlr=1 / cm**3,
         velocity_dispersion_blr=km / s,

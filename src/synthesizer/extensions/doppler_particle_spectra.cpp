@@ -21,6 +21,7 @@
 
 /* Local includes */
 #include "cpp_to_python.h"
+#include "floating_point_utils.h"
 #include "grid_props.h"
 #include "macros.h"
 #include "part_props.h"
@@ -152,6 +153,9 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
         }
 
         const PartReal w_p = part_props->get_weight_at<PartReal>(p);
+        double w_scale;
+        const OutT w_out =
+            split_weight<OutT>(static_cast<double>(w_p), w_scale);
         std::array<int, MAX_GRID_NDIM> part_indices;
         std::array<SpecReal, MAX_GRID_NDIM> axis_fracs;
         get_part_ind_frac_cic<PartReal, SpecReal>(part_indices, axis_fracs,
@@ -173,8 +177,7 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
           const int grid_i = base_lin + sc.linoff;
           cell_spectra_ptrs[nvalid_cells] =
               grid_spectra + static_cast<size_t>(grid_i) * nlam;
-          cell_weights[nvalid_cells] =
-              static_cast<OutT>(frac) * static_cast<OutT>(w_p);
+          cell_weights[nvalid_cells] = static_cast<OutT>(frac) * w_out;
           nvalid_cells++;
         }
 
@@ -201,9 +204,7 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
               static_cast<double>((static_cast<OutT>(1) - frac_s) * total);
           p_spec_accum[ils] += static_cast<double>(frac_s * total);
         }
-        for (size_t ilam = 0; ilam < nlam; ++ilam) {
-          p_spec[ilam] += static_cast<OutT>(p_spec_accum[ilam]);
-        }
+        add_scaled_row(p_spec, p_spec_accum.data(), nlam, w_scale);
       }
     }
     return;
@@ -249,8 +250,10 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
           mapped_indices[il] = get_upper_lam_bin(lam_s, wavelength, nlam);
         }
 
-        const OutT weight =
-            static_cast<OutT>(part_props->get_weight_at<PartReal>(p));
+        double w_scale;
+        const OutT weight = split_weight<OutT>(
+            static_cast<double>(part_props->get_weight_at<PartReal>(p)),
+            w_scale);
         std::array<int, MAX_GRID_NDIM> part_indices;
         get_part_inds_ngp<PartReal, SpecReal>(part_indices, grid_props,
                                               part_props, p);
@@ -283,9 +286,7 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
           p_spec_accum[ilam_shifted] +=
               static_cast<double>(frac_shifted * grid_spectra_value);
         }
-        for (size_t ilam = 0; ilam < nlam; ++ilam) {
-          p_spec[ilam] += static_cast<OutT>(p_spec_accum[ilam]);
-        }
+        add_scaled_row(p_spec, p_spec_accum.data(), nlam, w_scale);
       }
     }
     return;
@@ -375,6 +376,7 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
    * the dtypes resolved above. */
   npy_intp np_dims[2] = {npart, nlam};
   npy_intp np_dims_int[1] = {nlam};
+  reset_precision_flags();
   PyObject *out_tuple =
       dispatch_float(part_typenum, [&](auto p) -> PyObject * {
         return dispatch_float(grid_typenum, [&](auto g) -> PyObject * {
@@ -419,6 +421,13 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
   /* Clean up memory! */
   delete part_props;
   delete grid_props;
+
+  /* Warn about any weights or values too large for the output precision. */
+  if (out_tuple != NULL &&
+      !warn_precision_flags(typenum_to_string(output_typenum))) {
+    Py_DECREF(out_tuple);
+    return NULL;
+  }
 
   toc("compute_part_seds_with_vel_shift");
 

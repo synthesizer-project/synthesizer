@@ -2037,7 +2037,11 @@ class DraineLiGrainCurves(AttenuationLaw):
 
         # Accumulate the contribution from each grain component into the final
         # optical-depth array.
-        tau_all = np.zeros((nparticles, grid.nlam), dtype=np.float32)
+        # Evaluate at the precision of the wavelengths we were given (dust
+        # curves are evaluated at the spectra precision, see
+        # evaluate_dust_curve_at_dtype)
+        tau_dtype = np.result_type(np.asarray(lam).dtype, np.float32)
+        tau_all = np.zeros((nparticles, grid.nlam), dtype=tau_dtype)
         tau_scale = (
             ((1.0 * cm**2) / _GAS_MASS_PER_H).to(1 / column_units).ndview
         )
@@ -2101,7 +2105,7 @@ class DraineLiGrainCurves(AttenuationLaw):
                 valid,
                 None,
                 False,
-                np.float32,
+                tau_dtype,
                 (dtg_axis_name,),
             )
 

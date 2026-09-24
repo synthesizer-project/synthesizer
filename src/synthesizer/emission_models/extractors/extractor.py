@@ -184,6 +184,31 @@ class Extractor(ABC):
             elif isinstance(value, (unyt_array, unyt_quantity)):
                 value = value.value
 
+            # Logged attributes aren't stored in one consistent unit (some are
+            # the log10 of the emitter's internal units, some are already in
+            # the grid's units), so where the linear quantity is available we
+            # take log10 of it in the grid axis units instead. A logged value
+            # fixed on the model is used as given.
+            fixed = getattr(model, "fixed_parameters", {}) or {}
+            if (
+                log
+                and units not in (None, "dimensionless")
+                and (axis not in fixed)
+            ):
+                linear = get_param(
+                    axis.replace("log10", "", 1),
+                    model,
+                    None,
+                    emitter,
+                    default=None,
+                    preserve_units=True,
+                )
+                if isinstance(linear, (unyt_array, unyt_quantity)):
+                    dtype = np.asarray(value).dtype
+                    value = np.log10(
+                        unyt_to_ndview(linear.astype(np.float64), units)
+                    ).astype(dtype, copy=False)
+
             # We know that the extracted values must be arrays, this can not be
             # the case when we only have 1 value (i.e. a single particle, or
             # singular valued parametric property) so here we make sure that
@@ -537,7 +562,7 @@ class IntegratedParticleExtractor(Extractor):
         return LineCollection(
             line_ids=self._grid.line_ids,
             lam=self._line_lams,
-            lum=lum * erg / s,
+            lum=lum * self._line_lum_grid.units,
             cont=cont * erg / s / Hz,
         )
 
@@ -1232,13 +1257,13 @@ class ParticleExtractor(Extractor):
         part_line = LineCollection(
             line_ids=self._grid.line_ids,
             lam=self._line_lams,
-            lum=lum * erg / s,
+            lum=lum * self._line_lum_grid.units,
             cont=cont * erg / s / Hz,
         )
         integrated_line = LineCollection(
             line_ids=self._grid.line_ids,
             lam=self._line_lams,
-            lum=integrated_lum * erg / s,
+            lum=integrated_lum * self._line_lum_grid.units,
             cont=integrated_cont * erg / s / Hz,
         )
 
