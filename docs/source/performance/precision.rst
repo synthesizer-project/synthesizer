@@ -147,6 +147,8 @@ slice or transpose an array in a way that breaks contiguity you will get a
 ``ValueError`` asking for a contiguous array; use ``np.ascontiguousarray``
 at the point where you create the slice.
 
-Finally, some attenuation models cannot be evaluated at float32 without
-overflowing. If that happens you will get an error asking you to use float64
-outputs for that operation, rather than spectra silently full of ``inf``.
+Finally, some attenuation models overflow when evaluated at float32. In that
+case Synthesizer re-evaluates the (small) attenuation curve at float64 and
+converts the result. Only if the result itself cannot be represented at float32
+will you get an error asking you to use float64 outputs for that operation,
+rather than spectra silently full of ``inf``.

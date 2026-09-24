@@ -448,6 +448,27 @@ class BlackholesComponent(Component):
                 self.inclination.to("radian").value
             )
 
+    def _like_mass(self, arr):
+        """Return a derived array at the precision of the masses.
+
+        Physical constants (c, Lsun) and scalar defaults (e.g. epsilon=0.1)
+        are float64, so arithmetic with them promotes float32 black hole
+        properties. Derived properties should keep the precision of the
+        masses they were computed from.
+
+        Args:
+            arr (unyt_array/np.ndarray):
+                The derived array.
+
+        Returns:
+            unyt_array/np.ndarray:
+                The array at the masses' floating-point dtype.
+        """
+        dtype = getattr(self.mass, "dtype", None)
+        if dtype is None or dtype.kind != "f":
+            return arr
+        return arr.astype(dtype, copy=False)
+
     def calculate_accretion_rate(self):
         """Calculate the black hole accretion rate from the eddington ratio.
 
@@ -459,7 +480,7 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole accretion rate
         """
-        self.accretion_rate = (
+        self.accretion_rate = self._like_mass(
             self.accretion_rate_eddington
             * self.eddington_luminosity
             / (self.epsilon * c**2)
@@ -474,7 +495,9 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole bolometric luminosity
         """
-        self.bolometric_luminosity = self.epsilon * self.accretion_rate * c**2
+        self.bolometric_luminosity = self._like_mass(
+            self.epsilon * self.accretion_rate * c**2
+        )
 
         return self.bolometric_luminosity
 
@@ -489,7 +512,9 @@ class BlackholesComponent(Component):
         # L_Edd = 4*pi*G*mp*c*M/sigma_thompson = 1.257e38 * M/Msun erg/s
         # Converting to solar luminosities:
         # L_Edd = 1.257e38 / 3.828e33 = 3.284e4 Lsun/Msun
-        self.eddington_luminosity = 3.284e4 * self._mass * Lsun
+        self.eddington_luminosity = self._like_mass(
+            3.284e4 * self._mass * Lsun
+        )
 
         return self.eddington_luminosity
 

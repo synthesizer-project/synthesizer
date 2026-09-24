@@ -28,6 +28,7 @@ from synthesizer.extensions.reductions import (
 )
 from synthesizer.grid import Template
 from synthesizer.utils.operation_timers import timed, timer
+from synthesizer.utils.precision import resolve_out_dtype
 
 
 class Extraction:
@@ -420,6 +421,7 @@ class Generation:
         lam,
         emitter,
         nthreads=1,
+        out_dtype=None,
     ):
         """Generate the spectra for a given model.
 
@@ -438,6 +440,11 @@ class Generation:
                 The emitter to generate the spectra for.
             nthreads (int):
                 The number of threads available for particle integration.
+            out_dtype (np.dtype):
+                The dtype of the generated spectra. Generators compute in
+                float64 (e.g. to avoid overflowing exponentials) and the
+                result is converted to this dtype. Defaults to the global
+                default output dtype.
 
         Returns:
             dict:
@@ -446,18 +453,22 @@ class Generation:
         # Unpack what we need for dust emission
         generator = this_model.generator
         per_particle = this_model.per_particle
+        out_dtype = resolve_out_dtype(out_dtype)
 
         # If we have an empty emitter we can just return zeros (only applicable
         # when nparticles exists in the emitter)
         if getattr(emitter, "nparticles", 1) == 0:
             spectra[this_model.label] = Sed(
                 lam,
-                np.zeros(lam.size) * erg / s / Hz,
+                np.zeros(lam.size, dtype=out_dtype) * erg / s / Hz,
             )
             if per_particle:
                 particle_spectra[this_model.label] = Sed(
                     lam,
-                    np.zeros((emitter.nparticles, lam.size)) * erg / s / Hz,
+                    np.zeros((emitter.nparticles, lam.size), dtype=out_dtype)
+                    * erg
+                    / s
+                    / Hz,
                 )
             return spectra, particle_spectra
 
@@ -474,6 +485,9 @@ class Generation:
                 this_model,
                 particle_spectra if per_particle else spectra,
             )
+
+        # Convert to the output precision
+        sed._lnu = sed._lnu.astype(out_dtype, copy=False)
 
         # Cache the model on the emitter
         cache_model_params(this_model, emitter)
@@ -498,6 +512,7 @@ class Generation:
         line_ids,
         spectra,
         particle_spectra,
+        out_dtype=None,
     ):
         """Generate the lines for a given model.
 
@@ -524,6 +539,10 @@ class Generation:
             particle_spectra (dict):
                 Dictionary of existing particle spectra from all emitters for
                 scaling.
+            out_dtype (np.dtype):
+                The dtype of the generated lines. Generators compute in
+                float64 and the result is converted to this dtype. Defaults
+                to the global default output dtype.
 
         Returns:
             dict:
@@ -531,13 +550,14 @@ class Generation:
         """
         generator = this_model.generator
         per_particle = this_model.per_particle
+        out_dtype = resolve_out_dtype(out_dtype)
 
         # If the emitter is empty we can just return zeros. This is only
         # applicable when nparticles exists in the emitter
         if getattr(emitter, "nparticles", 1) == 0:
             # Create the zeroed luminosity and continuum arrays
-            lums = np.zeros((0, len(lams))) * erg / s
-            conts = np.zeros((0, len(lams))) * erg / s / Hz
+            lums = np.zeros((0, len(lams)), dtype=out_dtype) * erg / s
+            conts = np.zeros((0, len(lams)), dtype=out_dtype) * erg / s / Hz
 
             zeroed_lines = LineCollection(
                 line_ids=line_ids,
@@ -577,6 +597,14 @@ class Generation:
                 particle_lines if per_particle else lines,
                 particle_spectra if per_particle else spectra,
             )
+
+        # Convert to the output precision
+        out_lines._luminosity = out_lines._luminosity.astype(
+            out_dtype, copy=False
+        )
+        out_lines._continuum = out_lines._continuum.astype(
+            out_dtype, copy=False
+        )
 
         # Cache the model on the emitter
         cache_model_params(this_model, emitter)

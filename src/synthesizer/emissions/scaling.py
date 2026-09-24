@@ -288,6 +288,14 @@ def scale_line_arrays(
     nlam = luminosity.shape[-1]
     lum_1d = isinstance(scaling_lum, np.ndarray) and scaling_lum.ndim == 1
     cont_1d = isinstance(scaling_cont, np.ndarray) and scaling_cont.ndim == 1
+
+    # Per-row scalings are cheap to convert, so give them the line precision
+    # (matching scale_array).
+    if lum_1d and luminosity.ndim == 2:
+        scaling_lum = scaling_lum.astype(luminosity.dtype, copy=False)
+    if cont_1d and continuum.ndim == 2:
+        scaling_cont = scaling_cont.astype(continuum.dtype, copy=False)
+
     use_fused = (
         luminosity.ndim == 2
         and lum_1d
@@ -365,6 +373,18 @@ def scale_array(
     # Treat scalars as ndim=0 so the later branching can talk about arrays and
     # scalars using one variable.
     scaling_ndim = getattr(scaling, "ndim", 0)
+
+    # A lower-dimensional scaling (one factor per row or per wavelength) is
+    # cheap to convert, so it takes the array's precision rather than failing
+    # in the kernels (or promoting the result on the NumPy paths). Full-size
+    # scalings are left alone so we never make a hidden spectra-sized copy.
+    if (
+        isinstance(scaling, np.ndarray)
+        and scaling_ndim < array.ndim
+        and array.dtype.kind == "f"
+        and scaling.dtype != array.dtype
+    ):
+        scaling = scaling.astype(array.dtype)
 
     # When scaling is one factor per row and the masks are in the simple 1D
     # forms the extension understands, hand the whole operation over to the

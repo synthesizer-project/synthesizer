@@ -193,6 +193,18 @@ class Extractor(ABC):
             # Append the extracted value to the list
             extracted.append(value)
 
+        # Single values (e.g. scalar defaults like ionisation_parameter_blr
+        # or fixed model parameters) are broadcast to every particle. Give
+        # them the precision of the per-particle attributes so they don't
+        # break the extension's shared-dtype requirement.
+        per_particle = [v for v in extracted if v.size > 1]
+        if per_particle and len(per_particle) < len(extracted):
+            dtype = np.result_type(*per_particle)
+            extracted = [
+                v.astype(dtype, copy=False) if v.size == 1 else v
+                for v in extracted
+            ]
+
         # Check if the attributes are outside the grid axes if necessary
         if do_grid_check:
             self.check_emitter_attrs(extracted)

@@ -1007,6 +1007,10 @@ class GrainModels(AttenuationLaw):
         else:
             out = self.extmodel(lam.to_astropy())
 
+        # The interpolation always returns float64, so match the precision
+        # of the wavelengths we were given (if they are floating point)
+        if lam.dtype.kind == "f":
+            out = np.asarray(out).astype(lam.dtype, copy=False)
         return out
 
 

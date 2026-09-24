@@ -967,11 +967,14 @@ class Grid:
                     verbose=False,
                 )
 
-            # Update this spectra
-            self.spectra[spectra_type] = new_spectra
+            # Update this spectra, keeping the grid's precision (spectres
+            # always returns float64)
+            self.spectra[spectra_type] = new_spectra.astype(
+                self._dtype, copy=False
+            )
 
-        # Update wavelength array
-        self.lam = new_lam
+        # Update wavelength array, again at the grid's precision
+        self.lam = new_lam.astype(self._dtype, copy=False)
 
         self._ensure_spectra_data_contiguous()
 

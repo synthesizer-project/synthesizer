@@ -605,6 +605,10 @@ def _cast_curve_input(value, dtype):
         return value
     if isinstance(value, np.ndarray) and value.dtype != dtype:
         return value.astype(dtype)
+    # Python floats (e.g. tau_v=0.3) would otherwise promote float32 inputs
+    # to float64 inside unyt arithmetic
+    if isinstance(value, (float, np.floating)):
+        return np.dtype(dtype).type(value)
     return value
 
 
@@ -631,16 +635,32 @@ def evaluate_dust_curve_at_dtype(func, dtype, /, *args, **kwargs):
 
     Raises:
         InconsistentArguments:
-            If the evaluation overflows at the requested precision.
+            If the result cannot be represented at the requested precision.
     """
     cast_args = [_cast_curve_input(arg, dtype) for arg in args]
     try:
         with np.errstate(over="raise"):
-            return func(*cast_args, **kwargs)
+            result = func(*cast_args, **kwargs)
     except FloatingPointError:
+        # An intermediate overflowed at reduced precision. Evaluate at
+        # float64 instead, and only fail if the result itself cannot be
+        # represented at the requested precision.
+        args64 = [_cast_curve_input(arg, np.float64) for arg in args]
+        result = func(*args64, **kwargs)
+        with np.errstate(over="ignore"):
+            cast = np.asarray(result).astype(dtype)
+        if np.all(np.isfinite(cast) | ~np.isfinite(np.asarray(result))):
+            return cast
         raise exceptions.InconsistentArguments(
             f"Overflow while evaluating the dust curve at {np.dtype(dtype)}. "
             "This attenuation model cannot be represented at reduced "
             "precision; use float64 spectra (e.g. leave out_dtype unset or "
             "pass out_dtype=np.float64) when applying it."
         )
+
+    # Some curves compute internally at float64 regardless of their inputs
+    # (e.g. interpolated tables), so make sure the result has the requested
+    # precision
+    if isinstance(result, np.ndarray) and result.dtype != dtype:
+        result = result.astype(dtype)
+    return result
