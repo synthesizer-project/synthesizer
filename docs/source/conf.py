@@ -108,6 +108,11 @@ html_theme_options = {
 
 html_title = "Synthesizer"
 
+html_css_files = [
+    # Compact publication entries with an inline figure toggle.
+    "publications.css",
+]
+
 # Google Analytics
 # Register the scripts to be included in the HTML <head>.
 # We manually inject the GA4 scripts using html_js_files
