@@ -17,6 +17,7 @@ from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.exceptions import UnimplementedFunctionality
 from synthesizer.units import accepts
 from synthesizer.utils import sigmoid
+from synthesizer.utils.operation_timers import timed
 
 # Define the path to the data files
 filepath = os.path.abspath(__file__)
@@ -99,6 +100,7 @@ class IGMBase(Transformer):
 
         return fig, ax
 
+    @timed("IGMBase._transform")
     def _transform(
         self,
         emission,
