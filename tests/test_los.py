@@ -1662,3 +1662,196 @@ class TestColumnDensityAccumulationPrecision:
 
         assert threaded.dtype == dtype
         np.testing.assert_allclose(threaded, serial, rtol=0.0, atol=0.0)
+
+
+@pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+def test_column_density_supports_independent_dtypes(force_loop):
+    """Kernel, particle, value, and output precision can differ."""
+    from synthesizer.extensions.column_density import compute_column_density
+
+    kernel_obj = Kernel(name="uniform", binsize=16)
+    kernel = np.ascontiguousarray(kernel_obj.get_kernel(), dtype=np.float32)
+    truncated = np.ascontiguousarray(
+        kernel_obj.get_truncated_los_kernel()[0], dtype=np.float32
+    )
+    pos_i = np.ascontiguousarray([[0.0, 0.0, 2.0]], dtype=np.float64)
+    pos_j = np.ascontiguousarray(
+        [[0.0, 0.0, 0.0], [0.1, 0.0, 1.0]], dtype=np.float64
+    )
+    smls = np.ascontiguousarray([0.5, 0.5], dtype=np.float64)
+    values = np.ascontiguousarray([2.0, 3.0], dtype=np.float32)
+
+    result = compute_column_density(
+        kernel,
+        truncated,
+        pos_i,
+        pos_j,
+        smls,
+        (values,),
+        1,
+        2,
+        kernel.size,
+        truncated.shape[0],
+        truncated.shape[1],
+        1.0,
+        force_loop,
+        1,
+        1,
+        np.float64,
+    )
+
+    assert result.dtype == np.float64
+    assert result[0, 0] > 0.0
+
+
+def test_column_density_respects_output_dtype(one_star, one_gas_front):
+    """Public LOS API forwards independent output precision."""
+    result = one_star.get_los_column_density(
+        one_gas_front,
+        "masses",
+        Kernel(name="uniform", binsize=16),
+        out_dtype=np.float32,
+    )
+
+    assert result.dtype == np.float32
+
+
+@pytest.mark.parametrize("force_loop", [1, 0], ids=["loop", "tree"])
+def test_smoothed_column_density_supports_independent_dtypes(force_loop):
+    """Smoothed LOS dispatch also separates all precision groups."""
+    from synthesizer.extensions.column_density import (
+        compute_column_density_smoothed,
+    )
+
+    kernel_obj = Kernel(
+        name="uniform",
+        binsize=16,
+        overlap_q_binsize=8,
+        overlap_u_binsize=8,
+        overlap_eta_binsize=8,
+        overlap_build_ndim=4,
+    )
+    overlap_arrays = tuple(
+        np.ascontiguousarray(array, dtype=np.float32)
+        for array in kernel_obj.get_overlap_kernel()
+    )
+    overlap, q_grid, u_grid, eta_grid = overlap_arrays
+    pos_i = np.ascontiguousarray([[0.0, 0.0, 2.0]], dtype=np.float64)
+    input_smls = np.ascontiguousarray([0.25], dtype=np.float64)
+    pos_j = np.ascontiguousarray(
+        [[0.0, 0.0, 0.0], [0.1, 0.0, 1.0]], dtype=np.float64
+    )
+    smls = np.ascontiguousarray([0.5, 0.5], dtype=np.float64)
+    values = np.ascontiguousarray([2.0, 3.0], dtype=np.float32)
+
+    result = compute_column_density_smoothed(
+        overlap,
+        q_grid,
+        u_grid,
+        eta_grid,
+        pos_i,
+        input_smls,
+        pos_j,
+        smls,
+        (values,),
+        1,
+        2,
+        q_grid.size,
+        u_grid.size,
+        eta_grid.size,
+        1.0,
+        force_loop,
+        1,
+        1,
+        np.float64,
+    )
+
+    assert result.dtype == np.float64
+    assert result[0, 0] > 0.0
+
+
+@pytest.mark.parametrize("as_points", [True, False], ids=["points", "smooth"])
+@pytest.mark.parametrize(
+    "star_dtype, gas_dtype",
+    [
+        (np.float32, np.float32),
+        (np.float32, np.float64),
+        (np.float64, np.float32),
+    ],
+    ids=["f32-f32", "f32stars-f64gas", "f64stars-f32gas"],
+)
+def test_column_density_mixed_collection_precision(
+    as_points, star_dtype, gas_dtype
+):
+    """Stars and gas may each use their own precision via the public API.
+
+    This also covers dust masses derived from a scalar dust-to-metal ratio,
+    which must keep the gas precision.
+    """
+
+    def column_density(star_dtype, gas_dtype):
+        star = Stars(
+            initial_masses=unyt_array(
+                np.array([1.0], dtype=star_dtype), "Msun"
+            ),
+            ages=unyt_array(np.array([1.0], dtype=star_dtype), "Myr"),
+            metallicities=np.array([0.02], dtype=star_dtype),
+            redshift=0.0,
+            coordinates=unyt_array(
+                np.array([[0.0, 0.0, 1.0]], dtype=star_dtype), "Mpc"
+            ),
+            smoothing_lengths=unyt_array(
+                np.array([0.5], dtype=star_dtype), "Mpc"
+            ),
+        )
+        gas = Gas(
+            masses=unyt_array(np.array([1e6, 2e6], dtype=gas_dtype), "Msun"),
+            metallicities=np.array([0.01, 0.01], dtype=gas_dtype),
+            redshift=0.0,
+            coordinates=unyt_array(
+                np.array([[0.0, 0.0, 0.0], [0.1, 0.0, 0.5]], dtype=gas_dtype),
+                "Mpc",
+            ),
+            smoothing_lengths=unyt_array(
+                np.array([1.0, 1.0], dtype=gas_dtype), "Mpc"
+            ),
+            dust_to_metal_ratio=0.3,
+        )
+        assert gas.dust_masses.dtype == gas_dtype
+        kernel = Kernel(
+            name="uniform",
+            binsize=64,
+            overlap_q_binsize=8,
+            overlap_u_binsize=8,
+            overlap_eta_binsize=8,
+            overlap_build_ndim=4,
+            dtype=star_dtype,
+        )
+        return star.get_los_column_density(
+            gas,
+            "dust_masses",
+            kernel,
+            as_points=as_points,
+            out_dtype=np.float32,
+        )
+
+    result = column_density(star_dtype, gas_dtype)
+    reference = column_density(np.float64, np.float64)
+
+    assert result.dtype == np.float32
+    assert np.all(reference.value > 0)
+    np.testing.assert_allclose(result.value, reference.value, rtol=1e-5)
+
+
+def test_column_density_dtype_error_names_attributes(one_star, one_gas_front):
+    """A mismatched density attribute is named in the dtype error."""
+    one_gas_front.dust_masses = unyt_array(
+        one_gas_front.dust_masses.value.astype(np.float32), "Msun"
+    )
+
+    with pytest.raises(TypeError, match="dust_masses of the absorbing"):
+        one_star.get_los_column_density(
+            one_gas_front,
+            ["masses", "dust_masses"],
+            Kernel(name="uniform", binsize=16),
+        )

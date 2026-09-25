@@ -20,6 +20,7 @@ from synthesizer.units import Quantity, accepts, get_quantity_unit
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.utils.operation_timers import timed, timer
+from synthesizer.utils.precision import resolve_out_dtype
 
 
 class Particles:
@@ -1054,6 +1055,7 @@ class Particles:
         force_loop,
         min_count,
         nthreads,
+        out_dtype,
     ):
         """Prepare the arguments for line of sight column density computation.
 
@@ -1080,6 +1082,8 @@ class Particles:
                 performance.
             nthreads (int):
                 The number of threads to use for the calculation.
+            out_dtype (np.dtype):
+                The dtype for the output column densities.
         """
         # Ensure we actually have the properties needed
         if self.coordinates is None:
@@ -1141,6 +1145,8 @@ class Particles:
             force_loop,
             min_count,
             nthreads,
+            out_dtype,
+            tuple(attrs),
         )
 
     def _prepare_smoothed_los_args(
@@ -1153,6 +1159,7 @@ class Particles:
         force_loop,
         min_count,
         nthreads,
+        out_dtype,
     ):
         """Prepare the arguments for smoothed LOS column density computation.
 
@@ -1181,6 +1188,8 @@ class Particles:
                 performance.
             nthreads (int):
                 The number of threads to use for the calculation.
+            out_dtype (np.dtype):
+                The dtype for the output column densities.
         """
         if self.coordinates is None:
             raise exceptions.InconsistentArguments(
@@ -1296,6 +1305,8 @@ class Particles:
             force_loop,
             min_count,
             nthreads,
+            out_dtype,
+            tuple(attrs),
         )
 
     @timed("Particles.get_los_column_density")
@@ -1311,6 +1322,7 @@ class Particles:
         force_loop=0,
         min_count=100,
         nthreads=1,
+        out_dtype=None,
     ):
         """Calculate the column density of an attribute.
 
@@ -1352,6 +1364,9 @@ class Particles:
                 performance.
             nthreads (int):
                 The number of threads to use for the calculation.
+            out_dtype (dtype-like, optional):
+                Floating-point dtype for the returned column densities. By
+                default, use the global Synthesizer output dtype.
 
         Returns:
             unyt_array or tuple of unyt_array:
@@ -1443,6 +1458,8 @@ class Particles:
                 )
             column_density_units.append(density.units / coord_units**2)
 
+        output_dtype = resolve_out_dtype(out_dtype)
+
         def finalise(raw):
             with timer("Particles.get_los_column_density.attach_units"):
                 results = tuple(
@@ -1460,11 +1477,19 @@ class Particles:
 
         # If have no particles return 0
         if self.nparticles == 0 or masked_nparticles == 0:
-            return finalise(np.zeros((len(density_attrs), masked_nparticles)))
+            return finalise(
+                np.zeros(
+                    (len(density_attrs), masked_nparticles), dtype=output_dtype
+                )
+            )
 
         # If the other particles have no particles return 0
         if other_parts.nparticles == 0:
-            return finalise(np.zeros((len(density_attrs), masked_nparticles)))
+            return finalise(
+                np.zeros(
+                    (len(density_attrs), masked_nparticles), dtype=output_dtype
+                )
+            )
 
         # Compute the column density. Smoothed input particles use a dedicated
         # extension path based on the overlap kernel table.
@@ -1479,6 +1504,7 @@ class Particles:
                     force_loop,
                     min_count,
                     nthreads,
+                    output_dtype,
                 )
 
             with timer("Particles.get_los_column_density.compute"):
@@ -1494,6 +1520,7 @@ class Particles:
                     force_loop,
                     min_count,
                     nthreads,
+                    output_dtype,
                 )
 
             with timer("Particles.get_los_column_density.compute"):
