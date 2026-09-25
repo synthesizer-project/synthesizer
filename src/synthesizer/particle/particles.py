@@ -16,7 +16,7 @@ from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, get_quantity_unit
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.utils.operation_timers import timed, timer
@@ -867,7 +867,7 @@ class Particles:
                 f"Trying to calculate radius for {self.__class__.__name__}"
                 " with no particles. Returning 0."
             )
-            return 0 * self.coordinates.units
+            return 0 * get_quantity_unit(self, "coordinates")
 
         # Get the radii if not already set
         if self.radii is None:
@@ -875,13 +875,19 @@ class Particles:
 
         # Handle special cases
         if frac == 0:
-            return 0 * self.radii.units
+            return 0 * get_quantity_unit(self, "radii")
         elif frac == 1:
-            return np.max(self.radii.value) * self.coordinates.units
+            return np.max(self.radii.value) * get_quantity_unit(
+                self, "coordinates"
+            )
         elif self.nparticles == 1:
-            return self.radii[0].value * frac * self.coordinates.units
+            return (
+                self.radii[0].value
+                * frac
+                * get_quantity_unit(self, "coordinates")
+            )
         elif np.sum(weights) == 0:
-            return 0 * self.coordinates.units
+            return 0 * get_quantity_unit(self, "coordinates")
 
         # Strip units off the weights if they have them
         if hasattr(weights, "units"):
@@ -901,7 +907,7 @@ class Particles:
         # Interpolate to get an accurate radius
         radius = np.interp(frac * total, cum_weight, radii)
 
-        return radius * self.radii.units
+        return radius * get_quantity_unit(self, "radii")
 
     def get_attr_radius(self, weight_attr, frac=0.5):
         """Calculate the radius of a particle distribution.
@@ -1432,6 +1438,7 @@ class Particles:
                 f"{other_parts.name} object is missing coordinates!"
             )
 
+        coord_units = get_quantity_unit(other_parts, "coordinates")
         column_density_units = []
         for attr in density_attrs:
             density = getattr(other_parts, attr, None)
@@ -1449,9 +1456,7 @@ class Particles:
                     f"{other_parts.name} attribute {attr} must have one value "
                     "per particle."
                 )
-            column_density_units.append(
-                density.units / other_parts.coordinates.units**2
-            )
+            column_density_units.append(density.units / coord_units**2)
 
         output_dtype = resolve_out_dtype(out_dtype)
 
@@ -1615,9 +1620,11 @@ class Particles:
         # units. Since coordinates and velocities won't necessarily agree
         # on the length unit we adopt the velocity length unit which we can
         # extract with some simple string manipulation.
-        distance_unit = str(self.velocities.units).split("/")[0]
+        velocity_unit = get_quantity_unit(self, "velocities")
+        distance_unit = str(velocity_unit).split("/")[0]
         ang_mom_unit = (
-            f"{distance_unit} * {self.masses.units} * {self.velocities.units}"
+            f"{distance_unit} * {get_quantity_unit(self, 'masses')} * "
+            f"{velocity_unit}"
         )
 
         # Cross product of position and velocity, weighted by mass

@@ -1652,3 +1652,46 @@ class TestLineCollectionGenerationSubsets:
 
 if __name__ == "__main__":
     pytest.main(["-xvs", __file__])
+
+
+def _two_line_collection():
+    """Build a small per-particle collection for the aliasing tests."""
+    return LineCollection(
+        line_ids=["H 1 6562.80A", "N 2 6583.45A"],
+        lam=np.array([6562.8, 6583.45]) * angstrom,
+        lum=np.ones((3, 2)) * erg / s,
+        cont=np.ones((3, 2)) * erg / s / Hz,
+    )
+
+
+def test_blended_line_does_not_mutate_source():
+    """Blending lines must not accumulate into the source collection.
+
+    Attribute reads return views onto the stored arrays, so a blend that
+    accumulated into its first selection would rewrite the first line.
+    """
+    lines = _two_line_collection()
+    lines["H 1 6562.80A, N 2 6583.45A"]
+    np.testing.assert_array_equal(lines._luminosity, 1.0)
+    np.testing.assert_array_equal(lines._continuum, 1.0)
+
+
+@pytest.mark.parametrize("mask", [None, np.array([True, False, True])])
+def test_generic_attenuation_does_not_mutate_source(mask):
+    """The generic attenuation fallback must leave the source untouched.
+
+    Overriding get_transmission skips the separable fast path, which is how a
+    user-defined curve reaches the NumPy fallback.
+    """
+
+    class CustomCurve(PowerLaw):
+        def get_transmission(self, tau_v, lam):
+            return super().get_transmission(tau_v, lam)
+
+    lines = _two_line_collection()
+    attenuated = lines.apply_attenuation(
+        tau_v=np.ones(3), dust_curve=CustomCurve(), mask=mask
+    )
+    np.testing.assert_array_equal(lines._luminosity, 1.0)
+    np.testing.assert_array_equal(lines._continuum, 1.0)
+    assert np.all(attenuated._luminosity[0] < 1.0)
