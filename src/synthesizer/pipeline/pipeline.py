@@ -4234,8 +4234,17 @@ class Pipeline:
         # Loop over galaxies and compute what has been requested using get_*
         # signalling methods
         igal = 0
+        _gal = None
         while len(self.galaxies) > 0:
             start_gal = time.perf_counter()
+
+            # Drop the reference the previous iteration left on its last chunk
+            # before the next galaxy is pulled in. The outer pop below rebinds
+            # gal, but until this reference goes too the previous galaxy stays
+            # resident, so its arrays were being freed later and the cost was
+            # landing on the next chunk pop rather than being named here.
+            with timer("Pipeline.run.release_prev_galaxy"):
+                _gal = None
 
             # Pop the first galaxy from the list
             with timer("Pipeline.run.pop_galaxy"):
