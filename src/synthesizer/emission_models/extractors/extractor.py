@@ -17,7 +17,7 @@ import os
 from abc import ABC, abstractmethod
 
 import numpy as np
-from unyt import Hz, c, erg, s, unyt_array, unyt_quantity
+from unyt import Hz, Unit, c, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
@@ -167,18 +167,23 @@ class Extractor(ABC):
             value = get_param(axis, model, None, emitter, preserve_units=True)
 
             # Convert the units if necessary
-            if (
-                not log
-                and units != "dimensionless"
-                and isinstance(value, (unyt_array, unyt_quantity))
-                and value.units != units
-            ):
-                # Convert out of place: this value came off the emitter, so
-                # it is a view onto the emitter's stored array and converting
-                # it in place would rewrite the particle data.
-                value = value.to(units).ndview
-            elif isinstance(value, (unyt_array, unyt_quantity)):
-                value = value.value
+            if isinstance(value, (unyt_array, unyt_quantity)):
+                if log or units == "dimensionless":
+                    value = value.value
+                # Grid axis units are stored as strings, and a Unit never
+                # compares equal to a str, so coerce before comparing or every
+                # attribute looks mismatched and gets copied.
+                elif value.units == Unit(units):
+                    # Already in the grid's units, so read the emitter's buffer
+                    # directly. The kernels only read it and need it
+                    # contiguous, which it already is unless the emitter holds
+                    # a strided view.
+                    value = np.ascontiguousarray(value.ndview)
+                else:
+                    # Convert out of place: this value came off the emitter,
+                    # so it is a view onto the emitter's stored array and
+                    # converting it in place would rewrite the particle data.
+                    value = value.to(units).ndview
 
             # We know that the extracted values must be arrays, this can not be
             # the case when we only have 1 value (i.e. a single particle, or

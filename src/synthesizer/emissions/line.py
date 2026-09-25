@@ -713,24 +713,23 @@ class LineCollection:
                 alias_to_line_id(li.strip()) for li in line_id.split(",")
             ]
 
-            # Loop over the lines and combine them into a single line
-            new_lam = self.lam[self.line2index[line_ids[0]]]
-            new_lum = self.luminosity[..., self.line2index[line_ids[0]]]
-            new_cont = self.continuum[..., self.line2index[line_ids[0]]]
+            # Loop over the lines and combine them into a single line. Each
+            # first selection is a view onto this collection's arrays, and the
+            # loop below accumulates into it, so start from copies.
+            first = self.line2index[line_ids[0]]
+            new_lam = self.lam[first].copy()
+            new_lum = self.luminosity[..., first].copy()
+            new_cont = self.continuum[..., first].copy()
             new_flux = (
-                self.flux[..., self.line2index[line_ids[0]]]
-                if self.flux is not None
-                else None
+                self.flux[..., first].copy() if self.flux is not None else None
             )
             new_obs_cont = (
-                self.continuum_flux[..., self.line2index[line_ids[0]]]
+                self.continuum_flux[..., first].copy()
                 if self.continuum_flux is not None
                 else None
             )
             new_obslam = (
-                self.obslam[self.line2index[line_ids[0]]]
-                if self.obslam is not None
-                else None
+                self.obslam[first].copy() if self.obslam is not None else None
             )
             for li in line_ids[1:]:
                 new_lam += self.lam[self.line2index[li]]
@@ -1477,8 +1476,8 @@ class LineCollection:
         # If neither fast path applies we fall back to NumPy broadcasting,
         # copying the arrays and applying the transmission with or without
         # a mask
-        att_lum = self.luminosity
-        att_cont = self.continuum
+        att_lum = self.luminosity.copy()
+        att_cont = self.continuum.copy()
         if mask is None:
             att_lum *= transmission
             att_cont *= transmission
