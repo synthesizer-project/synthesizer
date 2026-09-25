@@ -49,7 +49,7 @@ const char *typenum_to_string(int typenum) {
  *
  * @return The dtype name.
  */
-static std::string dtype_name(PyArrayObject *np_arr) {
+static std::string get_dtype_name(PyArrayObject *np_arr) {
   PyObject *str =
       PyObject_Str(reinterpret_cast<PyObject *>(PyArray_DESCR(np_arr)));
   if (str == NULL) {
@@ -107,7 +107,7 @@ bool is_float32_or_float64(PyArrayObject *np_arr, const char *name) {
                  "'%s' has dtype %s, but Synthesizer only accepts float32 or "
                  "float64 arrays. Convert it with arr.astype(np.float64) (or "
                  "np.float32 to save memory).",
-                 name, dtype_name(np_arr).c_str());
+                 name, get_dtype_name(np_arr).c_str());
     return false;
   }
 
@@ -174,7 +174,7 @@ bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
   for (int i = 0; i < count; ++i) {
     if (!is_supported_float_typenum(PyArray_TYPE(arrays[i]))) {
       unsupported +=
-          "\n    " + std::string(names[i]) + ": " + dtype_name(arrays[i]);
+          "\n    " + std::string(names[i]) + ": " + get_dtype_name(arrays[i]);
     }
   }
   if (!unsupported.empty()) {

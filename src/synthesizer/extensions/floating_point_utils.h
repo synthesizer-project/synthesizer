@@ -39,22 +39,38 @@ static inline bool is_nan_bits(Real value) {
 }
 
 /* Set by the kernels when a particle weight could not be represented in the
- * output precision (and was applied at float64 instead), and when an output
- * value overflowed the output precision anyway. The Python wrappers reset
- * these before a kernel runs and turn them into warnings afterwards. */
+ * output precision (and was applied at float64 instead). The Python wrappers
+ * clear it before a kernel runs and warn if it was set afterwards. */
 inline std::atomic<bool> weight_rescaled{false};
-inline std::atomic<bool> output_overflowed{false};
 
 /**
- * @brief Split a particle weight so it can be applied in the output precision.
+ * @brief Set whether any particle weight has been rescaled.
+ *
+ * @param value: The new value of the flag.
+ */
+static inline void set_weight_rescaled(bool value) {
+  weight_rescaled.store(value, std::memory_order_relaxed);
+}
+
+/**
+ * @brief Get whether any particle weight has been rescaled.
+ *
+ * @return True if a weight was rescaled since the flag was last cleared.
+ */
+static inline bool get_weight_rescaled() {
+  return weight_rescaled.load(std::memory_order_relaxed);
+}
+
+/**
+ * @brief Get a particle weight that can be applied in the output precision.
  *
  * Kernels multiply the grid spectra by the particle weight in the output
  * precision. A weight too large for that precision (e.g. a bolometric
  * luminosity of ~1e45 erg/s at float32) would become inf even when the
  * resulting spectra fit. Such weights are split into a mantissa, used in the
  * kernel as normal, and a power-of-two scale, applied to the finished row at
- * float64 by apply_weight_scale. Weights that fit are returned unchanged, so
- * the common case costs a single comparison.
+ * float64 by set_scaled_row. Weights that fit are returned unchanged, so the
+ * common case costs a single comparison.
  *
  * @param weight: The particle weight.
  * @param scale: Set to the scale to apply afterwards (1 if none is needed).
@@ -62,7 +78,7 @@ inline std::atomic<bool> output_overflowed{false};
  * @return The weight to use in the kernel.
  */
 template <typename OutT>
-static inline OutT split_weight(double weight, double &scale) {
+static inline OutT get_split_weight(double weight, double &scale) {
   if (std::fabs(weight) <=
       static_cast<double>(std::numeric_limits<OutT>::max())) {
     scale = 1.0;
@@ -71,63 +87,47 @@ static inline OutT split_weight(double weight, double &scale) {
   int exponent;
   const double mantissa = std::frexp(weight, &exponent);
   scale = std::ldexp(1.0, exponent);
-  weight_rescaled.store(true, std::memory_order_relaxed);
+  set_weight_rescaled(true);
   return static_cast<OutT>(mantissa);
 }
 
 /**
- * @brief Apply the scale from split_weight to a finished output row.
+ * @brief Set a finished output row to its values times a weight scale.
  *
- * The multiplication is done at float64 and only the result is rounded to
- * the output precision. Any value that still cannot be represented is flagged.
+ * Applies the scale from get_split_weight. The multiplication is done at
+ * float64 and only the result is rounded to the output precision.
  *
  * @param row: The output row.
  * @param n: The number of elements in the row.
- * @param scale: The scale returned by split_weight.
+ * @param scale: The scale returned by get_split_weight.
  */
 template <typename OutT>
-static inline void apply_weight_scale(OutT *row, size_t n, double scale) {
+static inline void set_scaled_row(OutT *row, size_t n, double scale) {
   if (scale == 1.0) {
     return;
   }
-  const double max_value =
-      static_cast<double>(std::numeric_limits<OutT>::max());
-  bool overflowed = false;
   for (size_t i = 0; i < n; i++) {
-    const double value = static_cast<double>(row[i]) * scale;
-    overflowed |= std::fabs(value) > max_value;
-    row[i] = static_cast<OutT>(value);
-  }
-  if (overflowed) {
-    output_overflowed.store(true, std::memory_order_relaxed);
+    row[i] = static_cast<OutT>(static_cast<double>(row[i]) * scale);
   }
 }
 
 /**
- * @brief Add a float64 accumulation, times a split_weight scale, to a row.
+ * @brief Set an output row to itself plus float64 values times a scale.
  *
  * Used by kernels which accumulate each particle's contribution at float64
- * before storing it (e.g. the Doppler-shifted spectra). Any value too large
- * for the output precision is flagged.
+ * before storing it (e.g. the Doppler-shifted spectra), applying the scale
+ * from get_split_weight at float64.
  *
  * @param row: The output row to add to.
  * @param values: The float64 accumulated values.
  * @param n: The number of elements in the row.
- * @param scale: The scale returned by split_weight.
+ * @param scale: The scale returned by get_split_weight.
  */
 template <typename OutT>
-static inline void add_scaled_row(OutT *row, const double *values, size_t n,
-                                  double scale) {
-  const double max_value =
-      static_cast<double>(std::numeric_limits<OutT>::max());
-  bool overflowed = false;
+static inline void set_accumulated_row(OutT *row, const double *values,
+                                       size_t n, double scale) {
   for (size_t i = 0; i < n; i++) {
-    const double value = values[i] * scale;
-    overflowed |= std::fabs(value) > max_value;
-    row[i] += static_cast<OutT>(value);
-  }
-  if (overflowed) {
-    output_overflowed.store(true, std::memory_order_relaxed);
+    row[i] += static_cast<OutT>(values[i] * scale);
   }
 }
 

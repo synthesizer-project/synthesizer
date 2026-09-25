@@ -67,43 +67,23 @@ PyArrayObject *array_or_none(PyObject *obj, const char *name) {
 }
 
 /**
- * @brief Reset the precision overflow flags before running a kernel.
- */
-void reset_precision_flags() {
-  weight_rescaled.store(false, std::memory_order_relaxed);
-  output_overflowed.store(false, std::memory_order_relaxed);
-}
-
-/**
- * @brief Raise warnings for any precision overflows flagged by a kernel.
+ * @brief Set a Python warning if a kernel had to rescale particle weights.
  *
  * @param out_dtype_name: The name of the output dtype (for the message).
  *
- * @return False if a warning was turned into an exception (e.g. by
+ * @return False if the warning was turned into an exception (e.g. by
  * warnings.simplefilter("error")), true otherwise.
  */
-bool warn_precision_flags(const char *out_dtype_name) {
-  if (output_overflowed.load(std::memory_order_relaxed)) {
-    char msg[512];
-    snprintf(msg, sizeof(msg),
-             "Some output values are too large to be stored at %s and have "
-             "overflowed to inf. Use float64 outputs (out_dtype=np.float64) "
-             "or smaller internal units for this quantity.",
-             out_dtype_name);
-    if (PyErr_WarnEx(PyExc_RuntimeWarning, msg, 1) < 0) {
-      return false;
-    }
-  } else if (weight_rescaled.load(std::memory_order_relaxed)) {
-    char msg[512];
-    snprintf(msg, sizeof(msg),
-             "Some particle weights are too large to be stored at %s. They "
-             "were applied at float64 instead, so the results are correct, "
-             "but these particles take a slower path. Consider smaller "
-             "internal units for the weight variable.",
-             out_dtype_name);
-    if (PyErr_WarnEx(PyExc_RuntimeWarning, msg, 1) < 0) {
-      return false;
-    }
+bool set_weight_rescaled_warning(const char *out_dtype_name) {
+  if (!get_weight_rescaled()) {
+    return true;
   }
-  return true;
+  char msg[512];
+  snprintf(msg, sizeof(msg),
+           "Some particle weights are too large to be stored at %s. They "
+           "were applied at float64 instead, so the results are correct, "
+           "but these particles take a slower path. Consider smaller "
+           "internal units for the weight variable.",
+           out_dtype_name);
+  return PyErr_WarnEx(PyExc_RuntimeWarning, msg, 1) >= 0;
 }

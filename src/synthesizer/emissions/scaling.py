@@ -26,6 +26,7 @@ from synthesizer.extensions.spectra_operations import (
     scale_spectra_2d,
 )
 from synthesizer.units import get_array_quantity_view
+from synthesizer.utils.precision import convert_array_dtype
 
 
 def normalise_scale_masks(mask, lam_mask, shape):
@@ -242,25 +243,6 @@ def scale_inplace(array, scaling, mask=None, lam_mask=None, nthreads=1):
     )
 
 
-def _fits_dtype(value, dtype):
-    """Return whether a scaling fits in a float dtype without overflowing.
-
-    Args:
-        value (float or np.ndarray):
-            The scaling value(s).
-        dtype (np.dtype):
-            The target dtype.
-
-    Returns:
-        bool:
-            True if every value is finite at ``dtype`` (or ``dtype`` is not a
-            floating point dtype).
-    """
-    if np.dtype(dtype).kind != "f":
-        return True
-    return bool(np.max(np.abs(value), initial=0.0) <= np.finfo(dtype).max)
-
-
 def scale_line_arrays(
     luminosity,
     continuum,
@@ -317,10 +299,14 @@ def scale_line_arrays(
     # for the fused kernel (matching scale_array), but only if they fit.
     # Otherwise we fall back to scale_array, which multiplies at the
     # scaling's precision before storing the result.
-    if lum_1d and _fits_dtype(scaling_lum, luminosity.dtype):
-        scaling_lum = scaling_lum.astype(luminosity.dtype, copy=False)
-    if cont_1d and _fits_dtype(scaling_cont, continuum.dtype):
-        scaling_cont = scaling_cont.astype(continuum.dtype, copy=False)
+    if lum_1d:
+        scaling_lum = convert_array_dtype(
+            scaling_lum, luminosity.dtype, overflow="keep"
+        )
+    if cont_1d:
+        scaling_cont = convert_array_dtype(
+            scaling_cont, continuum.dtype, overflow="keep"
+        )
 
     use_fused = (
         luminosity.ndim == 2
@@ -420,9 +406,8 @@ def scale_array(
         isinstance(scaling, np.ndarray)
         and scaling_ndim < array.ndim
         and scaling.dtype != array.dtype
-        and _fits_dtype(scaling, array.dtype)
     ):
-        scaling = scaling.astype(array.dtype)
+        scaling = convert_array_dtype(scaling, array.dtype, overflow="keep")
 
     # When scaling is one factor per row and the masks are in the simple 1D
     # forms the extension understands, hand the whole operation over to the
@@ -453,12 +438,18 @@ def scale_array(
         return scale_spectra_2d(array, scaling, mask, lam_mask, nthreads, out)
 
     # Scalar 2D scaling with simple 1D masks can use the same row-scaling
-    # kernel after materialising the repeated row factor once.
+    # kernel after materialising the repeated row factor once, provided the
+    # scalar fits in the array's precision.
+    scalar_fits = np.isscalar(scaling) and (
+        np.asarray(
+            convert_array_dtype(scaling, array.dtype, overflow="keep")
+        ).dtype
+        == array.dtype
+    )
     if (
         array.ndim == 2
         and array.flags.c_contiguous
-        and np.isscalar(scaling)
-        and _fits_dtype(scaling, array.dtype)
+        and scalar_fits
         and (
             mask is None
             or (

@@ -512,50 +512,17 @@ class Sed:
 
         return formatter.get_table("SED")
 
-    def _scale_lnu_to(self, factor_quantity, category, dtype=None):
-        """Multiply lnu by a per-wavelength factor, returning internal units.
-
-        The factor (e.g. nu for nu*Lnu) and the unit conversion are combined
-        on the small wavelength-sized array in float64 first, so the product
-        with lnu is formed directly in the target units. This keeps reduced
-        precision spectra from overflowing on the way (e.g. nu*Lnu in erg/s
-        exceeds float32, the same values in Lsun do not).
-
-        Args:
-            factor_quantity (unyt_array):
-                The per-wavelength factor to multiply lnu by.
-            category (str):
-                The unit category of the result (e.g. "luminosity").
-            dtype (np.dtype, optional):
-                The precision of the result. Defaults to the precision of
-                lnu.
-
-        Returns:
-            unyt_array:
-                lnu * factor in the internal units of ``category``.
-        """
-        dtype = self._lnu.dtype if dtype is None else np.dtype(dtype)
-        units = getattr(Units(), category)
-        factor = (
-            (factor_quantity.astype(np.float64) * self.lnu.units)
-            .to(units)
-            .value
-        )
-        return unyt_array(
-            self._lnu.astype(dtype, copy=False) * factor.astype(dtype),
-            units,
-            bypass_validation=True,
-        )
-
     @property
     def luminosity(self):
         """Get the spectra in terms of luminosity.
 
         Returns:
             luminosity (unyt_array):
-                The luminosity array.
+                The luminosity array (always float64).
         """
-        return self._scale_lnu_to(self.nu, "luminosity")
+        # NOTE: this is always float64. nu * Lnu in erg/s (~1e40+ for
+        # realistic populations) exceeds the float32 range.
+        return (self.lnu.astype(np.float64) * self.nu).to(Units().luminosity)
 
     @property
     def flux(self):
@@ -573,15 +540,14 @@ class Sed:
 
         Returns:
             luminosity (unyt_array):
-                The spectral luminosity density per Angstrom array.
+                The spectral luminosity density per Angstrom array (always
+                float64).
         """
         # NOTE: this is always float64. Luminosity densities per unit
         # wavelength in erg/s/Angstrom (~1e40+ for realistic populations)
         # exceed the float32 range.
-        return self._scale_lnu_to(
-            self.nu / self.lam,
-            "luminosity_density_wavelength",
-            dtype=np.float64,
+        return (self.lnu.astype(np.float64) * self.nu / self.lam).to(
+            Units().luminosity_density_wavelength
         )
 
     @property
@@ -763,11 +729,15 @@ class Sed:
 
         Returns:
             luminosity (unyt-array):
-                The luminosity (lnu) at the provided wavelength.
+                The luminosity (lnu) at the provided wavelength, at the
+                precision of this Sed's lnu.
         """
-        return interp1d(self._lam, self._lnu, kind=kind)(
-            lam
-        ) * get_quantity_unit(self, "lnu")
+        # interp1d returns float64 unless every input is float32, so the
+        # (wavelength sized) result is returned at the precision of lnu
+        lnu = interp1d(self._lam, self._lnu, kind=kind)(lam)
+        return lnu.astype(self._lnu.dtype, copy=False) * get_quantity_unit(
+            self, "lnu"
+        )
 
     @timed("Sed.measure_bolometric_luminosity")
     def measure_bolometric_luminosity(

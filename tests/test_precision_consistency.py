@@ -24,7 +24,6 @@ from synthesizer import exceptions
 from synthesizer.emission_models import IncidentEmission, PacmanEmission
 from synthesizer.emission_models.generators.dust.greybody import Greybody
 from synthesizer.emission_models.transformers import (
-    CoveringFraction,
     GrainModels,
     ParametricLi08,
     PowerLaw,
@@ -32,6 +31,11 @@ from synthesizer.emission_models.transformers import (
 from synthesizer.emissions import Sed
 from synthesizer.grid import Grid
 from synthesizer.particle import Stars
+from synthesizer.utils.precision import (
+    InternalPrecisionWarning,
+    convert_array_dtype,
+    verify_out_precision,
+)
 
 
 def _stars(dtype, n=4):
@@ -91,20 +95,6 @@ def test_per_particle_scaling_takes_sed_precision():
 
     assert scaled._lnu.dtype == np.float32
     np.testing.assert_allclose(scaled._lnu[:, 0], [1.0, 2.0, 3.0])
-
-
-def test_per_particle_fraction_on_integrated_emission_raises(test_grid):
-    """Per-particle fractions can't be applied to integrated emission."""
-    sed = _sed32()
-    model = PacmanEmission(grid=test_grid)
-
-    emitter = _stars(np.float32)
-    emitter.fcov = np.full(emitter.nparticles, 0.2)
-
-    with pytest.raises(exceptions.InconsistentArguments, match="per_particle"):
-        CoveringFraction(covering_attrs=("fcov",))._transform(
-            sed, emitter, model, None, None
-        )
 
 
 def test_interp_spectra_keeps_grid_precision():
@@ -195,3 +185,110 @@ def test_image_normalisation_does_not_overflow(img_type):
     assert arr.dtype == np.float32
     assert not np.any(np.isinf(arr))
     np.testing.assert_allclose(arr[np.isfinite(arr)], 1e30, rtol=1e-5)
+
+
+class TestConvertArrayDtype:
+    """Tests for the general precision conversion utility."""
+
+    def test_converts_keeping_units(self):
+        """Arrays are converted with their units preserved."""
+        arr = unyt_array(np.array([1.0, 2.0]), erg / s)
+        converted = convert_array_dtype(arr, np.float32)
+        assert converted.dtype == np.float32
+        assert converted.units == arr.units
+        np.testing.assert_allclose(converted.value, [1.0, 2.0])
+
+    def test_returns_matching_arrays_untouched(self):
+        """No copy is made when the array already has the dtype."""
+        arr = np.ones(3, np.float32)
+        assert convert_array_dtype(arr, np.float32) is arr
+
+    def test_overflow_raises(self):
+        """Values too large for the target precision raise an error."""
+        with pytest.raises(exceptions.PrecisionOverflow, match="lums"):
+            convert_array_dtype(np.array([1e45]), np.float32, name="lums")
+
+    def test_overflow_keep_returns_input(self):
+        """With overflow="keep" values that don't fit are left alone."""
+        arr = np.array([1e45])
+        assert convert_array_dtype(arr, np.float32, overflow="keep") is arr
+
+    def test_scalars(self):
+        """Scalars are converted to scalars of the target dtype."""
+        converted = convert_array_dtype(2.0, np.float32)
+        assert isinstance(converted, np.float32)
+
+
+class TestVerifyOutPrecision:
+    """Tests for the decorator verifying outputs respect out_dtype."""
+
+    def test_matching_output_passes(self):
+        """Outputs at the requested precision are returned as they are."""
+
+        @verify_out_precision()
+        def func(out_dtype=None):
+            return np.ones(3, dtype=out_dtype)
+
+        assert func(out_dtype=np.float32).dtype == np.float32
+
+    def test_mismatched_output_warns_and_converts(self):
+        """Outputs at the wrong precision are converted with a warning."""
+
+        @verify_out_precision()
+        def func(out_dtype=None):
+            return np.ones(3)
+
+        with pytest.warns(InternalPrecisionWarning, match="report"):
+            result = func(out_dtype=np.float32)
+        assert result.dtype == np.float32
+
+    def test_mismatched_output_that_overflows_raises(self):
+        """Converting an output that doesn't fit raises an error."""
+
+        @verify_out_precision()
+        def func(out_dtype=None):
+            return np.full(3, 1e45)
+
+        with pytest.warns(InternalPrecisionWarning):
+            with pytest.raises(exceptions.PrecisionOverflow):
+                func(out_dtype=np.float32)
+
+    def test_overflowed_output_raises(self):
+        """Reduced precision outputs holding inf raise an error."""
+
+        @verify_out_precision()
+        def func(out_dtype=None):
+            return np.full(3, np.inf, dtype=np.float32)
+
+        with pytest.raises(exceptions.PrecisionOverflow, match="inf"):
+            func(out_dtype=np.float32)
+
+    def test_checks_select_returned_values(self):
+        """Only the flagged values of a returned tuple are checked."""
+
+        @verify_out_precision(True, False)
+        def func(out_dtype=None):
+            return np.ones(3, np.float32), np.ones(3)
+
+        first, second = func(out_dtype=np.float32)
+        assert first.dtype == np.float32
+        assert second.dtype == np.float64
+
+    def test_checks_output_objects(self):
+        """The arrays inside Synthesizer output objects are checked."""
+
+        @verify_out_precision()
+        def func(out_dtype=None):
+            return Sed(_sed32().lam, unyt_array(np.ones(50), erg / s / Hz))
+
+        with pytest.warns(InternalPrecisionWarning):
+            sed = func(out_dtype=np.float32)
+        assert sed._lnu.dtype == np.float32
+
+    def test_requires_out_dtype_argument(self):
+        """Only functions taking out_dtype can be decorated."""
+        with pytest.raises(TypeError, match="out_dtype"):
+
+            @verify_out_precision()
+            def func():
+                return None

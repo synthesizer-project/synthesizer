@@ -307,7 +307,7 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Get existing grid weights (or allocate new ones at the grid precision),
+  /* Get existing grid weights (or allocate new ones),
    * compute them if needed, and combine them with the grid spectra into the
    * integrated SED. */
   PyArrayObject *np_spectra = NULL;
@@ -317,17 +317,18 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
         using PartReal = decltype(p);
         using GridReal = decltype(g);
         using OutT = decltype(o);
-        GridReal *grid_weights = grid_props->get_grid_weights<GridReal>();
+        GridWeightReal *grid_weights =
+            grid_props->get_grid_weights<GridWeightReal>();
         if (grid_weights == NULL || PyErr_Occurred()) {
           return;
         }
         if (grid_props->need_grid_weights()) {
           if (is_cic) {
-            weight_loop_cic<PartReal, GridReal, GridReal>(
+            weight_loop_cic<PartReal, GridReal, GridWeightReal>(
                 grid_props.get(), part_props.get(), grid_props->size,
                 grid_weights, nthreads);
           } else {
-            weight_loop_ngp<PartReal, GridReal, GridReal>(
+            weight_loop_ngp<PartReal, GridReal, GridWeightReal>(
                 grid_props.get(), part_props.get(), grid_props->size,
                 grid_weights, nthreads);
           }
@@ -335,8 +336,8 @@ PyObject *compute_integrated_sed(PyObject *self, PyObject *args) {
             return;
           }
         }
-        np_spectra =
-            get_spectra<GridReal, GridReal, OutT>(grid_props.get(), nthreads);
+        np_spectra = get_spectra<GridReal, GridWeightReal, OutT>(
+            grid_props.get(), nthreads);
       });
     });
   });

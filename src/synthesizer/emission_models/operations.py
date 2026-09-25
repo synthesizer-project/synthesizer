@@ -442,10 +442,9 @@ class Generation:
             nthreads (int):
                 The number of threads available for particle integration.
             out_dtype (np.dtype):
-                The dtype of the generated spectra. Generators compute in
-                float64 (e.g. to avoid overflowing exponentials) and the
-                result is converted to this dtype. Defaults to the global
-                default output dtype.
+                The dtype of the generated spectra, passed to the generator
+                which produces its output at this precision. Defaults to the
+                global default output dtype.
 
         Returns:
             dict:
@@ -477,7 +476,9 @@ class Generation:
         if isinstance(generator, Template):
             # If we have a template we need to generate the spectra
             # for each model
-            sed = generator.get_spectra(emitter.bolometric_luminosity)
+            sed = generator.get_spectra(
+                emitter.bolometric_luminosity, out_dtype=out_dtype
+            )
         else:
             # Generate the spectra
             sed = generator._generate_spectra(
@@ -485,10 +486,8 @@ class Generation:
                 emitter,
                 this_model,
                 particle_spectra if per_particle else spectra,
+                out_dtype=out_dtype,
             )
-
-        # Convert to the output precision
-        sed._lnu = sed._lnu.astype(out_dtype, copy=False)
 
         # Cache the model on the emitter
         cache_model_params(this_model, emitter)
@@ -541,9 +540,9 @@ class Generation:
                 Dictionary of existing particle spectra from all emitters for
                 scaling.
             out_dtype (np.dtype):
-                The dtype of the generated lines. Generators compute in
-                float64 and the result is converted to this dtype. Defaults
-                to the global default output dtype.
+                The dtype of the generated lines, passed to the generator
+                which produces its output at this precision. Defaults to the
+                global default output dtype.
 
         Returns:
             dict:
@@ -579,13 +578,20 @@ class Generation:
         if isinstance(generator, Template):
             # If we have a template we need to generate the spectra
             # for each model
-            spectra = generator.get_spectra(emitter.bolometric_luminosity)
+            spectra = generator.get_spectra(
+                emitter.bolometric_luminosity, out_dtype=out_dtype
+            )
             out_lines = LineCollection(
                 line_ids=line_ids,
                 lam=lams,
-                lum=np.zeros((emitter.nparticles, len(lams))) * erg / s
-                if per_particle
-                else np.zeros(len(lams)) * erg / s,
+                lum=np.zeros(
+                    (emitter.nparticles, len(lams))
+                    if per_particle
+                    else len(lams),
+                    dtype=out_dtype,
+                )
+                * erg
+                / s,
                 cont=spectra.get_lnu_at_lam(lams),
             )
         else:
@@ -597,15 +603,8 @@ class Generation:
                 this_model,
                 particle_lines if per_particle else lines,
                 particle_spectra if per_particle else spectra,
+                out_dtype=out_dtype,
             )
-
-        # Convert to the output precision
-        out_lines._luminosity = out_lines._luminosity.astype(
-            out_dtype, copy=False
-        )
-        out_lines._continuum = out_lines._continuum.astype(
-            out_dtype, copy=False
-        )
 
         # Cache the model on the emitter
         cache_model_params(this_model, emitter)

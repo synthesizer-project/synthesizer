@@ -547,61 +547,6 @@ def as_contiguous(array):
     return np.ascontiguousarray(array)
 
 
-def convert_array_dtype(array, dtype):
-    """Convert a array-like object to a target dtype.
-
-    This works for NumPy arrays and unyt_arrays, preserving units for the
-    latter while ensuring the underlying storage is contiguous and of the
-    correct dtype.
-
-    If the input already has the requested dtype and contiguous storage it
-    is returned untouched; otherwise a copy is made.
-
-    Args:
-        array (array-like):
-            The input array-like object.
-        dtype (np.dtype/type):
-            The target dtype to convert to.
-
-    Returns:
-        array-like:
-            Converted array with contiguous storage where applicable.
-    """
-    # Nothing to do if input is None
-    if array is None:
-        return None
-
-    # If the array already has the requested dtype and contiguous storage
-    # there is nothing to do; return it untouched to avoid a needless copy.
-    if (
-        isinstance(array, np.ndarray)
-        and array.dtype == np.dtype(dtype)
-        and array.flags["C_CONTIGUOUS"]
-    ):
-        return array
-
-    # Handle the unyt_array case where we act on the underlying array and
-    # then reattach the units
-    if isinstance(array, unyt_array):
-        return unyt_array(
-            np.ascontiguousarray(array.ndview, dtype=dtype),
-            array.units,
-            bypass_validation=True,
-        )
-
-    # Convert to a plain NumPy array (always makes a copy)
-    array = np.array(array, copy=True)
-
-    # Validate it's floating-point
-    if not np.issubdtype(array.dtype, np.floating):
-        raise ValueError(
-            f"Unsupported array type or dtype for conversion: "
-            f"type(array)={type(array)}, dtype={getattr(array, 'dtype', None)}"
-        )
-
-    return np.ascontiguousarray(array, dtype=dtype)
-
-
 def sigmoid(x, A, a, c, center):
     """Sigmoid function.
 

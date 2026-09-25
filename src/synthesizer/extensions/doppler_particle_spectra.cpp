@@ -155,7 +155,7 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
         const PartReal w_p = part_props->get_weight_at<PartReal>(p);
         double w_scale;
         const OutT w_out =
-            split_weight<OutT>(static_cast<double>(w_p), w_scale);
+            get_split_weight<OutT>(static_cast<double>(w_p), w_scale);
         std::array<int, MAX_GRID_NDIM> part_indices;
         std::array<SpecReal, MAX_GRID_NDIM> axis_fracs;
         get_part_ind_frac_cic<PartReal, SpecReal>(part_indices, axis_fracs,
@@ -204,7 +204,7 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
               static_cast<double>((static_cast<OutT>(1) - frac_s) * total);
           p_spec_accum[ils] += static_cast<double>(frac_s * total);
         }
-        add_scaled_row(p_spec, p_spec_accum.data(), nlam, w_scale);
+        set_accumulated_row(p_spec, p_spec_accum.data(), nlam, w_scale);
       }
     }
     return;
@@ -251,7 +251,7 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
         }
 
         double w_scale;
-        const OutT weight = split_weight<OutT>(
+        const OutT weight = get_split_weight<OutT>(
             static_cast<double>(part_props->get_weight_at<PartReal>(p)),
             w_scale);
         std::array<int, MAX_GRID_NDIM> part_indices;
@@ -286,7 +286,7 @@ static void compute_doppler_particle_seds_impl(GridProps *grid_props,
           p_spec_accum[ilam_shifted] +=
               static_cast<double>(frac_shifted * grid_spectra_value);
         }
-        add_scaled_row(p_spec, p_spec_accum.data(), nlam, w_scale);
+        set_accumulated_row(p_spec, p_spec_accum.data(), nlam, w_scale);
       }
     }
     return;
@@ -376,7 +376,7 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
    * the dtypes resolved above. */
   npy_intp np_dims[2] = {npart, nlam};
   npy_intp np_dims_int[1] = {nlam};
-  reset_precision_flags();
+  set_weight_rescaled(false);
   PyObject *out_tuple =
       dispatch_float(part_typenum, [&](auto p) -> PyObject * {
         return dispatch_float(grid_typenum, [&](auto g) -> PyObject * {
@@ -424,7 +424,7 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
 
   /* Warn about any weights or values too large for the output precision. */
   if (out_tuple != NULL &&
-      !warn_precision_flags(typenum_to_string(output_typenum))) {
+      !set_weight_rescaled_warning(typenum_to_string(output_typenum))) {
     Py_DECREF(out_tuple);
     return NULL;
   }

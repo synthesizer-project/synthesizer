@@ -40,6 +40,7 @@ from synthesizer.emission_models import (
 )
 from synthesizer.emission_models.generators.dust.greybody import Greybody
 from synthesizer.emission_models.transformers import PowerLaw
+from synthesizer.exceptions import PrecisionOverflow
 from synthesizer.grid import Grid
 from synthesizer.instruments import FilterCollection
 from synthesizer.parametric import SFH, ZDist
@@ -296,7 +297,8 @@ def test_lines(grids, part, grid, out):
 
     The particles here carry up to 1e8 Msun, giving line luminosities well
     beyond the float32 range in erg/s. In Lsun they fit; with erg/s
-    luminosities float32 outputs must warn that they overflowed.
+    luminosities float32 outputs must raise PrecisionOverflow rather than
+    silently holding inf.
     """
 
     def lines(part, grid, out):
@@ -314,7 +316,7 @@ def test_lines(grids, part, grid, out):
         )
 
     if ERG_LUMINOSITIES and out == F32:
-        with pytest.warns(RuntimeWarning, match=r"overflowed\s+to\s+inf"):
+        with pytest.raises(PrecisionOverflow, match="overflowed to inf"):
             lines(part, grid, out)
         return
 
@@ -334,10 +336,10 @@ def test_agn_spectra_and_lines(agn_grids, part, grid, out):
       must raise a mixed precision error advising conversion to float64;
     - float32 outputs from float64 black holes must still give correct
       spectra (the weights are applied at float64, with a warning), while
-      the line luminosities themselves overflow (with a warning).
+      the line luminosities themselves overflow (raising PrecisionOverflow).
     """
 
-    def emission(part, grid, out):
+    def emission(part, grid, out, lines=True):
         set_default_out_dtype(out)
         bh = BlackHoles(
             masses=unyt_array(np.array([1e6, 1e7, 1e8, 1e9], part), Msun),
@@ -356,12 +358,14 @@ def test_agn_spectra_and_lines(agn_grids, part, grid, out):
             per_particle=True,
         )
         bh.get_spectra(model)
-        bh.get_lines(blr.available_lines[:10], model)
-        return (
+        spectra = (
             bh.particle_spectra[model.label]._lnu,
             bh.spectra[model.label]._lnu,
-            bh.lines[model.label]._luminosity,
         )
+        if not lines:
+            return spectra
+        bh.get_lines(blr.available_lines[:10], model)
+        return (*spectra, bh.lines[model.label]._luminosity)
 
     if ERG_LUMINOSITIES and part == F32:
         with pytest.raises(TypeError, match="to float64"):
@@ -371,14 +375,12 @@ def test_agn_spectra_and_lines(agn_grids, part, grid, out):
     reference = emission(F64, F64, F64)
 
     if ERG_LUMINOSITIES and out == F32:
-        with pytest.warns(RuntimeWarning) as record:
-            spectra, integrated, _ = emission(part, grid, out)
-        # (warning text may be wrapped over several lines)
-        messages = " ".join(" ".join(str(w.message).split()) for w in record)
-        assert "weights are too large" in messages
-        assert "overflowed to inf" in messages
+        with pytest.warns(RuntimeWarning, match="weights are too large"):
+            spectra, integrated = emission(part, grid, out, lines=False)
         _check(spectra, reference[0], out)
         _check(integrated, reference[1], out)
+        with pytest.raises(PrecisionOverflow, match="overflowed to inf"):
+            emission(part, grid, out)
         return
 
     for result, ref in zip(emission(part, grid, out), reference):
@@ -425,27 +427,3 @@ def test_weights_beyond_output_precision_are_applied_at_float64(method):
     assert result.dtype == F32
     assert np.all(np.isfinite(result))
     np.testing.assert_allclose(result, reference, rtol=1e-6)
-
-
-def test_output_overflow_warns():
-    """Output values too large for the output precision raise a warning."""
-    grid_spectra, axes, part_props, weights = _huge_weight_inputs(1.0)
-
-    with pytest.warns(RuntimeWarning, match="overflowed to inf"):
-        compute_particle_seds(
-            grid_spectra,
-            axes,
-            part_props,
-            weights,
-            np.array([3], np.int32),
-            1,
-            weights.size,
-            5,
-            "cic",
-            1,
-            None,
-            None,
-            False,
-            F32,
-            ("x", "w"),
-        )

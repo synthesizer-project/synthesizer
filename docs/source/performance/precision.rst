@@ -99,7 +99,13 @@ against the output precision. A weight too large for it (for example a
 bolometric luminosity in erg/s with float32 outputs) is applied at float64
 instead, so the result is still correct, and a ``RuntimeWarning`` tells you
 this happened. If a resulting value itself is too large for the output
-precision you get a ``RuntimeWarning`` saying it overflowed to ``inf``.
+precision, Synthesizer raises a ``PrecisionOverflow`` error rather than
+returning results containing ``inf``.
+
+Synthesizer also checks itself: the functions that produce emission verify
+that what they return really is at the requested ``out_dtype``. If one ever
+isn't, that is a bug in Synthesizer rather than anything you did; the result
+is converted and an ``InternalPrecisionWarning`` asks you to report it.
 
 Two limits remain your responsibility:
 

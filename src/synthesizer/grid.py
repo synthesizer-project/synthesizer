@@ -44,8 +44,12 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts, get_quantity_unit
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.operation_timers import timed
-from synthesizer.utils.precision import resolve_out_dtype
-from synthesizer.utils.util_funcs import as_contiguous, convert_array_dtype
+from synthesizer.utils.precision import (
+    convert_array_dtype,
+    resolve_out_dtype,
+    verify_out_precision,
+)
+from synthesizer.utils.util_funcs import as_contiguous
 
 
 class Grid:
@@ -260,27 +264,6 @@ class Grid:
             return dset.astype(self._dtype)[...]
         return dset[...]
 
-    def _axis_at_precision(self, values, dtype):
-        """Return axis values at a target precision, if they fit.
-
-        Axes are tiny, so an axis whose values overflow the target precision
-        (e.g. a black hole mass axis stored in kg, ~1e39, at float32) is
-        left at float64 rather than being corrupted to inf.
-
-        Args:
-            values (np.ndarray):
-                The axis values (float64).
-            dtype (np.dtype):
-                The target dtype.
-
-        Returns:
-            np.ndarray:
-                The axis values at ``dtype``, or unchanged if they don't fit.
-        """
-        if np.max(np.abs(values), initial=0.0) > np.finfo(dtype).max:
-            return values
-        return values.astype(dtype, copy=False)
-
     def _ensure_axis_data_contiguous(self):
         """Ensure stored axis arrays are contiguous."""
         for axis_name in self.axes:
@@ -428,14 +411,16 @@ class Grid:
 
                 # Get the values. Axes are tiny so we read them at float64
                 # and only then convert, which means log10 is taken before
-                # any reduction in precision (raw axes can exceed float32)
+                # any reduction in precision. A raw axis too large for the
+                # grid's precision (e.g. a black hole mass axis in kg, ~1e39,
+                # at float32) stays at float64 rather than becoming inf.
                 values = hf["axes"][axis][...].astype(np.float64)
 
                 # Set all the axis attributes as is (without accounting
                 # for any log10 conversions needed for extraction)
                 self.axes.append(axis)
-                self._axes_values[axis] = self._axis_at_precision(
-                    values, self._dtype
+                self._axes_values[axis] = convert_array_dtype(
+                    values, self._dtype, overflow="keep"
                 )
                 self._axes_units[axis] = axis_units
 
@@ -895,9 +880,10 @@ class Grid:
 
         # Convert all the grid axis arrays to the target precision
         for axis_name in grid.axes:
-            grid._axes_values[axis_name] = grid._axis_at_precision(
+            grid._axes_values[axis_name] = convert_array_dtype(
                 np.asarray(grid._axes_values[axis_name], dtype=np.float64),
                 dtype,
+                overflow="keep",
             )
 
         # Convert all the extraction axis arrays to the target precision
@@ -2859,13 +2845,20 @@ class Template:
         self._sed._lnu /= self.normalisation.to(self._sed.lnu.units * Hz).value
 
     @accepts(bolometric_luminosity=erg / s)
-    def get_spectra(self, bolometric_luminosity):
+    @verify_out_precision()
+    def get_spectra(self, bolometric_luminosity, out_dtype=None):
         """Calculate the blackhole spectra by scaling the template.
 
         Args:
             bolometric_luminosity (float):
                 The bolometric luminosity of the blackhole(s) for scaling.
+            out_dtype (np.dtype):
+                The precision of the spectra. Defaults to the global default
+                output dtype.
 
+        Returns:
+            Sed:
+                The scaled spectra, one per bolometric luminosity.
         """
         # Ensure we have units for safety
         if bolometric_luminosity is not None and not isinstance(
@@ -2875,5 +2868,21 @@ class Template:
                 "bolometric luminosity must be provided with units"
             )
 
-        # Scale the spectra and return
-        return self._sed * (bolometric_luminosity / Hz)
+        # The template is normalised per unit bolometric luminosity, so scale
+        # it by each luminosity. The product is computed at float64 (the
+        # luminosities can exceed the float32 range) and written straight
+        # into an array at the output precision.
+        lnu_units = get_quantity_unit(self._sed, "lnu")
+        luminosities = (
+            bolometric_luminosity.astype(np.float64).to(lnu_units * Hz).value
+        )
+        lnu = np.multiply(
+            self._sed._lnu,
+            np.asarray(luminosities)[..., np.newaxis],
+            out=np.empty(
+                (*np.shape(luminosities), self._sed._lnu.size),
+                dtype=resolve_out_dtype(out_dtype),
+            ),
+            casting="same_kind",
+        )
+        return Sed(self._sed.lam, lnu * lnu_units)

@@ -32,7 +32,10 @@ from synthesizer.extensions.particle_spectra import (
 from synthesizer.synth_warnings import warn
 from synthesizer.units import get_quantity_unit
 from synthesizer.utils.operation_timers import timed, timer
-from synthesizer.utils.precision import resolve_out_dtype
+from synthesizer.utils.precision import (
+    resolve_out_dtype,
+    verify_out_precision,
+)
 
 
 class Extractor(ABC):
@@ -141,44 +144,6 @@ class Extractor(ABC):
 
         # Finally, attach a pointer to the grid object
         self._grid = grid
-
-        # Cache of the maximum value of each grid (for overflow checks)
-        self._grid_max_cache = {}
-
-    def _warn_if_overflowed(self, grid, weight, *results):
-        """Warn if reduced precision results have overflowed to inf.
-
-        Checking every output would cost a full pass over it, so we first
-        bound the largest possible value (the summed weights, which also
-        covers integrated results, times the maximum grid value) and only
-        scan the results if that bound exceeds the output range.
-
-        Args:
-            grid (np.ndarray):
-                The grid the results were extracted from.
-            weight (float/np.ndarray):
-                The particle weights.
-            *results (np.ndarray):
-                The extracted results to check.
-        """
-        dtype = results[0].dtype
-        if dtype.kind != "f" or dtype.itemsize >= 8:
-            return
-        grid_max = self._grid_max_cache.get(id(grid))
-        if grid_max is None:
-            grid_max = float(np.max(np.abs(np.asarray(grid)), initial=0.0))
-            self._grid_max_cache[id(grid)] = grid_max
-        bound = float(np.sum(np.abs(np.asarray(weight)))) * grid_max
-        if bound <= np.finfo(dtype).max:
-            return
-        if any(np.isinf(result).any() for result in results):
-            warn(
-                f"Some output values are too large to be stored at {dtype} "
-                "and have overflowed to inf. Use float64 outputs "
-                "(out_dtype=np.float64) or smaller internal units for this "
-                "quantity (e.g. Lsun rather than erg/s for luminosities).",
-                RuntimeWarning,
-            )
 
     @timed("Extractor.get_emitter_attrs")
     def get_emitter_attrs(self, emitter, model, do_grid_check):
@@ -329,6 +294,7 @@ class IntegratedParticleExtractor(Extractor):
     """
 
     @timed("IntegratedParticleExtractor.generate_lnu")
+    @verify_out_precision()
     def generate_lnu(
         self,
         emitter,
@@ -426,7 +392,6 @@ class IntegratedParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
-        self._warn_if_overflowed(self._spectra_grid, weight, spec)
 
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later
@@ -444,6 +409,7 @@ class IntegratedParticleExtractor(Extractor):
         )
 
     @timed("IntegratedParticleExtractor.generate_line")
+    @verify_out_precision()
     def generate_line(
         self,
         emitter,
@@ -552,7 +518,6 @@ class IntegratedParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
-        self._warn_if_overflowed(self._line_lum_grid, weight, lum)
 
         # Compute the integrated continuum array
         cont, _ = compute_integrated_sed(
@@ -572,7 +537,6 @@ class IntegratedParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
-        self._warn_if_overflowed(self._line_cont_grid, weight, cont)
 
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later
@@ -605,6 +569,7 @@ class DopplerShiftedParticleExtractor(Extractor):
     """
 
     @timed("DopplerShiftedParticleExtractor.generate_lnu")
+    @verify_out_precision()
     def generate_lnu(
         self,
         emitter,
@@ -734,9 +699,6 @@ class DopplerShiftedParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
-        self._warn_if_overflowed(
-            self._spectra_grid, weight, spec, integrated_spec
-        )
 
         # Make the Sed objects themselves
         part_sed = Sed(
@@ -771,6 +733,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
     """
 
     @timed("IntegratedDopplerShiftedParticleExtractor.generate_lnu")
+    @verify_out_precision()
     def generate_lnu(
         self,
         emitter,
@@ -872,7 +835,6 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
-        self._warn_if_overflowed(self._spectra_grid, weight, integrated_spec)
 
         return Sed(
             model.lam,
@@ -896,6 +858,7 @@ class ParticleExtractor(Extractor):
     """
 
     @timed("ParticleExtractor.generate_lnu")
+    @verify_out_precision()
     def generate_lnu(
         self,
         emitter,
@@ -1026,7 +989,6 @@ class ParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
-        self._warn_if_overflowed(self._spectra_grid, weight, spec)
 
         # Compute the integrated lnu array using grid weights rather than a
         # memory-bandwidth dominated reduction over the per-particle spectra.
@@ -1047,7 +1009,6 @@ class ParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
-        self._warn_if_overflowed(self._spectra_grid, weight, integrated_spec)
 
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later.
@@ -1071,6 +1032,7 @@ class ParticleExtractor(Extractor):
         return part_sed, integrated_sed
 
     @timed("ParticleExtractor.generate_line")
+    @verify_out_precision()
     def generate_line(
         self,
         emitter,
@@ -1224,7 +1186,6 @@ class ParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
-        self._warn_if_overflowed(self._line_lum_grid, weight, lum)
 
         # Compute the integrated line lum array.
         integrated_lum, grid_weights = compute_integrated_sed(
@@ -1244,7 +1205,6 @@ class ParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
-        self._warn_if_overflowed(self._line_lum_grid, weight, integrated_lum)
 
         # Compute the per-particle continuum array.
         cont = compute_particle_seds(
@@ -1264,7 +1224,6 @@ class ParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
-        self._warn_if_overflowed(self._line_cont_grid, weight, cont)
 
         # Compute the integrated continuum array using the line luminosity grid
         # weights computed above.
@@ -1285,7 +1244,6 @@ class ParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
-        self._warn_if_overflowed(self._line_cont_grid, weight, integrated_cont)
 
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later.
@@ -1334,6 +1292,7 @@ class IntegratedParametricExtractor(Extractor):
     """
 
     @timed("IntegratedParametricExtractor.generate_lnu")
+    @verify_out_precision()
     def generate_lnu(
         self,
         emitter,
@@ -1395,6 +1354,7 @@ class IntegratedParametricExtractor(Extractor):
             model.lam, unyt_array(spec, erg / s / Hz, bypass_validation=True)
         )
 
+    @verify_out_precision()
     def generate_line(
         self,
         emitter,
