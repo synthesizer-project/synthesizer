@@ -108,9 +108,11 @@ def normalise_scaling_for_units(scaling, units):
             f"Incompatible units {units} and {scaling.units}"
         )
 
-    # The kernels operate on raw doubles, so once the units are compatible we
-    # convert into the target units and strip the unit wrapper.
-    return scaling.to(units).value
+    # Once the units are compatible we convert into the target units and
+    # strip the unit wrapper. The conversion is done at float64 since
+    # converting a reduced precision scaling into the target units can
+    # overflow (e.g. a float32 luminosity in Lsun converted to erg/s).
+    return scaling.astype(np.float64).to(units).value
 
 
 def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
@@ -143,6 +145,10 @@ def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
     # We only pay to construct nu when the scaling itself carries units and we
     # need to decide whether it belongs with luminosity or continuum.
     nu = get_nu()
+
+    # Convert at float64 so reduced precision scalings can't overflow when
+    # converted into the target units
+    scaling = scaling.astype(np.float64)
 
     # Continuum-compatible scaling can be pushed onto luminosity by
     # multiplying through by nu.

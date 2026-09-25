@@ -1,3 +1,8 @@
+# The version of the units file. Bump this when a default unit changes so
+# that existing (uncustomised) user files are migrated once (see
+# synthesizer/data/initialise.py).
+Version: 2
+
 UnitCategories:
   spatial:
     unit: Mpc
@@ -35,8 +40,9 @@ UnitCategories:
     unit: Hz
     description: "Frequencies of light"
 
+  # Lsun rather than erg/s so realistic luminosities fit in float32
   luminosity:
-    unit: "erg / s"
+    unit: "Lsun"
     description: "Total energy output per unit time"
 
   luminosity_solar:

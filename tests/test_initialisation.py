@@ -456,6 +456,46 @@ class TestUnitsFileHandling:
         assert "luminosity" in units["UnitCategories"]
         assert "wavelength" in units["UnitCategories"]
 
+    def test_copy_units_migrates_superseded_defaults_once(self, tmp_path):
+        """Old uncustomised defaults are migrated, but only once.
+
+        Luminosities moved from erg/s to Lsun (erg/s values overflow
+        float32). An old file still holding erg/s is updated, customised
+        units are left alone, and a user who switches back to erg/s after
+        the migration keeps it.
+        """
+        import yaml
+
+        from synthesizer.data.initialise import default_units_needs_update
+
+        units_file = tmp_path / "base" / "default_units.yml"
+        units_file.write_text(
+            "UnitCategories:\n"
+            "  luminosity:\n    unit: erg / s\n"
+            "  luminosity_density_wavelength:\n"
+            "    unit: erg / s / Angstrom\n"
+            "  spatial:\n    unit: kpc\n"
+        )
+        assert default_units_needs_update()
+
+        SynthesizerInitializer()._copy_units()
+        units = yaml.safe_load(units_file.read_text())
+        categories = units["UnitCategories"]
+        assert categories["luminosity"]["unit"] == "Lsun"
+        assert categories["luminosity_density_wavelength"]["unit"] == (
+            "erg / s / Angstrom"
+        )
+        assert categories["spatial"]["unit"] == "kpc"
+        assert not default_units_needs_update()
+
+        # Deliberately switch back to erg/s after the migration
+        categories["luminosity"]["unit"] = "erg / s"
+        units_file.write_text(yaml.dump(units))
+        assert not default_units_needs_update()
+        SynthesizerInitializer()._copy_units()
+        units = yaml.safe_load(units_file.read_text())
+        assert units["UnitCategories"]["luminosity"]["unit"] == "erg / s"
+
 
 class TestTopLevelFlows:
     """Tests for top-level functions that use SynthesizerInitializer."""

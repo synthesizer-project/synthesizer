@@ -16,6 +16,8 @@ from pathlib import Path
 
 import yaml
 from platformdirs import user_data_dir
+from unyt import Unit
+from unyt.exceptions import UnitParseError
 
 from synthesizer import exceptions
 from synthesizer._version import __version__
@@ -191,6 +193,49 @@ def default_units_exists() -> bool:
     return user_units_file.exists()
 
 
+# Default units which have since been replaced, keyed by the units file
+# version that replaced them. A user file older than that version which still
+# holds the old default was never customised, so it is migrated to the new
+# default once. Customised values are always left alone, and the migrated file
+# records the new version so a user can deliberately switch back.
+_SUPERSEDED_DEFAULT_UNITS = {
+    # Luminosities moved from erg/s to Lsun because erg/s values overflow
+    # float32
+    2: {"luminosity": ("erg / s",)},
+}
+
+
+def _get_superseded_unit_keys(user_units: dict) -> list:
+    """Get the unit categories still set to a superseded default.
+
+    Args:
+        user_units (dict):
+            The user's units file contents.
+
+    Returns:
+        list:
+            The categories holding a superseded default unit which have not
+            been migrated yet.
+    """
+    user_version = user_units.get("Version", 1)
+    user_categories = user_units.get("UnitCategories", {})
+    keys = []
+    for version, superseded in _SUPERSEDED_DEFAULT_UNITS.items():
+        if user_version >= version:
+            continue
+        for key, old_units in superseded.items():
+            entry = user_categories.get(key)
+            if not isinstance(entry, dict) or "unit" not in entry:
+                continue
+            try:
+                unit = Unit(entry["unit"])
+            except UnitParseError:
+                continue
+            if any(unit == Unit(old) for old in old_units):
+                keys.append(key)
+    return keys
+
+
 def default_units_needs_update() -> bool:
     """Check if the default units file is missing entries or invalid.
 
@@ -229,6 +274,10 @@ def default_units_needs_update() -> bool:
         for key in default_units["UnitCategories"].keys():
             if key not in user_units["UnitCategories"]:
                 return True  # Missing key found, needs update
+
+        # Check whether the file predates the current units file version
+        if user_units.get("Version", 1) < default_units.get("Version", 1):
+            return True
 
         return False  # All keys present, no update needed
 
@@ -372,15 +421,27 @@ class SynthesizerInitializer:
             else:
                 user_units = {"UnitCategories": {}}
 
+            # Drop any uncustomised superseded defaults so the new defaults
+            # replace them
+            for key in _get_superseded_unit_keys(user_units):
+                del user_units["UnitCategories"][key]
+
             # Update the default units with the users to overwrite any
             # old preferences
             default_units["UnitCategories"].update(
                 user_units["UnitCategories"]
             )
 
-            # Write the updated units back to the user's file
-            with open(user_units_file, "w") as f:
+            # Write the updated units back to the user's file. Write to a
+            # temporary file and move it into place so other processes
+            # importing Synthesizer at the same time (e.g. parallel test
+            # workers) never read a partially written file.
+            tmp_file = user_units_file.with_name(
+                f".{user_units_file.name}.{os.getpid()}.tmp"
+            )
+            with open(tmp_file, "w") as f:
                 yaml.dump(default_units, f)
+            os.replace(tmp_file, user_units_file)
 
             self.status["units_file"] = "created"
 

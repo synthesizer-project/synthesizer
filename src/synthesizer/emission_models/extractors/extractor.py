@@ -524,7 +524,7 @@ class IntegratedParticleExtractor(Extractor):
         return LineCollection(
             line_ids=self._grid.line_ids,
             lam=self._line_lams,
-            lum=lum * erg / s,
+            lum=lum * self._line_lum_grid.units,
             cont=cont * erg / s / Hz,
         )
 
@@ -1233,14 +1233,18 @@ class ParticleExtractor(Extractor):
             part_line = LineCollection(
                 line_ids=self._grid.line_ids,
                 lam=self._line_lams,
-                lum=unyt_array(lum, erg / s, bypass_validation=True),
+                lum=unyt_array(
+                    lum, self._line_lum_grid.units, bypass_validation=True
+                ),
                 cont=unyt_array(cont, erg / s / Hz, bypass_validation=True),
             )
             integrated_line = LineCollection(
                 line_ids=self._grid.line_ids,
                 lam=self._line_lams,
                 lum=unyt_array(
-                    integrated_lum, erg / s, bypass_validation=True
+                    integrated_lum,
+                    self._line_lum_grid.units,
+                    bypass_validation=True,
                 ),
                 cont=unyt_array(
                     integrated_cont, erg / s / Hz, bypass_validation=True
