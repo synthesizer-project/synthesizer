@@ -35,6 +35,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import scalar_like
 from synthesizer.utils.util_funcs import combine_arrays
 
 
@@ -249,9 +250,12 @@ class Gas(Particles, Component):
 
     def calculate_dust_mass(self):
         """Calculate dust mass from a given dust-to-metals ratio."""
-        self.dust_masses = (
-            self.masses * self.metallicities * self.dust_to_metal_ratio
-        )
+        # Type a scalar ratio against the masses, otherwise unyt promotes
+        # float32 masses to float64 when multiplying by a Python float
+        ratio = self.dust_to_metal_ratio
+        if np.ndim(ratio) == 0:
+            ratio = scalar_like(ratio, self.masses)
+        self.dust_masses = self.masses * self.metallicities * ratio
 
     def __str__(self):
         """Return a string representation of the gas object.
