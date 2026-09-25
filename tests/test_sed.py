@@ -1,9 +1,14 @@
 """A test suite for testing the Sed class."""
 
 import numpy as np
+import pytest
 from astropy.cosmology import Planck18
-from synthesizer.extensions.reductions import reduce_particle_spectra
-from unyt import Hz, angstrom, cm, erg, nJy, pc, s
+from synthesizer.extensions.observed_spectra import compute_fnu
+from synthesizer.extensions.reductions import (
+    combine_spectra_2d,
+    reduce_particle_spectra,
+)
+from unyt import Hz, angstrom, c, cm, erg, nJy, pc, s
 
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emission_models.attenuation import PowerLaw
@@ -217,6 +222,18 @@ def test_reduce_particle_spectra_supports_float64_output_from_float32():
     )
 
 
+def test_combine_spectra_supports_adaptive_precision_and_nan_masks():
+    """Spectrum combination should preserve dtype and ignore NaNs."""
+    for dtype in (np.float32, np.float64):
+        first = np.array([[1.0, np.nan], [3.0, 4.0]], dtype=dtype)
+        second = np.array([[5.0, 6.0], [np.nan, 8.0]], dtype=dtype)
+
+        combined = combine_spectra_2d((first, second), 2)
+
+        assert combined.dtype == dtype
+        np.testing.assert_allclose(combined, [[6.0, 6.0], [3.0, 12.0]])
+
+
 def test_integrate_particle_sed_preserves_input_precision():
     """The Sed reduction helper should keep the luminosity dtype family."""
     lam = np.linspace(1000.0, 2000.0, 5) * angstrom
@@ -279,3 +296,34 @@ def test_ionising_photon_production_rate_multidimensional():
     sed1d = Sed(lam, np.ones(500) * erg / s / Hz)
     rate1d = sed1d.calculate_ionising_photon_production_rate()
     assert np.isclose(rates[0].value, rate1d.value)
+
+
+def test_compute_fnu_rejects_non_contiguous_inputs():
+    """Strided inputs must be rejected rather than silently misread.
+
+    The kernel walks lnu/lam/nu as flat buffers, so a strided view would
+    read the wrong elements. The guard lives in ``is_matching_float_dtypes``;
+    this test catches any regression that loosens it.
+    """
+    lam = np.linspace(1000.0, 2000.0, 10)
+    nu = (c / (lam * angstrom)).to(Hz).value
+    lnu = np.ones((4, 10))
+    out = np.zeros((4, 10))
+
+    def call(lnu_arr, lam_arr, nu_arr):
+        compute_fnu(
+            lnu_arr, lam_arr, nu_arr, 1.0, 1.0, 1, out, None, None, None
+        )
+
+    # The contiguous case is the control: it must not raise.
+    call(lnu, lam, nu)
+
+    # Slicing the last axis of a 2D array gives a strided view.
+    with pytest.raises(ValueError, match="lnu must be C-contiguous"):
+        call(np.ones((4, 20))[:, ::2], lam, nu)
+
+    with pytest.raises(ValueError, match="lam must be C-contiguous"):
+        call(lnu, np.linspace(1000.0, 2000.0, 20)[::2], nu)
+
+    with pytest.raises(ValueError, match="nu must be C-contiguous"):
+        call(lnu, lam, np.linspace(1e14, 1e15, 20)[::2])

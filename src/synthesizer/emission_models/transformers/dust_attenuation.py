@@ -45,6 +45,7 @@ from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import scalar_like
 
 this_dir, this_filename = os.path.split(__file__)
 
@@ -226,6 +227,7 @@ class AttenuationLaw(Transformer):
 
         self._required_params = required_params
 
+    @timed("DustAttenuation._transform")
     def _transform(
         self,
         emission,
@@ -469,7 +471,9 @@ class PowerLaw(AttenuationLaw):
         Returns:
             float/np.ndarray of float: The optical depth.
         """
-        return (lam / (5500.0 * angstrom)) ** self.slope
+        return (lam / (scalar_like(5500.0, lam) * angstrom)) ** scalar_like(
+            self.slope, lam
+        )
 
     @accepts(lam=angstrom)
     def get_tau(self, lam):
@@ -484,7 +488,7 @@ class PowerLaw(AttenuationLaw):
             float/np.ndarray of float: The optical depth.
         """
         return self.get_tau_at_lam(lam) / self.get_tau_at_lam(
-            5500.0 * angstrom
+            scalar_like(5500.0, lam) * angstrom
         )
 
 
@@ -517,13 +521,21 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
             given wavelength
     """
     # Performing some unit conversions to match the
-    # Calzetti curve units which are in um
-    _lam = np.linspace(0.01, 3.0, 10000, endpoint=True) * um
-    _cent_lam = cent_lam.to("um")
-    _gamma = gamma.to("um")
-    lam_v = 0.55  # in um
+    # Calzetti curve units which are in um.
+    #
+    # The internal grid and the bump parameters are built at the wavelength
+    # dtype and handled as plain arrays in um. The curve is evaluated on its
+    # own fixed grid rather than on the caller's wavelengths, so building that
+    # grid in double precision would hand back a double precision curve
+    # whatever was asked for, and unyt arithmetic would widen it again even if
+    # it did not.
+    dtype = lam.dtype if lam.dtype.kind == "f" else np.dtype(np.float64)
+    _lam = np.linspace(0.01, 3.0, 10000, endpoint=True, dtype=dtype)
+    _cent_lam = dtype.type(cent_lam.to_value("um"))
+    _gamma = dtype.type(gamma.to_value("um"))
+    lam_v = dtype.type(0.55)  # in um
 
-    k_lam = np.zeros_like(_lam.value)
+    k_lam = np.zeros_like(_lam)
 
     # Masking for different regimes in the Calzetti curve
     ok1 = (_lam >= 0.12) * (_lam < 0.63)  # 0.12um<=lam<0.63um
@@ -532,23 +544,23 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     if np.sum(ok1) > 0:  # equation 1
         k_lam[ok1] = (
             -2.156
-            + (1.509 / _lam.value[ok1])
-            - (0.198 / _lam.value[ok1] ** 2)
-            + (0.011 / _lam.value[ok1] ** 3)
+            + (1.509 / _lam[ok1])
+            - (0.198 / _lam[ok1] ** 2)
+            + (0.011 / _lam[ok1] ** 3)
         )
         func = interpolate.interp1d(
-            _lam.value[ok1], k_lam[ok1], fill_value="extrapolate"
+            _lam[ok1], k_lam[ok1], fill_value="extrapolate"
         )
     else:
         func = None
     if np.sum(ok2) > 0:  # equation 2
-        k_lam[ok2] = -1.857 + (1.040 / _lam.value[ok2])
+        k_lam[ok2] = -1.857 + (1.040 / _lam[ok2])
     if np.sum(ok3) > 0:
         # This will never be none
         if func is None:
             raise exceptions.InconsistentArguments("No data in the UV-optical")
         # Extrapolating the 0.12um<=lam<0.63um regime
-        k_lam[ok3] = func(_lam.value[ok3])
+        k_lam[ok3] = func(_lam[ok3])
 
     # Using the Calzetti attenuation curve normalised
     # to Av=4.05
@@ -567,13 +579,15 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     # Normalising with the value at 0.55um, to obtain
     # normalised optical depth
     tau_x_v = (k_lam + D_lam) / k_v
-    tau_x = tau_x_v * (_lam.value / lam_v) ** slope
+    tau_x = tau_x_v * (_lam / lam_v) ** slope
 
     func = interpolate.interp1d(
         _lam, tau_x, bounds_error=False, fill_value=(tau_x[0], tau_x[-1])
     )
 
-    return func(lam.to("um"))
+    # Query at the wavelength dtype: unyt's own conversion widens, and a
+    # widened query would pull a widened result back out of the interpolation.
+    return func(np.asarray(lam.to_value("um"), dtype=dtype))
 
 
 class Calzetti2000(AttenuationLaw):
@@ -736,6 +750,14 @@ class MWN18(AttenuationLaw):
     def get_tau(self, lam, interp="cubic"):
         """Calculate V-band normalised optical depth.
 
+        The result is returned at the dtype of ``lam``. Note that the spline
+        interpolation kinds are evaluated in double precision inside SciPy
+        whatever they are given, so a float32 request is computed in double
+        and narrowed on return rather than being computed in float32
+        throughout. The answer is therefore slightly more accurate than a true
+        float32 evaluation would be, not less, and the tabulated curve is
+        bounded well inside the float32 range so narrowing cannot overflow.
+
         Args:
             lam (float/array, float):
                 An array of wavelengths or a single wavlength at which to
@@ -748,15 +770,27 @@ class MWN18(AttenuationLaw):
                 second or third order. Uses scipy.interpolate.interp1d.
 
         Returns:
-            float/array, float: The optical depth.
+            float/array, float: The optical depth, at ``lam``'s dtype.
         """
+        # Build the interpolation at the wavelength dtype. The tabulated curve
+        # is stored in double precision, and interpolating it would hand back a
+        # double precision result whatever precision was asked for. The table
+        # is 251 points, so typing it costs nothing, and the interpolator is
+        # rebuilt on every call regardless.
+        dtype = lam.dtype if lam.dtype.kind == "f" else np.dtype(np.float64)
         func = interpolate.interp1d(
-            self.data.f.mw_df_lam[::-1],
-            self.data.f.mw_df_chi[::-1],
+            np.asarray(self.data.f.mw_df_lam[::-1], dtype=dtype),
+            np.asarray(self.data.f.mw_df_chi[::-1], dtype=dtype),
             kind=interp,
             fill_value="extrapolate",
         )
-        return func(lam) / self.tau_lam_v
+        out = func(np.asarray(lam, dtype=dtype)) / dtype.type(self.tau_lam_v)
+
+        # SciPy evaluates spline interpolation in double whatever it is handed,
+        # so unlike the analytic curves this one cannot be kept narrow all the
+        # way through. Return it at the requested precision: the caller checks
+        # that the curve matches the spectra dtype and will refuse a mismatch.
+        return out.astype(dtype, copy=False)
 
     @accepts(lam=angstrom)
     def get_tau_at_lam(self, lam, interp="cubic"):
