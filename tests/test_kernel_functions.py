@@ -221,6 +221,69 @@ def test_kernel_hdf5_round_trip_preserves_tables(tmp_path):
     np.testing.assert_allclose(overlap_eta, expected_overlap_eta)
 
 
+def _small_kernel(**kwargs):
+    """Build a cheap kernel for dtype tests."""
+    return Kernel(
+        name="uniform",
+        binsize=16,
+        truncated_q_binsize=9,
+        truncated_z_binsize=11,
+        overlap_q_binsize=4,
+        overlap_u_binsize=6,
+        overlap_eta_binsize=3,
+        overlap_eta_min=0.5,
+        overlap_eta_max=2.0,
+        overlap_build_ndim=4,
+        projected_integration_steps=32,
+        **kwargs,
+    )
+
+
+def _all_tables(kernel):
+    """Return every lookup table and grid a kernel hands out."""
+    return (
+        kernel.get_kernel(),
+        *kernel.get_truncated_los_kernel(),
+        *kernel.get_overlap_kernel(),
+    )
+
+
+def test_kernel_dtype_sets_every_table_dtype():
+    """A float32 kernel should hand out float32 tables matching float64."""
+    tables32 = _all_tables(_small_kernel(dtype=np.float32))
+    tables64 = _all_tables(_small_kernel())
+
+    for table32, table64 in zip(tables32, tables64):
+        assert table32.dtype == np.float32
+        assert table64.dtype == np.float64
+        np.testing.assert_allclose(table32, table64, rtol=1e-6, atol=1e-7)
+
+    # The overlap table must be built from the float64 truncated table and
+    # only rounded at the end, so it matches the float64 table exactly once
+    # cast
+    np.testing.assert_array_equal(tables32[4], tables64[4].astype(np.float32))
+
+
+def test_kernel_hdf5_round_trip_preserves_dtype(tmp_path):
+    """A saved float32 kernel reloads as float32 unless overridden."""
+    filepath = tmp_path / "kernel_uniform.hdf5"
+    _small_kernel(dtype=np.float32).create_kernel(filepath=filepath)
+
+    reloaded = Kernel.load(filepath)
+    assert reloaded.dtype == np.float32
+    assert all(table.dtype == np.float32 for table in _all_tables(reloaded))
+
+    promoted = Kernel.load(filepath, dtype=np.float64)
+    assert promoted.dtype == np.float64
+    assert all(table.dtype == np.float64 for table in _all_tables(promoted))
+
+
+def test_kernel_rejects_unsupported_dtype():
+    """Only float32 and float64 kernels are supported."""
+    with pytest.raises(ValueError, match="float32 or np.float64"):
+        Kernel(dtype=np.float16)
+
+
 @pytest.mark.parametrize("kernel_name", KERNEL_NAMES)
 def test_kernel_wrappers_match_reference_shapes(kernel_name):
     """Public kernel wrappers should match their analytic definitions."""
