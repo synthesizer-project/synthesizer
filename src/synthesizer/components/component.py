@@ -19,6 +19,7 @@ from synthesizer.cosmology import (
     get_luminosity_distance,
 )
 from synthesizer.emissions import plot_spectra
+from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.imaging.data_cube_generators import (
     _combine_spectral_cubes,
     _prepare_component_data_cube_labels,
@@ -1016,6 +1017,17 @@ class Component(ABC):
 
         if isinstance(line_ids, str):
             line_ids = [line_ids]
+
+        # Canonicalise aliases so requested ids match the instrument's ids
+        line_ids = [str(alias_to_line_id(lid)) for lid in line_ids]
+        unsupported = [
+            lid for lid in line_ids if lid not in instrument.line_ids
+        ]
+        if len(unsupported) > 0:
+            raise exceptions.InconsistentArguments(
+                f"Lines {unsupported} are not mapped by instrument "
+                f"{instrument.label}. Available lines: {instrument.line_ids}"
+            )
 
         # Are we doing a parametric map?
         is_param = hasattr(self, "morphology")

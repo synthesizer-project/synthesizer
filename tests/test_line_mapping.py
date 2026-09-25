@@ -133,6 +133,17 @@ class TestLineImager:
                 psfs={line_ids[0]: psf},
             )
 
+    def test_alias_keys_canonicalised(self):
+        """Alias line ids and per-line keys should map to canonical ids."""
+        inst = LineImager(
+            "test",
+            line_ids=["Ha"],
+            resolution=1 * kpc,
+            psfs={"Ha": np.ones((3, 3))},
+        )
+        assert inst.line_ids == ["H 1 6562.80A"]
+        assert list(inst.psfs) == ["H 1 6562.80A"]
+
     def test_noise_capability_flag(self, line_ids):
         """can_do_noisy_line_mapping should reflect SNR/depth config."""
         from unyt import erg, s
@@ -312,6 +323,23 @@ class TestParticleGalaxyLineMaps:
             particle_galaxy_with_lines.get_line_maps_luminosity(
                 "nebular",
                 line_ids=["made up line"],
+                fov=0.1 * Mpc,
+                instrument=instrument,
+                img_type="smoothed",
+                kernel=kernel,
+            )
+
+    def test_unmapped_line_raises(
+        self, particle_galaxy_with_lines, line_ids, kernel
+    ):
+        """Requesting a line the instrument does not map should raise."""
+        instrument = LineImager(
+            "inst", line_ids=line_ids[:1], resolution=1 * Mpc
+        )
+        with pytest.raises(exceptions.InconsistentArguments):
+            particle_galaxy_with_lines.stars.get_line_maps_luminosity(
+                "nebular",
+                line_ids=line_ids[1:2],
                 fov=0.1 * Mpc,
                 instrument=instrument,
                 img_type="smoothed",

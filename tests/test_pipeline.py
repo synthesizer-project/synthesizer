@@ -582,6 +582,14 @@ class TestPipelineNotReady:
         ):  # Missing required cosmo argument
             base_pipeline.run()
 
+    def test_get_lines_rejects_uncovered_line_ids(self, base_pipeline):
+        """Later get_lines calls must request a subset of the first call."""
+        base_pipeline.get_lines(line_ids=["Ha"])
+        base_pipeline.get_lines(line_ids=["H 1 6562.80A"], write=False)
+        assert base_pipeline.line_ids == ["Ha"]
+        with pytest.raises(exceptions.InconsistentArguments):
+            base_pipeline.get_lines(line_ids=["Hb"])
+
     def test_get_observed_lines_without_line_ids(self, base_pipeline):
         """Test erroring in get_observed_lines without line IDs.
 

@@ -14,6 +14,7 @@ from scipy import signal
 from unyt import arcsecond, kpc, unyt_array
 
 from synthesizer import exceptions
+from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_collection import ImageCollection
 from synthesizer.imaging.image_generators import (
@@ -26,6 +27,16 @@ from synthesizer.instruments.instrument_base import (
 from synthesizer.instruments.photometric_noise import CorrelatedNoiseModel
 from synthesizer.units import accepts
 from synthesizer.utils.operation_timers import timed
+
+
+def _canonical_keys(payload):
+    """Return ``payload`` with alias keys converted to line ids.
+
+    Non-dict payloads are returned unchanged.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    return {str(alias_to_line_id(k)): v for k, v in payload.items()}
 
 
 class LineImager(InstrumentBase):
@@ -109,15 +120,17 @@ class LineImager(InstrumentBase):
         super().__init__(label)
 
         # Set the line imager specific attributes
-        self.line_ids = [str(line_id) for line_id in line_ids]
+        # Canonicalise line ids (and any per-line dict keys) so aliases
+        # match the ids carried by generated maps
+        self.line_ids = [str(alias_to_line_id(lid)) for lid in line_ids]
         self.resolution = resolution
-        self.psfs = psfs
+        self.psfs = _canonical_keys(psfs)
         self.psf_resample_factor = psf_resample_factor
-        self.depth = depth
+        self.depth = _canonical_keys(depth)
         self.depth_app_radius = depth_app_radius
-        self.snrs = snrs
-        self.noise_maps = noise_maps
-        self.noise_source_maps = noise_source_maps
+        self.snrs = _canonical_keys(snrs)
+        self.noise_maps = _canonical_keys(noise_maps)
+        self.noise_source_maps = _canonical_keys(noise_source_maps)
         self.correlated_noise_models = self._build_correlated_noise_models()
 
         # Validate the instrument configuration

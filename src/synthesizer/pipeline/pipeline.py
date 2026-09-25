@@ -35,6 +35,7 @@ import numpy as np
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import check_atomic_timing, check_openmp, exceptions
+from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.instruments import InstrumentCollection
 from synthesizer.particle import Galaxy as ParticleGalaxy
 from synthesizer.pipeline.pipeline_io import PipelineIO
@@ -2538,11 +2539,27 @@ class Pipeline:
             out_dtype (np.dtype):
                 Requested floating-point dtype for generated line arrays.
         """
-        # Store the line IDs for the operation
-        self._operation_kwargs.add_unique(
+        # Store the line IDs for the operation (the first call wins, later
+        # calls must request a subset of the configured lines)
+        op_kwargs = self._operation_kwargs.add_unique(
             "get_lines",
             line_ids=line_ids,
         )
+        if line_ids is not None and op_kwargs["line_ids"] is not None:
+            configured = {
+                str(alias_to_line_id(lid)) for lid in op_kwargs["line_ids"]
+            }
+            missing = [
+                lid
+                for lid in line_ids
+                if str(alias_to_line_id(lid)) not in configured
+            ]
+            if len(missing) > 0:
+                raise exceptions.InconsistentArguments(
+                    f"Lines {missing} are not covered by the configured "
+                    f"get_lines call ({op_kwargs['line_ids']}). Call "
+                    "get_lines first with every line id you need."
+                )
 
         # Record the requested output dtype (first call wins)
         self._out_dtypes.setdefault("lines", out_dtype)
@@ -2566,8 +2583,8 @@ class Pipeline:
         # by default)
         self._write_lines = write or self._write_lines
 
-        # Store the line IDs, we'll write these once later
-        self.line_ids = line_ids
+        # Store the line IDs actually computed, we'll write these once later
+        self.line_ids = op_kwargs["line_ids"]
 
     @timed("Pipeline._get_lines")
     def _get_lines(self, galaxy):
