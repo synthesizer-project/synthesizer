@@ -260,6 +260,27 @@ class Grid:
             return dset.astype(self._dtype)[...]
         return dset[...]
 
+    def _axis_at_precision(self, values, dtype):
+        """Return axis values at a target precision, if they fit.
+
+        Axes are tiny, so an axis whose values overflow the target precision
+        (e.g. a black hole mass axis stored in kg, ~1e39, at float32) is
+        left at float64 rather than being corrupted to inf.
+
+        Args:
+            values (np.ndarray):
+                The axis values (float64).
+            dtype (np.dtype):
+                The target dtype.
+
+        Returns:
+            np.ndarray:
+                The axis values at ``dtype``, or unchanged if they don't fit.
+        """
+        if np.max(np.abs(values), initial=0.0) > np.finfo(dtype).max:
+            return values
+        return values.astype(dtype, copy=False)
+
     def _ensure_axis_data_contiguous(self):
         """Ensure stored axis arrays are contiguous."""
         for axis_name in self.axes:
@@ -405,13 +426,17 @@ class Grid:
                         "of ambiguous units. Please update your grid file."
                     )
 
-                # Get the values
-                values = self._read_floats(hf["axes"][axis])
+                # Get the values. Axes are tiny so we read them at float64
+                # and only then convert, which means log10 is taken before
+                # any reduction in precision (raw axes can exceed float32)
+                values = hf["axes"][axis][...].astype(np.float64)
 
                 # Set all the axis attributes as is (without accounting
                 # for any log10 conversions needed for extraction)
                 self.axes.append(axis)
-                self._axes_values[axis] = values
+                self._axes_values[axis] = self._axis_at_precision(
+                    values, self._dtype
+                )
                 self._axes_units[axis] = axis_units
 
                 # Now we handle the extractions
@@ -419,10 +444,12 @@ class Grid:
                     self._extract_axes.append(f"log10{axis}")
                     self._extract_axes_values[f"log10{axis}"] = np.log10(
                         values
-                    )
+                    ).astype(self._dtype)
                 else:
                     self._extract_axes.append(axis)
-                    self._extract_axes_values[axis] = values
+                    self._extract_axes_values[axis] = values.astype(
+                        self._dtype
+                    )
 
             # Number of axes
             self.naxes = len(self.axes)
@@ -868,8 +895,9 @@ class Grid:
 
         # Convert all the grid axis arrays to the target precision
         for axis_name in grid.axes:
-            grid._axes_values[axis_name] = convert_array_dtype(
-                grid._axes_values[axis_name], dtype
+            grid._axes_values[axis_name] = grid._axis_at_precision(
+                np.asarray(grid._axes_values[axis_name], dtype=np.float64),
+                dtype,
             )
 
         # Convert all the extraction axis arrays to the target precision
@@ -967,11 +995,14 @@ class Grid:
                     verbose=False,
                 )
 
-            # Update this spectra
-            self.spectra[spectra_type] = new_spectra
+            # Update this spectra, keeping the grid's precision (spectres
+            # always returns float64)
+            self.spectra[spectra_type] = new_spectra.astype(
+                self._dtype, copy=False
+            )
 
-        # Update wavelength array
-        self.lam = new_lam
+        # Update wavelength array, again at the grid's precision
+        self.lam = new_lam.astype(self._dtype, copy=False)
 
         self._ensure_spectra_data_contiguous()
 

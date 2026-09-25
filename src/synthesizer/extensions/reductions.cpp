@@ -15,6 +15,7 @@
 /* C/C++ includes */
 #include <cmath>
 #include <new>
+#include <string>
 #include <vector>
 
 /* Python includes */
@@ -386,7 +387,8 @@ PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
 
   PyObject *inputs_sequence;
   int nthreads;
-  if (!PyArg_ParseTuple(args, "Oi", &inputs_sequence, &nthreads)) {
+  PyObject *labels = NULL;
+  if (!PyArg_ParseTuple(args, "Oi|O", &inputs_sequence, &nthreads, &labels)) {
     return NULL;
   }
 
@@ -424,30 +426,49 @@ PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
       PyErr_SetString(PyExc_ValueError, "all inputs must be 2D arrays.");
       return NULL;
     }
-    if (!is_c_contiguous(array, "inputs") ||
-        !is_float32_or_float64(array, "inputs")) {
-      Py_DECREF(inputs_fast);
-      return NULL;
-    }
-
     if (i == 0) {
       nrow = PyArray_DIM(array, 0);
       nlam = PyArray_DIM(array, 1);
-      input_typenum = PyArray_TYPE(array);
     } else if (PyArray_DIM(array, 0) != nrow ||
                PyArray_DIM(array, 1) != nlam) {
       Py_DECREF(inputs_fast);
       PyErr_SetString(PyExc_ValueError,
                       "all inputs must have the same shape.");
       return NULL;
-    } else if (PyArray_TYPE(array) != input_typenum) {
-      Py_DECREF(inputs_fast);
-      PyErr_SetString(PyExc_TypeError,
-                      "all inputs must have the same floating-point dtype.");
-      return NULL;
     }
 
     arrays.push_back(array);
+  }
+
+  /* Validate dtypes together, naming each input by its model label if the
+   * caller gave us the labels. */
+  std::vector<std::string> name_storage;
+  name_storage.reserve((size_t)ninputs);
+  for (Py_ssize_t i = 0; i < ninputs; ++i) {
+    std::string name = "input " + std::to_string(i + 1);
+    PyObject *label = (labels != NULL && PySequence_Check(labels) &&
+                       i < PySequence_Size(labels))
+                          ? PySequence_GetItem(labels, i)
+                          : NULL;
+    if (label != NULL) {
+      const char *utf8 =
+          PyUnicode_Check(label) ? PyUnicode_AsUTF8(label) : NULL;
+      if (utf8 != NULL) {
+        name = std::string("spectra from model '") + utf8 + "'";
+      }
+      Py_DECREF(label);
+    }
+    PyErr_Clear();
+    name_storage.push_back(name);
+  }
+  std::vector<const char *> names;
+  for (const std::string &name : name_storage) {
+    names.push_back(name.c_str());
+  }
+  if (!is_matching_float_dtypes(arrays.data(), names.data(),
+                                static_cast<int>(ninputs), &input_typenum)) {
+    Py_DECREF(inputs_fast);
+    return NULL;
   }
 
   tic("combine_spectra_2d");

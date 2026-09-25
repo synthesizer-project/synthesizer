@@ -108,6 +108,13 @@ class Extractor(ABC):
         # Attach the weight variable we'll extract from the emitter
         self._weight_var = grid._weight_var
 
+        # The name used for the weights in extension error messages
+        self._weight_label = (
+            "automatic unit weights"
+            if self._weight_var in [None, "None"]
+            else str(self._weight_var)
+        )
+
         # Attach the spectra and line grids to the Extractor object
 
         if extract in grid.available_spectra_emissions:
@@ -134,6 +141,44 @@ class Extractor(ABC):
 
         # Finally, attach a pointer to the grid object
         self._grid = grid
+
+        # Cache of the maximum value of each grid (for overflow checks)
+        self._grid_max_cache = {}
+
+    def _warn_if_overflowed(self, grid, weight, *results):
+        """Warn if reduced precision results have overflowed to inf.
+
+        Checking every output would cost a full pass over it, so we first
+        bound the largest possible value (the summed weights, which also
+        covers integrated results, times the maximum grid value) and only
+        scan the results if that bound exceeds the output range.
+
+        Args:
+            grid (np.ndarray):
+                The grid the results were extracted from.
+            weight (float/np.ndarray):
+                The particle weights.
+            *results (np.ndarray):
+                The extracted results to check.
+        """
+        dtype = results[0].dtype
+        if dtype.kind != "f" or dtype.itemsize >= 8:
+            return
+        grid_max = self._grid_max_cache.get(id(grid))
+        if grid_max is None:
+            grid_max = float(np.max(np.abs(np.asarray(grid)), initial=0.0))
+            self._grid_max_cache[id(grid)] = grid_max
+        bound = float(np.sum(np.abs(np.asarray(weight)))) * grid_max
+        if bound <= np.finfo(dtype).max:
+            return
+        if any(np.isinf(result).any() for result in results):
+            warn(
+                f"Some output values are too large to be stored at {dtype} "
+                "and have overflowed to inf. Use float64 outputs "
+                "(out_dtype=np.float64) or smaller internal units for this "
+                "quantity (e.g. Lsun rather than erg/s for luminosities).",
+                RuntimeWarning,
+            )
 
     @timed("Extractor.get_emitter_attrs")
     def get_emitter_attrs(self, emitter, model, do_grid_check):
@@ -194,15 +239,31 @@ class Extractor(ABC):
             # Append the extracted value to the list
             extracted.append(value)
 
+        # Single values (e.g. scalar defaults like ionisation_parameter_blr
+        # or fixed model parameters) are broadcast to every particle. Give
+        # them the precision of the per-particle attributes so they don't
+        # break the extension's shared-dtype requirement.
+        per_particle = [v for v in extracted if v.size > 1]
+        if per_particle and len(per_particle) < len(extracted):
+            dtype = np.result_type(*per_particle)
+            extracted = [
+                v.astype(dtype, copy=False) if v.size == 1 else v
+                for v in extracted
+            ]
+
         # Check if the attributes are outside the grid axes if necessary
         if do_grid_check:
             self.check_emitter_attrs(extracted)
 
         # Also extract the weight variable
         if self._weight_var in [None, "None"]:
-            # If no weight variable is provided, use a weight of 1.0
+            # If no weight variable is provided, use a weight of 1.0 at the
+            # same precision as the extracted attributes (the extension
+            # requires the weights and attributes to share a dtype)
             if hasattr(emitter, "nparticles"):
-                weight = np.ones(emitter.nparticles)
+                weight = np.ones(
+                    emitter.nparticles, dtype=np.result_type(*extracted)
+                )
             else:
                 weight = 1.0
         else:
@@ -347,7 +408,7 @@ class IntegratedParticleExtractor(Extractor):
 
         # Compute the integrated lnu array (this is attached to an Sed
         # object elsewhere)
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         spec, grid_weights = compute_integrated_sed(
             self._spectra_grid,
             self._grid_axes,
@@ -365,6 +426,7 @@ class IntegratedParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
+        self._warn_if_overflowed(self._spectra_grid, weight, spec)
 
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later
@@ -472,7 +534,7 @@ class IntegratedParticleExtractor(Extractor):
             grid_dims[-1] = self._grid.nlines
 
         # Compute the integrated line lum array
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         lum, grid_weights = compute_integrated_sed(
             self._line_lum_grid,
             self._grid_axes,
@@ -490,6 +552,7 @@ class IntegratedParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
+        self._warn_if_overflowed(self._line_lum_grid, weight, lum)
 
         # Compute the integrated continuum array
         cont, _ = compute_integrated_sed(
@@ -509,6 +572,7 @@ class IntegratedParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
+        self._warn_if_overflowed(self._line_cont_grid, weight, cont)
 
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later
@@ -650,7 +714,7 @@ class DopplerShiftedParticleExtractor(Extractor):
                 nthreads = os.cpu_count()
 
         # Compute the lnu array
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         spec, integrated_spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
             self._grid._lam,
@@ -669,6 +733,9 @@ class DopplerShiftedParticleExtractor(Extractor):
             lam_mask,
             out_dtype,
             emitter_attr_names,
+        )
+        self._warn_if_overflowed(
+            self._spectra_grid, weight, spec, integrated_spec
         )
 
         # Make the Sed objects themselves
@@ -785,7 +852,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
                 nthreads = os.cpu_count()
 
         # Compute the lnu array
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         _, integrated_spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
             self._grid._lam,
@@ -805,6 +872,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
+        self._warn_if_overflowed(self._spectra_grid, weight, integrated_spec)
 
         return Sed(
             model.lam,
@@ -932,7 +1000,7 @@ class ParticleExtractor(Extractor):
         # particle spectra extraction no longer reduces to the integrated
         # spectra; the integrated machinery is cheaper than reducing the full
         # per-particle spectra array.
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         if mask is None:
             grid_weights = emitter._grid_weights.get(
                 grid_assignment_method.lower(), {}
@@ -958,6 +1026,7 @@ class ParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
+        self._warn_if_overflowed(self._spectra_grid, weight, spec)
 
         # Compute the integrated lnu array using grid weights rather than a
         # memory-bandwidth dominated reduction over the per-particle spectra.
@@ -978,6 +1047,7 @@ class ParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
+        self._warn_if_overflowed(self._spectra_grid, weight, integrated_spec)
 
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later.
@@ -1128,7 +1198,7 @@ class ParticleExtractor(Extractor):
         # Get the grid_weights if they exist and we don't have a mask. The
         # integrated line spectra are computed through the integrated machinery
         # rather than by reducing the per-particle line arrays.
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         if mask is None:
             grid_weights = emitter._grid_weights.get(
                 grid_assignment_method.lower(), {}
@@ -1154,6 +1224,7 @@ class ParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
+        self._warn_if_overflowed(self._line_lum_grid, weight, lum)
 
         # Compute the integrated line lum array.
         integrated_lum, grid_weights = compute_integrated_sed(
@@ -1173,6 +1244,7 @@ class ParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
+        self._warn_if_overflowed(self._line_lum_grid, weight, integrated_lum)
 
         # Compute the per-particle continuum array.
         cont = compute_particle_seds(
@@ -1192,6 +1264,7 @@ class ParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
+        self._warn_if_overflowed(self._line_cont_grid, weight, cont)
 
         # Compute the integrated continuum array using the line luminosity grid
         # weights computed above.
@@ -1212,6 +1285,7 @@ class ParticleExtractor(Extractor):
             out_dtype,
             emitter_attr_names,
         )
+        self._warn_if_overflowed(self._line_cont_grid, weight, integrated_cont)
 
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later.

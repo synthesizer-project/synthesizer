@@ -79,6 +79,37 @@ double precision and only cast to the requested output dtype at the end, so a
 float32 result is the correctly-rounded float32 representation of the float64
 answer rather than a value degraded by millions of low-precision additions.
 
+The float32 range
+^^^^^^^^^^^^^^^^^
+
+float32 can only represent values up to about 3.4e38. Some quantities exceed
+that in cgs units for realistic sources, such as line luminosities
+(1e40–1e45 erg/s) and black hole bolometric luminosities (~1e45 erg/s).
+Spectral densities (e.g. ``lnu`` in erg/s/Hz) fit comfortably.
+
+A few quantities are always computed at float64, whatever ``out_dtype``
+says, because they don't fit in float32 in their natural units or because
+they are cheap scalars: bolometric and window luminosities, ionising photon
+production rates (~1e53 s^-1 and beyond), and ``Sed.llam`` (luminosity
+densities per unit wavelength reach ~1e43 erg/s/Å; it is computed on access
+from ``lnu``, which stays at your chosen precision).
+
+As a safety net, the particle spectra kernels check each particle's weight
+against the output precision. A weight too large for it (for example a
+bolometric luminosity in erg/s with float32 outputs) is applied at float64
+instead, so the result is still correct, and a ``RuntimeWarning`` tells you
+this happened. If a resulting value itself is too large for the output
+precision you get a ``RuntimeWarning`` saying it overflowed to ``inf``.
+
+Two limits remain your responsibility:
+
+- Converting large float32 values to other units happens at float32 in unyt
+  and can overflow (e.g. a float32 mass of 1e8 Msun converted to grams).
+  Convert to float64 first: ``arr.astype(np.float64).to("g")``.
+- Very small values can underflow float32 (below ~1e-38), e.g. extreme-UV
+  fluxes of high redshift sources in erg/s/cm²/Hz. Use float64 outputs if
+  you need those.
+
 Input precision
 ~~~~~~~~~~~~~~~
 
@@ -130,7 +161,8 @@ Mixing precisions
 Within one logical group of arrays (e.g. the arrays making up a grid, or the
 property arrays describing a particle distribution) all floating-point arrays
 must share a single dtype — float32 or float64. If they don't, Synthesizer
-raises a ``TypeError`` naming the offending array.
+raises a ``TypeError`` listing every array in the group with its dtype
+and naming the ones that need converting.
 
 *Between* groups, precisions can be mixed freely: float32 particle data can
 be combined with a float64 grid (and vice versa), float32 stars can have
@@ -146,12 +178,17 @@ errors like:
 
 .. code-block:: text
 
-    TypeError: ages must share the same floating-point dtype as masses
-    (got float64 and float32). Cast the offending array (e.g. with
-    arr.astype(np.float32)) or, for grid arrays, load the grid at the
-    matching precision with Grid(..., use_precision=...).
+    TypeError: These arrays are used together and must all have the same
+    precision (all float32 or all float64), but they are mixed:
+        initial_masses: float64
+        log10ages: float32
+        metallicities: float32
+    To fix this, convert the one mismatched array (initial_masses) to
+    float32, e.g. arr = arr.astype(np.float32), or convert all of them to
+    float64. Synthesizer never converts arrays for you because that would
+    silently create copies of potentially very large arrays.
 
-This means one array in a group doesn't match its siblings. Fix it at the
+This means some arrays in a group don't match their siblings. Fix it at the
 source — load the data at a consistent precision, or cast the named array
 once yourself — rather than working around it per call.
 
@@ -160,6 +197,8 @@ slice or transpose an array in a way that breaks contiguity you will get a
 ``ValueError`` asking for a contiguous array; use ``np.ascontiguousarray``
 at the point where you create the slice.
 
-Finally, some attenuation models cannot be evaluated at float32 without
-overflowing. If that happens you will get an error asking you to use float64
-outputs for that operation, rather than spectra silently full of ``inf``.
+Finally, some attenuation models overflow when evaluated at float32. In that
+case Synthesizer re-evaluates the (small) attenuation curve at float64 and
+converts the result. Only if the result itself cannot be represented at float32
+will you get an error asking you to use float64 outputs for that operation,
+rather than spectra silently full of ``inf``.

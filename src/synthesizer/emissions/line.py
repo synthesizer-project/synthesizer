@@ -632,14 +632,15 @@ class LineCollection:
                     obslam.extend(single_line.obslam)
                     cont_flux.extend(single_line.continuum_flux)
 
-            # Convert to arrays
+            # Convert to arrays (transposing back to (..., nlines) and making
+            # the result contiguous for the extensions)
             line_ids = np.array(line_ids)
             lam = np.array(lam)
-            lum = np.array(lum).T
-            cont = np.array(cont).T
-            flux = np.array(flux).T
-            obslam = np.array(obslam).T
-            cont_flux = np.array(cont_flux).T
+            lum = np.ascontiguousarray(np.array(lum).T)
+            cont = np.ascontiguousarray(np.array(cont).T)
+            flux = np.ascontiguousarray(np.array(flux).T)
+            obslam = np.ascontiguousarray(np.array(obslam).T)
+            cont_flux = np.ascontiguousarray(np.array(cont_flux).T)
 
             # Create the new line (converting to unyt_arrays)
             new_line = LineCollection(

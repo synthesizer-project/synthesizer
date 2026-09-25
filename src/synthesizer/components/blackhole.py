@@ -10,7 +10,7 @@ from unyt import G, Lsun, Msun, c, cm, deg, erg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, get_quantity_unit
 from synthesizer.utils import (
     TableFormatter,
     array_to_scalar,
@@ -448,6 +448,31 @@ class BlackholesComponent(Component):
                 self.inclination.to("radian").value
             )
 
+    def _like_mass(self, arr):
+        """Return a derived array at the precision of the masses.
+
+        Physical constants (c, Lsun) and scalar defaults (e.g. epsilon=0.1)
+        are float64, so arithmetic with them promotes float32 black hole
+        properties. Derived properties should keep the precision of the
+        masses they were computed from, but only where their values fit (e.g.
+        a bolometric luminosity fits in float32 in Lsun but not in erg/s, so
+        with erg/s luminosities it stays float64).
+
+        Args:
+            arr (unyt_array/np.ndarray):
+                The derived array.
+
+        Returns:
+            unyt_array/np.ndarray:
+                The array at the masses' floating-point dtype.
+        """
+        dtype = getattr(self.mass, "dtype", None)
+        if dtype is None or dtype.kind != "f":
+            return arr
+        if np.max(np.abs(np.asarray(arr)), initial=0.0) > np.finfo(dtype).max:
+            return arr
+        return arr.astype(dtype, copy=False)
+
     def calculate_accretion_rate(self):
         """Calculate the black hole accretion rate from the eddington ratio.
 
@@ -459,7 +484,7 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole accretion rate
         """
-        self.accretion_rate = (
+        self.accretion_rate = self._like_mass(
             self.accretion_rate_eddington
             * self.eddington_luminosity
             / (self.epsilon * c**2)
@@ -474,7 +499,11 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole bolometric luminosity
         """
-        self.bolometric_luminosity = self.epsilon * self.accretion_rate * c**2
+        self.bolometric_luminosity = self._like_mass(
+            (self.epsilon * self.accretion_rate * c**2).to(
+                get_quantity_unit(self, "bolometric_luminosity")
+            )
+        )
 
         return self.bolometric_luminosity
 
@@ -489,7 +518,9 @@ class BlackholesComponent(Component):
         # L_Edd = 4*pi*G*mp*c*M/sigma_thompson = 1.257e38 * M/Msun erg/s
         # Converting to solar luminosities:
         # L_Edd = 1.257e38 / 3.828e33 = 3.284e4 Lsun/Msun
-        self.eddington_luminosity = 3.284e4 * self._mass * Lsun
+        self.eddington_luminosity = self._like_mass(
+            3.284e4 * self._mass * Lsun
+        )
 
         return self.eddington_luminosity
 
@@ -506,7 +537,7 @@ class BlackholesComponent(Component):
             self.eddington_luminosity.units
         ).ndview
         edd_lum = self._eddington_luminosity
-        self.eddington_ratio = bol_lum / edd_lum
+        self.eddington_ratio = self._like_mass(bol_lum / edd_lum)
 
         return self.eddington_ratio
 
@@ -533,7 +564,7 @@ class BlackholesComponent(Component):
             unyt_array
                 The black hole accretion rate in units of the Eddington rate.
         """
-        self.accretion_rate_eddington = (
+        self.accretion_rate_eddington = self._like_mass(
             self._bolometric_luminosity / self._eddington_luminosity
         )
 

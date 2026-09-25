@@ -34,10 +34,13 @@ def planck(frequency, temperature):
         unyt_quantity: Spectral luminosity density in erg/s/Hz.
     """
     # Planck's law: B(ν, T) = (2*h*ν^3) / (c^2 * (exp(hν / kT) - 1))
+    # NOTE: exp overflows far into the Wien tail, which correctly gives a
+    # spectral radiance of 0, so the overflow warning is suppressed
     exponent = (const.h * frequency) / (const.kb * temperature)
-    spectral_radiance = (2 * const.h * frequency**3) / (
-        const.c**2 * (np.exp(exponent) - 1)
-    )
+    with np.errstate(over="ignore"):
+        spectral_radiance = (2 * const.h * frequency**3) / (
+            const.c**2 * (np.exp(exponent) - 1)
+        )
 
     # Convert from spectral radiance density to spectral luminosity density,
     # here we'll assume a luminosity distance of 10 pc

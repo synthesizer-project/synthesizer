@@ -170,4 +170,11 @@ PyArrayObject *array_or_none(PyObject *obj, const char *name = "argument");
     if (PyErr_Occurred()) return nullptr; \
   } while (0)
 
+/* Reset the precision overflow flags before running a kernel. */
+void reset_precision_flags();
+
+/* Raise warnings for any precision overflows flagged by a kernel. Returns
+ * false if a warning was turned into an exception. */
+bool warn_precision_flags(const char *out_dtype_name);
+
 #endif  // CPP_TO_PYTHON_H

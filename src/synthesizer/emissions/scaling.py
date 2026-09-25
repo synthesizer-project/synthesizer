@@ -108,9 +108,11 @@ def normalise_scaling_for_units(scaling, units):
             f"Incompatible units {units} and {scaling.units}"
         )
 
-    # The kernels operate on raw doubles, so once the units are compatible we
-    # convert into the target units and strip the unit wrapper.
-    return scaling.to(units).value
+    # Once the units are compatible we convert into the target units and
+    # strip the unit wrapper. The conversion is done at float64 since
+    # converting a reduced precision scaling into the target units can
+    # overflow (e.g. a float32 luminosity in Lsun converted to erg/s).
+    return scaling.astype(np.float64).to(units).value
 
 
 def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
@@ -146,6 +148,9 @@ def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
 
     # Continuum-compatible scaling can be pushed onto luminosity by
     # multiplying through by nu.
+    # Convert at float64 so reduced precision scalings can't overflow when
+    # converted into the target units
+    scaling = scaling.astype(np.float64)
     if cont_units.dimensions == scaling.units.dimensions:
         scaling_cont = scaling.to(cont_units).value
         scaling_lum = (scaling * nu).to(lum_units).value
@@ -237,6 +242,25 @@ def scale_inplace(array, scaling, mask=None, lam_mask=None, nthreads=1):
     )
 
 
+def _fits_dtype(value, dtype):
+    """Return whether a scaling fits in a float dtype without overflowing.
+
+    Args:
+        value (float or np.ndarray):
+            The scaling value(s).
+        dtype (np.dtype):
+            The target dtype.
+
+    Returns:
+        bool:
+            True if every value is finite at ``dtype`` (or ``dtype`` is not a
+            floating point dtype).
+    """
+    if np.dtype(dtype).kind != "f":
+        return True
+    return bool(np.max(np.abs(value), initial=0.0) <= np.finfo(dtype).max)
+
+
 def scale_line_arrays(
     luminosity,
     continuum,
@@ -288,10 +312,22 @@ def scale_line_arrays(
     nlam = luminosity.shape[-1]
     lum_1d = isinstance(scaling_lum, np.ndarray) and scaling_lum.ndim == 1
     cont_1d = isinstance(scaling_cont, np.ndarray) and scaling_cont.ndim == 1
+
+    # Per-row scalings are cheap to convert, so give them the line precision
+    # for the fused kernel (matching scale_array), but only if they fit.
+    # Otherwise we fall back to scale_array, which multiplies at the
+    # scaling's precision before storing the result.
+    if lum_1d and _fits_dtype(scaling_lum, luminosity.dtype):
+        scaling_lum = scaling_lum.astype(luminosity.dtype, copy=False)
+    if cont_1d and _fits_dtype(scaling_cont, continuum.dtype):
+        scaling_cont = scaling_cont.astype(continuum.dtype, copy=False)
+
     use_fused = (
         luminosity.ndim == 2
         and lum_1d
         and cont_1d
+        and scaling_lum.dtype == luminosity.dtype
+        and scaling_cont.dtype == continuum.dtype
         and scaling_lum.shape[0] == nspec
         and scaling_cont.shape[0] == nspec
         and (mask is None or (mask.ndim == 1 and mask.shape[0] == nspec))
@@ -362,15 +398,38 @@ def scale_array(
         np.ndarray:
             The scaled array (may be ``out`` if the fast path was used).
     """
+    # NumPy converts a bare Python float to the array's precision before
+    # multiplying, which overflows a float32 array scaled by e.g. 1e45 even
+    # when the result fits. As a float64 scalar the multiply happens at
+    # float64 and only the result is rounded.
+    if isinstance(scaling, float):
+        scaling = np.float64(scaling)
+
     # Treat scalars as ndim=0 so the later branching can talk about arrays and
     # scalars using one variable.
     scaling_ndim = getattr(scaling, "ndim", 0)
+
+    # A lower-dimensional scaling (one factor per row or per wavelength) is
+    # cheap to convert, so it takes the array's precision for the kernels.
+    # Scalings too large for that precision (e.g. an AGN template scaled by
+    # a bolometric luminosity of ~1e45) are left alone and handled on the
+    # NumPy paths below, which multiply at the scaling's precision and only
+    # round the (representable) result. Full-size scalings are never
+    # converted so we never make a hidden spectra-sized copy.
+    if (
+        isinstance(scaling, np.ndarray)
+        and scaling_ndim < array.ndim
+        and scaling.dtype != array.dtype
+        and _fits_dtype(scaling, array.dtype)
+    ):
+        scaling = scaling.astype(array.dtype)
 
     # When scaling is one factor per row and the masks are in the simple 1D
     # forms the extension understands, hand the whole operation over to the
     # specialised kernel.
     use_row_scaling_kernel = (
         isinstance(scaling, np.ndarray)
+        and scaling.dtype == array.dtype
         and array.ndim == 2
         and array.flags.c_contiguous
         and scaling_ndim == 1
@@ -399,6 +458,7 @@ def scale_array(
         array.ndim == 2
         and array.flags.c_contiguous
         and np.isscalar(scaling)
+        and _fits_dtype(scaling, array.dtype)
         and (
             mask is None
             or (
@@ -428,6 +488,7 @@ def scale_array(
     # dedicated last-axis kernel is the simplest path.
     if (
         isinstance(scaling, np.ndarray)
+        and scaling.dtype == array.dtype
         and scaling_ndim == 1
         and scaling.shape[0] == array.shape[-1]
         and mask is None
@@ -524,6 +585,8 @@ def scale_array(
         # This is the last-resort broadcast shape we still support: treat the
         # scaling as living one axis above the data and let NumPy broadcast.
         work = scaling[..., np.newaxis] * work
+        if array.dtype.kind == "f":
+            work = work.astype(array.dtype, copy=False)
         if mask is not None:
             raise exceptions.InconsistentMultiplication(
                 "Masking is not supported for scaling arrays with "

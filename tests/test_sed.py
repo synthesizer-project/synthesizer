@@ -319,11 +319,11 @@ def test_compute_fnu_rejects_non_contiguous_inputs():
     call(lnu, lam, nu)
 
     # Slicing the last axis of a 2D array gives a strided view.
-    with pytest.raises(ValueError, match="lnu must be C-contiguous"):
+    with pytest.raises(ValueError, match="'lnu' is not stored contiguously"):
         call(np.ones((4, 20))[:, ::2], lam, nu)
 
-    with pytest.raises(ValueError, match="lam must be C-contiguous"):
+    with pytest.raises(ValueError, match="'lam' is not stored contiguously"):
         call(lnu, np.linspace(1000.0, 2000.0, 20)[::2], nu)
 
-    with pytest.raises(ValueError, match="nu must be C-contiguous"):
+    with pytest.raises(ValueError, match="'nu' is not stored contiguously"):
         call(lnu, lam, np.linspace(1e14, 1e15, 20)[::2])
