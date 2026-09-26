@@ -34,7 +34,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.colors import LogNorm
 from scipy.interpolate import interp1d
 from spectres import spectres
-from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
+from unyt import Hz, Lsun, angstrom, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.data.initialise import get_grids_dir
@@ -2909,7 +2909,7 @@ class Template:
         self.normalisation = sed.bolometric_luminosity
         self._sed._lnu /= self.normalisation.to(self._sed.lnu.units * Hz).value
 
-    @accepts(bolometric_luminosity=Units().luminosity)
+    @accepts(bolometric_luminosity=Lsun)
     def get_spectra(self, bolometric_luminosity):
         """Calculate the blackhole spectra by scaling the template.
 

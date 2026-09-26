@@ -10,7 +10,7 @@ from unyt import G, Lsun, Msun, c, cm, deg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
-from synthesizer.units import Quantity, Units, accepts
+from synthesizer.units import Quantity, accepts
 from synthesizer.utils import (
     TableFormatter,
     array_to_scalar,
@@ -102,7 +102,7 @@ class BlackholesComponent(Component):
         mass=Msun.in_base("galactic"),
         accretion_rate=Msun.in_base("galactic") / yr,
         inclination=deg,
-        bolometric_luminosity=Units().luminosity,
+        bolometric_luminosity=Lsun,
         hydrogen_density_blr=cm**-3,
         hydrogen_density_nlr=cm**-3,
         velocity_dispersion_blr=km / s,
