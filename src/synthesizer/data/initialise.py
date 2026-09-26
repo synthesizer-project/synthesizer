@@ -11,6 +11,7 @@ not import other Synthesizer modules to avoid circular dependencies.
 """
 
 import os
+import tempfile
 from importlib import resources
 from pathlib import Path
 
@@ -379,7 +380,8 @@ class SynthesizerInitializer:
 
             # Load the user's default units
             user_units_file = self.base_dir / "default_units.yml"
-            if user_units_file.exists():
+            file_existed = user_units_file.exists()
+            if file_existed:
                 with open(user_units_file, "r") as f:
                     user_units = yaml.safe_load(f)
 
@@ -423,18 +425,21 @@ class SynthesizerInitializer:
             default_units["Version"] = __version__
 
             # Write the updated units back to the user's file. Write to a
-            # temporary file and move it into place so other processes
+            # unique temporary file and move it into place so other processes
             # importing Synthesizer at the same time (e.g. parallel test
             # workers) never read a partially written file.
-            tmp_file = user_units_file.with_name(
-                f".{user_units_file.name}.{os.getpid()}.tmp"
-            )
-            with open(tmp_file, "w") as f:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                dir=user_units_file.parent,
+                prefix=f".{user_units_file.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as f:
                 yaml.dump(default_units, f)
-            os.replace(tmp_file, user_units_file)
+            os.replace(f.name, user_units_file)
 
-            # Tell the user what changed in their units file
-            if changes:
+            # Tell the user what changed in an existing units file
+            if file_existed and changes:
                 print(f"\033[93mUpdated units file: {user_units_file}\033[0m")
                 for change in changes:
                     print(f"  \033[96m{change}\033[0m")
@@ -490,17 +495,9 @@ class SynthesizerInitializer:
         self._make_dir(self.svo_filter_cache_dir, "svo_filter_cache")
         self._make_dir(self.test_data_dir, "test_data")
 
-        # Copy the default units to their user facing location
-        if not default_units_exists():
-            self._copy_resource(
-                "synthesizer",
-                "default_units.yml",
-                self.base_dir / "default_units.yml",
-                "units_file",
-            )
-
-        # Otherwise, we may need to update it
-        elif default_units_needs_update():
+        # Write the default units to their user facing location, or update
+        # an existing file if needed
+        if default_units_needs_update():
             self._copy_units()
 
     def report(self, initialising: bool = False) -> None:
