@@ -247,13 +247,6 @@ class TestInitializerMethods:
 
     def test_initialize_creates_all(self, monkeypatch):
         """Test initialize() makes all dirs and copies resources."""
-        # stub out resource copy
-        monkeypatch.setattr(
-            init_mod.resources,
-            "open_binary",
-            lambda pkg, name: DummyResource(b""),
-        )
-
         init = SynthesizerInitializer()
         init.initialize()
 
@@ -558,12 +551,6 @@ class TestTopLevelFlows:
         )
         monkeypatch.setenv(
             "SYNTHESIZER_INSTRUMENT_CACHE", str(tmp_path / "base" / "inst")
-        )
-        # patch resource copy
-        monkeypatch.setattr(
-            init_mod.resources,
-            "open_binary",
-            lambda pkg, name: DummyResource(b""),
         )
         synth_initialise()
         out = capsys.readouterr().out
