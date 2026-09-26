@@ -27,7 +27,6 @@ Example usage:
 import os
 import shutil
 from functools import wraps
-from importlib import resources
 from inspect import Parameter, signature
 
 import numpy
@@ -41,6 +40,7 @@ from unyt import (
 from unyt.exceptions import UnitConversionError
 
 from synthesizer import BASE_DIR, exceptions
+from synthesizer._version import __version__
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 
@@ -438,12 +438,8 @@ class Units(metaclass=UnitSingleton):
         # yaml file then do so now
         self._preserve_orig_units()
 
-        # Construct the dictionary to write out. Record the current units file
-        # version so these deliberate choices are never treated as old
-        # defaults needing migration.
-        defaults = resources.files("synthesizer") / "default_units.yml"
-        version = yaml.safe_load(defaults.read_text()).get("Version", 1)
-        new_units = {"Version": version}
+        # Construct the dictionary to write out
+        new_units = {"Version": __version__}
         new_units["UnitCategories"] = {}
         for key, unit in self._units.items():
             new_units["UnitCategories"][key] = {"unit": str(unit)}

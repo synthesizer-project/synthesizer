@@ -15,9 +15,8 @@ from importlib import resources
 from pathlib import Path
 
 import yaml
+from packaging.version import Version
 from platformdirs import user_data_dir
-from unyt import Unit
-from unyt.exceptions import UnitParseError
 
 from synthesizer import exceptions
 from synthesizer._version import __version__
@@ -193,47 +192,17 @@ def default_units_exists() -> bool:
     return user_units_file.exists()
 
 
-# Default units which have since been replaced, keyed by the units file
-# version that replaced them. A user file older than that version which still
-# holds the old default was never customised, so it is migrated to the new
-# default once. Customised values are always left alone, and the migrated file
-# records the new version so a user can deliberately switch back.
-_SUPERSEDED_DEFAULT_UNITS = {
-    # Luminosities moved from erg/s to Lsun because erg/s values overflow
-    # float32
-    2: {"luminosity": ("erg / s",)},
-}
-
-
-def _get_superseded_unit_keys(user_units: dict) -> list:
-    """Get the unit categories still set to a superseded default.
-
-    Args:
-        user_units (dict):
-            The user's units file contents.
+def get_units_changelog() -> list:
+    """Get the changes made to the default units.
 
     Returns:
         list:
-            The categories holding a superseded default unit which have not
-            been migrated yet.
+            The changes listed in units_changelog.yml, each a dict with the
+            unit category, the old and new units, the last release using the
+            old unit (changed_after) and the reason for the change.
     """
-    user_version = user_units.get("Version", 1)
-    user_categories = user_units.get("UnitCategories", {})
-    keys = []
-    for version, superseded in _SUPERSEDED_DEFAULT_UNITS.items():
-        if user_version >= version:
-            continue
-        for key, old_units in superseded.items():
-            entry = user_categories.get(key)
-            if not isinstance(entry, dict) or "unit" not in entry:
-                continue
-            try:
-                unit = Unit(entry["unit"])
-            except UnitParseError:
-                continue
-            if any(unit == Unit(old) for old in old_units):
-                keys.append(key)
-    return keys
+    with resources.open_text("synthesizer", "units_changelog.yml") as f:
+        return yaml.safe_load(f) or []
 
 
 def default_units_needs_update() -> bool:
@@ -275,8 +244,9 @@ def default_units_needs_update() -> bool:
             if key not in user_units["UnitCategories"]:
                 return True  # Missing key found, needs update
 
-        # Check whether the file predates the current units file version
-        if user_units.get("Version", 1) < default_units.get("Version", 1):
+        # Update files written by a different version of Synthesizer (files
+        # without a version predate versioning)
+        if user_units.get("Version", "1.0.0") != __version__:
             return True
 
         return False  # All keys present, no update needed
@@ -421,16 +391,36 @@ class SynthesizerInitializer:
             else:
                 user_units = {"UnitCategories": {}}
 
-            # Drop any uncustomised superseded defaults so the new defaults
+            # Record the categories the user's file is missing
+            categories = user_units["UnitCategories"]
+            changes = [
+                f"{key}: added ({entry['unit']})"
+                for key, entry in default_units["UnitCategories"].items()
+                if key not in categories
+            ]
+
+            # Drop defaults that have changed since the user's file was
+            # written (unless the user customised them) so the new defaults
             # replace them
-            for key in _get_superseded_unit_keys(user_units):
-                del user_units["UnitCategories"][key]
+            user_version = Version(str(user_units.get("Version", "1.0.0")))
+            for change in get_units_changelog():
+                key = change["category"]
+                unit = str(categories.get(key, {}).get("unit", ""))
+                if user_version <= Version(change["changed_after"]) and (
+                    unit.replace(" ", "") == change["old"].replace(" ", "")
+                ):
+                    del categories[key]
+                    changes.append(
+                        f"{key}: {change['old']} -> {change['new']} "
+                        f"({change['reason']})"
+                    )
 
             # Update the default units with the users to overwrite any
             # old preferences
             default_units["UnitCategories"].update(
                 user_units["UnitCategories"]
             )
+            default_units["Version"] = __version__
 
             # Write the updated units back to the user's file. Write to a
             # temporary file and move it into place so other processes
@@ -442,6 +432,12 @@ class SynthesizerInitializer:
             with open(tmp_file, "w") as f:
                 yaml.dump(default_units, f)
             os.replace(tmp_file, user_units_file)
+
+            # Tell the user what changed in their units file
+            if changes:
+                print(f"\033[93mUpdated units file: {user_units_file}\033[0m")
+                for change in changes:
+                    print(f"  \033[96m{change}\033[0m")
 
             self.status["units_file"] = "created"
 

@@ -371,12 +371,15 @@ class TestUnitsFileHandling:
 
     def test_units_no_update_when_complete(self, tmp_path, monkeypatch):
         """Test that complete units file is not flagged for update."""
+        from synthesizer._version import __version__
         from synthesizer.data.initialise import default_units_needs_update
 
-        # Copy the actual default units file
+        # Copy the actual default units file, stamped with this version
         with resources.open_text("synthesizer", "default_units.yml") as f:
             units_content = f.read()
-        (tmp_path / "base" / "default_units.yml").write_text(units_content)
+        (tmp_path / "base" / "default_units.yml").write_text(
+            units_content + f'Version: "{__version__}"\n'
+        )
 
         assert not default_units_needs_update()
 
@@ -456,16 +459,18 @@ class TestUnitsFileHandling:
         assert "luminosity" in units["UnitCategories"]
         assert "wavelength" in units["UnitCategories"]
 
-    def test_copy_units_migrates_superseded_defaults_once(self, tmp_path):
-        """Old uncustomised defaults are migrated, but only once.
+    def test_copy_units_applies_units_changelog(self, tmp_path, capsys):
+        """Changed defaults are updated in files predating the change only.
 
-        Luminosities moved from erg/s to Lsun (erg/s values overflow
-        float32). An old file still holding erg/s is updated, customised
-        units are left alone, and a user who switches back to erg/s after
-        the migration keeps it.
+        Luminosities moved from erg/s to Lsun after 1.2.0 (erg/s values
+        overflow float32). An unversioned file still holding erg/s is
+        updated and the change reported, customised units are left alone,
+        and a user who switches back to erg/s afterwards keeps it, even
+        after a version change.
         """
         import yaml
 
+        from synthesizer._version import __version__
         from synthesizer.data.initialise import default_units_needs_update
 
         units_file = tmp_path / "base" / "default_units.yml"
@@ -479,8 +484,12 @@ class TestUnitsFileHandling:
         assert default_units_needs_update()
 
         SynthesizerInitializer()._copy_units()
+        out = capsys.readouterr().out
+        assert "luminosity: erg / s -> Lsun" in out
+        assert "spatial" not in out
         units = yaml.safe_load(units_file.read_text())
         categories = units["UnitCategories"]
+        assert units["Version"] == __version__
         assert categories["luminosity"]["unit"] == "Lsun"
         assert categories["luminosity_density_wavelength"]["unit"] == (
             "erg / s / Angstrom"
@@ -488,12 +497,14 @@ class TestUnitsFileHandling:
         assert categories["spatial"]["unit"] == "kpc"
         assert not default_units_needs_update()
 
-        # Deliberately switch back to erg/s after the migration
+        # Deliberately switch back to erg/s, then change version
         categories["luminosity"]["unit"] = "erg / s"
+        units["Version"] = "1.3.0"
         units_file.write_text(yaml.dump(units))
-        assert not default_units_needs_update()
+        assert default_units_needs_update()
         SynthesizerInitializer()._copy_units()
         units = yaml.safe_load(units_file.read_text())
+        assert units["Version"] == __version__
         assert units["UnitCategories"]["luminosity"]["unit"] == "erg / s"
 
 

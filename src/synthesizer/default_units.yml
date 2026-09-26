@@ -1,8 +1,3 @@
-# The version of the units file. Bump this when a default unit changes so
-# that existing (uncustomised) user files are migrated once (see
-# synthesizer/data/initialise.py).
-Version: 2
-
 UnitCategories:
   spatial:
     unit: Mpc
