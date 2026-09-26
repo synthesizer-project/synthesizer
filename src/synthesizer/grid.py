@@ -267,9 +267,9 @@ class Grid:
         for spectra in self.spectra.values():
             spectra *= factor
         for cont in self.line_conts.values():
-            cont.ndview[...] *= factor
+            cont *= factor
         for lum in self.line_lums.values():
-            lum.ndview[...] *= factor
+            lum *= factor
         for log10_lum in getattr(
             self, "log10_specific_ionising_lum", {}
         ).values():
@@ -282,13 +282,8 @@ class Grid:
         multiplied by the weights of realistic populations; in the internal
         unit (Lsun by default) they fit.
         """
-        lum_units = Units().luminosity
-        for line_id, lum in self.line_lums.items():
-            values = lum.ndview
-            values *= unyt_quantity(1.0, lum.units).to_value(lum_units)
-            self.line_lums[line_id] = unyt_array(
-                values, lum_units, bypass_validation=True
-            )
+        for lum in self.line_lums.values():
+            lum.convert_to_units(Units().luminosity)
 
     def _read_floats(self, dset):
         """Read an HDF5 dataset, converting floats to the target dtype.

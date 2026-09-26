@@ -95,10 +95,11 @@ makes no difference to the results: only the units of the returned
 luminosities change, and they can be converted with ``.to("erg/s")`` as
 usual.
 
-Note: If your units file predates this change and still uses the old ``erg / s``
-default it is updated once automatically; any units you customised are left
-alone. You can switch back to erg/s in the units file if you prefer, but
-float32 luminosities may then overflow.
+Note: If your units file predates this change and still uses the old
+``erg / s`` default, it is updated automatically (and the change is printed);
+any units you customised are left alone. Changes to the default units are
+listed in ``units_changelog.yml``. You can switch back to erg/s in the units
+file if you prefer, but float32 luminosities may then overflow.
 
 Input precision
 ~~~~~~~~~~~~~~~

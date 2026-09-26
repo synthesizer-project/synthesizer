@@ -17,7 +17,7 @@ from synthesizer.particle import BlackHoles, Stars
 from synthesizer.units import Units
 
 
-def _raw(grid, *keys):
+def _get_raw_dataset(grid, *keys):
     """Read a dataset and its units straight from a grid file."""
     with h5py.File(grid.grid_filename, "r") as hf:
         dset = hf["/".join(keys)]
@@ -26,7 +26,7 @@ def _raw(grid, *keys):
 
 def test_grid_line_luminosities_are_in_internal_units(test_grid):
     """Grid line luminosities are stored in the internal luminosity unit."""
-    raw, units = _raw(test_grid, "lines", "luminosity")
+    raw, units = _get_raw_dataset(test_grid, "lines", "luminosity")
     lums = test_grid.line_lums["nebular"]
 
     assert lums.units == Units().luminosity
@@ -42,7 +42,7 @@ def test_agn_grid_is_normalised_per_internal_weight_unit():
     loading it must be per unit of the internal luminosity unit.
     """
     grid = Grid("test_grid_agn-blr.hdf5")
-    raw, _ = _raw(grid, "spectra", "incident")
+    raw, _ = _get_raw_dataset(grid, "spectra", "incident")
     per_internal = unyt_quantity(1.0, Units().luminosity).to(erg / s).value
 
     np.testing.assert_allclose(
@@ -52,7 +52,7 @@ def test_agn_grid_is_normalised_per_internal_weight_unit():
 
 def test_extracted_line_luminosities_match_the_grid(test_grid):
     """A star on a grid point gets its mass times the grid's luminosity."""
-    raw, units = _raw(test_grid, "lines", "luminosity")
+    raw, units = _get_raw_dataset(test_grid, "lines", "luminosity")
     iage, imet = 10, 5
     mass = 1e6
     stars = Stars(
