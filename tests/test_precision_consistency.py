@@ -108,26 +108,17 @@ def test_interp_spectra_keeps_grid_precision():
         assert spectra.dtype == np.float32
 
 
-@pytest.mark.parametrize(
-    "scaling",
-    [1e45, np.full(3, 1e45)],
-    ids=["python-float", "per-particle-array"],
-)
-def test_large_scalings_do_not_overflow(scaling):
-    """Scalings too large for float32 still give representable results.
+def test_sed_luminosity_keeps_sed_precision():
+    """Sed.luminosity keeps the precision of lnu."""
+    lam = unyt_array(np.linspace(1000.0, 20000.0, 50), angstrom)
+    lnu = unyt_array(np.full(50, 1e20, np.float32), erg / s / Hz)
+    sed = Sed(lam, lnu)
 
-    e.g. an AGN template scaled by a bolometric luminosity of ~1e45. The
-    multiply must happen before rounding to float32.
-    """
-    sed = Sed(
-        unyt_array(np.linspace(1000.0, 20000.0, 50), angstrom),
-        unyt_array(np.full((3, 50), 1e-16, np.float32), erg / s / Hz),
-    )
+    lum = sed.luminosity
 
-    scaled = sed.scale(scaling)
-
-    assert scaled._lnu.dtype == np.float32
-    np.testing.assert_allclose(scaled._lnu, 1e29, rtol=1e-6)
+    assert lum.dtype == np.float32
+    expected = (lnu.astype(np.float64) * sed.nu).to(lum.units)
+    np.testing.assert_allclose(lum.value, expected.value, rtol=1e-6)
 
 
 def test_line_subset_is_contiguous(test_grid):

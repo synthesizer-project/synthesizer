@@ -149,7 +149,7 @@ def convert_array_dtype(array, dtype, overflow="raise", name=None):
     - ``"raise"`` raises a PrecisionOverflow error.
     - ``"keep"`` returns the input unchanged, at its original precision. Use
       this where a value simply can't be stored at the target precision and
-      should stay as it is (e.g. a luminosity in erg/s at float32).
+      should stay as it is (e.g. a grid mass axis in kg at float32).
 
     Only floating-point targets are converted; for any other target dtype
     the input is returned unchanged.

@@ -518,11 +518,17 @@ class Sed:
 
         Returns:
             luminosity (unyt_array):
-                The luminosity array (always float64).
+                The luminosity array in the internal luminosity unit, at
+                the precision of lnu.
         """
-        # NOTE: this is always float64. nu * Lnu in erg/s (~1e40+ for
-        # realistic populations) exceeds the float32 range.
-        return (self.lnu.astype(np.float64) * self.nu).to(Units().luminosity)
+        # Fold the conversion to the internal luminosity unit into nu (a
+        # small wavelength sized array) so nu * Lnu is never formed in erg/s,
+        # which overflows float32 for realistic populations
+        lum_units = Units().luminosity
+        factor = (self.nu * get_quantity_unit(self, "lnu")).to_value(lum_units)
+        return get_array_quantity_view(
+            self._lnu * factor.astype(self._lnu.dtype), lum_units
+        )
 
     @property
     def flux(self):

@@ -170,9 +170,4 @@ PyArrayObject *array_or_none(PyObject *obj, const char *name = "argument");
     if (PyErr_Occurred()) return nullptr; \
   } while (0)
 
-/* Set a Python warning if a kernel had to rescale particle weights (see
- * get_split_weight). Returns false if the warning was turned into an
- * exception. */
-bool set_weight_rescaled_warning(const char *out_dtype_name);
-
 #endif  // CPP_TO_PYTHON_H

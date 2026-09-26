@@ -15,7 +15,6 @@ import itertools
 import numpy as np
 import pytest
 from astropy.cosmology import Planck18
-from synthesizer.extensions.particle_spectra import compute_particle_seds
 from unyt import (
     K,
     Lsun,
@@ -271,21 +270,28 @@ def test_sfzh(grids, part, grid):
 
 @pytest.mark.parametrize("dtype", DTYPES, ids=["f32", "f64"])
 def test_black_hole_derived_properties_do_not_overflow(dtype):
-    """Derived black hole properties stay finite and physically sensible.
+    """Derived black hole properties keep the input precision.
 
     Bolometric luminosities (~1e45 erg/s here) only fit in float32 in Lsun
-    (the default units), otherwise they must stay float64. Dimensionless
-    ratios always keep the input precision.
+    (the default units); with erg/s luminosities float32 black holes must
+    raise PrecisionOverflow rather than hold inf.
     """
-    bh = BlackHoles(
-        masses=unyt_array(np.full(3, 1e8, dtype), Msun),
-        accretion_rates=unyt_array(np.ones(3, dtype), Msun / yr),
-        inclinations=np.zeros(3, dtype) * deg,
-    )
 
+    def black_holes():
+        return BlackHoles(
+            masses=unyt_array(np.full(3, 1e8, dtype), Msun),
+            accretion_rates=unyt_array(np.ones(3, dtype), Msun / yr),
+            inclinations=np.zeros(3, dtype) * deg,
+        )
+
+    if ERG_LUMINOSITIES and dtype == F32:
+        with pytest.raises(PrecisionOverflow):
+            black_holes()
+        return
+
+    bh = black_holes()
     assert np.all(np.isfinite(bh.bolometric_luminosities))
-    expected = dtype if Units().luminosity == Lsun else F64
-    assert bh.bolometric_luminosities.dtype == expected
+    assert bh.bolometric_luminosities.dtype == dtype
     for ratio in (bh.accretion_rate_eddington, bh.eddington_ratio):
         assert ratio.dtype == dtype
         assert np.all(np.isfinite(ratio))
@@ -329,17 +335,12 @@ def test_agn_spectra_and_lines(agn_grids, part, grid, out):
     """AGN spectra and lines work at every combination.
 
     Black hole bolometric luminosities (the grid weights) are ~1e45 erg/s,
-    far beyond the float32 range in erg/s. In Lsun everything fits. With
-    erg/s luminosities:
-
-    - float32 black holes can't have float32 luminosities, so extraction
-      must raise a mixed precision error advising conversion to float64;
-    - float32 outputs from float64 black holes must still give correct
-      spectra (the weights are applied at float64, with a warning), while
-      the line luminosities themselves overflow (raising PrecisionOverflow).
+    far beyond the float32 range in erg/s. In Lsun everything fits; with
+    erg/s luminosities any float32 black holes or outputs must raise
+    PrecisionOverflow rather than hold inf.
     """
 
-    def emission(part, grid, out, lines=True):
+    def emission(part, grid, out):
         set_default_out_dtype(out)
         bh = BlackHoles(
             masses=unyt_array(np.array([1e6, 1e7, 1e8, 1e9], part), Msun),
@@ -362,68 +363,14 @@ def test_agn_spectra_and_lines(agn_grids, part, grid, out):
             bh.particle_spectra[model.label]._lnu,
             bh.spectra[model.label]._lnu,
         )
-        if not lines:
-            return spectra
         bh.get_lines(blr.available_lines[:10], model)
         return (*spectra, bh.lines[model.label]._luminosity)
 
-    if ERG_LUMINOSITIES and part == F32:
-        with pytest.raises(TypeError, match="to float64"):
+    if ERG_LUMINOSITIES and F32 in (part, out):
+        with pytest.raises(PrecisionOverflow):
             emission(part, grid, out)
         return
 
     reference = emission(F64, F64, F64)
-
-    if ERG_LUMINOSITIES and out == F32:
-        with pytest.warns(RuntimeWarning, match="weights are too large"):
-            spectra, integrated = emission(part, grid, out, lines=False)
-        _check(spectra, reference[0], out)
-        _check(integrated, reference[1], out)
-        with pytest.raises(PrecisionOverflow, match="overflowed to inf"):
-            emission(part, grid, out)
-        return
-
     for result, ref in zip(emission(part, grid, out), reference):
         _check(result, ref, out)
-
-
-def _huge_weight_inputs(grid_value):
-    """Build extension inputs with weights far beyond the float32 range."""
-    axis = np.array([0.0, 1.0, 2.0])
-    grid_spectra = np.full((3, 5), grid_value)
-    part_props = (np.array([0.5, 1.5]),)
-    weights = np.array([1e45, 3e45])
-    return grid_spectra, (axis,), part_props, weights
-
-
-@pytest.mark.parametrize("method", ["cic", "ngp"])
-def test_weights_beyond_output_precision_are_applied_at_float64(method):
-    """Weights too large for float32 outputs still give correct results.
-
-    Each output value (1e45 * 1e-16) fits in float32, but the weight alone
-    does not, so it must be applied at float64 and a warning raised.
-    """
-    grid_spectra, axes, part_props, weights = _huge_weight_inputs(1e-16)
-    args = (
-        grid_spectra,
-        axes,
-        part_props,
-        weights,
-        np.array([3], np.int32),
-        1,
-        weights.size,
-        5,
-        method,
-        1,
-        None,
-        None,
-        False,
-    )
-
-    reference = compute_particle_seds(*args, F64, ("x", "w"))
-    with pytest.warns(RuntimeWarning, match="weights are too large"):
-        result = compute_particle_seds(*args, F32, ("x", "w"))
-
-    assert result.dtype == F32
-    assert np.all(np.isfinite(result))
-    np.testing.assert_allclose(result, reference, rtol=1e-6)

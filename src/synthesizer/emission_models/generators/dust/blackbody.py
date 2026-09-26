@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
-from unyt import Hz, angstrom, c, erg, s, unyt_array, unyt_quantity
+from unyt import Hz, Lsun, angstrom, c, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
@@ -281,7 +281,7 @@ class Blackbody(DustEmission):
         lines = LineCollection(
             line_ids,
             line_lams,
-            np.zeros(lnu.shape, dtype=lnu.dtype) * erg / s,
+            np.zeros(lnu.shape, dtype=lnu.dtype) * Lsun,
             cont=lnu * erg / s / Hz,
         )
 

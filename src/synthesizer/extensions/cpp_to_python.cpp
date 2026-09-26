@@ -2,11 +2,8 @@
 #define NO_IMPORT_ARRAY
 #include "cpp_to_python.h"
 
-#include "floating_point_utils.h"
 #include "numpy_init.h"
 #include "python_to_cpp.h"
-
-#include <cstdio>
 
 /**
  * @brief Resolve and validate a requested floating-point output dtype.
@@ -64,26 +61,4 @@ PyArrayObject *array_or_none(PyObject *obj, const char *name) {
   }
 
   return reinterpret_cast<PyArrayObject *>(obj);
-}
-
-/**
- * @brief Set a Python warning if a kernel had to rescale particle weights.
- *
- * @param out_dtype_name: The name of the output dtype (for the message).
- *
- * @return False if the warning was turned into an exception (e.g. by
- * warnings.simplefilter("error")), true otherwise.
- */
-bool set_weight_rescaled_warning(const char *out_dtype_name) {
-  if (!get_weight_rescaled()) {
-    return true;
-  }
-  char msg[512];
-  snprintf(msg, sizeof(msg),
-           "Some particle weights are too large to be stored at %s. They "
-           "were applied at float64 instead, so the results are correct, "
-           "but these particles take a slower path. Consider smaller "
-           "internal units for the weight variable.",
-           out_dtype_name);
-  return PyErr_WarnEx(PyExc_RuntimeWarning, msg, 1) >= 0;
 }

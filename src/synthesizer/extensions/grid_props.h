@@ -26,11 +26,6 @@
  * we can increase it). */
 constexpr int MAX_GRID_NDIM = 10;
 
-/* The type of the grid weights. Grid weights are summed particle weights,
- * which can exceed the float32 range (e.g. bolometric luminosities in erg/s),
- * so they are always float64 whatever the grid's precision. */
-using GridWeightReal = double;
-
 class GridProps {
 
  public:

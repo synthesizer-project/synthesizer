@@ -129,26 +129,17 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
     float_count++;
   }
 
+  if (np_grid_weights_ != NULL &&
+      reinterpret_cast<PyObject *>(np_grid_weights_) != Py_None) {
+    float_arrays[float_count] = np_grid_weights_;
+    float_names[float_count] = "grid weights";
+    float_count++;
+  }
+
   if (float_count > 0 &&
       !is_matching_float_dtypes(float_arrays, float_names, float_count,
                                 &float_typenum_)) {
     return;
-  }
-
-  /* Grid weights have their own fixed precision (see GridWeightReal). */
-  if (np_grid_weights_ != NULL &&
-      reinterpret_cast<PyObject *>(np_grid_weights_) != Py_None) {
-    if (!is_c_contiguous(np_grid_weights_, "grid weights")) {
-      return;
-    }
-    if (PyArray_TYPE(np_grid_weights_) !=
-        NumpyTypenum<GridWeightReal>::typenum) {
-      PyErr_SetString(PyExc_TypeError,
-                      "grid weights must be float64 (they are summed "
-                      "particle weights, which can exceed the float32 "
-                      "range).");
-      return;
-    }
   }
 
   /* Get the dimensions of the grid from the axis tuple. */

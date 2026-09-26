@@ -10,7 +10,7 @@ These classes should not be used directly.
 import os
 
 import numpy as np
-from unyt import Hz, erg, s, unyt_array
+from unyt import Hz, Lsun, erg, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.emission_models.extractors.extractor import (
@@ -556,7 +556,7 @@ class Generation:
         # applicable when nparticles exists in the emitter
         if getattr(emitter, "nparticles", 1) == 0:
             # Create the zeroed luminosity and continuum arrays
-            lums = np.zeros((0, len(lams)), dtype=out_dtype) * erg / s
+            lums = np.zeros((0, len(lams)), dtype=out_dtype) * Lsun
             conts = np.zeros((0, len(lams)), dtype=out_dtype) * erg / s / Hz
 
             zeroed_lines = LineCollection(
@@ -590,8 +590,7 @@ class Generation:
                     else len(lams),
                     dtype=out_dtype,
                 )
-                * erg
-                / s,
+                * Lsun,
                 cont=spectra.get_lnu_at_lam(lams),
             )
         else:
