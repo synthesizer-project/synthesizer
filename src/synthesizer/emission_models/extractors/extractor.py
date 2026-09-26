@@ -17,7 +17,7 @@ import os
 from abc import ABC, abstractmethod
 
 import numpy as np
-from unyt import Hz, Unit, c, erg, s, unyt_array, unyt_quantity
+from unyt import Hz, Lsun, Unit, c, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
@@ -524,7 +524,7 @@ class IntegratedParticleExtractor(Extractor):
         return LineCollection(
             line_ids=self._grid.line_ids,
             lam=self._line_lams,
-            lum=lum * self._line_lum_grid.units,
+            lum=lum * Lsun,
             cont=cont * erg / s / Hz,
         )
 
@@ -1234,9 +1234,15 @@ class ParticleExtractor(Extractor):
                 line_ids=self._grid.line_ids,
                 lam=self._line_lams,
                 lum=unyt_array(
-                    lum, self._line_lum_grid.units, bypass_validation=True
+                    lum,
+                    self._line_lum_grid.units,
+                    bypass_validation=True,
                 ),
-                cont=unyt_array(cont, erg / s / Hz, bypass_validation=True),
+                cont=unyt_array(
+                    cont,
+                    erg / s / Hz,
+                    bypass_validation=True,
+                ),
             )
             integrated_line = LineCollection(
                 line_ids=self._grid.line_ids,
@@ -1247,7 +1253,9 @@ class ParticleExtractor(Extractor):
                     bypass_validation=True,
                 ),
                 cont=unyt_array(
-                    integrated_cont, erg / s / Hz, bypass_validation=True
+                    integrated_cont,
+                    erg / s / Hz,
+                    bypass_validation=True,
                 ),
             )
 
