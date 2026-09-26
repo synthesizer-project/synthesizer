@@ -104,21 +104,6 @@ class Grid:
     lam = Quantity("wavelength")
     line_lams = Quantity("wavelength")
 
-    # The unit category of each weight variable found in grid files
-    _WEIGHT_CATEGORIES = {
-        "initial_masses": "mass",
-        "initial_mass": "mass",
-        "masses": "mass",
-        "mass": "mass",
-        "current_masses": "mass",
-        "bolometric_luminosities": "luminosity",
-        "bolometric_luminosity": "luminosity",
-    }
-
-    # Grid files predate recording the weight units (the WeightUnits
-    # attribute), and were normalised per unit of these
-    _LEGACY_WEIGHT_UNITS = {"mass": "Msun", "luminosity": "erg/s"}
-
     @accepts(new_lam=angstrom)
     @timed("Grid.__init__")
     def __init__(
@@ -238,11 +223,6 @@ class Grid:
             # Save the line lums keys as available emissions
             self.available_line_emissions = list(self.line_lums.keys())
 
-        # Express everything per unit of the weight variable in Synthesizer's
-        # internal units (e.g. per Lsun rather than per erg/s), with line
-        # luminosities in the internal luminosity unit
-        self._convert_to_internal_units()
-
         # Combine the two emissions lists and remove repeats
         self.available_emissions = list(
             set(
@@ -251,67 +231,61 @@ class Grid:
             )
         )
 
+        # Convert the grid to match Synthesizer's internal units
+        self._convert_grid_to_internal_units()
+
         # If a precision has been passed we need to coerce everything
         # on the grid to this precision. We do this inplace at this point
         # because we want to modify self
         if use_precision is not None:
             self.convert_precision(use_precision, inplace=True)
 
-    def _convert_to_internal_units(self):
-        """Express the grid per unit weight in Synthesizer's internal units.
+    def _convert_grid_to_internal_units(self):
+        """Convert the grid to match Synthesizer's internal units.
 
-        Grid files store spectra and lines per unit of the weight variable
-        in the units the grid was made with (e.g. per erg/s of bolometric
-        luminosity for AGN grids), and line luminosities in erg/s. Extraction
-        multiplies raw weights (in Synthesizer's internal units) by raw grid
-        values, so here we convert the grid to match those internal units.
-
-        This also keeps extraction within float32 range: line luminosities
-        in erg/s (~1e40+ for realistic populations) overflow float32 while
-        the same values in Lsun do not. For the same reason line luminosities
-        are read at float64 and only reduced to the grid's precision (by
-        convert_precision) after this conversion.
-
-        The factors are applied in place when the grid is loaded, so no extra
-        copies of the grid are made.
+        Extraction multiplies raw weights (in Synthesizer's internal units)
+        by raw grid values, so the grid must be expressed in those units.
+        The conversions are done in place.
         """
-        # Work out the factor converting "per on-disk weight unit" into "per
-        # internal weight unit". Grids without a weight need no conversion.
-        weight_factor = 1.0
-        category = self._WEIGHT_CATEGORIES.get(self._weight_var)
-        if category is not None:
-            disk_units = getattr(self, "WeightUnits", None)
-            if disk_units is None:
-                disk_units = self._LEGACY_WEIGHT_UNITS[category]
-            internal_units = getattr(Units(), category)
-            weight_factor = float(
-                unyt_quantity(1.0, internal_units).to(disk_units).value
-            )
+        self._convert_weight_to_internal_units()
+        self._convert_line_lums_to_internal_units()
 
-        # Scale the spectra and line continua (their units are unchanged,
-        # they are now just per internal weight unit)
-        if weight_factor != 1.0:
-            factor = np.float64(weight_factor)
-            for spectra in self.spectra.values():
-                spectra *= factor
-            for cont in self.line_conts.values():
-                cont.ndview[...] *= factor
-            for log10_lum in getattr(
-                self, "log10_specific_ionising_lum", {}
-            ).values():
-                log10_lum += np.log10(factor)
+    def _convert_weight_to_internal_units(self):
+        """Rescale luminosity weighted grids to the internal luminosity unit.
 
-        # Convert the line luminosities to the internal luminosity unit,
-        # folding in the weight factor so each array is scaled only once
+        AGN grids are normalised per erg/s of bolometric luminosity, but
+        bolometric luminosities are stored in the internal luminosity unit
+        (Lsun by default), so the grid is rescaled to be per internal unit.
+        """
+        if self._weight_var not in (
+            "bolometric_luminosity",
+            "bolometric_luminosities",
+        ):
+            return
+
+        factor = unyt_quantity(1.0, Units().luminosity).to_value("erg/s")
+        for spectra in self.spectra.values():
+            spectra *= factor
+        for cont in self.line_conts.values():
+            cont.ndview[...] *= factor
+        for lum in self.line_lums.values():
+            lum.ndview[...] *= factor
+        for log10_lum in getattr(
+            self, "log10_specific_ionising_lum", {}
+        ).values():
+            log10_lum += np.log10(factor)
+
+    def _convert_line_lums_to_internal_units(self):
+        """Convert the line luminosities to the internal luminosity unit.
+
+        Line luminosities are stored in erg/s, which overflows float32 once
+        multiplied by the weights of realistic populations; in the internal
+        unit (Lsun by default) they fit.
+        """
         lum_units = Units().luminosity
         for line_id, lum in self.line_lums.items():
-            factor = np.float64(
-                weight_factor
-                * unyt_quantity(1.0, lum.units).to(lum_units).value
-            )
             values = lum.ndview
-            if factor != 1.0:
-                values *= factor
+            values *= unyt_quantity(1.0, lum.units).to_value(lum_units)
             self.line_lums[line_id] = unyt_array(
                 values, lum_units, bypass_validation=True
             )
@@ -654,12 +628,9 @@ class Grid:
             lum_units = hf["lines"]["luminosity"].attrs.get("Units")
             cont_units = hf["lines"]["nebular_continuum"].attrs.get("Units")
 
-            # Read the nebular line luminosities and continuums. Line
-            # luminosities are read at float64 since in erg/s they can exceed
-            # float32; they are reduced to the grid's precision once
-            # converted to the internal units (see _convert_to_internal_units)
+            # Read the nebular line luminosities and continuums
             self.line_lums["nebular"] = unyt_array(
-                hf["lines"]["luminosity"][...].astype(np.float64),
+                self._read_floats(hf["lines"]["luminosity"]),
                 lum_units,
             )
             self.line_conts["nebular"] = unyt_array(
@@ -671,7 +642,7 @@ class Grid:
             # called by cloudy, this is the same as nebular in our
             # nomenclature - the line emissions from the birth cloud)
             self.line_lums["linecont"] = unyt_array(
-                hf["lines"]["luminosity"][...].astype(np.float64),
+                self._read_floats(hf["lines"]["luminosity"]),
                 lum_units,
             )
             self.line_conts["linecont"] = unyt_array(
