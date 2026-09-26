@@ -270,9 +270,10 @@ class TestInitializerMethods:
             assert path.exists()
             assert init.status[key] in {"created", "exists"}
 
-        # verify files copied
+        # verify files copied, with a version so no rewrite is needed
         assert (init.base_dir / "default_units.yml").exists()
         assert init.status["units_file"] in {"created", "exists"}
+        assert not init_mod.default_units_needs_update()
 
     def test_report_prints(self, capsys, monkeypatch):
         """Test report() prints status messages."""

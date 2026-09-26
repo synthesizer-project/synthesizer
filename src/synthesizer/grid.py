@@ -2348,23 +2348,9 @@ class Grid:
                     out_dtype=out_dtype,
                 )
 
+                # The interpolated arrays keep the grid's units
                 line_lum = interp_lum.reshape(coord_shape + (self.nlines,))
                 line_cont = interp_cont.reshape(coord_shape + (self.nlines,))
-
-                # Wrap in LineCollection object, ensuring correct unyt units.
-                # Convert out of place so nothing that might share these
-                # buffers is rewritten underneath us.
-                if isinstance(line_lum, unyt_array):
-                    if line_lum.units != erg / s:
-                        line_lum = line_lum.to(erg / s)
-                else:
-                    line_lum = unyt_array(line_lum, erg / s)
-
-                if isinstance(line_cont, unyt_array):
-                    if line_cont.units != erg / s / Hz:
-                        line_cont = line_cont.to(erg / s / Hz)
-                else:
-                    line_cont = unyt_array(line_cont, (erg / s / Hz))
 
                 results["lines"] = LineCollection(
                     line_ids=self.available_lines,
@@ -2383,9 +2369,9 @@ class Grid:
                     if self.line_lams is not None
                     else unyt_array([], "angstrom")
                 )
-                line_lum = np.zeros(
-                    coord_shape + (nlines,), dtype=out_dtype
-                ) * (erg / s)
+                line_lum = (
+                    np.zeros(coord_shape + (nlines,), dtype=out_dtype) * Lsun
+                )
                 line_cont = np.zeros(
                     coord_shape + (nlines,), dtype=out_dtype
                 ) * (erg / s / Hz)

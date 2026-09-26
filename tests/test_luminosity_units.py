@@ -78,6 +78,26 @@ def test_extracted_line_luminosities_match_the_grid(test_grid):
     )
 
 
+def test_interpolated_line_luminosities_keep_internal_units():
+    """Interpolated line luminosities stay in the internal units.
+
+    Converting float32 lines to erg/s would overflow, so the interpolated
+    lines must keep the grid's units.
+    """
+    grid = Grid("test_grid.hdf5", use_precision=np.float32)
+    coords = {
+        axis: getattr(grid, axis)[[len(getattr(grid, axis)) // 2]]
+        for axis in grid.axes
+    }
+
+    lines = grid.interpolate_grid_at_axes_value(
+        spectra_type="nebular", method="ngp", **coords
+    )["lines"]
+
+    assert lines.luminosity.units == grid.line_lums["nebular"].units
+    assert np.all(np.isfinite(lines._luminosity))
+
+
 def test_float32_line_luminosities_fit_in_internal_units(test_grid):
     """float32 line luminosities work whenever their values fit.
 
