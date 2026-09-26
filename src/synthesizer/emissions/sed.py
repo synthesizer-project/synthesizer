@@ -822,8 +822,8 @@ class Sed:
         # NOTE: the integration is done "backwards" when integrating over
         # frequency. It's faster to just multiply by -1 than to reverse the
         # array.
-        # (integrated at float64 like the bolometric luminosity, since
-        # luminosities in erg/s exceed the float32 range)
+        # (integrated at float64 like the bolometric luminosity, since it is
+        # a cheap scalar per spectrum)
         luminosity = -(
             integrate_last_axis(
                 self._nu,
