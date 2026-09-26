@@ -32,7 +32,10 @@ from synthesizer.extensions.particle_spectra import (
 from synthesizer.synth_warnings import warn
 from synthesizer.units import get_quantity_unit
 from synthesizer.utils.operation_timers import timed, timer
-from synthesizer.utils.precision import resolve_out_dtype
+from synthesizer.utils.precision import (
+    resolve_out_dtype,
+    verify_out_precision,
+)
 
 
 class Extractor(ABC):
@@ -107,6 +110,13 @@ class Extractor(ABC):
 
         # Attach the weight variable we'll extract from the emitter
         self._weight_var = grid._weight_var
+
+        # The name used for the weights in extension error messages
+        self._weight_label = (
+            "automatic unit weights"
+            if self._weight_var in [None, "None"]
+            else str(self._weight_var)
+        )
 
         # Attach the spectra and line grids to the Extractor object
 
@@ -194,15 +204,31 @@ class Extractor(ABC):
             # Append the extracted value to the list
             extracted.append(value)
 
+        # Single values (e.g. scalar defaults like ionisation_parameter_blr
+        # or fixed model parameters) are broadcast to every particle. Give
+        # them the precision of the per-particle attributes so they don't
+        # break the extension's shared-dtype requirement.
+        per_particle = [v for v in extracted if v.size > 1]
+        if per_particle and len(per_particle) < len(extracted):
+            dtype = np.result_type(*per_particle)
+            extracted = [
+                v.astype(dtype, copy=False) if v.size == 1 else v
+                for v in extracted
+            ]
+
         # Check if the attributes are outside the grid axes if necessary
         if do_grid_check:
             self.check_emitter_attrs(extracted)
 
         # Also extract the weight variable
         if self._weight_var in [None, "None"]:
-            # If no weight variable is provided, use a weight of 1.0
+            # If no weight variable is provided, use a weight of 1.0 at the
+            # same precision as the extracted attributes (the extension
+            # requires the weights and attributes to share a dtype)
             if hasattr(emitter, "nparticles"):
-                weight = np.ones(emitter.nparticles)
+                weight = np.ones(
+                    emitter.nparticles, dtype=np.result_type(*extracted)
+                )
             else:
                 weight = 1.0
         else:
@@ -268,6 +294,7 @@ class IntegratedParticleExtractor(Extractor):
     """
 
     @timed("IntegratedParticleExtractor.generate_lnu")
+    @verify_out_precision()
     def generate_lnu(
         self,
         emitter,
@@ -347,7 +374,7 @@ class IntegratedParticleExtractor(Extractor):
 
         # Compute the integrated lnu array (this is attached to an Sed
         # object elsewhere)
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         spec, grid_weights = compute_integrated_sed(
             self._spectra_grid,
             self._grid_axes,
@@ -382,6 +409,7 @@ class IntegratedParticleExtractor(Extractor):
         )
 
     @timed("IntegratedParticleExtractor.generate_line")
+    @verify_out_precision()
     def generate_line(
         self,
         emitter,
@@ -426,11 +454,10 @@ class IntegratedParticleExtractor(Extractor):
                 return LineCollection(
                     line_ids=self._grid.line_ids,
                     lam=self._line_lams,
-                    lum=np.zeros(self._grid.nlines, dtype=out_dtype) * erg / s,
+                    lum=np.zeros(self._grid.nlines, dtype=out_dtype)
+                    * self._line_lum_grid.units,
                     cont=np.zeros(self._grid.nlines, dtype=out_dtype)
-                    * erg
-                    / s
-                    / Hz,
+                    * self._line_cont_grid.units,
                 )
             elif mask is not None and np.sum(mask) == 0:
                 warn(
@@ -440,11 +467,10 @@ class IntegratedParticleExtractor(Extractor):
                 return LineCollection(
                     line_ids=self._grid.line_ids,
                     lam=self._line_lams,
-                    lum=np.zeros(self._grid.nlines, dtype=out_dtype) * erg / s,
+                    lum=np.zeros(self._grid.nlines, dtype=out_dtype)
+                    * self._line_lum_grid.units,
                     cont=np.zeros(self._grid.nlines, dtype=out_dtype)
-                    * erg
-                    / s
-                    / Hz,
+                    * self._line_cont_grid.units,
                 )
 
             # Get the attributes from the emitter
@@ -472,7 +498,7 @@ class IntegratedParticleExtractor(Extractor):
             grid_dims[-1] = self._grid.nlines
 
         # Compute the integrated line lum array
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         lum, grid_weights = compute_integrated_sed(
             self._line_lum_grid,
             self._grid_axes,
@@ -524,8 +550,8 @@ class IntegratedParticleExtractor(Extractor):
         return LineCollection(
             line_ids=self._grid.line_ids,
             lam=self._line_lams,
-            lum=lum * erg / s,
-            cont=cont * erg / s / Hz,
+            lum=lum * self._line_lum_grid.units,
+            cont=cont * self._line_cont_grid.units,
         )
 
 
@@ -541,6 +567,7 @@ class DopplerShiftedParticleExtractor(Extractor):
     """
 
     @timed("DopplerShiftedParticleExtractor.generate_lnu")
+    @verify_out_precision()
     def generate_lnu(
         self,
         emitter,
@@ -650,7 +677,7 @@ class DopplerShiftedParticleExtractor(Extractor):
                 nthreads = os.cpu_count()
 
         # Compute the lnu array
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         spec, integrated_spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
             self._grid._lam,
@@ -704,6 +731,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
     """
 
     @timed("IntegratedDopplerShiftedParticleExtractor.generate_lnu")
+    @verify_out_precision()
     def generate_lnu(
         self,
         emitter,
@@ -785,7 +813,7 @@ class IntegratedDopplerShiftedParticleExtractor(Extractor):
                 nthreads = os.cpu_count()
 
         # Compute the lnu array
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         _, integrated_spec = compute_part_seds_with_vel_shift(
             self._spectra_grid,
             self._grid._lam,
@@ -828,6 +856,7 @@ class ParticleExtractor(Extractor):
     """
 
     @timed("ParticleExtractor.generate_lnu")
+    @verify_out_precision()
     def generate_lnu(
         self,
         emitter,
@@ -932,7 +961,7 @@ class ParticleExtractor(Extractor):
         # particle spectra extraction no longer reduces to the integrated
         # spectra; the integrated machinery is cheaper than reducing the full
         # per-particle spectra array.
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         if mask is None:
             grid_weights = emitter._grid_weights.get(
                 grid_assignment_method.lower(), {}
@@ -1001,6 +1030,7 @@ class ParticleExtractor(Extractor):
         return part_sed, integrated_sed
 
     @timed("ParticleExtractor.generate_line")
+    @verify_out_precision()
     def generate_line(
         self,
         emitter,
@@ -1128,7 +1158,7 @@ class ParticleExtractor(Extractor):
         # Get the grid_weights if they exist and we don't have a mask. The
         # integrated line spectra are computed through the integrated machinery
         # rather than by reducing the per-particle line arrays.
-        emitter_attr_names = tuple(self._emitter_attributes)
+        emitter_attr_names = (*self._emitter_attributes, self._weight_label)
         if mask is None:
             grid_weights = emitter._grid_weights.get(
                 grid_assignment_method.lower(), {}
@@ -1233,17 +1263,29 @@ class ParticleExtractor(Extractor):
             part_line = LineCollection(
                 line_ids=self._grid.line_ids,
                 lam=self._line_lams,
-                lum=unyt_array(lum, erg / s, bypass_validation=True),
-                cont=unyt_array(cont, erg / s / Hz, bypass_validation=True),
+                lum=unyt_array(
+                    lum,
+                    self._line_lum_grid.units,
+                    bypass_validation=True,
+                ),
+                cont=unyt_array(
+                    cont,
+                    self._line_cont_grid.units,
+                    bypass_validation=True,
+                ),
             )
             integrated_line = LineCollection(
                 line_ids=self._grid.line_ids,
                 lam=self._line_lams,
                 lum=unyt_array(
-                    integrated_lum, erg / s, bypass_validation=True
+                    integrated_lum,
+                    self._line_lum_grid.units,
+                    bypass_validation=True,
                 ),
                 cont=unyt_array(
-                    integrated_cont, erg / s / Hz, bypass_validation=True
+                    integrated_cont,
+                    self._line_cont_grid.units,
+                    bypass_validation=True,
                 ),
             )
 
@@ -1260,6 +1302,7 @@ class IntegratedParametricExtractor(Extractor):
     """
 
     @timed("IntegratedParametricExtractor.generate_lnu")
+    @verify_out_precision()
     def generate_lnu(
         self,
         emitter,
@@ -1321,6 +1364,7 @@ class IntegratedParametricExtractor(Extractor):
             model.lam, unyt_array(spec, erg / s / Hz, bypass_validation=True)
         )
 
+    @verify_out_precision()
     def generate_line(
         self,
         emitter,
@@ -1377,9 +1421,13 @@ class IntegratedParametricExtractor(Extractor):
             # Compute the integrated line array by multiplying the sfzh by the
             # grids.
             if lam_mask is not None:
-                lum = np.zeros(self._grid.nlines, dtype=out_dtype) * erg / s
+                lum = (
+                    np.zeros(self._grid.nlines, dtype=out_dtype)
+                    * self._line_lum_grid.units
+                )
                 cont = (
-                    np.zeros(self._grid.nlines, dtype=out_dtype) * erg / s / Hz
+                    np.zeros(self._grid.nlines, dtype=out_dtype)
+                    * self._line_cont_grid.units
                 )
                 lum[lam_mask] = np.sum(
                     grid_line_lums[mask] * sfzh[mask], axis=0

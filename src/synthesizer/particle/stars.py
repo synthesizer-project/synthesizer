@@ -1675,7 +1675,7 @@ class Stars(Particles, StarsComponent):
             self.log10ages,
             self.log10metallicities,
         ]
-        prop_names = ("log10ages", "log10metallicities")
+        prop_names = ("log10ages", "log10metallicities", "initial_masses")
         part_mass = self._initial_masses
 
         # Make sure we set the number of particles to the size of the mask
@@ -1848,7 +1848,7 @@ class Stars(Particles, StarsComponent):
         part_props = [
             self.log10ages,
         ]
-        prop_names = ("log10ages",)
+        prop_names = ("log10ages", "initial_masses")
         part_mass = self._initial_masses
 
         # Make sure we set the number of particles to the size of the mask
@@ -2004,7 +2004,7 @@ class Stars(Particles, StarsComponent):
         part_props = [
             self.metallicities,
         ]
-        prop_names = ("metallicities",)
+        prop_names = ("metallicities", "initial_masses")
         part_mass = self._initial_masses
 
         # Make sure we set the number of particles to the size of the mask

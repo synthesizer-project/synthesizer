@@ -24,6 +24,9 @@ class GridProps;
  * @param np_mask: The numpy array holding the particle mask.
  * @param part_tuple: The tuple of numpy arrays holding the particle
  * properties.
+ * @param part_names_tuple: The names of the particle properties (for error
+ * messages). An optional extra trailing entry names the weights array.
+ * @param npart_: The number of particles.
  */
 Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
                      PyArrayObject *np_mask, PyObject *part_tuple,
@@ -40,6 +43,39 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
   /* Assign the number of particles. */
   npart = npart_;
 
+  /* Extract the property names first so dtype errors can name arrays. */
+  if (part_names_tuple != NULL && PySequence_Check(part_names_tuple) &&
+      !PyUnicode_Check(part_names_tuple)) {
+    Py_ssize_t n_names = PySequence_Size(part_names_tuple);
+    if (n_names < 0) {
+      PyErr_Clear();
+    } else {
+      part_names_.reserve(n_names);
+      for (Py_ssize_t i = 0; i < n_names; ++i) {
+        PyObject *name_obj = PySequence_GetItem(part_names_tuple, i);
+        if (name_obj == NULL) {
+          PyErr_Clear();
+          part_names_.emplace_back("");
+          continue;
+        }
+
+        if (PyUnicode_Check(name_obj)) {
+          const char *name = PyUnicode_AsUTF8(name_obj);
+          if (name != NULL) {
+            part_names_.emplace_back(name);
+          } else {
+            PyErr_Clear();
+            part_names_.emplace_back("");
+          }
+        } else {
+          part_names_.emplace_back("");
+        }
+
+        Py_DECREF(name_obj);
+      }
+    }
+  }
+
   /* Validate that all floating-point particle inputs are contiguous and share
    * one supported dtype family before any typed kernels use raw pointers. */
   PyArrayObject *float_arrays[MAX_GRID_NDIM + 2] = {NULL};
@@ -48,8 +84,14 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
 
   if (np_weights_ != NULL &&
       reinterpret_cast<PyObject *>(np_weights_) != Py_None) {
+    const size_t n_props = part_tuple_ != NULL && PyTuple_Check(part_tuple_)
+                               ? static_cast<size_t>(PyTuple_Size(part_tuple_))
+                               : 0;
     float_arrays[float_count] = np_weights_;
-    float_names[float_count] = "weights";
+    float_names[float_count] =
+        (n_props < part_names_.size() && !part_names_[n_props].empty())
+            ? part_names_[n_props].c_str()
+            : "weights";
     float_count++;
   }
 
@@ -78,7 +120,11 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
       }
       PyArrayObject *np_part_arr = reinterpret_cast<PyArrayObject *>(item);
       float_arrays[float_count] = np_part_arr;
-      float_names[float_count] = "particle property";
+      float_names[float_count] =
+          (static_cast<size_t>(i) < part_names_.size() &&
+           !part_names_[i].empty())
+              ? part_names_[i].c_str()
+              : "particle property";
       float_count++;
     }
   }
@@ -129,38 +175,6 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
                    velocity_ndim_);
       toc("Particles.__init__");
       return;
-    }
-  }
-
-  if (part_names_tuple != NULL && PySequence_Check(part_names_tuple) &&
-      !PyUnicode_Check(part_names_tuple)) {
-    Py_ssize_t n_names = PySequence_Size(part_names_tuple);
-    if (n_names < 0) {
-      PyErr_Clear();
-    } else {
-      part_names_.reserve(n_names);
-      for (Py_ssize_t i = 0; i < n_names; ++i) {
-        PyObject *name_obj = PySequence_GetItem(part_names_tuple, i);
-        if (name_obj == NULL) {
-          PyErr_Clear();
-          part_names_.emplace_back("");
-          continue;
-        }
-
-        if (PyUnicode_Check(name_obj)) {
-          const char *name = PyUnicode_AsUTF8(name_obj);
-          if (name != NULL) {
-            part_names_.emplace_back(name);
-          } else {
-            PyErr_Clear();
-            part_names_.emplace_back("");
-          }
-        } else {
-          part_names_.emplace_back("");
-        }
-
-        Py_DECREF(name_obj);
-      }
     }
   }
 

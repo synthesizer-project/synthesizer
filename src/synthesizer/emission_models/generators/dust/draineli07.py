@@ -8,16 +8,7 @@ from typing import TYPE_CHECKING, Optional, Union
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import fsolve
-from unyt import (
-    Hz,
-    Lsun,
-    Msun,
-    angstrom,
-    erg,
-    s,
-    unyt_array,
-    unyt_quantity,
-)
+from unyt import Hz, Lsun, Msun, angstrom, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
@@ -29,6 +20,7 @@ from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import verify_out_precision
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
@@ -544,6 +536,7 @@ class DraineLi07(DustEmission):
 
     @accepts(lams=angstrom)
     @timed("DraineLi07._generate_spectra")
+    @verify_out_precision()
     def _generate_spectra(
         self,
         lams: unyt_array,
@@ -551,6 +544,7 @@ class DraineLi07(DustEmission):
         model: EmissionModel,
         emissions: dict,
         redshift: float = 0,
+        out_dtype=None,
     ) -> Sed:
         """Generate the dust emission spectra.
 
@@ -566,6 +560,9 @@ class DraineLi07(DustEmission):
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
+            out_dtype (np.dtype):
+                The output precision. Defaults to the global default output
+                dtype.
 
         Returns:
             Sed:
@@ -598,20 +595,15 @@ class DraineLi07(DustEmission):
         sed._lnu /= bol_lum
         lnu = sed._lnu
 
-        # Handle per particle scaling (we need to expand the scaling shape)
-        if model is not None and model.per_particle:
-            if not hasattr(ldust, "shape"):
-                # ldust is a float, need to convert to array
-                ldust = np.full(emitter.nparticles, ldust)
-            ldust = ldust[:, np.newaxis]
-
-        # Properly handle units: normalize then scale
-        result = lnu * ldust
-        sed._lnu = result.value if hasattr(result, "value") else result
+        # Scale the normalised emission, at the output precision
+        sed._lnu = self.get_scaled_emission(
+            lnu, ldust, emitter, model, out_dtype
+        )
 
         return sed
 
     @accepts(line_lams=angstrom)
+    @verify_out_precision()
     def _generate_lines(
         self,
         line_ids,
@@ -621,6 +613,7 @@ class DraineLi07(DustEmission):
         emissions,
         spectra,
         redshift=0,
+        out_dtype=None,
     ) -> LineCollection:
         """Generate line emission spectra.
 
@@ -644,6 +637,9 @@ class DraineLi07(DustEmission):
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
+            out_dtype (np.dtype):
+                The output precision. Defaults to the global default output
+                dtype.
 
         Returns:
             LineCollection:
@@ -689,22 +685,14 @@ class DraineLi07(DustEmission):
         # Normalise the DL07 spectrum
         lnu /= bol_lum
 
-        # Handle per particle scaling (we need to expand the scaling shape)
-        if model is not None and model.per_particle:
-            if not hasattr(ldust, "shape"):
-                # ldust is a float, need to convert to array
-                ldust = np.full(emitter.nparticles, ldust)
-            ldust = ldust[:, np.newaxis]
-
-        # Properly handle units: normalize then scale
-        result = lnu * ldust
-        lnu = result.value if hasattr(result, "value") else result
+        # Scale the normalised emission, at the output precision
+        lnu = self.get_scaled_emission(lnu, ldust, emitter, model, out_dtype)
 
         # Return as LineCollection with continuum only
         lines = LineCollection(
             line_ids,
             line_lams,
-            lum=np.zeros(lnu.shape) * erg / s,
+            lum=np.zeros(lnu.shape, dtype=lnu.dtype) * Lsun,
             cont=lnu * erg / s / Hz,
         )
 

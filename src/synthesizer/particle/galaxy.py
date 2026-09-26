@@ -474,7 +474,11 @@ class Galaxy(BaseGalaxy):
         )
 
         # Loop over black holes
-        metallicities = np.zeros(self.black_holes.nbh)
+        # Match the precision of the black hole masses so the metallicities
+        # don't break the extensions' shared-dtype requirement
+        metallicities = np.zeros(
+            self.black_holes.nbh, dtype=self.black_holes._masses.dtype
+        )
         for ind, gas_in_range in enumerate(inds):
             # Handle black holes with no neighbouring gas
             if len(gas_in_range) == 0:

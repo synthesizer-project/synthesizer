@@ -45,10 +45,10 @@ class TestTemplateInit:
         # Initialize a Template object
         template = Template(lam, lnu)
 
-        # Check that the internal SED has been normalized
-        assert np.isclose(template._sed._bolometric_luminosity, 1.0), (
-            "Template is not normalized "
-            f"{template._sed._bolometric_luminosity}"
+        # Check that the internal SED has been normalized (per Lsun)
+        bol_lum = template._sed.bolometric_luminosity.to_value("Lsun")
+        assert np.isclose(bol_lum, 1.0), (
+            f"Template is not normalized {bol_lum}"
         )
 
     def test_template_unify_with_grid(self, test_grid):

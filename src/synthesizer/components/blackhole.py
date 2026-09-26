@@ -6,16 +6,17 @@ BlackholesComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import G, Lsun, Msun, c, cm, deg, erg, km, s, yr
+from unyt import G, Lsun, Msun, c, cm, deg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, get_quantity_unit
 from synthesizer.utils import (
     TableFormatter,
     array_to_scalar,
     scalar_to_array,
 )
+from synthesizer.utils.precision import convert_array_dtype
 
 
 class BlackholesComponent(Component):
@@ -102,7 +103,7 @@ class BlackholesComponent(Component):
         mass=Msun.in_base("galactic"),
         accretion_rate=Msun.in_base("galactic") / yr,
         inclination=deg,
-        bolometric_luminosity=erg / s,
+        bolometric_luminosity=Lsun,
         hydrogen_density_blr=cm**-3,
         hydrogen_density_nlr=cm**-3,
         velocity_dispersion_blr=km / s,
@@ -459,10 +460,11 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole accretion rate
         """
-        self.accretion_rate = (
+        self.accretion_rate = convert_array_dtype(
             self.accretion_rate_eddington
             * self.eddington_luminosity
-            / (self.epsilon * c**2)
+            / (self.epsilon * c**2),
+            self.mass.dtype,
         )
 
         return self.accretion_rate
@@ -474,7 +476,13 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole bolometric luminosity
         """
-        self.bolometric_luminosity = self.epsilon * self.accretion_rate * c**2
+        # Derived properties keep the precision of the masses
+        self.bolometric_luminosity = convert_array_dtype(
+            (self.epsilon * self.accretion_rate * c**2).to(
+                get_quantity_unit(self, "bolometric_luminosity")
+            ),
+            self.mass.dtype,
+        )
 
         return self.bolometric_luminosity
 
@@ -489,7 +497,10 @@ class BlackholesComponent(Component):
         # L_Edd = 4*pi*G*mp*c*M/sigma_thompson = 1.257e38 * M/Msun erg/s
         # Converting to solar luminosities:
         # L_Edd = 1.257e38 / 3.828e33 = 3.284e4 Lsun/Msun
-        self.eddington_luminosity = 3.284e4 * self._mass * Lsun
+        self.eddington_luminosity = convert_array_dtype(
+            3.284e4 * self._mass * Lsun,
+            self.mass.dtype,
+        )
 
         return self.eddington_luminosity
 
@@ -500,13 +511,14 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole eddington ratio
         """
-        # Compute the eddington ratio but ensure both luminosities are in the
-        # same units.
-        bol_lum = self.bolometric_luminosity.to(
-            self.eddington_luminosity.units
-        ).ndview
-        edd_lum = self._eddington_luminosity
-        self.eddington_ratio = bol_lum / edd_lum
+        # Dividing the luminosities cancels their units. NOTE: to_value makes
+        # a copy, which is fine for these small per-blackhole arrays.
+        self.eddington_ratio = convert_array_dtype(
+            (self.bolometric_luminosity / self.eddington_luminosity).to_value(
+                "dimensionless"
+            ),
+            self.mass.dtype,
+        )
 
         return self.eddington_ratio
 
@@ -533,8 +545,13 @@ class BlackholesComponent(Component):
             unyt_array
                 The black hole accretion rate in units of the Eddington rate.
         """
-        self.accretion_rate_eddington = (
-            self._bolometric_luminosity / self._eddington_luminosity
+        # Dividing the luminosities cancels their units. NOTE: to_value makes
+        # a copy, which is fine for these small per-blackhole arrays.
+        self.accretion_rate_eddington = convert_array_dtype(
+            (self.bolometric_luminosity / self.eddington_luminosity).to_value(
+                "dimensionless"
+            ),
+            self.mass.dtype,
         )
 
         return self.accretion_rate_eddington

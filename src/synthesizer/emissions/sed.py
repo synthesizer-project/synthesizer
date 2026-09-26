@@ -41,7 +41,6 @@ from unyt import (
 )
 
 from synthesizer import exceptions
-from synthesizer.conversions import lnu_to_llam
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emissions.scaling import (
     normalise_scaling_for_units,
@@ -60,6 +59,7 @@ from synthesizer.photometry import PhotometryCollection
 from synthesizer.synth_warnings import warn
 from synthesizer.units import (
     Quantity,
+    Units,
     accepts,
     get_array_quantity_view,
     get_quantity_unit,
@@ -518,9 +518,17 @@ class Sed:
 
         Returns:
             luminosity (unyt_array):
-                The luminosity array.
+                The luminosity array in the internal luminosity unit, at
+                the precision of lnu.
         """
-        return self.lnu * self.nu
+        # Fold the conversion to the internal luminosity unit into nu (a
+        # small wavelength sized array) so nu * Lnu is never formed in erg/s,
+        # which overflows float32 for realistic populations
+        lum_units = Units().luminosity
+        factor = (self.nu * get_quantity_unit(self, "lnu")).to_value(lum_units)
+        return get_array_quantity_view(
+            self._lnu * factor.astype(self._lnu.dtype), lum_units
+        )
 
     @property
     def flux(self):
@@ -538,9 +546,15 @@ class Sed:
 
         Returns:
             luminosity (unyt_array):
-                The spectral luminosity density per Angstrom array.
+                The spectral luminosity density per Angstrom array (always
+                float64).
         """
-        return self.nu * self.lnu / self.lam
+        # NOTE: this is always float64. Luminosity densities per unit
+        # wavelength in erg/s/Angstrom (~1e40+ for realistic populations)
+        # exceed the float32 range.
+        return (self.lnu.astype(np.float64) * self.nu / self.lam).to(
+            Units().luminosity_density_wavelength
+        )
 
     @property
     def flam(self):
@@ -721,11 +735,15 @@ class Sed:
 
         Returns:
             luminosity (unyt-array):
-                The luminosity (lnu) at the provided wavelength.
+                The luminosity (lnu) at the provided wavelength, at the
+                precision of this Sed's lnu.
         """
-        return interp1d(self._lam, self._lnu, kind=kind)(
-            lam
-        ) * get_quantity_unit(self, "lnu")
+        # interp1d returns float64 unless every input is float32, so the
+        # (wavelength sized) result is returned at the precision of lnu
+        lnu = interp1d(self._lam, self._lnu, kind=kind)(lam)
+        return lnu.astype(self._lnu.dtype, copy=False) * get_quantity_unit(
+            self, "lnu"
+        )
 
     @timed("Sed.measure_bolometric_luminosity")
     def measure_bolometric_luminosity(
@@ -804,12 +822,15 @@ class Sed:
         # NOTE: the integration is done "backwards" when integrating over
         # frequency. It's faster to just multiply by -1 than to reverse the
         # array.
+        # (integrated at float64 like the bolometric luminosity, since it is
+        # a cheap scalar per spectrum)
         luminosity = -(
             integrate_last_axis(
                 self._nu,
                 self._lnu * transmission,
                 nthreads=nthreads,
                 method=integration_method,
+                out_dtype=np.float64,
             )
             * get_quantity_unit(self, "lnu")
             * Hz
@@ -1535,8 +1556,13 @@ class Sed:
             verbose=False,
         )
 
-        # Instantiate the new Sed
-        sed = Sed(new_lam, new_spectra * get_quantity_unit(self, "lnu"))
+        # Instantiate the new Sed (spectres always returns float64, so
+        # restore the input precision)
+        sed = Sed(
+            new_lam,
+            new_spectra.astype(self._lnu.dtype, copy=False)
+            * get_quantity_unit(self, "lnu"),
+        )
 
         # If self also has fnu we should resample those too and store the
         # shifted wavelengths and frequencies
@@ -1549,7 +1575,9 @@ class Sed:
                 self._fnu,
                 fill=0.0,
                 verbose=False,
-            ) * get_quantity_unit(self, "fnu")
+            ).astype(self._fnu.dtype, copy=False) * get_quantity_unit(
+                self, "fnu"
+            )
             sed.redshift = self.redshift
 
         # Clean up nans, we shouldn't get them but they do appear sometimes...
@@ -1815,27 +1843,31 @@ class Sed:
             float:
                 Ionising photon luminosity (s^-1).
         """
-        # Convert lnu to llam
-        llam = lnu_to_llam(self.lam, self.lnu)
-
         # Calculate ionisation wavelength
         ionisation_wavelength = h * c / ionisation_energy
 
         ionisation_mask = self.lam < ionisation_wavelength
 
-        # Define integration arrays
-        x = self._lam
-        y = (llam * self.lam / h.to(erg / Hz) / c.to(angstrom / s)).value
-
-        # Restrict arrays to ionisation regime. Note that boolean masking
-        # along the final axis of a multidimensional array produces a
-        # Fortran-ordered result, so we have to explicitly restore C order
-        # for the C extension (at the cost of a copy of this derived array).
-        x = x[ionisation_mask]
-        if len(y.shape) == 1:
-            y = y[ionisation_mask]
-        else:
-            y = np.ascontiguousarray(y[..., ionisation_mask])
+        # Define the integration arrays: the photon rate per unit wavelength,
+        # Lnu * nu / (h * c). This is done in float64 on just the ionising
+        # part of the spectra, since photon rates (~1e53 s^-1 and beyond)
+        # exceed the float32 range. Note that boolean masking along the final
+        # axis produces a Fortran-ordered result, so we explicitly restore C
+        # order for the C extension.
+        x = self._lam[ionisation_mask].astype(np.float64)
+        factor = (
+            (
+                self.nu[ionisation_mask].astype(np.float64)
+                * self.lnu.units
+                / (h * c)
+            )
+            .to(1 / s / angstrom)
+            .value
+        )
+        y = np.ascontiguousarray(
+            self._lnu[..., ionisation_mask], dtype=np.float64
+        )
+        y *= factor
 
         # Add a final data point at the ionising energy to ensure full
         # coverage.
@@ -1852,7 +1884,10 @@ class Sed:
 
         x = np.append(x, x0)
 
-        ion_photon_prod_rate = integrate_last_axis(x, y, nthreads=nthreads) / s
+        ion_photon_prod_rate = (
+            integrate_last_axis(x, y, nthreads=nthreads, out_dtype=np.float64)
+            / s
+        )
 
         return ion_photon_prod_rate
 
@@ -1978,9 +2013,11 @@ class Sed:
             verbose=False,
         )
         new_flat_lnu[~flat_mask] = flat_lnu[~flat_mask]
-        new_lnu = new_flat_lnu.reshape(self._lnu.shape) * get_quantity_unit(
-            self, "lnu"
-        )
+
+        # spectres always returns float64, so restore the input precision
+        new_lnu = new_flat_lnu.astype(self._lnu.dtype, copy=False).reshape(
+            self._lnu.shape
+        ) * get_quantity_unit(self, "lnu")
 
         # Return new Sed or modify in place
         if inplace:

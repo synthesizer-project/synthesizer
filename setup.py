@@ -318,6 +318,7 @@ extensions = [
             "src/synthesizer/extensions/kernel_extensions/truncated_kernel.cpp",
             "src/synthesizer/extensions/kernel_extensions/overlap_kernel.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
         ],
         compile_flags=compile_flags,
@@ -526,7 +527,7 @@ setup(
     package_dir={"": "src"},
     include_package_data=True,
     package_data={
-        "synthesizer": ["default_units.yml"],
+        "synthesizer": ["default_units.yml", "units_changelog.yml"],
         "synthesizer.downloader": ["_data_ids.yml"],
     },
     install_requires=[

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Tuple, Union
 
+import numpy as np
 from unyt import K, unyt_quantity
 
 from synthesizer import exceptions
@@ -20,6 +21,7 @@ from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.generator import Generator
 from synthesizer.emission_models.utils import get_emission_label
 from synthesizer.units import accepts
+from synthesizer.utils.precision import resolve_out_dtype
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
@@ -291,6 +293,56 @@ class DustEmission(Generator):
             )
         else:
             return 1.0
+
+    def get_scaled_emission(
+        self,
+        normalised,
+        scaling,
+        emitter,
+        model,
+        out_dtype=None,
+        cmb_factor=1.0,
+    ):
+        """Get the normalised emission scaled by the scaling luminosity.
+
+        The normalised emission (per unit luminosity, on the wavelength or
+        line grid) is multiplied by the scaling from get_scaling, one per
+        particle for per-particle models, and by the CMB heating factor. The
+        product is computed at float64 and written straight into an array at
+        the output precision, so no float64 copy of the (potentially large)
+        result is ever made.
+
+        Args:
+            normalised (np.ndarray):
+                The emission per unit scaling luminosity.
+            scaling (float/unyt_quantity/unyt_array):
+                The scaling luminosity (from get_scaling).
+            emitter (Stars/Gas/BlackHole):
+                The object emitting the emission.
+            model (EmissionModel):
+                The emission model generating the emission.
+            out_dtype (np.dtype):
+                The output precision. Defaults to the global default output
+                dtype.
+            cmb_factor (float):
+                The CMB heating factor.
+
+        Returns:
+            np.ndarray:
+                The scaled emission, (nparticles, n) for per-particle models
+                and (n,) otherwise.
+        """
+        scaling = np.asarray(getattr(scaling, "value", scaling), np.float64)
+        if model is not None and model.per_particle:
+            if scaling.ndim == 0:
+                scaling = np.full(emitter.nparticles, scaling)
+            scaling = scaling[:, np.newaxis]
+        normalised = np.asarray(normalised, np.float64) * cmb_factor
+        out = np.empty(
+            np.broadcast_shapes(normalised.shape, scaling.shape),
+            dtype=resolve_out_dtype(out_dtype),
+        )
+        return np.multiply(normalised, scaling, out=out, casting="same_kind")
 
     def apply_cmb_heating(self, temperature, emissivity, redshift) -> Tuple:
         """Compute the cmb heating factor and modify the temperature.
