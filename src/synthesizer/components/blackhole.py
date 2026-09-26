@@ -500,13 +500,11 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole eddington ratio
         """
-        # Compute the eddington ratio but ensure both luminosities are in the
-        # same units.
-        bol_lum = self.bolometric_luminosity.to(
-            self.eddington_luminosity.units
-        ).ndview
-        edd_lum = self._eddington_luminosity
-        self.eddington_ratio = bol_lum / edd_lum
+        # Dividing the luminosities cancels their units. NOTE: to_value makes
+        # a copy, which is fine for these small per-blackhole arrays.
+        self.eddington_ratio = (
+            self.bolometric_luminosity / self.eddington_luminosity
+        ).to_value("dimensionless")
 
         return self.eddington_ratio
 
@@ -533,12 +531,11 @@ class BlackholesComponent(Component):
             unyt_array
                 The black hole accretion rate in units of the Eddington rate.
         """
-        # Convert to matching units before dividing (the bolometric and
-        # Eddington luminosities are stored in different units)
-        bol_lum = self.bolometric_luminosity.to(
-            self.eddington_luminosity.units
-        ).ndview
-        self.accretion_rate_eddington = bol_lum / self._eddington_luminosity
+        # Dividing the luminosities cancels their units. NOTE: to_value makes
+        # a copy, which is fine for these small per-blackhole arrays.
+        self.accretion_rate_eddington = (
+            self.bolometric_luminosity / self.eddington_luminosity
+        ).to_value("dimensionless")
 
         return self.accretion_rate_eddington
 
