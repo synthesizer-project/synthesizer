@@ -95,7 +95,7 @@ makes no difference to the results: only the units of the returned
 luminosities change, and they can be converted with ``.to("erg/s")`` as
 usual.
 
-If your units file predates this change and still uses the old ``erg / s``
+Note: If your units file predates this change and still uses the old ``erg / s``
 default it is updated once automatically; any units you customised are left
 alone. You can switch back to erg/s in the units file if you prefer, but
 float32 luminosities may then overflow.
