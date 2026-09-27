@@ -77,3 +77,36 @@ jobs:
           cd docs
           make clean
           make html SPHINXOPTS="-j auto"
+
+  free-threaded:
+    # Test on a free-threaded (no-GIL) build of Python, where emission models
+    # can be executed concurrently with nr_model_threads.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python 3.14t
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14t"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install wheel
+          WITH_OPENMP=1 pip install .[test]
+          pip install pytest-xdist  # enable parallel pytest execution
+          cat build_synth.log
+      - name: Download test data
+        run: |
+          synthesizer-download --test-grids --dust-grid --all-sim-data --instruments EuclidNISP
+      - name: Download SVO filter cache
+        run: |
+          synthesizer-download --svo-filter-cache
+      - name: Test with pytest
+        # NOTE: astropy currently re-enables the GIL on import, so disable it
+        # explicitly to exercise the threaded execution paths.
+        env:
+          PYTHON_GIL: "0"
+        run: |
+          python -c "import sys, synthesizer; assert not sys._is_gil_enabled()"
+          pytest -n auto
