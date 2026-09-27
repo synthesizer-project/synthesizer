@@ -19,14 +19,120 @@ consumed by all downstream dependents, and the model is not marked to be
 saved, the queue deletes that emission from the working output dictionaries.
 Keeping this logic in a dedicated module keeps execution-specific state out of
 ``EmissionModel`` and makes the scheduling logic easier to reason about.
+
+Models whose dependencies are all satisfied are independent of each other, so
+the queue can also execute them concurrently on a pool of threads (see
+``ModelQueue.execute``). The thread calling ``execute`` owns all of the queue
+state and only hands the models themselves to the workers, so the queue needs
+no locking. Concurrent execution is only useful when the Python work done per
+model can run in parallel, which requires a free-threaded (no-GIL) build of
+Python; ``resolve_model_threads`` falls back to serial execution otherwise.
 """
 
+import os
+import sys
+import sysconfig
 from collections import deque
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
 import numpy as np
 
 from synthesizer import exceptions
+from synthesizer.synth_warnings import warn
 from synthesizer.utils.operation_timers import timer
+
+
+def gil_enabled():
+    """Return whether the GIL is enabled in the running interpreter.
+
+    This is a runtime check rather than a check of how Python was built. A
+    free-threaded interpreter re-enables the GIL when it imports an extension
+    module that has not declared itself safe to run without it, or when the
+    ``PYTHON_GIL=1`` environment variable is set.
+
+    Returns:
+        bool:
+            ``True`` if the GIL is enabled, otherwise ``False``.
+    """
+    # Interpreters before 3.13 have no way to disable the GIL at all.
+    return getattr(sys, "_is_gil_enabled", lambda: True)()
+
+
+def resolve_model_threads(nr_model_threads, nthreads=1):
+    """Return the number of threads to execute emission models with.
+
+    Args:
+        nr_model_threads (int):
+            The requested number of threads to execute independent emission
+            models concurrently with.
+        nthreads (int):
+            The number of OpenMP threads each model will use, used to warn
+            about oversubscribing the available cores.
+
+    Returns:
+        int:
+            The number of model threads to use. This is 1 when the GIL is
+            enabled, since the Python work done per model cannot then run in
+            parallel.
+
+    Raises:
+        exceptions.InconsistentArguments:
+            If nr_model_threads is not a positive integer.
+    """
+    # Reject anything that isn't a positive integer (bools are ints, but
+    # passing True here is almost certainly a mistake).
+    if (
+        isinstance(nr_model_threads, bool)
+        or not isinstance(nr_model_threads, (int, np.integer))
+        or nr_model_threads < 1
+    ):
+        raise exceptions.InconsistentArguments(
+            "nr_model_threads must be a positive integer "
+            f"(got {nr_model_threads!r})."
+        )
+    nr_model_threads = int(nr_model_threads)
+
+    # Nothing to resolve for serial execution.
+    if nr_model_threads == 1:
+        return 1
+
+    # With the GIL the threads would contend for it rather than run in
+    # parallel, which is slower than running serially.
+    if gil_enabled():
+        # On a free-threaded build the GIL has been turned back on, either
+        # explicitly or by importing an extension module that hasn't declared
+        # it can run without it.
+        if sysconfig.get_config_var("Py_GIL_DISABLED"):
+            reason = (
+                "This is a free-threaded build of Python but the GIL has been "
+                "re-enabled, usually by importing an extension module that "
+                "has not declared it is safe without the GIL (at the time of "
+                "writing astropy.table, imported via astropy.cosmology, does "
+                "this). Run with PYTHON_GIL=0 (or -Xgil=0) to keep the GIL "
+                "disabled."
+            )
+        else:
+            reason = (
+                "This requires a free-threaded (no-GIL) build of Python, "
+                "e.g. python3.14t."
+            )
+        warn(
+            f"nr_model_threads={nr_model_threads} was requested but the GIL "
+            f"is enabled. {reason} Emission models will be executed serially."
+        )
+        return 1
+
+    # Warn if the model threads and the OpenMP threads they each spawn
+    # together exceed the cores available to this process.
+    ncores = getattr(os, "process_cpu_count", os.cpu_count)()
+    if ncores is not None and nr_model_threads * max(nthreads, 1) > ncores:
+        warn(
+            f"nr_model_threads={nr_model_threads} with nthreads={nthreads} "
+            f"uses {nr_model_threads * max(nthreads, 1)} threads but only "
+            f"{ncores} cores are available."
+        )
+
+    return nr_model_threads
 
 
 class ModelQueue:
@@ -268,6 +374,99 @@ class ModelQueue:
                 emissions,
                 particle_emissions,
             )
+
+    def execute(self, process, emissions, particle_emissions, nr_threads=1):
+        """Execute every active model in dependency order.
+
+        Each model is passed to ``process`` once all of its dependencies have
+        been processed. ``process`` must store the model's emission in the
+        emission dictionaries itself. Once it returns, the queue unlocks the
+        model's dependents and deletes any emissions that are no longer needed.
+
+        With more than one thread, ready models are processed concurrently by
+        a pool of worker threads. The calling thread keeps ownership of the
+        queue state: it submits ready models to the pool and, as each one
+        finishes, marks it done and submits whatever it unlocked. Only
+        ``process`` runs on the workers, so it must be safe to run for
+        independent models at the same time.
+
+        Args:
+            process (callable):
+                A function taking a single ``EmissionModel`` which generates
+                its emission.
+            emissions (dict):
+                The integrated emission dictionary being populated.
+            particle_emissions (dict):
+                The particle emission dictionary being populated.
+            nr_threads (int):
+                The number of threads to process models with.
+
+        Returns:
+            None
+        """
+        if nr_threads <= 1:
+            # Process each model as soon as it becomes ready.
+            while len(self) > 0:
+                model = self.pop()
+                process(model)
+                self.done(model, emissions, particle_emissions)
+        else:
+            self._execute_threaded(
+                process,
+                emissions,
+                particle_emissions,
+                nr_threads,
+            )
+
+        # Ensure the dependency graph was fully traversed.
+        self.assert_finished()
+
+    def _execute_threaded(
+        self,
+        process,
+        emissions,
+        particle_emissions,
+        nr_threads,
+    ):
+        """Execute every active model on a pool of worker threads.
+
+        Args:
+            process (callable):
+                A function taking a single ``EmissionModel`` which generates
+                its emission.
+            emissions (dict):
+                The integrated emission dictionary being populated.
+            particle_emissions (dict):
+                The particle emission dictionary being populated.
+            nr_threads (int):
+                The number of worker threads to use.
+
+        Returns:
+            None
+        """
+        # Map each in-flight future back to the model it is processing.
+        running = {}
+
+        with ThreadPoolExecutor(max_workers=nr_threads) as pool:
+            try:
+                while len(self) > 0 or len(running) > 0:
+                    # Hand every ready model to the pool.
+                    while len(self) > 0:
+                        model = self.pop()
+                        running[pool.submit(process, model)] = model
+
+                    # Wait for at least one model to finish, then unlock its
+                    # dependents so they are submitted on the next pass.
+                    finished, _ = wait(running, return_when=FIRST_COMPLETED)
+                    for future in finished:
+                        model = running.pop(future)
+                        future.result()
+                        self.done(model, emissions, particle_emissions)
+            except BaseException:
+                # Don't start anything still waiting in the pool, the models
+                # already running are left to finish when the pool exits.
+                pool.shutdown(wait=True, cancel_futures=True)
+                raise
 
     def assert_finished(self):
         """Ensure the dependency graph was fully traversed.
