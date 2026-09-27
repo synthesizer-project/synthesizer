@@ -701,6 +701,11 @@ static struct PyModuleDef moduledef = {
 PyMODINIT_FUNC PyInit_image(void) {
   PyObject *m = PyModule_Create(&moduledef);
   if (m == NULL) return NULL;
+  /* Declare the module safe to use without the GIL so importing it doesn't
+   * re-enable the GIL on free-threaded builds of Python. */
+#ifdef Py_GIL_DISABLED
+  PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);
+#endif
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);
