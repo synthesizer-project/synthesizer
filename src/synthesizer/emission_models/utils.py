@@ -390,6 +390,8 @@ def get_param(
         )
         if value is not None:
             # Attach this to the emitter so we don't have to do this again
+            # NOTE: this can run on several model threads at once, which
+            # is safe since every thread attaches the same value.
             value = np.log10(value)
             setattr(emitter, param, value)
 

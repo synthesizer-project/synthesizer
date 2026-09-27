@@ -368,6 +368,9 @@ class IntegratedParticleExtractor(Extractor):
 
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later
+        # NOTE: models executed concurrently (nr_model_threads > 1) can
+        # both compute and store these weights. The values are identical, so
+        # the only cost is the duplicated work.
         if (
             mask is None
             and self._grid.grid_name
@@ -512,6 +515,9 @@ class IntegratedParticleExtractor(Extractor):
 
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later
+        # NOTE: models executed concurrently (nr_model_threads > 1) can
+        # both compute and store these weights. The values are identical, so
+        # the only cost is the duplicated work.
         if (
             mask is None
             and self._grid.grid_name
@@ -981,6 +987,9 @@ class ParticleExtractor(Extractor):
 
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later.
+        # NOTE: models executed concurrently (nr_model_threads > 1) can
+        # both compute and store these weights. The values are identical, so
+        # the only cost is the duplicated work.
         if (
             mask is None
             and self._grid.grid_name
@@ -1215,6 +1224,9 @@ class ParticleExtractor(Extractor):
 
         # If we have no mask then lets store the grid weights in case
         # we can make use of them later.
+        # NOTE: models executed concurrently (nr_model_threads > 1) can
+        # both compute and store these weights. The values are identical, so
+        # the only cost is the duplicated work.
         if (
             mask is None
             and self._grid.grid_name
