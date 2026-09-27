@@ -46,6 +46,42 @@ The exact same would be true for any other function that supports OpenMP threadi
 
     galaxy.stars.get_los_column_density(..., nthreads=4)
 
+Model-Level Threading (Free-Threaded Python)
+--------------------------------------------
+
+An emission model is a tree of models, and any models whose inputs are ready can be generated independently of each other. For large trees, particularly those produced by `parameter variations <emission_models/model_variations.ipynb>`_ with hundreds or thousands of models, Synthesizer can generate these independent models concurrently on a pool of threads. Pass ``nr_model_threads`` to any ``get_spectra`` or ``get_lines`` call, or to the ``Pipeline``:
+
+.. code-block:: python
+
+    galaxy.stars.get_spectra(model, nr_model_threads=4)
+
+    pipeline = Pipeline(emission_model=model, nr_model_threads=4)
+
+Much of the work done for each model is Python, which can only run in parallel without the GIL. Model threading therefore requires a free-threaded build of Python (3.13t or later, e.g. ``uv python install 3.14t``). On a standard build a warning is issued and the models are executed serially; the results are identical either way.
+
+At the time of writing, astropy (imported via ``astropy.cosmology``) re-enables the GIL when it is imported on a free-threaded build. Synthesizer's own extensions are declared safe to run without the GIL, so until astropy does the same, run with the GIL explicitly disabled:
+
+.. code-block:: bash
+
+    PYTHON_GIL=0 python3.14t my_script.py
+
+You can check whether the GIL is enabled at runtime with:
+
+.. code-block:: python
+
+    from synthesizer.emission_models.model_queue import gil_enabled
+    gil_enabled()
+
+Each model thread still uses ``nthreads`` OpenMP threads, so ``nr_model_threads * nthreads`` should not exceed the number of cores available (a warning is issued if it does). As a rule of thumb, favour ``nr_model_threads`` for large trees of cheap models (e.g. integrated spectra with many variations) and ``nthreads`` for small trees applied to many particles.
+
+A few things to be aware of:
+
+- User-defined functions that run while a model is generated (e.g. ``ParameterFunction``\s and custom transformers or generators) may be called from several threads at once, so must be thread safe. Post-processing functions run after all models are generated, on the calling thread.
+- Running models concurrently can keep more intermediate emissions alive at once, increasing peak memory, particularly for per-particle spectra.
+- The operation timers accumulate the time spent in each thread, so with model threads their totals can exceed the wall clock time.
+
+The ``profiling/scaling/profile_model_threads.py`` script measures the speedup for a varied model on your machine.
+
 Distributed Memory Parallelism (Pipeline)
 ------------------------------------------
 
