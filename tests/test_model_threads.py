@@ -6,6 +6,8 @@ execution path is exercised on every build: the results must not depend on
 whether the threads actually run in parallel.
 """
 
+import importlib.util
+import os
 import subprocess
 import sys
 import sysconfig
@@ -14,15 +16,22 @@ import time
 
 import numpy as np
 import pytest
+from unyt import K, Msun
 
 from synthesizer import exceptions
-from synthesizer.emission_models import EmissionModel, PacmanEmission
+from synthesizer.emission_models import (
+    DustEmission,
+    EmissionModel,
+    PacmanEmission,
+)
 from synthesizer.emission_models import model_queue as model_queue_module
+from synthesizer.emission_models.generators.dust import Casey12, DraineLi07
 from synthesizer.emission_models.model_queue import (
     ModelQueue,
     resolve_model_threads,
 )
 from synthesizer.emission_models.parameters import ParameterList
+from synthesizer.grid import Grid
 from synthesizer.pipeline import Pipeline
 
 FREE_THREADED_BUILD = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
@@ -117,6 +126,18 @@ class TestResolveModelThreads:
         monkeypatch.setattr(model_queue_module.os, "cpu_count", lambda: 4)
         with pytest.warns(RuntimeWarning, match="only 4 cores"):
             assert resolve_model_threads(4, nthreads=2) == 4
+
+    def test_all_cores_nthreads_warns(self, no_gil, monkeypatch):
+        """Test nthreads=-1 counts as one OpenMP thread per core."""
+        monkeypatch.setattr(
+            model_queue_module.os,
+            "process_cpu_count",
+            lambda: 4,
+            raising=False,
+        )
+        monkeypatch.setattr(model_queue_module.os, "cpu_count", lambda: 4)
+        with pytest.warns(RuntimeWarning, match="only 4 cores"):
+            assert resolve_model_threads(2, nthreads=-1) == 2
 
 
 class TestExecute:
@@ -241,6 +262,90 @@ class TestThreadedParity:
         assert "EmissionModel.label" in notes
 
 
+@pytest.fixture
+def casey12_variants(test_grid):
+    """Return temperature variants which all share one Casey12 generator."""
+    return DustEmission(
+        Casey12(temperature=20 * K),
+        emitter="stellar",
+        grid=test_grid,
+        temperature=ParameterList(
+            [10 * K, 20 * K, 30 * K, 40 * K, 50 * K, 60 * K],
+            label_modifier="T%s",
+        ),
+    ).expand_models()
+
+
+@pytest.fixture
+def dl07_grid():
+    """Return the Draine & Li dust emission grid, if it is available."""
+    try:
+        return Grid("draine_li_dust_emission_grid_MW_3p1.hdf5")
+    except Exception:
+        pytest.skip("Draine & Li dust emission grid not available")
+
+
+@pytest.fixture
+def dl07_variants(test_grid, dl07_grid):
+    """Return qpah variants which all share one DraineLi07 generator."""
+    return DustEmission(
+        DraineLi07(
+            dl07_grid,
+            dust_mass=1e7 * Msun,
+            hydrogen_mass=1e9 * Msun,
+            gamma=0.05,
+            umin=1.0,
+            alpha=2.5,
+        ),
+        emitter="stellar",
+        grid=test_grid,
+        qpah=ParameterList(list(dl07_grid.qpah[:4]), label_modifier="q%.4f"),
+    ).expand_models()
+
+
+class TestDustGenerators:
+    """Test dust generators shared between concurrently executing models.
+
+    Variants of a model whose generator doesn't depend on other models all
+    share one generator instance, so generation must not store per-call state
+    on the generator (or its grid).
+    """
+
+    def test_variants_share_generator(self, casey12_variants):
+        """Test the variants really do share a generator instance."""
+        models = casey12_variants._models.values()
+        generators = {id(model.generator) for model in models}
+        assert len(generators) == 1
+
+    def test_casey12_parity(self, no_gil, casey12_variants, random_part_stars):
+        """Test Casey12 variants match serial execution."""
+        serial = _get_spectra(random_part_stars, casey12_variants, 1, False)
+        for _ in range(5):
+            threaded = _get_spectra(
+                random_part_stars, casey12_variants, 8, False
+            )
+            _assert_same(serial, threaded)
+
+    def test_dl07_parity(self, no_gil, dl07_variants, random_part_stars):
+        """Test DraineLi07 variants match serial execution."""
+        serial = _get_spectra(random_part_stars, dl07_variants, 1, False)
+        for _ in range(5):
+            threaded = _get_spectra(random_part_stars, dl07_variants, 8, False)
+            _assert_same(serial, threaded)
+
+    def test_dl07_leaves_grid_unchanged(
+        self, dl07_variants, dl07_grid, random_part_stars
+    ):
+        """Test generating emission doesn't resample the shared grid."""
+        lam = dl07_grid.lam.copy()
+        diffuse = dl07_grid.spectra["diffuse"].copy()
+
+        random_part_stars.get_spectra(dl07_variants)
+
+        np.testing.assert_array_equal(dl07_grid.lam, lam)
+        np.testing.assert_array_equal(dl07_grid.spectra["diffuse"], diffuse)
+
+
 class TestPipeline:
     """Test the Pipeline resolves model threads once at construction."""
 
@@ -257,52 +362,74 @@ class TestPipeline:
         assert pipeline.nr_model_threads == 1
 
 
+# Load one extension module straight from its file, so the synthesizer
+# package (and the third party modules it imports) is not imported first, and
+# report whether the GIL ended up enabled.
+_LOAD_EXTENSION = """
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location(sys.argv[1], sys.argv[2])
+spec.loader.exec_module(importlib.util.module_from_spec(spec))
+print(sys._is_gil_enabled())
+"""
+
+EXTENSION_MODULES = [
+    "synthesizer.extensions.atomic_timing_check",
+    "synthesizer.extensions.column_density",
+    "synthesizer.extensions.doppler_particle_spectra",
+    "synthesizer.extensions.grid_interpolation",
+    "synthesizer.extensions.integrated_spectra",
+    "synthesizer.extensions.integration",
+    "synthesizer.extensions.kernel",
+    "synthesizer.extensions.observed_spectra",
+    "synthesizer.extensions.openmp_check",
+    "synthesizer.extensions.particle_spectra",
+    "synthesizer.extensions.photometry",
+    "synthesizer.extensions.reductions",
+    "synthesizer.extensions.sfzh",
+    "synthesizer.extensions.spectra_operations",
+    "synthesizer.extensions.timers",
+    "synthesizer.imaging.extensions.circular_aperture",
+    "synthesizer.imaging.extensions.image",
+]
+
+
 @pytest.mark.skipif(
     not FREE_THREADED_BUILD,
     reason="Requires a free-threaded build of Python",
 )
-def test_extensions_do_not_enable_gil():
-    """Test none of synthesizer's extension modules re-enable the GIL.
+@pytest.mark.parametrize("module", EXTENSION_MODULES)
+def test_extension_does_not_enable_gil(module):
+    """Test an extension module doesn't re-enable the GIL when imported.
 
-    Third party modules (e.g. astropy.table) may still re-enable it, so this
-    checks the warning Python emits for each module that does, in a fresh
-    interpreter where no extension has been imported yet.
+    Each module is loaded in a fresh interpreter with PYTHON_GIL unset, since
+    setting it (as CI does to run the threaded tests) stops Python ever
+    re-enabling the GIL, which would make this test pass regardless.
     """
-    modules = [
-        "synthesizer.extensions.atomic_timing_check",
-        "synthesizer.extensions.column_density",
-        "synthesizer.extensions.doppler_particle_spectra",
-        "synthesizer.extensions.grid_interpolation",
-        "synthesizer.extensions.integrated_spectra",
-        "synthesizer.extensions.integration",
-        "synthesizer.extensions.kernel",
-        "synthesizer.extensions.observed_spectra",
-        "synthesizer.extensions.openmp_check",
-        "synthesizer.extensions.particle_spectra",
-        "synthesizer.extensions.photometry",
-        "synthesizer.extensions.reductions",
-        "synthesizer.extensions.sfzh",
-        "synthesizer.extensions.spectra_operations",
-        "synthesizer.extensions.timers",
-        "synthesizer.imaging.extensions.circular_aperture",
-        "synthesizer.imaging.extensions.image",
-    ]
+    path = importlib.util.find_spec(module).origin
+    env = {k: v for k, v in os.environ.items() if k != "PYTHON_GIL"}
     result = subprocess.run(
         [
             sys.executable,
             "-W",
             "always::RuntimeWarning",
             "-c",
-            "; ".join(f"import {module}" for module in modules),
+            _LOAD_EXTENSION,
+            module,
+            path,
         ],
         capture_output=True,
         text=True,
+        env=env,
         check=True,
     )
 
-    offenders = [
-        line
-        for line in result.stderr.splitlines()
-        if "GIL" in line and "'synthesizer." in line
-    ]
-    assert offenders == []
+    # Python names the module which caused the GIL to be enabled
+    enabled_by = [line for line in result.stderr.splitlines() if "GIL" in line]
+    assert not any("'synthesizer." in line for line in enabled_by), enabled_by
+
+    # NOTE: with ATOMIC_TIMING an extension imports the synthesizer package
+    # (for the timer capsules) during its own initialisation, so a third
+    # party module can enable the GIL first. That is only inconclusive for
+    # this module, so it is only a failure if nothing else enabled it.
+    if not enabled_by:
+        assert result.stdout.strip() == "False"

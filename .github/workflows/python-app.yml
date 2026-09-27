@@ -108,5 +108,4 @@ jobs:
         env:
           PYTHON_GIL: "0"
         run: |
-          python -c "import sys, synthesizer; assert not sys._is_gil_enabled()"
           pytest -n auto
