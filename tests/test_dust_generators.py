@@ -53,19 +53,11 @@ def mock_dust_grid():
             self.umin = np.array([0.1, 1.0, 10.0, 100.0])
             self.alpha = np.array([1.5, 2.0, 2.5])
 
-            # Mock spectral data
+            # Mock spectral data on a native wavelength grid (in Angstrom)
+            self._lam = np.logspace(3, 7, 100)
             self.spectra = {
                 "diffuse": np.random.random((3, 4, 100)),
                 "pdr": np.random.random((3, 4, 3, 100)),
-            }
-
-        def interp_spectra(self, new_lam):
-            """Mock interpolation method."""
-            # Update spectra shapes to match wavelength grid
-            n_lam = len(new_lam)
-            self.spectra = {
-                "diffuse": np.random.random((3, 4, n_lam)),
-                "pdr": np.random.random((3, 4, 3, n_lam)),
             }
 
     return MockGrid()

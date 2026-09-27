@@ -76,7 +76,7 @@ Each model thread still uses ``nthreads`` OpenMP threads, so ``nr_model_threads 
 
 A few things to be aware of:
 
-- User-defined functions that run while a model is generated (e.g. ``ParameterFunction``\s and custom transformers or generators) may be called from several threads at once, so must be thread safe. Post-processing functions run after all models are generated, on the calling thread.
+- User-defined functions that run while a model is generated (e.g. ``ParameterFunction``\s and custom transformers or generators) may be called from several threads at once, so must be thread safe. In particular, one generator or transformer instance is often shared by several models (every variant of a model shares its generator unless the generator depends on other models), so they must not store per-call state on themselves. The built-in generators and transformers follow this rule. Post-processing functions run after all models are generated, on the calling thread.
 - Running models concurrently can keep more intermediate emissions alive at once, increasing peak memory, particularly for per-particle spectra.
 - The operation timers accumulate the time spent in each thread, so with model threads their totals can exceed the wall clock time.
 
