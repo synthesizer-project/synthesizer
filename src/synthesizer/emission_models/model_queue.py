@@ -124,13 +124,16 @@ def resolve_model_threads(nr_model_threads, nthreads=1):
 
     # Warn if the model threads and the OpenMP threads they each spawn
     # together exceed the cores available to this process.
+    # (nthreads=-1 means one OpenMP thread per core.)
     ncores = getattr(os, "process_cpu_count", os.cpu_count)()
-    if ncores is not None and nr_model_threads * max(nthreads, 1) > ncores:
-        warn(
-            f"nr_model_threads={nr_model_threads} with nthreads={nthreads} "
-            f"uses {nr_model_threads * max(nthreads, 1)} threads but only "
-            f"{ncores} cores are available."
-        )
+    if ncores is not None:
+        omp_threads = ncores if nthreads == -1 else max(nthreads, 1)
+        if nr_model_threads * omp_threads > ncores:
+            warn(
+                f"nr_model_threads={nr_model_threads} with "
+                f"nthreads={nthreads} uses {nr_model_threads * omp_threads} "
+                f"threads but only {ncores} cores are available."
+            )
 
     return nr_model_threads
 
