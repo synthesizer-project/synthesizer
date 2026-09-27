@@ -35,6 +35,7 @@ import numpy as np
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import check_atomic_timing, check_openmp, exceptions
+from synthesizer.emission_models.model_queue import resolve_model_threads
 from synthesizer.instruments import InstrumentCollection
 from synthesizer.particle import Galaxy as ParticleGalaxy
 from synthesizer.pipeline.pipeline_io import PipelineIO
@@ -147,6 +148,7 @@ class Pipeline:
         verbose=1,
         report_memory=False,
         max_npart=None,
+        nr_model_threads=1,
     ):
         """Initialise the Pipeline object.
 
@@ -191,6 +193,12 @@ class Pipeline:
                 TODO: while gas particles don't carry spectra we only need to
                 consider stars and black holes in this threshold. If we have
                 gas spectra in the future we will need to amend this.
+            nr_model_threads (int): The number of threads to execute
+                independent emission models with concurrently when generating
+                spectra and lines. Each model still uses nthreads threads.
+                This requires a free-threaded (no-GIL) build of Python; with
+                the GIL enabled a warning is issued and the models are
+                executed serially. Default is 1.
         """
         # Attributes to track timing
         self._start_time = time.perf_counter()
@@ -235,6 +243,14 @@ class Pipeline:
                 "Can't use multiple threads without OpenMP support. "
                 " Install with: `WITH_OPENMP=1 pip install .`"
             )
+
+        # How many threads are we using to execute emission models
+        # concurrently? This is resolved once here so any warning about the
+        # GIL or oversubscription is only issued once.
+        self.nr_model_threads = resolve_model_threads(
+            nr_model_threads,
+            nthreads,
+        )
 
         # Define flags for what we will do
         self._do_los_optical_depths = False
@@ -447,6 +463,11 @@ class Pipeline:
             self._print(f"Running with {self.nthreads} threads per rank.")
         elif self.nthreads > 1:
             self._print(f"Running with {self.nthreads} threads.")
+        if self.nr_model_threads > 1:
+            self._print(
+                f"Executing emission models on {self.nr_model_threads} "
+                "threads."
+            )
 
         # Print some information about the emission model
         self._print(f"Root emission model: {self.emission_model.label}")
@@ -1671,6 +1692,7 @@ class Pipeline:
             self.emission_model,
             nthreads=self.nthreads,
             out_dtype=self._out_dtypes.get("spectra"),
+            nr_model_threads=self.nr_model_threads,
         )
 
         # Count the number of spectra we have generated
@@ -2538,6 +2560,7 @@ class Pipeline:
             emission_model=self.emission_model,
             nthreads=self.nthreads,
             out_dtype=self._out_dtypes.get("lines"),
+            nr_model_threads=self.nr_model_threads,
         )
 
         # Store the line wavelengths for writing, we only do this once since

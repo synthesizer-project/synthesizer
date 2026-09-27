@@ -382,6 +382,7 @@ class Component(ABC):
         nthreads=1,
         grid_assignment_method="cic",
         out_dtype=None,
+        nr_model_threads=1,
         **kwargs,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -434,6 +435,11 @@ class Component(ABC):
                 are "cic" (cloud-in-cell) or "ngp" (nearest grid point)."
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted spectra arrays.
+            nr_model_threads (int):
+                The number of threads to execute independent emission models
+                with concurrently. This requires a free-threaded (no-GIL)
+                build of Python; with the GIL enabled a warning is issued and
+                the models are executed serially.
             **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -455,6 +461,7 @@ class Component(ABC):
             mask=mask,
             vel_shift=vel_shift,
             verbose=verbose,
+            nr_model_threads=nr_model_threads,
             nthreads=nthreads,
             grid_assignment_method=grid_assignment_method,
             out_dtype=out_dtype,
@@ -483,6 +490,7 @@ class Component(ABC):
         mask=None,
         verbose=True,
         out_dtype=None,
+        nr_model_threads=1,
         **kwargs,
     ):
         """Generate stellar lines as described by the emission model.
@@ -530,6 +538,11 @@ class Component(ABC):
                 Are we talking?
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted line arrays.
+            nr_model_threads (int):
+                The number of threads to execute independent emission models
+                with concurrently. This requires a free-threaded (no-GIL)
+                build of Python; with the GIL enabled a warning is issued and
+                the models are executed serially.
             kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -550,6 +563,7 @@ class Component(ABC):
             fesc=fesc,
             mask=mask,
             verbose=verbose,
+            nr_model_threads=nr_model_threads,
             out_dtype=out_dtype,
             **kwargs,
         )
