@@ -340,7 +340,7 @@ def test_particle_galaxy_combines_additive_child_outputs():
         np.array([total_scale, 2 * total_scale]),
     )
     np.testing.assert_allclose(
-        galaxy.lines["line"].luminosity.value,
+        galaxy.lines["line"].luminosity.to("erg/s").value,
         np.array([total_scale]),
     )
     np.testing.assert_allclose(
