@@ -342,9 +342,10 @@ class Grid:
         # What are the units of this axis?
         units = dset.attrs.get("Units")
 
-        # Anything that isn't a mass can be read as is, reducing the
+        # Anything without units (including the "None" and empty string
+        # sentinels) or that isn't a mass can be read as is, reducing the
         # precision during the read itself
-        if units is None or Unit(units).dimensions != mass_dim:
+        if units in (None, "None", "") or Unit(units).dimensions != mass_dim:
             return self._read_floats(dset), units
 
         # Mass axes are read at the precision they were stored at, converted

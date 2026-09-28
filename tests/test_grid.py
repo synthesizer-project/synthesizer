@@ -256,6 +256,25 @@ class TestGridAxes:
             get_param("log10mass", None, None, bh), 8.0, rtol=1e-6
         )
 
+    @pytest.mark.parametrize("units", [None, "None", ""])
+    def test_axes_without_units_are_read_unchanged(self, test_grid, units):
+        """Axes with no units (or a "None"/empty sentinel) are left alone."""
+        # Write a small axis with the given units to an in-memory file
+        with h5py.File(
+            "axis.hdf5", "w", driver="core", backing_store=False
+        ) as hf:
+            dset = hf.create_dataset("axis", data=np.array([1.0, 2.0, 3.0]))
+            if units is not None:
+                dset.attrs["Units"] = units
+
+            # Read it as a grid axis
+            values, axis_units = test_grid._read_float_axis(dset)
+
+        # The values and units should come back unchanged
+        np.testing.assert_allclose(values, [1.0, 2.0, 3.0])
+        assert values.dtype == test_grid._dtype
+        assert axis_units == units
+
 
 class TestGridSpectra:
     """Tests for Grid spectra handling."""
