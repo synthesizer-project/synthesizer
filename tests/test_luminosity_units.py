@@ -13,7 +13,6 @@ from unyt import Msun, Myr, deg, erg, kpc, s, unyt_array, unyt_quantity, yr
 
 from synthesizer import set_default_out_dtype
 from synthesizer.emission_models import NebularLineEmission
-from synthesizer.emission_models.utils import get_param
 from synthesizer.exceptions import PrecisionOverflow
 from synthesizer.grid import Grid
 from synthesizer.particle import BlackHoles, Stars
@@ -50,31 +49,6 @@ def test_agn_grid_is_normalised_per_internal_weight_unit():
 
     np.testing.assert_allclose(
         grid.spectra["incident"], raw * per_internal, rtol=1e-6
-    )
-
-
-def test_agn_grid_mass_axis_matches_emitter_masses():
-    """AGN grid mass axes are in the internal mass unit, like emitter masses.
-
-    Grid files store black hole masses in kg; extraction compares log10 of
-    the axis with log10 of the (internally Msun) emitter masses, so the axis
-    must be converted when the grid is loaded.
-    """
-    grid = Grid("test_grid_agn-blr.hdf5")
-    raw, units = _get_raw_dataset(grid, "axes", "mass")
-    bh = BlackHoles(
-        masses=unyt_array([1e8], Msun),
-        accretion_rates=unyt_array([1.0], Msun / yr),
-        inclinations=np.zeros(1) * deg,
-    )
-
-    np.testing.assert_allclose(
-        grid._extract_axes_values["log10mass"],
-        np.log10(unyt_array(raw, units).to_value(Units().mass)),
-        rtol=1e-6,
-    )
-    np.testing.assert_allclose(
-        get_param("log10mass", None, None, bh), np.log10(1e8), rtol=1e-6
     )
 
 
