@@ -139,65 +139,39 @@ def cache_model_params(
         emitter (Stars/Gas/BlackHoles/Galaxy):
             The emitter object where the parameters will be cached.
     """
-    # Cache the predefined parameters on the emitter based on the type of model
+    # Collect the predefined parameters based on the type of model
+    params = {}
     if model._is_extracting:
-        cache_param(
-            param="extract",
-            emitter=emitter,
-            model_label=model.label,
-            value=model.extract,
-        )
+        params["extract"] = model.extract
     elif model._is_combining:
-        cache_param(
-            param="combine",
-            emitter=emitter,
-            model_label=model.label,
-            value=[
-                m if isinstance(m, str) else m.label for m in model.combine
-            ],
-        )
+        params["combine"] = [
+            m if isinstance(m, str) else m.label for m in model.combine
+        ]
     elif model._is_transforming:
-        cache_param(
-            param="apply_to",
-            emitter=emitter,
-            model_label=model.label,
-            value=model.apply_to
+        params["apply_to"] = (
+            model.apply_to
             if isinstance(model.apply_to, str)
-            else model.apply_to.label,
+            else model.apply_to.label
         )
-        cache_param(
-            param="transformer",
-            emitter=emitter,
-            model_label=model.label,
-            value=repr(model.transformer),
-        )
+        params["transformer"] = repr(model.transformer)
     elif model._is_generating:
-        cache_param(
-            param="generator",
-            emitter=emitter,
-            model_label=model.label,
-            value=repr(model.generator),
-        )
+        params["generator"] = repr(model.generator)
 
-    # Cache the emitter for this model
-    cache_param(
-        param="emitter",
-        emitter=emitter,
-        model_label=model.label,
-        value=model.emitter,
-    )
+    # The emitter for this model
+    params["emitter"] = model.emitter
 
-    # Cache any mask parameters in the form of <attr> <op> <thresh> strings
-    masks = []
-    for mask in model.masks:
-        masks.append(f"{mask['attr']} {mask['op']} {mask['thresh']}")
+    # Any mask parameters in the form of <attr> <op> <thresh> strings
+    masks = [
+        f"{mask['attr']} {mask['op']} {mask['thresh']}" for mask in model.masks
+    ]
     if len(masks) > 0:
-        cache_param(
-            param="masks",
-            emitter=emitter,
-            model_label=model.label,
-            value="\n".join(masks),
-        )
+        params["masks"] = "\n".join(masks)
+
+    # Store them in one go. The emitter's cache is shared by every model
+    # generating emission for it, so on free-threaded Python each access
+    # locks it; one access per model rather than one per parameter keeps
+    # concurrently executing models from queueing on that lock.
+    emitter.model_param_cache.setdefault(model.label, {}).update(params)
 
 
 def _finalize_param_value(
