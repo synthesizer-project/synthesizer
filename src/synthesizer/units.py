@@ -583,7 +583,9 @@ class Quantity:
         # Do we need to perform a unit conversion? If not we assume value
         # is already in the default unit system
         if isinstance(value, (unyt_quantity, unyt_array)):
-            if value.units != self.unit and value.units != dimensionless:
+            if _same_unit(value.units, self.unit):
+                value = value.ndview
+            elif value.units != self.unit and value.units != dimensionless:
                 # Convert out of place. The value being assigned is not ours:
                 # attribute reads hand back views onto the stored buffer, so
                 # `b.lnu = a.lnu` in mismatched units would rewrite a's data.
@@ -613,6 +615,32 @@ def has_units(x):
         return True
 
     return False
+
+
+def _same_unit(a, b):
+    """Return True if two units are trivially the same unit.
+
+    Comparing unyt units compares their sympy expressions, which is slow and,
+    on free-threaded Python, contends across threads on the shared expression
+    objects. Units built from the same expression in the same registry share
+    that expression object, so identity catches the common case cheaply. A
+    False result only means the units need comparing properly.
+
+    Args:
+        a (unyt.Unit):
+            The first unit.
+        b (unyt.Unit):
+            The second unit.
+
+    Returns:
+        bool:
+            True if the units are the same object or share an expression and
+            registry, otherwise False.
+    """
+    return a is b or (
+        getattr(a, "expr", None) is getattr(b, "expr", False)
+        and a.registry is b.registry
+    )
 
 
 def unyt_to_ndview(arr, unit=None):
@@ -659,7 +687,7 @@ def unyt_to_ndview(arr, unit=None):
         unit = Unit(unit)
 
     # If the units are the same then just return the ndview
-    if arr.units == unit:
+    if _same_unit(arr.units, unit) or arr.units == unit:
         return arr.ndview
 
     # A conversion is needed, and the caller owns arr, so do it in place and
@@ -690,7 +718,9 @@ def _raise_or_convert(expected_unit, name, value):
         # this runs from the @accepts decorator, so converting in place would
         # rewrite the array the caller passed in as a side effect of calling
         # the function.
-        if value.units != expected_unit:
+        if not _same_unit(value.units, expected_unit) and (
+            value.units != expected_unit
+        ):
             try:
                 return value.to(expected_unit)
             except UnitConversionError:
@@ -718,7 +748,9 @@ def _raise_or_convert(expected_unit, name, value):
                 )
 
             # Convert to the expected units
-            elif v.units != expected_unit:
+            elif not _same_unit(v.units, expected_unit) and (
+                v.units != expected_unit
+            ):
                 try:
                     converted[j] = _raise_or_convert(expected_unit, name, v)
                 except UnitConversionError:
@@ -862,6 +894,38 @@ def accepts(**units):
         # us support unit validation for variable keyword dictionaries.
         func_signature = signature(func)
         parameters = func_signature.parameters
+        timer_name = f"accepts({func.__qualname__})"
+
+        # When no *args or **kwargs parameter is itself declared in units
+        # (the usual case) each checked argument is either at a fixed
+        # position or passed by name, so we can check it in place. That
+        # avoids binding every call to the signature, which is slow and, on
+        # free-threaded Python, contends across threads on the shared
+        # signature objects. The position is None for keyword-only parameters
+        # and for names that can only arrive through **kwargs.
+        variadic = (Parameter.VAR_POSITIONAL, Parameter.VAR_KEYWORD)
+        use_fast_path = not any(
+            name in parameters and parameters[name].kind in variadic
+            for name in units
+        )
+        has_var_keyword = any(
+            param.kind is Parameter.VAR_KEYWORD
+            for param in parameters.values()
+        )
+        positional = (
+            Parameter.POSITIONAL_ONLY,
+            Parameter.POSITIONAL_OR_KEYWORD,
+        )
+        param_positions = {
+            name: index
+            for index, (name, param) in enumerate(parameters.items())
+            if param.kind in positional
+        }
+        checked_params = [
+            (name, param_positions.get(name))
+            for name in units
+            if name in parameters or has_var_keyword
+        ]
 
         @wraps(func)
         def wrapped(*args, **kwargs):
@@ -876,7 +940,26 @@ def accepts(**units):
             Returns:
                 The result of the wrapped function.
             """
-            tic(f"accepts({func.__qualname__})")
+            if use_fast_path:
+                tic(timer_name)
+                try:
+                    for name, index in checked_params:
+                        if index is not None and index < len(args):
+                            if args[index] is not None:
+                                args = (
+                                    args[:index]
+                                    + (_check_arg(units, name, args[index]),)
+                                    + args[index + 1 :]
+                                )
+                        elif name in kwargs:
+                            kwargs[name] = _check_arg(
+                                units, name, kwargs[name]
+                            )
+                finally:
+                    toc(timer_name)
+                return func(*args, **kwargs)
+
+            tic(timer_name)
             try:
                 # Bind the incoming arguments to their parameter names so we
                 # can treat positional and keyword arguments uniformly.
@@ -934,7 +1017,7 @@ def accepts(**units):
                     bound.arguments[name] = converted
 
             finally:
-                toc(f"accepts({func.__qualname__})")
+                toc(timer_name)
 
             return func(*bound.args, **bound.kwargs)
 
