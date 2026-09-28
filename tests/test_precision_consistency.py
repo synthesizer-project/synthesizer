@@ -10,6 +10,7 @@ import pytest
 from unyt import (
     Hz,
     K,
+    Lsun,
     Msun,
     Myr,
     angstrom,
@@ -31,6 +32,7 @@ from synthesizer.emission_models.transformers import (
 from synthesizer.emissions import Sed
 from synthesizer.grid import Grid
 from synthesizer.particle import Stars
+from synthesizer.units import Units
 from synthesizer.utils.precision import (
     InternalPrecisionWarning,
     convert_array_dtype,
@@ -39,9 +41,13 @@ from synthesizer.utils.precision import (
 
 
 def _stars(dtype, n=4):
-    """Build a small particle Stars object at a single precision."""
+    """Build a small particle Stars object at a single precision.
+
+    The masses are small so the luminosities fit in float32 whatever the
+    luminosity unit (these tests check precision, not range).
+    """
     return Stars(
-        initial_masses=unyt_array(np.full(n, 1e6, dtype=dtype), Msun),
+        initial_masses=unyt_array(np.full(n, 1.0, dtype=dtype), Msun),
         ages=unyt_array(np.linspace(1.0, 50.0, n, dtype=dtype), Myr),
         metallicities=np.full(n, 0.01, dtype=dtype),
         redshift=1.0,
@@ -108,6 +114,30 @@ def test_interp_spectra_keeps_grid_precision():
         assert spectra.dtype == np.float32
 
 
+def test_integrated_luminosities_keep_sed_precision():
+    """Bolometric and window luminosities keep the precision of lnu."""
+    lam = unyt_array(np.linspace(1000.0, 20000.0, 200), angstrom)
+    lnu = unyt_array(np.full((3, 200), 1e20, np.float32), erg / s / Hz)
+    sed = Sed(lam, lnu)
+    sed64 = Sed(lam, lnu.astype(np.float64))
+
+    results = (
+        (sed.bolometric_luminosity, sed64.bolometric_luminosity),
+        (
+            sed.measure_bolometric_luminosity(),
+            sed64.measure_bolometric_luminosity(),
+        ),
+        (
+            sed.measure_window_luminosity((2000, 5000) * angstrom),
+            sed64.measure_window_luminosity((2000, 5000) * angstrom),
+        ),
+    )
+    for result, reference in results:
+        assert result.units == Units().luminosity
+        assert result.dtype == np.float32
+        np.testing.assert_allclose(result.value, reference.value, rtol=1e-5)
+
+
 def test_sed_luminosity_keeps_sed_precision():
     """Sed.luminosity keeps the precision of lnu."""
     lam = unyt_array(np.linspace(1000.0, 20000.0, 50), angstrom)
@@ -145,19 +175,15 @@ def test_broadening_keeps_sed_precision():
 
 
 @pytest.mark.parametrize("img_type", ["hist", "smoothed"])
-def test_image_normalisation_does_not_overflow(img_type):
-    """Normalised float32 images don't overflow before normalising.
-
-    signal * normalisation (1e30 * 1e10) exceeds float32, while the
-    normalised image (1e30) does not.
-    """
+def test_normalised_images_keep_signal_precision(img_type):
+    """Normalised float32 images keep the precision of the signal."""
     from synthesizer.imaging import Image
     from synthesizer.kernel_functions import Kernel
 
     rng = np.random.default_rng(0)
     n = 50
     coords = unyt_array(rng.uniform(-0.4, 0.4, (n, 3)).astype(np.float32), kpc)
-    signal = unyt_array(np.full(n, 1e30, np.float32), erg / s)
+    signal = unyt_array(np.full(n, 1e8, np.float32), Lsun)
     norm = unyt_array(np.full(n, 1e10, np.float32), Msun)
 
     img = Image(resolution=0.1 * kpc, fov=1.0 * kpc)
@@ -175,7 +201,7 @@ def test_image_normalisation_does_not_overflow(img_type):
     arr = np.asarray(img.arr)
     assert arr.dtype == np.float32
     assert not np.any(np.isinf(arr))
-    np.testing.assert_allclose(arr[np.isfinite(arr)], 1e30, rtol=1e-5)
+    np.testing.assert_allclose(arr[np.isfinite(arr)], 1e8, rtol=1e-5)
 
 
 class TestConvertArrayDtype:

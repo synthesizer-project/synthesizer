@@ -104,12 +104,13 @@ file if you prefer, but float32 luminosities will then overflow.
 The float32 range
 ^^^^^^^^^^^^^^^^^
 
-A few quantities are always computed at float64, whatever ``out_dtype``
-says, because they don't fit in float32 or because they are cheap scalars:
-bolometric and window luminosities, ionising photon production rates
-(~1e53 s^-1 and beyond), and ``Sed.llam`` (luminosity densities per unit
-wavelength reach ~1e43 erg/s/Å; it is computed on access from ``lnu``, which
-stays at your chosen precision).
+Luminosities derived from spectra (``Sed.luminosity``, bolometric and
+window luminosities) are computed directly in the internal luminosity unit
+at the precision of ``lnu``. Two quantities are always computed at float64,
+whatever ``out_dtype`` says, because they don't fit in float32: ionising
+photon production rates (~1e53 s^-1 and beyond), and ``Sed.llam``
+(luminosity densities per unit wavelength reach ~1e43 erg/s/Å; it is
+computed on access from ``lnu``, which stays at your chosen precision).
 
 If a result is too large for the output precision, Synthesizer raises a
 ``PrecisionOverflow`` error rather than returning results containing ``inf``.

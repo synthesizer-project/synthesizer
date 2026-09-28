@@ -308,9 +308,7 @@ class DustEmission(Generator):
         The normalised emission (per unit luminosity, on the wavelength or
         line grid) is multiplied by the scaling from get_scaling, one per
         particle for per-particle models, and by the CMB heating factor. The
-        product is computed at float64 and written straight into an array at
-        the output precision, so no float64 copy of the (potentially large)
-        result is ever made.
+        product is written straight into an array at the output precision.
 
         Args:
             normalised (np.ndarray):
@@ -332,12 +330,12 @@ class DustEmission(Generator):
                 The scaled emission, (nparticles, n) for per-particle models
                 and (n,) otherwise.
         """
-        scaling = np.asarray(getattr(scaling, "value", scaling), np.float64)
+        scaling = np.asarray(getattr(scaling, "value", scaling))
         if model is not None and model.per_particle:
             if scaling.ndim == 0:
                 scaling = np.full(emitter.nparticles, scaling)
             scaling = scaling[:, np.newaxis]
-        normalised = np.asarray(normalised, np.float64) * cmb_factor
+        normalised = np.asarray(normalised) * cmb_factor
         out = np.empty(
             np.broadcast_shapes(normalised.shape, scaling.shape),
             dtype=resolve_out_dtype(out_dtype),

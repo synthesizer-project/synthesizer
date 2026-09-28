@@ -58,8 +58,8 @@ if __name__ == "__main__":
         "obslam": (sed._obslam, "angstrom"),
         "fnu": (fnu.to("nJy").value, "nJy"),
         "bolometric_luminosity": (
-            sed.bolometric_luminosity.to("erg/s").value,
-            "erg/s",
+            sed.bolometric_luminosity.to("Lsun").value,
+            "Lsun",
         ),
     }
     with h5py.File(path, "w") as hdf:

@@ -521,13 +521,70 @@ class Sed:
                 The luminosity array in the internal luminosity unit, at
                 the precision of lnu.
         """
-        # Fold the conversion to the internal luminosity unit into nu (a
-        # small wavelength sized array) so nu * Lnu is never formed in erg/s,
-        # which overflows float32 for realistic populations
-        lum_units = Units().luminosity
-        factor = (self.nu * get_quantity_unit(self, "lnu")).to_value(lum_units)
         return get_array_quantity_view(
-            self._lnu * factor.astype(self._lnu.dtype), lum_units
+            self._lnu * self._get_luminosity_nu(), Units().luminosity
+        )
+
+    def _get_integrated_luminosity(
+        self, lnu, integration_method="trapz", nthreads=1
+    ):
+        """Get the luminosity from integrating lnu over frequency.
+
+        The luminosity is in the internal luminosity unit, at the precision
+        of lnu.
+
+        Args:
+            lnu (np.ndarray):
+                The luminosity density to integrate (e.g. lnu with a window
+                applied).
+            integration_method (str):
+                The integration method, 'trapz' or 'simps'.
+            nthreads (int):
+                The number of threads to use for the integration.
+
+        Returns:
+            unyt_array:
+                The integrated luminosity.
+
+        Raises:
+            PrecisionOverflow:
+                If the luminosity doesn't fit in the precision of lnu.
+        """
+        # NOTE: the integration is done "backwards" when integrating over
+        # frequency. It's faster to just multiply by -1 than to reverse the
+        # array.
+        integral = -integrate_last_axis(
+            self._get_luminosity_nu(),
+            lnu,
+            nthreads=nthreads,
+            method=integration_method,
+            out_dtype=lnu.dtype,
+        )
+        if lnu.dtype.itemsize < 8 and np.isinf(integral).any():
+            raise exceptions.PrecisionOverflow(
+                f"Luminosities are too large to be stored at {lnu.dtype} in "
+                f"{Units().luminosity}. Use float64 spectra or a larger "
+                "luminosity unit (e.g. Lsun)."
+            )
+        return integral * Units().luminosity
+
+    def _get_luminosity_nu(self):
+        """Get the frequencies scaled to give luminosities in internal units.
+
+        Multiplying (or integrating) lnu by these frequencies gives
+        luminosities directly in the internal luminosity unit (Lsun by
+        default). Folding the unit conversion into this small wavelength
+        sized array means nu * Lnu is never formed in erg/s, which would
+        overflow float32, so luminosities keep the precision of lnu.
+
+        Returns:
+            np.ndarray:
+                The scaled frequencies, at the precision of lnu.
+        """
+        return (
+            (self.nu * get_quantity_unit(self, "lnu"))
+            .to_value(Units().luminosity)
+            .astype(self._lnu.dtype)
         )
 
     @property
@@ -667,23 +724,8 @@ class Sed:
             bolometric_luminosity (unyt_array):
                 The bolometric luminosity.
         """
-        # Calculate the bolometric luminosity using the trapezium rule.
-        # NOTE: the integration is done "backwards" when integrating over
-        # frequency. It's faster to just multiply by -1 than to reverse the
-        # array.
-        integral = -integrate_last_axis(
-            self._nu,
-            self._lnu,
-            method="trapz",
-            out_dtype=np.float64,
-        )
-
-        # Return the bolometric luminosity with units
-        return (
-            integral
-            * get_quantity_unit(self, "lnu")
-            * get_quantity_unit(self, "nu")
-        )
+        # Calculate the bolometric luminosity using the trapezium rule
+        return self._get_integrated_luminosity(self._lnu)
 
     @property
     def _bolometric_luminosity(self):
@@ -773,21 +815,8 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        # Calculate the bolometric luminosity
-        # NOTE: the integration is done "backwards" when integrating over
-        # frequency. It's faster to just multiply by -1 than to reverse the
-        # array.
-        integral = -integrate_last_axis(
-            self._nu,
-            self._lnu,
-            nthreads=nthreads,
-            method=integration_method,
-            out_dtype=np.float64,
-        )
-        return (
-            integral
-            * get_quantity_unit(self, "lnu")
-            * get_quantity_unit(self, "nu")
+        return self._get_integrated_luminosity(
+            self._lnu, integration_method, nthreads
         )
 
     @accepts(window=angstrom)
@@ -819,24 +848,9 @@ class Sed:
         transmission = (self.lam > window[0]) & (self.lam < window[1])
 
         # Integrate the window
-        # NOTE: the integration is done "backwards" when integrating over
-        # frequency. It's faster to just multiply by -1 than to reverse the
-        # array.
-        # (integrated at float64 like the bolometric luminosity, since it is
-        # a cheap scalar per spectrum)
-        luminosity = -(
-            integrate_last_axis(
-                self._nu,
-                self._lnu * transmission,
-                nthreads=nthreads,
-                method=integration_method,
-                out_dtype=np.float64,
-            )
-            * get_quantity_unit(self, "lnu")
-            * Hz
+        return self._get_integrated_luminosity(
+            self._lnu * transmission, integration_method, nthreads
         )
-
-        return luminosity
 
     @accepts(window=angstrom)
     def measure_window_lnu(

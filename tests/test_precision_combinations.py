@@ -168,7 +168,17 @@ def _attenuated_with_dust(grid, per_particle=True):
     ids=["incident", "attenuated+dust"],
 )
 def test_particle_spectra(make_model, grids, part, grid, out):
-    """Particle spectra work at every precision combination."""
+    """Particle spectra work at every precision combination.
+
+    Energy balance dust emission is scaled by bolometric luminosities
+    (~1e44 erg/s here), so with erg/s luminosities float32 outputs must
+    raise PrecisionOverflow rather than hold inf.
+    """
+    if ERG_LUMINOSITIES and out == F32 and make_model is _attenuated_with_dust:
+        with pytest.raises(PrecisionOverflow):
+            _run_particle_model(make_model, grids, part, grid, out)
+        return
+
     spectra, particle_spectra = _run_particle_model(
         make_model, grids, part, grid, out
     )
@@ -214,6 +224,12 @@ def test_parametric_spectra(grids, grid, out):
         stars.get_spectra(model, out_dtype=out)
         return stars.spectra[model.label]._lnu
 
+    # Energy balance dust overflows float32 with erg/s luminosities
+    if ERG_LUMINOSITIES and out == F32:
+        with pytest.raises(PrecisionOverflow):
+            spectra(grid, out)
+        return
+
     _check(spectra(grid, out), spectra(F64, F64), out)
 
 
@@ -238,6 +254,12 @@ def test_fluxes_and_photometry(grids, part, grid, out):
         return sed._fnu, np.array(
             [photometry[f].value for f in filters.filter_codes]
         )
+
+    # Energy balance dust overflows float32 with erg/s luminosities
+    if ERG_LUMINOSITIES and out == F32:
+        with pytest.raises(PrecisionOverflow):
+            observe(part, grid, out)
+        return
 
     fnu, photometry = observe(part, grid, out)
     ref_fnu, ref_photometry = observe(F64, F64, F64)
@@ -322,7 +344,7 @@ def test_lines(grids, part, grid, out):
         )
 
     if ERG_LUMINOSITIES and out == F32:
-        with pytest.raises(PrecisionOverflow, match="overflowed to inf"):
+        with pytest.raises(PrecisionOverflow):
             lines(part, grid, out)
         return
 
