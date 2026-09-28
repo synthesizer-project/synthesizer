@@ -10,13 +10,17 @@ This module contains tests for all Grid functionality including:
 - Utility methods
 """
 
+import h5py
 import numpy as np
 import pytest
-from unyt import Hz, angstrom, erg, s
+from unyt import Hz, Msun, angstrom, deg, erg, s, unyt_array, yr
 
 from synthesizer import exceptions
+from synthesizer.emission_models.utils import get_param
 from synthesizer.grid import Grid, Template
 from synthesizer.instruments.filters import UVJ
+from synthesizer.particle import BlackHoles
+from synthesizer.units import Units
 
 
 @pytest.fixture
@@ -212,6 +216,45 @@ class TestGridAxes:
             index = Grid.get_nearest_index(test_age, ages)
             assert isinstance(index, (int, np.integer))
             assert 0 <= index < len(ages)
+
+    @pytest.mark.parametrize("precision", [np.float32, np.float64])
+    def test_mass_axis_matches_emitter_masses(self, precision):
+        """Mass axes are in the internal mass unit, like emitter masses.
+
+        AGN grid files store black hole masses in kg. Extraction compares
+        log10 of the axis with log10 of the emitter masses (stored in the
+        internal mass unit), so the axis must be converted when the grid is
+        loaded, before any reduction in precision.
+        """
+        # Load the AGN grid (its mass axis is stored in kg)
+        grid = Grid("test_grid_agn-blr.hdf5", use_precision=precision)
+
+        # Read the raw mass axis (with its units) straight from the file
+        with h5py.File(grid.grid_filename, "r") as hf:
+            dset = hf["axes"]["mass"]
+            raw = unyt_array(dset[...], dset.attrs["Units"])
+
+        # Make a black hole with a mass on the grid
+        bh = BlackHoles(
+            masses=unyt_array([1e8], Msun),
+            accretion_rates=unyt_array([1.0], Msun / yr),
+            inclinations=np.zeros(1) * deg,
+        )
+
+        # The axis should be in the internal mass unit and its logged
+        # extraction values should be the raw values in those units
+        assert grid.mass.units == Units().mass
+        np.testing.assert_allclose(
+            grid._extract_axes_values["log10mass"],
+            np.log10(raw.to_value(Units().mass)),
+            rtol=1e-6,
+        )
+
+        # The black hole's logged mass should be on the same scale as the
+        # axis (log10 of the mass in the internal mass unit)
+        np.testing.assert_allclose(
+            get_param("log10mass", None, None, bh), 8.0, rtol=1e-6
+        )
 
 
 class TestGridSpectra:
