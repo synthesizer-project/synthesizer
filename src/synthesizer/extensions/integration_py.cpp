@@ -245,13 +245,11 @@ static PyObject *trapz_last_axis_integration(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  const int xs_typenum = PyArray_TYPE(xs);
-  const int ys_typenum = PyArray_TYPE(ys);
-  if (!is_supported_float_typenum(xs_typenum) ||
-      !is_supported_float_typenum(ys_typenum)) {
-    PyErr_SetString(PyExc_TypeError, "xs and ys must be float32 or float64.");
+  if (!is_float32_or_float64(xs, "xs") || !is_float32_or_float64(ys, "ys")) {
     return NULL;
   }
+  const int xs_typenum = PyArray_TYPE(xs);
+  const int ys_typenum = PyArray_TYPE(ys);
   if (!is_c_contiguous(xs, "xs") || !is_c_contiguous(ys, "ys")) {
     return NULL;
   }
@@ -441,13 +439,11 @@ static PyObject *simps_last_axis_integration(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  const int xs_typenum = PyArray_TYPE(xs);
-  const int ys_typenum = PyArray_TYPE(ys);
-  if (!is_supported_float_typenum(xs_typenum) ||
-      !is_supported_float_typenum(ys_typenum)) {
-    PyErr_SetString(PyExc_TypeError, "xs and ys must be float32 or float64.");
+  if (!is_float32_or_float64(xs, "xs") || !is_float32_or_float64(ys, "ys")) {
     return NULL;
   }
+  const int xs_typenum = PyArray_TYPE(xs);
+  const int ys_typenum = PyArray_TYPE(ys);
   if (!is_c_contiguous(xs, "xs") || !is_c_contiguous(ys, "ys")) {
     return NULL;
   }
@@ -696,16 +692,13 @@ static PyObject *weighted_trapz_last_axis_integration(PyObject *self,
     return NULL;
   }
 
+  if (!is_float32_or_float64(xs, "xs") || !is_float32_or_float64(ys, "ys") ||
+      !is_float32_or_float64(ws, "weights")) {
+    return NULL;
+  }
   const int xs_typenum = PyArray_TYPE(xs);
   const int ys_typenum = PyArray_TYPE(ys);
   const int ws_typenum = PyArray_TYPE(ws);
-  if (!is_supported_float_typenum(xs_typenum) ||
-      !is_supported_float_typenum(ys_typenum) ||
-      !is_supported_float_typenum(ws_typenum)) {
-    PyErr_SetString(PyExc_TypeError,
-                    "xs, ys, and weights must be float32 or float64.");
-    return NULL;
-  }
   if (!is_c_contiguous(xs, "xs") || !is_c_contiguous(ys, "ys") ||
       !is_c_contiguous(ws, "weights")) {
     return NULL;
@@ -1037,16 +1030,13 @@ static PyObject *weighted_simps_last_axis_integration(PyObject *self,
     return NULL;
   }
 
+  if (!is_float32_or_float64(xs, "xs") || !is_float32_or_float64(ys, "ys") ||
+      !is_float32_or_float64(ws, "weights")) {
+    return NULL;
+  }
   const int xs_typenum = PyArray_TYPE(xs);
   const int ys_typenum = PyArray_TYPE(ys);
   const int ws_typenum = PyArray_TYPE(ws);
-  if (!is_supported_float_typenum(xs_typenum) ||
-      !is_supported_float_typenum(ys_typenum) ||
-      !is_supported_float_typenum(ws_typenum)) {
-    PyErr_SetString(PyExc_TypeError,
-                    "xs, ys, and weights must be float32 or float64.");
-    return NULL;
-  }
   if (!is_c_contiguous(xs, "xs") || !is_c_contiguous(ys, "ys") ||
       !is_c_contiguous(ws, "weights")) {
     return NULL;

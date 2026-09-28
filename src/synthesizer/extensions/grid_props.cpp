@@ -76,12 +76,13 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
    * one supported dtype family before any hot kernels use raw pointers. */
   PyArrayObject *float_arrays[MAX_GRID_NDIM + 3] = {NULL};
   const char *float_names[MAX_GRID_NDIM + 3] = {NULL};
+  std::array<std::string, MAX_GRID_NDIM> axis_labels;
   int float_count = 0;
 
   if (np_spectra_ != NULL &&
       reinterpret_cast<PyObject *>(np_spectra_) != Py_None) {
     float_arrays[float_count] = np_spectra_;
-    float_names[float_count] = "grid_spectra";
+    float_names[float_count] = "grid spectra";
     float_count++;
   }
 
@@ -93,41 +94,6 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
                       "[GridProps::GridProps]: Failed to extract axis array.");
       return;
     }
-
-    float_arrays[float_count] = np_axis_arr;
-    float_names[float_count] = "grid axis";
-    float_count++;
-  }
-
-  if (np_lam_ != NULL && reinterpret_cast<PyObject *>(np_lam_) != Py_None) {
-    float_arrays[float_count] = np_lam_;
-    float_names[float_count] = "lam";
-    float_count++;
-  }
-
-  if (np_grid_weights_ != NULL &&
-      reinterpret_cast<PyObject *>(np_grid_weights_) != Py_None) {
-    float_arrays[float_count] = np_grid_weights_;
-    float_names[float_count] = "grid_weights";
-    float_count++;
-  }
-
-  if (float_count > 0 &&
-      !is_matching_float_dtypes(float_arrays, float_names, float_count,
-                                &float_typenum_)) {
-    return;
-  }
-
-  /* Get the dimensions of the grid from the axis tuple. */
-  for (int idim = 0; idim < ndim; idim++) {
-    PyArrayObject *np_axis_arr =
-        (PyArrayObject *)PyTuple_GetItem(axes_tuple, idim);
-    if (np_axis_arr == NULL) {
-      PyErr_SetString(PyExc_ValueError,
-                      "[GridProps::GridProps]: Failed to extract axis array.");
-      return;
-    }
-    dims[idim] = PyArray_DIM(np_axis_arr, 0);
 
     axis_names_[idim].clear();
     if (axis_names_tuple != NULL && PySequence_Check(axis_names_tuple) &&
@@ -147,6 +113,45 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
         PyErr_Clear();
       }
     }
+
+    float_arrays[float_count] = np_axis_arr;
+    axis_labels[idim] = "grid axis";
+    if (!axis_names_[idim].empty()) {
+      axis_labels[idim] += " " + axis_names_[idim];
+    }
+    float_names[float_count] = axis_labels[idim].c_str();
+    float_count++;
+  }
+
+  if (np_lam_ != NULL && reinterpret_cast<PyObject *>(np_lam_) != Py_None) {
+    float_arrays[float_count] = np_lam_;
+    float_names[float_count] = "grid wavelengths (lam)";
+    float_count++;
+  }
+
+  if (np_grid_weights_ != NULL &&
+      reinterpret_cast<PyObject *>(np_grid_weights_) != Py_None) {
+    float_arrays[float_count] = np_grid_weights_;
+    float_names[float_count] = "grid weights";
+    float_count++;
+  }
+
+  if (float_count > 0 &&
+      !is_matching_float_dtypes(float_arrays, float_names, float_count,
+                                &float_typenum_)) {
+    return;
+  }
+
+  /* Get the dimensions of the grid from the axis tuple. */
+  for (int idim = 0; idim < ndim; idim++) {
+    PyArrayObject *np_axis_arr =
+        (PyArrayObject *)PyTuple_GetItem(axes_tuple, idim);
+    if (np_axis_arr == NULL) {
+      PyErr_SetString(PyExc_ValueError,
+                      "[GridProps::GridProps]: Failed to extract axis array.");
+      return;
+    }
+    dims[idim] = PyArray_DIM(np_axis_arr, 0);
   }
 
   /* Calculate the size of the grid. */

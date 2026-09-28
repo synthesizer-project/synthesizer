@@ -52,10 +52,12 @@ static std::vector<std::string> density_attr_names(PyObject *py_names,
                              : NULL;
       if (utf8 != NULL) {
         name = std::string(utf8) + " of the absorbing particles";
+      } else {
+        /* Names are only for error messages, so fall back quietly. */
+        PyErr_Clear();
       }
       Py_XDECREF(item);
     }
-    PyErr_Clear();
     names.push_back(name);
   }
   return names;
@@ -903,7 +905,9 @@ PyObject *compute_column_density(PyObject *self, PyObject *args) {
   }
 
   PyArrayObject *kernel_arrays[] = {np_kernel, np_truncated_kernel};
-  const char *kernel_names[] = {"kernel", "truncated_kernel"};
+  const char *kernel_names[] = {
+      "kernel table (Kernel.get_kernel())",
+      "truncated kernel table (Kernel.get_truncated_los_kernel())"};
   int kernel_typenum = -1;
   if (!is_matching_float_dtypes(kernel_arrays, kernel_names, 2,
                                 &kernel_typenum)) {
@@ -1678,8 +1682,10 @@ PyObject *compute_column_density_smoothed(PyObject *self, PyObject *args) {
 
   PyArrayObject *kernel_arrays[] = {np_overlap_kernel, np_q_grid, np_u_grid,
                                     np_eta_grid};
-  const char *kernel_names[] = {"overlap_kernel", "q_grid", "u_grid",
-                                "eta_grid"};
+  const char *kernel_names[] = {
+      "overlap kernel table (Kernel.get_overlap_kernel())",
+      "overlap kernel q grid", "overlap kernel u grid",
+      "overlap kernel eta grid"};
   int kernel_typenum = -1;
   if (!is_matching_float_dtypes(kernel_arrays, kernel_names, 4,
                                 &kernel_typenum)) {

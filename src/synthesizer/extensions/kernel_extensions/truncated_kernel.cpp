@@ -9,6 +9,7 @@
 
 #include "kernel_functions.h"
 #include "kernels.h"
+#include "python_to_cpp.h"
 
 /**
  * @brief Build the truncated LOS kernel lookup table.
@@ -153,10 +154,11 @@ PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
   }
 
   /* Validate the dtype and dispatch to the correct instantiation. */
-  const int input_typenum = PyArray_TYPE(np_q_grid);
-  if (input_typenum != PyArray_TYPE(np_z_grid)) {
-    PyErr_SetString(PyExc_TypeError,
-                    "q_grid and z_grid must have the same dtype.");
+  PyArrayObject *float_arrays[2] = {np_q_grid, np_z_grid};
+  const char *float_names[2] = {"q_grid", "z_grid"};
+  int input_typenum = -1;
+  if (!is_matching_float_dtypes(float_arrays, float_names, 2,
+                                &input_typenum)) {
     return NULL;
   }
 
@@ -169,10 +171,6 @@ PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
       return compute_truncated_los_kernel_impl<double>(self, np_q_grid,
                                                        np_z_grid, kernel_name);
     default:
-      PyErr_Format(PyExc_TypeError,
-                   "Unsupported dtype for q_grid and z_grid, "
-                   "must be float32 or float64 (got %d).",
-                   input_typenum);
       return NULL;
   }
 }
