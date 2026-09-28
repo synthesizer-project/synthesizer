@@ -225,11 +225,6 @@ class TestConvertArrayDtype:
         with pytest.raises(exceptions.PrecisionOverflow, match="lums"):
             convert_array_dtype(np.array([1e45]), np.float32, name="lums")
 
-    def test_overflow_keep_returns_input(self):
-        """With overflow="keep" values that don't fit are left alone."""
-        arr = np.array([1e45])
-        assert convert_array_dtype(arr, np.float32, overflow="keep") is arr
-
     def test_scalars(self):
         """Scalars are converted to scalars of the target dtype."""
         converted = convert_array_dtype(2.0, np.float32)

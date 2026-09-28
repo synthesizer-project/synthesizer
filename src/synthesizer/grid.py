@@ -34,7 +34,8 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.colors import LogNorm
 from scipy.interpolate import interp1d
 from spectres import spectres
-from unyt import Hz, Lsun, angstrom, erg, s, unyt_array, unyt_quantity
+from unyt import Hz, Lsun, Unit, angstrom, erg, s, unyt_array, unyt_quantity
+from unyt.dimensions import mass as mass_dim
 
 from synthesizer import exceptions
 from synthesizer.data.initialise import get_grids_dir
@@ -459,16 +460,26 @@ class Grid:
 
                 # Get the values. Axes are tiny so we read them at float64
                 # and only then convert, which means log10 is taken before
-                # any reduction in precision. A raw axis too large for the
-                # grid's precision (e.g. a black hole mass axis in kg, ~1e39,
-                # at float32) stays at float64 rather than becoming inf.
+                # any reduction in precision.
                 values = hf["axes"][axis][...].astype(np.float64)
 
-                # Set all the axis attributes as is (without accounting
-                # for any log10 conversions needed for extraction)
+                # Mass axes (e.g. black hole masses, stored in kg) are
+                # expressed in the internal mass unit, matching the emitter
+                # masses they are compared against during extraction
+                if (
+                    axis_units is not None
+                    and Unit(axis_units).dimensions == mass_dim
+                ):
+                    values = unyt_array(values, axis_units).to_value(
+                        Units().mass
+                    )
+                    axis_units = str(Units().mass)
+
+                # Set all the axis attributes (without accounting for any
+                # log10 conversions needed for extraction)
                 self.axes.append(axis)
                 self._axes_values[axis] = convert_array_dtype(
-                    values, self._dtype, overflow="keep"
+                    values, self._dtype
                 )
                 self._axes_units[axis] = axis_units
 
@@ -929,9 +940,7 @@ class Grid:
         # Convert all the grid axis arrays to the target precision
         for axis_name in grid.axes:
             grid._axes_values[axis_name] = convert_array_dtype(
-                np.asarray(grid._axes_values[axis_name], dtype=np.float64),
-                dtype,
-                overflow="keep",
+                grid._axes_values[axis_name], dtype
             )
 
         # Convert all the extraction axis arrays to the target precision

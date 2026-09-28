@@ -134,7 +134,7 @@ def scalar_like(value, ref):
     return ref.dtype.type(value)
 
 
-def convert_array_dtype(array, dtype, overflow="raise", name=None):
+def convert_array_dtype(array, dtype, name=None):
     """Convert a numeric array-like object to a floating-point dtype.
 
     This works for NumPy arrays, unyt_arrays (preserving their units), lists
@@ -143,13 +143,8 @@ def convert_array_dtype(array, dtype, overflow="raise", name=None):
     untouched, otherwise a copy is made.
 
     Converting to a lower precision can overflow: values beyond the range of
-    the target dtype would silently become inf. This is always checked, and
-    ``overflow`` controls what happens:
-
-    - ``"raise"`` raises a PrecisionOverflow error.
-    - ``"keep"`` returns the input unchanged, at its original precision. Use
-      this where a value simply can't be stored at the target precision and
-      should stay as it is (e.g. a grid mass axis in kg at float32).
+    the target dtype would silently become inf, so this raises a
+    PrecisionOverflow error instead.
 
     Only floating-point targets are converted; for any other target dtype
     the input is returned unchanged.
@@ -159,9 +154,6 @@ def convert_array_dtype(array, dtype, overflow="raise", name=None):
             The input array-like object or scalar.
         dtype (np.dtype/type):
             The target dtype to convert to.
-        overflow (str):
-            What to do if the values don't fit in the target dtype, either
-            "raise" (the default) or "keep".
         name (str, optional):
             The name of the array, for the error message.
 
@@ -171,10 +163,9 @@ def convert_array_dtype(array, dtype, overflow="raise", name=None):
 
     Raises:
         PrecisionOverflow:
-            If the values don't fit in the target dtype and
-            ``overflow="raise"``.
+            If the values don't fit in the target dtype.
         ValueError:
-            If the input isn't numeric or ``overflow`` is invalid.
+            If the input isn't numeric.
     """
     # Nothing to do if input is None
     if array is None:
@@ -184,11 +175,6 @@ def convert_array_dtype(array, dtype, overflow="raise", name=None):
     dtype = np.dtype(dtype)
     if dtype.kind != "f":
         return array
-
-    if overflow not in ("raise", "keep"):
-        raise ValueError(
-            f"overflow must be 'raise' or 'keep' (got {overflow!r})."
-        )
 
     # If the array already has the requested dtype and contiguous storage
     # there is nothing to do; return it untouched to avoid a needless copy.
@@ -217,8 +203,6 @@ def convert_array_dtype(array, dtype, overflow="raise", name=None):
             np.max(np.abs(values), initial=0.0, where=np.isfinite(values))
         )
         if largest > float(np.finfo(dtype).max):
-            if overflow == "keep":
-                return array
             raise exceptions.PrecisionOverflow(
                 f"{name or 'An array'} holds values up to {largest:.3g}, "
                 f"beyond the {dtype} range (up to {np.finfo(dtype).max:.3g}), "
