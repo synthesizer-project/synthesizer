@@ -521,8 +521,9 @@ class Sed:
                 The luminosity array in the internal luminosity unit, at
                 the precision of lnu.
         """
+        lum_units = Units().luminosity
         return get_array_quantity_view(
-            self._lnu * self._get_luminosity_nu(), Units().luminosity
+            self._lnu * self._get_lnu_factor(self.nu, lum_units), lum_units
         )
 
     def _get_integrated_luminosity(
@@ -554,7 +555,7 @@ class Sed:
         # frequency. It's faster to just multiply by -1 than to reverse the
         # array.
         integral = -integrate_last_axis(
-            self._get_luminosity_nu(),
+            self._get_lnu_factor(self.nu, Units().luminosity),
             lnu,
             nthreads=nthreads,
             method=integration_method,
@@ -568,22 +569,29 @@ class Sed:
             )
         return integral * Units().luminosity
 
-    def _get_luminosity_nu(self):
-        """Get the frequencies scaled to give luminosities in internal units.
+    def _get_lnu_factor(self, factor, units):
+        """Get a per-wavelength factor converting lnu into other units.
 
-        Multiplying (or integrating) lnu by these frequencies gives
-        luminosities directly in the internal luminosity unit (Lsun by
-        default). Folding the unit conversion into this small wavelength
-        sized array means nu * Lnu is never formed in erg/s, which would
-        overflow float32, so luminosities keep the precision of lnu.
+        Multiplying (or integrating) lnu by the returned array gives
+        lnu * factor directly in ``units`` (e.g. nu gives luminosities in
+        Lsun). Folding the unit conversion into this small wavelength sized
+        array means the product is never formed in cgs units, which would
+        overflow float32, so the result keeps the precision of lnu.
+
+        Args:
+            factor (unyt_array):
+                The per-wavelength factor (e.g. nu, or nu / lam).
+            units (unyt.Unit):
+                The units of lnu * factor.
 
         Returns:
             np.ndarray:
-                The scaled frequencies, at the precision of lnu.
+                The factor including the unit conversion, at the precision
+                of lnu.
         """
         return (
-            (self.nu * get_quantity_unit(self, "lnu"))
-            .to_value(Units().luminosity)
+            (factor * get_quantity_unit(self, "lnu"))
+            .to_value(units)
             .astype(self._lnu.dtype)
         )
 
@@ -603,14 +611,13 @@ class Sed:
 
         Returns:
             luminosity (unyt_array):
-                The spectral luminosity density per Angstrom array (always
-                float64).
+                The spectral luminosity density per Angstrom array in the
+                internal units, at the precision of lnu.
         """
-        # NOTE: this is always float64. Luminosity densities per unit
-        # wavelength in erg/s/Angstrom (~1e40+ for realistic populations)
-        # exceed the float32 range.
-        return (self.lnu.astype(np.float64) * self.nu / self.lam).to(
-            Units().luminosity_density_wavelength
+        llam_units = Units().luminosity_density_wavelength
+        return get_array_quantity_view(
+            self._lnu * self._get_lnu_factor(self.nu / self.lam, llam_units),
+            llam_units,
         )
 
     @property

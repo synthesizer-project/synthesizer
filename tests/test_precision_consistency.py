@@ -139,16 +139,26 @@ def test_integrated_luminosities_keep_sed_precision():
 
 
 def test_sed_luminosity_keeps_sed_precision():
-    """Sed.luminosity keeps the precision of lnu."""
+    """Sed.luminosity and Sed.llam keep the precision of lnu."""
     lam = unyt_array(np.linspace(1000.0, 20000.0, 50), angstrom)
     lnu = unyt_array(np.full(50, 1e20, np.float32), erg / s / Hz)
     sed = Sed(lam, lnu)
+    lnu64 = lnu.astype(np.float64)
 
-    lum = sed.luminosity
-
-    assert lum.dtype == np.float32
-    expected = (lnu.astype(np.float64) * sed.nu).to(lum.units)
-    np.testing.assert_allclose(lum.value, expected.value, rtol=1e-6)
+    results = (
+        (sed.luminosity, lnu64 * sed.nu, Units().luminosity),
+        (
+            sed.llam,
+            lnu64 * sed.nu / sed.lam,
+            Units().luminosity_density_wavelength,
+        ),
+    )
+    for result, expected, units in results:
+        assert result.dtype == np.float32
+        assert result.units == units
+        np.testing.assert_allclose(
+            result.value, expected.to(units).value, rtol=1e-6
+        )
 
 
 def test_line_subset_is_contiguous(test_grid):

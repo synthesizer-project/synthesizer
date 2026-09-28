@@ -87,8 +87,10 @@ cgs units exceed that for realistic sources: line luminosities reach
 1e40–1e45 erg/s and black hole bolometric luminosities ~1e45 erg/s.
 Synthesizer therefore stores luminosities in solar luminosities by default
 (the ``luminosity`` unit category is ``Lsun``), which keeps them comfortably
-within the float32 range. Spectral densities (e.g. ``lnu`` in erg/s/Hz) fit
-in float32 and keep their cgs units.
+within the float32 range. Luminosity densities per unit wavelength
+(``llam``, up to ~1e43 erg/s/Å) are stored in ``Lsun / Angstrom`` for the
+same reason, while luminosity densities per unit frequency (``lnu`` in
+erg/s/Hz) and fluxes fit in float32 and keep their cgs units.
 
 Grids are converted to these internal units when they are loaded, so this
 makes no difference to the results: only the units of the returned
@@ -104,13 +106,11 @@ file if you prefer, but float32 luminosities will then overflow.
 The float32 range
 ^^^^^^^^^^^^^^^^^
 
-Luminosities derived from spectra (``Sed.luminosity``, bolometric and
-window luminosities) are computed directly in the internal luminosity unit
-at the precision of ``lnu``. Two quantities are always computed at float64,
-whatever ``out_dtype`` says, because they don't fit in float32: ionising
-photon production rates (~1e53 s^-1 and beyond), and ``Sed.llam``
-(luminosity densities per unit wavelength reach ~1e43 erg/s/Å; it is
-computed on access from ``lnu``, which stays at your chosen precision).
+Quantities derived from spectra (``Sed.luminosity``, ``Sed.llam``, and
+bolometric and window luminosities) are computed directly in these internal
+units at the precision of ``lnu``. The one exception is ionising photon
+production rates (~1e53 s^-1 and beyond), which don't fit in float32 and
+are always computed at float64.
 
 If a result is too large for the output precision, Synthesizer raises a
 ``PrecisionOverflow`` error rather than returning results containing ``inf``.

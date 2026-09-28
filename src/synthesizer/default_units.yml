@@ -48,8 +48,10 @@ UnitCategories:
     unit: "erg / s / Hz"
     description: "Luminosity density per unit frequency"
 
+  # Lsun / Angstrom rather than erg/s/Angstrom so realistic luminosity
+  # densities per wavelength fit in float32
   luminosity_density_wavelength:
-    unit: "erg / s / Angstrom"
+    unit: "Lsun / Angstrom"
     description: "Luminosity density per unit wavelength"
 
   flux:
