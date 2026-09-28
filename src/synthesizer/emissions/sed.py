@@ -113,6 +113,10 @@ class Sed:
     obsnu = Quantity("frequency")
     obslam = Quantity("wavelength")
 
+    # The speed of light in (wavelength unit) * (frequency unit), set on first
+    # use, so frequencies can be computed from the raw wavelength array.
+    _c_lam_nu = None
+
     @accepts(lam=angstrom, lnu=erg / s / Hz)
     @timed("Sed.__init__")
     def __init__(self, lam, lnu=None, description=None):
@@ -131,17 +135,10 @@ class Sed:
         # Set the description
         self.description = description
 
-        # Set the wavelength
+        # Set the wavelength (the frequencies are computed from it when they
+        # are first needed, see _nu)
         self.lam = lam
-
-        # Write directly into the target dtype; unyt otherwise promotes this
-        # division to float64.
-        self._nu = np.empty_like(self._lam)
-        np.divide(
-            c,
-            get_quantity_view(self, "_lam"),
-            out=get_quantity_view(self, "_nu"),
-        )
+        self._nu_cache = None
 
         # If no lnu is provided create an empty array with the same shape as
         # lam.
@@ -161,6 +158,46 @@ class Sed:
         # Broadband photometry
         self.photo_lnu = None
         self.photo_fnu = None
+
+    @property
+    def _nu(self):
+        """The frequencies of the wavelength array, computed when first needed.
+
+        Most Seds made while generating emission never use their frequencies,
+        so computing them lazily saves both the division and the array. The
+        cached array is stored with the wavelength array it was computed from,
+        so assigning a new wavelength array invalidates it.
+
+        Returns:
+            np.ndarray:
+                The frequencies, in the units of the nu Quantity, with the
+                same dtype as the wavelengths.
+        """
+        cache = getattr(self, "_nu_cache", None)
+        if cache is not None and cache[0] is self._lam:
+            return cache[1]
+
+        # Convert c once for the configured wavelength and frequency units
+        if Sed._c_lam_nu is None:
+            Sed._c_lam_nu = float(
+                c.to(Sed.__dict__["lam"].unit * Sed.__dict__["nu"].unit).value
+            )
+
+        # Divide in the wavelength dtype; unyt would promote to float64.
+        nu = np.empty_like(self._lam)
+        np.divide(Sed._c_lam_nu, self._lam, out=nu)
+        self._nu_cache = (self._lam, nu)
+        return nu
+
+    @_nu.setter
+    def _nu(self, value):
+        """Store frequencies alongside the wavelengths they belong to.
+
+        Args:
+            value (np.ndarray):
+                The frequencies, in the units of the nu Quantity.
+        """
+        self._nu_cache = (self._lam, value)
 
     @timed("Sed.sum")
     def sum(self):
