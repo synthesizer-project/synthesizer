@@ -327,3 +327,20 @@ def test_compute_fnu_rejects_non_contiguous_inputs():
 
     with pytest.raises(ValueError, match="nu must be C-contiguous"):
         call(lnu, lam, np.linspace(1e14, 1e15, 20)[::2])
+
+
+@pytest.mark.parametrize("method", ["average", "trapz"])
+def test_measure_window_lnu_keeps_sed_precision(method):
+    """Window lnu measurements keep the precision of the Sed."""
+    lam = np.linspace(1000.0, 5000.0, 200) * angstrom
+    lnu = np.full((3, 200), 1e20, np.float32) * erg / s / Hz
+    sed32 = Sed(lam, lnu)
+    sed64 = Sed(lam, lnu.astype(np.float64))
+    window = (2000.0, 3000.0) * angstrom
+
+    result = sed32.measure_window_lnu(window, integration_method=method)
+    reference = sed64.measure_window_lnu(window, integration_method=method)
+
+    assert result.dtype == np.float32
+    assert result.shape == (3,)
+    np.testing.assert_allclose(result.value, reference.value, rtol=1e-5)

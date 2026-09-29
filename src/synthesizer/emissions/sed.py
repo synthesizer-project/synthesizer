@@ -842,25 +842,20 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        # Define a pseudo transmission function
+        # Define a pseudo transmission function (at the precision of lnu so
+        # the measurement keeps that precision)
         transmission = (self.lam > window[0]) & (self.lam < window[1])
-        transmission = transmission.astype(float)
+        transmission = transmission.astype(self._lnu.dtype)
 
         # Apply the correct method
         if integration_method == "average":
-            # Apply to the correct axis of the spectra
-            if self.ndim >= 2:
-                lnu = np.array(
-                    [
-                        np.sum(_lnu * transmission) / np.sum(transmission)
-                        for _lnu in self._lnu.reshape(-1, self._lnu.shape[-1])
-                    ]
-                ) * get_quantity_unit(self, "lnu")
-
-                lnu = lnu.reshape(self._lnu.shape[:-1])
-
-            else:
-                lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
+            # Average over the window along the wavelength axis (the final
+            # axis, whatever the number of dimensions)
+            lnu = (
+                np.sum(self._lnu * transmission, axis=-1)
+                / np.sum(transmission)
+                * get_quantity_unit(self, "lnu")
+            )
 
         else:
             # Luminosity integral
@@ -869,6 +864,7 @@ class Sed:
                 self._lnu * transmission / self.nu,
                 nthreads=nthreads,
                 method=integration_method,
+                out_dtype=self._lnu.dtype,
             )
 
             # Transmission integral
@@ -877,6 +873,7 @@ class Sed:
                 transmission / self.nu,
                 nthreads=nthreads,
                 method=integration_method,
+                out_dtype=self._lnu.dtype,
             )
 
             # Compute lnu

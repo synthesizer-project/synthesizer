@@ -1695,3 +1695,24 @@ def test_generic_attenuation_does_not_mutate_source(mask):
     np.testing.assert_array_equal(lines._luminosity, 1.0)
     np.testing.assert_array_equal(lines._continuum, 1.0)
     assert np.all(attenuated._luminosity[0] < 1.0)
+
+
+def test_blending_and_sed_keep_line_precision():
+    """Blended lines and Seds made from lines keep the lines' precision."""
+    lines = LineCollection(
+        line_ids=["A 1000", "B 1001", "C 2000"],
+        lam=np.array([1000.0, 1001.0, 2000.0], np.float32) * angstrom,
+        lum=np.array([1e30, 2e30, 3e30], np.float32) * erg / s,
+        cont=np.array([1e20, 1e20, 1e20], np.float32) * erg / s / Hz,
+    )
+
+    blended = lines.get_blended_lines(
+        np.array([900.0, 1500.0, 2500.0]) * angstrom
+    )
+    assert blended._lam.dtype == np.float32
+    assert blended._luminosity.dtype == np.float32
+    assert blended._continuum.dtype == np.float32
+    np.testing.assert_allclose(blended._luminosity, [3e30, 3e30])
+
+    sed = lines.create_sed(np.linspace(500.0, 3000.0, 100) * angstrom)
+    assert sed._lnu.dtype == np.float32
