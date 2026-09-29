@@ -8,12 +8,13 @@ from synthesizer.extensions.reductions import (
     combine_spectra_2d,
     reduce_particle_spectra,
 )
-from unyt import Hz, angstrom, c, cm, erg, nJy, pc, s
+from unyt import Hz, angstrom, c, cm, erg, km, m, nJy, pc, s
 
+from synthesizer import exceptions
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.emissions import Sed
-from synthesizer.emissions.sed import Sed, integrate_particle_sed
+from synthesizer.emissions.sed import Sed
 
 
 def test_sed_empty(empty_sed):
@@ -234,12 +235,12 @@ def test_combine_spectra_supports_adaptive_precision_and_nan_masks():
         np.testing.assert_allclose(combined, [[6.0, 6.0], [3.0, 12.0]])
 
 
-def test_integrate_particle_sed_preserves_input_precision():
-    """The Sed reduction helper should keep the luminosity dtype family."""
+def test_sum_preserves_input_precision():
+    """Summing per-particle spectra should keep the luminosity dtype."""
     lam = np.linspace(1000.0, 2000.0, 5) * angstrom
     lnu = (np.arange(15, dtype=np.float32).reshape(3, 5) + 1.0) * erg / s / Hz
 
-    reduced = integrate_particle_sed(Sed(lam=lam, lnu=lnu), nthreads=1)
+    reduced = Sed(lam=lam, lnu=lnu).sum(nthreads=1)
 
     assert reduced._lnu.dtype == np.float32
     np.testing.assert_allclose(reduced._lnu, np.sum(lnu.value, axis=0))
@@ -344,3 +345,96 @@ def test_measure_window_lnu_keeps_sed_precision(method):
     assert result.dtype == np.float32
     assert result.shape == (3,)
     np.testing.assert_allclose(result.value, reference.value, rtol=1e-5)
+
+
+def test_get_fnu_peculiar_velocity_zero_matches_default():
+    """peculiar_velocity of None or 0 reproduces the cosmological get_fnu."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
+    z = 1.5
+
+    base = Sed(lam=lam, lnu=lnu).get_fnu(Planck18, z)
+    none = Sed(lam=lam, lnu=lnu).get_fnu(Planck18, z, peculiar_velocity=None)
+    zero = Sed(lam=lam, lnu=lnu).get_fnu(
+        Planck18, z, peculiar_velocity=0.0 * km / s
+    )
+
+    np.testing.assert_array_equal(none.value, base.value)
+    np.testing.assert_allclose(zero.value, base.value)
+
+
+def test_get_fnu_peculiar_velocity_shifts_to_observed_redshift():
+    """Distances are affected by the correct redshift.
+
+    A peculiar velocity shifts to z_obs while the luminosity distance and (1+z)
+    factor stay tied to the cosmological z.
+    """
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
+    z = 1.0
+    v = 600.0 * km / s  # receding
+
+    z_obs = (1.0 + z) * (1.0 + float(v / c)) - 1.0
+    d_l = get_luminosity_distance(Planck18, z).to(cm)
+    d_l_eff = d_l * (1.0 + z_obs) / (1.0 + z)
+    expected = lnu * (1.0 + z_obs) / (4 * np.pi * d_l_eff**2)
+
+    sed = Sed(lam=lam, lnu=lnu)
+    fnu = sed.get_fnu(Planck18, z, peculiar_velocity=v)
+
+    np.testing.assert_allclose(sed._obslam, sed._lam * (1.0 + z_obs))
+    np.testing.assert_allclose(sed._obsnu, sed._nu / (1.0 + z_obs))
+    np.testing.assert_allclose(fnu.to("nJy").value, expected.to("nJy").value)
+
+    # Equivalent velocity units give the same result.
+    fnu_ms = Sed(lam=lam, lnu=lnu).get_fnu(
+        Planck18, z, peculiar_velocity=v.to(m / s)
+    )
+    np.testing.assert_allclose(fnu_ms.to("nJy").value, fnu.to("nJy").value)
+
+
+def test_get_fnu_peculiar_velocity_requires_units():
+    """peculiar_velocity without velocity units is rejected."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
+
+    with pytest.raises(exceptions.MissingUnits):
+        Sed(lam=lam, lnu=lnu).get_fnu(Planck18, 1.0, peculiar_velocity=600.0)
+    with pytest.raises(exceptions.IncorrectUnits):
+        Sed(lam=lam, lnu=lnu).get_fnu(
+            Planck18, 1.0, peculiar_velocity=600.0 * cm
+        )
+
+
+def test_get_resampled_sed_keeps_peculiar_velocity_shift():
+    """Resampling keeps the observer frame at z_obs."""
+    lam = np.linspace(1000, 2000, 16) * angstrom
+    lnu = np.linspace(1.0, 16.0, 16) * erg / s / Hz
+    z = 1.0
+    v = 600.0 * km / s
+
+    sed = Sed(lam=lam, lnu=lnu)
+    sed.get_fnu(Planck18, z, peculiar_velocity=v)
+    z_obs = (1.0 + z) * (1.0 + float(v / c)) - 1.0
+    assert np.isclose(sed.redshift, z_obs)
+
+    resampled = sed.get_resampled_sed(new_lam=lam[2:-2])
+    np.testing.assert_allclose(
+        resampled._obslam, resampled._lam * (1.0 + z_obs)
+    )
+    np.testing.assert_allclose(resampled._fnu, sed._fnu[2:-2])
+
+
+def test_get_fnu_peculiar_velocity_rejects_vel_shifted_sed():
+    """A peculiar velocity can't be applied on top of vel_shift spectra."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
+
+    sed = Sed(lam=lam, lnu=lnu)
+    sed.vel_shifted = True
+
+    with pytest.raises(exceptions.InconsistentArguments):
+        sed.get_fnu(Planck18, 1.0, peculiar_velocity=600.0 * km / s)
+
+    # Without a peculiar velocity the flux is computed as normal
+    sed.get_fnu(Planck18, 1.0)

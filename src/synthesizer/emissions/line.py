@@ -44,6 +44,7 @@ from unyt import (
     Lsun,
     angstrom,
     c,
+    cm,
     erg,
     eV,
     h,
@@ -69,6 +70,7 @@ from synthesizer.emissions.utils import (
     get_available_ratio_ids,
     get_line2index,
     get_line_id_signature,
+    nansum_leading_axes,
 )
 from synthesizer.extensions.spectra_operations import (
     apply_separable_attenuation_2d,
@@ -84,6 +86,7 @@ from synthesizer.units import (
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import resolve_out_dtype
+from synthesizer.utils.util_funcs import get_attr_unit_conversion
 
 
 class LineCollection:
@@ -787,13 +790,17 @@ class LineCollection:
             f"comma separated string (type={type(line_id)} line_id={line_id})"
         )
 
-    def sum(self, axis=None):
+    @timed("LineCollection.sum")
+    def sum(self, axis=None, nthreads=1):
         """Sum the lines in the collection.
 
         Args:
             axis (int/tuple):
                 The axis/axes to sum over. By default this will sum over all
                 but the final axis (the axis containing different lines).
+            nthreads (int):
+                The number of threads to use for the default reduction. If -1
+                all available CPU cores will be used.
         """
         # First lets check if we have a multidimensional line collection, if
         # not we can just return the single line object
@@ -816,7 +823,14 @@ class LineCollection:
 
         # If no axes are passed we will sum over all but the last axis
         if axis is None:
-            axis = tuple(range(self.ndim - 1))
+            return LineCollection(
+                line_ids=self.line_ids,
+                lam=self.lam,
+                lum=nansum_leading_axes(self._luminosity, nthreads)
+                * get_quantity_unit(self, "luminosity"),
+                cont=nansum_leading_axes(self._continuum, nthreads)
+                * get_quantity_unit(self, "continuum"),
+            )
 
         return LineCollection(
             line_ids=self.line_ids,
@@ -923,7 +937,7 @@ class LineCollection:
         self.available_diagrams = get_available_diagram_ids(signature)
         return self.available_diagrams
 
-    def get_flux0(self, out_dtype=None):
+    def get_flux0(self, out_dtype=None, nthreads=1):
         """Calculate the rest frame line flux.
 
         Uses a standard distance of 10pc to calculate the flux.
@@ -936,33 +950,19 @@ class LineCollection:
             out_dtype (np.dtype, optional):
                 Requested floating-point dtype for the flux arrays. If None
                 the fluxes inherit the luminosity's dtype.
+            nthreads (int):
+                The number of threads to scale the fluxes with.
 
         Returns:
             flux (unyt_quantity):
                 Flux of the line in units of erg/s/cm2 by default.
         """
-        # Compute flux
-        self.flux = self.luminosity / (4 * np.pi * (10 * pc) ** 2)
-        self.continuum_flux = self.continuum / (4 * np.pi * (10 * pc) ** 2)
-
-        # Unit arithmetic can promote float32 values, so explicitly restore
-        # the luminosity dtype when no output precision was requested.
-        dtype = (
-            self.luminosity.dtype
-            if out_dtype is None
-            else resolve_out_dtype(out_dtype)
+        return self.get_flux(
+            cosmo=None, z=0, out_dtype=out_dtype, nthreads=nthreads
         )
-        self.flux = self.flux.astype(dtype, copy=False)
-        self.continuum_flux = self.continuum_flux.astype(dtype, copy=False)
-
-        # Set the observed wavelength (in this case this is the rest frame
-        # wavelength)
-        self.obslam = self.lam
-
-        return self.flux
 
     @timed("LineCollection.get_flux")
-    def get_flux(self, cosmo, z, igm=None, out_dtype=None):
+    def get_flux(self, cosmo, z, igm=None, out_dtype=None, nthreads=1):
         """Calculate the line flux given a redshift and cosmology.
 
         This will also populate the observed_wavelength attribute with the
@@ -983,6 +983,8 @@ class LineCollection:
             out_dtype (np.dtype, optional):
                 Requested floating-point dtype for the flux arrays. If None
                 the fluxes inherit the luminosity's dtype.
+            nthreads (int):
+                The number of threads to scale the fluxes with.
 
         Returns:
             flux (unyt_quantity):
@@ -991,15 +993,38 @@ class LineCollection:
         # If the redshift is 0 we can assume a distance of 10pc and ignore
         # the IGM
         if z == 0:
-            return self.get_flux0(out_dtype=out_dtype)
+            luminosity_distance = 10 * pc
+            igm = None
+        else:
+            # Get the luminosity distance
+            luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
-        # Get the luminosity distance
-        luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
-
-        # Compute flux and observed continuum
-        self.flux = self.luminosity / (4 * np.pi * luminosity_distance**2)
-        self.continuum_flux = self.continuum / (
-            4 * np.pi * luminosity_distance**2
+        # Compute flux and observed continuum in one threaded pass, folding
+        # the unit conversion into the scale factors
+        area = (4 * np.pi * luminosity_distance**2).to_value("cm**2")
+        nspec = self._luminosity.shape[0]
+        self.flux, self.continuum_flux = scale_line_arrays(
+            self._luminosity,
+            self._continuum,
+            np.full(
+                nspec,
+                get_attr_unit_conversion(
+                    get_quantity_unit(self, "luminosity"),
+                    get_quantity_unit(self, "flux") * cm**2,
+                )
+                / area,
+                dtype=self._luminosity.dtype,
+            ),
+            np.full(
+                nspec,
+                get_attr_unit_conversion(
+                    get_quantity_unit(self, "continuum"),
+                    get_quantity_unit(self, "continuum_flux") * cm**2,
+                )
+                / area,
+                dtype=self._continuum.dtype,
+            ),
+            nthreads=nthreads,
         )
 
         # Set the observed wavelength
