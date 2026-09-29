@@ -105,6 +105,30 @@ class TestPluralization:
         assert depluralize("metallicities") == "metallicity"
 
 
+class TestCombineArrays:
+    """Tests for combining arrays of particle properties."""
+
+    def test_combines_arrays_with_different_units(self):
+        """Compatible but different units are combined in the first's units.
+
+        e.g. ages in yr (the grid's units) and Myr (a customised internal
+        time unit) must be converted before concatenating.
+        """
+        from synthesizer.utils.util_funcs import combine_arrays
+
+        arr1 = unyt.unyt_array([1.0e6, 2.0e6], "yr")
+        arr2 = unyt.unyt_array([3.0, 4.0], "Myr")
+
+        combined = combine_arrays(arr1, arr2)
+
+        assert combined.units == arr1.units
+        np.testing.assert_allclose(combined.value, [1e6, 2e6, 3e6, 4e6])
+
+        # The input arrays are left untouched
+        assert arr2.units == unyt.Myr
+        np.testing.assert_allclose(arr2.value, [3.0, 4.0])
+
+
 class TestPrecisionConfig:
     """Test suite for the global output precision configuration."""
 
