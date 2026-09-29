@@ -21,12 +21,7 @@ from synthesizer.emission_models.extractors.extractor import (
     ParticleExtractor,
 )
 from synthesizer.emission_models.utils import cache_model_params
-from synthesizer.emissions import (
-    LineCollection,
-    Sed,
-    integrate_particle_lines,
-    integrate_particle_sed,
-)
+from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.reductions import (
     combine_spectra_2d,
     reduce_particle_spectra,
@@ -488,7 +483,7 @@ class Generation:
         # Store the spectra in the right place (integrating if we need to)
         if per_particle:
             particle_spectra[this_model.label] = sed
-            spectra[this_model.label] = integrate_particle_sed(sed, nthreads)
+            spectra[this_model.label] = sed.sum(nthreads=nthreads)
         else:
             spectra[this_model.label] = sed
 
@@ -594,9 +589,7 @@ class Generation:
         # Store the lines in the right place (integrating if we need to)
         if per_particle:
             particle_lines[this_model.label] = out_lines
-            lines[this_model.label] = integrate_particle_lines(
-                out_lines, nthreads
-            )
+            lines[this_model.label] = out_lines.sum(nthreads=nthreads)
         else:
             lines[this_model.label] = out_lines
 
@@ -798,15 +791,7 @@ class Transformation:
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_emissions[this_model.label] = emission
-            with timer("Transformation._transform_emission.integrate"):
-                if isinstance(emission, Sed):
-                    emissions[this_model.label] = integrate_particle_sed(
-                        emission, nthreads
-                    )
-                else:
-                    emissions[this_model.label] = integrate_particle_lines(
-                        emission, nthreads
-                    )
+            emissions[this_model.label] = emission.sum(nthreads=nthreads)
         else:
             emissions[this_model.label] = emission
 
@@ -1029,9 +1014,7 @@ class Combination:
         # Store the lines in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_lines[this_model.label] = out_lines
-            lines[this_model.label] = integrate_particle_lines(
-                out_lines, nthreads
-            )
+            lines[this_model.label] = out_lines.sum(nthreads=nthreads)
         else:
             lines[this_model.label] = out_lines
 

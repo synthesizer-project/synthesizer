@@ -42,6 +42,7 @@ Example usage:
 
 """
 
+import os
 from functools import lru_cache
 from types import MappingProxyType
 
@@ -49,7 +50,9 @@ import numpy as np
 from unyt import angstrom, unyt_array
 
 from synthesizer import exceptions
+from synthesizer.extensions.reductions import reduce_particle_spectra
 from synthesizer.units import accepts, get_quantity_unit
+from synthesizer.utils.util_funcs import as_contiguous
 
 
 def get_composite_line_id_from_list(id):
@@ -645,3 +648,36 @@ def evaluate_dust_curve_at_dtype(func, dtype, /, *args, **kwargs):
             "precision; use float64 spectra (e.g. leave out_dtype unset or "
             "pass out_dtype=np.float64) when applying it."
         )
+
+
+def nansum_leading_axes(arr, nthreads=1):
+    """Sum an emission array over all but its final axis, ignoring NaNs.
+
+    This is the reduction behind ``Sed.sum`` and ``LineCollection.sum``.
+    Per-particle arrays (shape ``(nparticle, nlam)`` or
+    ``(nparticle, nline)``) are the hot path, so these are reduced with the
+    threaded C++ particle reduction. Any other shape falls back to
+    ``np.nansum``.
+
+    Args:
+        arr (np.ndarray):
+            The raw (unitless) array to reduce.
+        nthreads (int):
+            The number of threads to use for the C++ reduction. If -1 all
+            available CPU cores will be used.
+
+    Returns:
+        np.ndarray:
+            The summed array, with the same dtype as ``arr``.
+    """
+    if arr.ndim != 2:
+        return np.nansum(arr, axis=tuple(range(arr.ndim - 1)))
+
+    if nthreads == -1:
+        nthreads = os.cpu_count() or 1
+
+    # The kernel walks the buffer directly, so strided views (e.g. from
+    # subsetting) have to be made contiguous first. This is a no-op for a
+    # freshly built array.
+    arr = as_contiguous(arr)
+    return reduce_particle_spectra(arr, nthreads, arr.dtype)
