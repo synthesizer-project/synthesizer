@@ -86,7 +86,12 @@ def write_instrument_attribute(group, name, value):
     if isinstance(value, dict):
         subgroup = group.create_group(name)
         for key, subvalue in value.items():
-            write_instrument_attribute(subgroup, key, subvalue)
+            # HDF5 treats "/" as a path separator so store the original key
+            # as an attribute on an escaped entry name
+            safe_key = key.replace("/", "|")
+            write_instrument_attribute(subgroup, safe_key, subvalue)
+            if safe_key in subgroup:
+                subgroup[safe_key].attrs["key"] = key
         return
     ds = group.create_dataset(
         name, data=getattr(value, "value", value), dtype=float
@@ -113,7 +118,12 @@ def read_instrument_attribute(group, name):
         return None
     entry = group[name]
     if isinstance(entry, h5py.Group):
-        return {key: read_instrument_attribute(entry, key) for key in entry}
+        return {
+            entry[key].attrs.get("key", key): read_instrument_attribute(
+                entry, key
+            )
+            for key in entry
+        }
     data = entry[...]
     units = entry.attrs.get("units", "dimensionless")
     if data.ndim == 0:
