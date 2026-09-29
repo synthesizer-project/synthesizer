@@ -13,7 +13,6 @@ Example usage:
     sed.get_photo_fnu(filters, nthreads=4)
 """
 
-import os
 import re
 
 import matplotlib.pyplot as plt
@@ -48,9 +47,11 @@ from synthesizer.emissions.scaling import (
     scale_inplace,
     scale_to_quantity,
 )
-from synthesizer.emissions.utils import evaluate_dust_curve_at_dtype
+from synthesizer.emissions.utils import (
+    evaluate_dust_curve_at_dtype,
+    nansum_leading_axes,
+)
 from synthesizer.extensions.observed_spectra import compute_fnu
-from synthesizer.extensions.reductions import reduce_particle_spectra
 from synthesizer.extensions.spectra_operations import (
     apply_separable_attenuation_2d,
     multiply_array_by_vector_1d,
@@ -170,15 +171,16 @@ class Sed:
         self.photo_fnu = None
 
     @timed("Sed.sum")
-    def sum(self):
+    def sum(self, nthreads=1):
         """Sum the SED over all dimensions.
 
         For multidimensional `sed`'s, sum the luminosity to provide a 1D
         integrated SED.
 
-        TODO: Replace this NumPy-based implementation with a generic C++
-        reduction backend that can handle the full range of supported Sed
-        shapes.
+        Args:
+            nthreads (int):
+                The number of threads to use for the reduction. If -1 all
+                available CPU cores will be used.
 
         Returns:
             sed (object, Sed):
@@ -186,20 +188,17 @@ class Sed:
         """
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
-            # Define the axes to sum over to give only the final axis
-            sum_over = tuple(range(0, len(self._lnu.shape) - 1))
-
             # Create a new sed object with the first Lnu dimension collapsed
             new_sed = Sed(
                 self.lam,
-                np.nansum(self._lnu, axis=sum_over)
+                nansum_leading_axes(self._lnu, nthreads)
                 * get_quantity_unit(self, "lnu"),
             )
 
             # If fnu exists, sum that too
             if self.fnu is not None:
-                new_sed.fnu = np.nansum(
-                    self._fnu, axis=sum_over
+                new_sed.fnu = nansum_leading_axes(
+                    self._fnu, nthreads
                 ) * get_quantity_unit(self, "fnu")
                 new_sed.obsnu = self.obsnu
                 new_sed.obslam = self.obslam
@@ -2827,51 +2826,3 @@ def plot_spectra_as_rainbow(
     ax.imshow(im, aspect="auto", extent=(lam_min, lam_max, 0, 1))
 
     return fig, ax
-
-
-@timed("Sed.integrate_particle_sed")
-def integrate_particle_sed(sed, nthreads=1):
-    """Integrate a per-particle Sed to an integrated Sed using C++.
-
-    This helper is intended for Sed objects whose luminosity array has shape
-    ``(nparticle, nlam)``. It uses the specialised C++ particle spectra
-    reduction kernel rather than the generic NumPy-based ``Sed.sum`` method.
-
-    Args:
-        sed (Sed):
-            The per-particle Sed to reduce.
-        nthreads (int):
-            The number of threads to use in the C++ reduction. If ``-1`` then
-            all available CPU cores will be used.
-
-    Returns:
-        Sed:
-            A new integrated Sed with the same wavelength grid and units as the
-            input Sed.
-
-    Raises:
-        InconsistentArguments:
-            If the input Sed does not contain a two-dimensional luminosity
-            array with particle spectra on the leading axis.
-    """
-    # Resolve the automatic thread-count request to a concrete integer before
-    # dispatching into the C++ extension.
-    if nthreads == -1:
-        nthreads = os.cpu_count() or 1
-
-    # Validate that the Sed matches the specialised particle spectra layout
-    # expected by the reduction extension.
-    if sed._lnu.ndim != 2:
-        raise exceptions.InconsistentArguments(
-            "integrate_particle_sed expects a Sed with a 2D lnu array of "
-            "shape "
-            f"(nparticle, nlam), got {sed._lnu.shape}."
-        )
-
-    # Reduce the per-particle spectra in C++ and rebuild a unit-aware Sed on
-    # the original wavelength grid.
-    reduced_lnu = reduce_particle_spectra(sed._lnu, nthreads, sed._lnu.dtype)
-    return Sed(
-        sed.lam,
-        get_array_quantity_view(reduced_lnu, get_quantity_unit(sed, "lnu")),
-    )

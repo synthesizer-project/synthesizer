@@ -408,7 +408,13 @@ class BaseGalaxy:
                         peculiar_velocity=peculiar_velocity,
                     )
 
-    def get_observed_lines(self, cosmo, igm=Inoue14, out_dtype=None):
+    def get_observed_lines(
+        self,
+        cosmo,
+        igm=Inoue14,
+        nthreads=1,
+        out_dtype=None,
+    ):
         """Calculate the observed lines for all Line objects.
 
         This will run Line.get_fnu(...) and populate Line.fnu (and Line.obslam
@@ -430,6 +436,9 @@ class BaseGalaxy:
             igm (igm):
                 The object describing the intergalactic medium (defaults to
                 Inoue14).
+            nthreads (int):
+                The number of threads to use when scaling the fluxes.
+                nthreads=-1 will use all available threads.
             out_dtype (np.dtype, optional):
                 Requested floating-point dtype for the flux arrays. If None
                 the fluxes inherit the line luminosity dtype.
@@ -452,6 +461,7 @@ class BaseGalaxy:
                 cosmo=cosmo,
                 z=self.redshift,
                 igm=igm,
+                nthreads=nthreads,
                 out_dtype=out_dtype,
             )
 
@@ -464,6 +474,7 @@ class BaseGalaxy:
                     cosmo=cosmo,
                     z=self.redshift,
                     igm=igm,
+                    nthreads=nthreads,
                     out_dtype=out_dtype,
                 )
 
@@ -476,6 +487,7 @@ class BaseGalaxy:
                         cosmo=cosmo,
                         z=self.redshift,
                         igm=igm,
+                        nthreads=nthreads,
                         out_dtype=out_dtype,
                     )
 
@@ -488,6 +500,7 @@ class BaseGalaxy:
                     cosmo=cosmo,
                     z=self.redshift,
                     igm=igm,
+                    nthreads=nthreads,
                     out_dtype=out_dtype,
                 )
 
@@ -499,6 +512,7 @@ class BaseGalaxy:
                         cosmo=cosmo,
                         z=self.redshift,
                         igm=igm,
+                        nthreads=nthreads,
                         out_dtype=out_dtype,
                     )
 
