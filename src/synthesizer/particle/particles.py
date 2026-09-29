@@ -16,10 +16,11 @@ from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, get_quantity_unit
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.utils.operation_timers import timed, timer
+from synthesizer.utils.precision import resolve_out_dtype
 
 
 class Particles:
@@ -866,7 +867,7 @@ class Particles:
                 f"Trying to calculate radius for {self.__class__.__name__}"
                 " with no particles. Returning 0."
             )
-            return 0 * self.coordinates.units
+            return 0 * get_quantity_unit(self, "coordinates")
 
         # Get the radii if not already set
         if self.radii is None:
@@ -874,13 +875,19 @@ class Particles:
 
         # Handle special cases
         if frac == 0:
-            return 0 * self.radii.units
+            return 0 * get_quantity_unit(self, "radii")
         elif frac == 1:
-            return np.max(self.radii.value) * self.coordinates.units
+            return np.max(self.radii.value) * get_quantity_unit(
+                self, "coordinates"
+            )
         elif self.nparticles == 1:
-            return self.radii[0].value * frac * self.coordinates.units
+            return (
+                self.radii[0].value
+                * frac
+                * get_quantity_unit(self, "coordinates")
+            )
         elif np.sum(weights) == 0:
-            return 0 * self.coordinates.units
+            return 0 * get_quantity_unit(self, "coordinates")
 
         # Strip units off the weights if they have them
         if hasattr(weights, "units"):
@@ -900,7 +907,7 @@ class Particles:
         # Interpolate to get an accurate radius
         radius = np.interp(frac * total, cum_weight, radii)
 
-        return radius * self.radii.units
+        return radius * get_quantity_unit(self, "radii")
 
     def get_attr_radius(self, weight_attr, frac=0.5):
         """Calculate the radius of a particle distribution.
@@ -1041,21 +1048,22 @@ class Particles:
     def _prepare_los_args(
         self,
         other_parts,
-        attr,
+        attrs,
         kernel,
         mask,
         threshold,
         force_loop,
         min_count,
         nthreads,
+        out_dtype,
     ):
         """Prepare the arguments for line of sight column density computation.
 
         Args:
             other_parts (Particles):
                 The other particles to compute the column density with.
-            attr (str):
-                The attribute to compute the column density of.
+            attrs (tuple, str):
+                The attributes to compute the column densities of.
             kernel (Kernel):
                 A ``synthesizer.kernel_functions.Kernel`` instance. This is
                 used to provide both the projected LOS kernel table and the
@@ -1074,6 +1082,8 @@ class Particles:
                 performance.
             nthreads (int):
                 The number of threads to use for the calculation.
+            out_dtype (np.dtype):
+                The dtype for the output column densities.
         """
         # Ensure we actually have the properties needed
         if self.coordinates is None:
@@ -1088,11 +1098,6 @@ class Particles:
             raise exceptions.InconsistentArguments(
                 f"{other_parts.name} object is missing smoothing lengths!"
             )
-        if getattr(other_parts, attr, None) is None:
-            raise exceptions.InconsistentArguments(
-                f"{other_parts.name} object is missing {attr}!"
-            )
-
         # Set up the kernel inputs to the C function.
         if not hasattr(kernel, "get_kernel") or not hasattr(
             kernel, "get_truncated_los_kernel"
@@ -1121,7 +1126,8 @@ class Particles:
         # Set up the inputs from the other particle instance.
         pos_j = other_parts._coordinates
         smls = other_parts._smoothing_lengths
-        surf_den_vals = getattr(other_parts, attr)
+        # Pass existing arrays by reference; the extension reads them directly.
+        surf_den_vals = tuple(getattr(other_parts, attr) for attr in attrs)
 
         return (
             kernel,
@@ -1139,26 +1145,29 @@ class Particles:
             force_loop,
             min_count,
             nthreads,
+            out_dtype,
+            tuple(attrs),
         )
 
     def _prepare_smoothed_los_args(
         self,
         other_parts,
-        attr,
+        attrs,
         kernel,
         mask,
         threshold,
         force_loop,
         min_count,
         nthreads,
+        out_dtype,
     ):
         """Prepare the arguments for smoothed LOS column density computation.
 
         Args:
             other_parts (Particles):
                 The other particles to compute the column density with.
-            attr (str):
-                The attribute to compute the column density of.
+            attrs (tuple, str):
+                The attributes to compute the column densities of.
             kernel (Kernel):
                 A `synthesizer.kernel_functions.Kernel` instance. Smoothed LOS
                 calculations require the overlap table returned by
@@ -1179,6 +1188,8 @@ class Particles:
                 performance.
             nthreads (int):
                 The number of threads to use for the calculation.
+            out_dtype (np.dtype):
+                The dtype for the output column densities.
         """
         if self.coordinates is None:
             raise exceptions.InconsistentArguments(
@@ -1196,11 +1207,6 @@ class Particles:
             raise exceptions.InconsistentArguments(
                 f"{other_parts.name} object is missing smoothing lengths!"
             )
-        if getattr(other_parts, attr, None) is None:
-            raise exceptions.InconsistentArguments(
-                f"{other_parts.name} object is missing {attr}!"
-            )
-
         if self._coordinates.ndim != 2 or self._coordinates.shape[1] != 3:
             raise exceptions.InconsistentArguments(
                 f"{self.name} coordinates must have shape (N, 3)!"
@@ -1225,14 +1231,15 @@ class Particles:
                 f"{other_parts.name} coordinates and smoothing lengths "
                 "must have matching lengths!"
             )
-        if (
-            other_parts._coordinates.shape[0]
-            != getattr(other_parts, attr).shape[0]
-        ):
-            raise exceptions.InconsistentArguments(
-                f"{other_parts.name} coordinates and {attr} must have "
-                "matching lengths!"
-            )
+        for attr in attrs:
+            if (
+                other_parts._coordinates.shape[0]
+                != getattr(other_parts, attr).shape[0]
+            ):
+                raise exceptions.InconsistentArguments(
+                    f"{other_parts.name} coordinates and {attr} must have "
+                    "matching lengths!"
+                )
 
         if (
             self._coordinates[mask, :].shape[0]
@@ -1276,7 +1283,8 @@ class Particles:
             # Set up the inputs from the other particle instance.
             pos_j = other_parts._coordinates
             smls = other_parts._smoothing_lengths
-            surf_den_vals = getattr(other_parts, attr)
+            # Pass references to existing arrays; no particle data is stacked.
+            surf_den_vals = tuple(getattr(other_parts, attr) for attr in attrs)
 
         return (
             overlap_kernel,
@@ -1297,6 +1305,8 @@ class Particles:
             force_loop,
             min_count,
             nthreads,
+            out_dtype,
+            tuple(attrs),
         )
 
     @timed("Particles.get_los_column_density")
@@ -1312,6 +1322,7 @@ class Particles:
         force_loop=0,
         min_count=100,
         nthreads=1,
+        out_dtype=None,
     ):
         """Calculate the column density of an attribute.
 
@@ -1322,8 +1333,10 @@ class Particles:
         Args:
             other_parts (Particles):
                 The other particles to calculate the column density with.
-            density_attr (str):
-                The attribute to use to calculate the column density.
+            density_attr (str or sequence of str):
+                The attribute or attributes to use to calculate column
+                densities. Multiple attributes are evaluated in one LOS tree
+                traversal.
             kernel (Kernel):
                 A `synthesizer.kernel_functions.Kernel` instance. LOS column
                 densities require both the projected kernel table and the
@@ -1333,10 +1346,10 @@ class Particles:
                 as point-like when evaluating the LOS column density. If False,
                 the input particle kernels are accounted for via the overlap
                 kernel table.
-            column_density_attr (str):
-                The attribute to store the column density in on the Particles
-                instance. If None, the column density will not be stored. By
-                default this is None.
+            column_density_attr (str or sequence of str):
+                The attribute or attributes to store the column densities in on
+                the Particles instance. A sequence must match a sequence passed
+                to ``density_attr``. If None, results are not stored.
             mask (array-like, bool):
                 A mask to be applied to the stars. Surface densities will only
                 be computed and returned for stars with True in the mask.
@@ -1351,15 +1364,59 @@ class Particles:
                 performance.
             nthreads (int):
                 The number of threads to use for the calculation.
+            out_dtype (dtype-like, optional):
+                Floating-point dtype for the returned column densities. By
+                default, use the global Synthesizer output dtype.
 
         Returns:
-            column_density (float):
-                The column density of the particles.
+            unyt_array or tuple of unyt_array:
+                The column density for a string input, or one column-density
+                array per requested attribute for a sequence input.
         """
         from synthesizer.extensions.column_density import (
             compute_column_density,
             compute_column_density_smoothed,
         )
+
+        scalar_input = isinstance(density_attr, str)
+        if scalar_input:
+            density_attrs = (density_attr,)
+        else:
+            try:
+                density_attrs = tuple(density_attr)
+            except TypeError as exc:
+                raise exceptions.InconsistentArguments(
+                    "density_attr must be a string or a sequence of strings."
+                ) from exc
+
+        if not density_attrs or not all(
+            isinstance(attr, str) for attr in density_attrs
+        ):
+            raise exceptions.InconsistentArguments(
+                "density_attr must contain at least one attribute name."
+            )
+
+        if column_density_attr is None:
+            output_attrs = None
+        elif scalar_input and isinstance(column_density_attr, str):
+            output_attrs = (column_density_attr,)
+        elif not scalar_input and not isinstance(column_density_attr, str):
+            try:
+                output_attrs = tuple(column_density_attr)
+            except TypeError as exc:
+                raise exceptions.InconsistentArguments(
+                    "column_density_attr must match density_attr."
+                ) from exc
+            if len(output_attrs) != len(density_attrs) or not all(
+                isinstance(attr, str) for attr in output_attrs
+            ):
+                raise exceptions.InconsistentArguments(
+                    "column_density_attr must match density_attr."
+                )
+        else:
+            raise exceptions.InconsistentArguments(
+                "column_density_attr must match density_attr."
+            )
 
         # If we don't have a mask make a fake one for consistency
         if mask is None:
@@ -1381,85 +1438,95 @@ class Particles:
                 f"{other_parts.name} object is missing coordinates!"
             )
 
-        density = getattr(other_parts, density_attr, None)
-        if density is None:
-            raise exceptions.InconsistentArguments(
-                f"{other_parts.name} object is missing {density_attr}!"
-            )
-        if not hasattr(density, "units"):
-            raise exceptions.InconsistentArguments(
-                f"{other_parts.name} object attribute {density_attr} must "
-                "have units to compute LOS column densities."
-            )
+        coord_units = get_quantity_unit(other_parts, "coordinates")
+        column_density_units = []
+        for attr in density_attrs:
+            density = getattr(other_parts, attr, None)
+            if density is None:
+                raise exceptions.InconsistentArguments(
+                    f"{other_parts.name} object is missing {attr}!"
+                )
+            if not hasattr(density, "units"):
+                raise exceptions.InconsistentArguments(
+                    f"{other_parts.name} object attribute {attr} must have "
+                    "units to compute LOS column densities."
+                )
+            if density.ndim != 1 or density.shape[0] != other_parts.nparticles:
+                raise exceptions.InconsistentArguments(
+                    f"{other_parts.name} attribute {attr} must have one value "
+                    "per particle."
+                )
+            column_density_units.append(density.units / coord_units**2)
 
-        # Get the units for the column density from the inputs
-        column_density_units = density.units / other_parts.coordinates.units**2
+        output_dtype = resolve_out_dtype(out_dtype)
+
+        def finalise(raw):
+            with timer("Particles.get_los_column_density.attach_units"):
+                results = tuple(
+                    unyt_array(
+                        raw[index],
+                        units,
+                        bypass_validation=True,
+                    )
+                    for index, units in enumerate(column_density_units)
+                )
+                if output_attrs is not None:
+                    for attr, result in zip(output_attrs, results):
+                        setattr(self, attr, result)
+            return results[0] if scalar_input else results
 
         # If have no particles return 0
         if self.nparticles == 0 or masked_nparticles == 0:
-            col_den = unyt_array(
-                np.zeros(masked_nparticles),
-                column_density_units,
-                bypass_validation=True,
+            return finalise(
+                np.zeros(
+                    (len(density_attrs), masked_nparticles), dtype=output_dtype
+                )
             )
-            if column_density_attr is not None:
-                setattr(self, column_density_attr, col_den)
-            return col_den
 
         # If the other particles have no particles return 0
         if other_parts.nparticles == 0:
-            col_den = unyt_array(
-                np.zeros(masked_nparticles),
-                column_density_units,
-                bypass_validation=True,
+            return finalise(
+                np.zeros(
+                    (len(density_attrs), masked_nparticles), dtype=output_dtype
+                )
             )
-            if column_density_attr is not None:
-                setattr(self, column_density_attr, col_den)
-            return col_den
 
         # Compute the column density. Smoothed input particles use a dedicated
         # extension path based on the overlap kernel table.
         if as_points:
-            col_den = compute_column_density(
-                *self._prepare_los_args(
+            with timer("Particles.get_los_column_density.prepare_inputs"):
+                los_args = self._prepare_los_args(
                     other_parts,
-                    density_attr,
+                    density_attrs,
                     kernel,
                     mask,
                     threshold,
                     force_loop,
                     min_count,
                     nthreads,
+                    output_dtype,
                 )
-            )
+
+            with timer("Particles.get_los_column_density.compute"):
+                col_den = compute_column_density(*los_args)
         else:
-            with timer("Particles.get_los_column_density.prepare_smoothed"):
+            with timer("Particles.get_los_column_density.prepare_inputs"):
                 smoothed_args = self._prepare_smoothed_los_args(
                     other_parts,
-                    density_attr,
+                    density_attrs,
                     kernel,
                     mask,
                     threshold,
                     force_loop,
                     min_count,
                     nthreads,
+                    output_dtype,
                 )
 
-            with timer("Particles.get_los_column_density.compute_smoothed"):
+            with timer("Particles.get_los_column_density.compute"):
                 col_den = compute_column_density_smoothed(*smoothed_args)
 
-        # Associate with the correct units
-        col_den = unyt_array(
-            col_den,
-            column_density_units,
-            bypass_validation=True,
-        )
-
-        # Set the column density attribute (if requested)
-        if column_density_attr is not None:
-            setattr(self, column_density_attr, col_den)
-
-        return col_den
+        return finalise(col_den)
 
     @accepts(phi=rad, theta=rad)
     @timed("Particles.rotate_particles")
@@ -1553,9 +1620,11 @@ class Particles:
         # units. Since coordinates and velocities won't necessarily agree
         # on the length unit we adopt the velocity length unit which we can
         # extract with some simple string manipulation.
-        distance_unit = str(self.velocities.units).split("/")[0]
+        velocity_unit = get_quantity_unit(self, "velocities")
+        distance_unit = str(velocity_unit).split("/")[0]
         ang_mom_unit = (
-            f"{distance_unit} * {self.masses.units} * {self.velocities.units}"
+            f"{distance_unit} * {get_quantity_unit(self, 'masses')} * "
+            f"{velocity_unit}"
         )
 
         # Cross product of position and velocity, weighted by mass

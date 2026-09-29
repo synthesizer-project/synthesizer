@@ -20,6 +20,24 @@
 #include "timers.h"
 #include "timers_init.h"
 
+/* Vectorisation hint for the per element loops below.
+ *
+ * This has to be a macro rather than a bare "#pragma omp simd" because the
+ * pragma must disappear entirely in builds without OpenMP, where the compiler
+ * would otherwise warn about an unknown pragma, and -Werror builds would fail.
+ * _Pragma is the form of #pragma that can be produced by a macro.
+ *
+ * It matters most for the attenuation kernels: on GCC with glibc, marking the
+ * loop simd is what allows the scalar exp call to be replaced with its vector
+ * libm equivalent, which is worth roughly 2x there. That substitution also
+ * needs an architecture flag, so it only happens in builds that pass one (see
+ * NATIVE in setup.py). */
+#ifdef WITH_OPENMP
+#define SYNTH_SIMD _Pragma("omp simd")
+#else
+#define SYNTH_SIMD
+#endif
+
 /* ------------------------------------------------------------------------ */
 /*  scale_spectra_2d — per-spectrum row scaling with four mask combos       */
 /* ------------------------------------------------------------------------ */
@@ -688,15 +706,17 @@ static void attenuate_2d_no_mask_serial(const Real *__restrict__ spectra,
   /* Loop over every row and apply the fused exponential-attenuation chain. */
   for (int irow = 0; irow < nrows; irow++) {
 
-    /* Cache the V-band optical depth for this row so we read it once. */
-    const Real row_tau = tau_v[irow];
+    /* Cache the negated V-band optical depth for this row so we read it
+     * once and the element loop does not repeat the negation. */
+    const Real neg_tau = -tau_v[irow];
     const Real *in_row = spectra + irow * ncols;
     OutT *out_row = out + irow * ncols;
 
     /* Attenuate every wavelength by exp(-tau_v * tau_x_v). */
+    SYNTH_SIMD
     for (int icol = 0; icol < ncols; icol++) {
       out_row[icol] =
-          static_cast<OutT>(in_row[icol] * std::exp(-row_tau * tau_x_v[icol]));
+          static_cast<OutT>(in_row[icol] * std::exp(neg_tau * tau_x_v[icol]));
     }
   }
 }
@@ -731,11 +751,12 @@ static void attenuate_2d_with_mask_serial(const Real *__restrict__ spectra,
 
     /* Attenuate masked rows and copy unmasked rows through unchanged. */
     if (mask[irow]) {
-      const Real row_tau = tau_v[irow];
+      const Real neg_tau = -tau_v[irow];
 
+      SYNTH_SIMD
       for (int icol = 0; icol < ncols; icol++) {
         out_row[icol] = static_cast<OutT>(in_row[icol] *
-                                          std::exp(-row_tau * tau_x_v[icol]));
+                                          std::exp(neg_tau * tau_x_v[icol]));
       }
     } else {
       for (int icol = 0; icol < ncols; icol++) {
@@ -773,15 +794,16 @@ static void attenuate_2d_no_mask_omp(const Real *__restrict__ spectra,
   /* Split the rows evenly across threads. */
 #pragma omp parallel for num_threads(nthreads) schedule(static)
   for (int irow = 0; irow < nrows; irow++) {
-    /* Cache the V-band optical depth for this row. */
-    const Real row_tau = tau_v[irow];
+    /* Cache the negated V-band optical depth for this row. */
+    const Real neg_tau = -tau_v[irow];
     const Real *in_row = spectra + irow * ncols;
     OutT *out_row = out + irow * ncols;
 
     /* Attenuate every wavelength by exp(-tau_v * tau_x_v). */
+    SYNTH_SIMD
     for (int icol = 0; icol < ncols; icol++) {
       out_row[icol] =
-          static_cast<OutT>(in_row[icol] * std::exp(-row_tau * tau_x_v[icol]));
+          static_cast<OutT>(in_row[icol] * std::exp(neg_tau * tau_x_v[icol]));
     }
   }
 }
@@ -818,11 +840,12 @@ static void attenuate_2d_with_mask_omp(const Real *__restrict__ spectra,
 
     /* Attenuate masked rows and copy unmasked rows through unchanged. */
     if (mask[irow]) {
-      const Real row_tau = tau_v[irow];
+      const Real neg_tau = -tau_v[irow];
 
+      SYNTH_SIMD
       for (int icol = 0; icol < ncols; icol++) {
         out_row[icol] = static_cast<OutT>(in_row[icol] *
-                                          std::exp(-row_tau * tau_x_v[icol]));
+                                          std::exp(neg_tau * tau_x_v[icol]));
       }
     } else {
       for (int icol = 0; icol < ncols; icol++) {

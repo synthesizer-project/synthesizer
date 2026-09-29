@@ -33,6 +33,110 @@
 #include "weights.h"
 
 /**
+ * @brief Accumulate a fixed number of weighted grid rows into one output row.
+ *
+ * Computes out[ilam] = sum over the N cells of cells[i][ilam] * weights[i].
+ *
+ * N is a template parameter rather than an argument so the compiler knows the
+ * trip count of the inner loop. That lets it unroll the cell loop, which in
+ * turn lets it vectorise the wavelength loop: with a runtime count it can do
+ * neither, and the accumulation runs scalar at roughly a quarter of the
+ * memory bandwidth this access pattern can reach.
+ *
+ * @tparam N The number of contributing rows, known at compile time.
+ * @tparam SpecReal The floating-point type of the grid spectra.
+ * @tparam OutT The floating-point type of the output buffer.
+ *
+ * @param cells: The grid spectra rows contributing to this particle.
+ * @param weights: The weight applied to each contributing row.
+ * @param out: The destination row.
+ * @param nlam: The number of wavelength bins.
+ */
+template <int N, typename SpecReal, typename OutT>
+static void accumulate_n_cells(const SpecReal *const *cells,
+                               const OutT *weights, OutT *__restrict out,
+                               size_t nlam) {
+
+  /* Copy the pointers and weights into fixed size local arrays so the
+   * compiler can see they do not change across the wavelength loop. */
+  const SpecReal *c[N];
+  OutT w[N];
+  for (int i = 0; i < N; i++) {
+    c[i] = cells[i];
+    w[i] = weights[i];
+  }
+
+  /* Guarded because a build without OpenMP would otherwise warn about an
+   * unknown pragma, which -Werror builds treat as an error. */
+#ifdef WITH_OPENMP
+#pragma omp simd
+#endif
+  for (size_t ilam = 0; ilam < nlam; ilam++) {
+    OutT spec_val = static_cast<OutT>(0);
+    for (int i = 0; i < N; i++) {
+      spec_val += static_cast<OutT>(c[i][ilam]) * w[i];
+    }
+    out[ilam] = spec_val;
+  }
+}
+
+/**
+ * @brief Accumulate the weighted grid rows of one particle.
+ *
+ * Computes out[ilam] = sum_icell cells[icell][ilam] * weights[icell].
+ *
+ * A CIC patch contributes at most 2^ndim cells and cells with a zero fraction
+ * are dropped, so the count is only known at runtime. Dispatching on it here
+ * hands each case to a version compiled for that exact count; see
+ * accumulate_n_cells for why that matters. Grids with more dimensions than we
+ * specialise for fall through to a generic loop.
+ *
+ * @tparam SpecReal The floating-point type of the grid spectra.
+ * @tparam OutT The floating-point type of the output buffer.
+ *
+ * @param cells: The grid spectra rows contributing to this particle.
+ * @param weights: The weight applied to each contributing row.
+ * @param ncells: The number of contributing rows (1 to 2^ndim).
+ * @param out: The destination row.
+ * @param nlam: The number of wavelength bins.
+ */
+template <typename SpecReal, typename OutT>
+static void accumulate_cell_spectra(const SpecReal *const *cells,
+                                    const OutT *weights, int ncells,
+                                    OutT *__restrict out, size_t nlam) {
+  switch (ncells) {
+    case 1:
+      return accumulate_n_cells<1>(cells, weights, out, nlam);
+    case 2:
+      return accumulate_n_cells<2>(cells, weights, out, nlam);
+    case 3:
+      return accumulate_n_cells<3>(cells, weights, out, nlam);
+    case 4:
+      return accumulate_n_cells<4>(cells, weights, out, nlam);
+    case 5:
+      return accumulate_n_cells<5>(cells, weights, out, nlam);
+    case 6:
+      return accumulate_n_cells<6>(cells, weights, out, nlam);
+    case 7:
+      return accumulate_n_cells<7>(cells, weights, out, nlam);
+    case 8:
+      return accumulate_n_cells<8>(cells, weights, out, nlam);
+    default:
+      break;
+  }
+
+  /* More cells than we specialise for (grids with ndim > 3). */
+  for (size_t ilam = 0; ilam < nlam; ilam++) {
+    OutT spec_val = static_cast<OutT>(0);
+    for (int icell = 0; icell < ncells; icell++) {
+      spec_val = std::fma(static_cast<OutT>(cells[icell][ilam]),
+                          weights[icell], spec_val);
+    }
+    out[ilam] = spec_val;
+  }
+}
+
+/**
  * @brief This calculates particle spectra using a cloud in cell approach.
  *
  * This is the serial version of the function for grids with a wavelength mask.
@@ -252,14 +356,9 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
     OutT *__restrict part_spec = part_spectra + p * nlam;
 
     /* Add all grid cell contributions to the spectra. */
-    for (size_t ilam = 0; ilam < nlam; ilam++) {
-      OutT spec_val = static_cast<OutT>(0);
-      for (int icell = 0; icell < nvalid_cells; icell++) {
-        spec_val = std::fma(static_cast<OutT>(cell_spectra_ptrs[icell][ilam]),
-                            cell_weights[icell], spec_val);
-      }
-      part_spec[ilam] = spec_val;
-    }
+    accumulate_cell_spectra<SpecReal, OutT>(cell_spectra_ptrs.data(),
+                                            cell_weights.data(), nvalid_cells,
+                                            part_spec, nlam);
   }
 }
 
@@ -557,15 +656,9 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
       OutT *__restrict part_spec = part_spectra + p * nlam;
 
       /* Add all grid cell contributions to the spectra. */
-      for (size_t ilam = 0; ilam < nlam; ilam++) {
-        OutT spec_val = static_cast<OutT>(0);
-        for (int icell = 0; icell < nvalid_cells; icell++) {
-          spec_val =
-              std::fma(static_cast<OutT>(cell_spectra_ptrs[icell][ilam]),
-                       cell_weights[icell], spec_val);
-        }
-        part_spec[ilam] = spec_val;
-      }
+      accumulate_cell_spectra<SpecReal, OutT>(cell_spectra_ptrs.data(),
+                                              cell_weights.data(),
+                                              nvalid_cells, part_spec, nlam);
     }
   }
 }
@@ -1161,13 +1254,38 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   /* Define the output dimensions. */
   npy_intp np_part_dims[2] = {npart, nlam};
 
-  /* Allocate the particle spectra in the requested output precision. */
+  /* The extraction kernels assign (not accumulate) every wavelength of every
+   * row they visit, so the buffer only has to be zeroed when a mask can leave
+   * part of it untouched: a wavelength mask skips columns and a particle mask
+   * skips whole rows. Without either, zeroing is a redundant full pass over
+   * the output. */
+  const bool needs_zeroing =
+      has_lam_mask || (np_mask != NULL && (PyObject *)np_mask != Py_None &&
+                       PyArray_Check((PyObject *)np_mask));
+
   PyArrayObject *np_part_spectra =
-      (PyArrayObject *)PyArray_ZEROS(2, np_part_dims, output_typenum, 0);
+      (PyArrayObject *)PyArray_SimpleNew(2, np_part_dims, output_typenum);
   if (np_part_spectra == NULL) {
     delete part_props;
     delete grid_props;
     return NULL;
+  }
+
+  /* When the fill is needed, run it over the same static particle blocks the
+   * kernels use. On a NUMA node that makes the thread which will later write
+   * each row the one that first touches its pages, so the pages are placed on
+   * that thread's node rather than all on the allocating thread's. */
+  if (needs_zeroing) {
+    char *out_bytes = static_cast<char *>(PyArray_DATA(np_part_spectra));
+    const size_t row_bytes =
+        static_cast<size_t>(nlam) * PyArray_ITEMSIZE(np_part_spectra);
+#ifdef WITH_OPENMP
+#pragma omp parallel for num_threads(nthreads) \
+    schedule(static) if (nthreads > 1)
+#endif
+    for (npy_intp p = 0; p < npart; p++) {
+      memset(out_bytes + static_cast<size_t>(p) * row_bytes, 0, row_bytes);
+    }
   }
 
   toc("compute_particle_seds.setup_output_arrays");

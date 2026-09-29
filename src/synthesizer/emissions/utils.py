@@ -49,7 +49,7 @@ import numpy as np
 from unyt import angstrom, unyt_array
 
 from synthesizer import exceptions
-from synthesizer.units import accepts
+from synthesizer.units import accepts, get_quantity_unit
 
 
 def get_composite_line_id_from_list(id):
@@ -512,8 +512,9 @@ def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
             The attenuation at the passed wavelength/s in magnitudes.
     """
     # Ensure lam is in the same units as the sed
-    if lam.units != intrinsic_sed.lam.units:
-        lam = lam.to(intrinsic_sed.lam.units)
+    lam_unit = get_quantity_unit(intrinsic_sed, "lam")
+    if lam.units != lam_unit:
+        lam = lam.to(lam_unit)
 
     # Calcilate the transmission array
     attenuation = get_attenuation(intrinsic_sed, attenuated_sed)

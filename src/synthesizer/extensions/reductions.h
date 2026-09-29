@@ -8,3 +8,4 @@ void reduce_spectra(OutT *spectra, const Real *part_spectra, int nlam,
                     int npart, int nthreads);
 
 PyObject *reduce_particle_spectra(PyObject *self, PyObject *args);
+PyObject *combine_spectra_2d(PyObject *self, PyObject *args);

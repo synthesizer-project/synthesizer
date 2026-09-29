@@ -23,6 +23,42 @@ int promoted_float_typenum(int lhs, int rhs);
 bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
                               int count, int *resolved_typenum);
 
+/**
+ * @brief A read-only view of a float32 or float64 array whose precision is
+ * only known at runtime.
+ *
+ * Every read branches on the dtype and converts to the requested type, so this
+ * is only for arrays read outside hot inner loops (e.g. once per outer-loop
+ * particle). There it lets an array keep its own precision without adding a
+ * template dimension (and doubling the instantiations) to a kernel.
+ */
+struct FloatView {
+  const void *data = nullptr;
+  bool is_float32 = false;
+
+  FloatView() = default;
+  explicit FloatView(PyArrayObject *arr)
+      : data(PyArray_DATA(arr)),
+        is_float32(PyArray_TYPE(arr) == NPY_FLOAT32) {}
+
+  /* Read element i converted to T. */
+  template <typename T>
+  T get(npy_intp i) const {
+    return is_float32 ? static_cast<T>(static_cast<const float *>(data)[i])
+                      : static_cast<T>(static_cast<const double *>(data)[i]);
+  }
+
+  /* A view starting n elements further into the array. */
+  FloatView offset(npy_intp n) const {
+    FloatView view = *this;
+    view.data =
+        is_float32
+            ? static_cast<const void *>(static_cast<const float *>(data) + n)
+            : static_cast<const void *>(static_cast<const double *>(data) + n);
+    return view;
+  }
+};
+
 /* Float-type dispatch helpers.
  *
  * These map a NumPy float typenum (NPY_FLOAT32/NPY_FLOAT64) onto a C++

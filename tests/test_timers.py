@@ -311,6 +311,7 @@ class TestNestedTimers(unittest.TestCase):
 
     def test_parent_excludes_child_runtime(self):
         """Parent timer should exclude time spent in nested child timer."""
+        outer_start = time.perf_counter()
         tic("Parent operation")
         time.sleep(0.001)
 
@@ -320,6 +321,7 @@ class TestNestedTimers(unittest.TestCase):
 
         time.sleep(0.001)
         toc("Parent operation")
+        outer_walltime = time.perf_counter() - outer_start
 
         parent_time, parent_count, _ = get_operation_timings(
             "Parent operation"
@@ -330,7 +332,11 @@ class TestNestedTimers(unittest.TestCase):
         self.assertEqual(child_count, 1)
         self.assertGreater(parent_time, 0.001)
         self.assertGreater(child_time, 0.002)
-        self.assertLess(parent_time, child_time)
+        self.assertAlmostEqual(
+            parent_time + child_time,
+            outer_walltime,
+            delta=child_time / 2,
+        )
 
     def test_nested_timers_accumulate_counts_once_per_close(self):
         """Nested pause/resume should not inflate parent call counts."""

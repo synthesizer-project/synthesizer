@@ -145,6 +145,7 @@ class Kernel:
         overlap_eta_max=10.0,
         overlap_build_ndim=16,
         projected_integration_steps=256,
+        dtype=np.float64,
     ):
         """Initialize the kernel class.
 
@@ -182,6 +183,12 @@ class Kernel:
             projected_integration_steps (int):
                 The number of trapezoidal integration steps used to build the
                 projected LOS kernel table.
+            dtype (np.dtype):
+                The floating-point dtype (np.float32 or np.float64) of the
+                lookup tables. Tables are always built in float64 for accuracy
+                and then stored at this dtype. float32 halves the memory of
+                the tables (the truncated table is ~40 MB at float32 with the
+                default resolution).
         """
         # What kernel to use
         self.name = name
@@ -205,6 +212,14 @@ class Kernel:
         self.overlap_eta_max = overlap_eta_max
         self.overlap_build_ndim = overlap_build_ndim
         self.projected_integration_steps = projected_integration_steps
+
+        # The dtype the lookup tables are stored at
+        self.dtype = np.dtype(dtype)
+        if self.dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
+            raise ValueError(
+                f"Kernel dtype must be np.float32 or np.float64 (got "
+                f"{self.dtype})."
+            )
 
         # Make sure we have valid look up table parameters
         if self.binsize <= 0:
@@ -312,10 +327,10 @@ class Kernel:
             self.projected_integration_steps,
         )
 
-        # Cache it.
-        self._projected_kernel = kernel
+        # Cache it at the requested precision.
+        self._projected_kernel = kernel.astype(self.dtype, copy=False)
 
-        return kernel
+        return self._projected_kernel
 
     @timed("Kernel.create_kernel")
     def create_kernel(self, filepath=None, nthreads=1):
@@ -384,6 +399,7 @@ class Kernel:
             self.projected_integration_steps
         )
         group.attrs["format_version"] = self._HDF5_FORMAT_VERSION
+        group.attrs["dtype"] = self.dtype.name
 
         datasets = {
             "projected_kernel": projected_kernel,
@@ -397,15 +413,19 @@ class Kernel:
             "overlap_eta": overlap_eta,
         }
         for dataset_name, data in datasets.items():
-            group.create_dataset(dataset_name, data=data, dtype=np.float64)
+            group.create_dataset(dataset_name, data=data, dtype=self.dtype)
 
     @classmethod
-    def _from_hdf5(cls, group):
+    def _from_hdf5(cls, group, dtype=None):
         """Create a Kernel from an HDF5 group.
 
         Args:
             group (h5py.Group):
                 The group containing a serialized kernel.
+            dtype (np.dtype, optional):
+                The dtype to store the tables at. If omitted this uses the
+                dtype the tables were saved at (float64 for files written
+                before the dtype was recorded).
 
         Returns:
             Kernel:
@@ -425,24 +445,34 @@ class Kernel:
             projected_integration_steps=int(
                 group.attrs["projected_integration_steps"]
             ),
+            dtype=(
+                group.attrs.get("dtype", "float64") if dtype is None else dtype
+            ),
         )
 
-        instance._projected_kernel = group["projected_kernel"][...]
-        instance._truncated_los_kernel = group["truncated_kernel"][...]
-        instance._overlap_kernel = group["overlap_kernel"][...]
-        instance._overlap_q = group["overlap_q"][...]
-        instance._overlap_u = group["overlap_u"][...]
-        instance._overlap_eta = group["overlap_eta"][...]
+        # Read each table straight into the requested dtype
+        def read(name):
+            return group[name].astype(instance.dtype)[...]
+
+        instance._projected_kernel = read("projected_kernel")
+        instance._truncated_los_kernel = read("truncated_kernel")
+        instance._overlap_kernel = read("overlap_kernel")
+        instance._overlap_q = read("overlap_q")
+        instance._overlap_u = read("overlap_u")
+        instance._overlap_eta = read("overlap_eta")
 
         return instance
 
     @classmethod
-    def load(cls, filepath):
+    def load(cls, filepath, dtype=None):
         """Load a Kernel from an HDF5 file.
 
         Args:
             filepath (str):
                 The path to the HDF5 file containing the serialized kernel.
+            dtype (np.dtype, optional):
+                The dtype to store the tables at. If omitted this uses the
+                dtype the tables were saved at.
 
         Returns:
             Kernel:
@@ -450,11 +480,24 @@ class Kernel:
         """
         with h5py.File(filepath, "r") as hdf:
             group = hdf["Kernel"] if "Kernel" in hdf else hdf
-            return cls._from_hdf5(group)
+            return cls._from_hdf5(group, dtype=dtype)
 
     def _get_z_bins(self):
         """Get the dimensionless LOS truncation bins for the 2D lookup."""
         return np.linspace(-1.0, 1.0, self.truncated_z_binsize + 1)
+
+    def _build_truncated_los_kernel(self):
+        """Build the truncated LOS kernel table and its grids in float64.
+
+        Returns:
+            tuple:
+                The float64 truncated kernel table and the radial and
+                LOS-coordinate grids that index it.
+        """
+        bins = self._get_bins(self.truncated_q_binsize)
+        z_bins = self._get_z_bins()
+        kernel = compute_truncated_los_kernel(bins, z_bins, self.name)
+        return kernel, bins, z_bins
 
     @timed("Kernel.get_truncated_los_kernel")
     def get_truncated_los_kernel(self):
@@ -475,22 +518,21 @@ class Kernel:
         if self._truncated_los_kernel is not None:
             bins = self._get_bins(self.truncated_q_binsize)
             z_bins = self._get_z_bins()
-            return self._truncated_los_kernel, bins, z_bins
+            return (
+                self._truncated_los_kernel,
+                bins.astype(self.dtype, copy=False),
+                z_bins.astype(self.dtype, copy=False),
+            )
 
-        # Get the projected-separation and LOS-coordinate bins and set up the
-        # output.
-        bins = self._get_bins(self.truncated_q_binsize)
-        z_bins = self._get_z_bins()
-        kernel = compute_truncated_los_kernel(
-            bins,
-            z_bins,
-            self.name,
+        # Build the table (in float64) and cache it at the requested precision.
+        kernel, bins, z_bins = self._build_truncated_los_kernel()
+        self._truncated_los_kernel = kernel.astype(self.dtype, copy=False)
+
+        return (
+            self._truncated_los_kernel,
+            bins.astype(self.dtype, copy=False),
+            z_bins.astype(self.dtype, copy=False),
         )
-
-        # Cache it.
-        self._truncated_los_kernel = kernel
-
-        return self._truncated_los_kernel, bins, z_bins
 
     @timed("Kernel._get_overlap_sample_points")
     def _get_overlap_sample_points(self):
@@ -547,8 +589,21 @@ class Kernel:
 
         # Get the truncated LOS kernel table, we need this to evaluate the
         # truncated LOS contribution at each sample point inside the input
-        # kernel when building the overlap table
-        truncated_kernel, trunc_q, trunc_z = self.get_truncated_los_kernel()
+        # kernel when building the overlap table. The build always works in
+        # float64, so if the stored table is at reduced precision we rebuild
+        # it at float64 rather than promoting the rounded values.
+        if self.dtype == np.float64:
+            truncated_kernel, trunc_q, trunc_z = (
+                self.get_truncated_los_kernel()
+            )
+        else:
+            truncated_kernel, trunc_q, trunc_z = (
+                self._build_truncated_los_kernel()
+            )
+            if self._truncated_los_kernel is None:
+                self._truncated_los_kernel = truncated_kernel.astype(
+                    self.dtype
+                )
 
         # Build the overlap kernel
         kernel = compute_overlap_kernel(
@@ -594,10 +649,10 @@ class Kernel:
         kernel, q_grid, u_grid, eta_grid = self._build_overlap_kernel(
             nthreads=nthreads
         )
-        self._overlap_kernel = kernel
-        self._overlap_q = q_grid
-        self._overlap_u = u_grid
-        self._overlap_eta = eta_grid
+        self._overlap_kernel = kernel.astype(self.dtype, copy=False)
+        self._overlap_q = q_grid.astype(self.dtype, copy=False)
+        self._overlap_u = u_grid.astype(self.dtype, copy=False)
+        self._overlap_eta = eta_grid.astype(self.dtype, copy=False)
 
         return (
             self._overlap_kernel,

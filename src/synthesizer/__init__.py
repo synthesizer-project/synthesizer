@@ -1,5 +1,12 @@
 """The main module for the synthesizer package."""
 
+# Apply the NUMA memory policy before anything allocates, since the policy only
+# affects later allocations. This is a no-op unless SYNTHESIZER_NUMA_INTERLEAVE
+# is set.
+from synthesizer._numa import maybe_interleave_memory
+
+maybe_interleave_memory()
+
 # Get the initialisation and data directory stuff we need before importing
 # the rest of the package.
 from synthesizer.data.initialise import (
