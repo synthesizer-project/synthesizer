@@ -1987,6 +1987,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """
         return self.plot_emission_graph(*args, **kwargs)
 
+    @timed("EmissionModel._apply_overrides")
     def _apply_overrides(
         self,
         emission_model,
@@ -2128,6 +2129,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     if model._is_extracting:
                         model.set_vel_shift(vel_shift)
 
+    @timed("EmissionModel._get_existing_emissions")
     def _get_existing_emissions(
         self,
         emitters,
@@ -2442,16 +2444,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         emission_model = copy.copy(self)
 
         # Apply any overrides we have
-        with timer("EmissionModel._get_spectra.apply_overrides"):
-            self._apply_overrides(
-                emission_model,
-                dust_curves=dust_curves,
-                tau_v=tau_v,
-                fesc=fesc,
-                covering_fraction=covering_fraction,
-                mask=mask,
-                vel_shift=vel_shift,
-            )
+        self._apply_overrides(
+            emission_model,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            fesc=fesc,
+            covering_fraction=covering_fraction,
+            mask=mask,
+            vel_shift=vel_shift,
+        )
 
         # Work with the overridden root instance stored in the model tree so
         # root-level overrides are reflected in any queue and reuse logic.
@@ -2474,8 +2475,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Build the execution queue for the active model tree before doing any
         # existing-emission reuse checks so inactive branches are skipped.
-        with timer("EmissionModel._get_spectra.build_model_queue"):
-            queue = ModelQueue(root_model)
+        queue = ModelQueue(root_model)
 
         # Before we do anything else, check that we have the emitters needed by
         # the active models in the queued execution graph.
@@ -2487,14 +2487,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
         # Get any existing spectra we are reusing
-        with timer("EmissionModel._get_spectra.get_existing_emissions"):
-            spectra, particle_spectra = root_model._get_existing_emissions(
-                emitters,
-                spectra,
-                particle_spectra,
-                emission_type="spectra",
-                models=queue.models.values(),
-            )
+        spectra, particle_spectra = root_model._get_existing_emissions(
+            emitters,
+            spectra,
+            particle_spectra,
+            emission_type="spectra",
+            models=queue.models.values(),
+        )
 
         # Execute the full model closure by processing each ready model once.
         while len(queue) > 0:
@@ -2679,6 +2678,17 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         f"Can't scale spectra by {scaler}."
                     )
 
+            # Flag spectra built from particle velocity shifts so a peculiar
+            # velocity can't be applied on top of them (see Sed.get_fnu).
+            if this_model.vel_shift or any(
+                spectra[dep].vel_shifted
+                for dep in queue.dependencies[label]
+                if dep in spectra
+            ):
+                spectra[label].vel_shifted = True
+                if label in particle_spectra:
+                    particle_spectra[label].vel_shifted = True
+
             # Unlock downstream models and delete expired unsaved emissions.
             queue.done(this_model, spectra, particle_spectra)
 
@@ -2841,8 +2851,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Build the execution queue for the active model tree before doing any
         # existing-emission reuse checks so inactive branches are skipped.
-        with timer("EmissionModel._get_lines.build_model_queue"):
-            queue = ModelQueue(root_model)
+        queue = ModelQueue(root_model)
 
         # Before we do anything else, check that we have the emitters needed by
         # the active models in the queued execution graph.
@@ -2940,6 +2949,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         particle_lines,
                         this_model,
                         emitter,
+                        nthreads=nthreads,
                     )
                     if line_lams is None and label in lines:
                         line_lams = lines[label].lam
@@ -2984,6 +2994,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         spectra,
                         particle_spectra,
                         out_dtype=out_dtype,
+                        nthreads=nthreads,
                     )
                     if line_lams is None and label in lines:
                         line_lams = lines[label].lam
@@ -2997,28 +3008,29 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
 
             # Apply any requested scaling after the model has been generated.
-            for scaler in this_model.scale_by:
-                if scaler is None:
-                    continue
-                elif hasattr(emitter, scaler):
-                    for line_id in line_ids:
-                        if this_model.per_particle:
-                            particle_lines[label][
-                                line_id
-                            ]._luminosity *= getattr(emitter, scaler)
-                            particle_lines[label][
-                                line_id
-                            ]._continuum *= getattr(emitter, scaler)
-                        lines[label][line_id]._luminosity *= getattr(
-                            emitter, scaler
+            with timer("EmissionModel._get_lines.scale"):
+                for scaler in this_model.scale_by:
+                    if scaler is None:
+                        continue
+                    elif hasattr(emitter, scaler):
+                        for line_id in line_ids:
+                            if this_model.per_particle:
+                                particle_lines[label][
+                                    line_id
+                                ]._luminosity *= getattr(emitter, scaler)
+                                particle_lines[label][
+                                    line_id
+                                ]._continuum *= getattr(emitter, scaler)
+                            lines[label][line_id]._luminosity *= getattr(
+                                emitter, scaler
+                            )
+                            lines[label][line_id]._continuum *= getattr(
+                                emitter, scaler
+                            )
+                    else:
+                        raise exceptions.InconsistentArguments(
+                            f"Can't scale lines by {scaler}."
                         )
-                        lines[label][line_id]._continuum *= getattr(
-                            emitter, scaler
-                        )
-                else:
-                    raise exceptions.InconsistentArguments(
-                        f"Can't scale lines by {scaler}."
-                    )
 
             # Unlock downstream models and delete expired unsaved emissions.
             queue.done(this_model, lines, particle_lines)
@@ -3027,10 +3039,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         queue.assert_finished()
 
         # Apply any post processing functions to the surviving emissions.
-        for func in self._post_processing:
-            lines = func(lines, emitters, self)
-            if len(particle_lines) > 0:
-                particle_lines = func(particle_lines, emitters, self)
+        with timer("EmissionModel._get_lines.post_processing"):
+            for func in self._post_processing:
+                lines = func(lines, emitters, self)
+                if len(particle_lines) > 0:
+                    particle_lines = func(particle_lines, emitters, self)
 
         return lines, particle_lines
 

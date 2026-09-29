@@ -3,6 +3,11 @@
 import time
 
 import numpy as np
+import pytest
+from astropy.cosmology import Planck18
+from unyt import km, s
+
+from synthesizer import exceptions
 
 
 def test_velocity_shift_applys_cic(random_part_stars, nebular_emission_model):
@@ -191,3 +196,29 @@ def test_velocity_shift_conservation_ngp(
         f"{(with_shift_sum - without_shift_sum) / without_shift_sum}, "
         f"with: {with_shift_sum}, without: {without_shift_sum})"
     )
+
+
+def test_velocity_shift_flags_spectra(
+    random_part_stars,
+    nebular_emission_model,
+):
+    """vel_shift spectra, and those built from them, are flagged."""
+    shifted = random_part_stars.get_spectra(
+        nebular_emission_model,
+        vel_shift=True,
+    )
+    random_part_stars.clear_all_emissions()
+    unshifted = random_part_stars.get_spectra(
+        nebular_emission_model,
+        vel_shift=False,
+    )
+    random_part_stars.clear_all_emissions()
+
+    # The root combines the shifted line and continuum extractions
+    assert shifted.vel_shifted
+    assert not unshifted.vel_shifted
+
+    # So a peculiar velocity can't be applied on top
+    with pytest.raises(exceptions.InconsistentArguments):
+        shifted.get_fnu(Planck18, 1.0, peculiar_velocity=500 * km / s)
+    unshifted.get_fnu(Planck18, 1.0, peculiar_velocity=500 * km / s)

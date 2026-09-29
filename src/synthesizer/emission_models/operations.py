@@ -21,7 +21,7 @@ from synthesizer.emission_models.extractors.extractor import (
     ParticleExtractor,
 )
 from synthesizer.emission_models.utils import cache_model_params
-from synthesizer.emissions import LineCollection, Sed, integrate_particle_sed
+from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.reductions import (
     combine_spectra_2d,
     reduce_particle_spectra,
@@ -30,6 +30,7 @@ from synthesizer.grid import Template
 from synthesizer.units import get_quantity_unit
 from synthesizer.utils.operation_timers import timed, timer
 from synthesizer.utils.precision import resolve_out_dtype
+from synthesizer.utils.util_funcs import as_contiguous
 
 
 class Extraction:
@@ -496,12 +497,13 @@ class Generation:
         # Store the spectra in the right place (integrating if we need to)
         if per_particle:
             particle_spectra[this_model.label] = sed
-            spectra[this_model.label] = integrate_particle_sed(sed, nthreads)
+            spectra[this_model.label] = sed.sum(nthreads=nthreads)
         else:
             spectra[this_model.label] = sed
 
         return spectra, particle_spectra
 
+    @timed("Generation._generate_lines")
     def _generate_lines(
         self,
         this_model,
@@ -513,6 +515,7 @@ class Generation:
         line_ids,
         spectra,
         particle_spectra,
+        nthreads=1,
         out_dtype=None,
     ):
         """Generate the lines for a given model.
@@ -540,6 +543,8 @@ class Generation:
             particle_spectra (dict):
                 Dictionary of existing particle spectra from all emitters for
                 scaling.
+            nthreads (int):
+                The number of threads available for the particle reduction.
             out_dtype (np.dtype):
                 The dtype of the generated lines, passed to the generator
                 which produces its output at this precision. Defaults to the
@@ -611,7 +616,7 @@ class Generation:
         # Store the lines in the right place (integrating if we need to)
         if per_particle:
             particle_lines[this_model.label] = out_lines
-            lines[this_model.label] = out_lines.sum()
+            lines[this_model.label] = out_lines.sum(nthreads=nthreads)
         else:
             lines[this_model.label] = out_lines
 
@@ -813,12 +818,7 @@ class Transformation:
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_emissions[this_model.label] = emission
-            if isinstance(emission, Sed):
-                emissions[this_model.label] = integrate_particle_sed(
-                    emission, nthreads
-                )
-            else:
-                emissions[this_model.label] = emission.sum()
+            emissions[this_model.label] = emission.sum(nthreads=nthreads)
         else:
             emissions[this_model.label] = emission
 
@@ -954,6 +954,7 @@ class Combination:
 
         return spectra, particle_spectra
 
+    @timed("Combination._combine_lines")
     def _combine_lines(
         self,
         emission_model,
@@ -961,6 +962,7 @@ class Combination:
         particle_lines,
         this_model,
         emitter,
+        nthreads=1,
     ):
         """Combine the extracted lines.
 
@@ -976,6 +978,9 @@ class Combination:
                 The model defining the combination.
             emitter (Stars/BlackHoles/Galaxy):
                 The emitter to generate the spectra for.
+            nthreads (int):
+                The number of threads available for the combination and the
+                particle reduction.
 
         Returns:
             dict:
@@ -987,21 +992,39 @@ class Combination:
             in_lines = lines
 
         template = in_lines[this_model._combine_labels[0]]
-        out_luminosity = np.zeros(
-            template._luminosity.shape,
-            dtype=template._luminosity.dtype,
-        )
-        out_continuum = np.zeros(
-            template._continuum.shape,
-            dtype=template._continuum.dtype,
-        )
 
         # Combine raw arrays directly and construct one LineCollection at the
         # end to avoid repeated constructor and metadata work in hot loops.
-        for combine_label in this_model._combine_labels:
-            combine_lines = in_lines[combine_label]
-            out_luminosity += combine_lines._luminosity
-            out_continuum += combine_lines._continuum
+        if this_model.per_particle:
+            # Per-particle arrays go through the threaded kernel, which needs
+            # contiguous buffers
+            out_luminosity = combine_spectra_2d(
+                tuple(
+                    as_contiguous(in_lines[label]._luminosity)
+                    for label in this_model._combine_labels
+                ),
+                nthreads,
+            )
+            out_continuum = combine_spectra_2d(
+                tuple(
+                    as_contiguous(in_lines[label]._continuum)
+                    for label in this_model._combine_labels
+                ),
+                nthreads,
+            )
+        else:
+            out_luminosity = np.zeros(
+                template._luminosity.shape,
+                dtype=template._luminosity.dtype,
+            )
+            out_continuum = np.zeros(
+                template._continuum.shape,
+                dtype=template._continuum.dtype,
+            )
+            for combine_label in this_model._combine_labels:
+                combine_lines = in_lines[combine_label]
+                out_luminosity += combine_lines._luminosity
+                out_continuum += combine_lines._continuum
 
         out_lines = LineCollection(
             line_ids=template.line_ids,
@@ -1024,7 +1047,7 @@ class Combination:
         # Store the lines in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_lines[this_model.label] = out_lines
-            lines[this_model.label] = out_lines.sum()
+            lines[this_model.label] = out_lines.sum(nthreads=nthreads)
         else:
             lines[this_model.label] = out_lines
 
