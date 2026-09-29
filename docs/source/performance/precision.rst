@@ -79,6 +79,28 @@ double precision and only cast to the requested output dtype at the end, so a
 float32 result is the correctly-rounded float32 representation of the float64
 answer rather than a value degraded by millions of low-precision additions.
 
+Luminosity units
+^^^^^^^^^^^^^^^^
+
+float32 can only represent values up to about 3.4e38, but luminosities in
+cgs units exceed that for realistic sources: line luminosities reach
+1e40–1e45 erg/s and black hole bolometric luminosities ~1e45 erg/s.
+Synthesizer therefore stores luminosities in solar luminosities by default
+(the ``luminosity`` unit category is ``Lsun``), which keeps them comfortably
+within the float32 range. Spectral densities (e.g. ``lnu`` in erg/s/Hz) fit
+in float32 and keep their cgs units.
+
+Grids are converted to these internal units when they are loaded, so this
+makes no difference to the results: only the units of the returned
+luminosities change, and they can be converted with ``.to("erg/s")`` as
+usual.
+
+Note: If your units file predates this change and still uses the old
+``erg / s`` default, it is updated automatically (and the change is printed);
+any units you customised are left alone. Changes to the default units are
+listed in ``units_changelog.yml``. You can switch back to erg/s in the units
+file if you prefer, but float32 luminosities may then overflow.
+
 Input precision
 ~~~~~~~~~~~~~~~
 
