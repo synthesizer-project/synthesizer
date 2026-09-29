@@ -35,8 +35,9 @@ UnitCategories:
     unit: Hz
     description: "Frequencies of light"
 
+  # Lsun rather than erg/s so realistic luminosities fit in float32
   luminosity:
-    unit: "erg / s"
+    unit: "Lsun"
     description: "Total energy output per unit time"
 
   luminosity_solar:
