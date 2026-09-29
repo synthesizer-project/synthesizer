@@ -404,7 +404,9 @@ def combine_arrays(arr1, arr2, verbose=False):
     combinations.
 
     If both arrays are None then None is returned. If one array is None and
-    the other is not then None is returned along with a warning.
+    the other is not then None is returned along with a warning. Arrays with
+    compatible but different units (e.g. ages in yr and Myr) are combined in
+    the units of the first array.
 
     Args:
         arr1 (np.ndarray):
@@ -432,9 +434,18 @@ def combine_arrays(arr1, arr2, verbose=False):
     elif arr1.ndim == 0 or arr2.ndim == 0:
         return None
 
-    # If both are not None then combine them
-    else:
-        return np.concatenate([arr1, arr2])
+    # Arrays with compatible but different units (e.g. ages in yr and Myr)
+    # are combined in the units of the first array. Convert out of place so
+    # the caller's array is left untouched.
+    if (
+        isinstance(arr1, unyt_array)
+        and isinstance(arr2, unyt_array)
+        and arr1.units != arr2.units
+    ):
+        arr2 = arr2.to(arr1.units)
+
+    # Combine them
+    return np.concatenate([arr1, arr2])
 
 
 def pluralize(word: str) -> str:
