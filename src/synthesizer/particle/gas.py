@@ -36,7 +36,7 @@ from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import scalar_like
-from synthesizer.utils.util_funcs import combine_arrays
+from synthesizer.utils.util_funcs import combine_arrays, pluralize_kwargs
 
 
 class Gas(Particles, Component):
@@ -96,6 +96,7 @@ class Gas(Particles, Component):
     smoothing_lengths = Quantity("spatial")
     dust_masses = Quantity("mass")
 
+    @pluralize_kwargs
     @accepts(
         masses=Msun.in_base("galactic"),
         coordinates=Mpc,

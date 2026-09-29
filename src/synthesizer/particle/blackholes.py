@@ -30,6 +30,7 @@ from synthesizer.components.blackhole import BlackholesComponent
 from synthesizer.particle.particles import Particles
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import scalar_to_array
+from synthesizer.utils.util_funcs import pluralize_kwargs
 
 
 class BlackHoles(Particles, BlackholesComponent):
@@ -59,6 +60,7 @@ class BlackHoles(Particles, BlackholesComponent):
     # Define quantities
     smoothing_lengths = Quantity("spatial")
 
+    @pluralize_kwargs
     @accepts(
         masses=Msun.in_base("galactic"),
         accretion_rates=Msun.in_base("galactic") / yr,

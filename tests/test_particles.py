@@ -2,9 +2,10 @@
 
 import numpy as np
 import pytest
-from unyt import Mpc, Msun, km, rad, s, unyt_array
+from unyt import Mpc, Msun, Myr, km, rad, s, unyt_array, yr
 
 from synthesizer import exceptions
+from synthesizer.particle import BlackHoles, Gas, Stars
 from synthesizer.particle.particles import CoordinateGenerator, Particles
 
 
@@ -460,3 +461,76 @@ class TestCoordinateGenerator:
         """generate_3D_spline should raise UnimplementedFunctionality."""
         with pytest.raises(exceptions.UnimplementedFunctionality):
             CoordinateGenerator.generate_3D_spline(5, kernel_func=lambda x: x)
+
+
+class TestSingularArguments:
+    """Particle constructors accept singular names for plural arguments."""
+
+    @pytest.mark.parametrize(
+        "cls, plural, singular",
+        [
+            (
+                Stars,
+                {
+                    "initial_masses": np.array([1e6]) * Msun,
+                    "ages": np.array([10.0]) * Myr,
+                    "metallicities": np.array([0.01]),
+                    "velocities": np.zeros((1, 3)) * km / s,
+                },
+                {
+                    "initial_mass": np.array([1e6]) * Msun,
+                    "age": np.array([10.0]) * Myr,
+                    "metallicity": np.array([0.01]),
+                    "velocity": np.zeros((1, 3)) * km / s,
+                },
+            ),
+            (
+                Gas,
+                {
+                    "masses": np.array([1e6]) * Msun,
+                    "metallicities": np.array([0.01]),
+                    "dust_masses": np.array([1e3]) * Msun,
+                },
+                {
+                    "mass": np.array([1e6]) * Msun,
+                    "metallicity": np.array([0.01]),
+                    "dust_mass": np.array([1e3]) * Msun,
+                },
+            ),
+            (
+                BlackHoles,
+                {
+                    "masses": np.array([1e8]) * Msun,
+                    "accretion_rates": np.array([1.0]) * Msun / yr,
+                    "inclinations": np.array([0.5]) * rad,
+                    "metallicities": np.array([0.01]),
+                },
+                {
+                    "mass": np.array([1e8]) * Msun,
+                    "accretion_rate": np.array([1.0]) * Msun / yr,
+                    "inclination": np.array([0.5]) * rad,
+                    "metallicity": np.array([0.01]),
+                },
+            ),
+        ],
+        ids=["Stars", "Gas", "BlackHoles"],
+    )
+    def test_singular_names_match_plural_names(self, cls, plural, singular):
+        """Singular argument names give the same object as plural ones."""
+        from_plural = cls(**plural)
+        from_singular = cls(**singular)
+
+        for name in plural:
+            np.testing.assert_allclose(
+                np.asarray(getattr(from_singular, name)),
+                np.asarray(getattr(from_plural, name)),
+            )
+
+    def test_passing_both_names_raises(self):
+        """Passing both the singular and plural name is ambiguous."""
+        with pytest.raises(exceptions.InconsistentArguments, match="Both"):
+            BlackHoles(
+                masses=np.array([1e8]) * Msun,
+                accretion_rate=np.array([1.0]) * Msun / yr,
+                accretion_rates=np.array([1.0]) * Msun / yr,
+            )

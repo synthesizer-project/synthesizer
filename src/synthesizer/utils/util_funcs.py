@@ -6,7 +6,8 @@ Example usage:
     rebin_1d(arr, 10, func=np.sum)
 """
 
-from functools import lru_cache
+from functools import lru_cache, wraps
+from inspect import signature
 
 import numpy as np
 import unyt.physical_constants as const
@@ -466,6 +467,58 @@ def pluralize(word: str) -> str:
         return word + "es"  # box -> boxes, bias -> biases
     else:
         return word + "s"  # age -> ages
+
+
+def pluralize_kwargs(func):
+    """Let a function accept singular names for its plural arguments.
+
+    Particle constructors take plural argument names (e.g. ages,
+    accretion_rates) while their parametric counterparts take singular ones
+    (e.g. age, accretion_rate). This decorator translates any keyword
+    argument whose plural form (see pluralize) is one of the function's
+    arguments, so either name can be used. Keyword arguments which don't
+    correspond to a plural argument are passed through untouched.
+
+    This must be the outermost decorator so the translation happens before
+    any other decorator (e.g. accepts) inspects the arguments.
+
+    Args:
+        func (callable):
+            The function to wrap.
+
+    Returns:
+        callable:
+            The wrapped function.
+
+    Raises:
+        InconsistentArguments:
+            If both the singular and plural name of an argument are passed.
+    """
+    # Get the argument names of the wrapped function once
+    params = signature(func).parameters
+
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        # Translate any singular names into their plural arguments
+        for key in list(kwargs):
+            plural = pluralize(key)
+
+            # Skip real arguments and anything without a plural argument
+            if key in params or plural not in params:
+                continue
+
+            # Passing both names is ambiguous
+            if plural in kwargs:
+                raise exceptions.InconsistentArguments(
+                    f"Both {key} and {plural} were passed, please pass "
+                    "only one of them."
+                )
+
+            kwargs[plural] = kwargs.pop(key)
+
+        return func(*args, **kwargs)
+
+    return wrapped
 
 
 def depluralize(word: str) -> str:

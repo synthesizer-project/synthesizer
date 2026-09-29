@@ -48,7 +48,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.operation_timers import timed
-from synthesizer.utils.util_funcs import combine_arrays
+from synthesizer.utils.util_funcs import combine_arrays, pluralize_kwargs
 
 
 def _evaluate_sfh_on_grid(sfh_func, log10ages, nsub=100):
@@ -200,6 +200,7 @@ class Stars(Particles, StarsComponent):
     current_masses = Quantity("mass")
     smoothing_lengths = Quantity("spatial")
 
+    @pluralize_kwargs
     @accepts(
         initial_masses=Msun.in_base("galactic"),
         ages=Myr,
