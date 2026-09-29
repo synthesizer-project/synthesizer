@@ -504,6 +504,25 @@ class TestUnitsFileHandling:
         assert units["Version"] == __version__
         assert units["UnitCategories"]["luminosity"]["unit"] == "erg / s"
 
+    def test_copy_units_updates_dev_build_files(self, tmp_path):
+        """Files from dev builds (which may predate a change) are updated."""
+        import yaml
+
+        units_file = tmp_path / "base" / "default_units.yml"
+        units_file.write_text(
+            "Version: 1.2.1.dev453\n"
+            "UnitCategories:\n"
+            "  luminosity_density_wavelength:\n"
+            "    unit: erg / s / Angstrom\n"
+        )
+
+        SynthesizerInitializer()._copy_units()
+
+        categories = yaml.safe_load(units_file.read_text())["UnitCategories"]
+        assert categories["luminosity_density_wavelength"]["unit"] == (
+            "Lsun / Angstrom"
+        )
+
 
 class TestTopLevelFlows:
     """Tests for top-level functions that use SynthesizerInitializer."""

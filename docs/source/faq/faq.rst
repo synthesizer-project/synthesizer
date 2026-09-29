@@ -19,7 +19,7 @@ error such as:
     precision (all float32 or all float64), but they are mixed:
         initial_masses: float64
         log10ages: float32
-        metallicities: float32
+        log10metallicities: float32
     ...
 
 Choose one dtype when loading or constructing the collection. When attaching

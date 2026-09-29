@@ -403,12 +403,16 @@ class SynthesizerInitializer:
 
             # Drop defaults that have changed since the user's file was
             # written (unless the user customised them) so the new defaults
-            # replace them
+            # replace them. Dev builds can't be ordered against the change
+            # (they may predate it), so files they wrote count as old too.
             user_version = Version(str(user_units.get("Version", "1.0.0")))
             for change in get_units_changelog():
                 key = change["category"]
                 unit = str(categories.get(key, {}).get("unit", ""))
-                if user_version <= Version(change["changed_after"]) and (
+                predates = user_version.is_devrelease or user_version <= (
+                    Version(change["changed_after"])
+                )
+                if predates and (
                     unit.replace(" ", "") == change["old"].replace(" ", "")
                 ):
                     del categories[key]

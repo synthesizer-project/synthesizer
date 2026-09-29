@@ -94,14 +94,15 @@ erg/s/Hz) and fluxes fit in float32 and keep their cgs units.
 
 Grids are converted to these internal units when they are loaded, so this
 makes no difference to the results: only the units of the returned
-luminosities change, and they can be converted with ``.to("erg/s")`` as
-usual.
+luminosities (and ``llam``) change, and they can be converted with
+``.to("erg/s")`` (or ``.to("erg/s/Angstrom")``) as usual.
 
-Note: If your units file predates this change and still uses the old
-``erg / s`` default, it is updated automatically (and the change is printed);
-any units you customised are left alone. Changes to the default units are
-listed in ``units_changelog.yml``. You can switch back to erg/s in the units
-file if you prefer, but float32 luminosities may then overflow.
+Note: If your units file predates these changes and still uses the old
+``erg / s`` and ``erg / s / Angstrom`` defaults, it is updated automatically
+(and the changes are printed); any units you customised are left alone.
+Changes to the default units are listed in ``units_changelog.yml``. You can
+switch back to cgs units in the units file if you prefer, but float32
+results that don't fit will then raise a ``PrecisionOverflow`` error.
 
 The float32 range
 ^^^^^^^^^^^^^^^^^
@@ -190,7 +191,7 @@ errors like:
     precision (all float32 or all float64), but they are mixed:
         initial_masses: float64
         log10ages: float32
-        metallicities: float32
+        log10metallicities: float32
     To fix this, convert the one mismatched array (initial_masses) to
     float32, e.g. arr = arr.astype(np.float32), or convert all of them to
     float64. For grid arrays, load the grid at the matching precision with
