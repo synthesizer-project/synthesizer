@@ -48,12 +48,17 @@ const char *typenum_to_string(int typenum) {
  * @return The dtype name.
  */
 static std::string get_dtype_name(PyArrayObject *np_arr) {
+
+  /* Get the dtype's string representation from NumPy. */
   PyObject *str =
       PyObject_Str(reinterpret_cast<PyObject *>(PyArray_DESCR(np_arr)));
   if (str == NULL) {
     PyErr_Clear();
     return typenum_to_string(PyArray_TYPE(np_arr));
   }
+
+  /* Copy it into a std::string, falling back to our own name if the
+   * conversion fails. */
   const char *utf8 = PyUnicode_AsUTF8(str);
   std::string name =
       utf8 != NULL ? utf8 : typenum_to_string(PyArray_TYPE(np_arr));
@@ -179,7 +184,8 @@ bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
     return false;
   }
 
-  /* Every input must be contiguous before we hand out raw pointers. */
+  /* Every input must be contiguous before we hand out raw pointers. While
+   * we're here, count the float32 arrays to see if the precision is mixed. */
   int n32 = 0;
   for (int i = 0; i < count; ++i) {
     if (!is_c_contiguous(arrays[i], names[i])) {
@@ -200,6 +206,8 @@ bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
   const int from_typenum = to64 ? NPY_FLOAT32 : NPY_FLOAT64;
   const char *to_name = to64 ? "float64" : "float32";
   const char *from_name = to64 ? "float32" : "float64";
+  /* List every array with its dtype, and collect the names of the ones that
+   * need converting. */
   std::string listing;
   std::string offenders;
   int n_offenders = 0;

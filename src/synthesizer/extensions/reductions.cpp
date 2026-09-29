@@ -387,6 +387,8 @@ PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
 
   PyObject *inputs_sequence;
   int nthreads;
+  /* The optional labels are the model labels of the inputs (for error
+   * messages). */
   PyObject *labels = NULL;
   if (!PyArg_ParseTuple(args, "Oi|O", &inputs_sequence, &nthreads, &labels)) {
     return NULL;
@@ -445,6 +447,9 @@ PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
   std::vector<std::string> name_storage;
   name_storage.reserve((size_t)ninputs);
   for (Py_ssize_t i = 0; i < ninputs; ++i) {
+
+    /* Default to the input's position, and use its label if we have a
+     * valid one. A bad label is not fatal so any Python error is cleared. */
     std::string name = "input " + std::to_string(i + 1);
     PyObject *label = (labels != NULL && PySequence_Check(labels) &&
                        i < PySequence_Size(labels))
@@ -461,6 +466,8 @@ PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
     PyErr_Clear();
     name_storage.push_back(name);
   }
+  /* is_matching_float_dtypes wants C strings, which point into name_storage
+   * so it must outlive the check. */
   std::vector<const char *> names;
   for (const std::string &name : name_storage) {
     names.push_back(name.c_str());

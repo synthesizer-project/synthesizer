@@ -42,7 +42,9 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
   /* Assign the number of particles. */
   npart = npart_;
 
-  /* Extract the property names first so dtype errors can name arrays. */
+  /* Extract the property names first so dtype errors can name arrays. A
+   * missing or invalid name is not fatal, we just store an empty name and
+   * fall back to a generic label below. */
   if (part_names_tuple != NULL && PySequence_Check(part_names_tuple) &&
       !PyUnicode_Check(part_names_tuple)) {
     Py_ssize_t n_names = PySequence_Size(part_names_tuple);
@@ -83,6 +85,8 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
 
   if (np_weights_ != NULL &&
       reinterpret_cast<PyObject *>(np_weights_) != Py_None) {
+    /* The weights name (if given) is the extra entry after the property
+     * names. */
     const size_t n_props = part_tuple_ != NULL && PyTuple_Check(part_tuple_)
                                ? static_cast<size_t>(PyTuple_Size(part_tuple_))
                                : 0;
@@ -118,6 +122,8 @@ Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
         return;
       }
       PyArrayObject *np_part_arr = reinterpret_cast<PyArrayObject *>(item);
+      /* Name the property if we have its name, otherwise use a generic
+       * label. */
       float_arrays[float_count] = np_part_arr;
       float_names[float_count] =
           (static_cast<size_t>(i) < part_names_.size() &&
