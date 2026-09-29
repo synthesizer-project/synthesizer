@@ -107,29 +107,6 @@ int promoted_float_typenum(int lhs, int rhs) {
 }
 
 /**
- * @brief Return an array view or cast copy with the requested float typenum.
- *
- * If the input already has the requested dtype, this returns the original
- * array with its reference count incremented. Otherwise it returns a new NumPy
- * array produced by ``PyArray_Cast``. Callers always own the returned
- * reference and must decref it.
- *
- * @param array: The NumPy array to reuse or cast.
- * @param typenum: The requested float32/float64 NumPy typenum.
- *
- * @return A new owned reference to an array with the requested dtype, or NULL
- *         if casting fails.
- */
-PyArrayObject *cast_float_array(PyArrayObject *array, int typenum) {
-  if (PyArray_TYPE(array) == typenum) {
-    Py_INCREF(array);
-    return array;
-  }
-
-  return (PyArrayObject *)PyArray_Cast(array, typenum);
-}
-
-/**
  * @brief Check whether a list of arrays share one floating-point dtype.
  *
  * This helper enforces the initial precision contract used by the migrated
@@ -182,7 +159,11 @@ bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
     if (typenum != shared_typenum) {
       PyErr_Format(PyExc_TypeError,
                    "%s must share the same floating-point dtype as %s "
-                   "(got %s and %s).",
+                   "(got %s and %s). Cast the offending array (e.g. with "
+                   "arr.astype(np.float32)) or, for grid arrays, load the "
+                   "grid at the matching precision with "
+                   "Grid(..., use_precision=...). Synthesizer never casts "
+                   "behind the scenes as this would produce hidden copies.",
                    name, names[0], typenum_to_string(typenum),
                    typenum_to_string(shared_typenum));
       return false;

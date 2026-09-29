@@ -26,9 +26,6 @@ from synthesizer.conversions import (
 from synthesizer.imaging.extensions.image import make_img
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
-from synthesizer.utils import (
-    ensure_array_c_compatible_double,
-)
 from synthesizer.utils.operation_timers import timed, timer
 
 _CENTERING_TOLERANCE = 1e-6
@@ -50,8 +47,9 @@ def _standardize_sph_kernel(kernel):
     if hasattr(kernel, "get_kernel"):
         kernel = kernel.get_kernel()
 
-    # Ensure the backend always receives a contiguous float64 lookup array.
-    return ensure_array_c_compatible_double(kernel)
+    # The kernel lookup table is generated internally so we build it at
+    # float64 explicitly (it is tiny and the backend interpolates in double).
+    return np.ascontiguousarray(kernel, dtype=np.float64)
 
 
 def _validate_centered_coordinates(cent_coords, *, warn_only=False):
@@ -379,7 +377,7 @@ def _generate_image_particle_hist(
 
         # Return an empty image if there are no particles
         if signal.size == 0:
-            img.arr = np.zeros(img.npix)
+            img.arr = np.zeros(img.npix, dtype=signal.dtype)
             return img.arr * img.units if img.units is not None else img.arr
 
         # Unpack the image properties and ensure we agree on the units
@@ -408,6 +406,12 @@ def _generate_image_particle_hist(
             ),
             weights=signal,
         )[0]
+
+        # The histogram computes in float64; cast the (small) image back so
+        # it inherits the signal dtype.
+        sig_dtype = getattr(signal, "dtype", None)
+        if sig_dtype is not None and img.arr.dtype != sig_dtype:
+            img.arr = img.arr.astype(sig_dtype)
 
     # Normalise the image by the normalisation if applicable
     if normalisation is not None:
@@ -593,9 +597,9 @@ def _generate_image_particle_smoothed(
 
     # Get the (npix_x, npix_y, Nimg) array of images
     imgs_arr = make_img(
-        ensure_array_c_compatible_double(signal),
-        ensure_array_c_compatible_double(_smoothing_lengths),
-        ensure_array_c_compatible_double(_coords),
+        np.ascontiguousarray(signal),
+        np.ascontiguousarray(_smoothing_lengths),
+        np.ascontiguousarray(_coords),
         kernel_arr,
         res,
         img.npix[0],
@@ -773,9 +777,9 @@ def _generate_images_particle_smoothed(
 
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
-        ensure_array_c_compatible_double(signals),
-        ensure_array_c_compatible_double(_smoothing_lengths),
-        ensure_array_c_compatible_double(_coords),
+        np.ascontiguousarray(signals),
+        np.ascontiguousarray(_smoothing_lengths),
+        np.ascontiguousarray(_coords),
         kernel_arr,
         res,
         imgs.npix[0],

@@ -193,6 +193,7 @@ def test_integrated_particle_empty_case(test_grid, nebular_emission_model):
             "cic",
             1,
             False,
+            np.float32,
         )
 
         # Check that warn was called with a message about no particles
@@ -204,6 +205,7 @@ def test_integrated_particle_empty_case(test_grid, nebular_emission_model):
         assert np.array_equal(
             result.lnu, np.zeros(test_grid.nlam) * erg / s / Hz
         )
+        assert result.lnu.dtype == np.float32
 
 
 def test_integrated_particle_masked_empty_case(
@@ -229,6 +231,7 @@ def test_integrated_particle_masked_empty_case(
             "cic",
             1,
             False,
+            np.float32,
         )
 
         # Check that warn was called with a message about filtered particles
@@ -240,6 +243,7 @@ def test_integrated_particle_masked_empty_case(
         assert np.array_equal(
             result.lnu, np.zeros(test_grid.nlam) * erg / s / Hz
         )
+        assert result.lnu.dtype == np.float32
 
 
 @patch(
@@ -291,6 +295,68 @@ def test_doppler_shifted_generate_lnu(
     # Check that the result is a Sed object with the right values
     assert isinstance(result, Sed)
     assert np.array_equal(result.lnu, mock_spectrum * erg / s / Hz)
+
+
+def test_doppler_shifted_empty_case(test_grid, nebular_emission_model):
+    """Test Doppler shifted extraction with an empty emitter."""
+    extractor = DopplerShiftedParticleExtractor(test_grid, "incident")
+    mock_emitter = MagicMock()
+    mock_emitter.nparticles = 0
+
+    with patch(
+        "synthesizer.emission_models.extractors.extractor.warn"
+    ) as mock_warn:
+        particle_sed, integrated_sed = extractor.generate_lnu(
+            mock_emitter,
+            nebular_emission_model,
+            None,
+            None,
+            "cic",
+            1,
+            False,
+        )
+
+    mock_warn.assert_called_once()
+    assert "no particles" in mock_warn.call_args[0][0]
+    assert isinstance(particle_sed, Sed)
+    assert isinstance(integrated_sed, Sed)
+    assert particle_sed.lnu.shape == (0, test_grid.nlam)
+    assert integrated_sed.lnu.shape == (test_grid.nlam,)
+    assert np.all(particle_sed.lnu == 0)
+    assert np.all(integrated_sed.lnu == 0)
+
+
+def test_doppler_shifted_masked_empty_case(
+    test_grid, random_part_stars, nebular_emission_model
+):
+    """Test Doppler shifted extraction when a mask removes all particles."""
+    extractor = DopplerShiftedParticleExtractor(test_grid, "incident")
+    mask = np.zeros(random_part_stars.nparticles, dtype=bool)
+
+    with patch(
+        "synthesizer.emission_models.extractors.extractor.warn"
+    ) as mock_warn:
+        particle_sed, integrated_sed = extractor.generate_lnu(
+            random_part_stars,
+            nebular_emission_model,
+            mask,
+            None,
+            "cic",
+            1,
+            False,
+        )
+
+    mock_warn.assert_called_once()
+    assert "filtered out all particles" in mock_warn.call_args[0][0]
+    assert isinstance(particle_sed, Sed)
+    assert isinstance(integrated_sed, Sed)
+    assert particle_sed.lnu.shape == (
+        random_part_stars.nparticles,
+        test_grid.nlam,
+    )
+    assert integrated_sed.lnu.shape == (test_grid.nlam,)
+    assert np.all(particle_sed.lnu == 0)
+    assert np.all(integrated_sed.lnu == 0)
 
 
 def test_doppler_shifted_no_velocities(

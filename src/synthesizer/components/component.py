@@ -282,7 +282,14 @@ class Component(ABC):
         # avoid any issues with 0s
         return (10 * pc).to(kpc)
 
-    def get_photo_lnu(self, filters, verbose=True, nthreads=1, limit_to=None):
+    def get_photo_lnu(
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        limit_to=None,
+        out_dtype=None,
+    ):
         """Calculate luminosity photometry using a FilterCollection object.
 
         Args:
@@ -297,6 +304,8 @@ class Component(ABC):
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             photo_lnu (dict):
@@ -312,11 +321,19 @@ class Component(ABC):
                 filters,
                 verbose,
                 nthreads=nthreads,
+                out_dtype=out_dtype,
             )
 
         return self.photo_lnu
 
-    def get_photo_fnu(self, filters, verbose=True, nthreads=1, limit_to=None):
+    def get_photo_fnu(
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        limit_to=None,
+        out_dtype=None,
+    ):
         """Calculate flux photometry using a FilterCollection object.
 
         Args:
@@ -331,6 +348,8 @@ class Component(ABC):
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             dict:
@@ -346,6 +365,7 @@ class Component(ABC):
                 filters,
                 verbose,
                 nthreads=nthreads,
+                out_dtype=out_dtype,
             )
 
         return self.photo_fnu
@@ -361,6 +381,7 @@ class Component(ABC):
         verbose=True,
         nthreads=1,
         grid_assignment_method="cic",
+        out_dtype=None,
         **kwargs,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -411,6 +432,8 @@ class Component(ABC):
             grid_assignment_method (str):
                 The method to use for assigning particles to the grid. Options
                 are "cic" (cloud-in-cell) or "ngp" (nearest grid point)."
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted spectra arrays.
             **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -434,6 +457,7 @@ class Component(ABC):
             verbose=verbose,
             nthreads=nthreads,
             grid_assignment_method=grid_assignment_method,
+            out_dtype=out_dtype,
             **kwargs,
         )
 
@@ -458,6 +482,7 @@ class Component(ABC):
         fesc=None,
         mask=None,
         verbose=True,
+        out_dtype=None,
         **kwargs,
     ):
         """Generate stellar lines as described by the emission model.
@@ -503,6 +528,8 @@ class Component(ABC):
                       a particular model.
             verbose (bool):
                 Are we talking?
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted line arrays.
             kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -523,6 +550,7 @@ class Component(ABC):
             fesc=fesc,
             mask=mask,
             verbose=verbose,
+            out_dtype=out_dtype,
             **kwargs,
         )
 
@@ -1177,6 +1205,7 @@ class Component(ABC):
         self,
         instrument,
         limit_to=None,
+        out_dtype=None,
     ):
         """Get spectroscopy for the component based on a specific instrument.
 
@@ -1193,6 +1222,9 @@ class Component(ABC):
                 the component. If a string or list of strings is provided,
                 then spectroscopy is only calculated for the specified
                 spectra.
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the resulting spectra.
+                If None the spectroscopy inherits the source spectra dtype.
 
         Returns:
             dict
@@ -1216,6 +1248,8 @@ class Component(ABC):
             spectrum = instrument.apply_lam_array(self.spectra[label])
             if instrument.can_do_noisy_spectroscopy:
                 spectrum = instrument.apply_noise(spectrum)
+            if out_dtype is not None:
+                spectrum.cast(out_dtype)
             self.spectroscopy[instrument.label][label] = spectrum
 
         # If we have particle spectra then do the same for them
@@ -1244,6 +1278,8 @@ class Component(ABC):
                 )
                 if instrument.can_do_noisy_spectroscopy:
                     spectrum = instrument.apply_noise(spectrum)
+                if out_dtype is not None:
+                    spectrum.cast(out_dtype)
                 self.particle_spectroscopy[instrument.label][label] = spectrum
 
         # Return the spectroscopy for the component

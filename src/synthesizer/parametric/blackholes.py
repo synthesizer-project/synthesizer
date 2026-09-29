@@ -18,7 +18,7 @@ Example usages::
 """
 
 import numpy as np
-from unyt import Msun, cm, deg, erg, km, kpc, s, yr
+from unyt import Lsun, Msun, cm, deg, km, kpc, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.blackhole import BlackholesComponent
@@ -42,7 +42,7 @@ class BlackHole(BlackholesComponent):
         accretion_rate=Msun.in_base("galactic") / yr,
         inclination=deg,
         offset=kpc,
-        bolometric_luminosity=erg / s,
+        bolometric_luminosity=Lsun,
         hydrogen_density_blr=1 / cm**3,
         hydrogen_density_nlr=1 / cm**3,
         velocity_dispersion_blr=km / s,

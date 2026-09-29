@@ -314,3 +314,86 @@ def test_draine_li_tau_independent_of_hydrogen(draine_li_grid):
     )
 
     np.testing.assert_allclose(tau_1, tau_2)
+
+
+class TestParameterApplicationIsIsolated:
+    """Test parameters found on a model or emitter don't mutate the curve.
+
+    A dust curve can be shared by many models, and the parameters it needs
+    can come from each of those models rather than from the curve itself. They
+    are applied to a copy so that one model's parameters cannot be seen by
+    another, whether the two are transformed one after the other or at the
+    same time.
+    """
+
+    def test_the_curve_is_left_alone(self):
+        """Test a parameter passed for one call does not stick."""
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        curve = PowerLaw(slope=-1.0)
+        lam = np.linspace(1000, 10000, 100) * angstrom
+
+        curve.get_transmission(0.5, lam, slope=-0.5)
+
+        assert curve.slope == -1.0
+
+    def test_the_parameter_reaches_the_calculation(self):
+        """Test the applied parameter is the one used."""
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        lam = np.linspace(1000, 10000, 100) * angstrom
+
+        overridden = PowerLaw(slope=-1.0).get_transmission(
+            0.5, lam, slope=-0.5
+        )
+        directly = PowerLaw(slope=-0.5).get_transmission(0.5, lam)
+
+        assert np.allclose(overridden, directly)
+
+    def test_concurrent_calls_do_not_interfere(self):
+        """Test two threads sharing a curve each get their own answer.
+
+        The threads are held inside the calculation by a barrier, so every
+        one of them is between having its parameters applied and having read
+        them. Applying them to the shared curve rather than to a copy would
+        leave them all reading whichever thread wrote last.
+        """
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+
+        from synthesizer.emission_models.attenuation import PowerLaw
+
+        slopes = [-2.0, -1.5, -1.0, -0.5, -0.1]
+        barrier = threading.Barrier(len(slopes))
+
+        class BarrierPowerLaw(PowerLaw):
+            """A power law which waits for its peers before reading slope."""
+
+            def get_tau(self, lam):
+                """Return the optical depth, once every thread is here."""
+                barrier.wait(timeout=10)
+                return super().get_tau(lam)
+
+        shared = BarrierPowerLaw(slope=-1.0)
+        lam = np.linspace(1000, 10000, 1000) * angstrom
+
+        expected = {
+            slope: PowerLaw(slope=slope).get_transmission(0.5, lam)
+            for slope in slopes
+        }
+
+        with ThreadPoolExecutor(max_workers=len(slopes)) as pool:
+            results = list(
+                pool.map(
+                    lambda slope: (
+                        slope,
+                        shared.get_transmission(0.5, lam, slope=slope),
+                    ),
+                    slopes,
+                )
+            )
+
+        for slope, transmission in results:
+            assert np.allclose(transmission, expected[slope])
+
+        assert shared.slope == -1.0

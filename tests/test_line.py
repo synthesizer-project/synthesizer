@@ -26,6 +26,7 @@ from synthesizer.emission_models.transformers.dust_attenuation import (
 from synthesizer.emissions import LineCollection
 from synthesizer.emissions.line_ratios import ratios
 from synthesizer.emissions.utils import O2, O3, Hb, O3b, O3r
+from synthesizer.units import Units
 
 
 class NoTauDustCurve(AttenuationLaw):
@@ -58,8 +59,8 @@ class TestLineCollectionInitialization:
             lines.line_ids, np.array(["O III 5007 A", "H 1 6563 A"])
         )
         assert lines.lam.units == angstrom
-        assert lines.luminosity.units == erg / s
-        assert lines.continuum.units == erg / s / Hz
+        assert lines.luminosity.units == Units().luminosity
+        assert lines.continuum.units == Units().luminosity_density_frequency
 
     def test_basic_properties(self, simple_line_collection):
         """Test basic properties of the LineCollection."""
@@ -127,7 +128,9 @@ class TestLineCollectionOperations:
         )
 
         # Scale with scalar with units
-        scaled_lines = simple_line_collection.scale(2.0 * erg / s)
+        lum_units = simple_line_collection.luminosity.units
+        cont_units = simple_line_collection.continuum.units
+        scaled_lines = simple_line_collection.scale(2.0 * lum_units)
         assert np.allclose(
             scaled_lines.luminosity.value,
             simple_line_collection.luminosity.value * 2.0,
@@ -135,25 +138,26 @@ class TestLineCollectionOperations:
             f"{scaled_lines.luminosity.value} !="
             f" {simple_line_collection.luminosity.value * 2.0}"
         )
-        assert np.allclose(
-            scaled_lines.continuum.value,
+        expected_cont = (
             simple_line_collection.continuum.value
-            * 2.0
-            / simple_line_collection.nu.value,
-        ), (
-            f"{scaled_lines.continuum.value} !="
-            f" {simple_line_collection.continuum.value * 2.0}"
+            * (2.0 * lum_units / simple_line_collection.nu)
+            .to(cont_units)
+            .value
         )
-        assert scaled_lines.luminosity.units == erg / s, (
-            f"{scaled_lines.luminosity.units} != erg/s"
+        assert np.allclose(scaled_lines.continuum.value, expected_cont), (
+            f"{scaled_lines.continuum.value} != {expected_cont}"
+        )
+        assert scaled_lines.luminosity.units == lum_units, (
+            f"{scaled_lines.luminosity.units} != {lum_units}"
         )
 
         # Scale with scalar continuum units
-        scaled_lines = simple_line_collection.scale(2.0 * erg / s / Hz)
+        scaled_lines = simple_line_collection.scale(2.0 * cont_units)
         expected_lum = (
             simple_line_collection.luminosity.value
-            * 2.0
-            * simple_line_collection.nu.value
+            * (2.0 * cont_units * simple_line_collection.nu)
+            .to(lum_units)
+            .value
         )
         expected_cont = simple_line_collection.continuum.value * 2.0
         assert np.allclose(
@@ -208,7 +212,9 @@ class TestLineCollectionOperations:
         )
 
         # Scale with scalar with units
-        scaled_lines = lines.scale(2.0 * erg / s)
+        lum_units = lines.luminosity.units
+        cont_units = lines.continuum.units
+        scaled_lines = lines.scale(2.0 * lum_units)
         assert np.allclose(
             scaled_lines.luminosity.value,
             lines.luminosity.value * 2.0,
@@ -217,21 +223,24 @@ class TestLineCollectionOperations:
             f"{scaled_lines.luminosity.value} !="
             f" {lines.luminosity.value * 2.0}"
         )
-        assert np.allclose(
-            scaled_lines.continuum.value,
-            lines.continuum.value * 2.0 / lines.nu.value,
-        ), (
-            "Scaled continuum doesn't match "
-            f"{scaled_lines.continuum.value} !="
-            f" {lines.continuum.value * 2.0 / lines.nu.value}"
+        expected_cont = (
+            lines.continuum.value
+            * (2.0 * lum_units / lines.nu).to(cont_units).value
         )
-        assert scaled_lines.luminosity.units == erg / s, (
-            f"{scaled_lines.luminosity.units} != erg/s"
+        assert np.allclose(scaled_lines.continuum.value, expected_cont), (
+            "Scaled continuum doesn't match "
+            f"{scaled_lines.continuum.value} != {expected_cont}"
+        )
+        assert scaled_lines.luminosity.units == lum_units, (
+            f"{scaled_lines.luminosity.units} != {lum_units}"
         )
 
         # Scale with scalar continuum units
-        scaled_lines = lines.scale(2.0 * erg / s / Hz)
-        expected_lum = lines.luminosity.value * 2.0 * lines.nu.value
+        scaled_lines = lines.scale(2.0 * cont_units)
+        expected_lum = (
+            lines.luminosity.value
+            * (2.0 * cont_units * lines.nu).to(lum_units).value
+        )
         expected_cont = lines.continuum.value * 2.0
         assert np.allclose(
             scaled_lines.luminosity.value,
@@ -384,6 +393,30 @@ class TestLineCollectionFlux:
         # Check the flux calculation
         expected_flux = lines.luminosity / (4 * np.pi * (10 * pc) ** 2)
         assert np.allclose(flux, expected_flux)
+
+    def test_get_flux0_preserves_float32(self, simple_line_collection):
+        """Rest-frame fluxes should inherit float32 luminosity precision."""
+        lines = simple_line_collection
+        lines.luminosity = (lines.luminosity * 1e-10).astype(np.float32)
+        lines.continuum = (lines.continuum * 1e-10).astype(np.float32)
+
+        flux = lines.get_flux0()
+
+        assert flux.dtype == np.float32
+        assert lines.continuum_flux.dtype == np.float32
+
+    def test_get_flux_honours_and_validates_out_dtype(
+        self, simple_line_collection
+    ):
+        """Observed line fluxes should narrow only to supported dtypes."""
+        lines = simple_line_collection
+
+        flux = lines.get_flux(cosmo, 1.0, out_dtype=np.float32)
+
+        assert flux.dtype == np.float32
+        assert lines.continuum_flux.dtype == np.float32
+        with pytest.raises(ValueError, match="Unsupported output dtype"):
+            lines.get_flux(cosmo, 1.0, out_dtype=np.int32)
 
     @pytest.mark.parametrize("z", [0.1, 1.0, 2.0])
     def test_get_flux(self, simple_line_collection, z, test_grid):
@@ -1628,3 +1661,50 @@ class TestLineCollectionGenerationSubsets:
 
 if __name__ == "__main__":
     pytest.main(["-xvs", __file__])
+
+
+def _two_line_collection():
+    """Build a small per-particle collection for the aliasing tests."""
+    return LineCollection(
+        line_ids=["H 1 6562.80A", "N 2 6583.45A"],
+        lam=np.array([6562.8, 6583.45]) * angstrom,
+        lum=np.ones((3, 2)) * erg / s,
+        cont=np.ones((3, 2)) * erg / s / Hz,
+    )
+
+
+def test_blended_line_does_not_mutate_source():
+    """Blending lines must not accumulate into the source collection.
+
+    Attribute reads return views onto the stored arrays, so a blend that
+    accumulated into its first selection would rewrite the first line.
+    """
+    lines = _two_line_collection()
+    luminosity = lines._luminosity.copy()
+    continuum = lines._continuum.copy()
+    lines["H 1 6562.80A, N 2 6583.45A"]
+    np.testing.assert_array_equal(lines._luminosity, luminosity)
+    np.testing.assert_array_equal(lines._continuum, continuum)
+
+
+@pytest.mark.parametrize("mask", [None, np.array([True, False, True])])
+def test_generic_attenuation_does_not_mutate_source(mask):
+    """The generic attenuation fallback must leave the source untouched.
+
+    Overriding get_transmission skips the separable fast path, which is how a
+    user-defined curve reaches the NumPy fallback.
+    """
+
+    class CustomCurve(PowerLaw):
+        def get_transmission(self, tau_v, lam):
+            return super().get_transmission(tau_v, lam)
+
+    lines = _two_line_collection()
+    luminosity = lines._luminosity.copy()
+    continuum = lines._continuum.copy()
+    attenuated = lines.apply_attenuation(
+        tau_v=np.ones(3), dust_curve=CustomCurve(), mask=mask
+    )
+    np.testing.assert_array_equal(lines._luminosity, luminosity)
+    np.testing.assert_array_equal(lines._continuum, continuum)
+    assert np.all(attenuated._luminosity[0] < luminosity[0])

@@ -13,17 +13,20 @@
 
 /**
  * @brief A particle to be contained in a cell.
+ *
+ * @tparam Real The floating-point type (float or double).
  */
+template <typename Real>
 struct particle {
 
   /* Position of the particle. */
-  double pos[3];
+  Real pos[3];
 
   /* Smoothing length of the particle. */
-  double sml;
+  Real sml;
 
   /* Surface density variable. */
-  double surf_den_var;
+  Real surf_den_var;
 
   /*! The index of the particle in the original array. */
   int index;
@@ -31,12 +34,15 @@ struct particle {
 
 /**
  * @brief A cell to contain gas particles.
+ *
+ * @tparam Real The floating-point type (float or double).
  */
+template <typename Real>
 struct cell {
 
   /* Location and width */
-  double loc[3];
-  double width;
+  Real loc[3];
+  Real width;
 
   /* Is it split? */
   int split;
@@ -46,24 +52,27 @@ struct cell {
 
   /* Pointers to particles in cell. */
   int part_count;
-  struct particle *particles;
+  struct particle<Real> *particles;
 
   /* Store the square of the maximum smoothing length. */
-  double max_sml_squ;
+  Real max_sml_squ;
 
   /* Pointers to cells below this one. */
-  struct cell *progeny;
+  struct cell<Real> *progeny;
 
   /* The maximum depth in the cell tree. */
   int maxdepth;
 };
 
 /* Prototypes. */
-void construct_cell_tree(const double *pos, const double *sml,
-                         const double *surf_den_val, const int npart,
-                         struct cell *root, int ncells, int maxdepth,
+template <typename Real>
+void construct_cell_tree(const Real *pos, const Real *sml,
+                         const Real *surf_den_val, const int npart,
+                         struct cell<Real> *root, int ncells, int maxdepth,
                          int min_count);
-void cleanup_cell_tree(struct cell *c);
-double min_projected_dist2(struct cell *c, double x, double y);
+template <typename Real>
+void cleanup_cell_tree(struct cell<Real> *c);
+template <typename Real>
+Real min_projected_dist2(struct cell<Real> *c, Real x, Real y);
 
 #endif  // OCTREE_H_

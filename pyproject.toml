@@ -123,9 +123,19 @@ docs = [
     "nbsphinx",
     "sphinx-copybutton",
     "readthedocs-sphinx-search",
+    # The emission model notebooks plot model networks
+    "networkx",
 ]
 
 
+
+# Emission model network visualisation. networkx provides the graph model and
+# layering, pydot enables the optional graphviz "dot" layout (which also needs
+# the graphviz binary installed separately).
+em-networks = [
+    "networkx",
+    "pydot",
+]
 
 # Simulation specifc loader dependancies
 bluetides = [

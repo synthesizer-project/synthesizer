@@ -30,7 +30,11 @@ from unyt import Mpc, Msun, deg, km, s, unyt_array, yr
 from unyt.exceptions import UnitConversionError, UnitOperationError
 
 from synthesizer.exceptions import InconsistentArguments, UnmetDependency
-from synthesizer.load_data.utils import age_lookup_table, lookup_age
+from synthesizer.load_data.utils import (
+    age_lookup_table,
+    cast_component_dtype,
+    lookup_age,
+)
 
 try:
     import yt
@@ -1719,6 +1723,7 @@ def load_yt(
     load_derived_extra_fields=False,
     galaxy_name_prefix="yt_galaxy",
     verbose=False,
+    dtype=np.float64,
 ):
     """Load one or more yt selections into Synthesizer particle galaxies.
 
@@ -1767,6 +1772,11 @@ def load_yt(
             Prefix used when naming the output galaxy objects.
         verbose (bool):
             If `True`, print progress information during loading.
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
 
     Returns:
         tuple[list[Galaxy], dict]:
@@ -1923,12 +1933,15 @@ def load_yt(
         )
 
         if stars is not None:
+            stars = cast_component_dtype(stars, dtype)
             galaxy.load_stars(**stars)
 
         if gas is not None:
+            gas = cast_component_dtype(gas, dtype)
             galaxy.load_gas(**gas)
 
         if black_holes is not None:
+            black_holes = cast_component_dtype(black_holes, dtype)
             black_hole_kwargs = dict(black_holes)
             galaxy.black_holes = BlackHoles(
                 masses=black_hole_kwargs.pop("masses"),

@@ -26,3 +26,20 @@ You'll also want to download some test data if you want to run any particle base
     synthesizer-download --camels-data
 
 This will download the data to the ``tests/data/`` directory, the same caveat described above for the test grid applies here when installing via pip. 
+
+Downloading catalogue datasets
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Production grids are listed in the `Syndex catalogue <https://synthesizer-project.org/syndex>`_. Download one or more by catalogue name with:
+
+.. code-block:: bash
+
+    synthesizer-download --dataset grid-one grid-two --destination /path/to/grids
+
+To reproduce a specific published version, select one dataset and pin its release:
+
+.. code-block:: bash
+
+    synthesizer-download --dataset grid-one --release 42
+
+For development and testing, ``SYNTHESIZER_DATA_API_URL`` overrides the catalogue API host.

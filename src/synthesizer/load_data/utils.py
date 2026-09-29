@@ -20,6 +20,31 @@ import math
 import numpy as np
 
 
+def cast_component_dtype(component, dtype):
+    """Cast floating-point arrays in component input data to one dtype.
+
+    Args:
+        component (mapping or None):
+            Component constructor arguments from any data source.
+        dtype (numpy dtype):
+            Target floating-point dtype.
+
+    Returns:
+        dict or None:
+            Shallow copy with floating-point arrays cast, preserving units.
+    """
+    if component is None:
+        return None
+
+    return {
+        key: value.astype(dtype, copy=False)
+        if isinstance(value, np.ndarray)
+        and np.issubdtype(value.dtype, np.floating)
+        else value
+        for key, value in component.items()
+    }
+
+
 def get_begin_end_pointers(length):
     """Find the beginning and ending indices from a length array.
 

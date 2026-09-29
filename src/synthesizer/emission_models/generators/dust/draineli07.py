@@ -28,6 +28,7 @@ from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
+from synthesizer.utils.operation_timers import timed
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
@@ -542,6 +543,7 @@ class DraineLi07(DustEmission):
         return self._generate_dl07_spectra(lams, dust_components)
 
     @accepts(lams=angstrom)
+    @timed("DraineLi07._generate_spectra")
     def _generate_spectra(
         self,
         lams: unyt_array,

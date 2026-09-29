@@ -100,6 +100,29 @@ class Image(ImagingBase):
         self.noise_arr = None
         self.weight_map = None
 
+    def cast(self, dtype):
+        """Cast the image arrays to a new floating-point dtype in place.
+
+        Casts the image array and, when present, the noise array and weight
+        map. Arrays already at the requested dtype are left untouched.
+
+        Args:
+            dtype (np.dtype/type):
+                The dtype to cast to.
+
+        Returns:
+            Image:
+                This image (to allow chaining).
+        """
+        dtype = np.dtype(dtype)
+        if self.arr is not None and self.arr.dtype != dtype:
+            self.arr = self.arr.astype(dtype)
+        if self.noise_arr is not None and self.noise_arr.dtype != dtype:
+            self.noise_arr = self.noise_arr.astype(dtype)
+        if self.weight_map is not None and self.weight_map.dtype != dtype:
+            self.weight_map = self.weight_map.astype(dtype)
+        return self
+
     @property
     def img(self):
         """The image array with units."""
@@ -1084,9 +1107,9 @@ class Image(ImagingBase):
                 self._resolution,
                 self.npix[0],
                 self.npix[1],
-                np.float64(aperture_radius),
+                aperture_radius,
                 self.arr,
-                np.float64(aperture_cent),
+                aperture_cent,
                 nthreads,
             )
             * self.units
