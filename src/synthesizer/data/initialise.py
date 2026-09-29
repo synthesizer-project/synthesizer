@@ -11,10 +11,12 @@ not import other Synthesizer modules to avoid circular dependencies.
 """
 
 import os
+import tempfile
 from importlib import resources
 from pathlib import Path
 
 import yaml
+from packaging.version import Version
 from platformdirs import user_data_dir
 
 from synthesizer import exceptions
@@ -191,6 +193,19 @@ def default_units_exists() -> bool:
     return user_units_file.exists()
 
 
+def get_units_changelog() -> list:
+    """Get the changes made to the default units.
+
+    Returns:
+        list:
+            The changes listed in units_changelog.yml, each a dict with the
+            unit category, the old and new units, the last release using the
+            old unit (changed_after) and the reason for the change.
+    """
+    with resources.open_text("synthesizer", "units_changelog.yml") as f:
+        return yaml.safe_load(f) or []
+
+
 def default_units_needs_update() -> bool:
     """Check if the default units file is missing entries or invalid.
 
@@ -229,6 +244,11 @@ def default_units_needs_update() -> bool:
         for key in default_units["UnitCategories"].keys():
             if key not in user_units["UnitCategories"]:
                 return True  # Missing key found, needs update
+
+        # Update files written by a different version of Synthesizer (files
+        # without a version predate versioning)
+        if user_units.get("Version", "1.0.0") != __version__:
+            return True
 
         return False  # All keys present, no update needed
 
@@ -360,7 +380,8 @@ class SynthesizerInitializer:
 
             # Load the user's default units
             user_units_file = self.base_dir / "default_units.yml"
-            if user_units_file.exists():
+            file_existed = user_units_file.exists()
+            if file_existed:
                 with open(user_units_file, "r") as f:
                     user_units = yaml.safe_load(f)
 
@@ -372,15 +393,56 @@ class SynthesizerInitializer:
             else:
                 user_units = {"UnitCategories": {}}
 
+            # Record the categories the user's file is missing
+            categories = user_units["UnitCategories"]
+            changes = [
+                f"{key}: added ({entry['unit']})"
+                for key, entry in default_units["UnitCategories"].items()
+                if key not in categories
+            ]
+
+            # Drop defaults that have changed since the user's file was
+            # written (unless the user customised them) so the new defaults
+            # replace them
+            user_version = Version(str(user_units.get("Version", "1.0.0")))
+            for change in get_units_changelog():
+                key = change["category"]
+                unit = str(categories.get(key, {}).get("unit", ""))
+                if user_version <= Version(change["changed_after"]) and (
+                    unit.replace(" ", "") == change["old"].replace(" ", "")
+                ):
+                    del categories[key]
+                    changes.append(
+                        f"{key}: {change['old']} -> {change['new']} "
+                        f"({change['reason']})"
+                    )
+
             # Update the default units with the users to overwrite any
             # old preferences
             default_units["UnitCategories"].update(
                 user_units["UnitCategories"]
             )
+            default_units["Version"] = __version__
 
-            # Write the updated units back to the user's file
-            with open(user_units_file, "w") as f:
+            # Write the updated units back to the user's file. Write to a
+            # unique temporary file and move it into place so other processes
+            # importing Synthesizer at the same time (e.g. parallel test
+            # workers) never read a partially written file.
+            with tempfile.NamedTemporaryFile(
+                "w",
+                dir=user_units_file.parent,
+                prefix=f".{user_units_file.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as f:
                 yaml.dump(default_units, f)
+            os.replace(f.name, user_units_file)
+
+            # Tell the user what changed in an existing units file
+            if file_existed and changes:
+                print(f"\033[93mUpdated units file: {user_units_file}\033[0m")
+                for change in changes:
+                    print(f"  \033[96m{change}\033[0m")
 
             self.status["units_file"] = "created"
 
@@ -433,17 +495,9 @@ class SynthesizerInitializer:
         self._make_dir(self.svo_filter_cache_dir, "svo_filter_cache")
         self._make_dir(self.test_data_dir, "test_data")
 
-        # Copy the default units to their user facing location
-        if not default_units_exists():
-            self._copy_resource(
-                "synthesizer",
-                "default_units.yml",
-                self.base_dir / "default_units.yml",
-                "units_file",
-            )
-
-        # Otherwise, we may need to update it
-        elif default_units_needs_update():
+        # Write the default units to their user facing location, or update
+        # an existing file if needed
+        if default_units_needs_update():
             self._copy_units()
 
     def report(self, initialising: bool = False) -> None:

@@ -526,7 +526,7 @@ setup(
     package_dir={"": "src"},
     include_package_data=True,
     package_data={
-        "synthesizer": ["default_units.yml"],
+        "synthesizer": ["default_units.yml", "units_changelog.yml"],
         "synthesizer.downloader": ["_data_ids.yml"],
     },
     install_requires=[

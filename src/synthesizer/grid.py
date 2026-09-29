@@ -34,14 +34,15 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.colors import LogNorm
 from scipy.interpolate import interp1d
 from spectres import spectres
-from unyt import Hz, angstrom, erg, s, unyt_array, unyt_quantity
+from unyt import Hz, Lsun, Unit, angstrom, erg, s, unyt_array, unyt_quantity
+from unyt.dimensions import mass as mass_dim
 
 from synthesizer import exceptions
 from synthesizer.data.initialise import get_grids_dir
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.grid_interpolation import interpolate_grid_array
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts, get_quantity_unit
+from synthesizer.units import Quantity, Units, accepts, get_quantity_unit
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import resolve_out_dtype
@@ -231,11 +232,59 @@ class Grid:
             )
         )
 
+        # Convert the grid to match Synthesizer's internal units
+        self._convert_grid_to_internal_units()
+
         # If a precision has been passed we need to coerce everything
         # on the grid to this precision. We do this inplace at this point
         # because we want to modify self
         if use_precision is not None:
             self.convert_precision(use_precision, inplace=True)
+
+    def _convert_grid_to_internal_units(self):
+        """Convert the grid to match Synthesizer's internal units.
+
+        Extraction multiplies raw weights (in Synthesizer's internal units)
+        by raw grid values, so the grid must be expressed in those units.
+        The conversions are done in place.
+        """
+        self._convert_weight_to_internal_units()
+        self._convert_line_lums_to_internal_units()
+
+    def _convert_weight_to_internal_units(self):
+        """Rescale luminosity weighted grids to the internal luminosity unit.
+
+        AGN grids are normalised per erg/s of bolometric luminosity, but
+        bolometric luminosities are stored in the internal luminosity unit
+        (Lsun by default), so the grid is rescaled to be per internal unit.
+        """
+        if self._weight_var not in (
+            "bolometric_luminosity",
+            "bolometric_luminosities",
+        ):
+            return
+
+        factor = unyt_quantity(1.0, Units().luminosity).to_value("erg/s")
+        for spectra in self.spectra.values():
+            spectra *= factor
+        for cont in self.line_conts.values():
+            cont *= factor
+        for lum in self.line_lums.values():
+            lum *= factor
+        for log10_lum in getattr(
+            self, "log10_specific_ionising_lum", {}
+        ).values():
+            log10_lum += np.log10(factor)
+
+    def _convert_line_lums_to_internal_units(self):
+        """Convert the line luminosities to the internal luminosity unit.
+
+        Line luminosities are stored in erg/s, which overflows float32 once
+        multiplied by the weights of realistic populations; in the internal
+        unit (Lsun by default) they fit.
+        """
+        for lum in self.line_lums.values():
+            lum.convert_to_units(Units().luminosity)
 
     def _read_floats(self, dset):
         """Read an HDF5 dataset, converting floats to the target dtype.
@@ -259,6 +308,48 @@ class Grid:
         ):
             return dset.astype(self._dtype)[...]
         return dset[...]
+
+    def _read_float_axis(self, dset):
+        """Read a grid axis from an HDF5 dataset along with its units.
+
+        Axes are read like any other floating point dataset (see
+        _read_floats), with one exception: mass axes. Grid files store these
+        in whatever units the grid was made with but unyt treats Msun as a
+        composite unit made up of kg. When logged this can lead to values in
+        the range of 38 when values are expected in the range of 0-10 (i.e.
+        kg vs Msun). To avoid this we convert any mass axes to the internal
+        mass unit (Msun) before returning them just to be sure. Note that
+        this is safe for grids made with pure Msun (in the galactic base)
+        units.
+
+        The conversion is done before the values are reduced to the grid's
+        precision since masses in kg (~1e39 for black holes) exceed the
+        float32 range.
+
+        Args:
+            dset (h5py.Dataset):
+                The axis dataset to read.
+
+        Returns:
+            tuple
+                The axis values (at the grid's target dtype) and their units
+                (as a string, matching the Units attribute of the file).
+        """
+        # What are the units of this axis?
+        units = dset.attrs.get("Units")
+
+        # Anything without units (including the "None" and empty string
+        # sentinels) or that isn't a mass can be read as is, reducing the
+        # precision during the read itself
+        if units in (None, "None", "") or Unit(units).dimensions != mass_dim:
+            return self._read_floats(dset), units
+
+        # Mass axes are read at the precision they were stored at, converted
+        # to the internal mass unit, and only then reduced to the grid's
+        # precision (the axes are tiny so this intermediate copy is cheap)
+        mass_units = Units().mass
+        values = unyt_array(dset[...], units).to_value(mass_units)
+        return values.astype(self._dtype), str(mass_units)
 
     def _ensure_axis_data_contiguous(self):
         """Ensure stored axis arrays are contiguous."""
@@ -395,8 +486,6 @@ class Grid:
             # Set the values of each axis as an attribute
             # e.g. self.log10age == hdf["axes"]["log10age"]
             for axis in axes:
-                # What are the units of this axis?
-                axis_units = hf["axes"][axis].attrs.get("Units")
                 log_axis = hf["axes"][axis].attrs.get("log_on_read")
 
                 if "log10" in axis:
@@ -405,8 +494,10 @@ class Grid:
                         "of ambiguous units. Please update your grid file."
                     )
 
-                # Get the values
-                values = self._read_floats(hf["axes"][axis])
+                # Get the values and their units (mass axes are converted to
+                # the internal mass unit so they match the emitter masses
+                # they are compared against during extraction)
+                values, axis_units = self._read_float_axis(hf["axes"][axis])
 
                 # Set all the axis attributes as is (without accounting
                 # for any log10 conversions needed for extraction)
@@ -2283,23 +2374,9 @@ class Grid:
                     out_dtype=out_dtype,
                 )
 
+                # The interpolated arrays keep the grid's units
                 line_lum = interp_lum.reshape(coord_shape + (self.nlines,))
                 line_cont = interp_cont.reshape(coord_shape + (self.nlines,))
-
-                # Wrap in LineCollection object, ensuring correct unyt units.
-                # Convert out of place so nothing that might share these
-                # buffers is rewritten underneath us.
-                if isinstance(line_lum, unyt_array):
-                    if line_lum.units != erg / s:
-                        line_lum = line_lum.to(erg / s)
-                else:
-                    line_lum = unyt_array(line_lum, erg / s)
-
-                if isinstance(line_cont, unyt_array):
-                    if line_cont.units != erg / s / Hz:
-                        line_cont = line_cont.to(erg / s / Hz)
-                else:
-                    line_cont = unyt_array(line_cont, (erg / s / Hz))
 
                 results["lines"] = LineCollection(
                     line_ids=self.available_lines,
@@ -2318,9 +2395,9 @@ class Grid:
                     if self.line_lams is not None
                     else unyt_array([], "angstrom")
                 )
-                line_lum = np.zeros(
-                    coord_shape + (nlines,), dtype=out_dtype
-                ) * (erg / s)
+                line_lum = (
+                    np.zeros(coord_shape + (nlines,), dtype=out_dtype) * Lsun
+                )
                 line_cont = np.zeros(
                     coord_shape + (nlines,), dtype=out_dtype
                 ) * (erg / s / Hz)
@@ -2827,7 +2904,7 @@ class Template:
         self.normalisation = sed.bolometric_luminosity
         self._sed._lnu /= self.normalisation.to(self._sed.lnu.units * Hz).value
 
-    @accepts(bolometric_luminosity=erg / s)
+    @accepts(bolometric_luminosity=Lsun)
     def get_spectra(self, bolometric_luminosity):
         """Calculate the blackhole spectra by scaling the template.
 

@@ -41,6 +41,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import (
     Hz,
+    Lsun,
     angstrom,
     c,
     erg,
@@ -137,7 +138,7 @@ class LineCollection:
     obslam = Quantity("wavelength")
     vacuum_wavelength = Quantity("wavelength")
 
-    @accepts(lam=angstrom, lum=erg / s, cont=erg / s / Hz)
+    @accepts(lam=angstrom, lum=Lsun, cont=erg / s / Hz)
     @timed("LineCollection.__init__")
     def __init__(self, line_ids, lam, lum, cont, description=None):
         """Initialise the collection of emission lines.
