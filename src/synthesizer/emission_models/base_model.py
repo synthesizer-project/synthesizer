@@ -2678,6 +2678,17 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         f"Can't scale spectra by {scaler}."
                     )
 
+            # Flag spectra built from particle velocity shifts so a peculiar
+            # velocity can't be applied on top of them (see Sed.get_fnu).
+            if this_model.vel_shift or any(
+                spectra[dep].vel_shifted
+                for dep in queue.dependencies[label]
+                if dep in spectra
+            ):
+                spectra[label].vel_shifted = True
+                if label in particle_spectra:
+                    particle_spectra[label].vel_shifted = True
+
             # Unlock downstream models and delete expired unsaved emissions.
             queue.done(this_model, spectra, particle_spectra)
 

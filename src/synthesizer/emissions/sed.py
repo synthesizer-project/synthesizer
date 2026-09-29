@@ -96,7 +96,11 @@ class Sed:
         description (str):
             An optional descriptive string defining the Sed.
         redshift (float):
-            The redshift of the Sed.
+            The redshift of the Sed's observer frame arrays (including any
+            peculiar velocity shift).
+        vel_shifted (bool):
+            Whether the spectra include particle velocity shifts (from
+            vel_shift=True on an EmissionModel).
         photo_lnu (dict, float)
             The rest frame broadband photometry in arbitrary filters
             (filter_code: photometry).
@@ -152,6 +156,9 @@ class Sed:
 
         # Redshift of the SED
         self.redshift = 0
+
+        # Have particle velocity shifts already been applied?
+        self.vel_shifted = False
 
         # The wavelengths and frequencies in the observer frame
         self.obslam = None
@@ -1167,8 +1174,8 @@ class Sed:
         with the observer frame values.
 
         NOTE: if a redshift of 0 is passed the flux return will be calculated
-        assuming a distance of 10 pc omitting IGM since at this distance
-        IGM contribution makes no sense.
+        assuming a distance of 10 pc omitting IGM (and any peculiar velocity)
+        since at this distance IGM contribution makes no sense.
 
         Args:
             cosmo (astropy.cosmology):
@@ -1193,6 +1200,10 @@ class Sed:
             fnu (ndarray)
                 Spectral flux density in the observer frame.
 
+        Raises:
+            InconsistentArguments
+                If a peculiar_velocity is passed for spectra that already
+                include particle velocity shifts (vel_shift=True).
         """
         # Store the redshift for later use
         self.redshift = z
@@ -1211,8 +1222,18 @@ class Sed:
         # source; z_obs == z when no velocity is given.
         z_obs = float(z)
         if peculiar_velocity is not None:
+            # Particle velocity shifts already include any bulk motion
+            if self.vel_shifted:
+                raise exceptions.InconsistentArguments(
+                    "Can't apply a peculiar_velocity to spectra generated "
+                    "with vel_shift=True; include any bulk motion in the "
+                    "particle velocities instead."
+                )
             beta = float(peculiar_velocity.value) / c.to_value(km / s)
             z_obs = (1.0 + z_obs) * (1.0 + beta) - 1.0
+
+        # The observer frame arrays are at z_obs (e.g. for resampling)
+        self.redshift = z_obs
 
         if self._obslam is None or self._obslam.shape != self._lam.shape:
             self._obslam = np.empty_like(self._lam)

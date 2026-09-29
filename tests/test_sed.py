@@ -384,3 +384,37 @@ def test_get_fnu_peculiar_velocity_requires_units():
         Sed(lam=lam, lnu=lnu).get_fnu(
             Planck18, 1.0, peculiar_velocity=600.0 * cm
         )
+
+
+def test_get_resampled_sed_keeps_peculiar_velocity_shift():
+    """Resampling keeps the observer frame at z_obs."""
+    lam = np.linspace(1000, 2000, 16) * angstrom
+    lnu = np.linspace(1.0, 16.0, 16) * erg / s / Hz
+    z = 1.0
+    v = 600.0 * km / s
+
+    sed = Sed(lam=lam, lnu=lnu)
+    sed.get_fnu(Planck18, z, peculiar_velocity=v)
+    z_obs = (1.0 + z) * (1.0 + float(v / c)) - 1.0
+    assert np.isclose(sed.redshift, z_obs)
+
+    resampled = sed.get_resampled_sed(new_lam=lam[2:-2])
+    np.testing.assert_allclose(
+        resampled._obslam, resampled._lam * (1.0 + z_obs)
+    )
+    np.testing.assert_allclose(resampled._fnu, sed._fnu[2:-2])
+
+
+def test_get_fnu_peculiar_velocity_rejects_vel_shifted_sed():
+    """A peculiar velocity can't be applied on top of vel_shift spectra."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
+
+    sed = Sed(lam=lam, lnu=lnu)
+    sed.vel_shifted = True
+
+    with pytest.raises(exceptions.InconsistentArguments):
+        sed.get_fnu(Planck18, 1.0, peculiar_velocity=600.0 * km / s)
+
+    # Without a peculiar velocity the flux is computed as normal
+    sed.get_fnu(Planck18, 1.0)
