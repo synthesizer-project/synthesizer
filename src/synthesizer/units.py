@@ -40,6 +40,7 @@ from unyt import (
 from unyt.exceptions import UnitConversionError
 
 from synthesizer import BASE_DIR, exceptions
+from synthesizer._version import __version__
 from synthesizer.extensions.timers import tic, toc
 from synthesizer.synth_warnings import warn
 
@@ -438,7 +439,7 @@ class Units(metaclass=UnitSingleton):
         self._preserve_orig_units()
 
         # Construct the dictionary to write out
-        new_units = {}
+        new_units = {"Version": __version__}
         new_units["UnitCategories"] = {}
         for key, unit in self._units.items():
             new_units["UnitCategories"][key] = {"unit": str(unit)}
