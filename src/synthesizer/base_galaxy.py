@@ -5,7 +5,7 @@ only contains common attributes and methods to reduce boilerplate.
 """
 
 import numpy as np
-from unyt import Gyr, Mpc, Msun, Myr, arcsecond, degree, kpc, pc, yr
+from unyt import Gyr, Mpc, Msun, Myr, arcsecond, degree, km, kpc, pc, s, yr
 
 from synthesizer import exceptions
 from synthesizer.cosmology import (
@@ -285,8 +285,14 @@ class BaseGalaxy:
 
         return equivalent_widths
 
+    @accepts(peculiar_velocity=km / s)
     def get_observed_spectra(
-        self, cosmo, igm=Inoue14, nthreads=1, out_dtype=None
+        self,
+        cosmo,
+        igm=Inoue14,
+        nthreads=1,
+        out_dtype=None,
+        peculiar_velocity=None,
     ):
         """Calculate the observed spectra for all Seds within this galaxy.
 
@@ -315,6 +321,10 @@ class BaseGalaxy:
             out_dtype (np.dtype, optional):
                 Requested floating-point dtype for the flux arrays. If None
                 the fluxes inherit the source spectra dtype.
+            peculiar_velocity (unyt_quantity):
+                Line-of-sight peculiar velocity passed to Sed.get_fnu. If
+                None, a `peculiar_velocity` attribute on the galaxy is used if
+                set. Defaults to None.
 
         Raises:
             MissingAttribute
@@ -328,6 +338,10 @@ class BaseGalaxy:
                 " calculated without one."
             )
 
+        # An explicit argument overrides a peculiar_velocity set on the galaxy.
+        if peculiar_velocity is None:
+            peculiar_velocity = getattr(self, "peculiar_velocity", None)
+
         # Loop over all combined spectra
         for sed in self.spectra.values():
             # Calculate the observed spectra
@@ -337,6 +351,7 @@ class BaseGalaxy:
                 igm=igm,
                 nthreads=nthreads,
                 out_dtype=out_dtype,
+                peculiar_velocity=peculiar_velocity,
             )
 
         # Do we have stars?
@@ -350,6 +365,7 @@ class BaseGalaxy:
                     igm=igm,
                     nthreads=nthreads,
                     out_dtype=out_dtype,
+                    peculiar_velocity=peculiar_velocity,
                 )
 
             # Loop over all stellar particle spectra
@@ -362,6 +378,7 @@ class BaseGalaxy:
                         igm=igm,
                         nthreads=nthreads,
                         out_dtype=out_dtype,
+                        peculiar_velocity=peculiar_velocity,
                     )
 
         # Do we have black holes?
@@ -375,6 +392,7 @@ class BaseGalaxy:
                     igm=igm,
                     nthreads=nthreads,
                     out_dtype=out_dtype,
+                    peculiar_velocity=peculiar_velocity,
                 )
 
             # Loop over all black hole particle spectra
@@ -387,6 +405,7 @@ class BaseGalaxy:
                         igm=igm,
                         nthreads=nthreads,
                         out_dtype=out_dtype,
+                        peculiar_velocity=peculiar_velocity,
                     )
 
     def get_observed_lines(

@@ -97,7 +97,11 @@ class Sed:
         description (str):
             An optional descriptive string defining the Sed.
         redshift (float):
-            The redshift of the Sed.
+            The redshift of the Sed's observer frame arrays (including any
+            peculiar velocity shift).
+        vel_shifted (bool):
+            Whether the spectra include particle velocity shifts (from
+            vel_shift=True on an EmissionModel).
         photo_lnu (dict, float)
             The rest frame broadband photometry in arbitrary filters
             (filter_code: photometry).
@@ -154,6 +158,9 @@ class Sed:
         # Redshift of the SED
         self.redshift = 0
 
+        # Have particle velocity shifts already been applied?
+        self.vel_shifted = False
+
         # The wavelengths and frequencies in the observer frame
         self.obslam = None
         self.obsnu = None
@@ -187,6 +194,7 @@ class Sed:
                 nansum_leading_axes(self._lnu, nthreads)
                 * get_quantity_unit(self, "lnu"),
             )
+            new_sed.vel_shifted = self.vel_shifted
 
             # If fnu exists, sum that too
             if self.fnu is not None:
@@ -256,7 +264,12 @@ class Sed:
             # Concatenate this lnu array
             new_lnu = np.concatenate((new_lnu, other_lnu))
 
-        return Sed(self.lam, new_lnu * get_quantity_unit(self, "lnu"))
+        new_sed = Sed(self.lam, new_lnu * get_quantity_unit(self, "lnu"))
+        new_sed.vel_shifted = self.vel_shifted or any(
+            other_sed.vel_shifted for other_sed in other_seds
+        )
+
+        return new_sed
 
     def __sub__(self, second_sed):
         """Subtract one Sed from another.
@@ -302,6 +315,7 @@ class Sed:
         # They're compatible, subtract the second_sed from the first and make
         # a new Sed
         new_sed = Sed(self.lam, lnu=self.lnu - second_sed.lnu)
+        new_sed.vel_shifted = self.vel_shifted or second_sed.vel_shifted
 
         # If fnu exists on both then we need to subtract the second from the
         # original too
@@ -356,6 +370,7 @@ class Sed:
 
         # They're compatible, add them and make a new Sed
         new_sed = Sed(self.lam, lnu=self.lnu + second_sed.lnu)
+        new_sed.vel_shifted = self.vel_shifted or second_sed.vel_shifted
 
         # If fnu exists on both then we need to add those too
         if (self.fnu is not None) and (second_sed.fnu is not None):
@@ -1149,22 +1164,32 @@ class Sed:
         # Return the fnu with units, without making a copy
         return get_quantity_view(self, "_fnu")
 
+    @accepts(peculiar_velocity=km / s)
     @timed("Sed.get_fnu")
-    def get_fnu(self, cosmo, z, igm=None, nthreads=1, out_dtype=None):
+    def get_fnu(
+        self,
+        cosmo,
+        z,
+        igm=None,
+        nthreads=1,
+        out_dtype=None,
+        peculiar_velocity=None,
+    ):
         """Calculate the observed frame spectral energy distribution.
 
         This will also populate the observed wavelength and frequency arrays
         with the observer frame values.
 
         NOTE: if a redshift of 0 is passed the flux return will be calculated
-        assuming a distance of 10 pc omitting IGM since at this distance
-        IGM contribution makes no sense.
+        assuming a distance of 10 pc omitting IGM (and any peculiar velocity)
+        since at this distance IGM contribution makes no sense.
 
         Args:
             cosmo (astropy.cosmology):
                 astropy cosmology instance.
             z (float):
-                The redshift of the spectra.
+                The cosmological redshift of the spectra (sets luminosity
+                distance and IGM).
             igm (igm):
                 The IGM class. e.g. `synthesizer.igm.Inoue14`.
                 Defaults to None.
@@ -1173,11 +1198,19 @@ class Sed:
             out_dtype (np.dtype, optional):
                 Requested floating-point dtype for the flux array. If None
                 the flux inherits the luminosity's dtype.
+            peculiar_velocity (unyt_quantity):
+                Line-of-sight peculiar velocity (positive = receding). Shifts
+                the spectrum to z_obs with 1 + z_obs = (1 + z)(1 + v / c);
+                distance and IGM stay at z. Defaults to None (no shift).
 
         Returns:
             fnu (ndarray)
                 Spectral flux density in the observer frame.
 
+        Raises:
+            InconsistentArguments
+                If a peculiar_velocity is passed for spectra that already
+                include particle velocity shifts (vel_shift=True).
         """
         # Store the redshift for later use
         self.redshift = z
@@ -1192,14 +1225,34 @@ class Sed:
             self._lnu.dtype if out_dtype is None else np.dtype(out_dtype)
         )
 
+        # Peculiar velocity shifts the spectrum to z_obs without moving the
+        # source; z_obs == z when no velocity is given.
+        z_obs = float(z)
+        if peculiar_velocity is not None:
+            # Particle velocity shifts already include any bulk motion
+            if self.vel_shifted:
+                raise exceptions.InconsistentArguments(
+                    "Can't apply a peculiar_velocity to spectra generated "
+                    "with vel_shift=True; include any bulk motion in the "
+                    "particle velocities instead."
+                )
+            beta = float(peculiar_velocity.value) / c.to_value(km / s)
+            z_obs = (1.0 + z_obs) * (1.0 + beta) - 1.0
+
+        # The observer frame arrays are at z_obs (e.g. for resampling)
+        self.redshift = z_obs
+
         if self._obslam is None or self._obslam.shape != self._lam.shape:
             self._obslam = np.empty_like(self._lam)
         if self._obsnu is None or self._obsnu.shape != self._nu.shape:
             self._obsnu = np.empty_like(self._nu)
 
         # Calculate the observed wavelength and frequency
-        one_plus_z = 1.0 + float(z)
+        one_plus_z = 1.0 + z_obs
+        # d_L is set by the cosmological z, rescaled to the observed frame
+        # (factor 1 when there is no peculiar velocity).
         luminosity_distance_cm = get_luminosity_distance(cosmo, z).to_value(cm)
+        luminosity_distance_cm *= one_plus_z / (1.0 + float(z))
         conversion = (
             get_attr_unit_conversion(
                 self.__class__.__dict__["lnu"].unit,
@@ -1536,6 +1589,7 @@ class Sed:
 
         # Instantiate the new Sed
         sed = Sed(new_lam, new_spectra * get_quantity_unit(self, "lnu"))
+        sed.vel_shifted = self.vel_shifted
 
         # If self also has fnu we should resample those too and store the
         # shifted wavelengths and frequencies
