@@ -6,7 +6,7 @@ BlackholesComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import G, Lsun, Msun, c, cm, deg, erg, km, s, yr
+from unyt import G, Lsun, Msun, c, cm, deg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
@@ -102,7 +102,7 @@ class BlackholesComponent(Component):
         mass=Msun.in_base("galactic"),
         accretion_rate=Msun.in_base("galactic") / yr,
         inclination=deg,
-        bolometric_luminosity=erg / s,
+        bolometric_luminosity=Lsun,
         hydrogen_density_blr=cm**-3,
         hydrogen_density_nlr=cm**-3,
         velocity_dispersion_blr=km / s,
@@ -500,13 +500,11 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole eddington ratio
         """
-        # Compute the eddington ratio but ensure both luminosities are in the
-        # same units.
-        bol_lum = self.bolometric_luminosity.to(
-            self.eddington_luminosity.units
-        ).ndview
-        edd_lum = self._eddington_luminosity
-        self.eddington_ratio = bol_lum / edd_lum
+        # Dividing the luminosities cancels their units. NOTE: to_value makes
+        # a copy, which is fine for these small per-blackhole arrays.
+        self.eddington_ratio = (
+            self.bolometric_luminosity / self.eddington_luminosity
+        ).to_value("dimensionless")
 
         return self.eddington_ratio
 
@@ -533,9 +531,11 @@ class BlackholesComponent(Component):
             unyt_array
                 The black hole accretion rate in units of the Eddington rate.
         """
+        # Dividing the luminosities cancels their units. NOTE: to_value makes
+        # a copy, which is fine for these small per-blackhole arrays.
         self.accretion_rate_eddington = (
-            self._bolometric_luminosity / self._eddington_luminosity
-        )
+            self.bolometric_luminosity / self.eddington_luminosity
+        ).to_value("dimensionless")
 
         return self.accretion_rate_eddington
 

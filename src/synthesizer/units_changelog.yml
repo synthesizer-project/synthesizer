@@ -1,0 +1,13 @@
+# Changes to the default units in default_units.yml.
+#
+# When a default unit changes, add an entry giving the unit category, the old
+# and new units, why it changed, and the last release that used the old unit
+# (changed_after). A user's units file written by that release or earlier
+# which still holds the old unit was never customised, so it is updated to the
+# new unit. Units files without a version count as version 1.0.0.
+
+- category: luminosity
+  old: erg / s
+  new: Lsun
+  changed_after: "1.2.0"
+  reason: erg/s luminosities overflow float32

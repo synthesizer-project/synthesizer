@@ -524,8 +524,8 @@ class IntegratedParticleExtractor(Extractor):
         return LineCollection(
             line_ids=self._grid.line_ids,
             lam=self._line_lams,
-            lum=lum * erg / s,
-            cont=cont * erg / s / Hz,
+            lum=lum * self._line_lum_grid.units,
+            cont=cont * self._line_cont_grid.units,
         )
 
 
@@ -1233,17 +1233,29 @@ class ParticleExtractor(Extractor):
             part_line = LineCollection(
                 line_ids=self._grid.line_ids,
                 lam=self._line_lams,
-                lum=unyt_array(lum, erg / s, bypass_validation=True),
-                cont=unyt_array(cont, erg / s / Hz, bypass_validation=True),
+                lum=unyt_array(
+                    lum,
+                    self._line_lum_grid.units,
+                    bypass_validation=True,
+                ),
+                cont=unyt_array(
+                    cont,
+                    self._line_cont_grid.units,
+                    bypass_validation=True,
+                ),
             )
             integrated_line = LineCollection(
                 line_ids=self._grid.line_ids,
                 lam=self._line_lams,
                 lum=unyt_array(
-                    integrated_lum, erg / s, bypass_validation=True
+                    integrated_lum,
+                    self._line_lum_grid.units,
+                    bypass_validation=True,
                 ),
                 cont=unyt_array(
-                    integrated_cont, erg / s / Hz, bypass_validation=True
+                    integrated_cont,
+                    self._line_cont_grid.units,
+                    bypass_validation=True,
                 ),
             )
 
@@ -1377,9 +1389,13 @@ class IntegratedParametricExtractor(Extractor):
             # Compute the integrated line array by multiplying the sfzh by the
             # grids.
             if lam_mask is not None:
-                lum = np.zeros(self._grid.nlines, dtype=out_dtype) * erg / s
+                lum = (
+                    np.zeros(self._grid.nlines, dtype=out_dtype)
+                    * self._line_lum_grid.units
+                )
                 cont = (
-                    np.zeros(self._grid.nlines, dtype=out_dtype) * erg / s / Hz
+                    np.zeros(self._grid.nlines, dtype=out_dtype)
+                    * self._line_cont_grid.units
                 )
                 lum[lam_mask] = np.sum(
                     grid_line_lums[mask] * sfzh[mask], axis=0
