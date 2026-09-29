@@ -194,6 +194,7 @@ class Sed:
                 nansum_leading_axes(self._lnu, nthreads)
                 * get_quantity_unit(self, "lnu"),
             )
+            new_sed.vel_shifted = self.vel_shifted
 
             # If fnu exists, sum that too
             if self.fnu is not None:
@@ -263,7 +264,12 @@ class Sed:
             # Concatenate this lnu array
             new_lnu = np.concatenate((new_lnu, other_lnu))
 
-        return Sed(self.lam, new_lnu * get_quantity_unit(self, "lnu"))
+        new_sed = Sed(self.lam, new_lnu * get_quantity_unit(self, "lnu"))
+        new_sed.vel_shifted = self.vel_shifted or any(
+            other_sed.vel_shifted for other_sed in other_seds
+        )
+
+        return new_sed
 
     def __sub__(self, second_sed):
         """Subtract one Sed from another.
@@ -309,6 +315,7 @@ class Sed:
         # They're compatible, subtract the second_sed from the first and make
         # a new Sed
         new_sed = Sed(self.lam, lnu=self.lnu - second_sed.lnu)
+        new_sed.vel_shifted = self.vel_shifted or second_sed.vel_shifted
 
         # If fnu exists on both then we need to subtract the second from the
         # original too
@@ -363,6 +370,7 @@ class Sed:
 
         # They're compatible, add them and make a new Sed
         new_sed = Sed(self.lam, lnu=self.lnu + second_sed.lnu)
+        new_sed.vel_shifted = self.vel_shifted or second_sed.vel_shifted
 
         # If fnu exists on both then we need to add those too
         if (self.fnu is not None) and (second_sed.fnu is not None):
@@ -1581,6 +1589,7 @@ class Sed:
 
         # Instantiate the new Sed
         sed = Sed(new_lam, new_spectra * get_quantity_unit(self, "lnu"))
+        sed.vel_shifted = self.vel_shifted
 
         # If self also has fnu we should resample those too and store the
         # shifted wavelengths and frequencies
