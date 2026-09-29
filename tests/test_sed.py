@@ -13,7 +13,7 @@ from unyt import Hz, angstrom, c, cm, erg, nJy, pc, s
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.emissions import Sed
-from synthesizer.emissions.sed import Sed, integrate_particle_sed
+from synthesizer.emissions.sed import Sed
 
 
 def test_sed_empty(empty_sed):
@@ -234,12 +234,12 @@ def test_combine_spectra_supports_adaptive_precision_and_nan_masks():
         np.testing.assert_allclose(combined, [[6.0, 6.0], [3.0, 12.0]])
 
 
-def test_integrate_particle_sed_preserves_input_precision():
-    """The Sed reduction helper should keep the luminosity dtype family."""
+def test_sum_preserves_input_precision():
+    """Summing per-particle spectra should keep the luminosity dtype."""
     lam = np.linspace(1000.0, 2000.0, 5) * angstrom
     lnu = (np.arange(15, dtype=np.float32).reshape(3, 5) + 1.0) * erg / s / Hz
 
-    reduced = integrate_particle_sed(Sed(lam=lam, lnu=lnu), nthreads=1)
+    reduced = Sed(lam=lam, lnu=lnu).sum(nthreads=1)
 
     assert reduced._lnu.dtype == np.float32
     np.testing.assert_allclose(reduced._lnu, np.sum(lnu.value, axis=0))
