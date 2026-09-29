@@ -15,6 +15,10 @@ from synthesizer.instruments.instrument_base import _hashable_state
 from synthesizer.instruments.spectroscopic_instrument import (
     SpectroscopicInstrument,
 )
+from synthesizer.instruments.utils import (
+    read_instrument_attribute,
+    write_instrument_attribute,
+)
 from synthesizer.units import accepts
 from synthesizer.utils.operation_timers import timed
 
@@ -489,21 +493,9 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         )
         ds.attrs["units"] = "dimensionless"
 
-        if self.noise_source_maps is not None:
-            if isinstance(self.noise_source_maps, dict):
-                noise_source_group = group.create_group("NoiseSourceMaps")
-                for key, value in self.noise_source_maps.items():
-                    ds = noise_source_group.create_dataset(
-                        key, data=value.value, dtype=float
-                    )
-                    ds.attrs["units"] = str(value.units)
-            else:
-                ds = group.create_dataset(
-                    "NoiseSourceMaps",
-                    data=self.noise_source_maps.value,
-                    dtype=float,
-                )
-                ds.attrs["units"] = str(self.noise_source_maps.units)
+        write_instrument_attribute(
+            group, "NoiseSourceMaps", self.noise_source_maps
+        )
 
     @classmethod
     @timed("IntegratedFieldUnit.load")
@@ -539,35 +531,11 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             group["Resolution"][...], group["Resolution"].attrs["units"]
         )
 
-        if "Depth" in group and isinstance(group["Depth"], h5py.Group):
-            depth = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["Depth"].items()
-            }
-        elif "Depth" in group:
-            depth = unyt_array(
-                group["Depth"][...], group["Depth"].attrs["units"]
-            )
-        else:
-            depth = None
-
-        if "DepthApertureRadius" in group:
-            depth_app_radius = unyt_array(
-                group["DepthApertureRadius"][...],
-                group["DepthApertureRadius"].attrs["units"],
-            )
-        else:
-            depth_app_radius = None
-
-        if "SNRs" in group and isinstance(group["SNRs"], h5py.Group):
-            snrs = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["SNRs"].items()
-            }
-        elif "SNRs" in group:
-            snrs = unyt_array(group["SNRs"][...], group["SNRs"].attrs["units"])
-        else:
-            snrs = None
+        depth = read_instrument_attribute(group, "Depth")
+        depth_app_radius = read_instrument_attribute(
+            group, "DepthApertureRadius"
+        )
+        snrs = read_instrument_attribute(group, "SNRs")
 
         if "PSFs" in group:
             psfs = unyt_array(group["PSFs"][...], group["PSFs"].attrs["units"])
@@ -579,27 +547,8 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         else:
             psf_resample_factor = 1
 
-        if "NoiseMaps" in group:
-            noise_maps = unyt_array(
-                group["NoiseMaps"][...], group["NoiseMaps"].attrs["units"]
-            )
-        else:
-            noise_maps = None
-
-        if "NoiseSourceMaps" in group and isinstance(
-            group["NoiseSourceMaps"], h5py.Group
-        ):
-            noise_source_maps = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["NoiseSourceMaps"].items()
-            }
-        elif "NoiseSourceMaps" in group:
-            noise_source_maps = unyt_array(
-                group["NoiseSourceMaps"][...],
-                group["NoiseSourceMaps"].attrs["units"],
-            )
-        else:
-            noise_source_maps = None
+        noise_maps = read_instrument_attribute(group, "NoiseMaps")
+        noise_source_maps = read_instrument_attribute(group, "NoiseSourceMaps")
 
         payload = {
             "label": group.attrs["label"],

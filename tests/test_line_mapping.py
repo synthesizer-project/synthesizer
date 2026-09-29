@@ -8,7 +8,7 @@ Components and Galaxies.
 import numpy as np
 import pytest
 from astropy.cosmology import Planck18 as cosmo
-from unyt import Mpc, Msun, Myr, cm, erg, kpc, s
+from unyt import Mpc, Msun, Myr, cm, erg, kpc, s, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.image_collection import ImageCollection
@@ -191,7 +191,9 @@ class TestLineImager:
             loaded = LineImager._from_hdf5(hdf)
 
         assert loaded.snrs == 5.0
+        assert isinstance(loaded.snrs, float)
         assert loaded.depth == inst.depth
+        assert isinstance(loaded.depth, unyt_quantity)
 
     @pytest.mark.parametrize(
         ("depth", "expected_unit"),
