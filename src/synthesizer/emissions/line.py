@@ -86,9 +86,7 @@ from synthesizer.units import (
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import resolve_out_dtype
-from synthesizer.utils.util_funcs import (
-    get_attr_unit_conversion,
-)
+from synthesizer.utils.util_funcs import get_attr_unit_conversion
 
 
 class LineCollection:
@@ -799,9 +797,8 @@ class LineCollection:
                 The axis/axes to sum over. By default this will sum over all
                 but the final axis (the axis containing different lines).
             nthreads (int):
-                The number of threads to use when summing a per-particle
-                collection (shape (nparticle, nline)) over its particles. If
-                -1 all available CPU cores will be used.
+                The number of threads to use for the default reduction. If -1
+                all available CPU cores will be used.
         """
         # First lets check if we have a multidimensional line collection, if
         # not we can just return the single line object
@@ -815,31 +812,29 @@ class LineCollection:
                 raise exceptions.InconsistentArguments(
                     f"Axis {axis} not compatible with LineCollection of ndim=1"
                 )
+            return LineCollection(
+                line_ids=self.line_ids,
+                lam=self.lam,
+                lum=np.nansum(self.luminosity, axis=axis),
+                cont=np.nansum(self.continuum, axis=axis),
+            )
 
         # If no axes are passed we will sum over all but the last axis
-        elif axis is None:
-            axis = tuple(range(self.ndim - 1))
-
-        # The default reduction (over every axis but the lines) takes the
-        # threaded path. Otherwise sum with NumPy. Either way we reduce the
-        # raw buffers rather than the luminosity/continuum descriptors, since
-        # reading those builds a unyt_array by copying the whole array.
-        if self.ndim > 1 and axis == tuple(range(self.ndim - 1)):
-            lum = nansum_leading_axes(self._luminosity, nthreads)
-            cont = nansum_leading_axes(self._continuum, nthreads)
-        else:
-            lum = np.nansum(self._luminosity, axis=axis)
-            cont = np.nansum(self._continuum, axis=axis)
+        if axis is None:
+            return LineCollection(
+                line_ids=self.line_ids,
+                lam=self.lam,
+                lum=nansum_leading_axes(self._luminosity, nthreads)
+                * get_quantity_unit(self, "luminosity"),
+                cont=nansum_leading_axes(self._continuum, nthreads)
+                * get_quantity_unit(self, "continuum"),
+            )
 
         return LineCollection(
             line_ids=self.line_ids,
             lam=self.lam,
-            lum=get_array_quantity_view(
-                lum, get_quantity_unit(self, "luminosity")
-            ),
-            cont=get_array_quantity_view(
-                cont, get_quantity_unit(self, "continuum")
-            ),
+            lum=np.nansum(self.luminosity, axis=axis),
+            cont=np.nansum(self.continuum, axis=axis),
         )
 
     def concat(self, *other_lines):
@@ -996,72 +991,62 @@ class LineCollection:
         # If the redshift is 0 we can assume a distance of 10pc and ignore
         # the IGM
         if z == 0:
-            distance = (10 * pc).to_value("cm")
+            luminosity_distance = 10 * pc
             igm = None
         else:
-            distance = get_luminosity_distance(cosmo, z).to_value("cm")
+            # Get the luminosity distance
+            luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
-        # Unit arithmetic can promote float32 values, so explicitly restore
-        # the luminosity dtype when no output precision was requested.
-        dtype = (
-            self._luminosity.dtype
-            if out_dtype is None
-            else resolve_out_dtype(out_dtype)
-        )
-
-        # Fold the unit conversion into the distance scaling so the fluxes
-        # come out directly in their stored units, rather than paying for a
-        # second full pass over the arrays to convert them afterwards
-        area = 4 * np.pi * distance**2
-        lum_scale = (
-            get_attr_unit_conversion(
-                get_quantity_unit(self, "luminosity"),
-                get_quantity_unit(self, "flux") * cm**2,
-            )
-            / area
-        )
-        cont_scale = (
-            get_attr_unit_conversion(
-                get_quantity_unit(self, "continuum"),
-                get_quantity_unit(self, "continuum_flux") * cm**2,
-            )
-            / area
-        )
-
-        # Scale both arrays in one threaded pass using the fused line scaling
-        # kernel (a plain NumPy multiply is single threaded, which hurts on
-        # large per-particle collections)
+        # Compute flux and observed continuum in one threaded pass, folding
+        # the unit conversion into the scale factors
+        area = (4 * np.pi * luminosity_distance**2).to_value("cm**2")
         nspec = self._luminosity.shape[0]
-        flux, cont_flux = scale_line_arrays(
+        self.flux, self.continuum_flux = scale_line_arrays(
             self._luminosity,
             self._continuum,
-            np.full(nspec, lum_scale, dtype=self._luminosity.dtype),
-            np.full(nspec, cont_scale, dtype=self._continuum.dtype),
+            np.full(
+                nspec,
+                get_attr_unit_conversion(
+                    get_quantity_unit(self, "luminosity"),
+                    get_quantity_unit(self, "flux") * cm**2,
+                )
+                / area,
+                dtype=self._luminosity.dtype,
+            ),
+            np.full(
+                nspec,
+                get_attr_unit_conversion(
+                    get_quantity_unit(self, "continuum"),
+                    get_quantity_unit(self, "continuum_flux") * cm**2,
+                )
+                / area,
+                dtype=self._continuum.dtype,
+            ),
             nthreads=nthreads,
-        )
-        self.flux = get_array_quantity_view(
-            flux.astype(dtype, copy=False), get_quantity_unit(self, "flux")
-        )
-        self.continuum_flux = get_array_quantity_view(
-            cont_flux.astype(dtype, copy=False),
-            get_quantity_unit(self, "continuum_flux"),
         )
 
         # Set the observed wavelength
-        self.obslam = get_array_quantity_view(
-            self._lam * (1 + z), get_quantity_unit(self, "lam")
-        )
+        self.obslam = self.lam * (1 + z)
 
-        # If we are applying an IGM model apply it (in place on the raw
-        # buffers to avoid copying the flux arrays)
+        # If we are applying an IGM model apply it
         if igm is not None:
             # Support both class references and instantiated objects
             if callable(igm):
                 igm_transmission = igm().get_transmission(z, self.obslam)
             else:
                 igm_transmission = igm.get_transmission(z, self.obslam)
-            self._flux *= igm_transmission
-            self._continuum_flux *= igm_transmission
+            self.flux *= igm_transmission
+            self.continuum_flux *= igm_transmission
+
+        # Unit arithmetic can promote float32 values, so explicitly restore
+        # the luminosity dtype when no output precision was requested.
+        dtype = (
+            self.luminosity.dtype
+            if out_dtype is None
+            else resolve_out_dtype(out_dtype)
+        )
+        self.flux = self.flux.astype(dtype, copy=False)
+        self.continuum_flux = self.continuum_flux.astype(dtype, copy=False)
 
         return self.flux
 

@@ -172,38 +172,35 @@ class Sed:
 
         Args:
             nthreads (int):
-                The number of threads to use when summing per-particle
-                spectra (shape (nparticle, nlam)). If -1 all available CPU
-                cores will be used.
+                The number of threads to use for the reduction. If -1 all
+                available CPU cores will be used.
 
         Returns:
             sed (object, Sed):
                 Summed 1D SED.
         """
-        # If 1D there is nothing to sum, just return the original Sed
-        if self._lnu.ndim == 1:
-            return self
-
-        # Create a new sed object with all but the wavelength axis collapsed
-        new_sed = Sed(
-            self.lam,
-            get_array_quantity_view(
-                nansum_leading_axes(self._lnu, nthreads),
-                get_quantity_unit(self, "lnu"),
-            ),
-        )
-
-        # If fnu exists, sum that too
-        if self.fnu is not None:
-            new_sed.fnu = get_array_quantity_view(
-                nansum_leading_axes(self._fnu, nthreads),
-                get_quantity_unit(self, "fnu"),
+        # Check that the lnu array is multidimensional
+        if len(self._lnu.shape) > 1:
+            # Create a new sed object with the first Lnu dimension collapsed
+            new_sed = Sed(
+                self.lam,
+                nansum_leading_axes(self._lnu, nthreads)
+                * get_quantity_unit(self, "lnu"),
             )
-            new_sed.obsnu = self.obsnu
-            new_sed.obslam = self.obslam
-            new_sed.redshift = self.redshift
 
-        return new_sed
+            # If fnu exists, sum that too
+            if self.fnu is not None:
+                new_sed.fnu = nansum_leading_axes(
+                    self._fnu, nthreads
+                ) * get_quantity_unit(self, "fnu")
+                new_sed.obsnu = self.obsnu
+                new_sed.obslam = self.obslam
+                new_sed.redshift = self.redshift
+
+            return new_sed
+        else:
+            # If 1D, just return the original array
+            return self
 
     def concat(self, *other_seds):
         """Concatenate the spectra arrays of multiple Sed objects.

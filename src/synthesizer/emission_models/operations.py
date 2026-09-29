@@ -791,7 +791,8 @@ class Transformation:
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_emissions[this_model.label] = emission
-            emissions[this_model.label] = emission.sum(nthreads=nthreads)
+            with timer("Transformation._transform_emission.integrate"):
+                emissions[this_model.label] = emission.sum(nthreads=nthreads)
         else:
             emissions[this_model.label] = emission
 
@@ -964,34 +965,39 @@ class Combination:
             in_lines = lines
 
         template = in_lines[this_model._combine_labels[0]]
-        labels = this_model._combine_labels
 
-        # Per-particle collections are 2D, so they go through the same
-        # NaN-ignoring threaded kernel the spectra path uses. Integrated
-        # collections are 1D, which that kernel does not take, so they fall
-        # back to the same masked NumPy accumulation _combine_spectra uses.
-        # The combine kernel walks the buffers directly, so subset
-        # collections holding strided views have to be made contiguous first.
-        # This is a no-op for the usual freshly built collection.
-        lum_arrays = tuple(
-            as_contiguous(in_lines[label]._luminosity) for label in labels
-        )
-        cont_arrays = tuple(
-            as_contiguous(in_lines[label]._continuum) for label in labels
-        )
+        # Combine raw arrays directly and construct one LineCollection at the
+        # end to avoid repeated constructor and metadata work in hot loops.
         if this_model.per_particle:
-            out_luminosity = combine_spectra_2d(lum_arrays, nthreads)
-            out_continuum = combine_spectra_2d(cont_arrays, nthreads)
+            # Per-particle arrays go through the threaded kernel, which needs
+            # contiguous buffers
+            out_luminosity = combine_spectra_2d(
+                tuple(
+                    as_contiguous(in_lines[label]._luminosity)
+                    for label in this_model._combine_labels
+                ),
+                nthreads,
+            )
+            out_continuum = combine_spectra_2d(
+                tuple(
+                    as_contiguous(in_lines[label]._continuum)
+                    for label in this_model._combine_labels
+                ),
+                nthreads,
+            )
         else:
-            out_luminosity = np.zeros_like(lum_arrays[0])
-            out_continuum = np.zeros_like(cont_arrays[0])
-            for arr, out in (
-                (lum_arrays, out_luminosity),
-                (cont_arrays, out_continuum),
-            ):
-                for a in arr:
-                    nan_mask = np.isnan(a)
-                    out[~nan_mask] += a[~nan_mask]
+            out_luminosity = np.zeros(
+                template._luminosity.shape,
+                dtype=template._luminosity.dtype,
+            )
+            out_continuum = np.zeros(
+                template._continuum.shape,
+                dtype=template._continuum.dtype,
+            )
+            for combine_label in this_model._combine_labels:
+                combine_lines = in_lines[combine_label]
+                out_luminosity += combine_lines._luminosity
+                out_continuum += combine_lines._continuum
 
         out_lines = LineCollection(
             line_ids=template.line_ids,
