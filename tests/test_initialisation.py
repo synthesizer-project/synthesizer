@@ -505,7 +505,11 @@ class TestUnitsFileHandling:
         assert units["UnitCategories"]["luminosity"]["unit"] == "erg / s"
 
     def test_copy_units_updates_dev_build_files(self, tmp_path):
-        """Files from dev builds (which may predate a change) are updated."""
+        """Files from dev builds (which may predate a change) are updated.
+
+        Once updated, a unit the user switches back to is kept by later dev
+        builds.
+        """
         import yaml
 
         units_file = tmp_path / "base" / "default_units.yml"
@@ -518,9 +522,23 @@ class TestUnitsFileHandling:
 
         SynthesizerInitializer()._copy_units()
 
-        categories = yaml.safe_load(units_file.read_text())["UnitCategories"]
+        units = yaml.safe_load(units_file.read_text())
+        categories = units["UnitCategories"]
         assert categories["luminosity_density_wavelength"]["unit"] == (
             "Lsun / Angstrom"
+        )
+
+        # Deliberately switch back to erg/s, then update from a later dev build
+        categories["luminosity_density_wavelength"]["unit"] = (
+            "erg / s / Angstrom"
+        )
+        units["Version"] = "1.2.1.dev460"
+        units_file.write_text(yaml.dump(units))
+        SynthesizerInitializer()._copy_units()
+
+        categories = yaml.safe_load(units_file.read_text())["UnitCategories"]
+        assert categories["luminosity_density_wavelength"]["unit"] == (
+            "erg / s / Angstrom"
         )
 
 

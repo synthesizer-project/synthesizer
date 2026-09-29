@@ -404,13 +404,19 @@ class SynthesizerInitializer:
             # Drop defaults that have changed since the user's file was
             # written (unless the user customised them) so the new defaults
             # replace them. Dev builds can't be ordered against the change
-            # (they may predate it), so files they wrote count as old too.
+            # (they may predate it), so files they wrote count as old too,
+            # unless the file records the change as already applied (so a
+            # unit the user picks afterwards is kept).
             user_version = Version(str(user_units.get("Version", "1.0.0")))
-            for change in get_units_changelog():
+            applied = set(user_units.get("AppliedUnitChanges", []))
+            changelog = get_units_changelog()
+            for change in changelog:
                 key = change["category"]
                 unit = str(categories.get(key, {}).get("unit", ""))
-                predates = user_version.is_devrelease or user_version <= (
-                    Version(change["changed_after"])
+                change_id = f"{key}@{change['changed_after']}"
+                predates = change_id not in applied and (
+                    user_version.is_devrelease
+                    or user_version <= Version(change["changed_after"])
                 )
                 if predates and (
                     unit.replace(" ", "") == change["old"].replace(" ", "")
@@ -427,6 +433,10 @@ class SynthesizerInitializer:
                 user_units["UnitCategories"]
             )
             default_units["Version"] = __version__
+            default_units["AppliedUnitChanges"] = [
+                f"{change['category']}@{change['changed_after']}"
+                for change in changelog
+            ]
 
             # Write the updated units back to the user's file. Write to a
             # unique temporary file and move it into place so other processes
