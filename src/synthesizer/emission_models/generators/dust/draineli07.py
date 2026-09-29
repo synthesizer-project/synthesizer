@@ -8,7 +8,16 @@ from typing import TYPE_CHECKING, Optional, Union
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import fsolve
-from unyt import Hz, Lsun, Msun, angstrom, erg, s, unyt_array, unyt_quantity
+from unyt import (
+    Hz,
+    Lsun,
+    Msun,
+    angstrom,
+    erg,
+    s,
+    unyt_array,
+    unyt_quantity,
+)
 
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
@@ -692,7 +701,7 @@ class DraineLi07(DustEmission):
         lines = LineCollection(
             line_ids,
             line_lams,
-            lum=np.zeros(lnu.shape, dtype=lnu.dtype) * Lsun,
+            lum=np.zeros(lnu.shape, dtype=lnu.dtype) * erg / s,
             cont=lnu * erg / s / Hz,
         )
 

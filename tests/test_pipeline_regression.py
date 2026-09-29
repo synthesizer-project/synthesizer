@@ -23,15 +23,13 @@ import h5py
 import numpy as np
 import pytest
 from astropy.cosmology import Planck18
-from unyt import Lsun, Mpc, Myr, unyt_array
+from unyt import Mpc, Myr, unyt_array
 
 from synthesizer import GRID_DIR
 from synthesizer.emission_models import PacmanEmission
 from synthesizer.emission_models.transformers import PowerLaw
-from synthesizer.exceptions import PrecisionOverflow
 from synthesizer.grid import Grid
 from synthesizer.particle.stars import Stars
-from synthesizer.units import Units
 
 REFERENCE_PATH = Path(GRID_DIR) / "golden_pipeline_reference.hdf5"
 
@@ -108,7 +106,7 @@ class TestGoldenPipelineRegression:
             atol=0.0,
         )
         np.testing.assert_allclose(
-            sed.bolometric_luminosity.to("Lsun").value,
+            sed.bolometric_luminosity.to("erg/s").value,
             golden_reference["bolometric_luminosity"],
             rtol=1e-9,
             atol=0.0,
@@ -148,15 +146,10 @@ class TestGoldenPipelineRegression:
             rtol=2e-3,
             atol=1e-3 * np.abs(golden_reference["fnu"]).max(),
         )
-
-        # float32 bolometric luminosities only fit in Lsun (the default)
-        if Units().luminosity != Lsun:
-            with pytest.raises(PrecisionOverflow):
-                sed.bolometric_luminosity
-            return
-
+        # float32 Lsun overflows when converted to erg/s, so convert at
+        # float64
         np.testing.assert_allclose(
-            sed.bolometric_luminosity.to("Lsun").value,
+            sed.bolometric_luminosity.astype(np.float64).to("erg/s").value,
             golden_reference["bolometric_luminosity"],
             rtol=1e-5,
         )

@@ -454,10 +454,11 @@ class IntegratedParticleExtractor(Extractor):
                 return LineCollection(
                     line_ids=self._grid.line_ids,
                     lam=self._line_lams,
-                    lum=np.zeros(self._grid.nlines, dtype=out_dtype)
-                    * self._line_lum_grid.units,
+                    lum=np.zeros(self._grid.nlines, dtype=out_dtype) * erg / s,
                     cont=np.zeros(self._grid.nlines, dtype=out_dtype)
-                    * self._line_cont_grid.units,
+                    * erg
+                    / s
+                    / Hz,
                 )
             elif mask is not None and np.sum(mask) == 0:
                 warn(
@@ -467,10 +468,11 @@ class IntegratedParticleExtractor(Extractor):
                 return LineCollection(
                     line_ids=self._grid.line_ids,
                     lam=self._line_lams,
-                    lum=np.zeros(self._grid.nlines, dtype=out_dtype)
-                    * self._line_lum_grid.units,
+                    lum=np.zeros(self._grid.nlines, dtype=out_dtype) * erg / s,
                     cont=np.zeros(self._grid.nlines, dtype=out_dtype)
-                    * self._line_cont_grid.units,
+                    * erg
+                    / s
+                    / Hz,
                 )
 
             # Get the attributes from the emitter

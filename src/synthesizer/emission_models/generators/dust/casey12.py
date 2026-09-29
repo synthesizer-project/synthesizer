@@ -8,7 +8,6 @@ import numpy as np
 from unyt import (
     Hz,
     K,
-    Lsun,
     angstrom,
     c,
     erg,
@@ -475,7 +474,7 @@ class Casey12(DustEmission):
         lines = LineCollection(
             line_ids,
             line_lams,
-            lum=np.zeros(lnu.shape, dtype=lnu.dtype) * Lsun,
+            lum=np.zeros(lnu.shape, dtype=lnu.dtype) * erg / s,
             cont=lnu * erg / s / Hz,
         )
 

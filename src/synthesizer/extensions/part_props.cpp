@@ -26,7 +26,6 @@ class GridProps;
  * properties.
  * @param part_names_tuple: The names of the particle properties (for error
  * messages). An optional extra trailing entry names the weights array.
- * @param npart_: The number of particles.
  */
 Particles::Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
                      PyArrayObject *np_mask, PyObject *part_tuple,

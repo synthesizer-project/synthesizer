@@ -9,7 +9,6 @@ import numpy as np
 import pytest
 from unyt import (
     Hz,
-    K,
     Lsun,
     Msun,
     Myr,
@@ -22,8 +21,6 @@ from unyt import (
 )
 
 from synthesizer import exceptions
-from synthesizer.emission_models import IncidentEmission, PacmanEmission
-from synthesizer.emission_models.generators.dust.greybody import Greybody
 from synthesizer.emission_models.transformers import (
     GrainModels,
     ParametricLi08,
@@ -61,23 +58,6 @@ def _sed32(nspec=None):
     lam = unyt_array(np.geomspace(1e-4, 1e11, 50), angstrom)
     shape = (lam.size,) if nspec is None else (nspec, lam.size)
     return Sed(lam, unyt_array(np.ones(shape, np.float32), erg / s / Hz))
-
-
-def test_generated_dust_emission_follows_out_dtype(test_grid):
-    """Dust emission generators should honour out_dtype (per particle)."""
-    stars = _stars(np.float32)
-    model = PacmanEmission(
-        grid=test_grid,
-        tau_v="tau_v",
-        dust_curve=PowerLaw(),
-        dust_emission=Greybody(temperature=30 * K, emissivity=1.5),
-        per_particle=True,
-    )
-
-    stars.get_spectra(model, out_dtype=np.float32)
-
-    assert stars.particle_spectra[model.label]._lnu.dtype == np.float32
-    assert stars.spectra[model.label]._lnu.dtype == np.float32
 
 
 @pytest.mark.parametrize(
@@ -159,20 +139,6 @@ def test_sed_luminosity_keeps_sed_precision():
         np.testing.assert_allclose(
             result.value, expected.to(units).value, rtol=1e-6
         )
-
-
-def test_line_subset_is_contiguous(test_grid):
-    """Selecting a subset of per-particle lines gives contiguous arrays."""
-    stars = _stars(np.float32)
-    model = IncidentEmission(grid=test_grid, per_particle=True)
-    line_ids = test_grid.available_lines[:3]
-
-    stars.get_lines(line_ids, model)
-    lines = stars.particle_lines[model.label]
-
-    assert lines._luminosity.flags.c_contiguous
-    assert lines._continuum.flags.c_contiguous
-    lines.scale(np.ones(stars.nparticles))
 
 
 def test_broadening_keeps_sed_precision():
@@ -284,17 +250,6 @@ class TestVerifyOutPrecision:
 
         with pytest.raises(exceptions.PrecisionOverflow, match="inf"):
             func(out_dtype=np.float32)
-
-    def test_checks_select_returned_values(self):
-        """Only the flagged values of a returned tuple are checked."""
-
-        @verify_out_precision(True, False)
-        def func(out_dtype=None):
-            return np.ones(3, np.float32), np.ones(3)
-
-        first, second = func(out_dtype=np.float32)
-        assert first.dtype == np.float32
-        assert second.dtype == np.float64
 
     def test_checks_output_objects(self):
         """The arrays inside Synthesizer output objects are checked."""

@@ -2923,9 +2923,6 @@ class Template:
                 The precision of the spectra. Defaults to the global default
                 output dtype.
 
-        Returns:
-            Sed:
-                The scaled spectra, one per bolometric luminosity.
         """
         # Ensure we have units for safety
         if bolometric_luminosity is not None and not isinstance(
@@ -2942,7 +2939,7 @@ class Template:
         luminosities = bolometric_luminosity.ndview
         lnu = np.multiply(
             self._sed._lnu,
-            np.asarray(luminosities)[..., np.newaxis],
+            luminosities[..., np.newaxis],
             out=np.empty(
                 (*np.shape(luminosities), self._sed._lnu.size),
                 dtype=resolve_out_dtype(out_dtype),

@@ -101,7 +101,7 @@ Note: If your units file predates this change and still uses the old
 ``erg / s`` default, it is updated automatically (and the change is printed);
 any units you customised are left alone. Changes to the default units are
 listed in ``units_changelog.yml``. You can switch back to erg/s in the units
-file if you prefer, but float32 luminosities will then overflow.
+file if you prefer, but float32 luminosities may then overflow.
 
 The float32 range
 ^^^^^^^^^^^^^^^^^
@@ -115,19 +115,8 @@ are always computed at float64.
 If a result is too large for the output precision, Synthesizer raises a
 ``PrecisionOverflow`` error rather than returning results containing ``inf``.
 
-Synthesizer also checks itself: the functions that produce emission verify
-that what they return really is at the requested ``out_dtype``. If one ever
-isn't, that is a bug in Synthesizer rather than anything you did; the result
-is converted and an ``InternalPrecisionWarning`` asks you to report it.
-
-Two limits remain your responsibility:
-
-- Converting large float32 values to other units happens at float32 in unyt
-  and can overflow (e.g. a float32 mass of 1e8 Msun converted to grams).
-  Convert to float64 first: ``arr.astype(np.float64).to("g")``.
-- Very small values can underflow float32 (below ~1e-38), e.g. extreme-UV
-  fluxes of high redshift sources in erg/s/cm²/Hz. Use float64 outputs if
-  you need those.
+If an output ever isn't at the requested ``out_dtype`` that is a bug in
+Synthesizer, reported with an ``InternalPrecisionWarning``.
 
 Input precision
 ~~~~~~~~~~~~~~~
@@ -204,8 +193,10 @@ errors like:
         metallicities: float32
     To fix this, convert the one mismatched array (initial_masses) to
     float32, e.g. arr = arr.astype(np.float32), or convert all of them to
-    float64. Synthesizer never converts arrays for you because that would
-    silently create copies of potentially very large arrays.
+    float64. For grid arrays, load the grid at the matching precision with
+    Grid(..., use_precision=...). Synthesizer never converts arrays for you
+    because that would silently create copies of potentially very large
+    arrays.
 
 This means some arrays in a group don't match their siblings. Fix it at the
 source — load the data at a consistent precision, or cast the named array

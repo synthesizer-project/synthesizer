@@ -82,7 +82,7 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
   if (np_spectra_ != NULL &&
       reinterpret_cast<PyObject *>(np_spectra_) != Py_None) {
     float_arrays[float_count] = np_spectra_;
-    float_names[float_count] = "grid spectra";
+    float_names[float_count] = "grid_spectra";
     float_count++;
   }
 
@@ -125,14 +125,14 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
 
   if (np_lam_ != NULL && reinterpret_cast<PyObject *>(np_lam_) != Py_None) {
     float_arrays[float_count] = np_lam_;
-    float_names[float_count] = "grid wavelengths (lam)";
+    float_names[float_count] = "lam";
     float_count++;
   }
 
   if (np_grid_weights_ != NULL &&
       reinterpret_cast<PyObject *>(np_grid_weights_) != Py_None) {
     float_arrays[float_count] = np_grid_weights_;
-    float_names[float_count] = "grid weights";
+    float_names[float_count] = "grid_weights";
     float_count++;
   }
 

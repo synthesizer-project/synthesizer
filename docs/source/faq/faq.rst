@@ -20,10 +20,7 @@ error such as:
         initial_masses: float64
         log10ages: float32
         metallicities: float32
-    To fix this, convert the one mismatched array (initial_masses) to
-    float32, e.g. arr = arr.astype(np.float32), or convert all of them to
-    float64. Synthesizer never converts arrays for you because that would
-    silently create copies of potentially very large arrays.
+    ...
 
 Choose one dtype when loading or constructing the collection. When attaching
 units, use ``unyt_array`` to preserve that dtype; multiplying by some physical

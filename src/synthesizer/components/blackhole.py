@@ -497,10 +497,7 @@ class BlackholesComponent(Component):
         # L_Edd = 4*pi*G*mp*c*M/sigma_thompson = 1.257e38 * M/Msun erg/s
         # Converting to solar luminosities:
         # L_Edd = 1.257e38 / 3.828e33 = 3.284e4 Lsun/Msun
-        self.eddington_luminosity = convert_array_dtype(
-            3.284e4 * self._mass * Lsun,
-            self.mass.dtype,
-        )
+        self.eddington_luminosity = 3.284e4 * self._mass * Lsun
 
         return self.eddington_luminosity
 

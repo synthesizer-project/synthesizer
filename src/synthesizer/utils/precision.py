@@ -146,9 +146,6 @@ def convert_array_dtype(array, dtype, name=None):
     the target dtype would silently become inf, so this raises a
     PrecisionOverflow error instead.
 
-    Only floating-point targets are converted; for any other target dtype
-    the input is returned unchanged.
-
     Args:
         array (array-like/float):
             The input array-like object or scalar.
@@ -159,7 +156,7 @@ def convert_array_dtype(array, dtype, name=None):
 
     Returns:
         array-like/float:
-            The converted array (or scalar), or the input unchanged.
+            The converted array (or scalar).
 
     Raises:
         PrecisionOverflow:
@@ -171,10 +168,7 @@ def convert_array_dtype(array, dtype, name=None):
     if array is None:
         return None
 
-    # Only floating-point targets are converted
     dtype = np.dtype(dtype)
-    if dtype.kind != "f":
-        return array
 
     # If the array already has the requested dtype and contiguous storage
     # there is nothing to do; return it untouched to avoid a needless copy.
@@ -314,7 +308,7 @@ def _convert_output_dtype(value, dtype, where):
     return value
 
 
-def verify_out_precision(*checks):
+def verify_out_precision():
     """Verify a function's outputs respect its out_dtype argument.
 
     Decorates any function or method taking an ``out_dtype`` argument. The
@@ -329,12 +323,6 @@ def verify_out_precision(*checks):
 
     Outputs can be arrays, Synthesizer output objects (Sed, LineCollection,
     PhotometryCollection) or dicts, lists and tuples of these.
-
-    Args:
-        *checks (bool):
-            For functions returning a tuple, whether to check each returned
-            value (e.g. ``verify_out_precision(True, False)`` checks only the
-            first). With no arguments every output is checked.
 
     Returns:
         callable:
@@ -354,24 +342,7 @@ def verify_out_precision(*checks):
             result = func(*args, **kwargs)
             bound = signature.bind(*args, **kwargs)
             dtype = resolve_out_dtype(bound.arguments.get("out_dtype"))
-            where = func.__qualname__
-            if not checks:
-                return _convert_output_dtype(result, dtype, where)
-            if not isinstance(result, tuple):
-                return (
-                    _convert_output_dtype(result, dtype, where)
-                    if checks[0]
-                    else result
-                )
-            return (
-                tuple(
-                    _convert_output_dtype(value, dtype, where)
-                    if check
-                    else value
-                    for value, check in zip(result, checks)
-                )
-                + result[len(checks) :]
-            )
+            return _convert_output_dtype(result, dtype, func.__qualname__)
 
         return wrapped
 
