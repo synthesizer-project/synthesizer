@@ -60,7 +60,7 @@ def _check_fraction_shape(fraction, emission, model):
             f"Model '{label}' applies a fraction with one value per particle "
             f"({np.size(fraction)} values) to integrated emission. Either set "
             "per_particle=True on the model or use a single value for the "
-            "fraction."
+            "fraction.",
         )
 
 

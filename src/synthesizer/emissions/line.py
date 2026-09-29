@@ -632,14 +632,15 @@ class LineCollection:
                     obslam.extend(single_line.obslam)
                     cont_flux.extend(single_line.continuum_flux)
 
-            # Convert to arrays
+            # Convert to arrays (transposing back to (..., nlines) and making
+            # the result contiguous for the extensions)
             line_ids = np.array(line_ids)
             lam = np.array(lam)
-            lum = np.array(lum).T
-            cont = np.array(cont).T
-            flux = np.array(flux).T
-            obslam = np.array(obslam).T
-            cont_flux = np.array(cont_flux).T
+            lum = np.ascontiguousarray(np.array(lum).T)
+            cont = np.ascontiguousarray(np.array(cont).T)
+            flux = np.ascontiguousarray(np.array(flux).T)
+            obslam = np.ascontiguousarray(np.array(obslam).T)
+            cont_flux = np.ascontiguousarray(np.array(cont_flux).T)
 
             # Create the new line (converting to unyt_arrays)
             new_line = LineCollection(
@@ -1637,7 +1638,8 @@ class LineCollection:
         blended_lines_counts = np.zeros(len(wavelength_bins) - 1, dtype=int)
         blended_line_ids = [[] for _ in range(len(wavelength_bins) - 1)]
         blended_line_lams = np.zeros(
-            len(wavelength_bins) - 1, dtype=self._lam.dtype
+            len(wavelength_bins) - 1,
+            dtype=self._lam.dtype,
         )
         blended_line_lums = np.zeros(new_shape, dtype=self._luminosity.dtype)
         blended_line_conts = np.zeros(new_shape, dtype=self._continuum.dtype)

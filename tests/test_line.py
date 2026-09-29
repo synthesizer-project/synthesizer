@@ -19,6 +19,7 @@ from unyt import (
 )
 
 from synthesizer.conversions import standard_to_vacuum
+from synthesizer.emission_models import IncidentEmission
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.emission_models.transformers.dust_attenuation import (
     AttenuationLaw,
@@ -1649,6 +1650,22 @@ class TestLineCollectionGenerationSubsets:
             "The continuum is not an array of length 5."
         )
 
+    def test_particle_subset_is_contiguous(
+        self,
+        random_part_stars,
+        test_grid,
+    ):
+        """Test a subset of per-particle lines gives contiguous arrays."""
+        model = IncidentEmission(grid=test_grid, per_particle=True)
+        random_part_stars.get_lines(test_grid.available_lines[:3], model)
+        lines = random_part_stars.particle_lines[model.label]
+
+        assert lines._luminosity.flags.c_contiguous
+        assert lines._continuum.flags.c_contiguous
+
+        # The extensions need contiguous arrays
+        lines.scale(np.ones(random_part_stars.nparticles))
+
 
 if __name__ == "__main__":
     pytest.main(["-xvs", __file__])
@@ -1707,7 +1724,7 @@ def test_blending_and_sed_keep_line_precision():
     )
 
     blended = lines.get_blended_lines(
-        np.array([900.0, 1500.0, 2500.0]) * angstrom
+        np.array([900.0, 1500.0, 2500.0]) * angstrom,
     )
     assert blended._lam.dtype == np.float32
     assert blended._luminosity.dtype == np.float32
