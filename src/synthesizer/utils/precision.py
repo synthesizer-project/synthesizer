@@ -30,6 +30,7 @@ import numpy as np
 from unyt import unyt_array
 
 from synthesizer import exceptions
+from synthesizer.synth_warnings import InternalPrecisionWarning
 
 # The allowed floating point dtypes for outputs.
 _ALLOWED_DTYPES = (np.dtype(np.float32), np.dtype(np.float64))
@@ -216,14 +217,6 @@ def convert_array_dtype(array, dtype, name=None):
     if np.ndim(array) == 0 and not isinstance(array, np.ndarray):
         return dtype.type(converted)
     return converted
-
-
-class InternalPrecisionWarning(RuntimeWarning):
-    """Warning for outputs that didn't respect the requested out_dtype.
-
-    This always indicates a bug in Synthesizer rather than a problem with the
-    user's inputs. The test suite turns it into an error.
-    """
 
 
 # The private array attributes of Synthesizer's output objects (Sed,
