@@ -1150,6 +1150,7 @@ class Sed:
         # Return the fnu with units, without making a copy
         return get_quantity_view(self, "_fnu")
 
+    @accepts(peculiar_velocity=km / s)
     @timed("Sed.get_fnu")
     def get_fnu(
         self,
@@ -1183,11 +1184,10 @@ class Sed:
             out_dtype (np.dtype, optional):
                 Requested floating-point dtype for the flux array. If None
                 the flux inherits the luminosity's dtype.
-            peculiar_velocity (unyt_quantity/float):
-                Line-of-sight peculiar velocity (positive = receding), a unyt
-                velocity or a float in km/s. Shifts the spectrum to z_obs with
-                1 + z_obs = (1 + z)(1 + v / c); distance and IGM stay at z.
-                Defaults to None (no shift).
+            peculiar_velocity (unyt_quantity):
+                Line-of-sight peculiar velocity (positive = receding). Shifts
+                the spectrum to z_obs with 1 + z_obs = (1 + z)(1 + v / c);
+                distance and IGM stay at z. Defaults to None (no shift).
 
         Returns:
             fnu (ndarray)
@@ -1209,14 +1209,10 @@ class Sed:
 
         # Peculiar velocity shifts the spectrum to z_obs without moving the
         # source; z_obs == z when no velocity is given.
+        z_obs = float(z)
         if peculiar_velocity is not None:
-            if hasattr(peculiar_velocity, "units"):
-                beta = float((peculiar_velocity / c).to_value(""))
-            else:
-                beta = float(peculiar_velocity) / c.to_value("km/s")
-            z_obs = (1.0 + float(z)) * (1.0 + beta) - 1.0
-        else:
-            z_obs = float(z)
+            beta = float(peculiar_velocity.value) / c.to_value(km / s)
+            z_obs = (1.0 + z_obs) * (1.0 + beta) - 1.0
 
         if self._obslam is None or self._obslam.shape != self._lam.shape:
             self._obslam = np.empty_like(self._lam)

@@ -5,7 +5,7 @@ only contains common attributes and methods to reduce boilerplate.
 """
 
 import numpy as np
-from unyt import Gyr, Mpc, Msun, Myr, arcsecond, degree, kpc, pc, yr
+from unyt import Gyr, Mpc, Msun, Myr, arcsecond, degree, km, kpc, pc, s, yr
 
 from synthesizer import exceptions
 from synthesizer.cosmology import (
@@ -285,6 +285,7 @@ class BaseGalaxy:
 
         return equivalent_widths
 
+    @accepts(peculiar_velocity=km / s)
     def get_observed_spectra(
         self,
         cosmo,
@@ -320,7 +321,7 @@ class BaseGalaxy:
             out_dtype (np.dtype, optional):
                 Requested floating-point dtype for the flux arrays. If None
                 the fluxes inherit the source spectra dtype.
-            peculiar_velocity (unyt_quantity/float):
+            peculiar_velocity (unyt_quantity):
                 Line-of-sight peculiar velocity passed to Sed.get_fnu. If
                 None, a `peculiar_velocity` attribute on the galaxy is used if
                 set. Defaults to None.

@@ -8,8 +8,9 @@ from synthesizer.extensions.reductions import (
     combine_spectra_2d,
     reduce_particle_spectra,
 )
-from unyt import Hz, angstrom, c, cm, erg, km, nJy, pc, s
+from unyt import Hz, angstrom, c, cm, erg, km, m, nJy, pc, s
 
+from synthesizer import exceptions
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.emissions import Sed
@@ -337,7 +338,9 @@ def test_get_fnu_peculiar_velocity_zero_matches_default():
 
     base = Sed(lam=lam, lnu=lnu).get_fnu(Planck18, z)
     none = Sed(lam=lam, lnu=lnu).get_fnu(Planck18, z, peculiar_velocity=None)
-    zero = Sed(lam=lam, lnu=lnu).get_fnu(Planck18, z, peculiar_velocity=0.0)
+    zero = Sed(lam=lam, lnu=lnu).get_fnu(
+        Planck18, z, peculiar_velocity=0.0 * km / s
+    )
 
     np.testing.assert_array_equal(none.value, base.value)
     np.testing.assert_allclose(zero.value, base.value)
@@ -349,9 +352,9 @@ def test_get_fnu_peculiar_velocity_shifts_to_observed_redshift():
     lam = np.linspace(1000, 2000, 8) * angstrom
     lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
     z = 1.0
-    v = 600.0  # km/s, receding
+    v = 600.0 * km / s  # receding
 
-    z_obs = (1.0 + z) * (1.0 + v / c.to_value("km/s")) - 1.0
+    z_obs = (1.0 + z) * (1.0 + float(v / c)) - 1.0
     d_l = get_luminosity_distance(Planck18, z).to(cm)
     d_l_eff = d_l * (1.0 + z_obs) / (1.0 + z)
     expected = lnu * (1.0 + z_obs) / (4 * np.pi * d_l_eff**2)
@@ -363,8 +366,21 @@ def test_get_fnu_peculiar_velocity_shifts_to_observed_redshift():
     np.testing.assert_allclose(sed._obsnu, sed._nu / (1.0 + z_obs))
     np.testing.assert_allclose(fnu.to("nJy").value, expected.to("nJy").value)
 
-    # A unyt velocity matches the float (km/s) shorthand.
-    fnu_unyt = Sed(lam=lam, lnu=lnu).get_fnu(
-        Planck18, z, peculiar_velocity=v * km / s
+    # Equivalent velocity units give the same result.
+    fnu_ms = Sed(lam=lam, lnu=lnu).get_fnu(
+        Planck18, z, peculiar_velocity=v.to(m / s)
     )
-    np.testing.assert_allclose(fnu_unyt.to("nJy").value, fnu.to("nJy").value)
+    np.testing.assert_allclose(fnu_ms.to("nJy").value, fnu.to("nJy").value)
+
+
+def test_get_fnu_peculiar_velocity_requires_units():
+    """peculiar_velocity without velocity units is rejected."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
+
+    with pytest.raises(exceptions.MissingUnits):
+        Sed(lam=lam, lnu=lnu).get_fnu(Planck18, 1.0, peculiar_velocity=600.0)
+    with pytest.raises(exceptions.IncorrectUnits):
+        Sed(lam=lam, lnu=lnu).get_fnu(
+            Planck18, 1.0, peculiar_velocity=600.0 * cm
+        )
