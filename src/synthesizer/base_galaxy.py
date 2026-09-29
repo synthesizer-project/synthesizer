@@ -419,6 +419,7 @@ class BaseGalaxy:
                 Inoue14).
             nthreads (int):
                 The number of threads to use when scaling the fluxes.
+                nthreads=-1 will use all available threads.
             out_dtype (np.dtype, optional):
                 Requested floating-point dtype for the flux arrays. If None
                 the fluxes inherit the line luminosity dtype.
