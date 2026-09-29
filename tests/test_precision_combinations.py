@@ -214,7 +214,9 @@ def test_stellar_emission(grids, part, grid, out):
 
 
 @pytest.mark.parametrize(
-    "grid, out", PAIRS, ids=[f"grid{_bits(g)}-out{_bits(o)}" for g, o in PAIRS]
+    "grid, out",
+    PAIRS,
+    ids=[f"grid{_bits(g)}-out{_bits(o)}" for g, o in PAIRS],
 )
 def test_parametric_spectra(grids, grid, out):
     """Parametric stars work with either grid and output precision."""
@@ -267,7 +269,8 @@ def test_agn_spectra_and_lines(agn_grids, part, grid, out):
         bh = BlackHoles(
             masses=unyt_array(np.array([1e6, 1e7, 1e8, 1e9], part), Msun),
             accretion_rates=unyt_array(
-                np.array([0.01, 0.1, 1.0, 1.0], part), Msun / yr
+                np.array([0.01, 0.1, 1.0, 1.0], part),
+                Msun / yr,
             ),
             inclinations=np.array([10, 30, 50, 70], part) * deg,
             coordinates=np.zeros((4, 3), part) * Mpc,

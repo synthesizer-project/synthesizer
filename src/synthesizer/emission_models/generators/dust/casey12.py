@@ -344,7 +344,12 @@ class Casey12(DustEmission):
 
         # Scale the normalised emission, at the output precision
         sed._lnu = self.get_scaled_emission(
-            lnu, scaling, emitter, model, out_dtype, cmb_factor
+            lnu,
+            scaling,
+            emitter,
+            model,
+            out_dtype,
+            cmb_factor,
         )
 
         return sed
@@ -467,7 +472,12 @@ class Casey12(DustEmission):
 
         # Scale the normalised emission, at the output precision
         lnu = self.get_scaled_emission(
-            lnu, scaling, emitter, model, out_dtype, cmb_factor
+            lnu,
+            scaling,
+            emitter,
+            model,
+            out_dtype,
+            cmb_factor,
         )
 
         # Return as LineCollection with continuum only

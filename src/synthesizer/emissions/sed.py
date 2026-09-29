@@ -523,11 +523,15 @@ class Sed:
         """
         lum_units = Units().luminosity
         return get_array_quantity_view(
-            self._lnu * self._get_lnu_factor(self.nu, lum_units), lum_units
+            self._lnu * self._get_lnu_factor(self.nu, lum_units),
+            lum_units,
         )
 
     def _get_integrated_luminosity(
-        self, lnu, integration_method="trapz", nthreads=1
+        self,
+        lnu,
+        integration_method="trapz",
+        nthreads=1,
     ):
         """Get the luminosity from integrating lnu over frequency.
 
@@ -565,7 +569,7 @@ class Sed:
             raise exceptions.PrecisionOverflow(
                 f"Luminosities are too large to be stored at {lnu.dtype} in "
                 f"{Units().luminosity}. Use float64 spectra or a larger "
-                "luminosity unit (e.g. Lsun)."
+                "luminosity unit (e.g. Lsun).",
             )
         return integral * Units().luminosity
 
@@ -791,7 +795,8 @@ class Sed:
         # (wavelength sized) result is returned at the precision of lnu
         lnu = interp1d(self._lam, self._lnu, kind=kind)(lam)
         return lnu.astype(self._lnu.dtype, copy=False) * get_quantity_unit(
-            self, "lnu"
+            self,
+            "lnu",
         )
 
     @timed("Sed.measure_bolometric_luminosity")
@@ -823,7 +828,9 @@ class Sed:
                 is raised.
         """
         return self._get_integrated_luminosity(
-            self._lnu, integration_method, nthreads
+            self._lnu,
+            integration_method,
+            nthreads,
         )
 
     @accepts(window=angstrom)
@@ -856,7 +863,9 @@ class Sed:
 
         # Integrate the window
         return self._get_integrated_luminosity(
-            self._lnu * transmission, integration_method, nthreads
+            self._lnu * transmission,
+            integration_method,
+            nthreads,
         )
 
     @accepts(window=angstrom)
@@ -1597,7 +1606,8 @@ class Sed:
                 fill=0.0,
                 verbose=False,
             ).astype(self._fnu.dtype, copy=False) * get_quantity_unit(
-                self, "fnu"
+                self,
+                "fnu",
             )
             sed.redshift = self.redshift
 
@@ -1886,7 +1896,8 @@ class Sed:
             .value
         )
         y = np.ascontiguousarray(
-            self._lnu[..., ionisation_mask], dtype=np.float64
+            self._lnu[..., ionisation_mask],
+            dtype=np.float64,
         )
         y *= factor
 
@@ -2037,7 +2048,7 @@ class Sed:
 
         # spectres always returns float64, so restore the input precision
         new_lnu = new_flat_lnu.astype(self._lnu.dtype, copy=False).reshape(
-            self._lnu.shape
+            self._lnu.shape,
         ) * get_quantity_unit(self, "lnu")
 
         # Return new Sed or modify in place

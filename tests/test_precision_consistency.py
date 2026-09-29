@@ -61,7 +61,9 @@ def _sed32(nspec=None):
 
 
 @pytest.mark.parametrize(
-    "curve", [PowerLaw(), GrainModels(), ParametricLi08()], ids=type
+    "curve",
+    [PowerLaw(), GrainModels(), ParametricLi08()],
+    ids=type,
 )
 def test_attenuation_keeps_sed_precision(curve):
     """A Python float tau_v or a float64 curve shouldn't promote the Sed."""
@@ -137,7 +139,9 @@ def test_sed_luminosity_keeps_sed_precision():
         assert result.dtype == np.float32
         assert result.units == units
         np.testing.assert_allclose(
-            result.value, expected.to(units).value, rtol=1e-6
+            result.value,
+            expected.to(units).value,
+            rtol=1e-6,
         )
 
 

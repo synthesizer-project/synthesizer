@@ -477,7 +477,8 @@ class Generation:
             # If we have a template we need to generate the spectra
             # for each model
             sed = generator.get_spectra(
-                emitter.bolometric_luminosity, out_dtype=out_dtype
+                emitter.bolometric_luminosity,
+                out_dtype=out_dtype,
             )
         else:
             # Generate the spectra
@@ -579,7 +580,8 @@ class Generation:
             # If we have a template we need to generate the spectra
             # for each model
             spectra = generator.get_spectra(
-                emitter.bolometric_luminosity, out_dtype=out_dtype
+                emitter.bolometric_luminosity,
+                out_dtype=out_dtype,
             )
             out_lines = LineCollection(
                 line_ids=line_ids,

@@ -188,13 +188,13 @@ def convert_array_dtype(array, dtype, name=None):
     if values.dtype.kind not in "iuf":
         raise ValueError(
             f"Unsupported array type or dtype for conversion: "
-            f"type(array)={type(array)}, dtype={values.dtype}"
+            f"type(array)={type(array)}, dtype={values.dtype}",
         )
 
     # Check the (finite) values fit if we are reducing the precision
     if values.dtype.itemsize > dtype.itemsize and values.size > 0:
         largest = float(
-            np.max(np.abs(values), initial=0.0, where=np.isfinite(values))
+            np.max(np.abs(values), initial=0.0, where=np.isfinite(values)),
         )
         if largest > float(np.finfo(dtype).max):
             raise exceptions.PrecisionOverflow(
@@ -202,7 +202,7 @@ def convert_array_dtype(array, dtype, name=None):
                 f"beyond the {dtype} range (up to {np.finfo(dtype).max:.3g}), "
                 f"so converting it to {dtype} would overflow to inf. Keep it "
                 f"at {values.dtype}, or use units that bring its values into "
-                "range."
+                "range.",
             )
 
     # Convert, reattaching units where we had them (ascontiguousarray would
@@ -302,7 +302,7 @@ def _convert_output_dtype(value, dtype, where):
             f"{where} produced values too large to be stored at {dtype}, "
             "which overflowed to inf. Use float64 outputs "
             "(out_dtype=np.float64) or units that bring these values into "
-            "range."
+            "range.",
         )
 
     return value
@@ -334,7 +334,7 @@ def verify_out_precision():
         if "out_dtype" not in signature.parameters:
             raise TypeError(
                 f"verify_out_precision can only decorate functions taking an "
-                f"out_dtype argument ({func.__qualname__} doesn't)."
+                f"out_dtype argument ({func.__qualname__} doesn't).",
             )
 
         @functools.wraps(func)

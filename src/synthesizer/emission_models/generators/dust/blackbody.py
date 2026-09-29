@@ -177,7 +177,12 @@ class Blackbody(DustEmission):
 
         # Scale the normalised emission, at the output precision
         sed._lnu = self.get_scaled_emission(
-            lnu, scaling, emitter, model, out_dtype, cmb_factor
+            lnu,
+            scaling,
+            emitter,
+            model,
+            out_dtype,
+            cmb_factor,
         )
 
         return sed
@@ -270,7 +275,12 @@ class Blackbody(DustEmission):
 
         # Scale the normalised emission, at the output precision
         lnu = self.get_scaled_emission(
-            lnu, scaling, emitter, model, out_dtype, cmb_factor
+            lnu,
+            scaling,
+            emitter,
+            model,
+            out_dtype,
+            cmb_factor,
         )
 
         # OK, now we have used the Sed magic lets return the LineCollection

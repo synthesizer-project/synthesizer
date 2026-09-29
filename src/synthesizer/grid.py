@@ -1065,7 +1065,8 @@ class Grid:
             # Update this spectra, keeping the grid's precision (spectres
             # always returns float64)
             self.spectra[spectra_type] = new_spectra.astype(
-                self._dtype, copy=False
+                self._dtype,
+                copy=False,
             )
 
         # Update wavelength array, again at the grid's precision

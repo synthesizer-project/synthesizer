@@ -479,7 +479,7 @@ class BlackholesComponent(Component):
         # Derived properties keep the precision of the masses
         self.bolometric_luminosity = convert_array_dtype(
             (self.epsilon * self.accretion_rate * c**2).to(
-                get_quantity_unit(self, "bolometric_luminosity")
+                get_quantity_unit(self, "bolometric_luminosity"),
             ),
             self.mass.dtype,
         )
@@ -512,7 +512,7 @@ class BlackholesComponent(Component):
         # a copy, which is fine for these small per-blackhole arrays.
         self.eddington_ratio = convert_array_dtype(
             (self.bolometric_luminosity / self.eddington_luminosity).to_value(
-                "dimensionless"
+                "dimensionless",
             ),
             self.mass.dtype,
         )
@@ -546,7 +546,7 @@ class BlackholesComponent(Component):
         # a copy, which is fine for these small per-blackhole arrays.
         self.accretion_rate_eddington = convert_array_dtype(
             (self.bolometric_luminosity / self.eddington_luminosity).to_value(
-                "dimensionless"
+                "dimensionless",
             ),
             self.mass.dtype,
         )

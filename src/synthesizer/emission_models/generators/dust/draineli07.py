@@ -606,7 +606,11 @@ class DraineLi07(DustEmission):
 
         # Scale the normalised emission, at the output precision
         sed._lnu = self.get_scaled_emission(
-            lnu, ldust, emitter, model, out_dtype
+            lnu,
+            ldust,
+            emitter,
+            model,
+            out_dtype,
         )
 
         return sed

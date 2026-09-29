@@ -513,7 +513,7 @@ class TestUnitsFileHandling:
             "Version: 1.2.1.dev453\n"
             "UnitCategories:\n"
             "  luminosity_density_wavelength:\n"
-            "    unit: erg / s / Angstrom\n"
+            "    unit: erg / s / Angstrom\n",
         )
 
         SynthesizerInitializer()._copy_units()
