@@ -699,6 +699,7 @@ class TestPipelineOperations:
                 igm=igm,
                 nthreads=7,
                 out_dtype=None,
+                peculiar_velocity=None,
             )
 
     def test_pipeline_get_observed_spectra_passes_pipeline_nthreads(
