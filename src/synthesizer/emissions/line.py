@@ -789,6 +789,7 @@ class LineCollection:
             f"comma separated string (type={type(line_id)} line_id={line_id})"
         )
 
+    @timed("LineCollection.sum")
     def sum(self, axis=None, nthreads=1):
         """Sum the lines in the collection.
 

@@ -1987,6 +1987,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """
         return self.plot_emission_graph(*args, **kwargs)
 
+    @timed("EmissionModel._apply_overrides")
     def _apply_overrides(
         self,
         emission_model,
@@ -2128,6 +2129,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     if model._is_extracting:
                         model.set_vel_shift(vel_shift)
 
+    @timed("EmissionModel._get_existing_emissions")
     def _get_existing_emissions(
         self,
         emitters,
@@ -2442,16 +2444,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         emission_model = copy.copy(self)
 
         # Apply any overrides we have
-        with timer("EmissionModel._get_spectra.apply_overrides"):
-            self._apply_overrides(
-                emission_model,
-                dust_curves=dust_curves,
-                tau_v=tau_v,
-                fesc=fesc,
-                covering_fraction=covering_fraction,
-                mask=mask,
-                vel_shift=vel_shift,
-            )
+        self._apply_overrides(
+            emission_model,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            fesc=fesc,
+            covering_fraction=covering_fraction,
+            mask=mask,
+            vel_shift=vel_shift,
+        )
 
         # Work with the overridden root instance stored in the model tree so
         # root-level overrides are reflected in any queue and reuse logic.
@@ -2474,8 +2475,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Build the execution queue for the active model tree before doing any
         # existing-emission reuse checks so inactive branches are skipped.
-        with timer("EmissionModel._get_spectra.build_model_queue"):
-            queue = ModelQueue(root_model)
+        queue = ModelQueue(root_model)
 
         # Before we do anything else, check that we have the emitters needed by
         # the active models in the queued execution graph.
@@ -2487,14 +2487,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
         # Get any existing spectra we are reusing
-        with timer("EmissionModel._get_spectra.get_existing_emissions"):
-            spectra, particle_spectra = root_model._get_existing_emissions(
-                emitters,
-                spectra,
-                particle_spectra,
-                emission_type="spectra",
-                models=queue.models.values(),
-            )
+        spectra, particle_spectra = root_model._get_existing_emissions(
+            emitters,
+            spectra,
+            particle_spectra,
+            emission_type="spectra",
+            models=queue.models.values(),
+        )
 
         # Execute the full model closure by processing each ready model once.
         while len(queue) > 0:
@@ -2809,16 +2808,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         emission_model = copy.copy(self)
 
         # Apply any overrides we have
-        with timer("EmissionModel._get_lines.apply_overrides"):
-            self._apply_overrides(
-                emission_model,
-                dust_curves=dust_curves,
-                tau_v=tau_v,
-                fesc=fesc,
-                covering_fraction=covering_fraction,
-                mask=mask,
-                vel_shift=None,
-            )
+        self._apply_overrides(
+            emission_model,
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            fesc=fesc,
+            covering_fraction=covering_fraction,
+            mask=mask,
+            vel_shift=None,
+        )
 
         # Work with the overridden root instance stored in the model tree so
         # root-level overrides are reflected in any queue and reuse logic.
@@ -2841,8 +2839,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Build the execution queue for the active model tree before doing any
         # existing-emission reuse checks so inactive branches are skipped.
-        with timer("EmissionModel._get_lines.build_model_queue"):
-            queue = ModelQueue(root_model)
+        queue = ModelQueue(root_model)
 
         # Before we do anything else, check that we have the emitters needed by
         # the active models in the queued execution graph.
@@ -2854,14 +2851,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
         # Get any existing lines we are reusing
-        with timer("EmissionModel._get_lines.get_existing_emissions"):
-            lines, particle_lines = root_model._get_existing_emissions(
-                emitters,
-                lines,
-                particle_lines,
-                emission_type="lines",
-                models=queue.models.values(),
-            )
+        lines, particle_lines = root_model._get_existing_emissions(
+            emitters,
+            lines,
+            particle_lines,
+            emission_type="lines",
+            models=queue.models.values(),
+        )
 
         # Collect existing spectra from all emitters for scaling purposes
         spectra = {}
@@ -2935,15 +2931,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_combining:
                 try:
-                    with timer("EmissionModel._get_lines.combine"):
-                        lines, particle_lines = self._combine_lines(
-                            emission_model,
-                            lines,
-                            particle_lines,
-                            this_model,
-                            emitter,
-                            nthreads=nthreads,
-                        )
+                    lines, particle_lines = self._combine_lines(
+                        emission_model,
+                        lines,
+                        particle_lines,
+                        this_model,
+                        emitter,
+                        nthreads=nthreads,
+                    )
                     if line_lams is None and label in lines:
                         line_lams = lines[label].lam
                 except Exception as e:
@@ -2976,19 +2971,18 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_generating:
                 try:
-                    with timer("EmissionModel._get_lines.generate"):
-                        lines, particle_lines = self._generate_lines(
-                            this_model,
-                            emission_model,
-                            lines,
-                            particle_lines,
-                            emitter,
-                            line_lams,
-                            line_ids,
-                            spectra,
-                            particle_spectra,
-                            nthreads=nthreads,
-                        )
+                    lines, particle_lines = self._generate_lines(
+                        this_model,
+                        emission_model,
+                        lines,
+                        particle_lines,
+                        emitter,
+                        line_lams,
+                        line_ids,
+                        spectra,
+                        particle_spectra,
+                        nthreads=nthreads,
+                    )
                     if line_lams is None and label in lines:
                         line_lams = lines[label].lam
                 except Exception as e:
@@ -3026,8 +3020,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         )
 
             # Unlock downstream models and delete expired unsaved emissions.
-            with timer("EmissionModel._get_lines.queue_done"):
-                queue.done(this_model, lines, particle_lines)
+            queue.done(this_model, lines, particle_lines)
 
         # Ensure the dependency graph was fully traversed before returning.
         queue.assert_finished()

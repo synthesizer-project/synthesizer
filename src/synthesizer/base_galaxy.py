@@ -390,7 +390,11 @@ class BaseGalaxy:
                     )
 
     def get_observed_lines(
-        self, cosmo, igm=Inoue14, nthreads=1, out_dtype=None
+        self,
+        cosmo,
+        igm=Inoue14,
+        nthreads=1,
+        out_dtype=None,
     ):
         """Calculate the observed lines for all Line objects.
 

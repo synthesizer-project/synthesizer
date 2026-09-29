@@ -489,6 +489,7 @@ class Generation:
 
         return spectra, particle_spectra
 
+    @timed("Generation._generate_lines")
     def _generate_lines(
         self,
         this_model,
@@ -791,8 +792,7 @@ class Transformation:
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_emissions[this_model.label] = emission
-            with timer("Transformation._transform_emission.integrate"):
-                emissions[this_model.label] = emission.sum(nthreads=nthreads)
+            emissions[this_model.label] = emission.sum(nthreads=nthreads)
         else:
             emissions[this_model.label] = emission
 
@@ -928,6 +928,7 @@ class Combination:
 
         return spectra, particle_spectra
 
+    @timed("Combination._combine_lines")
     def _combine_lines(
         self,
         emission_model,
