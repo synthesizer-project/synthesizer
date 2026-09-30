@@ -17,7 +17,7 @@ from unyt import Msun, Myr, km, kpc, s
 from synthesizer import exceptions
 from synthesizer.emission_models import PacmanEmission
 from synthesizer.grid import Grid
-from synthesizer.instruments.premade import JWSTNIRCamWide
+from synthesizer.instruments import PhotometricImager
 from synthesizer.kernel_functions import Kernel
 from synthesizer.particle import BlackHoles, Galaxy, Gas, Stars
 
@@ -146,7 +146,7 @@ def get_test_instrument(grid: Grid):
 
     try:
         with h5py.File(INSTRUMENT_PATH, "r") as hdf:
-            photometry_inst = JWSTNIRCamWide._from_hdf5(hdf)
+            photometry_inst = PhotometricImager._from_hdf5(hdf)
             return photometry_inst
     except (OSError, KeyError, ValueError) as err:
         raise exceptions.MissingArgument(

@@ -69,7 +69,7 @@ def profile_nparticles(
     instrument = get_test_instrument(grid)
 
     # Use instrument's filters for different test cases
-    filters_3 = instrument.filters.select(*instrument.available_filters[:3])
+    filters_3 = instrument.filters.select(*instrument.filters.filter_codes[:3])
     filters_10 = instrument.filters
 
     # --- Setup Imaging ---

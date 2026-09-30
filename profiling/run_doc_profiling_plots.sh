@@ -33,6 +33,7 @@ PIPELINE_THREADS=8
 SCALING_THREADS=8
 STRONG_THREADS=32
 STRONG_AVERAGES=10
+GRID_PRECISION=float64
 OUTPUT_ROOT="profiling/outputs"
 
 # Parse command line arguments
@@ -54,6 +55,10 @@ while [[ $# -gt 0 ]]; do
 		STRONG_AVERAGES="$2"
 		shift 2
 		;;
+	--grid-precision)
+		GRID_PRECISION="$2"
+		shift 2
+		;;
 	--output-dir)
 		OUTPUT_ROOT="$2"
 		shift 2
@@ -66,6 +71,8 @@ while [[ $# -gt 0 ]]; do
 		echo "  --scaling-threads N     Number of threads for particle/wavelength scaling (default: 8)"
 		echo "  --strong-threads N      Max threads for strong scaling tests (default: 32)"
 		echo "  --strong-averages N     Number of averages for strong scaling (default: 10)"
+		echo "  --grid-precision DTYPE  Precision to load the grid at, float32 or"
+		echo "                          float64 (default: float64)"
 		echo "  --output-dir PATH       Output root directory (default: profiling/outputs)"
 		echo "  -h, --help             Show this help message"
 		echo ""
@@ -134,6 +141,8 @@ for npart in 100 500 1000 5000 10000 100000; do
 		--ngalaxies 10 \
 		--nthreads $PIPELINE_THREADS \
 		--out_dir "$TIMING_DIR" \
+		--grid-precision $GRID_PRECISION \
+		--out-dtype $GRID_PRECISION \
 		--include-observer-frame
 done
 
@@ -151,6 +160,8 @@ python profiling/pipeline/profile_memory.py \
 	--nthreads $PIPELINE_THREADS \
 	--out_dir "$MEMORY_DIR" \
 	--sample-freq 5000 \
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION \
 	--include-observer-frame
 
 python profiling/pipeline/profile_memory.py \
@@ -160,6 +171,8 @@ python profiling/pipeline/profile_memory.py \
 	--nthreads $PIPELINE_THREADS \
 	--out_dir "$MEMORY_DIR" \
 	--sample-freq 3000 \
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION \
 	--include-observer-frame
 
 python profiling/pipeline/profile_memory.py \
@@ -169,6 +182,8 @@ python profiling/pipeline/profile_memory.py \
 	--nthreads $PIPELINE_THREADS \
 	--out_dir "$MEMORY_DIR" \
 	--sample-freq 2000 \
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION \
 	--include-observer-frame
 
 python profiling/pipeline/profile_memory.py \
@@ -178,6 +193,8 @@ python profiling/pipeline/profile_memory.py \
 	--nthreads $PIPELINE_THREADS \
 	--out_dir "$MEMORY_DIR" \
 	--sample-freq 1000 \
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION \
 	--include-observer-frame
 
 python profiling/pipeline/profile_memory.py \
@@ -187,6 +204,8 @@ python profiling/pipeline/profile_memory.py \
 	--nthreads $PIPELINE_THREADS \
 	--out_dir "$MEMORY_DIR" \
 	--sample-freq 500 \
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION \
 	--include-observer-frame
 
 python profiling/pipeline/profile_memory.py \
@@ -196,6 +215,8 @@ python profiling/pipeline/profile_memory.py \
 	--nthreads $PIPELINE_THREADS \
 	--out_dir "$MEMORY_DIR" \
 	--sample-freq 250 \
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION \
 	--include-observer-frame
 
 echo ""
@@ -262,7 +283,8 @@ python profiling/scaling/strong_scaling_int_spectra.py \
 	--max_threads $STRONG_THREADS \
 	--nstars 1000000 \
 	--average_over $STRONG_AVERAGES \
-	--low_thresh 0.01
+	--low_thresh 0.01 \
+	--grid-precision $GRID_PRECISION
 
 echo "Running particle spectra strong scaling..."
 python profiling/scaling/strong_scaling_part_spectra.py \
@@ -271,7 +293,8 @@ python profiling/scaling/strong_scaling_part_spectra.py \
 	--max_threads $STRONG_THREADS \
 	--nstars 10000 \
 	--average_over $STRONG_AVERAGES \
-	--low_thresh 0.01
+	--low_thresh 0.01 \
+	--grid-precision $GRID_PRECISION
 
 echo "Running LOS column density strong scaling..."
 python profiling/scaling/strong_scaling_los_col_den.py \
@@ -281,7 +304,8 @@ python profiling/scaling/strong_scaling_los_col_den.py \
 	--nstars 1000000 \
 	--ngas 1000000 \
 	--average_over $STRONG_AVERAGES \
-	--low_thresh 0.01
+	--low_thresh 0.01 \
+	--grid-precision $GRID_PRECISION
 
 echo "Running imaging strong scaling..."
 python profiling/scaling/strong_scaling_images.py \
@@ -290,7 +314,8 @@ python profiling/scaling/strong_scaling_images.py \
 	--max_threads $STRONG_THREADS \
 	--nstars 10000 \
 	--average_over $STRONG_AVERAGES \
-	--low_thresh 0.01
+	--low_thresh 0.01 \
+	--grid-precision $GRID_PRECISION
 
 cp "$TIMING_ANALYSIS_DIR/timing_comparison.png" \
 	"$FINAL_PLOTS_DIR/pipeline_timing_scaling.png"
