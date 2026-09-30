@@ -118,12 +118,16 @@ def read_instrument_attribute(group, name):
         return None
     entry = group[name]
     if isinstance(entry, h5py.Group):
-        return {
-            entry[key].attrs.get("key", key): read_instrument_attribute(
-                entry, key
-            )
-            for key in entry
-        }
+        out = {}
+        for key in entry:
+            value = read_instrument_attribute(entry, key)
+            if "key" not in entry[key].attrs and isinstance(value, dict):
+                # NOTE: Legacy files stored keys containing "/" (e.g. filter
+                # codes) as nested groups, flatten them back into full keys
+                out.update({f"{key}/{k}": v for k, v in value.items()})
+            else:
+                out[entry[key].attrs.get("key", key)] = value
+        return out
     data = entry[...]
     units = entry.attrs.get("units", "dimensionless")
     if data.ndim == 0:

@@ -1965,6 +1965,10 @@ class BaseGalaxy:
             line_ids (list):
                 The line ids to make maps for. Each requested label must
                 have all of these lines available.
+                Blended lines (e.g. doublets) can be given as a comma separated
+                string (e.g. "O 3 4958.91A, O 3 5006.84A") or a nested list of
+                line ids; these produce a single map of the summed lines keyed
+                by the ", " joined id.
             fov (unyt_quantity of float):
                 The width of the map in image coordinates.
             instrument (Instrument):
@@ -2258,6 +2262,10 @@ class BaseGalaxy:
                 the galaxy.
             line_ids (list):
                 The line ids to make maps for.
+                Blended lines (e.g. doublets) can be given as a comma separated
+                string (e.g. "O 3 4958.91A, O 3 5006.84A") or a nested list of
+                line ids; these produce a single map of the summed lines keyed
+                by the ", " joined id.
             fov (unyt_quantity of float):
                 The width of the map in image coordinates.
             instrument (Instrument):
@@ -2328,6 +2336,10 @@ class BaseGalaxy:
                 the galaxy.
             line_ids (list):
                 The line ids to make maps for.
+                Blended lines (e.g. doublets) can be given as a comma separated
+                string (e.g. "O 3 4958.91A, O 3 5006.84A") or a nested list of
+                line ids; these produce a single map of the summed lines keyed
+                by the ", " joined id.
             fov (unyt_quantity of float):
                 The width of the map in image coordinates.
             instrument (Instrument):

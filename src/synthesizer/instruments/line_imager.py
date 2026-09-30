@@ -54,7 +54,10 @@ class LineImager(InstrumentBase):
 
     Attributes:
         line_ids (list): The ids of the emission lines this instrument
-            maps.
+            maps. Blended lines (e.g. doublets) can be given as a comma
+            separated string (e.g. "O 3 4958.91A, O 3 5006.84A") or a
+            nested list of line ids; these produce a single map of the
+            summed lines keyed by the ", " joined id.
         resolution (unyt_array): The spatial resolution of the instrument, in
             kpc or arcseconds.
         psfs (dict, optional): An optional dictionary of point spread
@@ -95,7 +98,10 @@ class LineImager(InstrumentBase):
         Args:
             label (str): A label for the instrument.
             line_ids (list): The ids of the emission lines this instrument
-                maps.
+                maps. Blended lines (e.g. doublets) can be given as a comma
+                separated string (e.g. "O 3 4958.91A, O 3 5006.84A") or a
+                nested list of line ids; these produce a single map of the
+                summed lines keyed by the ", " joined id.
             resolution (unyt_array): The spatial resolution of the
                 instrument, in kpc or arcseconds.
             psfs (dict, optional): An optional dictionary of point spread

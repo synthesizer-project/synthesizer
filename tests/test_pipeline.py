@@ -1169,6 +1169,53 @@ class TestPipelineOperations:
         with h5py.File(output) as hdf:
             assert "Galaxies/Stars/LineMaps/Luminosity" in hdf
 
+    def test_run_pipeline_blended_line_maps(
+        self,
+        kernel,
+        pipeline_with_galaxies_per_particle,
+        test_grid,
+        tmp_path,
+    ):
+        """Test the pipeline can map a blended (comma separated) line."""
+        from synthesizer.instruments import LineImager
+
+        line_ids = [list(test_grid.available_lines[:2])]
+        line_imager = LineImager(
+            "test_line_imager", line_ids=line_ids, resolution=1 * Mpc
+        )
+
+        pipeline_with_galaxies_per_particle.get_spectra()
+        pipeline_with_galaxies_per_particle.get_line_maps_luminosity(
+            line_imager,
+            line_ids=line_ids,
+            fov=100 * Mpc,
+            kernel=kernel,
+            out_dtype=np.float32,
+        )
+        pipeline_with_galaxies_per_particle.run()
+
+        assert pipeline_with_galaxies_per_particle._analysis_complete, (
+            "Pipeline did not run"
+        )
+        assert pipeline_with_galaxies_per_particle._write_line_maps_lum, (
+            "Line maps not flagged for writing"
+        )
+        assert (
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies_per_particle.line_maps_lum
+            )
+            > 0
+        ), "No line maps were calculated"
+        line_map = pipeline_with_galaxies_per_particle.line_maps_lum["Stars"][
+            "test_line_imager"
+        ]["nebular"][", ".join(line_ids[0])]
+        assert line_map.dtype == np.float32
+
+        output = tmp_path / "blended_line_maps.hdf5"
+        pipeline_with_galaxies_per_particle.write(output)
+        with h5py.File(output) as hdf:
+            assert "Galaxies/Stars/LineMaps/Luminosity" in hdf
+
     def test_run_pipeline_line_maps_flux(
         self,
         kernel,

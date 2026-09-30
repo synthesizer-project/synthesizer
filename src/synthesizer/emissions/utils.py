@@ -440,16 +440,26 @@ S2 = aliases["S2"]
 def alias_to_line_id(alias):
     """Convert a line alias to a line id.
 
+    Blended line ids (comma separated strings, e.g. "Ha, [NII]6583", or a
+    list/tuple of ids) are canonicalised component-wise and rejoined with
+    ", " so equivalent spellings of the same blend map to the same id.
+
     Args:
-        alias (str):
-            The line alias.
+        alias (str/list):
+            The line alias, or a list of aliases defining a blend.
 
     Returns:
         line_id (str):
             The line id.
     """
+    if isinstance(alias, (list, tuple)):
+        alias = ",".join(alias)
     if alias in aliases:
         return aliases[alias]
+    if isinstance(alias, str) and "," in alias:
+        return ", ".join(
+            alias_to_line_id(li.strip()) for li in alias.split(",")
+        )
     return alias
 
 

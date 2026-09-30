@@ -819,7 +819,10 @@ class LineCollection:
     def __contains__(self, line_id):
         """Check whether a line_id is in the collection.
 
-        This enables syntax such as ``if line_id in lines``.
+        This enables syntax such as ``if line_id in lines``. A blended
+        line_id (a comma separated string) is considered present if it was
+        stored as a blend or if every one of its component lines is in the
+        collection.
 
         Args:
             line_id (str):
@@ -829,7 +832,10 @@ class LineCollection:
             bool:
                 True if the line_id is in the collection, False otherwise.
         """
-        return str(alias_to_line_id(line_id)) in self.line2index
+        line_id = str(alias_to_line_id(line_id))
+        return line_id in self.line2index or all(
+            lid.strip() in self.line2index for lid in line_id.split(",")
+        )
 
     @timed("LineCollection.sum")
     def sum(self, axis=None, nthreads=1):
