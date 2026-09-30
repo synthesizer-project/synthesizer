@@ -30,7 +30,10 @@ np.random.seed(42)
 
 
 def profile_wavelength_scaling(
-    nthreads=1, n_averages=3, output_dir=Path("profiling/plots")
+    nthreads=1,
+    n_averages=3,
+    output_dir=Path("profiling/plots"),
+    grid_precision="float64",
 ):
     """Run the profiling."""
     print(
@@ -41,7 +44,7 @@ def profile_wavelength_scaling(
     timers.reset()
 
     # Load the base grid once to get the range
-    base_grid = Grid("test_grid")
+    base_grid = Grid("test_grid", use_precision=np.dtype(grid_precision))
     lam_min = base_grid.lam.min()
     lam_max = base_grid.lam.max()
 
@@ -94,7 +97,7 @@ def profile_wavelength_scaling(
         # errors (though strictly we are just interpolating from the file each
         # time if we re-load). But Grid object modifies itself in place with
         # interp_spectra. So we should re-load or deep copy.
-        grid = Grid("test_grid")
+        grid = Grid("test_grid", use_precision=np.dtype(grid_precision))
 
         # Create new wavelength array
         new_lam = np.linspace(lam_min, lam_max, n_lam)
@@ -217,10 +220,17 @@ if __name__ == "__main__":
         type=Path,
         default=Path("profiling/plots"),
     )
+    parser.add_argument(
+        "--grid-precision",
+        choices=("float32", "float64"),
+        default="float64",
+        help="Precision to load the grid arrays at.",
+    )
     args = parser.parse_args()
 
     profile_wavelength_scaling(
         nthreads=args.nthreads,
         n_averages=args.n_averages,
         output_dir=args.output_dir,
+        grid_precision=args.grid_precision,
     )

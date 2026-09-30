@@ -34,6 +34,7 @@ SCALING_THREADS=8
 STRONG_THREADS=32
 STRONG_AVERAGES=10
 GRID_PRECISION=float64
+STRONG_NUMA_INTERLEAVE=0
 OUTPUT_ROOT="profiling/outputs"
 
 # Parse command line arguments
@@ -63,6 +64,10 @@ while [[ $# -gt 0 ]]; do
 		OUTPUT_ROOT="$2"
 		shift 2
 		;;
+	--strong-numa-interleave)
+		STRONG_NUMA_INTERLEAVE=1
+		shift
+		;;
 	-h | --help)
 		echo "Usage: $0 [OPTIONS]"
 		echo ""
@@ -74,6 +79,9 @@ while [[ $# -gt 0 ]]; do
 		echo "  --grid-precision DTYPE  Precision to load the grid at, float32 or"
 		echo "                          float64 (default: float64)"
 		echo "  --output-dir PATH       Output root directory (default: profiling/outputs)"
+		echo "  --strong-numa-interleave"
+		echo "                          Interleave memory across NUMA domains for the"
+		echo "                          strong scaling tests only"
 		echo "  -h, --help             Show this help message"
 		echo ""
 		echo "Examples:"
@@ -111,6 +119,7 @@ echo "Scaling threads: $SCALING_THREADS"
 echo "Strong scaling max threads: $STRONG_THREADS"
 echo "Strong scaling averages: $STRONG_AVERAGES"
 echo "Output root: $OUTPUT_ROOT"
+echo "Strong scaling NUMA interleave: $STRONG_NUMA_INTERLEAVE"
 echo ""
 
 # Check we're in the right place
@@ -268,12 +277,19 @@ echo "========================================"
 
 # Run the general profiling scripts using make_all_plots.py
 echo "Running particle and wavelength scaling profiling..."
-python profiling/general/make_all_plots.py --nthreads $SCALING_THREADS --n_averages 3 --output_dir "$FINAL_PLOTS_DIR"
+python profiling/general/make_all_plots.py --nthreads $SCALING_THREADS --n_averages 3 --output_dir "$FINAL_PLOTS_DIR" \
+	--grid-precision $GRID_PRECISION
 
 echo ""
 echo "========================================"
 echo "Strong Scaling (Thread Count)"
 echo "========================================"
+
+# Only the strong scaling tests use the NUMA interleave policy, everything
+# above runs with the default first-touch placement
+if [ "$STRONG_NUMA_INTERLEAVE" = 1 ]; then
+	export SYNTHESIZER_NUMA_INTERLEAVE=1
+fi
 
 # Run strong scaling tests
 echo "Running integrated spectra strong scaling..."

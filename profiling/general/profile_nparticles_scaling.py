@@ -37,7 +37,10 @@ np.random.seed(42)
 
 
 def profile_nparticles(
-    nthreads=1, n_averages=3, output_dir=Path("profiling/plots")
+    nthreads=1,
+    n_averages=3,
+    output_dir=Path("profiling/plots"),
+    grid_precision="float64",
 ):
     """Run the profiling."""
     print(
@@ -47,7 +50,7 @@ def profile_nparticles(
     timers = OperationTimers()
     timers.reset()
 
-    grid = Grid("test_grid")
+    grid = Grid("test_grid", use_precision=np.dtype(grid_precision))
     n_lam = grid.nlam
 
     # --- Setup Models ---
@@ -359,10 +362,17 @@ if __name__ == "__main__":
         type=Path,
         default=Path("profiling/plots"),
     )
+    parser.add_argument(
+        "--grid-precision",
+        choices=("float32", "float64"),
+        default="float64",
+        help="Precision to load the grid arrays at.",
+    )
     args = parser.parse_args()
 
     profile_nparticles(
         nthreads=args.nthreads,
         n_averages=args.n_averages,
         output_dir=args.output_dir,
+        grid_precision=args.grid_precision,
     )

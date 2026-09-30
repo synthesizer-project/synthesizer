@@ -87,7 +87,10 @@ def run_and_measure_memory(func, *args, obj_to_measure=None, **kwargs):
 
 
 def profile_wavelength_memory(
-    nthreads=1, n_averages=3, output_dir=Path("profiling/plots")
+    nthreads=1,
+    n_averages=3,
+    output_dir=Path("profiling/plots"),
+    grid_precision="float64",
 ):
     """Run the profiling."""
     print(
@@ -98,7 +101,7 @@ def profile_wavelength_memory(
     timers.reset()
 
     # Load the base grid once to get the range
-    base_grid = Grid("test_grid")
+    base_grid = Grid("test_grid", use_precision=np.dtype(grid_precision))
     lam_min = base_grid.lam.min()
     lam_max = base_grid.lam.max()
 
@@ -143,7 +146,7 @@ def profile_wavelength_memory(
         print(f"Profiling Memory n_lam={n_lam}...")
 
         # 1. Create a new grid with n_lam points
-        grid = Grid("test_grid")
+        grid = Grid("test_grid", use_precision=np.dtype(grid_precision))
         new_lam = np.linspace(lam_min, lam_max, n_lam)
         grid.interp_spectra(new_lam)
 
@@ -277,10 +280,17 @@ if __name__ == "__main__":
         type=Path,
         default=Path("profiling/plots"),
     )
+    parser.add_argument(
+        "--grid-precision",
+        choices=("float32", "float64"),
+        default="float64",
+        help="Precision to load the grid arrays at.",
+    )
     args = parser.parse_args()
 
     profile_wavelength_memory(
         nthreads=args.nthreads,
         n_averages=args.n_averages,
         output_dir=args.output_dir,
+        grid_precision=args.grid_precision,
     )

@@ -21,6 +21,7 @@ def run_script(
     nthreads=1,
     n_averages=3,
     output_dir=Path("profiling/plots"),
+    grid_precision="float64",
 ):
     """Run a python script and check for errors."""
     print(
@@ -39,6 +40,8 @@ def run_script(
             str(n_averages),
             "--output_dir",
             str(output_dir),
+            "--grid-precision",
+            grid_precision,
         ]
 
         subprocess.run(
@@ -55,6 +58,7 @@ def make_all_plots(
     nthreads=1,
     n_averages=3,
     output_dir=Path("profiling/plots"),
+    grid_precision="float64",
 ):
     """Run all profiling scripts and collect plots in one directory."""
     # Define directories
@@ -80,6 +84,7 @@ def make_all_plots(
             nthreads=nthreads,
             n_averages=n_averages,
             output_dir=output_dir,
+            grid_precision=grid_precision,
         )
 
     print(f"\nAll plots generated in {output_dir}.")
@@ -94,10 +99,17 @@ if __name__ == "__main__":
         type=Path,
         default=Path("profiling/plots"),
     )
+    parser.add_argument(
+        "--grid-precision",
+        choices=("float32", "float64"),
+        default="float64",
+        help="Precision to load the grid arrays at.",
+    )
     args = parser.parse_args()
 
     make_all_plots(
         nthreads=args.nthreads,
         n_averages=args.n_averages,
         output_dir=args.output_dir,
+        grid_precision=args.grid_precision,
     )
