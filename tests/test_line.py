@@ -1750,3 +1750,25 @@ def test_blending_and_sed_keep_line_precision():
 
     sed = lines.create_sed(np.linspace(500.0, 3000.0, 100) * angstrom)
     assert sed._lnu.dtype == np.float32
+
+
+def test_blending_and_sed_of_integer_lines():
+    """Integer lines are blended and turned into Seds at float64."""
+    lines = LineCollection(
+        line_ids=["A 5711", "B 5713"],
+        lam=np.array([5711, 5713]) * angstrom,
+        lum=np.array([1, 2]) * erg / s,
+        cont=np.array([1, 1]) * erg / s / Hz,
+    )
+
+    # Blending the integer lines gives float64 means and sums
+    blended = lines.get_blended_lines(np.array([5000.0, 6000.0]) * angstrom)
+    assert blended._lam.dtype == np.float64
+    assert blended._luminosity.dtype == np.float64
+    np.testing.assert_allclose(blended.lam.to_value(angstrom), [5712.0])
+    np.testing.assert_allclose(blended.luminosity.to_value(erg / s), [3.0])
+
+    # The Sed isn't truncated to zero by an integer array
+    sed = lines.create_sed(np.linspace(5000.0, 6000.0, 101) * angstrom)
+    assert sed._lnu.dtype == np.float64
+    assert np.any(sed._lnu > 0)

@@ -85,7 +85,7 @@ from synthesizer.units import (
 )
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
-from synthesizer.utils.precision import resolve_out_dtype
+from synthesizer.utils.precision import get_float_dtype, resolve_out_dtype
 from synthesizer.utils.util_funcs import get_attr_unit_conversion
 
 
@@ -1660,15 +1660,20 @@ class LineCollection:
         new_shape[-1] = len(wavelength_bins) - 1
 
         # Create the arrays we'll need to store the blended lines (at the
-        # precision of the lines being blended)
+        # precision of the lines being blended, or float64 if they aren't
+        # floating point)
         blended_lines_counts = np.zeros(len(wavelength_bins) - 1, dtype=int)
         blended_line_ids = [[] for _ in range(len(wavelength_bins) - 1)]
         blended_line_lams = np.zeros(
             len(wavelength_bins) - 1,
-            dtype=self._lam.dtype,
+            dtype=get_float_dtype(self._lam.dtype),
         )
-        blended_line_lums = np.zeros(new_shape, dtype=self._luminosity.dtype)
-        blended_line_conts = np.zeros(new_shape, dtype=self._continuum.dtype)
+        blended_line_lums = np.zeros(
+            new_shape, dtype=get_float_dtype(self._luminosity.dtype)
+        )
+        blended_line_conts = np.zeros(
+            new_shape, dtype=get_float_dtype(self._continuum.dtype)
+        )
 
         # Loop bin indices and combine the lines into the blended_lines array
         for i, bin_ind in enumerate(bin_inds):
@@ -1735,10 +1740,9 @@ class LineCollection:
 
         """
         # Create empty spectra with correct units (at the precision of the
-        # line luminosities)
-        sed_lnu = (
-            np.zeros(len(sed_lam), dtype=self._luminosity.dtype) * erg / s / Hz
-        )
+        # line luminosities, or float64 if they aren't floating point)
+        dtype = get_float_dtype(self._luminosity.dtype)
+        sed_lnu = np.zeros(len(sed_lam), dtype=dtype) * erg / s / Hz
 
         # Loop over the vacuum wavelengths and luminosities in the collection
         # and add them to the spectra

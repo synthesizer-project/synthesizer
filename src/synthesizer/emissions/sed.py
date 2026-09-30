@@ -69,6 +69,7 @@ from synthesizer.units import (
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import get_float_dtype
 from synthesizer.utils.util_funcs import (
     ensure_array_buffer,
     get_attr_unit_conversion,
@@ -856,10 +857,12 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        # Define a pseudo transmission function (at the precision of lnu so
-        # the measurement keeps that precision)
+        # Define a pseudo transmission function (at the precision of lnu, or
+        # float64 if it isn't floating point, so the measurement keeps that
+        # precision)
         transmission = (self.lam > window[0]) & (self.lam < window[1])
-        transmission = transmission.astype(self._lnu.dtype)
+        dtype = get_float_dtype(self._lnu.dtype)
+        transmission = transmission.astype(dtype)
 
         # Apply the correct method
         if integration_method == "average":
@@ -878,7 +881,7 @@ class Sed:
                 self._lnu * transmission / self.nu,
                 nthreads=nthreads,
                 method=integration_method,
-                out_dtype=self._lnu.dtype,
+                out_dtype=dtype,
             )
 
             # Transmission integral
@@ -887,7 +890,7 @@ class Sed:
                 transmission / self.nu,
                 nthreads=nthreads,
                 method=integration_method,
-                out_dtype=self._lnu.dtype,
+                out_dtype=dtype,
             )
 
             # Compute lnu

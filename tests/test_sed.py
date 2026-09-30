@@ -347,6 +347,24 @@ def test_measure_window_lnu_keeps_sed_precision(method):
     np.testing.assert_allclose(result.value, reference.value, rtol=1e-5)
 
 
+@pytest.mark.parametrize("method", ["average", "trapz"])
+def test_measure_window_lnu_of_integer_spectra(method):
+    """Integer spectra are measured at float64, like float64 spectra."""
+    lam = np.linspace(1000.0, 5000.0, 200) * angstrom
+    lnu = np.arange(1, 201) * erg / s / Hz
+    window = (2000.0, 3000.0) * angstrom
+
+    result = Sed(lam, lnu).measure_window_lnu(
+        window, integration_method=method
+    )
+    reference = Sed(lam, lnu.astype(np.float64)).measure_window_lnu(
+        window, integration_method=method
+    )
+
+    assert result.dtype == np.float64
+    np.testing.assert_allclose(result.value, reference.value)
+
+
 def test_get_fnu_peculiar_velocity_zero_matches_default():
     """peculiar_velocity of None or 0 reproduces the cosmological get_fnu."""
     lam = np.linspace(1000, 2000, 8) * angstrom
