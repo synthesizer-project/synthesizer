@@ -5,7 +5,7 @@ only contains common attributes and methods to reduce boilerplate.
 """
 
 import numpy as np
-from unyt import Gyr, Mpc, Msun, Myr, arcsecond, degree, kpc, pc, yr
+from unyt import Gyr, Mpc, Msun, Myr, arcsecond, degree, km, kpc, pc, s, yr
 
 from synthesizer import exceptions
 from synthesizer.cosmology import (
@@ -29,6 +29,7 @@ from synthesizer.imaging.image_generators import (
 from synthesizer.imaging.postprocess import (
     _postprocess_existing_data_cubes,
     _postprocess_existing_images,
+    _postprocess_existing_line_maps,
 )
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import accepts, unit_is_compatible
@@ -119,6 +120,16 @@ class BaseGalaxy:
         self.images_psf_fnu = {}
         self.images_noise_lnu = {}
         self.images_noise_fnu = {}
+
+        # Define the dictionaries to hold the emission line maps (same
+        # structure as the photometric images above, but keyed by line id
+        # rather than filter code)
+        self.line_maps_lnu = {}
+        self.line_maps_fnu = {}
+        self.line_maps_psf_lnu = {}
+        self.line_maps_psf_fnu = {}
+        self.line_maps_noise_lnu = {}
+        self.line_maps_noise_fnu = {}
 
         # Initialise the dictionary to hold instrument specific spectroscopy
         self.spectroscopy = {}
@@ -285,8 +296,14 @@ class BaseGalaxy:
 
         return equivalent_widths
 
+    @accepts(peculiar_velocity=km / s)
     def get_observed_spectra(
-        self, cosmo, igm=Inoue14, nthreads=1, out_dtype=None
+        self,
+        cosmo,
+        igm=Inoue14,
+        nthreads=1,
+        out_dtype=None,
+        peculiar_velocity=None,
     ):
         """Calculate the observed spectra for all Seds within this galaxy.
 
@@ -315,6 +332,10 @@ class BaseGalaxy:
             out_dtype (np.dtype, optional):
                 Requested floating-point dtype for the flux arrays. If None
                 the fluxes inherit the source spectra dtype.
+            peculiar_velocity (unyt_quantity):
+                Line-of-sight peculiar velocity passed to Sed.get_fnu. If
+                None, a `peculiar_velocity` attribute on the galaxy is used if
+                set. Defaults to None.
 
         Raises:
             MissingAttribute
@@ -328,6 +349,10 @@ class BaseGalaxy:
                 " calculated without one."
             )
 
+        # An explicit argument overrides a peculiar_velocity set on the galaxy.
+        if peculiar_velocity is None:
+            peculiar_velocity = getattr(self, "peculiar_velocity", None)
+
         # Loop over all combined spectra
         for sed in self.spectra.values():
             # Calculate the observed spectra
@@ -337,6 +362,7 @@ class BaseGalaxy:
                 igm=igm,
                 nthreads=nthreads,
                 out_dtype=out_dtype,
+                peculiar_velocity=peculiar_velocity,
             )
 
         # Do we have stars?
@@ -350,6 +376,7 @@ class BaseGalaxy:
                     igm=igm,
                     nthreads=nthreads,
                     out_dtype=out_dtype,
+                    peculiar_velocity=peculiar_velocity,
                 )
 
             # Loop over all stellar particle spectra
@@ -362,6 +389,7 @@ class BaseGalaxy:
                         igm=igm,
                         nthreads=nthreads,
                         out_dtype=out_dtype,
+                        peculiar_velocity=peculiar_velocity,
                     )
 
         # Do we have black holes?
@@ -375,6 +403,7 @@ class BaseGalaxy:
                     igm=igm,
                     nthreads=nthreads,
                     out_dtype=out_dtype,
+                    peculiar_velocity=peculiar_velocity,
                 )
 
             # Loop over all black hole particle spectra
@@ -387,9 +416,16 @@ class BaseGalaxy:
                         igm=igm,
                         nthreads=nthreads,
                         out_dtype=out_dtype,
+                        peculiar_velocity=peculiar_velocity,
                     )
 
-    def get_observed_lines(self, cosmo, igm=Inoue14, out_dtype=None):
+    def get_observed_lines(
+        self,
+        cosmo,
+        igm=Inoue14,
+        nthreads=1,
+        out_dtype=None,
+    ):
         """Calculate the observed lines for all Line objects.
 
         This will run Line.get_fnu(...) and populate Line.fnu (and Line.obslam
@@ -411,6 +447,9 @@ class BaseGalaxy:
             igm (igm):
                 The object describing the intergalactic medium (defaults to
                 Inoue14).
+            nthreads (int):
+                The number of threads to use when scaling the fluxes.
+                nthreads=-1 will use all available threads.
             out_dtype (np.dtype, optional):
                 Requested floating-point dtype for the flux arrays. If None
                 the fluxes inherit the line luminosity dtype.
@@ -433,6 +472,7 @@ class BaseGalaxy:
                 cosmo=cosmo,
                 z=self.redshift,
                 igm=igm,
+                nthreads=nthreads,
                 out_dtype=out_dtype,
             )
 
@@ -445,6 +485,7 @@ class BaseGalaxy:
                     cosmo=cosmo,
                     z=self.redshift,
                     igm=igm,
+                    nthreads=nthreads,
                     out_dtype=out_dtype,
                 )
 
@@ -457,6 +498,7 @@ class BaseGalaxy:
                         cosmo=cosmo,
                         z=self.redshift,
                         igm=igm,
+                        nthreads=nthreads,
                         out_dtype=out_dtype,
                     )
 
@@ -469,6 +511,7 @@ class BaseGalaxy:
                     cosmo=cosmo,
                     z=self.redshift,
                     igm=igm,
+                    nthreads=nthreads,
                     out_dtype=out_dtype,
                 )
 
@@ -480,6 +523,7 @@ class BaseGalaxy:
                         cosmo=cosmo,
                         z=self.redshift,
                         igm=igm,
+                        nthreads=nthreads,
                         out_dtype=out_dtype,
                     )
 
@@ -1873,6 +1917,458 @@ class BaseGalaxy:
         """
         return self._generate_images(
             *labels,
+            fov=fov,
+            instrument=instrument,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            cosmo=cosmo,
+            phot_type="fnu",
+        )
+
+    def _generate_line_maps(
+        self,
+        *labels,
+        line_ids,
+        fov,
+        instrument,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        cosmo=None,
+        phot_type="lnu",
+    ):
+        """Make emission line map ImageCollections for a galaxy/components.
+
+        For Parametric Galaxy objects, maps can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle Galaxy objects, maps can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        Which maps are produced is defined by the labels passed. If any
+        of the necessary lines are missing for generating a particular
+        map, an exception will be raised.
+
+        All maps that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the line_maps_lnu/line_maps_fnu
+        attribute.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make line maps for.
+                These must be present in the lines dicts of the components or
+                the galaxy.
+            line_ids (list):
+                The line ids to make maps for. Each requested label must
+                have all of these lines available.
+                Blended lines (e.g. doublets) can be given as a comma separated
+                string (e.g. "O 3 4958.91A, O 3 5006.84A") or a nested list of
+                line ids; these produce a single map of the summed lines keyed
+                by the ", " joined id.
+            fov (unyt_quantity of float):
+                The width of the map in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the map (typically a
+                LineImager).
+            img_type (str):
+                The type of map to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed maps.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+            phot_type (str):
+                The type of line quantity to use for the maps, either
+                'lnu' for luminosity maps, or 'fnu' for flux.
+
+        Returns:
+            ImageCollection/dict
+                Either a single ImageCollection if only one label is passed,
+                otherwise a dict of ImageCollections keyed by label. Each
+                ImageCollection contains one line map (Image) per requested
+                line id.
+        """
+        labels = list(labels)
+        for label in labels:
+            if not isinstance(label, str):
+                raise exceptions.InconsistentArguments(
+                    f"All labels must be strings, got {type(label).__name__}. "
+                    "If passing an EmissionModel, use model.label instead."
+                )
+
+        if isinstance(line_ids, str):
+            line_ids = [line_ids]
+
+        if self.galaxy_type == "Parametric" and img_type == "hist":
+            raise exceptions.InconsistentArguments(
+                "Parametric Galaxies can only produce smoothed maps."
+            )
+
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set on a Galaxy when using an angular "
+                    "resolution and FOV."
+                )
+
+        # Build a combined model_param_cache that includes the galaxy's cache
+        # and all component caches. This ensures we can find labels that were
+        # generated on components.
+        combined_cache = dict(self.model_param_cache)
+        if self.stars is not None and hasattr(self.stars, "model_param_cache"):
+            combined_cache.update(self.stars.model_param_cache)
+        if self.black_holes is not None and hasattr(
+            self.black_holes, "model_param_cache"
+        ):
+            combined_cache.update(self.black_holes.model_param_cache)
+        if self.gas is not None and hasattr(self.gas, "model_param_cache"):
+            combined_cache.update(self.gas.model_param_cache)
+
+        galaxy_combine_labels, component_labels_by_emitter = (
+            _prepare_galaxy_image_labels(
+                labels,
+                combined_cache,
+            )
+        )
+
+        routed_labels = set(galaxy_combine_labels)
+        for emitter_labels in component_labels_by_emitter.values():
+            routed_labels.update(emitter_labels)
+        missing = set(labels) - routed_labels
+        if missing:
+            raise exceptions.InconsistentArguments(
+                f"The following labels were not found in any emitter: "
+                f"{missing}. Available labels are: "
+                f"{list(combined_cache.keys())}"
+            )
+
+        out_maps = {}
+
+        # Generate line maps for each component based on the routing
+        for emitter, emitter_labels in component_labels_by_emitter.items():
+            component = None
+            if emitter == "stellar" and self.stars is not None:
+                component = self.stars
+            elif emitter == "blackhole" and self.black_holes is not None:
+                component = self.black_holes
+            elif emitter == "gas" and self.gas is not None:
+                component = self.gas
+
+            if component is None:
+                continue
+
+            component_maps = component._generate_line_maps(
+                *emitter_labels,
+                line_ids=line_ids,
+                img_type=img_type,
+                instrument=instrument,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+                fov=fov,
+                cosmo=cosmo,
+                phot_type=phot_type,
+                postprocess=False,
+            )
+
+            if isinstance(component_maps, dict):
+                out_maps.update(component_maps)
+            else:
+                out_maps[emitter_labels[0]] = component_maps
+
+        expected_labels = []
+        for emitter_labels in component_labels_by_emitter.values():
+            expected_labels.extend(emitter_labels)
+
+        missing_labels = set(expected_labels) - set(out_maps.keys())
+        if len(missing_labels) > 0:
+            raise exceptions.MissingImage(
+                "Cannot generate galaxy line maps for the following "
+                "labels as the necessary component line maps are "
+                f"missing: {', '.join(missing_labels)}"
+            )
+
+        for label in galaxy_combine_labels:
+            out_maps.update(
+                {
+                    label: _combine_image_collections(
+                        images=out_maps,
+                        label=label,
+                        model_cache=combined_cache,
+                    )
+                }
+            )
+
+        instrument_name = instrument.label
+
+        if instrument_name is not None:
+            if phot_type == "lnu":
+                for label in out_maps:
+                    in_stars = self.stars is not None and label in (
+                        self.stars.line_maps_lnu.get(instrument_name, {})
+                    )
+                    in_bhs = self.black_holes is not None and label in (
+                        self.black_holes.line_maps_lnu.get(instrument_name, {})
+                    )
+                    in_gas = self.gas is not None and label in (
+                        self.gas.line_maps_lnu.get(instrument_name, {})
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
+                        self.line_maps_lnu.setdefault(instrument_name, {})
+                        self.line_maps_lnu[instrument_name][label] = out_maps[
+                            label
+                        ]
+            else:
+                for label in out_maps:
+                    in_stars = self.stars is not None and label in (
+                        self.stars.line_maps_fnu.get(instrument_name, {})
+                    )
+                    in_bhs = self.black_holes is not None and label in (
+                        self.black_holes.line_maps_fnu.get(instrument_name, {})
+                    )
+                    in_gas = self.gas is not None and label in (
+                        self.gas.line_maps_fnu.get(instrument_name, {})
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
+                        self.line_maps_fnu.setdefault(instrument_name, {})
+                        self.line_maps_fnu[instrument_name][label] = out_maps[
+                            label
+                        ]
+        else:
+            if phot_type == "lnu":
+                for label in out_maps:
+                    in_stars = (
+                        self.stars is not None
+                        and label in self.stars.line_maps_lnu
+                    )
+                    in_bhs = (
+                        self.black_holes is not None
+                        and label in self.black_holes.line_maps_lnu
+                    )
+                    in_gas = (
+                        self.gas is not None
+                        and label in self.gas.line_maps_lnu
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
+                        self.line_maps_lnu[label] = out_maps[label]
+            else:
+                for label in out_maps:
+                    in_stars = (
+                        self.stars is not None
+                        and label in self.stars.line_maps_fnu
+                    )
+                    in_bhs = (
+                        self.black_holes is not None
+                        and label in self.black_holes.line_maps_fnu
+                    )
+                    in_gas = (
+                        self.gas is not None
+                        and label in self.gas.line_maps_fnu
+                    )
+                    if not in_stars and not in_bhs and not in_gas:
+                        self.line_maps_fnu[label] = out_maps[label]
+
+        if len(out_maps) == 0:
+            warn(
+                "No line maps were generated for the requested labels. "
+                "An empty dict will be returned. (Note that this is very "
+                "unlikely to happen and should have raised an exception "
+                "earlier.)"
+            )
+            return {}
+
+        final_maps = dict(out_maps)
+
+        for emitter, emitter_labels in component_labels_by_emitter.items():
+            component = None
+            if emitter == "stellar" and self.stars is not None:
+                component = self.stars
+            elif emitter == "blackhole" and self.black_holes is not None:
+                component = self.black_holes
+            elif emitter == "gas" and self.gas is not None:
+                component = self.gas
+
+            if component is None:
+                continue
+
+            final_maps.update(
+                _postprocess_existing_line_maps(
+                    component,
+                    instrument=instrument,
+                    phot_type=phot_type,
+                    limit_to=emitter_labels,
+                )
+            )
+
+        if len(galaxy_combine_labels) > 0:
+            final_maps.update(
+                _postprocess_existing_line_maps(
+                    self,
+                    instrument=instrument,
+                    phot_type=phot_type,
+                    limit_to=galaxy_combine_labels,
+                )
+            )
+
+        if len(labels) == 1:
+            return final_maps[labels[0]]
+        return final_maps
+
+    def get_line_maps_luminosity(
+        self,
+        *labels,
+        line_ids,
+        fov,
+        instrument,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Make emission line maps (ImageCollections) from luminosities.
+
+        For Parametric Galaxy objects, maps can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle Galaxy objects, maps can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        All maps that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the line_maps_lnu attribute.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make line maps for.
+                These must be present in the lines dicts of the components or
+                the galaxy.
+            line_ids (list):
+                The line ids to make maps for.
+                Blended lines (e.g. doublets) can be given as a comma separated
+                string (e.g. "O 3 4958.91A, O 3 5006.84A") or a nested list of
+                line ids; these produce a single map of the summed lines keyed
+                by the ", " joined id.
+            fov (unyt_quantity of float):
+                The width of the map in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the map (typically a
+                LineImager).
+            img_type (str):
+                The type of map to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed maps.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+
+        Returns:
+            ImageCollection/dict
+                Either a single ImageCollection if only one label is passed,
+                otherwise a dict of ImageCollections keyed by label.
+        """
+        return self._generate_line_maps(
+            *labels,
+            line_ids=line_ids,
+            fov=fov,
+            instrument=instrument,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            cosmo=cosmo,
+            phot_type="lnu",
+        )
+
+    def get_line_maps_flux(
+        self,
+        *labels,
+        line_ids,
+        fov,
+        instrument,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Make emission line maps (ImageCollections) from fluxes.
+
+        For Parametric Galaxy objects, maps can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle Galaxy objects, maps can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        All maps that are created will be stored on the emitter (Stars,
+        BlackHole/s, or galaxy) under the line_maps_fnu attribute.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make line maps for.
+                These must be present in the lines dicts of the components or
+                the galaxy.
+            line_ids (list):
+                The line ids to make maps for.
+                Blended lines (e.g. doublets) can be given as a comma separated
+                string (e.g. "O 3 4958.91A, O 3 5006.84A") or a nested list of
+                line ids; these produce a single map of the summed lines keyed
+                by the ", " joined id.
+            fov (unyt_quantity of float):
+                The width of the map in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the map (typically a
+                LineImager).
+            img_type (str):
+                The type of map to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed maps.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+
+        Returns:
+            ImageCollection/dict
+                Either a single ImageCollection if only one label is passed,
+                otherwise a dict of ImageCollections keyed by label.
+        """
+        return self._generate_line_maps(
+            *labels,
+            line_ids=line_ids,
             fov=fov,
             instrument=instrument,
             img_type=img_type,

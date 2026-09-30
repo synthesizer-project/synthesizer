@@ -1,13 +1,15 @@
 """Utility helpers for instrument-related workflows.
 
 This module currently provides helpers for constructing wavelength grids from
-resolving power and for inspecting the available premade instruments.
+resolving power, for inspecting the available premade instruments, and for
+reading and writing instrument attributes to and from HDF5.
 """
 
 import inspect
 import os
 from typing import Callable, Union
 
+import h5py
 from unyt import angstrom, unyt_array, unyt_quantity
 
 from synthesizer.units import accepts
@@ -64,6 +66,75 @@ def get_lams_from_resolving_power(
 
     # Preserve existing units without squaring them
     return unyt_array(wavelengths)
+
+
+def write_instrument_attribute(group, name, value):
+    """Write an instrument attribute to ``group`` under ``name``.
+
+    Dictionaries are written as a group with one entry per key. Anything else
+    is written as a float dataset with a ``units`` attribute, which is
+    ``"dimensionless"`` for values without units. ``None`` writes nothing.
+
+    Args:
+        group (h5py.Group): The group to write into.
+        name (str): The name of the dataset or group to create.
+        value (dict, unyt_array, unyt_quantity, array-like, float, None):
+            The value to write.
+    """
+    if value is None:
+        return
+    if isinstance(value, dict):
+        subgroup = group.create_group(name)
+        for key, subvalue in value.items():
+            # HDF5 treats "/" as a path separator so store the original key
+            # as an attribute on an escaped entry name
+            safe_key = key.replace("/", "|")
+            write_instrument_attribute(subgroup, safe_key, subvalue)
+            if safe_key in subgroup:
+                subgroup[safe_key].attrs["key"] = key
+        return
+    ds = group.create_dataset(
+        name, data=getattr(value, "value", value), dtype=float
+    )
+    ds.attrs["units"] = str(getattr(value, "units", "dimensionless"))
+
+
+def read_instrument_attribute(group, name):
+    """Read an instrument attribute written by ``write_instrument_attribute``.
+
+    Groups are read as dictionaries keyed by entry name. Datasets are read
+    as Python floats if they are dimensionless scalars, ``unyt_quantity`` if
+    they are scalars with units, and ``unyt_array`` otherwise.
+
+    Args:
+        group (h5py.Group): The group to read from.
+        name (str): The name of the dataset or group to read.
+
+    Returns:
+        dict, float, unyt_quantity, unyt_array or None: The loaded value, or
+            None if ``name`` is not in ``group``.
+    """
+    if name not in group:
+        return None
+    entry = group[name]
+    if isinstance(entry, h5py.Group):
+        out = {}
+        for key in entry:
+            value = read_instrument_attribute(entry, key)
+            if "key" not in entry[key].attrs and isinstance(value, dict):
+                # NOTE: Legacy files stored keys containing "/" (e.g. filter
+                # codes) as nested groups, flatten them back into full keys
+                out.update({f"{key}/{k}": v for k, v in value.items()})
+            else:
+                out[entry[key].attrs.get("key", key)] = value
+        return out
+    data = entry[...]
+    units = entry.attrs.get("units", "dimensionless")
+    if data.ndim == 0:
+        if units == "dimensionless":
+            return float(data)
+        return unyt_quantity(float(data), units)
+    return unyt_array(data, units)
 
 
 def print_premade_instruments() -> None:

@@ -11,6 +11,7 @@ instrument type directly if they already know which configuration they need.
 
 from synthesizer import exceptions
 from synthesizer.instruments.integrated_field_unit import IntegratedFieldUnit
+from synthesizer.instruments.line_imager import LineImager
 from synthesizer.instruments.photometric_imager import PhotometricImager
 from synthesizer.instruments.photometric_instrument import (
     PhotometricInstrument,
@@ -46,6 +47,7 @@ class Instrument:
                 - label (str): A label for the instrument.
                 - filters (list of str): A list of filter names for photometric
                     instruments.
+                - line_ids (list of str): Emission lines for a line imager.
                 - resolution (float): The spectral resolution for spectroscopic
                     instruments, or the spatial resolution for imaging
                     instruments.
@@ -93,6 +95,7 @@ class Instrument:
         # Unpack all supported arguments for dispatch.
         label = kwargs.get("label", None)
         filters = kwargs.get("filters", None)
+        line_ids = kwargs.get("line_ids", None)
         resolution = kwargs.get("resolution", None)
         lam = kwargs.get("lam", None)
         depth = kwargs.get("depth", None)
@@ -109,6 +112,7 @@ class Instrument:
             for key, value in {
                 "label": label,
                 "filters": filters,
+                "line_ids": line_ids,
                 "resolution": resolution,
                 "lam": lam,
                 "depth": depth,
@@ -124,8 +128,17 @@ class Instrument:
         # Resolve the correct instrument type based on the supplied arguments
         target_cls = None
 
+        # Emission line mapping case: line ids plus a spatial resolution
+        if (
+            line_ids is not None
+            and filters is None
+            and lam is None
+            and resolution is not None
+        ):
+            target_cls = LineImager
+
         # Photometric imaging case: filters plus a spatial resolution
-        if filters is not None and lam is None and resolution is not None:
+        elif filters is not None and lam is None and resolution is not None:
             target_cls = PhotometricImager
 
         # Integrated photometry case: filters but no spatial resolution
@@ -177,6 +190,8 @@ class Instrument:
             return SpectroscopicInstrument._from_hdf5(group, **kwargs)
         if instrument_type == "ifu":
             return IntegratedFieldUnit._from_hdf5(group, **kwargs)
+        if instrument_type == "line_imager":
+            return LineImager._from_hdf5(group, **kwargs)
 
         raise exceptions.InconsistentArguments(
             "Unsupported instrument_type "
