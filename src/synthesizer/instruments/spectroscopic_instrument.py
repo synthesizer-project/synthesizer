@@ -16,6 +16,10 @@ from synthesizer.instruments.instrument_base import (
     InstrumentBase,
     _hashable_state,
 )
+from synthesizer.instruments.utils import (
+    read_instrument_attribute,
+    write_instrument_attribute,
+)
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.operation_timers import timed
 
@@ -248,55 +252,12 @@ class SpectroscopicInstrument(InstrumentBase):
         )
         ds.attrs["units"] = str(self.lam.units)
 
-        if self.depth is not None:
-            if isinstance(self.depth, dict):
-                depth_group = group.create_group("Depth")
-                for key, value in self.depth.items():
-                    raw = value.value if hasattr(value, "value") else value
-                    units = (
-                        str(value.units)
-                        if hasattr(value, "units")
-                        else "dimensionless"
-                    )
-                    ds = depth_group.create_dataset(key, data=raw, dtype=float)
-                    ds.attrs["units"] = units
-            else:
-                ds = group.create_dataset(
-                    "Depth", data=self.depth.value, dtype=float
-                )
-                ds.attrs["units"] = "dimensionless"
-
-        if self.depth_app_radius is not None:
-            ds = group.create_dataset(
-                "DepthApertureRadius",
-                data=self.depth_app_radius.value,
-                dtype=float,
-            )
-            ds.attrs["units"] = str(self.depth_app_radius.units)
-
-        if self.snrs is not None:
-            if isinstance(self.snrs, dict):
-                snrs_group = group.create_group("SNRs")
-                for key, value in self.snrs.items():
-                    raw = value.value if hasattr(value, "value") else value
-                    units = (
-                        str(value.units)
-                        if hasattr(value, "units")
-                        else "dimensionless"
-                    )
-                    ds = snrs_group.create_dataset(key, data=raw, dtype=float)
-                    ds.attrs["units"] = units
-            else:
-                ds = group.create_dataset(
-                    "SNRs", data=self.snrs.value, dtype=float
-                )
-                ds.attrs["units"] = "dimensionless"
-
-        if self.noise_maps is not None:
-            ds = group.create_dataset(
-                "NoiseMaps", data=self.noise_maps.value, dtype=float
-            )
-            ds.attrs["units"] = str(self.noise_maps.units)
+        write_instrument_attribute(group, "Depth", self.depth)
+        write_instrument_attribute(
+            group, "DepthApertureRadius", self.depth_app_radius
+        )
+        write_instrument_attribute(group, "SNRs", self.snrs)
+        write_instrument_attribute(group, "NoiseMaps", self.noise_maps)
 
     @classmethod
     @timed("SpectroscopicInstrument.load")
@@ -329,42 +290,13 @@ class SpectroscopicInstrument(InstrumentBase):
             group["Wavelength"][...], group["Wavelength"].attrs["units"]
         )
 
-        if "Depth" in group and isinstance(group["Depth"], h5py.Group):
-            depth = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["Depth"].items()
-            }
-        elif "Depth" in group:
-            depth = unyt_array(
-                group["Depth"][...], group["Depth"].attrs["units"]
-            )
-        else:
-            depth = None
+        depth = read_instrument_attribute(group, "Depth")
+        depth_app_radius = read_instrument_attribute(
+            group, "DepthApertureRadius"
+        )
+        snrs = read_instrument_attribute(group, "SNRs")
 
-        if "DepthApertureRadius" in group:
-            depth_app_radius = unyt_array(
-                group["DepthApertureRadius"][...],
-                group["DepthApertureRadius"].attrs["units"],
-            )
-        else:
-            depth_app_radius = None
-
-        if "SNRs" in group and isinstance(group["SNRs"], h5py.Group):
-            snrs = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["SNRs"].items()
-            }
-        elif "SNRs" in group:
-            snrs = unyt_array(group["SNRs"][...], group["SNRs"].attrs["units"])
-        else:
-            snrs = None
-
-        if "NoiseMaps" in group:
-            noise_maps = unyt_array(
-                group["NoiseMaps"][...], group["NoiseMaps"].attrs["units"]
-            )
-        else:
-            noise_maps = None
+        noise_maps = read_instrument_attribute(group, "NoiseMaps")
 
         payload = {
             "label": group.attrs["label"],

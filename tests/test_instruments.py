@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import h5py
 import numpy as np
 import pytest
-from unyt import angstrom, arcsecond, kpc
+from unyt import angstrom, arcsecond, kpc, nJy, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
@@ -1272,6 +1272,30 @@ def test_callable_resolving_power_is_not_serialised(tmp_path):
         loaded = Instrument._from_hdf5(hdf["Instrument"])
 
     assert loaded.resolving_power is None
+
+
+def test_spectroscopic_scalar_noise_roundtrip(tmp_path):
+    """Scalar depths keep their units and scalar SNRs stay floats."""
+    instrument = SpectroscopicInstrument(
+        label="spec-scalar-noise",
+        lam=np.linspace(1000, 3000, 32) * angstrom,
+        depth=100 * nJy,
+        depth_app_radius=0.1 * kpc,
+        snrs=5.0,
+    )
+    path = tmp_path / "spec-scalar-noise.hdf5"
+
+    with h5py.File(path, "w") as hdf:
+        instrument.to_hdf5(hdf.create_group("Instrument"))
+
+    with h5py.File(path, "r") as hdf:
+        loaded = Instrument._from_hdf5(hdf["Instrument"])
+
+    assert isinstance(loaded.depth, unyt_quantity)
+    assert loaded.depth == 100 * nJy
+    assert loaded.depth_app_radius == 0.1 * kpc
+    assert isinstance(loaded.snrs, float)
+    assert loaded.snrs == 5.0
 
 
 @pytest.mark.parametrize(

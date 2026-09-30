@@ -1,8 +1,9 @@
-"""Specialised photometric imaging instrument.
+"""Specialised emission line imaging instrument.
 
-This instrument is designed to hold the attributes required by photometric
-imaging. It extends :class:`PhotometricInstrument` with spatial resolution,
-optional PSFs, fixed noise maps, and correlated-noise source maps.
+This instrument is designed to hold the attributes required to turn
+per-line luminosities/fluxes into resolved emission line maps. Unlike
+photometric imaging, there is no filter transmission curve involved: each
+emission line is projected directly into its own map, keyed by line id.
 """
 
 import hashlib
@@ -13,15 +14,15 @@ from scipy import signal
 from unyt import arcsecond, kpc, unyt_array
 
 from synthesizer import exceptions
+from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_collection import ImageCollection
 from synthesizer.imaging.image_generators import (
-    _generate_image_collection_generic,
+    _generate_line_map_collection_generic,
 )
-from synthesizer.instruments.filters import FilterCollection
-from synthesizer.instruments.instrument_base import _hashable_state
-from synthesizer.instruments.photometric_instrument import (
-    PhotometricInstrument,
+from synthesizer.instruments.instrument_base import (
+    InstrumentBase,
+    _hashable_state,
 )
 from synthesizer.instruments.photometric_noise import CorrelatedNoiseModel
 from synthesizer.instruments.utils import (
@@ -32,33 +33,57 @@ from synthesizer.units import accepts
 from synthesizer.utils.operation_timers import timed
 
 
-class PhotometricImager(PhotometricInstrument):
-    """Photometric imager instrument class.
+def _canonical_keys(payload):
+    """Return ``payload`` with alias keys converted to line ids.
+
+    Non-dict payloads are returned unchanged.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    return {str(alias_to_line_id(k)): v for k, v in payload.items()}
+
+
+class LineImager(InstrumentBase):
+    """Emission line imaging instrument class.
 
     A class containing the attributes and methods required to produce
-    photometric images. It extends :class:`PhotometricInstrument` with spatial
-    resolution, optional PSFs, fixed noise maps, and correlated-noise source
-    maps. This is the instrument class to use when a photometric setup must
-    produce resolved images rather than integrated photometry alone.
+    resolved emission line maps. It holds the set of line ids the
+    instrument maps together with the spatial resolution, optional PSFs,
+    and optional noise definitions, each keyed by line id rather than by
+    filter code.
 
     Attributes:
+        line_ids (list): The ids of the emission lines this instrument
+            maps. Blended lines (e.g. doublets) can be given as a comma
+            separated string (e.g. "O 3 4958.91A, O 3 5006.84A") or a
+            nested list of line ids; these produce a single map of the
+            summed lines keyed by the ", " joined id.
         resolution (unyt_array): The spatial resolution of the instrument, in
             kpc or arcseconds.
         psfs (dict, optional): An optional dictionary of point spread
-            functions, with one entry per filter.
-        noise_maps (dict, optional): An optional dictionary of fixed noise maps
-            to apply directly to images, with one entry per filter.
+            functions, with one entry per line id.
+        noise_maps (dict, optional): An optional dictionary of fixed noise
+            maps to apply directly to line maps, with one entry per line id.
         noise_source_maps (dict, optional): An optional dictionary of source
             maps used to generate correlated-noise models, with one entry per
-            filter.
+            line id.
+        depth (dict or unyt_quantity, optional): The depth of the instrument.
+            If depths are provided per line, this should be a dictionary
+            keyed by line id.
+        depth_app_radius (unyt_quantity, optional): The aperture radius for
+            the depth measurement. If this is omitted but SNRs and depths are
+            provided, the depth is assumed to be a point-source depth.
+        snrs (dict or unyt_quantity, optional): The signal-to-noise ratios of
+            the instrument. If values are provided per line, this should be a
+            dictionary keyed by line id.
     """
 
     @accepts(resolution=(kpc, arcsecond))
-    @timed("PhotometricImager.__init__")
+    @timed("LineImager.__init__")
     def __init__(
         self,
         label,
-        filters,
+        line_ids,
         resolution,
         psfs=None,
         psf_resample_factor=1,
@@ -68,75 +93,89 @@ class PhotometricImager(PhotometricInstrument):
         noise_maps=None,
         noise_source_maps=None,
     ):
-        """Initialise a photometric imager.
+        """Initialise a line imager.
 
         Args:
             label (str): A label for the instrument.
-            filters (FilterCollection): The filters defining the photometric
-                response of the instrument.
-            resolution (unyt_array): The spatial resolution of the instrument,
-                in kpc or arcseconds.
+            line_ids (list): The ids of the emission lines this instrument
+                maps. Blended lines (e.g. doublets) can be given as a comma
+                separated string (e.g. "O 3 4958.91A, O 3 5006.84A") or a
+                nested list of line ids; these produce a single map of the
+                summed lines keyed by the ", " joined id.
+            resolution (unyt_array): The spatial resolution of the
+                instrument, in kpc or arcseconds.
             psfs (dict, optional): An optional dictionary of point spread
-                functions, with one entry per filter.
+                functions, with one entry per line id.
             psf_resample_factor (int, optional): Instrument-owned PSF
-                supersampling factor. When greater than 1, images are
-                temporarily resampled by this factor before PSF convolution and
-                then downsampled back to their original resolution.
+                supersampling factor. When greater than 1, maps are
+                temporarily resampled by this factor before PSF convolution
+                and then downsampled back to their original resolution.
             depth (dict or unyt_quantity, optional): The depth of the
-                instrument, typically in apparent magnitudes. If depths are
-                provided per filter, this should be a dictionary keyed by
-                filter code.
-            depth_app_radius (unyt_quantity, optional): The aperture radius for
-                the depth measurement. If this is omitted but SNRs and depths
-                are provided, the depth is assumed to be a point-source depth.
-            snrs (dict or unyt_quantity, optional): The signal-to-noise ratios
-                of the instrument. If values are provided per filter, this
-                should be a dictionary keyed by filter code.
-            noise_maps (dict, optional): An optional dictionary of fixed noise
-                maps to apply directly to images, with one entry per filter.
+                instrument. If depths are provided per line, this should be a
+                dictionary keyed by line id.
+            depth_app_radius (unyt_quantity, optional): The aperture radius
+                for the depth measurement. If this is omitted but SNRs and
+                depths are provided, the depth is assumed to be a
+                point-source depth.
+            snrs (dict or unyt_quantity, optional): The signal-to-noise
+                ratios of the instrument. If values are provided per line,
+                this should be a dictionary keyed by line id.
+            noise_maps (dict, optional): An optional dictionary of fixed
+                noise maps to apply directly to line maps, with one entry per
+                line id.
             noise_source_maps (dict, optional): An optional dictionary of
-                source maps used to generate correlated-noise models, with one
-                entry per filter.
+                source maps used to generate correlated-noise models, with
+                one entry per line id.
         """
-        # Initialise the shared photometric instrument first
-        super().__init__(
-            label=label,
-            filters=filters,
-            depth=depth,
-            depth_app_radius=depth_app_radius,
-            snrs=snrs,
-        )
+        super().__init__(label)
 
-        # Set the photometric imager-specific attributes
+        # Set the line imager specific attributes
+        # Canonicalise line ids (and any per-line dict keys) so aliases
+        # match the ids carried by generated maps
+        self.line_ids = [str(alias_to_line_id(lid)) for lid in line_ids]
         self.resolution = resolution
-        self.psfs = psfs
+        self.psfs = _canonical_keys(psfs)
         self.psf_resample_factor = psf_resample_factor
-        self.noise_maps = noise_maps
-        self.noise_source_maps = noise_source_maps
+        self.depth = _canonical_keys(depth)
+        self.depth_app_radius = depth_app_radius
+        self.snrs = _canonical_keys(snrs)
+        self.noise_maps = _canonical_keys(noise_maps)
+        self.noise_source_maps = _canonical_keys(noise_source_maps)
         self.correlated_noise_models = self._build_correlated_noise_models()
 
         # Validate the instrument configuration
         self._validate()
 
-    @timed("PhotometricImager._validate")
+    @timed("LineImager._validate")
     def _validate(self):
         """Validate the instrument attributes.
 
         Raises:
             MissingArgument: If any required attributes are missing.
         """
-        # Perform the shared validation first
-        super()._validate()
+        if len(self.line_ids) == 0:
+            raise exceptions.MissingArgument(
+                "LineImager requires at least one line id."
+            )
 
-        # Ensure we actually have the image resolution
         if self.resolution is None:
             raise exceptions.MissingArgument(
-                "PhotometricImager requires a resolution."
+                "LineImager requires a resolution."
             )
 
         if self.psf_resample_factor < 1:
             raise exceptions.InconsistentArguments(
                 "psf_resample_factor must be greater than or equal to 1."
+            )
+
+        # Depths only make sense when paired with SNR definitions
+        if self.depth is not None and self.snrs is None:
+            raise exceptions.MissingArgument(
+                "If you set a depth you must also set the SNRs"
+            )
+        if self.snrs is not None and self.depth is None:
+            raise exceptions.MissingArgument(
+                "If you set a SNR you must also set the depth"
             )
 
         # Noise maps are an alternative noise definition to depth+SNR pairs
@@ -145,7 +184,8 @@ class PhotometricImager(PhotometricInstrument):
                 "You cannot set depths and SNRs at the same time as noise maps"
             )
 
-        # Correlated-noise source maps are also an alternative noise definition
+        # Correlated-noise source maps are also an alternative noise
+        # definition
         if self.snrs is not None and self.noise_source_maps is not None:
             raise exceptions.MissingArgument(
                 "You cannot set depths and SNRs at the same time as "
@@ -153,54 +193,69 @@ class PhotometricImager(PhotometricInstrument):
             )
         if self.noise_maps is not None and self.noise_source_maps is not None:
             raise exceptions.MissingArgument(
-                "You cannot set fixed noise maps and correlated noise source "
-                "maps at the same time"
+                "You cannot set fixed noise maps and correlated noise "
+                "source maps at the same time"
             )
 
-        # PSFs are always looked up by filter code during convolution, so keep
-        # that configuration strict here and reject partial PSF dictionaries at
+        # PSFs and noise definitions are always looked up by line id, so keep
+        # that configuration strict here and reject partial dictionaries at
         # construction time.
-        for attr_name in ("psfs",):
+        for attr_name in (
+            "psfs",
+            "noise_maps",
+            "noise_source_maps",
+        ):
             payload = getattr(self, attr_name)
             if payload is None:
                 continue
-            missing_filters = set(self.filters.filter_codes) - set(payload)
-            if len(missing_filters) > 0:
+            missing_lines = set(self.line_ids) - set(payload)
+            if len(missing_lines) > 0:
                 raise exceptions.MissingArgument(
-                    f"{attr_name} is missing entries for filters: "
-                    f"{sorted(missing_filters)}"
+                    f"{attr_name} is missing entries for lines: "
+                    f"{sorted(missing_lines)}"
+                )
+
+        for attr_name in ("depth", "snrs"):
+            payload = getattr(self, attr_name)
+            if not isinstance(payload, dict):
+                continue
+            missing_lines = set(self.line_ids) - set(payload)
+            if len(missing_lines) > 0:
+                raise exceptions.MissingArgument(
+                    f"{attr_name} is missing entries for lines: "
+                    f"{sorted(missing_lines)}"
                 )
 
     @property
     def instrument_type(self):
         """Return the serialised type tag for this instrument."""
-        return "photometric_imager"
+        return "line_imager"
 
     @property
-    def can_do_imaging(self):
-        """Return whether this instrument supports imaging."""
+    def can_do_line_mapping(self):
+        """Return whether this instrument supports line mapping."""
         return True
 
     @property
-    def can_do_psf_imaging(self):
-        """Return whether this instrument supports PSF imaging."""
+    def can_do_psf_line_mapping(self):
+        """Return whether this instrument supports PSF line mapping."""
         return self.psfs is not None
 
     @property
-    def can_do_noisy_imaging(self):
-        """Return whether this instrument supports noisy imaging."""
+    def can_do_noisy_line_mapping(self):
+        """Return whether this instrument supports noisy line mapping."""
         have_noise = self.noise_maps is not None
         have_noise |= self.noise_source_maps is not None
         have_noise |= self.snrs is not None and self.depth is not None
         return have_noise
 
-    @timed("PhotometricImager._build_correlated_noise_models")
+    @timed("LineImager._build_correlated_noise_models")
     def _build_correlated_noise_models(self):
-        """Build per-filter correlated-noise models from source maps.
+        """Build per-line correlated-noise models from source maps.
 
         Returns:
-            dict or None: Mapping of filter codes to correlated-noise models,
-                or None if no source maps are configured.
+            dict or None: Mapping of line ids to correlated-noise models, or
+                None if no source maps are configured.
 
         Raises:
             InconsistentArguments: If ``noise_source_maps`` is not a dict.
@@ -210,39 +265,43 @@ class PhotometricImager(PhotometricInstrument):
 
         if not isinstance(self.noise_source_maps, dict):
             raise exceptions.InconsistentArguments(
-                "noise_source_maps must be a dict keyed by filter code for "
+                "noise_source_maps must be a dict keyed by line id for "
                 "correlated noise generation."
             )
 
         return {
-            filter_code: CorrelatedNoiseModel(noise_map)
-            for filter_code, noise_map in self.noise_source_maps.items()
+            line_id: CorrelatedNoiseModel(noise_map)
+            for line_id, noise_map in self.noise_source_maps.items()
         }
 
-    @timed("PhotometricImager._comparison_state")
+    @timed("LineImager._comparison_state")
     def _comparison_state(self):
-        """Return a tuple describing the imaging comparison state.
+        """Return a tuple describing the line mapping comparison state.
 
         Returns:
             tuple: Hashable representation of the instrument state.
         """
-        return super()._comparison_state() + (
+        return (
+            _hashable_state(tuple(self.line_ids)),
             _hashable_state(self.resolution),
             _hashable_state(self.psfs),
             _hashable_state(self.psf_resample_factor),
+            _hashable_state(self.depth),
+            _hashable_state(self.depth_app_radius),
+            _hashable_state(self.snrs),
             _hashable_state(self.noise_maps),
             _hashable_state(self.noise_source_maps),
         )
 
-    @timed("PhotometricImager.get_correlated_noise_model")
-    def get_correlated_noise_model(self, filter_code):
-        """Return the correlated-noise model for a filter.
+    @timed("LineImager.get_correlated_noise_model")
+    def get_correlated_noise_model(self, line_id):
+        """Return the correlated-noise model for a line.
 
         Args:
-            filter_code (str): Filter code identifying the required model.
+            line_id (str): Line id identifying the required model.
 
         Returns:
-            CorrelatedNoiseModel: The correlated-noise model for the filter.
+            CorrelatedNoiseModel: The correlated-noise model for the line.
         """
         if self.correlated_noise_models is None:
             raise exceptions.MissingArgument(
@@ -250,19 +309,18 @@ class PhotometricImager(PhotometricInstrument):
                 "Provide noise_source_maps when constructing the Instrument."
             )
 
-        if filter_code not in self.correlated_noise_models:
+        if line_id not in self.correlated_noise_models:
             raise exceptions.InconsistentArguments(
-                "No correlated noise model found for filter "
-                f"'{filter_code}'. Available filters: "
-                f"{list(self.correlated_noise_models.keys())}"
+                f"No correlated noise model found for line '{line_id}'. "
+                f"Available lines: {list(self.correlated_noise_models)}"
             )
 
-        return self.correlated_noise_models[filter_code]
+        return self.correlated_noise_models[line_id]
 
-    @timed("PhotometricImager.generate_images")
-    def generate_images(
+    @timed("LineImager.generate_maps")
+    def generate_maps(
         self,
-        photometry,
+        lines,
         fov,
         img_type,
         kernel,
@@ -270,30 +328,31 @@ class PhotometricImager(PhotometricInstrument):
         nthreads,
         emitter,
         cosmo,
+        quantity="luminosity",
     ):
-        """Generate an image collection for one emitter.
+        """Generate a line map collection for one emitter.
 
         Args:
-            photometry (PhotometryCollection): Photometry to project into the
-                output images.
-            fov (unyt_quantity/tuple, unyt_quantity): Width of the image.
-            img_type (str): The type of image to create.
+            lines (LineCollection): Lines to project into the output maps.
+            fov (unyt_quantity/tuple, unyt_quantity): Width of the map.
+            img_type (str): The type of map to create.
             kernel (np.ndarray, optional): Kernel used for smoothed particle
                 imaging.
             kernel_threshold (float): Kernel impact-parameter threshold.
             nthreads (int): Number of threads to use for particle smoothing.
             emitter (Component): Emitter supplying geometry and source data.
             cosmo (astropy.cosmology.Cosmology, optional): Cosmology used for
-                angular-image coordinate conversions.
+                angular-coordinate conversions.
+            quantity (str): Either "luminosity" or "flux", selecting which
+                LineCollection attribute is mapped.
 
         Returns:
-            ImageCollection: The generated image collection.
+            ImageCollection: The generated map collection, one Image per
+                requested line id.
         """
-        # Delegate the low-level image construction to the shared generator so
-        # the instrument owns the public imaging entry point
-        return _generate_image_collection_generic(
+        return _generate_line_map_collection_generic(
             instrument=self,
-            photometry=photometry,
+            lines=lines,
             fov=fov,
             img_type=img_type,
             kernel=kernel,
@@ -301,15 +360,16 @@ class PhotometricImager(PhotometricInstrument):
             nthreads=nthreads,
             emitter=emitter,
             cosmo=cosmo,
+            quantity=quantity,
         )
 
-    @timed("PhotometricImager.apply_psf")
-    def apply_psf(self, image, filter_code, inplace=False):
-        """Apply the configured PSF to one image.
+    @timed("LineImager.apply_psf")
+    def apply_psf(self, image, line_id, inplace=False):
+        """Apply the configured PSF to one line map.
 
         Args:
             image (Image): Image to which the PSF should be applied.
-            filter_code (str): Filter code identifying which PSF to use.
+            line_id (str): Line id identifying which PSF to use.
             inplace (bool): If ``True`` update ``image`` directly and return
                 it. Otherwise return a new image.
 
@@ -318,33 +378,26 @@ class PhotometricImager(PhotometricInstrument):
 
         Raises:
             MissingArgument: If the instrument has no PSFs configured.
-            InconsistentArguments: If no PSF is defined for ``filter_code``.
+            InconsistentArguments: If no PSF is defined for ``line_id``.
         """
-        # Ensure the instrument actually has PSFs to apply
         if self.psfs is None:
             raise exceptions.MissingArgument(
                 "No PSFs are set on this Instrument. Provide psfs when "
                 "constructing the Instrument."
             )
 
-        # Ensure the requested filter has a PSF definition
-        if filter_code not in self.psfs:
+        if line_id not in self.psfs:
             raise exceptions.InconsistentArguments(
-                f"No PSF found for filter '{filter_code}'. Available filters: "
+                f"No PSF found for line '{line_id}'. Available lines: "
                 f"{list(self.psfs.keys())}"
             )
 
         psf_resample_factor = self.psf_resample_factor
-
-        # Resampling factors smaller than one do not make sense for this PSF
-        # application path because the image is optionally supersampled first
         if psf_resample_factor < 1:
             raise exceptions.InconsistentArguments(
                 "psf_resample_factor must be greater than or equal to 1."
             )
 
-        # Work on the original image when requested, otherwise create a fresh
-        # container so the instrument owns the post-processing semantics
         if inplace:
             working_image = image
         else:
@@ -354,38 +407,32 @@ class PhotometricImager(PhotometricInstrument):
                 img=image.img,
             )
 
-        # If requested, temporarily supersample before the PSF convolution
         if psf_resample_factor > 1:
             working_image.resample(psf_resample_factor)
 
-        # Perform the PSF convolution on the instrument side rather than on the
-        # image container so the observation machinery stays instrument-owned
         convolved_img = signal.fftconvolve(
             working_image.arr,
-            self.psfs[filter_code],
+            self.psfs[line_id],
             mode="same",
         )
 
-        # Reapply units if the image carries them
         if working_image.units is not None:
             convolved_img *= working_image.units
 
-        # Update the chosen image container with the convolved pixels
         working_image.img = convolved_img
 
-        # Return to the original resolution if we temporarily supersampled
         if psf_resample_factor > 1:
             working_image.downsample(1 / psf_resample_factor)
 
         return working_image
 
-    @timed("PhotometricImager.apply_psfs")
+    @timed("LineImager.apply_psfs")
     def apply_psfs(self, image_collection, inplace=False):
-        """Apply the configured PSFs to an image collection.
+        """Apply the configured PSFs to a line map collection.
 
         Args:
-            image_collection (ImageCollection): Collection to which PSFs should
-                be applied.
+            image_collection (ImageCollection): Collection to which PSFs
+                should be applied.
             inplace (bool): If ``True`` update ``image_collection`` directly
                 and return it. Otherwise return a new image collection.
 
@@ -397,24 +444,19 @@ class PhotometricImager(PhotometricInstrument):
                 1.
         """
         psf_resample_factor = self.psf_resample_factor
-
-        # Resampling factors smaller than one do not make sense for this PSF
-        # application path because the images are optionally supersampled first
         if psf_resample_factor < 1:
             raise exceptions.InconsistentArguments(
                 "psf_resample_factor must be greater than or equal to 1."
             )
 
-        # Work on the original collection when requested, otherwise construct a
-        # fresh collection to hold the convolved images.
         if inplace:
             working_collection = image_collection
             target_imgs = working_collection.imgs
         else:
             target_imgs = {}
-            for filter_code in image_collection.filter_codes:
-                image = image_collection.imgs[filter_code]
-                target_imgs[filter_code] = Image(
+            for line_id in image_collection.keys():
+                image = image_collection.imgs[line_id]
+                target_imgs[line_id] = Image(
                     resolution=image.resolution,
                     fov=image.fov,
                     img=image.img,
@@ -425,32 +467,29 @@ class PhotometricImager(PhotometricInstrument):
                 imgs=target_imgs,
             )
 
-        # Apply the PSF to each image through the single-image helper so the
-        # instrument owns one canonical PSF-convolution path.
-        for filter_code in image_collection.filter_codes:
-            target_imgs[filter_code] = self.apply_psf(
-                target_imgs[filter_code],
-                filter_code,
+        for line_id in list(image_collection.keys()):
+            target_imgs[line_id] = self.apply_psf(
+                target_imgs[line_id],
+                line_id,
                 inplace=True,
             )
 
         return working_collection
 
-    @timed("PhotometricImager.apply_noise")
+    @timed("LineImager.apply_noise")
     def apply_noise(
         self,
         image,
-        filter_code,
+        line_id,
         correct_periodicity=True,
         rng_seed=None,
         aperture_radius=None,
     ):
-        """Apply the configured imaging noise to one image.
+        """Apply the configured noise to one line map.
 
         Args:
             image (Image): Image to which noise should be applied.
-            filter_code (str): Filter code identifying which noise definition
-                to use.
+            line_id (str): Line id identifying which noise definition to use.
             correct_periodicity (bool): Whether to apply periodicity
                 correction when generating correlated noise.
             rng_seed (int, optional): Seed used for stochastic noise
@@ -461,36 +500,30 @@ class PhotometricImager(PhotometricInstrument):
         Returns:
             Image: New image with noise applied.
         """
-        # Apply a fixed noise array directly if one has been configured
         if self.noise_maps is not None:
-            if filter_code not in self.noise_maps:
+            if line_id not in self.noise_maps:
                 raise exceptions.MissingArgument(
-                    "noise_maps is missing an entry for filter "
-                    f"'{filter_code}'."
+                    f"noise_maps is missing an entry for line '{line_id}'."
                 )
-            noise_arr = self.noise_maps[filter_code]
+            noise_arr = self.noise_maps[line_id]
             return image.apply_noise_array(noise_arr)
 
-        # Delegate correlated-noise generation to the image primitive while the
-        # instrument remains the owner of the noise-model configuration
         if self.correlated_noise_models is not None:
             return image.apply_correlated_noise(
                 self,
-                filter_code,
+                line_id,
                 correct_periodicity=correct_periodicity,
                 rng_seed=rng_seed,
             )
 
-        # Derive image noise from depth and SNR definitions when that is the
-        # configured photometric noise model
         if self.snrs is not None and self.depth is not None:
             snr = (
-                self.snrs[filter_code]
+                self.snrs[line_id]
                 if isinstance(self.snrs, dict)
                 else self.snrs
             )
             depth = (
-                self.depth[filter_code]
+                self.depth[line_id]
                 if isinstance(self.depth, dict)
                 else self.depth
             )
@@ -499,10 +532,10 @@ class PhotometricImager(PhotometricInstrument):
             )
 
         raise exceptions.MissingArgument(
-            "The instrument has no imaging noise configuration."
+            "The instrument has no line mapping noise configuration."
         )
 
-    @timed("PhotometricImager.apply_noises")
+    @timed("LineImager.apply_noises")
     def apply_noises(
         self,
         image_collection,
@@ -510,7 +543,7 @@ class PhotometricImager(PhotometricInstrument):
         rng_seed=None,
         aperture_radius=None,
     ):
-        """Apply the configured imaging noise to an image collection.
+        """Apply the configured noise to a line map collection.
 
         Args:
             image_collection (ImageCollection): Collection to which noise
@@ -526,22 +559,20 @@ class PhotometricImager(PhotometricInstrument):
             ImageCollection: New image collection with noise applied.
         """
         noisy_imgs = {}
-        for f in image_collection.filter_codes:
+        for line_id in image_collection.keys():
             if rng_seed is None:
-                filter_rng_seed = None
+                line_rng_seed = None
             else:
-                seed_material = f"{rng_seed}:{f}".encode("utf-8")
-                filter_rng_seed = int.from_bytes(
+                seed_material = f"{rng_seed}:{line_id}".encode("utf-8")
+                line_rng_seed = int.from_bytes(
                     hashlib.sha256(seed_material).digest()[:4], "big"
                 )
 
-            # Delegate the per-image noise policy to the single-image helper so
-            # there is one canonical decision path for imaging noise
-            noisy_imgs[f] = self.apply_noise(
-                image_collection.imgs[f],
-                f,
+            noisy_imgs[line_id] = self.apply_noise(
+                image_collection.imgs[line_id],
+                line_id,
                 correct_periodicity=correct_periodicity,
-                rng_seed=filter_rng_seed,
+                rng_seed=line_rng_seed,
                 aperture_radius=aperture_radius,
             )
 
@@ -551,15 +582,17 @@ class PhotometricImager(PhotometricInstrument):
             imgs=noisy_imgs,
         )
 
-    @timed("PhotometricImager.to_hdf5")
+    @timed("LineImager.to_hdf5")
     def to_hdf5(self, group):
-        """Write the photometric imager to an HDF5 group.
+        """Write the line imager to an HDF5 group.
 
         Args:
             group (h5py.Group): Group into which the instrument should be
                 serialised.
         """
-        super().to_hdf5(group)
+        group.attrs["label"] = self.label
+        group.attrs["instrument_type"] = self.instrument_type
+        group.attrs["line_ids"] = self.line_ids
 
         ds = group.create_dataset(
             "Resolution", data=self.resolution.value, dtype=float
@@ -579,23 +612,27 @@ class PhotometricImager(PhotometricInstrument):
         )
         ds.attrs["units"] = "dimensionless"
 
+        write_instrument_attribute(group, "Depth", self.depth)
+        write_instrument_attribute(
+            group, "DepthApertureRadius", self.depth_app_radius
+        )
+        write_instrument_attribute(group, "SNRs", self.snrs)
         write_instrument_attribute(group, "NoiseMaps", self.noise_maps)
         write_instrument_attribute(
             group, "NoiseSourceMaps", self.noise_source_maps
         )
 
     @classmethod
-    @timed("PhotometricImager.load")
+    @timed("LineImager.load")
     def load(cls, filepath=None, **kwargs):
-        """Load a photometric imager from an HDF5 file.
+        """Load a line imager from an HDF5 file.
 
         Args:
-            filepath (str or PathLike, optional): Path to the HDF5 file. If
-                omitted, subclasses may provide a cached default path.
+            filepath (str or PathLike, optional): Path to the HDF5 file.
             **kwargs: Attribute overrides applied after deserialisation.
 
         Returns:
-            PhotometricImager: The loaded instrument.
+            LineImager: The loaded instrument.
         """
         if filepath is None:
             filepath = getattr(cls, "_instrument_cache_file", None)
@@ -607,18 +644,18 @@ class PhotometricImager(PhotometricInstrument):
             return cls._from_hdf5(hdf, **kwargs)
 
     @classmethod
-    @timed("PhotometricImager._from_hdf5")
+    @timed("LineImager._from_hdf5")
     def _from_hdf5(cls, group, **kwargs):
-        """Load a photometric imager from an HDF5 group.
+        """Load a line imager from an HDF5 group.
 
         Args:
             group (h5py.Group): Group containing the serialised instrument.
             **kwargs: Attribute overrides applied after deserialisation.
 
         Returns:
-            PhotometricImager: The loaded instrument.
+            LineImager: The loaded instrument.
         """
-        filters = FilterCollection._from_hdf5(group["Filters"])
+        line_ids = [str(lid) for lid in group.attrs["line_ids"]]
         resolution = unyt_array(
             group["Resolution"][...], group["Resolution"].attrs["units"]
         )
@@ -630,19 +667,7 @@ class PhotometricImager(PhotometricInstrument):
         snrs = read_instrument_attribute(group, "SNRs")
 
         if "PSFs" in group and isinstance(group["PSFs"], h5py.Group):
-            psfs = {}
-            for key in group["PSFs"]:
-                if isinstance(group["PSFs"][key], h5py.Group):
-                    for subkey in group["PSFs"][key]:
-                        psfs[f"{key}/{subkey}"] = unyt_array(
-                            group["PSFs"][key][subkey][...],
-                            group["PSFs"][key][subkey].attrs["units"],
-                        )
-                else:
-                    psfs[key] = unyt_array(
-                        group["PSFs"][key][...],
-                        group["PSFs"][key].attrs["units"],
-                    )
+            psfs = {key: group["PSFs"][key][...] for key in group["PSFs"]}
         else:
             psfs = None
 
@@ -656,7 +681,7 @@ class PhotometricImager(PhotometricInstrument):
 
         payload = {
             "label": group.attrs["label"],
-            "filters": filters,
+            "line_ids": line_ids,
             "resolution": resolution,
             "depth": depth,
             "depth_app_radius": depth_app_radius,
@@ -669,30 +694,4 @@ class PhotometricImager(PhotometricInstrument):
         payload.update(kwargs)
 
         init_params = inspect.signature(cls.__init__).parameters
-
-        if "filters" not in init_params or "resolution" not in init_params:
-            return cls(
-                label=payload["label"],
-                filter_lams=payload["filters"].lam,
-                depth=payload["depth"],
-                depth_app_radius=payload["depth_app_radius"],
-                snrs=payload["snrs"],
-                psfs=payload["psfs"],
-                psf_resample_factor=payload["psf_resample_factor"],
-                noise_maps=payload["noise_maps"],
-                noise_source_maps=payload["noise_source_maps"],
-                filter_subset=tuple(payload["filters"].filter_codes),
-            )
-
-        return cls(
-            label=payload["label"],
-            filters=payload["filters"],
-            resolution=payload["resolution"],
-            depth=payload["depth"],
-            depth_app_radius=payload["depth_app_radius"],
-            snrs=payload["snrs"],
-            psfs=payload["psfs"],
-            psf_resample_factor=payload["psf_resample_factor"],
-            noise_maps=payload["noise_maps"],
-            noise_source_maps=payload["noise_source_maps"],
-        )
+        return cls(**{k: v for k, v in payload.items() if k in init_params})
