@@ -103,6 +103,24 @@ def resolve_out_dtype(out_dtype):
     return _validate_dtype(out_dtype)
 
 
+def get_float_dtype(dtype):
+    """Get the floating point dtype to compute at for an input dtype.
+
+    Inputs at a supported floating point precision (float32 or float64)
+    keep it, anything else (e.g. integers) is computed at float64.
+
+    Args:
+        dtype (np.dtype/type):
+            The dtype of the input.
+
+    Returns:
+        np.dtype:
+            The dtype to compute and allocate outputs with.
+    """
+    dtype = np.dtype(dtype)
+    return dtype if dtype in _ALLOWED_DTYPES else np.dtype(np.float64)
+
+
 def scalar_like(value, ref):
     """Return a scalar typed to match a reference array's dtype.
 

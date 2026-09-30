@@ -69,6 +69,7 @@ from synthesizer.units import (
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import get_float_dtype
 from synthesizer.utils.util_funcs import (
     ensure_array_buffer,
     get_attr_unit_conversion,
@@ -907,25 +908,22 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        # Define a pseudo transmission function
+        # Define a pseudo transmission function (at the precision of lnu, or
+        # float64 if it isn't floating point, so the measurement keeps that
+        # precision)
         transmission = (self.lam > window[0]) & (self.lam < window[1])
-        transmission = transmission.astype(float)
+        dtype = get_float_dtype(self._lnu.dtype)
+        transmission = transmission.astype(dtype)
 
         # Apply the correct method
         if integration_method == "average":
-            # Apply to the correct axis of the spectra
-            if self.ndim >= 2:
-                lnu = np.array(
-                    [
-                        np.sum(_lnu * transmission) / np.sum(transmission)
-                        for _lnu in self._lnu.reshape(-1, self._lnu.shape[-1])
-                    ]
-                ) * get_quantity_unit(self, "lnu")
-
-                lnu = lnu.reshape(self._lnu.shape[:-1])
-
-            else:
-                lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
+            # Average over the window along the wavelength axis (the final
+            # axis, whatever the number of dimensions)
+            lnu = (
+                np.sum(self._lnu * transmission, axis=-1)
+                / np.sum(transmission)
+                * get_quantity_unit(self, "lnu")
+            )
 
         else:
             # Luminosity integral
@@ -934,6 +932,7 @@ class Sed:
                 self._lnu * transmission / self.nu,
                 nthreads=nthreads,
                 method=integration_method,
+                out_dtype=dtype,
             )
 
             # Transmission integral
@@ -942,6 +941,7 @@ class Sed:
                 transmission / self.nu,
                 nthreads=nthreads,
                 method=integration_method,
+                out_dtype=dtype,
             )
 
             # Compute lnu

@@ -1,8 +1,10 @@
 """A test suite for the transformers module."""
 
 import numpy as np
+import pytest
 from unyt import K, angstrom
 
+from synthesizer import exceptions
 from synthesizer.emission_models import (
     AttenuatedEmission,
     DustEmission,
@@ -272,4 +274,32 @@ def test_generator_param_on_model_overrides_generator(
     assert np.allclose(overridden.value, explicit.value), (
         "A temperature set on the EmissionModel should override the "
         "generator value"
+    )
+
+
+def test_per_particle_fraction_needs_per_particle_emission(
+    test_grid,
+    random_part_stars,
+):
+    """A per-particle escape fraction can't be applied to integrated emission.
+
+    Scaling an integrated spectrum by one fraction per particle would
+    silently broadcast it into one spectrum per particle, so it must raise
+    a clear error instead. Per-particle emission is fine.
+    """
+    # Give each particle its own escape fraction
+    random_part_stars.fesc = np.full(random_part_stars.nparticles, 0.1)
+
+    # Integrated emission with a per-particle fraction should raise
+    model = TransmittedEmission(test_grid, fesc="fesc", per_particle=False)
+    with pytest.raises(exceptions.InconsistentArguments, match="per_particle"):
+        random_part_stars.get_spectra(model)
+    random_part_stars.clear_all_emissions()
+
+    # Per-particle emission with a per-particle fraction is fine
+    model = TransmittedEmission(test_grid, fesc="fesc", per_particle=True)
+    random_part_stars.get_spectra(model)
+    assert random_part_stars.particle_spectra["transmitted"].shape == (
+        random_part_stars.nparticles,
+        test_grid.nlam,
     )
