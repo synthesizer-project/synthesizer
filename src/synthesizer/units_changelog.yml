@@ -11,3 +11,9 @@
   new: Lsun
   changed_after: "1.2.0"
   reason: erg/s luminosities overflow float32
+
+- category: luminosity_density_wavelength
+  old: erg / s / Angstrom
+  new: Lsun / Angstrom
+  changed_after: "1.2.0"
+  reason: erg/s/Angstrom luminosity densities overflow float32

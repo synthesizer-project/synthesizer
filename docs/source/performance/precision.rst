@@ -87,19 +87,39 @@ cgs units exceed that for realistic sources: line luminosities reach
 1e40–1e45 erg/s and black hole bolometric luminosities ~1e45 erg/s.
 Synthesizer therefore stores luminosities in solar luminosities by default
 (the ``luminosity`` unit category is ``Lsun``), which keeps them comfortably
-within the float32 range. Spectral densities (e.g. ``lnu`` in erg/s/Hz) fit
-in float32 and keep their cgs units.
+within the float32 range. Luminosity densities per unit wavelength
+(``llam``, up to ~1e43 erg/s/Å) are stored in ``Lsun / Angstrom`` for the
+same reason, while luminosity densities per unit frequency (``lnu`` in
+erg/s/Hz) and fluxes fit in float32 and keep their cgs units.
 
 Grids are converted to these internal units when they are loaded, so this
 makes no difference to the results: only the units of the returned
-luminosities change, and they can be converted with ``.to("erg/s")`` as
-usual.
+luminosities (and ``llam``) change, and they can be converted with
+``.to("erg/s")`` (or ``.to("erg/s/Angstrom")``) as usual. Though note that 
+conversions to these units may overflow at float32, so you may need to use 
+float64 outputs to use these units.
 
-Note: If your units file predates this change and still uses the old
-``erg / s`` default, it is updated automatically (and the change is printed);
-any units you customised are left alone. Changes to the default units are
-listed in ``units_changelog.yml``. You can switch back to erg/s in the units
-file if you prefer, but float32 luminosities may then overflow.
+Note: If your units file predates these changes and still uses the old
+``erg / s`` and ``erg / s / Angstrom`` defaults, it is updated automatically
+(and the changes are printed); any units you customised are left alone.
+Changes to the default units are listed in ``units_changelog.yml``. You can
+switch back to cgs units in the units file if you prefer, but float32
+results that don't fit will then raise a ``PrecisionOverflow`` error.
+
+The float32 range
+^^^^^^^^^^^^^^^^^
+
+Quantities derived from spectra (``Sed.luminosity``, ``Sed.llam``, and
+bolometric and window luminosities) are computed directly in these internal
+units at the precision of ``lnu``. The one exception is ionising photon
+production rates (~1e53 s^-1 and beyond), which don't fit in float32 and
+are always computed at float64.
+
+If a result is too large for the output precision, Synthesizer raises a
+``PrecisionOverflow`` error rather than returning results containing ``inf``.
+
+If an output ever isn't at the requested ``out_dtype`` that is a bug in
+Synthesizer, reported with an ``InternalPrecisionWarning``.
 
 Input precision
 ~~~~~~~~~~~~~~~
@@ -152,7 +172,8 @@ Mixing precisions
 Within one logical group of arrays (e.g. the arrays making up a grid, or the
 property arrays describing a particle distribution) all floating-point arrays
 must share a single dtype — float32 or float64. If they don't, Synthesizer
-raises a ``TypeError`` naming the offending array.
+raises a ``TypeError`` listing every array in the group with its dtype
+and naming the ones that need converting.
 
 *Between* groups, precisions can be mixed freely: float32 particle data can
 be combined with a float64 grid (and vice versa), float32 stars can have
@@ -168,12 +189,19 @@ errors like:
 
 .. code-block:: text
 
-    TypeError: ages must share the same floating-point dtype as masses
-    (got float64 and float32). Cast the offending array (e.g. with
-    arr.astype(np.float32)) or, for grid arrays, load the grid at the
-    matching precision with Grid(..., use_precision=...).
+    TypeError: These arrays are used together and must all have the same
+    precision (all float32 or all float64), but they are mixed:
+        initial_masses: float64
+        log10ages: float32
+        log10metallicities: float32
+    To fix this, convert the one mismatched array (initial_masses) to
+    float32, e.g. arr = arr.astype(np.float32), or convert all of them to
+    float64. For grid arrays, load the grid at the matching precision with
+    Grid(..., use_precision=...). Synthesizer never converts arrays for you
+    because that would silently create copies of potentially very large
+    arrays.
 
-This means one array in a group doesn't match its siblings. Fix it at the
+This means some arrays in a group don't match their siblings. Fix it at the
 source — load the data at a consistent precision, or cast the named array
 once yourself — rather than working around it per call.
 
@@ -182,6 +210,8 @@ slice or transpose an array in a way that breaks contiguity you will get a
 ``ValueError`` asking for a contiguous array; use ``np.ascontiguousarray``
 at the point where you create the slice.
 
-Finally, some attenuation models cannot be evaluated at float32 without
-overflowing. If that happens you will get an error asking you to use float64
-outputs for that operation, rather than spectra silently full of ``inf``.
+Finally, some attenuation models overflow when evaluated at float32. In that
+case Synthesizer re-evaluates the (small) attenuation curve at float64 and
+converts the result. Only if the result itself cannot be represented at float32
+will you get an error asking you to use float64 outputs for that operation,
+rather than spectra silently full of ``inf``.

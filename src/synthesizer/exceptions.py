@@ -899,3 +899,28 @@ class CannotHashThat(Exception):
         if self.message:
             return "{0} ".format(self.message)
         return "The object cannot be hashed."
+
+
+class PrecisionOverflow(Exception):
+    """Exception class for values too large for a floating-point precision."""
+
+    def __init__(self, *args):
+        """Initialise the exception with an optional message.
+
+        Args:
+            *args: Optional message to include in the exception.
+        """
+        if args:
+            self.message = args[0]
+        else:
+            self.message = None
+
+    def __str__(self):
+        """Return the string representation of the exception.
+
+        Returns:
+            str: The string representation of the exception.
+        """
+        if self.message:
+            return "{0} ".format(self.message)
+        return "Values are too large for the requested precision."

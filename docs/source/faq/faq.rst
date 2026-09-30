@@ -15,7 +15,12 @@ error such as:
 
 .. code-block:: text
 
-    TypeError: ages must share the same floating-point dtype as masses
+    TypeError: These arrays are used together and must all have the same
+    precision (all float32 or all float64), but they are mixed:
+        initial_masses: float64
+        log10ages: float32
+        log10metallicities: float32
+    ...
 
 Choose one dtype when loading or constructing the collection. When attaching
 units, use ``unyt_array`` to preserve that dtype; multiplying by some physical

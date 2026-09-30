@@ -29,6 +29,7 @@ from synthesizer.extensions.reductions import (
 from synthesizer.grid import Template
 from synthesizer.units import get_quantity_unit
 from synthesizer.utils.operation_timers import timed, timer
+from synthesizer.utils.precision import resolve_out_dtype
 from synthesizer.utils.util_funcs import as_contiguous
 
 
@@ -422,6 +423,7 @@ class Generation:
         lam,
         emitter,
         nthreads=1,
+        out_dtype=None,
     ):
         """Generate the spectra for a given model.
 
@@ -440,6 +442,10 @@ class Generation:
                 The emitter to generate the spectra for.
             nthreads (int):
                 The number of threads available for particle integration.
+            out_dtype (np.dtype):
+                The dtype of the generated spectra, passed to the generator
+                which produces its output at this precision. Defaults to the
+                global default output dtype.
 
         Returns:
             dict:
@@ -448,18 +454,22 @@ class Generation:
         # Unpack what we need for dust emission
         generator = this_model.generator
         per_particle = this_model.per_particle
+        out_dtype = resolve_out_dtype(out_dtype)
 
         # If we have an empty emitter we can just return zeros (only applicable
         # when nparticles exists in the emitter)
         if getattr(emitter, "nparticles", 1) == 0:
             spectra[this_model.label] = Sed(
                 lam,
-                np.zeros(lam.size) * erg / s / Hz,
+                np.zeros(lam.size, dtype=out_dtype) * erg / s / Hz,
             )
             if per_particle:
                 particle_spectra[this_model.label] = Sed(
                     lam,
-                    np.zeros((emitter.nparticles, lam.size)) * erg / s / Hz,
+                    np.zeros((emitter.nparticles, lam.size), dtype=out_dtype)
+                    * erg
+                    / s
+                    / Hz,
                 )
             return spectra, particle_spectra
 
@@ -467,7 +477,10 @@ class Generation:
         if isinstance(generator, Template):
             # If we have a template we need to generate the spectra
             # for each model
-            sed = generator.get_spectra(emitter.bolometric_luminosity)
+            sed = generator.get_spectra(
+                emitter.bolometric_luminosity,
+                out_dtype=out_dtype,
+            )
         else:
             # Generate the spectra
             sed = generator._generate_spectra(
@@ -475,6 +488,7 @@ class Generation:
                 emitter,
                 this_model,
                 particle_spectra if per_particle else spectra,
+                out_dtype=out_dtype,
             )
 
         # Cache the model on the emitter
@@ -502,6 +516,7 @@ class Generation:
         spectra,
         particle_spectra,
         nthreads=1,
+        out_dtype=None,
     ):
         """Generate the lines for a given model.
 
@@ -530,6 +545,10 @@ class Generation:
                 scaling.
             nthreads (int):
                 The number of threads available for the particle reduction.
+            out_dtype (np.dtype):
+                The dtype of the generated lines, passed to the generator
+                which produces its output at this precision. Defaults to the
+                global default output dtype.
 
         Returns:
             dict:
@@ -537,13 +556,14 @@ class Generation:
         """
         generator = this_model.generator
         per_particle = this_model.per_particle
+        out_dtype = resolve_out_dtype(out_dtype)
 
         # If the emitter is empty we can just return zeros. This is only
         # applicable when nparticles exists in the emitter
         if getattr(emitter, "nparticles", 1) == 0:
             # Create the zeroed luminosity and continuum arrays
-            lums = np.zeros((0, len(lams))) * erg / s
-            conts = np.zeros((0, len(lams))) * erg / s / Hz
+            lums = np.zeros((0, len(lams)), dtype=out_dtype) * erg / s
+            conts = np.zeros((0, len(lams)), dtype=out_dtype) * erg / s / Hz
 
             zeroed_lines = LineCollection(
                 line_ids=line_ids,
@@ -564,13 +584,18 @@ class Generation:
         if isinstance(generator, Template):
             # If we have a template we need to generate the spectra
             # for each model
-            spectra = generator.get_spectra(emitter.bolometric_luminosity)
+            spectra = generator.get_spectra(
+                emitter.bolometric_luminosity,
+                out_dtype=out_dtype,
+            )
             out_lines = LineCollection(
                 line_ids=line_ids,
                 lam=lams,
-                lum=np.zeros((emitter.nparticles, len(lams))) * erg / s
+                lum=np.zeros((emitter.nparticles, len(lams)), dtype=out_dtype)
+                * erg
+                / s
                 if per_particle
-                else np.zeros(len(lams)) * erg / s,
+                else np.zeros(len(lams), dtype=out_dtype) * erg / s,
                 cont=spectra.get_lnu_at_lam(lams),
             )
         else:
@@ -582,6 +607,7 @@ class Generation:
                 this_model,
                 particle_lines if per_particle else lines,
                 particle_spectra if per_particle else spectra,
+                out_dtype=out_dtype,
             )
 
         # Cache the model on the emitter
@@ -893,7 +919,7 @@ class Combination:
             if nthreads == -1:
                 nthreads = os.cpu_count() or 1
 
-            out_lnu = combine_spectra_2d(arrays, nthreads)
+            out_lnu = combine_spectra_2d(arrays, nthreads, labels)
             out_spec = Sed(
                 emission_model.lam,
                 lnu=unyt_array(out_lnu, erg / s / Hz, bypass_validation=True),

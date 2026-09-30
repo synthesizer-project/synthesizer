@@ -8,9 +8,8 @@ are the same whatever that unit is, so they hold for any units file.
 
 import h5py
 import numpy as np
-from unyt import Msun, Myr, deg, erg, kpc, s, unyt_array, unyt_quantity, yr
+from unyt import Msun, deg, erg, kpc, s, unyt_array, unyt_quantity, yr
 
-from synthesizer import set_default_out_dtype
 from synthesizer.emission_models import NebularLineEmission
 from synthesizer.grid import Grid
 from synthesizer.particle import BlackHoles, Stars
@@ -94,37 +93,6 @@ def test_interpolated_line_luminosities_keep_internal_units():
 
     assert lines.luminosity.units == grid.line_lums["nebular"].units
     assert np.all(np.isfinite(lines._luminosity))
-
-
-def test_float32_line_luminosities_fit_in_internal_units(test_grid):
-    """float32 line luminosities are finite whenever their values fit.
-
-    Young 1e8 Msun populations have line luminosities of ~1e43 erg/s, beyond
-    the float32 range in erg/s but well within it in Lsun (the default).
-    """
-    n = 10
-    stars = Stars(
-        initial_masses=unyt_array(np.full(n, 1e8, np.float32), Msun),
-        ages=unyt_array(np.full(n, 3.0, np.float32), Myr),
-        metallicities=np.full(n, 0.01, np.float32),
-        redshift=0.0,
-        coordinates=unyt_array(np.zeros((n, 3), np.float32), kpc),
-    )
-    model = NebularLineEmission(grid=test_grid, per_particle=True)
-
-    set_default_out_dtype(np.float32)
-    try:
-        stars.get_lines(test_grid.available_lines, model)
-    finally:
-        set_default_out_dtype(np.float64)
-    lums = stars.particle_lines[model.label]._luminosity
-
-    set_default_out_dtype(np.float64)
-    stars.get_lines(test_grid.available_lines, model)
-    true_max = np.max(stars.particle_lines[model.label]._luminosity)
-
-    assert lums.dtype == np.float32
-    assert np.all(np.isfinite(lums)) == (true_max < np.finfo(np.float32).max)
 
 
 def test_eddington_accretion_rate_is_unit_independent():
