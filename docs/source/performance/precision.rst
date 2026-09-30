@@ -95,7 +95,9 @@ erg/s/Hz) and fluxes fit in float32 and keep their cgs units.
 Grids are converted to these internal units when they are loaded, so this
 makes no difference to the results: only the units of the returned
 luminosities (and ``llam``) change, and they can be converted with
-``.to("erg/s")`` (or ``.to("erg/s/Angstrom")``) as usual.
+``.to("erg/s")`` (or ``.to("erg/s/Angstrom")``) as usual. Though note that 
+conversions to these units may overflow at float32, so you may need to use 
+float64 outputs to use these units.
 
 Note: If your units file predates these changes and still uses the old
 ``erg / s`` and ``erg / s / Angstrom`` defaults, it is updated automatically
