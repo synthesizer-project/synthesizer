@@ -19,6 +19,7 @@ from unyt import (
 )
 
 from synthesizer.conversions import standard_to_vacuum
+from synthesizer.emission_models import IncidentEmission
 from synthesizer.emission_models.attenuation import PowerLaw
 from synthesizer.emission_models.transformers.dust_attenuation import (
     AttenuationLaw,
@@ -1681,6 +1682,22 @@ class TestLineCollectionGenerationSubsets:
             "The continuum is not an array of length 5."
         )
 
+    def test_particle_subset_is_contiguous(
+        self,
+        random_part_stars,
+        test_grid,
+    ):
+        """Test a subset of per-particle lines gives contiguous arrays."""
+        model = IncidentEmission(grid=test_grid, per_particle=True)
+        random_part_stars.get_lines(test_grid.available_lines[:3], model)
+        lines = random_part_stars.particle_lines[model.label]
+
+        assert lines._luminosity.flags.c_contiguous
+        assert lines._continuum.flags.c_contiguous
+
+        # The extensions need contiguous arrays
+        lines.scale(np.ones(random_part_stars.nparticles))
+
 
 if __name__ == "__main__":
     pytest.main(["-xvs", __file__])
@@ -1731,3 +1748,50 @@ def test_generic_attenuation_does_not_mutate_source(mask):
     np.testing.assert_array_equal(lines._luminosity, luminosity)
     np.testing.assert_array_equal(lines._continuum, continuum)
     assert np.all(attenuated._luminosity[0] < luminosity[0])
+
+
+def test_blending_and_sed_keep_line_precision():
+    """Blended lines and Seds made from lines keep the lines' precision."""
+    lines = LineCollection(
+        line_ids=["A 1000", "B 1001", "C 2000"],
+        lam=np.array([1000.0, 1001.0, 2000.0], np.float32) * angstrom,
+        lum=np.array([1e30, 2e30, 3e30], np.float32) * erg / s,
+        cont=np.array([1e20, 1e20, 1e20], np.float32) * erg / s / Hz,
+    )
+
+    blended = lines.get_blended_lines(
+        np.array([900.0, 1500.0, 2500.0]) * angstrom,
+    )
+    assert blended._lam.dtype == np.float32
+    assert blended._luminosity.dtype == np.float32
+    assert blended._continuum.dtype == np.float32
+    np.testing.assert_allclose(
+        blended.luminosity.to_value(erg / s),
+        [3e30, 3e30],
+        rtol=1e-6,
+    )
+
+    sed = lines.create_sed(np.linspace(500.0, 3000.0, 100) * angstrom)
+    assert sed._lnu.dtype == np.float32
+
+
+def test_blending_and_sed_of_integer_lines():
+    """Integer lines are blended and turned into Seds at float64."""
+    lines = LineCollection(
+        line_ids=["A 5711", "B 5713"],
+        lam=np.array([5711, 5713]) * angstrom,
+        lum=np.array([1, 2]) * erg / s,
+        cont=np.array([1, 1]) * erg / s / Hz,
+    )
+
+    # Blending the integer lines gives float64 means and sums
+    blended = lines.get_blended_lines(np.array([5000.0, 6000.0]) * angstrom)
+    assert blended._lam.dtype == np.float64
+    assert blended._luminosity.dtype == np.float64
+    np.testing.assert_allclose(blended.lam.to_value(angstrom), [5712.0])
+    np.testing.assert_allclose(blended.luminosity.to_value(erg / s), [3.0])
+
+    # The Sed isn't truncated to zero by an integer array
+    sed = lines.create_sed(np.linspace(5000.0, 6000.0, 101) * angstrom)
+    assert sed._lnu.dtype == np.float64
+    assert np.any(sed._lnu > 0)

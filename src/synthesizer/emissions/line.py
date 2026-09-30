@@ -85,7 +85,7 @@ from synthesizer.units import (
 )
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
-from synthesizer.utils.precision import resolve_out_dtype
+from synthesizer.utils.precision import get_float_dtype, resolve_out_dtype
 from synthesizer.utils.util_funcs import get_attr_unit_conversion
 
 
@@ -636,14 +636,15 @@ class LineCollection:
                     obslam.extend(single_line.obslam)
                     cont_flux.extend(single_line.continuum_flux)
 
-            # Convert to arrays
+            # Convert to arrays (transposing back to (..., nlines) and making
+            # the result contiguous for the extensions)
             line_ids = np.array(line_ids)
             lam = np.array(lam)
-            lum = np.array(lum).T
-            cont = np.array(cont).T
-            flux = np.array(flux).T
-            obslam = np.array(obslam).T
-            cont_flux = np.array(cont_flux).T
+            lum = np.ascontiguousarray(np.array(lum).T)
+            cont = np.ascontiguousarray(np.array(cont).T)
+            flux = np.ascontiguousarray(np.array(flux).T)
+            obslam = np.ascontiguousarray(np.array(obslam).T)
+            cont_flux = np.ascontiguousarray(np.array(cont_flux).T)
 
             # Create the new line (converting to unyt_arrays)
             new_line = LineCollection(
@@ -1699,12 +1700,21 @@ class LineCollection:
         new_shape = list(self.shape)
         new_shape[-1] = len(wavelength_bins) - 1
 
-        # Create the arrays we'll need to store the blended lines
+        # Create the arrays we'll need to store the blended lines (at the
+        # precision of the lines being blended, or float64 if they aren't
+        # floating point)
         blended_lines_counts = np.zeros(len(wavelength_bins) - 1, dtype=int)
         blended_line_ids = [[] for _ in range(len(wavelength_bins) - 1)]
-        blended_line_lams = np.zeros(len(wavelength_bins) - 1, dtype=float)
-        blended_line_lums = np.zeros(new_shape, dtype=float)
-        blended_line_conts = np.zeros(new_shape, dtype=float)
+        blended_line_lams = np.zeros(
+            len(wavelength_bins) - 1,
+            dtype=get_float_dtype(self._lam.dtype),
+        )
+        blended_line_lums = np.zeros(
+            new_shape, dtype=get_float_dtype(self._luminosity.dtype)
+        )
+        blended_line_conts = np.zeros(
+            new_shape, dtype=get_float_dtype(self._continuum.dtype)
+        )
 
         # Loop bin indices and combine the lines into the blended_lines array
         for i, bin_ind in enumerate(bin_inds):
@@ -1770,8 +1780,10 @@ class LineCollection:
                 synthesizer.sed.Sed object.
 
         """
-        # Create empty spectra with correct units
-        sed_lnu = np.zeros(len(sed_lam)) * erg / s / Hz
+        # Create empty spectra with correct units (at the precision of the
+        # line luminosities, or float64 if they aren't floating point)
+        dtype = get_float_dtype(self._luminosity.dtype)
+        sed_lnu = np.zeros(len(sed_lam), dtype=dtype) * erg / s / Hz
 
         # Loop over the vacuum wavelengths and luminosities in the collection
         # and add them to the spectra
