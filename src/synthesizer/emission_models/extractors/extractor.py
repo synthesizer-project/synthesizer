@@ -14,6 +14,7 @@ to extract the emissions.
 """
 
 import os
+import weakref
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -36,6 +37,34 @@ from synthesizer.utils.precision import (
     resolve_out_dtype,
     verify_out_precision,
 )
+
+# The largest absolute value of each grid array used in the overflow bound
+# (see Extractor._cannot_overflow), keyed by array identity. Extractors are
+# created per extraction, so this outlives them; weak references let old
+# grids be freed.
+_grid_abs_max = {}
+
+
+def _get_grid_abs_max(grid):
+    """Get the largest absolute value in a grid array, caching it.
+
+    NOTE: Modifying a grid array in place after its first use is not reflected
+    here. Grid methods replace their arrays, which gives them a fresh entry.
+
+    Args:
+        grid (np.ndarray/unyt_array):
+            The grid array.
+
+    Returns:
+        float:
+            The largest absolute value in the array.
+    """
+    cached = _grid_abs_max.get(id(grid))
+    if cached is not None and cached[0]() is grid:
+        return cached[1]
+    value = float(np.max(np.abs(getattr(grid, "ndview", grid))))
+    _grid_abs_max[id(grid)] = (weakref.ref(grid), value)
+    return value
 
 
 class Extractor(ABC):
@@ -273,6 +302,91 @@ class Extractor(ABC):
                 " the grid axes.",
             )
 
+    def _cannot_overflow(self, dtype, emitter, model, grids):
+        """Check whether extracted emission is provably finite at dtype.
+
+        Every output (per-particle or integrated) is a sum of grid values
+        times non-negative weights whose grid assignment fractions sum to at
+        most one per particle. No output can therefore exceed the largest
+        absolute grid value times the total weight. If that bound (with a
+        factor of 2 margin for rounding) fits in dtype, nothing can overflow
+        and the caller can skip scanning the outputs for inf.
+
+        Args:
+            dtype (np.dtype):
+                The output dtype.
+            emitter (Stars/BlackHoles/Gas):
+                The emitter the emission is extracted for.
+            model (EmissionModel):
+                The emission model defining the extraction.
+            grids (tuple):
+                The grid arrays being extracted from.
+
+        Returns:
+            bool:
+                True if the outputs cannot overflow at dtype.
+        """
+        # Get the total weight (the same weights the extraction uses)
+        if self._weight_var in [None, "None"]:
+            total_weight = float(getattr(emitter, "nparticles", 1))
+        else:
+            weight = get_param(self._weight_var, model, None, emitter)
+            weight = getattr(weight, "ndview", weight)
+            total_weight = float(np.sum(np.abs(weight), dtype=np.float64))
+
+        # Get the largest absolute grid value
+        grid_max = max(_get_grid_abs_max(grid) for grid in grids)
+
+        # Comparisons with a NaN or inf bound are False, so those fall back
+        # to scanning the outputs
+        return 2.0 * grid_max * total_weight < float(np.finfo(dtype).max)
+
+    def _spectra_cannot_overflow(self, dtype, emitter, model, **kwargs):
+        """Check whether extracted spectra are provably finite at dtype.
+
+        Args:
+            dtype (np.dtype):
+                The output dtype.
+            emitter (Stars/BlackHoles/Gas):
+                The emitter the emission is extracted for.
+            model (EmissionModel):
+                The emission model defining the extraction.
+            **kwargs (dict):
+                The extraction's other arguments (unused).
+
+        Returns:
+            bool:
+                True if the spectra cannot overflow at dtype.
+        """
+        return self._cannot_overflow(
+            dtype, emitter, model, (self._spectra_grid,)
+        )
+
+    def _lines_cannot_overflow(self, dtype, emitter, model, **kwargs):
+        """Check whether extracted lines are provably finite at dtype.
+
+        Args:
+            dtype (np.dtype):
+                The output dtype.
+            emitter (Stars/BlackHoles/Gas):
+                The emitter the emission is extracted for.
+            model (EmissionModel):
+                The emission model defining the extraction.
+            **kwargs (dict):
+                The extraction's other arguments (unused).
+
+        Returns:
+            bool:
+                True if the line luminosities and continua cannot overflow at
+                dtype.
+        """
+        return self._cannot_overflow(
+            dtype,
+            emitter,
+            model,
+            (self._line_lum_grid, self._line_cont_grid),
+        )
+
     @abstractmethod
     def generate_lnu(self, *args, **kwargs):
         """Extract the spectra from the grid for the emitter."""
@@ -295,7 +409,7 @@ class IntegratedParticleExtractor(Extractor):
     """
 
     @timed("IntegratedParticleExtractor.generate_lnu")
-    @verify_out_precision()
+    @verify_out_precision(cannot_overflow=Extractor._spectra_cannot_overflow)
     def generate_lnu(
         self,
         emitter,
@@ -412,7 +526,7 @@ class IntegratedParticleExtractor(Extractor):
         )
 
     @timed("IntegratedParticleExtractor.generate_line")
-    @verify_out_precision()
+    @verify_out_precision(cannot_overflow=Extractor._lines_cannot_overflow)
     def generate_line(
         self,
         emitter,
@@ -862,7 +976,7 @@ class ParticleExtractor(Extractor):
     """
 
     @timed("ParticleExtractor.generate_lnu")
-    @verify_out_precision()
+    @verify_out_precision(cannot_overflow=Extractor._spectra_cannot_overflow)
     def generate_lnu(
         self,
         emitter,
@@ -1039,7 +1153,7 @@ class ParticleExtractor(Extractor):
         return part_sed, integrated_sed
 
     @timed("ParticleExtractor.generate_line")
-    @verify_out_precision()
+    @verify_out_precision(cannot_overflow=Extractor._lines_cannot_overflow)
     def generate_line(
         self,
         emitter,

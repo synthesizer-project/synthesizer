@@ -11,8 +11,9 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Msun, Myr, kpc
+from unyt import Msun, Myr
 
+from synthesizer import set_default_out_dtype
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
@@ -59,9 +60,7 @@ def profile_wavelength_scaling(
     times = {
         "spectra": {
             "Particle": [],
-            "Particle (Doppler)": [],
             "Integrated": [],
-            "Integrated (Doppler)": [],
         },
     }
 
@@ -85,9 +84,6 @@ def profile_wavelength_scaling(
         n_particles,
         redshift=1,
     )
-    stars.velocities = (
-        np.random.randn(n_particles, 3) * 100 * (kpc / Myr)
-    )  # Needs velocities for shift
 
     for n_lam in n_lambdas:
         print(f"Profiling n_lam={n_lam}...")
@@ -107,25 +103,14 @@ def profile_wavelength_scaling(
 
         # 2. Setup Models with this new grid
         model_part = IncidentEmission(grid, per_particle=True, label="part")
-        # Particle, With Shift
-        model_part_shift = IncidentEmission(
-            grid, per_particle=True, label="part_shift", vel_shift=True
-        )
-        # Integrated, No Shift
         model_int = IncidentEmission(grid, per_particle=False, label="int")
-        # Integrated, With Shift
-        model_int_shift = IncidentEmission(
-            grid, per_particle=False, label="int_shift", vel_shift=True
-        )
 
         # 3. Profile
 
         # Local storage for averages
         iter_times = {
             "Particle": [],
-            "Particle (Doppler)": [],
             "Integrated": [],
-            "Integrated (Doppler)": [],
         }
 
         for i in range(n_averages):
@@ -137,25 +122,10 @@ def profile_wavelength_scaling(
             stars.get_spectra(model_part, nthreads=nthreads)
             iter_times["Particle"].append(time.perf_counter() - start)
 
-            # Particle Shift
-            start = time.perf_counter()
-            stars.get_spectra(model_part_shift, nthreads=nthreads)
-            iter_times["Particle (Doppler)"].append(
-                time.perf_counter() - start
-            )
-
             # Integrated
             start = time.perf_counter()
             stars.get_spectra(model_int, nthreads=nthreads)
             iter_times["Integrated"].append(time.perf_counter() - start)
-
-            # Integrated Shift
-            start = time.perf_counter()
-            stars.get_spectra(model_int_shift, nthreads=nthreads)
-            iter_times["Integrated (Doppler)"].append(
-                time.perf_counter() - start
-            )
-
         # Store averages
         for key in iter_times:
             times["spectra"][key].append(np.mean(iter_times[key]))
@@ -163,9 +133,7 @@ def profile_wavelength_scaling(
         # Force garbage collection
         del grid
         del model_part
-        del model_part_shift
         del model_int
-        del model_int_shift
         gc.collect()
 
     # --- Plotting ---
@@ -226,7 +194,17 @@ if __name__ == "__main__":
         default="float64",
         help="Precision to load the grid arrays at.",
     )
+    parser.add_argument(
+        "--out-dtype",
+        choices=("float32", "float64"),
+        default=None,
+        help="Requested output precision. Defaults to the global default.",
+    )
     args = parser.parse_args()
+
+    # Set the global output precision if one was requested
+    if args.out_dtype is not None:
+        set_default_out_dtype(np.dtype(args.out_dtype))
 
     profile_wavelength_scaling(
         nthreads=args.nthreads,

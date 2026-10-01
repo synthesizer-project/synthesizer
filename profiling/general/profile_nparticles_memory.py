@@ -12,8 +12,9 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Msun, Myr, kpc, unyt_array
+from unyt import Msun, Myr, unyt_array
 
+from synthesizer import set_default_out_dtype
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
@@ -92,18 +93,10 @@ def profile_nparticles_memory(
     n_lam = grid.nlam
 
     # --- Setup Models ---
-    # Particle, No Shift
+    # Particle
     model_part = IncidentEmission(grid, per_particle=True, label="part")
-    # Particle, With Shift
-    model_part_shift = IncidentEmission(
-        grid, per_particle=True, label="part_shift", vel_shift=True
-    )
-    # Integrated, No Shift
+    # Integrated
     model_int = IncidentEmission(grid, per_particle=False, label="int")
-    # Integrated, With Shift
-    model_int_shift = IncidentEmission(
-        grid, per_particle=False, label="int_shift", vel_shift=True
-    )
 
     # --- Setup Filters ---
     # Get cached instrument from pipeline_test_data (no network access)
@@ -127,9 +120,7 @@ def profile_nparticles_memory(
     mems = {
         "spectra": {
             "Particle": [],
-            "Particle (Doppler)": [],
             "Integrated": [],
-            "Integrated (Doppler)": [],
         },
         "photometry": {
             "Particle (3 filters)": [],
@@ -156,9 +147,7 @@ def profile_nparticles_memory(
         iter_mems = {
             "spectra": {
                 "Particle": [],
-                "Particle (Doppler)": [],
                 "Integrated": [],
-                "Integrated (Doppler)": [],
             },
             "photometry": {
                 "Particle (3 filters)": [],
@@ -178,8 +167,6 @@ def profile_nparticles_memory(
                 n,
                 redshift=1,
             )
-            stars.velocities = np.random.randn(n, 3) * 100 * (kpc / Myr)
-
             # Particle
             stars.spectra = {}
             stars.particle_spectra = {}
@@ -192,18 +179,6 @@ def profile_nparticles_memory(
             iter_mems["spectra"]["Particle"].append(mem)
             del stars.particle_spectra["part"]
 
-            # Particle Shift
-            stars.spectra = {}
-            stars.particle_spectra = {}
-            mem = run_and_measure_memory(
-                stars.get_spectra,
-                model_part_shift,
-                obj_to_measure=stars.particle_spectra,
-                nthreads=nthreads,
-            )
-            iter_mems["spectra"]["Particle (Doppler)"].append(mem)
-            del stars.particle_spectra["part_shift"]
-
             # Integrated
             stars.spectra = {}
             mem = run_and_measure_memory(
@@ -214,16 +189,6 @@ def profile_nparticles_memory(
             )
             iter_mems["spectra"]["Integrated"].append(mem)
             del stars.spectra["int"]
-
-            # Integrated Shift
-            stars.spectra = {}
-            mem = run_and_measure_memory(
-                stars.get_spectra,
-                model_int_shift,
-                obj_to_measure=stars.spectra,
-                nthreads=nthreads,
-            )
-            iter_mems["spectra"]["Integrated (Doppler)"].append(mem)
 
             # Re-generate necessary spectra for photometry
             stars.get_spectra(model_part, nthreads=nthreads)
@@ -332,7 +297,17 @@ if __name__ == "__main__":
         default="float64",
         help="Precision to load the grid arrays at.",
     )
+    parser.add_argument(
+        "--out-dtype",
+        choices=("float32", "float64"),
+        default=None,
+        help="Requested output precision. Defaults to the global default.",
+    )
     args = parser.parse_args()
+
+    # Set the global output precision if one was requested
+    if args.out_dtype is not None:
+        set_default_out_dtype(np.dtype(args.out_dtype))
 
     profile_nparticles_memory(
         nthreads=args.nthreads,

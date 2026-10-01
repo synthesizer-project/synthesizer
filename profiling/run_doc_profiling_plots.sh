@@ -278,7 +278,8 @@ echo "========================================"
 # Run the general profiling scripts using make_all_plots.py
 echo "Running particle and wavelength scaling profiling..."
 python profiling/general/make_all_plots.py --nthreads $SCALING_THREADS --n_averages 3 --output_dir "$FINAL_PLOTS_DIR" \
-	--grid-precision $GRID_PRECISION
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION
 
 echo ""
 echo "========================================"
@@ -300,7 +301,8 @@ python profiling/scaling/strong_scaling_int_spectra.py \
 	--nstars 1000000 \
 	--average_over $STRONG_AVERAGES \
 	--low_thresh 0.01 \
-	--grid-precision $GRID_PRECISION
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION
 
 echo "Running particle spectra strong scaling..."
 python profiling/scaling/strong_scaling_part_spectra.py \
@@ -310,7 +312,8 @@ python profiling/scaling/strong_scaling_part_spectra.py \
 	--nstars 10000 \
 	--average_over $STRONG_AVERAGES \
 	--low_thresh 0.01 \
-	--grid-precision $GRID_PRECISION
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION
 
 echo "Running LOS column density strong scaling..."
 python profiling/scaling/strong_scaling_los_col_den.py \
@@ -321,7 +324,8 @@ python profiling/scaling/strong_scaling_los_col_den.py \
 	--ngas 1000000 \
 	--average_over $STRONG_AVERAGES \
 	--low_thresh 0.01 \
-	--grid-precision $GRID_PRECISION
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION
 
 echo "Running imaging strong scaling..."
 python profiling/scaling/strong_scaling_images.py \
@@ -331,7 +335,8 @@ python profiling/scaling/strong_scaling_images.py \
 	--nstars 10000 \
 	--average_over $STRONG_AVERAGES \
 	--low_thresh 0.01 \
-	--grid-precision $GRID_PRECISION
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION
 
 cp "$TIMING_ANALYSIS_DIR/timing_comparison.png" \
 	"$FINAL_PLOTS_DIR/pipeline_timing_scaling.png"
@@ -354,11 +359,11 @@ echo "    - pipeline_timing_scaling.png"
 echo "    - pipeline_memory_normalized.png"
 echo "    - pipeline_memory_scaling.png"
 echo "  Particle/Wavelength Scaling ($SCALING_THREADS threads):"
-echo "    - nparticles_performance_*.png (6 plots)"
+echo "    - nparticles_performance_*.png (5 plots)"
 echo "    - wavelength_performance_*.png (2 plots)"
 echo "  Strong Scaling (up to $STRONG_THREADS threads, $STRONG_AVERAGES averages):"
 echo "    - exclusive_docs_int_spectra_cic_totThreads${STRONG_THREADS}_nstars1000000.png"
-echo "    - exclusive_docs_part_spectra_cic_totThreads${STRONG_THREADS}_nstars10000.png"
+echo "    - exclusive_docs_part_spectra_cic_totThreads${STRONG_THREADS}_nstars10000_${GRID_PRECISION}.png"
 echo "    - exclusive_docs_los_column_density_totThreads${STRONG_THREADS}_nstars1000000_ngas1000000.png"
 echo "    - exclusive_docs_images_totThreads${STRONG_THREADS}_nstars10000.png"
 echo ""

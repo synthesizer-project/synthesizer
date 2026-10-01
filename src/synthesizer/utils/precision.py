@@ -24,12 +24,14 @@ the rules on mixing input precisions.
 
 import functools
 import inspect
+import os
 import warnings
 
 import numpy as np
 from unyt import unyt_array
 
 from synthesizer import exceptions
+from synthesizer.extensions.reductions import any_inf
 from synthesizer.synth_warnings import InternalPrecisionWarning
 
 # The allowed floating point dtypes for outputs.
@@ -252,7 +254,7 @@ _OUTPUT_ARRAY_ATTRS = (
 )
 
 
-def _convert_output_dtype(value, dtype, where):
+def _convert_output_dtype(value, dtype, where, nthreads=1, check_inf=True):
     """Convert an output to the out_dtype if needed, checking for overflow.
 
     Args:
@@ -263,6 +265,11 @@ def _convert_output_dtype(value, dtype, where):
             The requested output dtype.
         where (str):
             The name of the function that produced the output.
+        nthreads (int):
+            The number of threads to use for the overflow check.
+        check_inf (bool):
+            Whether to scan reduced precision outputs for inf. False when the
+            outputs are already known to be finite.
 
     Returns:
         object:
@@ -271,12 +278,13 @@ def _convert_output_dtype(value, dtype, where):
     # Containers: verify each entry
     if isinstance(value, dict):
         return {
-            key: _convert_output_dtype(v, dtype, where)
+            key: _convert_output_dtype(v, dtype, where, nthreads, check_inf)
             for key, v in value.items()
         }
     if isinstance(value, (list, tuple)):
         return type(value)(
-            _convert_output_dtype(v, dtype, where) for v in value
+            _convert_output_dtype(v, dtype, where, nthreads, check_inf)
+            for v in value
         )
 
     # Synthesizer output objects: verify their arrays in place
@@ -287,7 +295,9 @@ def _convert_output_dtype(value, dtype, where):
                 setattr(
                     value,
                     attr,
-                    _convert_output_dtype(array, dtype, f"{where} ({attr})"),
+                    _convert_output_dtype(
+                        array, dtype, f"{where} ({attr})", nthreads, check_inf
+                    ),
                 )
         return value
 
@@ -307,8 +317,18 @@ def _convert_output_dtype(value, dtype, where):
         )
         value = convert_array_dtype(value, dtype, name=f"{where} output")
 
-    # Reduced precision outputs can overflow to inf when the values don't fit
-    if dtype.itemsize < 8 and np.isinf(value).any():
+    # Reduced precision outputs can overflow to inf when the values don't fit.
+    # The threaded C check avoids np.isinf's full size boolean temporary and
+    # single threaded scan, which cost as much as computing large outputs.
+    if (
+        check_inf
+        and dtype.itemsize < 8
+        and (
+            any_inf(value, nthreads)
+            if value.flags["C_CONTIGUOUS"]
+            else np.isinf(value).any()
+        )
+    ):
         raise exceptions.PrecisionOverflow(
             f"{where} produced values too large to be stored at {dtype}, "
             "which overflowed to inf. Use float64 outputs "
@@ -319,7 +339,7 @@ def _convert_output_dtype(value, dtype, where):
     return value
 
 
-def verify_out_precision():
+def verify_out_precision(cannot_overflow=None):
     """Verify a function's outputs respect its out_dtype argument.
 
     Decorates any function or method taking an ``out_dtype`` argument. The
@@ -334,6 +354,12 @@ def verify_out_precision():
 
     Outputs can be arrays, Synthesizer output objects (Sed, LineCollection,
     PhotometryCollection) or dicts, lists and tuples of these.
+
+    Args:
+        cannot_overflow (callable, optional):
+            Called with the resolved dtype and the function's arguments (as
+            keywords) before the inf scan. Returning True means the outputs
+            are provably finite at that dtype, so the scan is skipped.
 
     Returns:
         callable:
@@ -353,7 +379,20 @@ def verify_out_precision():
             result = func(*args, **kwargs)
             bound = signature.bind(*args, **kwargs)
             dtype = resolve_out_dtype(bound.arguments.get("out_dtype"))
-            return _convert_output_dtype(result, dtype, func.__qualname__)
+
+            # Check with the threads the function itself was given
+            nthreads = bound.arguments.get("nthreads") or 1
+            if nthreads == -1:
+                nthreads = os.cpu_count()
+
+            # Skip the inf scan where the outputs are provably finite
+            check_inf = dtype.itemsize < 8 and not (
+                cannot_overflow is not None
+                and cannot_overflow(dtype=dtype, **bound.arguments)
+            )
+            return _convert_output_dtype(
+                result, dtype, func.__qualname__, nthreads, check_inf
+            )
 
         return wrapped
 

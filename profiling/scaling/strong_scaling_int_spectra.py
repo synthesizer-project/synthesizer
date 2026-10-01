@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Msun, Myr
 
+from synthesizer import set_default_out_dtype
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
@@ -83,13 +84,20 @@ def int_spectra_strong_scaling(
         f"totThreads{max_threads}_nstars{nstars}.png"
     )
 
+    # Clear the cached grid weights before every call, otherwise each timed
+    # call would reuse the weights from the serial call above and skip the
+    # per-particle work entirely
+    def get_spectra(**kwargs):
+        stars.clear_weights()
+        stars.get_spectra(**kwargs)
+
     # Run the scaling test
     run_scaling_test(
         max_threads,
         average_over,
         log_outpath,
         plot_outpath,
-        stars.get_spectra,
+        get_spectra,
         {
             "emission_model": model,
             "grid_assignment_method": gam,
@@ -169,7 +177,17 @@ if __name__ == "__main__":
         "read traffic in the extraction kernels.",
     )
 
+    args.add_argument(
+        "--out-dtype",
+        choices=("float32", "float64"),
+        default=None,
+        help="Requested output precision. Defaults to the global default.",
+    )
     args = args.parse_args()
+
+    # Set the global output precision if one was requested
+    if args.out_dtype is not None:
+        set_default_out_dtype(np.dtype(args.out_dtype))
 
     # Check for atomic timing
     from synthesizer import check_atomic_timing

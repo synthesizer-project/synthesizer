@@ -78,6 +78,27 @@ holds. On a two-socket EPYC 7H12 node (eight domains of sixteen cores) it is
 worth 1.9x at 32 threads and 2.2x at 64 on particle spectra extraction, and
 3.2x and 5.4x respectively on the flux conversion and scaling kernels.
 
+Idle OpenMP threads
+~~~~~~~~~~~~~~~~~~~
+
+When a parallel region finishes, most OpenMP runtimes keep the worker threads
+spinning for a while so the next region can start without waking them. The
+serial work between regions (Python bookkeeping, tree construction, unit
+handling) then shares the node with every spinning thread, and at high thread
+counts it runs measurably slower than it does on one thread.
+
+If your workload alternates between short parallel kernels and serial Python,
+let the idle threads sleep instead:
+
+.. code-block:: bash
+
+    OMP_WAIT_POLICY=passive python my_script.py
+
+The trade-off is that each parallel region then pays to wake its threads, so
+this helps when the serial gaps dominate and hurts when one parallel kernel
+follows another back to back. It is a runtime setting, so try both on your own
+workload.
+
 Profiling Suite
 ~~~~~~~~~~~~~~~
 

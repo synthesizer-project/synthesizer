@@ -15,7 +15,7 @@ import numpy as np
 from astropy.cosmology import Planck18
 from unyt import Msun, Myr, kpc
 
-from synthesizer import Grid
+from synthesizer import Grid, set_default_out_dtype
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.kernel_functions import Kernel
@@ -224,7 +224,17 @@ if __name__ == "__main__":
         "read traffic in the extraction kernels.",
     )
 
+    args.add_argument(
+        "--out-dtype",
+        choices=("float32", "float64"),
+        default=None,
+        help="Requested output precision. Defaults to the global default.",
+    )
     args = args.parse_args()
+
+    # Set the global output precision if one was requested
+    if args.out_dtype is not None:
+        set_default_out_dtype(np.dtype(args.out_dtype))
 
     # Check for atomic timing
     from synthesizer import check_atomic_timing

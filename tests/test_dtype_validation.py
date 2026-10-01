@@ -670,6 +670,35 @@ class TestVerifyOutPrecision:
         with pytest.raises(exceptions.PrecisionOverflow, match="inf"):
             func(out_dtype=np.float32)
 
+    @pytest.mark.parametrize("strided", [False, True])
+    def test_overflowed_output_raises_threaded(self, strided):
+        """A single -inf is caught threaded and in strided views."""
+
+        @verify_out_precision()
+        def func(nthreads=1, out_dtype=None):
+            arr = np.ones((200, 100), dtype=np.float32)
+            arr[-1, -2] = -np.inf
+            return arr[:, ::2] if strided else arr
+
+        with pytest.raises(exceptions.PrecisionOverflow, match="inf"):
+            func(nthreads=4, out_dtype=np.float32)
+
+    @pytest.mark.parametrize("finite", [False, True])
+    def test_cannot_overflow_skips_scan(self, finite):
+        """The inf scan is skipped only when outputs are provably finite."""
+
+        @verify_out_precision(
+            cannot_overflow=lambda dtype, scale, **kwargs: finite
+        )
+        def func(scale, out_dtype=None):
+            return np.full(3, np.inf, dtype=np.float32)
+
+        if finite:
+            assert np.isinf(func(1.0, out_dtype=np.float32)).all()
+        else:
+            with pytest.raises(exceptions.PrecisionOverflow, match="inf"):
+                func(1.0, out_dtype=np.float32)
+
     def test_checks_output_objects(self):
         """The arrays inside Synthesizer output objects are checked."""
 

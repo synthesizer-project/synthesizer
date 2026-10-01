@@ -19,6 +19,10 @@
 #include "property_funcs.h"
 #include "timers.h"
 
+/* The minimum number of particles in a cell for its subtree to be built as
+ * a separate OpenMP task. Below this the task overhead outweighs the work. */
+#define TREE_TASK_MIN_PARTS 4096
+
 /**
  * @brief Recursively Populates the cell tree until maxdepth is reached.
  *
@@ -28,11 +32,12 @@
  * @param maxdepth The maximum depth of the tree.
  * @param depth The current depth.
  * @param min_count The minimum number of particles in a leaf cell.
+ * @param use_tasks Whether to build large subtrees as OpenMP tasks.
  */
 template <typename Real>
 static void populate_cell_tree_recursive(struct cell<Real> *c, int *ncells,
                                          int maxdepth, int depth,
-                                         int min_count) {
+                                         int min_count, bool use_tasks) {
 
   /* Have we reached the bottom? */
   if (depth > maxdepth) {
@@ -55,6 +60,9 @@ static void populate_cell_tree_recursive(struct cell<Real> *c, int *ncells,
   /* We need to split... get the progeny. */
   c->split = 1;
   c->progeny = new struct cell<Real>[8];
+#ifdef WITH_OPENMP
+#pragma omp atomic
+#endif
   *ncells += 8;
   for (int ip = 0; ip < 8; ip++) {
 
@@ -193,12 +201,23 @@ static void populate_cell_tree_recursive(struct cell<Real> *c, int *ncells,
     /* Square the maximum smoothing length. */
     cp->max_sml_squ = cp->max_sml_squ * cp->max_sml_squ;
 
-    /* Go to the next level */
+    /* Go to the next level, as a task if this subtree is large enough. */
+#ifdef WITH_OPENMP
+#pragma omp task if (use_tasks && cp->part_count >= TREE_TASK_MIN_PARTS)
+#endif
     populate_cell_tree_recursive<Real>(cp, ncells, maxdepth, depth + 1,
-                                       min_count);
+                                       min_count, use_tasks);
+  }
 
-    /* Update the maximum depth. */
-    if (cp->maxdepth > c->maxdepth) {
+  /* Wait for any child tasks before reading their depths. */
+#ifdef WITH_OPENMP
+#pragma omp taskwait
+#endif
+
+  /* Update the maximum depth. */
+  for (int ip = 0; ip < 8; ip++) {
+    struct cell<Real> *cp = &c->progeny[ip];
+    if (cp->part_count > 0 && cp->maxdepth > c->maxdepth) {
       c->maxdepth = cp->maxdepth;
     }
   }
@@ -309,12 +328,13 @@ static void construct_particles(struct particle<Real> *particles,
  * @param tot_cells The total number of cells.
  * @param maxdepth The maximum depth of the tree.
  * @param min_count The minimum number of particles in a leaf cell.
+ * @param nthreads The number of threads to use.
  */
 template <typename Real>
 void construct_cell_tree(const Real *pos, const Real *sml,
                          const Real *surf_den_val, const int npart,
                          struct cell<Real> *root, int ncells, int maxdepth,
-                         int min_count) {
+                         int min_count, int nthreads) {
 
   tic("construct_cell_tree");
 
@@ -335,7 +355,22 @@ void construct_cell_tree(const Real *pos, const Real *sml,
   construct_particles<Real>(parts, pos, sml, surf_den_val, npart, root);
 
   /* And recurse... */
-  populate_cell_tree_recursive<Real>(root, &ncells, maxdepth, 1, min_count);
+#ifdef WITH_OPENMP
+  if (nthreads > 1) {
+    /* One thread starts the recursion and the team picks up its tasks. */
+#pragma omp parallel num_threads(nthreads)
+#pragma omp single
+    populate_cell_tree_recursive<Real>(root, &ncells, maxdepth, 1, min_count,
+                                       true);
+  } else {
+    populate_cell_tree_recursive<Real>(root, &ncells, maxdepth, 1, min_count,
+                                       false);
+  }
+#else
+  (void)nthreads;
+  populate_cell_tree_recursive<Real>(root, &ncells, maxdepth, 1, min_count,
+                                     false);
+#endif
 
 #ifdef WITH_DEBUGGING_CHECKS
   printf("Constructed cell tree with %d cells\n", ncells);
@@ -405,10 +440,11 @@ Real min_projected_dist2(struct cell<Real> *c, Real x, Real y) {
 /* Explicit instantiations for float and double. */
 template void construct_cell_tree<float>(const float *, const float *,
                                          const float *, const int,
-                                         struct cell<float> *, int, int, int);
+                                         struct cell<float> *, int, int, int,
+                                         int);
 template void construct_cell_tree<double>(const double *, const double *,
                                           const double *, const int,
-                                          struct cell<double> *, int, int,
+                                          struct cell<double> *, int, int, int,
                                           int);
 template void cleanup_cell_tree<float>(struct cell<float> *);
 template void cleanup_cell_tree<double>(struct cell<double> *);

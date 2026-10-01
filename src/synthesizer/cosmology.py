@@ -27,6 +27,12 @@ from unyt import Mpc
 
 from synthesizer import exceptions
 
+# NOTE: Constructing an astropy cosmology leaves reference cycles (from unit
+# composition) that pin the calling frames, e.g. a whole galaxy, until the
+# garbage collector runs. Cache misses therefore use the caller's cosmology,
+# stored here by key, rather than reconstructing one.
+_cosmologies = {}
+
 
 def _get_cosmo_key(cosmo):
     """Create a hashable key for a cosmology object.
@@ -159,7 +165,9 @@ def _cached_luminosity_distance(cosmo_key, redshift):
     Returns:
         float: The luminosity distance value in Mpc.
     """
-    cosmo = _reconstruct_cosmology(cosmo_key)
+    cosmo = _cosmologies.get(cosmo_key)
+    if cosmo is None:
+        cosmo = _reconstruct_cosmology(cosmo_key)
     return cosmo.luminosity_distance(redshift).to("Mpc").value
 
 
@@ -180,7 +188,9 @@ def _cached_angular_diameter_distance(cosmo_key, redshift):
     Returns:
         float: The angular diameter distance value in Mpc.
     """
-    cosmo = _reconstruct_cosmology(cosmo_key)
+    cosmo = _cosmologies.get(cosmo_key)
+    if cosmo is None:
+        cosmo = _reconstruct_cosmology(cosmo_key)
     return cosmo.angular_diameter_distance(redshift).to("Mpc").value
 
 
@@ -206,6 +216,7 @@ def get_luminosity_distance(cosmo, redshift):
         )
 
     cosmo_key = _get_cosmo_key(cosmo)
+    _cosmologies.setdefault(cosmo_key, cosmo)
     result_value = _cached_luminosity_distance(cosmo_key, redshift)
     return result_value * Mpc
 
@@ -227,5 +238,6 @@ def get_angular_diameter_distance(cosmo, redshift):
         unyt_quantity: The angular diameter distance in Mpc.
     """
     cosmo_key = _get_cosmo_key(cosmo)
+    _cosmologies.setdefault(cosmo_key, cosmo)
     result_value = _cached_angular_diameter_distance(cosmo_key, redshift)
     return result_value * Mpc

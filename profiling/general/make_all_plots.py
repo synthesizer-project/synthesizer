@@ -22,6 +22,7 @@ def run_script(
     n_averages=3,
     output_dir=Path("profiling/plots"),
     grid_precision="float64",
+    out_dtype=None,
 ):
     """Run a python script and check for errors."""
     print(
@@ -43,6 +44,8 @@ def run_script(
             "--grid-precision",
             grid_precision,
         ]
+        if out_dtype is not None:
+            cmd += ["--out-dtype", out_dtype]
 
         subprocess.run(
             cmd,
@@ -59,6 +62,7 @@ def make_all_plots(
     n_averages=3,
     output_dir=Path("profiling/plots"),
     grid_precision="float64",
+    out_dtype=None,
 ):
     """Run all profiling scripts and collect plots in one directory."""
     # Define directories
@@ -85,6 +89,7 @@ def make_all_plots(
             n_averages=n_averages,
             output_dir=output_dir,
             grid_precision=grid_precision,
+            out_dtype=out_dtype,
         )
 
     print(f"\nAll plots generated in {output_dir}.")
@@ -105,6 +110,12 @@ if __name__ == "__main__":
         default="float64",
         help="Precision to load the grid arrays at.",
     )
+    parser.add_argument(
+        "--out-dtype",
+        choices=("float32", "float64"),
+        default=None,
+        help="Requested output precision. Defaults to the global default.",
+    )
     args = parser.parse_args()
 
     make_all_plots(
@@ -112,4 +123,5 @@ if __name__ == "__main__":
         n_averages=args.n_averages,
         output_dir=args.output_dir,
         grid_precision=args.grid_precision,
+        out_dtype=args.out_dtype,
     )

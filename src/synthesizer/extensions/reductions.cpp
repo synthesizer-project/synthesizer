@@ -14,8 +14,11 @@
 
 /* C/C++ includes */
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <new>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 /* Python includes */
@@ -510,6 +513,92 @@ PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
   return result;
 }
 
+/**
+ * @brief Check whether any element of an array is +/-inf.
+ *
+ * The raw bits are read straight from memory as an integer. The extensions
+ * build with -ffast-math, so the compiler may assume any float value is
+ * finite and fold a test on it (std::isinf, or even a bit test on a loaded
+ * float) to false.
+ *
+ * @tparam Real The floating-point type of the array.
+ *
+ * @param values: The array values.
+ * @param size: The number of elements.
+ * @param nthreads: The number of threads to use.
+ */
+template <typename Real>
+static bool any_inf_impl(const Real *values, size_t size, int nthreads) {
+  /* The unsigned integer matching the float's width, and the bit patterns of
+   * an infinity once the sign bit is masked off. */
+  using Bits =
+      typename std::conditional<sizeof(Real) == 4, uint32_t, uint64_t>::type;
+  const Bits abs_mask = static_cast<Bits>(~Bits(0) >> 1);
+  const Bits inf_bits = sizeof(Real) == 4 ? Bits(UINT32_C(0x7f800000))
+                                          : Bits(UINT64_C(0x7ff0000000000000));
+
+  const unsigned char *bytes = reinterpret_cast<const unsigned char *>(values);
+  bool found = false;
+
+#ifdef WITH_OPENMP
+#pragma omp parallel for num_threads(nthreads) schedule(static) \
+    reduction(|| : found)
+#endif
+  for (npy_intp index = 0; index < (npy_intp)size; ++index) {
+    Bits bits;
+    std::memcpy(&bits, bytes + index * sizeof(Real), sizeof(Bits));
+    found = found || ((bits & abs_mask) == inf_bits);
+  }
+
+  return found;
+}
+
+/**
+ * @brief Check whether a floating-point array contains any +/-inf.
+ *
+ * This is the overflow check used when verifying reduced precision outputs.
+ * A NumPy np.isinf(arr).any() allocates a boolean array the size of the input
+ * and scans it on one thread, which for per-particle spectra costs a
+ * significant fraction of the time taken to compute them.
+ *
+ * Args:
+ *   values (np.ndarray):
+ *     A C-contiguous float32 or float64 array of any shape.
+ *   nthreads (int):
+ *     The number of threads to use.
+ *
+ * Returns:
+ *   bool:
+ *     True if any element is +/-inf.
+ */
+PyObject *any_inf(PyObject *self, PyObject *args) {
+  (void)self;
+
+  PyArrayObject *np_values;
+  int nthreads;
+  if (!PyArg_ParseTuple(args, "O!i", &PyArray_Type, &np_values, &nthreads)) {
+    return NULL;
+  }
+
+  PyArrayObject *float_arrays[] = {np_values};
+  const char *float_names[] = {"values"};
+  int typenum = -1;
+  if (!is_matching_float_dtypes(float_arrays, float_names, 1, &typenum)) {
+    return NULL;
+  }
+
+  tic("any_inf");
+  const bool found = dispatch_float(typenum, [&](auto value) -> bool {
+    using Real = decltype(value);
+    return any_inf_impl<Real>(data_ptr<const Real>(np_values),
+                              (size_t)PyArray_SIZE(np_values),
+                              nthreads > 1 ? nthreads : 1);
+  });
+  toc("any_inf");
+
+  return PyBool_FromLong(found);
+}
+
 template void reduce_spectra<float, float>(float *, const float *, int, int,
                                            int);
 template void reduce_spectra<float, double>(double *, const float *, int, int,
@@ -526,6 +615,8 @@ static PyMethodDef ReductionMethods[] = {
      "Reduce per-particle spectra to a single integrated spectrum."},
     {"combine_spectra_2d", (PyCFunction)combine_spectra_2d, METH_VARARGS,
      "Combine 2D per-particle spectra without temporary arrays."},
+    {"any_inf", (PyCFunction)any_inf, METH_VARARGS,
+     "Check whether a floating-point array contains any +/-inf."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */

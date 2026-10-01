@@ -11,8 +11,9 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Msun, Myr, kpc, unyt_array
+from unyt import Msun, Myr, unyt_array
 
+from synthesizer import set_default_out_dtype
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
@@ -115,9 +116,7 @@ def profile_wavelength_memory(
     mems = {
         "spectra": {
             "Particle": [],
-            "Particle (Doppler)": [],
             "Integrated": [],
-            "Integrated (Doppler)": [],
         },
     }
 
@@ -140,7 +139,6 @@ def profile_wavelength_memory(
         n_particles,
         redshift=1,
     )
-    stars.velocities = np.random.randn(n_particles, 3) * 100 * (kpc / Myr)
 
     for n_lam in n_lambdas:
         print(f"Profiling Memory n_lam={n_lam}...")
@@ -152,22 +150,14 @@ def profile_wavelength_memory(
 
         # 2. Setup Models with this new grid
         model_part = IncidentEmission(grid, per_particle=True, label="part")
-        model_part_shift = IncidentEmission(
-            grid, per_particle=True, label="part_shift", vel_shift=True
-        )
         model_int = IncidentEmission(grid, per_particle=False, label="int")
-        model_int_shift = IncidentEmission(
-            grid, per_particle=False, label="int_shift", vel_shift=True
-        )
 
         # 3. Profile
 
         # Local storage for averages
         iter_mems = {
             "Particle": [],
-            "Particle (Doppler)": [],
             "Integrated": [],
-            "Integrated (Doppler)": [],
         }
 
         for i in range(n_averages):
@@ -183,18 +173,6 @@ def profile_wavelength_memory(
             iter_mems["Particle"].append(mem)
             del stars.particle_spectra["part"]
 
-            # Particle Shift
-            stars.spectra = {}
-            stars.particle_spectra = {}
-            mem = run_and_measure_memory(
-                stars.get_spectra,
-                model_part_shift,
-                obj_to_measure=stars.particle_spectra,
-                nthreads=nthreads,
-            )
-            iter_mems["Particle (Doppler)"].append(mem)
-            del stars.particle_spectra["part_shift"]
-
             # Integrated
             stars.spectra = {}
             mem = run_and_measure_memory(
@@ -205,17 +183,6 @@ def profile_wavelength_memory(
             )
             iter_mems["Integrated"].append(mem)
             del stars.spectra["int"]
-
-            # Integrated Shift
-            stars.spectra = {}
-            mem = run_and_measure_memory(
-                stars.get_spectra,
-                model_int_shift,
-                obj_to_measure=stars.spectra,
-                nthreads=nthreads,
-            )
-            iter_mems["Integrated (Doppler)"].append(mem)
-
         # Store averages
         for key in iter_mems:
             mems["spectra"][key].append(np.mean(iter_mems[key]))
@@ -223,9 +190,7 @@ def profile_wavelength_memory(
         # Force garbage collection
         del grid
         del model_part
-        del model_part_shift
         del model_int
-        del model_int_shift
         gc.collect()
 
     # --- Plotting ---
@@ -286,7 +251,17 @@ if __name__ == "__main__":
         default="float64",
         help="Precision to load the grid arrays at.",
     )
+    parser.add_argument(
+        "--out-dtype",
+        choices=("float32", "float64"),
+        default=None,
+        help="Requested output precision. Defaults to the global default.",
+    )
     args = parser.parse_args()
+
+    # Set the global output precision if one was requested
+    if args.out_dtype is not None:
+        set_default_out_dtype(np.dtype(args.out_dtype))
 
     profile_wavelength_memory(
         nthreads=args.nthreads,
