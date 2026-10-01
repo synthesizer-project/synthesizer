@@ -356,7 +356,9 @@ void construct_cell_tree(const Real *pos, const Real *sml,
 
   /* And recurse... */
 #ifdef WITH_OPENMP
-  if (nthreads > 1) {
+  /* Only start a team when there are subtrees large enough to be tasks,
+   * otherwise starting it costs more than the serial build. */
+  if (nthreads > 1 && npart >= 8 * TREE_TASK_MIN_PARTS) {
     /* One thread starts the recursion and the team picks up its tasks. */
 #pragma omp parallel num_threads(nthreads)
 #pragma omp single
