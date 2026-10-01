@@ -32,7 +32,7 @@ Timing Performance
 
 The following plot shows how the Pipeline runtime scales with the number of stellar particles per galaxy. Only operations contributing ≥5% to the total runtime in at least one particle count are shown. The O(n) reference line is anchored at the first data point (100 particles).
 
-.. image:: plots/pipeline_timing_scaling.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/pipeline/pipeline_timing_scaling.png
    :width: 100%
    :align: center
 
@@ -46,7 +46,7 @@ Normalised Memory Profile
 
 Memory usage normalised to execution progress (0-100%), shown in MB on a logarithmic scale. Peak memory is marked with circles.
 
-.. image:: plots/pipeline_memory_normalized.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/pipeline/pipeline_memory_normalized.png
    :width: 75%
    :align: center
 
@@ -55,7 +55,7 @@ Peak Memory Scaling
 
 Peak memory vs particle count on log-log axes (shown in MB) with an O(n) reference line anchored at the first data point.
 
-.. image:: plots/pipeline_memory_scaling.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/pipeline/pipeline_memory_scaling.png
    :width: 75%
    :align: center
 

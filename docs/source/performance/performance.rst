@@ -112,7 +112,8 @@ The profiling scripts and documentation can be found in the `profiling directory
 
 - **Particle and Wavelength Scaling**: How individual operations scale with problem size (number of particles or wavelength elements)
 - **Pipeline Profiling**: Real-world benchmarks with multiple operations performed in sequence
-- **Strong Scaling**: How performance scales with thread count for fixed problem sizes
+- **Thread Scaling**: How performance scales with OpenMP thread count for fixed problem sizes
+- **MPI Scaling**: How the Pipeline scales across MPI ranks, for fixed total work (strong) and fixed work per rank (weak)
 
 The profiling suite includes scripts to:
 
@@ -164,4 +165,5 @@ Performance Benchmarks
    precision
    particle_wavelength_scaling
    pipeline_profiling
-   strong_scaling
+   thread_scaling
+   mpi_scaling

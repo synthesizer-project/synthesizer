@@ -137,9 +137,12 @@ TIMING_DIR="$OUTPUT_ROOT/timing"
 MEMORY_DIR="$OUTPUT_ROOT/memory"
 TIMING_ANALYSIS_DIR="$OUTPUT_ROOT/timing_analysis"
 MEMORY_ANALYSIS_DIR="$OUTPUT_ROOT/memory_analysis"
-FINAL_PLOTS_DIR="$OUTPUT_ROOT"
+# The final plots, grouped as they are in synventory
+PIPELINE_PLOTS_DIR="$OUTPUT_ROOT/pipeline"
+PROBLEM_SIZE_DIR="$OUTPUT_ROOT/problem_size"
+THREAD_SCALING_DIR="$OUTPUT_ROOT/thread_scaling"
 
-mkdir -p "$TIMING_DIR" "$MEMORY_DIR" "$TIMING_ANALYSIS_DIR" "$MEMORY_ANALYSIS_DIR" "$FINAL_PLOTS_DIR"
+mkdir -p "$TIMING_DIR" "$MEMORY_DIR" "$TIMING_ANALYSIS_DIR" "$MEMORY_ANALYSIS_DIR" "$PIPELINE_PLOTS_DIR" "$PROBLEM_SIZE_DIR" "$THREAD_SCALING_DIR"
 
 # Run Pipeline timing profiling for different particle counts
 for npart in 100 500 1000 5000 10000 100000; do
@@ -277,7 +280,7 @@ echo "========================================"
 
 # Run the general profiling scripts using make_all_plots.py
 echo "Running particle and wavelength scaling profiling..."
-python profiling/general/make_all_plots.py --nthreads $SCALING_THREADS --n_averages 3 --output_dir "$FINAL_PLOTS_DIR" \
+python profiling/general/make_all_plots.py --nthreads $SCALING_THREADS --n_averages 3 --output_dir "$PROBLEM_SIZE_DIR" \
 	--grid-precision $GRID_PRECISION \
 	--out-dtype $GRID_PRECISION
 
@@ -296,7 +299,7 @@ fi
 echo "Running integrated spectra strong scaling..."
 python profiling/scaling/strong_scaling_int_spectra.py \
 	--basename exclusive_docs \
-	--out_dir "$FINAL_PLOTS_DIR" \
+	--out_dir "$THREAD_SCALING_DIR" \
 	--max_threads $STRONG_THREADS \
 	--nstars 1000000 \
 	--average_over $STRONG_AVERAGES \
@@ -307,7 +310,7 @@ python profiling/scaling/strong_scaling_int_spectra.py \
 echo "Running particle spectra strong scaling..."
 python profiling/scaling/strong_scaling_part_spectra.py \
 	--basename exclusive_docs \
-	--out_dir "$FINAL_PLOTS_DIR" \
+	--out_dir "$THREAD_SCALING_DIR" \
 	--max_threads $STRONG_THREADS \
 	--nstars 10000 \
 	--average_over $STRONG_AVERAGES \
@@ -318,7 +321,7 @@ python profiling/scaling/strong_scaling_part_spectra.py \
 echo "Running LOS column density strong scaling..."
 python profiling/scaling/strong_scaling_los_col_den.py \
 	--basename exclusive_docs \
-	--out_dir "$FINAL_PLOTS_DIR" \
+	--out_dir "$THREAD_SCALING_DIR" \
 	--max_threads $STRONG_THREADS \
 	--nstars 1000000 \
 	--ngas 1000000 \
@@ -330,7 +333,7 @@ python profiling/scaling/strong_scaling_los_col_den.py \
 echo "Running imaging strong scaling..."
 python profiling/scaling/strong_scaling_images.py \
 	--basename exclusive_docs \
-	--out_dir "$FINAL_PLOTS_DIR" \
+	--out_dir "$THREAD_SCALING_DIR" \
 	--max_threads $STRONG_THREADS \
 	--nstars 10000 \
 	--average_over $STRONG_AVERAGES \
@@ -339,13 +342,13 @@ python profiling/scaling/strong_scaling_images.py \
 	--out-dtype $GRID_PRECISION
 
 cp "$TIMING_ANALYSIS_DIR/timing_comparison.png" \
-	"$FINAL_PLOTS_DIR/pipeline_timing_scaling.png"
+	"$PIPELINE_PLOTS_DIR/pipeline_timing_scaling.png"
 
 cp "$MEMORY_ANALYSIS_DIR/memory_comparison_normalized.png" \
-	"$FINAL_PLOTS_DIR/pipeline_memory_normalized.png"
+	"$PIPELINE_PLOTS_DIR/pipeline_memory_normalized.png"
 
 cp "$MEMORY_ANALYSIS_DIR/memory_comparison_scaling.png" \
-	"$FINAL_PLOTS_DIR/pipeline_memory_scaling.png"
+	"$PIPELINE_PLOTS_DIR/pipeline_memory_scaling.png"
 
 echo ""
 echo "========================================"
@@ -353,7 +356,7 @@ echo "All Profiling Complete!"
 echo "========================================"
 echo ""
 echo "Generated plots:"
-echo "  Output directory: $FINAL_PLOTS_DIR"
+echo "  Output directories: $PIPELINE_PLOTS_DIR, $PROBLEM_SIZE_DIR, $THREAD_SCALING_DIR"
 echo "  Pipeline Profiling ($PIPELINE_THREADS threads):"
 echo "    - pipeline_timing_scaling.png"
 echo "    - pipeline_memory_normalized.png"
@@ -361,11 +364,11 @@ echo "    - pipeline_memory_scaling.png"
 echo "  Particle/Wavelength Scaling ($SCALING_THREADS threads):"
 echo "    - nparticles_performance_*.png (5 plots)"
 echo "    - wavelength_performance_*.png (2 plots)"
-echo "  Strong Scaling (up to $STRONG_THREADS threads, $STRONG_AVERAGES averages):"
+echo "  Thread Scaling (up to $STRONG_THREADS threads, $STRONG_AVERAGES averages):"
 echo "    - exclusive_docs_int_spectra_cic_totThreads${STRONG_THREADS}_nstars1000000.png"
 echo "    - exclusive_docs_part_spectra_cic_totThreads${STRONG_THREADS}_nstars10000_${GRID_PRECISION}.png"
 echo "    - exclusive_docs_los_column_density_totThreads${STRONG_THREADS}_nstars1000000_ngas1000000.png"
 echo "    - exclusive_docs_images_totThreads${STRONG_THREADS}_nstars10000.png"
 echo ""
-echo "No plots were copied to docs/source/performance/plots/."
+echo "Copy them to synventory with profiling/move_profiling_to_synventory.sh."
 echo ""

@@ -1,13 +1,13 @@
-Strong Scaling (Thread Count)
-==============================
+Thread Scaling
+==============
 
-Strong scaling tests measure how performance improves when using more threads on a **fixed problem size**. These benchmarks show the parallel efficiency of Synthesizer's OpenMP implementation for computationally intensive operations.
+Thread scaling tests measure how performance improves when using more OpenMP threads within a single process on a **fixed problem size**. These benchmarks show the parallel efficiency of Synthesizer's OpenMP implementation for computationally intensive operations. For scaling the Pipeline across processes with MPI, see :doc:`mpi_scaling`.
 
 The performance should scale with the number of threads used, up to the number of physical cores on your machine. Beyond the physical core count, you may see diminishing returns due to hyperthreading overhead.
 
 Note that super-linear scaling can appear in low-cost operations due to run-to-run variance, cache effects, and scheduling overheads becoming less dominant. These cases should be interpreted as measurement noise around near-linear scaling, not as true algorithmic better-than-linear scaling. We use averaging and a low-threshold filter to reduce clutter, but small operations remain noisier than dominant kernels.
 
-All tests were run on AMD EPYC 7542 32-Core Processor hardware with up to 32 threads.
+All tests were run on a COSMA8 node (two AMD EPYC 7H12 processors) with up to 32 threads, with the NUMA interleave policy enabled (see :doc:`performance`).
 
 
 Integrated Spectra Scaling
@@ -20,7 +20,7 @@ Generating integrated (galaxy-level) spectra from 1,000,000 stellar particles wi
     python strong_scaling_int_spectra.py --basename exclusive_docs --nstars 1000000 \
         --max_threads=32 --average_over 10 --low_thresh 0.01
 
-.. image:: plots/exclusive_docs_int_spectra_cic_totThreads32_nstars1000000.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/thread_scaling/exclusive_docs_int_spectra_cic_totThreads32_nstars1000000.png
     :width: 75%
     :align: center
 
@@ -34,7 +34,7 @@ Generating per-particle spectra from 10,000 stellar particles with varying threa
     python strong_scaling_part_spectra.py --basename exclusive_docs --nstars 10000 \
         --max_threads=32 --average_over 10 --low_thresh 0.01
 
-.. image:: plots/exclusive_docs_part_spectra_cic_totThreads32_nstars10000.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/thread_scaling/exclusive_docs_part_spectra_cic_totThreads32_nstars10000_float64.png
    :width: 75%
    :align: center
 
@@ -48,7 +48,7 @@ Computing LOS column densities for 1,000,000 star and 1,000,000 gas particles wi
     python strong_scaling_los_col_den.py --basename exclusive_docs --nstars 1000000 \
         --ngas 1000000 --max_threads=32 --average_over 10 --low_thresh 0.01
 
-.. image:: plots/exclusive_docs_los_column_density_totThreads32_nstars1000000_ngas1000000.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/thread_scaling/exclusive_docs_los_column_density_totThreads32_nstars1000000_ngas1000000.png
    :width: 75%
    :align: center
 
@@ -62,14 +62,14 @@ Generating smoothed images from 10,000 stellar particles with varying thread cou
     python strong_scaling_images.py --basename exclusive_docs --nstars 10000 \
         --max_threads=32 --average_over 10 --low_thresh 0.01
 
-.. image:: plots/exclusive_docs_images_totThreads32_nstars10000.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/thread_scaling/exclusive_docs_images_totThreads32_nstars10000.png
    :width: 75%
    :align: center
 
 Considerations
 --------------
 
-**Ideal Strong Scaling**: With N threads, the runtime should be 1/N of the single-threaded time (i.e., perfect linear speedup). In practice, parallel overhead and serial portions of the code limit this ideal scaling.
+**Ideal Thread Scaling**: With N threads, the runtime should be 1/N of the single-threaded time (i.e., perfect linear speedup). In practice, parallel overhead and serial portions of the code limit this ideal scaling.
 
 **Practical Considerations**:
 
@@ -90,4 +90,4 @@ For most use cases, use **4-8 threads** for good performance without excessive r
 Profiling Scripts
 -----------------
 
-The strong scaling tests can be reproduced using the scripts in the `profiling/scaling directory <https://github.com/synthesizer-project/synthesizer/tree/main/profiling/scaling>`_. See the repository for the full set of strong scaling profiling scripts.
+The thread scaling tests can be reproduced using the scripts in the `profiling/scaling directory <https://github.com/synthesizer-project/synthesizer/tree/main/profiling/scaling>`_. See the repository for the full set of thread scaling profiling scripts.

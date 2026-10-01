@@ -12,13 +12,13 @@ The following plots show how the runtime of individual operations scales with th
 
 **Spectra Generation**
 
-.. image:: plots/nparticles_performance_spectra_nlam9244_nt32.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/problem_size/nparticles_performance_spectra_nlam9244_nt32.png
    :width: 75%
    :align: center
 
 **Photometry**
 
-.. image:: plots/nparticles_performance_photometry_nlam9244_nt32.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/problem_size/nparticles_performance_photometry_nlam9244_nt32.png
    :width: 75%
    :align: center
 
@@ -26,7 +26,7 @@ The following plots show how the runtime of individual operations scales with th
 
 Imaging benchmarks include both smoothed and histogram-based methods at different pixel resolutions (100×100 and 1000×1000).
 
-.. image:: plots/nparticles_performance_imaging_nlam9244_nt32.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/problem_size/nparticles_performance_imaging_nlam9244_nt32.png
    :width: 75%
    :align: center
 
@@ -34,11 +34,11 @@ Imaging benchmarks include both smoothed and histogram-based methods at differen
 
 These plots show the memory size of the generated spectra and photometry objects as a function of the number of particles.
 
-.. image:: plots/nparticles_performance_memory_spectra_nlam9244_nt32.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/problem_size/nparticles_performance_memory_spectra_nlam9244_nt32.png
    :width: 75%
    :align: center
 
-.. image:: plots/nparticles_performance_memory_photometry_nlam9244_nt32.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/problem_size/nparticles_performance_memory_photometry_nlam9244_nt32.png
    :width: 75%
    :align: center
 
@@ -49,7 +49,7 @@ The following plots show the scaling of spectra generation with the number of wa
 
 **Runtime Scaling**
 
-.. image:: plots/wavelength_performance_spectra_npart10000_nt32.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/problem_size/wavelength_performance_spectra_npart10000_nt32.png
    :width: 75%
    :align: center
 
@@ -57,6 +57,6 @@ The following plots show the scaling of spectra generation with the number of wa
 
 This plot shows the memory size of the generated spectra as a function of the number of wavelength elements in the grid.
 
-.. image:: plots/wavelength_performance_memory_spectra_npart10000_nt32.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/problem_size/wavelength_performance_memory_spectra_npart10000_nt32.png
    :width: 75%
    :align: center
