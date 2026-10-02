@@ -22,10 +22,15 @@ from synthesizer import exceptions
 from synthesizer.emission_models import (
     DustEmission,
     EmissionModel,
+    IncidentEmission,
     PacmanEmission,
 )
 from synthesizer.emission_models import model_queue as model_queue_module
-from synthesizer.emission_models.generators.dust import Casey12, DraineLi07
+from synthesizer.emission_models.generators.dust import (
+    Blackbody,
+    Casey12,
+    DraineLi07,
+)
 from synthesizer.emission_models.model_queue import (
     ModelQueue,
     resolve_model_threads,
@@ -143,7 +148,7 @@ class TestResolveModelThreads:
 class TestExecute:
     """Test ModelQueue.execute directly."""
 
-    def test_dependencies_run_first(self, varied_model):
+    def test_dependencies_run_first(self, no_gil, varied_model):
         """Test every model is processed after all of its dependencies."""
         queue = ModelQueue(varied_model)
         finished = set()
@@ -161,12 +166,12 @@ class TestExecute:
             with lock:
                 finished.add(model.label)
 
-        queue.execute(process, {}, {}, nr_threads=4)
+        queue.execute(process, {}, {}, nr_model_threads=4)
 
         assert violations == []
         assert finished == set(queue.models)
 
-    def test_all_models_processed_once(self, varied_model):
+    def test_all_models_processed_once(self, no_gil, varied_model):
         """Test the threaded executor processes each model exactly once."""
         queue = ModelQueue(varied_model)
         processed = []
@@ -176,12 +181,12 @@ class TestExecute:
             with lock:
                 processed.append(model.label)
 
-        queue.execute(process, {}, {}, nr_threads=4)
+        queue.execute(process, {}, {}, nr_model_threads=4)
 
         assert sorted(processed) == sorted(queue.models)
 
     @pytest.mark.parametrize("nr_threads", [1, 4])
-    def test_exception_propagates(self, varied_model, nr_threads):
+    def test_exception_propagates(self, no_gil, varied_model, nr_threads):
         """Test an exception raised for one model reaches the caller."""
         queue = ModelQueue(varied_model)
         bad_label = next(
@@ -195,7 +200,7 @@ class TestExecute:
                 raise ValueError(f"failed on {model.label}")
 
         with pytest.raises(ValueError, match=bad_label):
-            queue.execute(process, {}, {}, nr_threads=nr_threads)
+            queue.execute(process, {}, {}, nr_model_threads=nr_threads)
 
 
 class TestThreadedParity:
@@ -225,6 +230,41 @@ class TestThreadedParity:
         serial = _get_lines(random_part_stars, varied_model, line_ids, 1)
         threaded = _get_lines(random_part_stars, varied_model, line_ids, 4)
         _assert_same(serial, threaded)
+
+    @pytest.mark.parametrize("nr_model_threads", [1, 4])
+    def test_lines_generator_without_dependencies(
+        self, no_gil, test_grid, random_part_stars, nr_model_threads
+    ):
+        """Test a generator with no dependencies gets the line wavelengths.
+
+        The generator is combined first, so it can run before any extraction
+        has produced lines.
+        """
+        dust = DustEmission(
+            Blackbody(temperature=1e4 * K),
+            emitter="stellar",
+            label="blackbody",
+        )
+        incident = IncidentEmission(test_grid, label="incident")
+        model = EmissionModel(
+            "total",
+            combine=(dust, incident),
+            emitter="stellar",
+        )
+        line_ids = test_grid.available_lines[:3]
+        random_part_stars.clear_all_emissions()
+        random_part_stars.get_spectra(model)
+        random_part_stars.get_lines(
+            line_ids,
+            model,
+            nr_model_threads=nr_model_threads,
+        )
+
+        lines = random_part_stars.lines
+        np.testing.assert_array_equal(
+            lines["blackbody"].lam,
+            lines["incident"].lam,
+        )
 
     def test_vel_shifted_flags(self, no_gil, varied_model, random_part_stars):
         """Test velocity shift flags propagate as they do in serial."""

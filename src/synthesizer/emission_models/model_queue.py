@@ -381,13 +381,22 @@ class ModelQueue:
                 particle_emissions,
             )
 
-    def execute(self, process, emissions, particle_emissions, nr_threads=1):
+    def execute(
+        self,
+        process,
+        emissions,
+        particle_emissions,
+        nr_model_threads=1,
+        nthreads=1,
+    ):
         """Execute every active model in dependency order.
 
         Each model is passed to ``process`` once all of its dependencies have
         been processed. ``process`` must store the model's emission in the
-        emission dictionaries itself. Once it returns, the queue unlocks the
-        model's dependents and deletes any emissions that are no longer needed.
+        emission dictionaries itself. Models whose emission is already in
+        ``emissions`` (e.g. reused existing emissions) are not processed
+        again. Once a model is processed, the queue unlocks its dependents and
+        deletes any emissions that are no longer needed.
 
         With more than one thread, ready models are processed concurrently by
         a pool of worker threads (the calling thread being one of them). Each
@@ -404,21 +413,34 @@ class ModelQueue:
                 The integrated emission dictionary being populated.
             particle_emissions (dict):
                 The particle emission dictionary being populated.
-            nr_threads (int):
-                The number of threads to process models with.
+            nr_model_threads (int):
+                The requested number of threads to process models with. See
+                ``resolve_model_threads`` for when fewer are used.
+            nthreads (int):
+                The number of OpenMP threads each model uses, used to warn
+                about oversubscribing the available cores.
 
         Returns:
             None
         """
-        if nr_threads <= 1:
+
+        # Reused or externally supplied emissions still need to unlock the
+        # graph, but they do not need to be regenerated.
+        def process_if_missing(model):
+            """Process a model unless its emission already exists."""
+            if model.label not in emissions:
+                process(model)
+
+        nr_threads = resolve_model_threads(nr_model_threads, nthreads)
+        if nr_threads == 1:
             # Process each model as soon as it becomes ready.
             while len(self) > 0:
                 model = self.pop()
-                process(model)
+                process_if_missing(model)
                 self.done(model, emissions, particle_emissions)
         else:
             self._execute_threaded(
-                process,
+                process_if_missing,
                 emissions,
                 particle_emissions,
                 nr_threads,
@@ -519,16 +541,16 @@ class ModelQueue:
         except BaseException as error:
             # Something escaped the calling thread's worker outside process
             # (e.g. a KeyboardInterrupt while waiting). Stop the others taking
-            # new models and wait for the ones still running.
+            # new models.
             with ready:
                 if state["error"] is None:
                     state["error"] = error
                 ready.notify_all()
+            raise
+        finally:
+            # Wait for the models still running
             for thread in threads:
                 thread.join()
-            raise
-        for thread in threads:
-            thread.join()
 
         # Re-raise the first error from any worker on the calling thread
         if state["error"] is not None:

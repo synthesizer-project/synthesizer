@@ -894,38 +894,6 @@ def accepts(**units):
         # us support unit validation for variable keyword dictionaries.
         func_signature = signature(func)
         parameters = func_signature.parameters
-        timer_name = f"accepts({func.__qualname__})"
-
-        # When no *args or **kwargs parameter is itself declared in units
-        # (the usual case) each checked argument is either at a fixed
-        # position or passed by name, so we can check it in place. That
-        # avoids binding every call to the signature, which is slow and, on
-        # free-threaded Python, contends across threads on the shared
-        # signature objects. The position is None for keyword-only parameters
-        # and for names that can only arrive through **kwargs.
-        variadic = (Parameter.VAR_POSITIONAL, Parameter.VAR_KEYWORD)
-        use_fast_path = not any(
-            name in parameters and parameters[name].kind in variadic
-            for name in units
-        )
-        has_var_keyword = any(
-            param.kind is Parameter.VAR_KEYWORD
-            for param in parameters.values()
-        )
-        positional = (
-            Parameter.POSITIONAL_ONLY,
-            Parameter.POSITIONAL_OR_KEYWORD,
-        )
-        param_positions = {
-            name: index
-            for index, (name, param) in enumerate(parameters.items())
-            if param.kind in positional
-        }
-        checked_params = [
-            (name, param_positions.get(name))
-            for name in units
-            if name in parameters or has_var_keyword
-        ]
 
         @wraps(func)
         def wrapped(*args, **kwargs):
@@ -940,26 +908,7 @@ def accepts(**units):
             Returns:
                 The result of the wrapped function.
             """
-            if use_fast_path:
-                tic(timer_name)
-                try:
-                    for name, index in checked_params:
-                        if index is not None and index < len(args):
-                            if args[index] is not None:
-                                args = (
-                                    args[:index]
-                                    + (_check_arg(units, name, args[index]),)
-                                    + args[index + 1 :]
-                                )
-                        elif name in kwargs:
-                            kwargs[name] = _check_arg(
-                                units, name, kwargs[name]
-                            )
-                finally:
-                    toc(timer_name)
-                return func(*args, **kwargs)
-
-            tic(timer_name)
+            tic(f"accepts({func.__qualname__})")
             try:
                 # Bind the incoming arguments to their parameter names so we
                 # can treat positional and keyword arguments uniformly.
@@ -1017,7 +966,7 @@ def accepts(**units):
                     bound.arguments[name] = converted
 
             finally:
-                toc(timer_name)
+                toc(f"accepts({func.__qualname__})")
 
             return func(*bound.args, **bound.kwargs)
 

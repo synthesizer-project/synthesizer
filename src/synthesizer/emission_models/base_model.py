@@ -47,10 +47,7 @@ import numpy as np
 from unyt import unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.emission_models.model_queue import (
-    ModelQueue,
-    resolve_model_threads,
-)
+from synthesizer.emission_models.model_queue import ModelQueue
 from synthesizer.emission_models.operations import (
     Combination,
     Extraction,
@@ -2517,11 +2514,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             """
             label = this_model.label
 
-            # Reused or externally supplied emissions still need to unlock the
-            # graph, but they do not need to be regenerated.
-            if label in spectra:
-                return
-
             # Active queued models must always have a matching emitter.
             if this_model.emitter not in emitters:
                 raise exceptions.InconsistentArguments(
@@ -2713,7 +2705,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             process,
             spectra,
             particle_spectra,
-            nr_threads=resolve_model_threads(nr_model_threads, nthreads),
+            nr_model_threads=nr_model_threads,
+            nthreads=nthreads,
         )
 
         # Apply any post processing functions to the surviving emissions.
@@ -2912,6 +2905,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         line_lams = None
         if len(lines) > 0:
             line_lams = lines[list(lines.keys())[0]].lam
+        else:
+            # Otherwise get them from an extraction, so they are known before
+            # any model runs (generators need them whether or not an
+            # extraction has already run)
+            for model in queue.models.values():
+                if model._is_extracting:
+                    line_lams = model._get_line_lams(line_ids)
+                    break
 
         # Generate the emission for a single model. This may run on a worker
         # thread (see ModelQueue.execute), so it only writes this model's own
@@ -2923,19 +2924,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 this_model (EmissionModel):
                     The model to generate the lines for.
             """
-            # NOTE: line_lams is shared between models. Every model writes the
-            # same wavelengths, and a model only reads it once its
-            # dependencies (which set it) have been processed.
-            nonlocal line_lams
-
             label = this_model.label
-
-            # Reused or externally supplied emissions still need to unlock the
-            # graph, but they do not need to be regenerated.
-            if label in lines:
-                if line_lams is None:
-                    line_lams = lines[label].lam
-                return
 
             # Active queued models must always have a matching emitter.
             if this_model.emitter not in emitters:
@@ -2970,8 +2959,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         grid_assignment_method=grid_assignment_method,
                         out_dtype=out_dtype,
                     )
-                    if line_lams is None and label in lines:
-                        line_lams = lines[label].lam
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {label}")
@@ -2982,17 +2969,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_combining:
                 try:
-                    with timer("EmissionModel._get_lines.combine"):
-                        self._combine_lines(
-                            emission_model,
-                            lines,
-                            particle_lines,
-                            this_model,
-                            emitter,
-                            nthreads=nthreads,
-                        )
-                    if line_lams is None and label in lines:
-                        line_lams = lines[label].lam
+                    self._combine_lines(
+                        emission_model,
+                        lines,
+                        particle_lines,
+                        this_model,
+                        emitter,
+                        nthreads=nthreads,
+                    )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -3011,8 +2995,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         this_mask,
                         self.lam,
                     )
-                    if line_lams is None and label in lines:
-                        line_lams = lines[label].lam
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -3023,22 +3005,19 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_generating:
                 try:
-                    with timer("EmissionModel._get_lines.generate"):
-                        self._generate_lines(
-                            this_model,
-                            emission_model,
-                            lines,
-                            particle_lines,
-                            emitter,
-                            line_lams,
-                            line_ids,
-                            spectra,
-                            particle_spectra,
-                            out_dtype=out_dtype,
-                            nthreads=nthreads,
-                        )
-                    if line_lams is None and label in lines:
-                        line_lams = lines[label].lam
+                    self._generate_lines(
+                        this_model,
+                        emission_model,
+                        lines,
+                        particle_lines,
+                        emitter,
+                        line_lams,
+                        line_ids,
+                        spectra,
+                        particle_spectra,
+                        out_dtype=out_dtype,
+                        nthreads=nthreads,
+                    )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -3053,25 +3032,25 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 for scaler in this_model.scale_by:
                     if scaler is None:
                         continue
-
-                    scaler_arr = getattr(emitter, f"_{scaler}", None)
-                    if scaler_arr is None:
-                        scaler_arr = getattr(emitter, scaler, None)
-                    if scaler_arr is None:
+                    elif hasattr(emitter, scaler):
+                        for line_id in line_ids:
+                            if this_model.per_particle:
+                                particle_lines[label][
+                                    line_id
+                                ]._luminosity *= getattr(emitter, scaler)
+                                particle_lines[label][
+                                    line_id
+                                ]._continuum *= getattr(emitter, scaler)
+                            lines[label][line_id]._luminosity *= getattr(
+                                emitter, scaler
+                            )
+                            lines[label][line_id]._continuum *= getattr(
+                                emitter, scaler
+                            )
+                    else:
                         raise exceptions.InconsistentArguments(
                             f"Can't scale lines by {scaler}."
                         )
-
-                    for line_id in line_ids:
-                        if this_model.per_particle:
-                            particle_lines[label][
-                                line_id
-                            ]._luminosity *= scaler_arr
-                            particle_lines[label][
-                                line_id
-                            ]._continuum *= scaler_arr
-                        lines[label][line_id]._luminosity *= scaler_arr
-                        lines[label][line_id]._continuum *= scaler_arr
 
         # Execute the full model closure, processing each model once all of
         # its dependencies are ready.
@@ -3079,7 +3058,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             process,
             lines,
             particle_lines,
-            nr_threads=resolve_model_threads(nr_model_threads, nthreads),
+            nr_model_threads=nr_model_threads,
+            nthreads=nthreads,
         )
 
         # Apply any post processing functions to the surviving emissions.
