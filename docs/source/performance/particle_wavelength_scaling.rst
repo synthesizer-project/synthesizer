@@ -3,7 +3,7 @@ Particle and Wavelength Scaling
 
 These benchmarks show how individual operations scale with problem size (number of particles or wavelength elements). These tests isolate specific operations to understand their computational complexity.
 
-All tests were run using 32 threads on AMD EPYC 7542 32-Core Processor hardware.
+All tests were run using 32 threads on a COSMA8 node (two AMD EPYC 7763 processors).
 
 Particle Scaling
 ----------------

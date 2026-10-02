@@ -131,21 +131,14 @@ The benchmarks shown in this documentation were run on the Cosma8 HPC at Durham 
 
 .. code-block:: 
 
-    Architecture:             x86_64
-      CPU op-mode(s):         32-bit, 64-bit
-      Address sizes:          43 bits physical, 48 bits virtual
-      Byte Order:             Little Endian
-    CPU(s):                   128
-      On-line CPU(s) list:    0-127
-    Vendor ID:                AuthenticAMD
-      Model name:             AMD EPYC 7542 32-Core Processor
-        CPU family:           23
-        Model:                49
-        Thread(s) per core:   2
-        Core(s) per socket:   32
-        Socket(s):            2
+    CPU(s):                   256
+    Model name:               AMD EPYC 7763 64-Core Processor
+    Thread(s) per core:       2
+    Core(s) per socket:       64
+    Socket(s):                2
+    NUMA node(s):             8
 
-Most benchmarks were run using 8 threads unless otherwise specified.
+All benchmarks were run on nodes of this type (the ``cosma8-milan`` partition), using 32 threads unless otherwise specified.
 
 Memory Footprint Note
 ~~~~~~~~~~~~~~~~~~~~~

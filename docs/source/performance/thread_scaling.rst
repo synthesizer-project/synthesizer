@@ -7,7 +7,7 @@ The performance should scale with the number of threads used, up to the number o
 
 Note that super-linear scaling can appear in low-cost operations due to run-to-run variance, cache effects, and scheduling overheads becoming less dominant. These cases should be interpreted as measurement noise around near-linear scaling, not as true algorithmic better-than-linear scaling. We use averaging and a low-threshold filter to reduce clutter, but small operations remain noisier than dominant kernels.
 
-All tests were run on a COSMA8 node (two AMD EPYC 7H12 processors) with up to 32 threads, with the NUMA interleave policy enabled (see :doc:`performance`).
+All tests were run on a COSMA8 node (two AMD EPYC 7763 processors) with up to 32 threads, with the NUMA interleave policy enabled (see :doc:`performance`).
 
 
 Integrated Spectra Scaling

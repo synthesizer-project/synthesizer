@@ -23,9 +23,9 @@ The Pipeline profiling uses the following configuration to represent realistic o
    * - **Galaxies**
      - 10 synthetic galaxies per run, each containing stars, gas, and black holes
    * - **Particle Counts**
-     - 100, 500, 1000, 5000, 10000
+     - 100, 500, 1000, 5000, 10000, 100000
    * - **Hardware**
-     - AMD EPYC 7542 32-Core Processor, 8 threads used
+     - COSMA8 node (two AMD EPYC 7763 processors), 32 threads used
 
 Timing Performance
 ------------------
