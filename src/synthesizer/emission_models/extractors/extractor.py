@@ -14,7 +14,6 @@ to extract the emissions.
 """
 
 import os
-import weakref
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -36,35 +35,8 @@ from synthesizer.utils.operation_timers import timed, timer
 from synthesizer.utils.precision import (
     resolve_out_dtype,
     verify_out_precision,
+    weighted_sum_fits,
 )
-
-# The largest absolute value of each grid array used in the overflow bound
-# (see Extractor._cannot_overflow), keyed by array identity. Extractors are
-# created per extraction, so this outlives them; weak references let old
-# grids be freed.
-_grid_abs_max = {}
-
-
-def _get_grid_abs_max(grid):
-    """Get the largest absolute value in a grid array, caching it.
-
-    NOTE: Modifying a grid array in place after its first use is not reflected
-    here. Grid methods replace their arrays, which gives them a fresh entry.
-
-    Args:
-        grid (np.ndarray/unyt_array):
-            The grid array.
-
-    Returns:
-        float:
-            The largest absolute value in the array.
-    """
-    cached = _grid_abs_max.get(id(grid))
-    if cached is not None and cached[0]() is grid:
-        return cached[1]
-    value = float(np.max(np.abs(getattr(grid, "ndview", grid))))
-    _grid_abs_max[id(grid)] = (weakref.ref(grid), value)
-    return value
 
 
 class Extractor(ABC):
@@ -147,7 +119,9 @@ class Extractor(ABC):
             else str(self._weight_var)
         )
 
-        # Attach the spectra and line grids to the Extractor object
+        # Attach the spectra and line grids to the Extractor object, keeping
+        # the emission they hold
+        self._extract = extract
 
         if extract in grid.available_spectra_emissions:
             self._spectra_grid = grid.spectra[extract]
@@ -302,15 +276,14 @@ class Extractor(ABC):
                 " the grid axes.",
             )
 
-    def _cannot_overflow(self, dtype, emitter, model, grids):
+    def _cannot_overflow(self, dtype, emitter, model, grid_max):
         """Check whether extracted emission is provably finite at dtype.
 
         Every output (per-particle or integrated) is a sum of grid values
         times non-negative weights whose grid assignment fractions sum to at
-        most one per particle. No output can therefore exceed the largest
-        absolute grid value times the total weight. If that bound (with a
-        factor of 2 margin for rounding) fits in dtype, nothing can overflow
-        and the caller can skip scanning the outputs for inf.
+        most one per particle, so it is bounded by the largest absolute grid
+        value times the total weight (see weighted_sum_fits). If that bound
+        fits in dtype, the caller can skip scanning the outputs for inf.
 
         Args:
             dtype (np.dtype):
@@ -319,8 +292,9 @@ class Extractor(ABC):
                 The emitter the emission is extracted for.
             model (EmissionModel):
                 The emission model defining the extraction.
-            grids (tuple):
-                The grid arrays being extracted from.
+            grid_max (float):
+                The largest absolute value in the grid arrays being
+                extracted from.
 
         Returns:
             bool:
@@ -334,12 +308,7 @@ class Extractor(ABC):
             weight = getattr(weight, "ndview", weight)
             total_weight = float(np.sum(np.abs(weight), dtype=np.float64))
 
-        # Get the largest absolute grid value
-        grid_max = max(_get_grid_abs_max(grid) for grid in grids)
-
-        # Comparisons with a NaN or inf bound are False, so those fall back
-        # to scanning the outputs
-        return 2.0 * grid_max * total_weight < float(np.finfo(dtype).max)
+        return weighted_sum_fits(dtype, grid_max, total_weight)
 
     def _spectra_cannot_overflow(self, dtype, emitter, model, **kwargs):
         """Check whether extracted spectra are provably finite at dtype.
@@ -359,7 +328,10 @@ class Extractor(ABC):
                 True if the spectra cannot overflow at dtype.
         """
         return self._cannot_overflow(
-            dtype, emitter, model, (self._spectra_grid,)
+            dtype,
+            emitter,
+            model,
+            self._grid._max_abs["spectra"][self._extract],
         )
 
     def _lines_cannot_overflow(self, dtype, emitter, model, **kwargs):
@@ -384,7 +356,10 @@ class Extractor(ABC):
             dtype,
             emitter,
             model,
-            (self._line_lum_grid, self._line_cont_grid),
+            max(
+                self._grid._max_abs["line_lum"][self._extract],
+                self._grid._max_abs["line_cont"][self._extract],
+            ),
         )
 
     @abstractmethod

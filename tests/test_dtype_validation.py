@@ -62,7 +62,9 @@ from synthesizer.synth_warnings import InternalPrecisionWarning
 from synthesizer.units import Units
 from synthesizer.utils.precision import (
     convert_array_dtype,
+    max_abs,
     verify_out_precision,
+    weighted_sum_fits,
 )
 
 
@@ -624,6 +626,25 @@ class TestConvertArrayDtype:
         """Scalars are converted to scalars of the target dtype."""
         converted = convert_array_dtype(2.0, np.float32)
         assert isinstance(converted, np.float32)
+
+
+class TestOverflowBound:
+    """Tests for the tools bounding weighted sums against overflow."""
+
+    def test_max_abs(self):
+        """The largest absolute value is found, with or without units."""
+        assert max_abs(np.array([-3.0, 2.0])) == 3.0
+        assert max_abs(unyt_array([1.0, -5.0], "erg/s")) == 5.0
+        assert max_abs(np.array([])) == 0.0
+
+    def test_weighted_sum_fits(self):
+        """The bound fits only when it is safely below the dtype maximum."""
+        big = float(np.finfo(np.float32).max)
+        assert weighted_sum_fits(np.float32, 1.0, 1e10)
+        assert not weighted_sum_fits(np.float32, big, 1.0)
+        assert weighted_sum_fits(np.float64, big, 1e-10)
+        assert not weighted_sum_fits(np.float32, np.inf, 1.0)
+        assert not weighted_sum_fits(np.float32, np.nan, 1.0)
 
 
 class TestVerifyOutPrecision:

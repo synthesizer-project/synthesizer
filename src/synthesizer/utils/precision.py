@@ -339,6 +339,45 @@ def _convert_output_dtype(value, dtype, where, nthreads=1, check_inf=True):
     return value
 
 
+def max_abs(values):
+    """Get the largest absolute value in an array.
+
+    Args:
+        values (np.ndarray/unyt_array):
+            The array.
+
+    Returns:
+        float:
+            The largest absolute value in the array (0 for an empty array).
+    """
+    return float(
+        np.max(np.abs(getattr(values, "ndview", values)), initial=0.0)
+    )
+
+
+def weighted_sum_fits(dtype, max_abs_value, total_weight):
+    """Check a weighted sum of values cannot overflow a dtype.
+
+    A sum of values times non-negative weights, where each value is at most
+    max_abs_value in magnitude, can be no larger than max_abs_value times the
+    total weight. If that bound (with a factor of 2 margin for rounding) fits
+    in dtype, the sum cannot overflow. A NaN or inf bound never fits.
+
+    Args:
+        dtype (np.dtype):
+            The dtype the sum is computed and stored at.
+        max_abs_value (float):
+            The largest absolute value being summed.
+        total_weight (float):
+            The total of the (non-negative) weights.
+
+    Returns:
+        bool:
+            True if the sum cannot overflow dtype.
+    """
+    return 2.0 * max_abs_value * total_weight < float(np.finfo(dtype).max)
+
+
 def verify_out_precision(cannot_overflow=None):
     """Verify a function's outputs respect its out_dtype argument.
 
