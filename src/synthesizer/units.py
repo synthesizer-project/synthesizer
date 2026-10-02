@@ -174,9 +174,7 @@ def get_quantity_view(obj, attr_name):
         unyt_array:
             Unit-bearing view of the raw ndarray data.
     """
-    values = getattr(obj, attr_name)
-    unit = obj.__class__.__dict__[attr_name[1:]].unit
-    return unyt_array(values, unit, bypass_validation=True)
+    return getattr(obj, attr_name[1:])
 
 
 class DefaultUnits:
@@ -533,6 +531,9 @@ class Quantity:
         if hasattr(Units(), name):
             self.unit = getattr(Units(), name)
 
+        # Install the unit-free view under the private name
+        setattr(owner, self.private_name, _QuantityView(self))
+
     def __get__(self, obj, type=None):
         """Return the value of the attribute with units.
 
@@ -550,21 +551,16 @@ class Quantity:
             unyt_array/unyt_quantity/None
                 The value with units attached or None if value is None.
         """
-        value = getattr(obj, self.private_name)
-
-        # If we have an uninitialised attribute avoid the multiplying NoneType
-        # error and just return None
-        if value is None:
-            return None
-
-        # Attach the unit as a view. `value * self.unit` would copy the whole
-        # buffer on every attribute read, which dominated the line pipeline.
-        # This is only safe because nothing converts units in place any more;
-        # if that changes, a conversion here would rewrite the stored array.
-        if isinstance(value, numpy.ndarray):
-            return get_array_quantity_view(value, self.unit)
-
-        return value * self.unit
+        # The stored value already carries its units, and may not be in the
+        # internal unit system if the user converted it in place. Hand back the
+        # stored object itself so any such conversion stays consistent.
+        try:
+            return obj.__dict__[self.private_name]
+        except KeyError:
+            raise AttributeError(
+                f"{obj.__class__.__name__} object has no attribute "
+                f"'{self.public_name}'"
+            ) from None
 
     def __set__(self, obj, value):
         """Set the value of the attribute with units.
@@ -584,15 +580,112 @@ class Quantity:
         # is already in the default unit system
         if isinstance(value, (unyt_quantity, unyt_array)):
             if value.units != self.unit and value.units != dimensionless:
-                # Convert out of place. The value being assigned is not ours:
-                # attribute reads hand back views onto the stored buffer, so
-                # `b.lnu = a.lnu` in mismatched units would rewrite a's data.
-                value = value.to(self.unit).ndview
+                # Convert out of place. The value being assigned is not ours,
+                # converting it in place would rewrite the caller's data.
+                value = value.to(self.unit)
             else:
-                value = value.ndview
+                # Attach our unit to a view so we store the canonical unit
+                # object rather than an equivalent one (e.g. 1.0*Msun), which
+                # unyt would otherwise carry into float64 arithmetic
+                value = _attach_unit(value.ndview, self.unit)
+        elif value is not None:
+            value = _attach_unit(value, self.unit)
 
-        # Set the attribute
-        setattr(obj, self.private_name, value)
+        # Store the unit-bearing value under the private name in the instance
+        # dict. The _QuantityView descriptor on the class takes precedence
+        # over the instance dict so reading the private name still returns
+        # the unit-free values.
+        obj.__dict__[self.private_name] = value
+
+
+def _attach_unit(value, unit):
+    """Attach a unit to a raw value without copying where possible.
+
+    Args:
+        value (array-like/float/int):
+            The raw value assumed to be in ``unit``.
+        unit (unyt.Unit):
+            The unit to attach.
+
+    Returns:
+        unyt_array/unyt_quantity:
+            The value with units attached.
+    """
+    if isinstance(value, numpy.ndarray) and value.ndim > 0:
+        return unyt_array(value, unit, bypass_validation=True)
+    if numpy.ndim(value) == 0:
+        return unyt_quantity(value, unit)
+    return unyt_array(value, unit)
+
+
+class _QuantityView:
+    """A descriptor giving unit-free access to a Quantity's stored value.
+
+    This is installed on the class under the Quantity's private name (e.g.
+    ``_lnu``). Reading it returns the stored values in the internal unit
+    system without copying, converting the stored value first if it has been
+    moved into other units. Setting it routes through the Quantity so the
+    stored value always carries its units.
+
+    Attributes:
+        quantity (Quantity):
+            The Quantity this view belongs to.
+    """
+
+    def __init__(self, quantity):
+        """Initialise the view.
+
+        Args:
+            quantity (Quantity):
+                The Quantity this view belongs to.
+        """
+        self.quantity = quantity
+
+    def __get__(self, obj, type=None):
+        """Return the stored value without units in the internal unit system.
+
+        Returns:
+            np.ndarray/float/None:
+                The unit-free value or None if value is None.
+        """
+        if obj is None:
+            return self
+
+        name = self.quantity.private_name
+        try:
+            value = obj.__dict__[name]
+        except KeyError:
+            raise AttributeError(
+                f"{obj.__class__.__name__} object has no attribute '{name}'"
+            ) from None
+
+        if value is None:
+            return None
+
+        # Only copy if the stored value has been moved out of the internal
+        # unit system, in which case we store the converted value so we only
+        # pay for this once. The setter stores our unit object itself, so the
+        # identity check skips unyt's slow unit comparison on the hot path.
+        unit = self.quantity.unit
+        if value.units is not unit and value.units != unit:
+            value = value.to(unit)
+            obj.__dict__[name] = value
+
+        if value.ndim == 0:
+            return value.value
+        return value.ndview
+
+    def __set__(self, obj, value):
+        """Set the stored value, attaching the internal unit if needed.
+
+        Args:
+            obj (Any):
+                The object containing the Quantity.
+            value (array-like/float/int):
+                The value to store, assumed to be in the internal unit system
+                if it carries no units.
+        """
+        self.quantity.__set__(obj, value)
 
 
 def has_units(x):

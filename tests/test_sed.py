@@ -8,7 +8,7 @@ from synthesizer.extensions.reductions import (
     combine_spectra_2d,
     reduce_particle_spectra,
 )
-from unyt import Hz, angstrom, c, cm, erg, km, m, nJy, pc, s
+from unyt import Hz, Unit, angstrom, c, cm, erg, km, m, nJy, pc, s
 
 from synthesizer import exceptions
 from synthesizer.cosmology import get_luminosity_distance
@@ -159,6 +159,21 @@ def test_get_fnu0_handles_multidimensional_spectra():
     )
 
 
+def test_quantity_in_place_conversion_keeps_units_consistent():
+    """Converting a Quantity in place must not desync its stored units."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    sed = Sed(lam=lam, lnu=np.ones(8) * erg / s / Hz)
+
+    sed.lnu.convert_to_units("W/Hz")
+
+    # The public value carries the new units
+    assert sed.lnu.units == Unit("W/Hz")
+    assert np.allclose(sed.lnu.to("erg/s/Hz").value, 1.0)
+
+    # The private value is still in the internal unit system
+    assert np.allclose(sed._lnu, 1.0)
+
+
 def test_get_fnu0_reuses_final_contiguous_wavelength_buffers():
     """Rest-frame flux conversion should alias the final wavelength buffers."""
     lam = np.linspace(1000, 2000, 16)[::2] * angstrom
@@ -167,8 +182,8 @@ def test_get_fnu0_reuses_final_contiguous_wavelength_buffers():
     sed = Sed(lam=lam, lnu=lnu)
     sed.get_fnu0()
 
-    assert sed._obslam is sed._lam
-    assert sed._obsnu is sed._nu
+    assert np.shares_memory(sed._obslam, sed._lam)
+    assert np.shares_memory(sed._obsnu, sed._nu)
     assert sed._lam.flags.c_contiguous
     assert sed._nu.flags.c_contiguous
 
