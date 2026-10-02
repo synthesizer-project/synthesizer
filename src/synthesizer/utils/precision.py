@@ -30,6 +30,7 @@ import numpy as np
 from unyt import unyt_array
 
 from synthesizer import exceptions
+from synthesizer.synth_warnings import InternalPrecisionWarning
 
 # The allowed floating point dtypes for outputs.
 _ALLOWED_DTYPES = (np.dtype(np.float32), np.dtype(np.float64))
@@ -102,6 +103,24 @@ def resolve_out_dtype(out_dtype):
     return _validate_dtype(out_dtype)
 
 
+def get_float_dtype(dtype):
+    """Get the floating point dtype to compute at for an input dtype.
+
+    Inputs at a supported floating point precision (float32 or float64)
+    keep it, anything else (e.g. integers) is computed at float64.
+
+    Args:
+        dtype (np.dtype/type):
+            The dtype of the input.
+
+    Returns:
+        np.dtype:
+            The dtype to compute and allocate outputs with.
+    """
+    dtype = np.dtype(dtype)
+    return dtype if dtype in _ALLOWED_DTYPES else np.dtype(np.float64)
+
+
 def scalar_like(value, ref):
     """Return a scalar typed to match a reference array's dtype.
 
@@ -134,7 +153,7 @@ def scalar_like(value, ref):
     return ref.dtype.type(value)
 
 
-def convert_array_dtype(array, dtype, overflow="raise", name=None):
+def convert_array_dtype(array, dtype, name=None):
     """Convert a numeric array-like object to a floating-point dtype.
 
     This works for NumPy arrays, unyt_arrays (preserving their units), lists
@@ -143,52 +162,32 @@ def convert_array_dtype(array, dtype, overflow="raise", name=None):
     untouched, otherwise a copy is made.
 
     Converting to a lower precision can overflow: values beyond the range of
-    the target dtype would silently become inf. This is always checked, and
-    ``overflow`` controls what happens:
-
-    - ``"raise"`` raises a PrecisionOverflow error.
-    - ``"keep"`` returns the input unchanged, at its original precision. Use
-      this where a value simply can't be stored at the target precision and
-      should stay as it is (e.g. a grid mass axis in kg at float32).
-
-    Only floating-point targets are converted; for any other target dtype
-    the input is returned unchanged.
+    the target dtype would silently become inf, so this raises a
+    PrecisionOverflow error instead.
 
     Args:
         array (array-like/float):
             The input array-like object or scalar.
         dtype (np.dtype/type):
             The target dtype to convert to.
-        overflow (str):
-            What to do if the values don't fit in the target dtype, either
-            "raise" (the default) or "keep".
         name (str, optional):
             The name of the array, for the error message.
 
     Returns:
         array-like/float:
-            The converted array (or scalar), or the input unchanged.
+            The converted array (or scalar).
 
     Raises:
         PrecisionOverflow:
-            If the values don't fit in the target dtype and
-            ``overflow="raise"``.
+            If the values don't fit in the target dtype.
         ValueError:
-            If the input isn't numeric or ``overflow`` is invalid.
+            If the input isn't numeric.
     """
     # Nothing to do if input is None
     if array is None:
         return None
 
-    # Only floating-point targets are converted
     dtype = np.dtype(dtype)
-    if dtype.kind != "f":
-        return array
-
-    if overflow not in ("raise", "keep"):
-        raise ValueError(
-            f"overflow must be 'raise' or 'keep' (got {overflow!r})."
-        )
 
     # If the array already has the requested dtype and contiguous storage
     # there is nothing to do; return it untouched to avoid a needless copy.
@@ -208,23 +207,21 @@ def convert_array_dtype(array, dtype, overflow="raise", name=None):
     if values.dtype.kind not in "iuf":
         raise ValueError(
             f"Unsupported array type or dtype for conversion: "
-            f"type(array)={type(array)}, dtype={values.dtype}"
+            f"type(array)={type(array)}, dtype={values.dtype}",
         )
 
     # Check the (finite) values fit if we are reducing the precision
     if values.dtype.itemsize > dtype.itemsize and values.size > 0:
         largest = float(
-            np.max(np.abs(values), initial=0.0, where=np.isfinite(values))
+            np.max(np.abs(values), initial=0.0, where=np.isfinite(values)),
         )
         if largest > float(np.finfo(dtype).max):
-            if overflow == "keep":
-                return array
             raise exceptions.PrecisionOverflow(
                 f"{name or 'An array'} holds values up to {largest:.3g}, "
                 f"beyond the {dtype} range (up to {np.finfo(dtype).max:.3g}), "
                 f"so converting it to {dtype} would overflow to inf. Keep it "
                 f"at {values.dtype}, or use units that bring its values into "
-                "range."
+                "range.",
             )
 
     # Convert, reattaching units where we had them (ascontiguousarray would
@@ -238,14 +235,6 @@ def convert_array_dtype(array, dtype, overflow="raise", name=None):
     if np.ndim(array) == 0 and not isinstance(array, np.ndarray):
         return dtype.type(converted)
     return converted
-
-
-class InternalPrecisionWarning(RuntimeWarning):
-    """Warning for outputs that didn't respect the requested out_dtype.
-
-    This always indicates a bug in Synthesizer rather than a problem with the
-    user's inputs. The test suite turns it into an error.
-    """
 
 
 # The private array attributes of Synthesizer's output objects (Sed,
@@ -324,13 +313,13 @@ def _convert_output_dtype(value, dtype, where):
             f"{where} produced values too large to be stored at {dtype}, "
             "which overflowed to inf. Use float64 outputs "
             "(out_dtype=np.float64) or units that bring these values into "
-            "range."
+            "range.",
         )
 
     return value
 
 
-def verify_out_precision(*checks):
+def verify_out_precision():
     """Verify a function's outputs respect its out_dtype argument.
 
     Decorates any function or method taking an ``out_dtype`` argument. The
@@ -346,12 +335,6 @@ def verify_out_precision(*checks):
     Outputs can be arrays, Synthesizer output objects (Sed, LineCollection,
     PhotometryCollection) or dicts, lists and tuples of these.
 
-    Args:
-        *checks (bool):
-            For functions returning a tuple, whether to check each returned
-            value (e.g. ``verify_out_precision(True, False)`` checks only the
-            first). With no arguments every output is checked.
-
     Returns:
         callable:
             The decorator.
@@ -362,7 +345,7 @@ def verify_out_precision(*checks):
         if "out_dtype" not in signature.parameters:
             raise TypeError(
                 f"verify_out_precision can only decorate functions taking an "
-                f"out_dtype argument ({func.__qualname__} doesn't)."
+                f"out_dtype argument ({func.__qualname__} doesn't).",
             )
 
         @functools.wraps(func)
@@ -370,24 +353,7 @@ def verify_out_precision(*checks):
             result = func(*args, **kwargs)
             bound = signature.bind(*args, **kwargs)
             dtype = resolve_out_dtype(bound.arguments.get("out_dtype"))
-            where = func.__qualname__
-            if not checks:
-                return _convert_output_dtype(result, dtype, where)
-            if not isinstance(result, tuple):
-                return (
-                    _convert_output_dtype(result, dtype, where)
-                    if checks[0]
-                    else result
-                )
-            return (
-                tuple(
-                    _convert_output_dtype(value, dtype, where)
-                    if check
-                    else value
-                    for value, check in zip(result, checks)
-                )
-                + result[len(checks) :]
-            )
+            return _convert_output_dtype(result, dtype, func.__qualname__)
 
         return wrapped
 

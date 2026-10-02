@@ -456,9 +456,11 @@ class TestUnitsFileHandling:
     def test_copy_units_applies_units_changelog(self, tmp_path, capsys):
         """Changed defaults are updated in files predating the change only.
 
-        Luminosities moved from erg/s to Lsun after 1.2.0 (erg/s values
-        overflow float32). An unversioned file still holding erg/s is
-        updated and the change reported, customised units are left alone,
+        Luminosities moved from erg/s to Lsun (and luminosity densities per
+        wavelength from erg/s/Angstrom to Lsun/Angstrom) after 1.2.0, since
+        the cgs values overflow float32. An unversioned file still holding
+        the old units is updated and the changes reported, customised units
+        are left alone,
         and a user who switches back to erg/s afterwards keeps it, even
         after a version change.
         """
@@ -480,13 +482,14 @@ class TestUnitsFileHandling:
         SynthesizerInitializer()._copy_units()
         out = capsys.readouterr().out
         assert "luminosity: erg / s -> Lsun" in out
+        assert "erg / s / Angstrom -> Lsun / Angstrom" in out
         assert "spatial" not in out
         units = yaml.safe_load(units_file.read_text())
         categories = units["UnitCategories"]
         assert units["Version"] == __version__
         assert categories["luminosity"]["unit"] == "Lsun"
         assert categories["luminosity_density_wavelength"]["unit"] == (
-            "erg / s / Angstrom"
+            "Lsun / Angstrom"
         )
         assert categories["spatial"]["unit"] == "kpc"
         assert not default_units_needs_update()
@@ -500,6 +503,43 @@ class TestUnitsFileHandling:
         units = yaml.safe_load(units_file.read_text())
         assert units["Version"] == __version__
         assert units["UnitCategories"]["luminosity"]["unit"] == "erg / s"
+
+    def test_copy_units_updates_dev_build_files(self, tmp_path):
+        """Files from dev builds (which may predate a change) are updated.
+
+        Once updated, a unit the user switches back to is kept by later dev
+        builds.
+        """
+        import yaml
+
+        units_file = tmp_path / "base" / "default_units.yml"
+        units_file.write_text(
+            "Version: 1.2.1.dev453\n"
+            "UnitCategories:\n"
+            "  luminosity_density_wavelength:\n"
+            "    unit: erg / s / Angstrom\n",
+        )
+
+        SynthesizerInitializer()._copy_units()
+
+        units = yaml.safe_load(units_file.read_text())
+        categories = units["UnitCategories"]
+        assert categories["luminosity_density_wavelength"]["unit"] == (
+            "Lsun / Angstrom"
+        )
+
+        # Deliberately switch back to erg/s, then update from a later dev build
+        categories["luminosity_density_wavelength"]["unit"] = (
+            "erg / s / Angstrom"
+        )
+        units["Version"] = "1.2.1.dev460"
+        units_file.write_text(yaml.dump(units))
+        SynthesizerInitializer()._copy_units()
+
+        categories = yaml.safe_load(units_file.read_text())["UnitCategories"]
+        assert categories["luminosity_density_wavelength"]["unit"] == (
+            "erg / s / Angstrom"
+        )
 
 
 class TestTopLevelFlows:

@@ -10,12 +10,8 @@ for alias, line in line_aliases.items():
     setattr(sys.modules[__name__], alias, line)
 
 # Import the emissions classe
-from synthesizer.emissions.line import (
-    LineCollection,
-    integrate_particle_lines,
-)
+from synthesizer.emissions.line import LineCollection
 from synthesizer.emissions.sed import (
-    integrate_particle_sed,
     Sed,
     plot_observed_spectra,
     plot_spectra,
@@ -34,8 +30,6 @@ from synthesizer.emissions.utils import (
 
 __all__ = [
     "LineCollection",
-    "integrate_particle_sed",
-    "integrate_particle_lines",
     "Sed",
     "plot_observed_spectra",
     "plot_spectra",

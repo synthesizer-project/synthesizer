@@ -13,7 +13,6 @@ Example usage:
     sed.get_photo_fnu(filters, nthreads=4)
 """
 
-import os
 import re
 
 import matplotlib.pyplot as plt
@@ -47,9 +46,11 @@ from synthesizer.emissions.scaling import (
     scale_inplace,
     scale_to_quantity,
 )
-from synthesizer.emissions.utils import evaluate_dust_curve_at_dtype
+from synthesizer.emissions.utils import (
+    evaluate_dust_curve_at_dtype,
+    nansum_leading_axes,
+)
 from synthesizer.extensions.observed_spectra import compute_fnu
-from synthesizer.extensions.reductions import reduce_particle_spectra
 from synthesizer.extensions.spectra_operations import (
     apply_separable_attenuation_2d,
     multiply_array_by_vector_1d,
@@ -68,6 +69,7 @@ from synthesizer.units import (
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import get_float_dtype
 from synthesizer.utils.util_funcs import (
     ensure_array_buffer,
     get_attr_unit_conversion,
@@ -96,7 +98,11 @@ class Sed:
         description (str):
             An optional descriptive string defining the Sed.
         redshift (float):
-            The redshift of the Sed.
+            The redshift of the Sed's observer frame arrays (including any
+            peculiar velocity shift).
+        vel_shifted (bool):
+            Whether the spectra include particle velocity shifts (from
+            vel_shift=True on an EmissionModel).
         photo_lnu (dict, float)
             The rest frame broadband photometry in arbitrary filters
             (filter_code: photometry).
@@ -150,6 +156,9 @@ class Sed:
         # Redshift of the SED
         self.redshift = 0
 
+        # Have particle velocity shifts already been applied?
+        self.vel_shifted = False
+
         # The wavelengths and frequencies in the observer frame
         self.obslam = None
         self.obsnu = None
@@ -200,15 +209,16 @@ class Sed:
         self._nu_cache = (self._lam, value)
 
     @timed("Sed.sum")
-    def sum(self):
+    def sum(self, nthreads=1):
         """Sum the SED over all dimensions.
 
         For multidimensional `sed`'s, sum the luminosity to provide a 1D
         integrated SED.
 
-        TODO: Replace this NumPy-based implementation with a generic C++
-        reduction backend that can handle the full range of supported Sed
-        shapes.
+        Args:
+            nthreads (int):
+                The number of threads to use for the reduction. If -1 all
+                available CPU cores will be used.
 
         Returns:
             sed (object, Sed):
@@ -216,20 +226,18 @@ class Sed:
         """
         # Check that the lnu array is multidimensional
         if len(self._lnu.shape) > 1:
-            # Define the axes to sum over to give only the final axis
-            sum_over = tuple(range(0, len(self._lnu.shape) - 1))
-
             # Create a new sed object with the first Lnu dimension collapsed
             new_sed = Sed(
                 self.lam,
-                np.nansum(self._lnu, axis=sum_over)
+                nansum_leading_axes(self._lnu, nthreads)
                 * get_quantity_unit(self, "lnu"),
             )
+            new_sed.vel_shifted = self.vel_shifted
 
             # If fnu exists, sum that too
             if self.fnu is not None:
-                new_sed.fnu = np.nansum(
-                    self._fnu, axis=sum_over
+                new_sed.fnu = nansum_leading_axes(
+                    self._fnu, nthreads
                 ) * get_quantity_unit(self, "fnu")
                 new_sed.obsnu = self.obsnu
                 new_sed.obslam = self.obslam
@@ -294,7 +302,12 @@ class Sed:
             # Concatenate this lnu array
             new_lnu = np.concatenate((new_lnu, other_lnu))
 
-        return Sed(self.lam, new_lnu * get_quantity_unit(self, "lnu"))
+        new_sed = Sed(self.lam, new_lnu * get_quantity_unit(self, "lnu"))
+        new_sed.vel_shifted = self.vel_shifted or any(
+            other_sed.vel_shifted for other_sed in other_seds
+        )
+
+        return new_sed
 
     def __sub__(self, second_sed):
         """Subtract one Sed from another.
@@ -340,6 +353,7 @@ class Sed:
         # They're compatible, subtract the second_sed from the first and make
         # a new Sed
         new_sed = Sed(self.lam, lnu=self.lnu - second_sed.lnu)
+        new_sed.vel_shifted = self.vel_shifted or second_sed.vel_shifted
 
         # If fnu exists on both then we need to subtract the second from the
         # original too
@@ -394,6 +408,7 @@ class Sed:
 
         # They're compatible, add them and make a new Sed
         new_sed = Sed(self.lam, lnu=self.lnu + second_sed.lnu)
+        new_sed.vel_shifted = self.vel_shifted or second_sed.vel_shifted
 
         # If fnu exists on both then we need to add those too
         if (self.fnu is not None) and (second_sed.fnu is not None):
@@ -558,13 +573,82 @@ class Sed:
                 The luminosity array in the internal luminosity unit, at
                 the precision of lnu.
         """
-        # Fold the conversion to the internal luminosity unit into nu (a
-        # small wavelength sized array) so nu * Lnu is never formed in erg/s,
-        # which overflows float32 for realistic populations
         lum_units = Units().luminosity
-        factor = (self.nu * get_quantity_unit(self, "lnu")).to_value(lum_units)
         return get_array_quantity_view(
-            self._lnu * factor.astype(self._lnu.dtype), lum_units
+            self._lnu * self._get_lnu_factor(self.nu, lum_units),
+            lum_units,
+        )
+
+    def _get_integrated_luminosity(
+        self,
+        lnu,
+        integration_method="trapz",
+        nthreads=1,
+    ):
+        """Get the luminosity from integrating lnu over frequency.
+
+        The luminosity is in the internal luminosity unit, at the precision
+        of lnu.
+
+        Args:
+            lnu (np.ndarray):
+                The luminosity density to integrate (e.g. lnu with a window
+                applied).
+            integration_method (str):
+                The integration method, 'trapz' or 'simps'.
+            nthreads (int):
+                The number of threads to use for the integration.
+
+        Returns:
+            unyt_array:
+                The integrated luminosity.
+
+        Raises:
+            PrecisionOverflow:
+                If the luminosity doesn't fit in the precision of lnu.
+        """
+        # NOTE: the integration is done "backwards" when integrating over
+        # frequency. It's faster to just multiply by -1 than to reverse the
+        # array.
+        integral = -integrate_last_axis(
+            self._get_lnu_factor(self.nu, Units().luminosity),
+            lnu,
+            nthreads=nthreads,
+            method=integration_method,
+            out_dtype=lnu.dtype,
+        )
+        if lnu.dtype.itemsize < 8 and np.isinf(integral).any():
+            raise exceptions.PrecisionOverflow(
+                f"Luminosities are too large to be stored at {lnu.dtype} in "
+                f"{Units().luminosity}. Use float64 spectra or a larger "
+                "luminosity unit (e.g. Lsun).",
+            )
+        return integral * Units().luminosity
+
+    def _get_lnu_factor(self, factor, units):
+        """Get a per-wavelength factor converting lnu into other units.
+
+        Multiplying (or integrating) lnu by the returned array gives
+        lnu * factor directly in ``units`` (e.g. nu gives luminosities in
+        Lsun). Folding the unit conversion into this small wavelength sized
+        array means the product is never formed in cgs units, which would
+        overflow float32, so the result keeps the precision of lnu.
+
+        Args:
+            factor (unyt_array):
+                The per-wavelength factor (e.g. nu, or nu / lam).
+            units (unyt.Unit):
+                The units of lnu * factor.
+
+        Returns:
+            np.ndarray:
+                The factor including the unit conversion, at the precision
+                of lnu.
+        """
+        return (
+            (factor * get_quantity_unit(self, "lnu"))
+            .to_value(units)
+            .astype(self._lnu.dtype)
         )
 
     @property
@@ -583,14 +667,13 @@ class Sed:
 
         Returns:
             luminosity (unyt_array):
-                The spectral luminosity density per Angstrom array (always
-                float64).
+                The spectral luminosity density per Angstrom array in the
+                internal units, at the precision of lnu.
         """
-        # NOTE: this is always float64. Luminosity densities per unit
-        # wavelength in erg/s/Angstrom (~1e40+ for realistic populations)
-        # exceed the float32 range.
-        return (self.lnu.astype(np.float64) * self.nu / self.lam).to(
-            Units().luminosity_density_wavelength
+        llam_units = Units().luminosity_density_wavelength
+        return get_array_quantity_view(
+            self._lnu * self._get_lnu_factor(self.nu / self.lam, llam_units),
+            llam_units,
         )
 
     @property
@@ -704,23 +787,8 @@ class Sed:
             bolometric_luminosity (unyt_array):
                 The bolometric luminosity.
         """
-        # Calculate the bolometric luminosity using the trapezium rule.
-        # NOTE: the integration is done "backwards" when integrating over
-        # frequency. It's faster to just multiply by -1 than to reverse the
-        # array.
-        integral = -integrate_last_axis(
-            self._nu,
-            self._lnu,
-            method="trapz",
-            out_dtype=np.float64,
-        )
-
-        # Return the bolometric luminosity with units
-        return (
-            integral
-            * get_quantity_unit(self, "lnu")
-            * get_quantity_unit(self, "nu")
-        )
+        # Calculate the bolometric luminosity using the trapezium rule
+        return self._get_integrated_luminosity(self._lnu)
 
     @property
     def _bolometric_luminosity(self):
@@ -779,7 +847,8 @@ class Sed:
         # (wavelength sized) result is returned at the precision of lnu
         lnu = interp1d(self._lam, self._lnu, kind=kind)(lam)
         return lnu.astype(self._lnu.dtype, copy=False) * get_quantity_unit(
-            self, "lnu"
+            self,
+            "lnu",
         )
 
     @timed("Sed.measure_bolometric_luminosity")
@@ -810,21 +879,10 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        # Calculate the bolometric luminosity
-        # NOTE: the integration is done "backwards" when integrating over
-        # frequency. It's faster to just multiply by -1 than to reverse the
-        # array.
-        integral = -integrate_last_axis(
-            self._nu,
+        return self._get_integrated_luminosity(
             self._lnu,
-            nthreads=nthreads,
-            method=integration_method,
-            out_dtype=np.float64,
-        )
-        return (
-            integral
-            * get_quantity_unit(self, "lnu")
-            * get_quantity_unit(self, "nu")
+            integration_method,
+            nthreads,
         )
 
     @accepts(window=angstrom)
@@ -856,24 +914,11 @@ class Sed:
         transmission = (self.lam > window[0]) & (self.lam < window[1])
 
         # Integrate the window
-        # NOTE: the integration is done "backwards" when integrating over
-        # frequency. It's faster to just multiply by -1 than to reverse the
-        # array.
-        # (integrated at float64 like the bolometric luminosity, since it is
-        # a cheap scalar per spectrum)
-        luminosity = -(
-            integrate_last_axis(
-                self._nu,
-                self._lnu * transmission,
-                nthreads=nthreads,
-                method=integration_method,
-                out_dtype=np.float64,
-            )
-            * get_quantity_unit(self, "lnu")
-            * Hz
+        return self._get_integrated_luminosity(
+            self._lnu * transmission,
+            integration_method,
+            nthreads,
         )
-
-        return luminosity
 
     @accepts(window=angstrom)
     def measure_window_lnu(
@@ -900,25 +945,22 @@ class Sed:
                 If `integration_method` is an incompatible option an error
                 is raised.
         """
-        # Define a pseudo transmission function
+        # Define a pseudo transmission function (at the precision of lnu, or
+        # float64 if it isn't floating point, so the measurement keeps that
+        # precision)
         transmission = (self.lam > window[0]) & (self.lam < window[1])
-        transmission = transmission.astype(float)
+        dtype = get_float_dtype(self._lnu.dtype)
+        transmission = transmission.astype(dtype)
 
         # Apply the correct method
         if integration_method == "average":
-            # Apply to the correct axis of the spectra
-            if self.ndim >= 2:
-                lnu = np.array(
-                    [
-                        np.sum(_lnu * transmission) / np.sum(transmission)
-                        for _lnu in self._lnu.reshape(-1, self._lnu.shape[-1])
-                    ]
-                ) * get_quantity_unit(self, "lnu")
-
-                lnu = lnu.reshape(self._lnu.shape[:-1])
-
-            else:
-                lnu = np.sum(self.lnu * transmission) / np.sum(transmission)
+            # Average over the window along the wavelength axis (the final
+            # axis, whatever the number of dimensions)
+            lnu = (
+                np.sum(self._lnu * transmission, axis=-1)
+                / np.sum(transmission)
+                * get_quantity_unit(self, "lnu")
+            )
 
         else:
             # Luminosity integral
@@ -927,6 +969,7 @@ class Sed:
                 self._lnu * transmission / self.nu,
                 nthreads=nthreads,
                 method=integration_method,
+                out_dtype=dtype,
             )
 
             # Transmission integral
@@ -935,6 +978,7 @@ class Sed:
                 transmission / self.nu,
                 nthreads=nthreads,
                 method=integration_method,
+                out_dtype=dtype,
             )
 
             # Compute lnu
@@ -1208,22 +1252,32 @@ class Sed:
         # Return the fnu with units, without making a copy
         return get_quantity_view(self, "_fnu")
 
+    @accepts(peculiar_velocity=km / s)
     @timed("Sed.get_fnu")
-    def get_fnu(self, cosmo, z, igm=None, nthreads=1, out_dtype=None):
+    def get_fnu(
+        self,
+        cosmo,
+        z,
+        igm=None,
+        nthreads=1,
+        out_dtype=None,
+        peculiar_velocity=None,
+    ):
         """Calculate the observed frame spectral energy distribution.
 
         This will also populate the observed wavelength and frequency arrays
         with the observer frame values.
 
         NOTE: if a redshift of 0 is passed the flux return will be calculated
-        assuming a distance of 10 pc omitting IGM since at this distance
-        IGM contribution makes no sense.
+        assuming a distance of 10 pc omitting IGM (and any peculiar velocity)
+        since at this distance IGM contribution makes no sense.
 
         Args:
             cosmo (astropy.cosmology):
                 astropy cosmology instance.
             z (float):
-                The redshift of the spectra.
+                The cosmological redshift of the spectra (sets luminosity
+                distance and IGM).
             igm (igm):
                 The IGM class. e.g. `synthesizer.igm.Inoue14`.
                 Defaults to None.
@@ -1232,11 +1286,19 @@ class Sed:
             out_dtype (np.dtype, optional):
                 Requested floating-point dtype for the flux array. If None
                 the flux inherits the luminosity's dtype.
+            peculiar_velocity (unyt_quantity):
+                Line-of-sight peculiar velocity (positive = receding). Shifts
+                the spectrum to z_obs with 1 + z_obs = (1 + z)(1 + v / c);
+                distance and IGM stay at z. Defaults to None (no shift).
 
         Returns:
             fnu (ndarray)
                 Spectral flux density in the observer frame.
 
+        Raises:
+            InconsistentArguments
+                If a peculiar_velocity is passed for spectra that already
+                include particle velocity shifts (vel_shift=True).
         """
         # Store the redshift for later use
         self.redshift = z
@@ -1251,14 +1313,34 @@ class Sed:
             self._lnu.dtype if out_dtype is None else np.dtype(out_dtype)
         )
 
+        # Peculiar velocity shifts the spectrum to z_obs without moving the
+        # source; z_obs == z when no velocity is given.
+        z_obs = float(z)
+        if peculiar_velocity is not None:
+            # Particle velocity shifts already include any bulk motion
+            if self.vel_shifted:
+                raise exceptions.InconsistentArguments(
+                    "Can't apply a peculiar_velocity to spectra generated "
+                    "with vel_shift=True; include any bulk motion in the "
+                    "particle velocities instead."
+                )
+            beta = float(peculiar_velocity.value) / c.to_value(km / s)
+            z_obs = (1.0 + z_obs) * (1.0 + beta) - 1.0
+
+        # The observer frame arrays are at z_obs (e.g. for resampling)
+        self.redshift = z_obs
+
         if self._obslam is None or self._obslam.shape != self._lam.shape:
             self._obslam = np.empty_like(self._lam)
         if self._obsnu is None or self._obsnu.shape != self._nu.shape:
             self._obsnu = np.empty_like(self._nu)
 
         # Calculate the observed wavelength and frequency
-        one_plus_z = 1.0 + float(z)
+        one_plus_z = 1.0 + z_obs
+        # d_L is set by the cosmological z, rescaled to the observed frame
+        # (factor 1 when there is no peculiar velocity).
         luminosity_distance_cm = get_luminosity_distance(cosmo, z).to_value(cm)
+        luminosity_distance_cm *= one_plus_z / (1.0 + float(z))
         conversion = (
             get_attr_unit_conversion(
                 self.__class__.__dict__["lnu"].unit,
@@ -1600,6 +1682,7 @@ class Sed:
             new_spectra.astype(self._lnu.dtype, copy=False)
             * get_quantity_unit(self, "lnu"),
         )
+        sed.vel_shifted = self.vel_shifted
 
         # If self also has fnu we should resample those too and store the
         # shifted wavelengths and frequencies
@@ -1613,7 +1696,8 @@ class Sed:
                 fill=0.0,
                 verbose=False,
             ).astype(self._fnu.dtype, copy=False) * get_quantity_unit(
-                self, "fnu"
+                self,
+                "fnu",
             )
             sed.redshift = self.redshift
 
@@ -1902,7 +1986,8 @@ class Sed:
             .value
         )
         y = np.ascontiguousarray(
-            self._lnu[..., ionisation_mask], dtype=np.float64
+            self._lnu[..., ionisation_mask],
+            dtype=np.float64,
         )
         y *= factor
 
@@ -2053,7 +2138,7 @@ class Sed:
 
         # spectres always returns float64, so restore the input precision
         new_lnu = new_flat_lnu.astype(self._lnu.dtype, copy=False).reshape(
-            self._lnu.shape
+            self._lnu.shape,
         ) * get_quantity_unit(self, "lnu")
 
         # Return new Sed or modify in place
@@ -2856,51 +2941,3 @@ def plot_spectra_as_rainbow(
     ax.imshow(im, aspect="auto", extent=(lam_min, lam_max, 0, 1))
 
     return fig, ax
-
-
-@timed("Sed.integrate_particle_sed")
-def integrate_particle_sed(sed, nthreads=1):
-    """Integrate a per-particle Sed to an integrated Sed using C++.
-
-    This helper is intended for Sed objects whose luminosity array has shape
-    ``(nparticle, nlam)``. It uses the specialised C++ particle spectra
-    reduction kernel rather than the generic NumPy-based ``Sed.sum`` method.
-
-    Args:
-        sed (Sed):
-            The per-particle Sed to reduce.
-        nthreads (int):
-            The number of threads to use in the C++ reduction. If ``-1`` then
-            all available CPU cores will be used.
-
-    Returns:
-        Sed:
-            A new integrated Sed with the same wavelength grid and units as the
-            input Sed.
-
-    Raises:
-        InconsistentArguments:
-            If the input Sed does not contain a two-dimensional luminosity
-            array with particle spectra on the leading axis.
-    """
-    # Resolve the automatic thread-count request to a concrete integer before
-    # dispatching into the C++ extension.
-    if nthreads == -1:
-        nthreads = os.cpu_count() or 1
-
-    # Validate that the Sed matches the specialised particle spectra layout
-    # expected by the reduction extension.
-    if sed._lnu.ndim != 2:
-        raise exceptions.InconsistentArguments(
-            "integrate_particle_sed expects a Sed with a 2D lnu array of "
-            "shape "
-            f"(nparticle, nlam), got {sed._lnu.shape}."
-        )
-
-    # Reduce the per-particle spectra in C++ and rebuild a unit-aware Sed on
-    # the original wavelength grid.
-    reduced_lnu = reduce_particle_spectra(sed._lnu, nthreads, sed._lnu.dtype)
-    return Sed(
-        sed.lam,
-        get_array_quantity_view(reduced_lnu, get_quantity_unit(sed, "lnu")),
-    )

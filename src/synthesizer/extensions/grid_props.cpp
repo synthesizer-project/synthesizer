@@ -76,13 +76,14 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
    * one supported dtype family before any hot kernels use raw pointers. */
   PyArrayObject *float_arrays[MAX_GRID_NDIM + 3] = {NULL};
   const char *float_names[MAX_GRID_NDIM + 3] = {NULL};
+  /* Storage for the axis labels, since float_names only holds pointers. */
   std::array<std::string, MAX_GRID_NDIM> axis_labels;
   int float_count = 0;
 
   if (np_spectra_ != NULL &&
       reinterpret_cast<PyObject *>(np_spectra_) != Py_None) {
     float_arrays[float_count] = np_spectra_;
-    float_names[float_count] = "grid spectra";
+    float_names[float_count] = "grid_spectra";
     float_count++;
   }
 
@@ -95,6 +96,9 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
       return;
     }
 
+    /* Extract the axis name (if given) so dtype errors can name the axis.
+     * A missing or invalid name is not fatal, we just fall back to an
+     * unnamed axis. */
     axis_names_[idim].clear();
     if (axis_names_tuple != NULL && PySequence_Check(axis_names_tuple) &&
         !PyUnicode_Check(axis_names_tuple)) {
@@ -114,6 +118,7 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
       }
     }
 
+    /* Label the axis for error messages, e.g. "grid axis ages". */
     float_arrays[float_count] = np_axis_arr;
     axis_labels[idim] = "grid axis";
     if (!axis_names_[idim].empty()) {
@@ -125,14 +130,14 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
 
   if (np_lam_ != NULL && reinterpret_cast<PyObject *>(np_lam_) != Py_None) {
     float_arrays[float_count] = np_lam_;
-    float_names[float_count] = "grid wavelengths (lam)";
+    float_names[float_count] = "lam";
     float_count++;
   }
 
   if (np_grid_weights_ != NULL &&
       reinterpret_cast<PyObject *>(np_grid_weights_) != Py_None) {
     float_arrays[float_count] = np_grid_weights_;
-    float_names[float_count] = "grid weights";
+    float_names[float_count] = "grid_weights";
     float_count++;
   }
 

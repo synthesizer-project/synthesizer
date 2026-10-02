@@ -10,7 +10,7 @@ These classes should not be used directly.
 import os
 
 import numpy as np
-from unyt import Hz, Lsun, erg, s, unyt_array
+from unyt import Hz, erg, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.emission_models.extractors.extractor import (
@@ -21,12 +21,7 @@ from synthesizer.emission_models.extractors.extractor import (
     ParticleExtractor,
 )
 from synthesizer.emission_models.utils import cache_model_params
-from synthesizer.emissions import (
-    LineCollection,
-    Sed,
-    integrate_particle_lines,
-    integrate_particle_sed,
-)
+from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.reductions import (
     combine_spectra_2d,
     reduce_particle_spectra,
@@ -483,7 +478,8 @@ class Generation:
             # If we have a template we need to generate the spectra
             # for each model
             sed = generator.get_spectra(
-                emitter.bolometric_luminosity, out_dtype=out_dtype
+                emitter.bolometric_luminosity,
+                out_dtype=out_dtype,
             )
         else:
             # Generate the spectra
@@ -501,12 +497,13 @@ class Generation:
         # Store the spectra in the right place (integrating if we need to)
         if per_particle:
             particle_spectra[this_model.label] = sed
-            spectra[this_model.label] = integrate_particle_sed(sed, nthreads)
+            spectra[this_model.label] = sed.sum(nthreads=nthreads)
         else:
             spectra[this_model.label] = sed
 
         return spectra, particle_spectra
 
+    @timed("Generation._generate_lines")
     def _generate_lines(
         self,
         this_model,
@@ -518,8 +515,8 @@ class Generation:
         line_ids,
         spectra,
         particle_spectra,
-        out_dtype=None,
         nthreads=1,
+        out_dtype=None,
     ):
         """Generate the lines for a given model.
 
@@ -546,12 +543,12 @@ class Generation:
             particle_spectra (dict):
                 Dictionary of existing particle spectra from all emitters for
                 scaling.
+            nthreads (int):
+                The number of threads available for the particle reduction.
             out_dtype (np.dtype):
                 The dtype of the generated lines, passed to the generator
                 which produces its output at this precision. Defaults to the
                 global default output dtype.
-            nthreads (int):
-                The number of threads available for the particle reduction.
 
         Returns:
             dict:
@@ -565,7 +562,7 @@ class Generation:
         # applicable when nparticles exists in the emitter
         if getattr(emitter, "nparticles", 1) == 0:
             # Create the zeroed luminosity and continuum arrays
-            lums = np.zeros((0, len(lams)), dtype=out_dtype) * Lsun
+            lums = np.zeros((0, len(lams)), dtype=out_dtype) * erg / s
             conts = np.zeros((0, len(lams)), dtype=out_dtype) * erg / s / Hz
 
             zeroed_lines = LineCollection(
@@ -588,18 +585,17 @@ class Generation:
             # If we have a template we need to generate the spectra
             # for each model
             spectra = generator.get_spectra(
-                emitter.bolometric_luminosity, out_dtype=out_dtype
+                emitter.bolometric_luminosity,
+                out_dtype=out_dtype,
             )
             out_lines = LineCollection(
                 line_ids=line_ids,
                 lam=lams,
-                lum=np.zeros(
-                    (emitter.nparticles, len(lams))
-                    if per_particle
-                    else len(lams),
-                    dtype=out_dtype,
-                )
-                * Lsun,
+                lum=np.zeros((emitter.nparticles, len(lams)), dtype=out_dtype)
+                * erg
+                / s
+                if per_particle
+                else np.zeros(len(lams), dtype=out_dtype) * erg / s,
                 cont=spectra.get_lnu_at_lam(lams),
             )
         else:
@@ -620,9 +616,7 @@ class Generation:
         # Store the lines in the right place (integrating if we need to)
         if per_particle:
             particle_lines[this_model.label] = out_lines
-            lines[this_model.label] = integrate_particle_lines(
-                out_lines, nthreads
-            )
+            lines[this_model.label] = out_lines.sum(nthreads=nthreads)
         else:
             lines[this_model.label] = out_lines
 
@@ -824,15 +818,7 @@ class Transformation:
         # Store the spectra in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_emissions[this_model.label] = emission
-            with timer("Transformation._transform_emission.integrate"):
-                if isinstance(emission, Sed):
-                    emissions[this_model.label] = integrate_particle_sed(
-                        emission, nthreads
-                    )
-                else:
-                    emissions[this_model.label] = integrate_particle_lines(
-                        emission, nthreads
-                    )
+            emissions[this_model.label] = emission.sum(nthreads=nthreads)
         else:
             emissions[this_model.label] = emission
 
@@ -968,6 +954,7 @@ class Combination:
 
         return spectra, particle_spectra
 
+    @timed("Combination._combine_lines")
     def _combine_lines(
         self,
         emission_model,
@@ -1005,34 +992,39 @@ class Combination:
             in_lines = lines
 
         template = in_lines[this_model._combine_labels[0]]
-        labels = this_model._combine_labels
 
-        # Per-particle collections are 2D, so they go through the same
-        # NaN-ignoring threaded kernel the spectra path uses. Integrated
-        # collections are 1D, which that kernel does not take, so they fall
-        # back to the same masked NumPy accumulation _combine_spectra uses.
-        # The combine kernel walks the buffers directly, so subset
-        # collections holding strided views have to be made contiguous first.
-        # This is a no-op for the usual freshly built collection.
-        lum_arrays = tuple(
-            as_contiguous(in_lines[label]._luminosity) for label in labels
-        )
-        cont_arrays = tuple(
-            as_contiguous(in_lines[label]._continuum) for label in labels
-        )
+        # Combine raw arrays directly and construct one LineCollection at the
+        # end to avoid repeated constructor and metadata work in hot loops.
         if this_model.per_particle:
-            out_luminosity = combine_spectra_2d(lum_arrays, nthreads)
-            out_continuum = combine_spectra_2d(cont_arrays, nthreads)
+            # Per-particle arrays go through the threaded kernel, which needs
+            # contiguous buffers
+            out_luminosity = combine_spectra_2d(
+                tuple(
+                    as_contiguous(in_lines[label]._luminosity)
+                    for label in this_model._combine_labels
+                ),
+                nthreads,
+            )
+            out_continuum = combine_spectra_2d(
+                tuple(
+                    as_contiguous(in_lines[label]._continuum)
+                    for label in this_model._combine_labels
+                ),
+                nthreads,
+            )
         else:
-            out_luminosity = np.zeros_like(lum_arrays[0])
-            out_continuum = np.zeros_like(cont_arrays[0])
-            for arr, out in (
-                (lum_arrays, out_luminosity),
-                (cont_arrays, out_continuum),
-            ):
-                for a in arr:
-                    nan_mask = np.isnan(a)
-                    out[~nan_mask] += a[~nan_mask]
+            out_luminosity = np.zeros(
+                template._luminosity.shape,
+                dtype=template._luminosity.dtype,
+            )
+            out_continuum = np.zeros(
+                template._continuum.shape,
+                dtype=template._continuum.dtype,
+            )
+            for combine_label in this_model._combine_labels:
+                combine_lines = in_lines[combine_label]
+                out_luminosity += combine_lines._luminosity
+                out_continuum += combine_lines._continuum
 
         out_lines = LineCollection(
             line_ids=template.line_ids,
@@ -1055,9 +1047,7 @@ class Combination:
         # Store the lines in the right place (integrating if we need to)
         if this_model.per_particle:
             particle_lines[this_model.label] = out_lines
-            lines[this_model.label] = integrate_particle_lines(
-                out_lines, nthreads
-            )
+            lines[this_model.label] = out_lines.sum(nthreads=nthreads)
         else:
             lines[this_model.label] = out_lines
 

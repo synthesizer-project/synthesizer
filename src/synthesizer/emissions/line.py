@@ -37,8 +37,6 @@ Example usages::
 
 """
 
-import os
-
 import matplotlib.pyplot as plt
 import numpy as np
 from unyt import (
@@ -46,6 +44,7 @@ from unyt import (
     Lsun,
     angstrom,
     c,
+    cm,
     erg,
     eV,
     h,
@@ -71,8 +70,8 @@ from synthesizer.emissions.utils import (
     get_available_ratio_ids,
     get_line2index,
     get_line_id_signature,
+    nansum_leading_axes,
 )
-from synthesizer.extensions.reductions import reduce_particle_spectra
 from synthesizer.extensions.spectra_operations import (
     apply_separable_attenuation_2d,
     multiply_array_by_vector_1d,
@@ -85,12 +84,9 @@ from synthesizer.units import (
     get_quantity_unit,
 )
 from synthesizer.utils import TableFormatter
-from synthesizer.utils.operation_timers import timed, timer
-from synthesizer.utils.precision import resolve_out_dtype
-from synthesizer.utils.util_funcs import (
-    as_contiguous,
-    get_attr_unit_conversion,
-)
+from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import get_float_dtype, resolve_out_dtype
+from synthesizer.utils.util_funcs import get_attr_unit_conversion
 
 
 class LineCollection:
@@ -823,7 +819,10 @@ class LineCollection:
     def __contains__(self, line_id):
         """Check whether a line_id is in the collection.
 
-        This enables syntax such as ``if line_id in lines``.
+        This enables syntax such as ``if line_id in lines``. A blended
+        line_id (a comma separated string) is considered present if it was
+        stored as a blend or if every one of its component lines is in the
+        collection.
 
         Args:
             line_id (str):
@@ -833,15 +832,22 @@ class LineCollection:
             bool:
                 True if the line_id is in the collection, False otherwise.
         """
-        return str(alias_to_line_id(line_id)) in self.line2index
+        line_id = str(alias_to_line_id(line_id))
+        return line_id in self.line2index or all(
+            lid.strip() in self.line2index for lid in line_id.split(",")
+        )
 
-    def sum(self, axis=None):
+    @timed("LineCollection.sum")
+    def sum(self, axis=None, nthreads=1):
         """Sum the lines in the collection.
 
         Args:
             axis (int/tuple):
                 The axis/axes to sum over. By default this will sum over all
                 but the final axis (the axis containing different lines).
+            nthreads (int):
+                The number of threads to use for the default reduction. If -1
+                all available CPU cores will be used.
         """
         # First lets check if we have a multidimensional line collection, if
         # not we can just return the single line object
@@ -855,44 +861,29 @@ class LineCollection:
                 raise exceptions.InconsistentArguments(
                     f"Axis {axis} not compatible with LineCollection of ndim=1"
                 )
-            return self._summed_collection(axis)
+            return LineCollection(
+                line_ids=self.line_ids,
+                lam=self.lam,
+                lum=np.nansum(self.luminosity, axis=axis),
+                cont=np.nansum(self.continuum, axis=axis),
+            )
 
         # If no axes are passed we will sum over all but the last axis
         if axis is None:
-            axis = tuple(range(self.ndim - 1))
+            return LineCollection(
+                line_ids=self.line_ids,
+                lam=self.lam,
+                lum=nansum_leading_axes(self._luminosity, nthreads)
+                * get_quantity_unit(self, "luminosity"),
+                cont=nansum_leading_axes(self._continuum, nthreads)
+                * get_quantity_unit(self, "continuum"),
+            )
 
-        return self._summed_collection(axis)
-
-    def _summed_collection(self, axis):
-        """Build the reduced LineCollection for sum() over one or more axes.
-
-        The reduction runs on the raw buffers rather than on the ``luminosity``
-        and ``continuum`` Quantity descriptors. Reading a descriptor builds a
-        unyt_array by multiplying the buffer by its unit, and that multiply
-        copies: on a per-particle collection it is a full copy of an
-        (nparticle, nline) array per read, which dominated the cost of the
-        combination and transformation steps. Units go back on afterwards as a
-        view over the reduced buffer.
-
-        Args:
-            axis (int/tuple):
-                The axis or axes to sum over.
-
-        Returns:
-            LineCollection:
-                The reduced collection.
-        """
         return LineCollection(
             line_ids=self.line_ids,
             lam=self.lam,
-            lum=get_array_quantity_view(
-                np.nansum(self._luminosity, axis=axis),
-                get_quantity_unit(self, "luminosity"),
-            ),
-            cont=get_array_quantity_view(
-                np.nansum(self._continuum, axis=axis),
-                get_quantity_unit(self, "continuum"),
-            ),
+            lum=np.nansum(self.luminosity, axis=axis),
+            cont=np.nansum(self.continuum, axis=axis),
         )
 
     def concat(self, *other_lines):
@@ -993,57 +984,6 @@ class LineCollection:
         self.available_diagrams = get_available_diagram_ids(signature)
         return self.available_diagrams
 
-    def _set_fluxes(self, distance_factor, dtype, nthreads=1):
-        """Populate flux and continuum_flux from the stored luminosities.
-
-        The unit conversion is folded into the distance scaling. Producing
-        these in the luminosity's own units would leave the assignment to
-        convert a whole (nparticle, nline) array into the flux units, a second
-        full pass over the data for what is a constant factor.
-
-        Args:
-            distance_factor (unyt_quantity):
-                The 4 pi d^2 factor to divide the luminosities by.
-            dtype (np.dtype):
-                The floating-point type to store the fluxes at.
-            nthreads (int):
-                The number of threads to scale with.
-        """
-        flux_unit = get_quantity_unit(self, "flux")
-        cont_flux_unit = get_quantity_unit(self, "continuum_flux")
-        lum_scale = (
-            get_attr_unit_conversion(
-                get_quantity_unit(self, "luminosity") / distance_factor.units,
-                flux_unit,
-            )
-            / distance_factor.value
-        )
-        cont_scale = (
-            get_attr_unit_conversion(
-                get_quantity_unit(self, "continuum") / distance_factor.units,
-                cont_flux_unit,
-            )
-            / distance_factor.value
-        )
-        # Scale both arrays in one threaded pass through the same fused
-        # kernel the rest of the line path uses. A plain NumPy multiply here
-        # is single threaded, which on per-particle collections is tens of
-        # gigabytes moved on one core.
-        nspec = self._luminosity.shape[0]
-        lum_out, cont_out = scale_line_arrays(
-            self._luminosity,
-            self._continuum,
-            np.full(nspec, lum_scale, dtype=self._luminosity.dtype),
-            np.full(nspec, cont_scale, dtype=self._continuum.dtype),
-            nthreads=nthreads,
-        )
-        self.flux = get_array_quantity_view(
-            lum_out.astype(dtype, copy=False), flux_unit
-        )
-        self.continuum_flux = get_array_quantity_view(
-            cont_out.astype(dtype, copy=False), cont_flux_unit
-        )
-
     def get_flux0(self, out_dtype=None, nthreads=1):
         """Calculate the rest frame line flux.
 
@@ -1064,23 +1004,9 @@ class LineCollection:
             flux (unyt_quantity):
                 Flux of the line in units of erg/s/cm2 by default.
         """
-        # Unit arithmetic can promote float32 values, so explicitly restore
-        # the luminosity dtype when no output precision was requested.
-        dtype = (
-            self._luminosity.dtype
-            if out_dtype is None
-            else resolve_out_dtype(out_dtype)
+        return self.get_flux(
+            cosmo=None, z=0, out_dtype=out_dtype, nthreads=nthreads
         )
-        distance_factor = 4 * np.pi * (10 * pc) ** 2
-        self._set_fluxes(distance_factor, dtype, nthreads)
-
-        # Set the observed wavelength (in this case this is the rest frame
-        # wavelength)
-        self.obslam = get_array_quantity_view(
-            self._lam.copy(), get_quantity_unit(self, "lam")
-        )
-
-        return self.flux
 
     @timed("LineCollection.get_flux")
     def get_flux(self, cosmo, z, igm=None, out_dtype=None, nthreads=1):
@@ -1114,47 +1040,62 @@ class LineCollection:
         # If the redshift is 0 we can assume a distance of 10pc and ignore
         # the IGM
         if z == 0:
-            return self.get_flux0(out_dtype=out_dtype, nthreads=nthreads)
+            luminosity_distance = 10 * pc
+            igm = None
+        else:
+            # Get the luminosity distance
+            luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
-        # Get the luminosity distance
-        luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
-
-        # Unit arithmetic can promote float32 values, so explicitly restore
-        # the luminosity dtype when no output precision was requested.
-        dtype = (
-            self._luminosity.dtype
-            if out_dtype is None
-            else resolve_out_dtype(out_dtype)
+        # Compute flux and observed continuum in one threaded pass, folding
+        # the unit conversion into the scale factors
+        area = (4 * np.pi * luminosity_distance**2).to_value("cm**2")
+        nspec = self._luminosity.shape[0]
+        self.flux, self.continuum_flux = scale_line_arrays(
+            self._luminosity,
+            self._continuum,
+            np.full(
+                nspec,
+                get_attr_unit_conversion(
+                    get_quantity_unit(self, "luminosity"),
+                    get_quantity_unit(self, "flux") * cm**2,
+                )
+                / area,
+                dtype=self._luminosity.dtype,
+            ),
+            np.full(
+                nspec,
+                get_attr_unit_conversion(
+                    get_quantity_unit(self, "continuum"),
+                    get_quantity_unit(self, "continuum_flux") * cm**2,
+                )
+                / area,
+                dtype=self._continuum.dtype,
+            ),
+            nthreads=nthreads,
         )
-        distance_factor = 4 * np.pi * luminosity_distance**2
-
-        with timer("LineCollection.get_flux.scale_fluxes"):
-            self._set_fluxes(distance_factor, dtype, nthreads)
 
         # Set the observed wavelength
-        self.obslam = get_array_quantity_view(
-            self._lam * (1 + z), get_quantity_unit(self, "lam")
-        )
+        self.obslam = self.lam * (1 + z)
 
         # If we are applying an IGM model apply it
         if igm is not None:
             # Support both class references and instantiated objects
             if callable(igm):
-                igm_transmission = igm().get_transmission(
-                    z,
-                    get_array_quantity_view(
-                        self._obslam, get_quantity_unit(self, "obslam")
-                    ),
-                )
+                igm_transmission = igm().get_transmission(z, self.obslam)
             else:
-                igm_transmission = igm.get_transmission(
-                    z,
-                    get_array_quantity_view(
-                        self._obslam, get_quantity_unit(self, "obslam")
-                    ),
-                )
-            self._flux *= igm_transmission
-            self._continuum_flux *= igm_transmission
+                igm_transmission = igm.get_transmission(z, self.obslam)
+            self.flux *= igm_transmission
+            self.continuum_flux *= igm_transmission
+
+        # Unit arithmetic can promote float32 values, so explicitly restore
+        # the luminosity dtype when no output precision was requested.
+        dtype = (
+            self.luminosity.dtype
+            if out_dtype is None
+            else resolve_out_dtype(out_dtype)
+        )
+        self.flux = self.flux.astype(dtype, copy=False)
+        self.continuum_flux = self.continuum_flux.astype(dtype, copy=False)
 
         return self.flux
 
@@ -1765,12 +1706,21 @@ class LineCollection:
         new_shape = list(self.shape)
         new_shape[-1] = len(wavelength_bins) - 1
 
-        # Create the arrays we'll need to store the blended lines
+        # Create the arrays we'll need to store the blended lines (at the
+        # precision of the lines being blended, or float64 if they aren't
+        # floating point)
         blended_lines_counts = np.zeros(len(wavelength_bins) - 1, dtype=int)
         blended_line_ids = [[] for _ in range(len(wavelength_bins) - 1)]
-        blended_line_lams = np.zeros(len(wavelength_bins) - 1, dtype=float)
-        blended_line_lums = np.zeros(new_shape, dtype=float)
-        blended_line_conts = np.zeros(new_shape, dtype=float)
+        blended_line_lams = np.zeros(
+            len(wavelength_bins) - 1,
+            dtype=get_float_dtype(self._lam.dtype),
+        )
+        blended_line_lums = np.zeros(
+            new_shape, dtype=get_float_dtype(self._luminosity.dtype)
+        )
+        blended_line_conts = np.zeros(
+            new_shape, dtype=get_float_dtype(self._continuum.dtype)
+        )
 
         # Loop bin indices and combine the lines into the blended_lines array
         for i, bin_ind in enumerate(bin_inds):
@@ -1836,8 +1786,10 @@ class LineCollection:
                 synthesizer.sed.Sed object.
 
         """
-        # Create empty spectra with correct units
-        sed_lnu = np.zeros(len(sed_lam)) * erg / s / Hz
+        # Create empty spectra with correct units (at the precision of the
+        # line luminosities, or float64 if they aren't floating point)
+        dtype = get_float_dtype(self._luminosity.dtype)
+        sed_lnu = np.zeros(len(sed_lam), dtype=dtype) * erg / s / Hz
 
         # Loop over the vacuum wavelengths and luminosities in the collection
         # and add them to the spectra
@@ -1865,58 +1817,3 @@ class LineCollection:
 
         # Create and return new synthesizer.sed.Sed object
         return Sed(lam=sed_lam, lnu=sed_lnu)
-
-
-def integrate_particle_lines(lines, nthreads=1):
-    """Integrate a per-particle LineCollection using C++.
-
-    The counterpart of ``integrate_particle_sed`` for lines. It expects
-    luminosity and continuum arrays of shape
-    ``(nparticle, nline)`` and uses the threaded particle reduction kernel
-    rather than the generic NumPy ``LineCollection.sum``.
-
-    Args:
-        lines (LineCollection):
-            The per-particle LineCollection to reduce.
-        nthreads (int):
-            The number of threads to use in the C++ reduction. If ``-1`` then
-            all available CPU cores will be used.
-
-    Returns:
-        LineCollection:
-            A new integrated LineCollection with the same lines and units.
-
-    Raises:
-        InconsistentArguments:
-            If the collection does not hold two-dimensional per-particle
-            arrays.
-    """
-    if nthreads == -1:
-        nthreads = os.cpu_count() or 1
-
-    if lines._luminosity.ndim != 2:
-        raise exceptions.InconsistentArguments(
-            "integrate_particle_lines expects a LineCollection with 2D "
-            "arrays of shape (nparticle, nline), got "
-            f"{lines._luminosity.shape}."
-        )
-
-    # The reduction kernel walks the buffer directly, so a subset collection
-    # holding a strided view has to be made contiguous first. This is a no-op
-    # for the usual case of a freshly built collection.
-    lum_in = as_contiguous(lines._luminosity)
-    cont_in = as_contiguous(lines._continuum)
-
-    lum = reduce_particle_spectra(lum_in, nthreads, lum_in.dtype)
-    cont = reduce_particle_spectra(cont_in, nthreads, cont_in.dtype)
-
-    return LineCollection(
-        line_ids=lines.line_ids,
-        lam=lines.lam,
-        lum=get_array_quantity_view(
-            lum, get_quantity_unit(lines, "luminosity")
-        ),
-        cont=get_array_quantity_view(
-            cont, get_quantity_unit(lines, "continuum")
-        ),
-    )

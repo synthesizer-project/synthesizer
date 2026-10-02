@@ -8,7 +8,7 @@ Components and Galaxies.
 import numpy as np
 import pytest
 from astropy.cosmology import Planck18 as cosmo
-from unyt import Mpc, Msun, Myr, cm, erg, kpc, s
+from unyt import Mpc, Msun, Myr, cm, erg, kpc, s, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging.image_collection import ImageCollection
@@ -191,7 +191,9 @@ class TestLineImager:
             loaded = LineImager._from_hdf5(hdf)
 
         assert loaded.snrs == 5.0
+        assert isinstance(loaded.snrs, float)
         assert loaded.depth == inst.depth
+        assert isinstance(loaded.depth, unyt_quantity)
 
     @pytest.mark.parametrize(
         ("depth", "expected_unit"),
@@ -394,6 +396,26 @@ class TestParametricGalaxyLineMaps:
         assert set(imgs.keys()) == set(line_ids)
         for lid in line_ids:
             assert imgs[lid].arr.sum() >= 0
+
+    def test_blended_line_map(self, parametric_galaxy_with_lines, line_ids):
+        """A blended line id should map the summed blend."""
+        blend = f"{line_ids[0]}, {line_ids[1]}"
+        instrument = LineImager(
+            "inst", line_ids=[blend, *line_ids], resolution=1 * Mpc
+        )
+        imgs = parametric_galaxy_with_lines.get_line_maps_luminosity(
+            "nebular",
+            # A nested list should canonicalise to the same blend
+            line_ids=[line_ids[:2], *line_ids[:2]],
+            fov=0.1 * Mpc,
+            instrument=instrument,
+            img_type="smoothed",
+        )
+        assert set(imgs.keys()) == {blend, *line_ids[:2]}
+        assert np.allclose(
+            imgs[blend].arr,
+            imgs[line_ids[0]].arr + imgs[line_ids[1]].arr,
+        )
 
     def test_hist_rejected(self, parametric_galaxy_with_lines, line_ids):
         """Parametric galaxies cannot produce histogram line maps."""

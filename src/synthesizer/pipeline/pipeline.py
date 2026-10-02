@@ -3261,6 +3261,10 @@ class Pipeline:
                 single InstrumentCollection for this operation.
             line_ids (list):
                 The emission line ids to make images for.
+                Blended lines (e.g. doublets) can be given as a comma separated
+                string (e.g. "O 3 4958.91A, O 3 5006.84A") or a nested list of
+                line ids; these produce a single map of the summed lines keyed
+                by the ", " joined id.
             fov (unyt_quantity):
                 The field of view of the image with units.
             img_type (str):
@@ -3292,6 +3296,9 @@ class Pipeline:
                 "models and image sizes."
             )
             labels = self.emission_model.saved_labels
+
+        # Canonicalise ids so nested lists become comma separated blends
+        line_ids = [str(alias_to_line_id(lid)) for lid in line_ids]
 
         self._do_line_maps_lum = True
 
@@ -3453,6 +3460,10 @@ class Pipeline:
                 single InstrumentCollection for this operation.
             line_ids (list):
                 The emission line ids to make images for.
+                Blended lines (e.g. doublets) can be given as a comma separated
+                string (e.g. "O 3 4958.91A, O 3 5006.84A") or a nested list of
+                line ids; these produce a single map of the summed lines keyed
+                by the ", " joined id.
             fov (unyt_quantity):
                 The field of view of the image with units.
             img_type (str):
@@ -3487,6 +3498,9 @@ class Pipeline:
                 "models and image sizes."
             )
             labels = self.emission_model.saved_labels
+
+        # Canonicalise ids so nested lists become comma separated blends
+        line_ids = [str(alias_to_line_id(lid)) for lid in line_ids]
 
         self._do_line_maps_flux = True
 

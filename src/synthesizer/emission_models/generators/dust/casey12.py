@@ -8,7 +8,6 @@ import numpy as np
 from unyt import (
     Hz,
     K,
-    Lsun,
     angstrom,
     c,
     erg,
@@ -360,7 +359,12 @@ class Casey12(DustEmission):
 
         # Scale the normalised emission, at the output precision
         sed._lnu = self.get_scaled_emission(
-            lnu, scaling, emitter, model, out_dtype, cmb_factor
+            lnu,
+            scaling,
+            emitter,
+            model,
+            out_dtype,
+            cmb_factor,
         )
 
         return sed
@@ -473,14 +477,19 @@ class Casey12(DustEmission):
 
         # Scale the normalised emission, at the output precision
         lnu = self.get_scaled_emission(
-            lnu, scaling, emitter, model, out_dtype, cmb_factor
+            lnu,
+            scaling,
+            emitter,
+            model,
+            out_dtype,
+            cmb_factor,
         )
 
         # Return as LineCollection with continuum only
         lines = LineCollection(
             line_ids,
             line_lams,
-            lum=np.zeros(lnu.shape, dtype=lnu.dtype) * Lsun,
+            lum=np.zeros(lnu.shape, dtype=lnu.dtype) * erg / s,
             cont=lnu * erg / s / Hz,
         )
 

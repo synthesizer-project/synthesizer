@@ -171,6 +171,10 @@ PyObject *compute_truncated_los_kernel(PyObject *self, PyObject *args) {
       return compute_truncated_los_kernel_impl<double>(self, np_q_grid,
                                                        np_z_grid, kernel_name);
     default:
+      PyErr_Format(PyExc_TypeError,
+                   "Unsupported dtype for q_grid and z_grid, "
+                   "must be float32 or float64 (got %d).",
+                   input_typenum);
       return NULL;
   }
 }

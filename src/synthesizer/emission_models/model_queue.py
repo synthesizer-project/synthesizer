@@ -40,7 +40,7 @@ import numpy as np
 
 from synthesizer import exceptions
 from synthesizer.synth_warnings import warn
-from synthesizer.utils.operation_timers import timer
+from synthesizer.utils.operation_timers import timed, timer
 
 
 def gil_enabled():
@@ -183,6 +183,7 @@ class ModelQueue:
             The set of active model labels that have already been processed.
     """
 
+    @timed("ModelQueue.__init__")
     def __init__(self, root_model):
         """Initialise the queue for an emission model execution.
 
@@ -330,6 +331,7 @@ class ModelQueue:
         # Default to inactive for any label outside the discovered closure.
         return self.active.get(label, False)
 
+    @timed("ModelQueue.done")
     def done(self, model, emissions, particle_emissions):
         """Mark a model as processed and update queue state.
 

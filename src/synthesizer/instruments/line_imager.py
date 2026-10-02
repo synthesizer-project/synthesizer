@@ -25,6 +25,10 @@ from synthesizer.instruments.instrument_base import (
     _hashable_state,
 )
 from synthesizer.instruments.photometric_noise import CorrelatedNoiseModel
+from synthesizer.instruments.utils import (
+    read_instrument_attribute,
+    write_instrument_attribute,
+)
 from synthesizer.units import accepts
 from synthesizer.utils.operation_timers import timed
 
@@ -50,7 +54,10 @@ class LineImager(InstrumentBase):
 
     Attributes:
         line_ids (list): The ids of the emission lines this instrument
-            maps.
+            maps. Blended lines (e.g. doublets) can be given as a comma
+            separated string (e.g. "O 3 4958.91A, O 3 5006.84A") or a
+            nested list of line ids; these produce a single map of the
+            summed lines keyed by the ", " joined id.
         resolution (unyt_array): The spatial resolution of the instrument, in
             kpc or arcseconds.
         psfs (dict, optional): An optional dictionary of point spread
@@ -91,7 +98,10 @@ class LineImager(InstrumentBase):
         Args:
             label (str): A label for the instrument.
             line_ids (list): The ids of the emission lines this instrument
-                maps.
+                maps. Blended lines (e.g. doublets) can be given as a comma
+                separated string (e.g. "O 3 4958.91A, O 3 5006.84A") or a
+                nested list of line ids; these produce a single map of the
+                summed lines keyed by the ", " joined id.
             resolution (unyt_array): The spatial resolution of the
                 instrument, in kpc or arcseconds.
             psfs (dict, optional): An optional dictionary of point spread
@@ -602,81 +612,15 @@ class LineImager(InstrumentBase):
         )
         ds.attrs["units"] = "dimensionless"
 
-        if self.depth is not None:
-            if isinstance(self.depth, dict):
-                depth_group = group.create_group("Depth")
-                for key, value in self.depth.items():
-                    raw = value.value if hasattr(value, "value") else value
-                    units = (
-                        str(value.units)
-                        if hasattr(value, "units")
-                        else "dimensionless"
-                    )
-                    ds = depth_group.create_dataset(key, data=raw, dtype=float)
-                    ds.attrs["units"] = units
-            else:
-                raw = (
-                    self.depth.value
-                    if hasattr(self.depth, "value")
-                    else self.depth
-                )
-                units = (
-                    str(self.depth.units)
-                    if hasattr(self.depth, "units")
-                    else "dimensionless"
-                )
-                ds = group.create_dataset("Depth", data=raw, dtype=float)
-                ds.attrs["units"] = units
-
-        if self.depth_app_radius is not None:
-            ds = group.create_dataset(
-                "DepthApertureRadius",
-                data=self.depth_app_radius.value,
-                dtype=float,
-            )
-            ds.attrs["units"] = str(self.depth_app_radius.units)
-
-        if self.snrs is not None:
-            if isinstance(self.snrs, dict):
-                snrs_group = group.create_group("SNRs")
-                for key, value in self.snrs.items():
-                    raw = value.value if hasattr(value, "value") else value
-                    units = (
-                        str(value.units)
-                        if hasattr(value, "units")
-                        else "dimensionless"
-                    )
-                    ds = snrs_group.create_dataset(key, data=raw, dtype=float)
-                    ds.attrs["units"] = units
-            else:
-                raw = (
-                    self.snrs.value
-                    if hasattr(self.snrs, "value")
-                    else self.snrs
-                )
-                units = (
-                    str(self.snrs.units)
-                    if hasattr(self.snrs, "units")
-                    else "dimensionless"
-                )
-                ds = group.create_dataset("SNRs", data=raw, dtype=float)
-                ds.attrs["units"] = units
-
-        if self.noise_maps is not None:
-            noise_group = group.create_group("NoiseMaps")
-            for key, value in self.noise_maps.items():
-                ds = noise_group.create_dataset(
-                    key, data=value.value, dtype=float
-                )
-                ds.attrs["units"] = str(value.units)
-
-        if self.noise_source_maps is not None:
-            noise_source_group = group.create_group("NoiseSourceMaps")
-            for key, value in self.noise_source_maps.items():
-                ds = noise_source_group.create_dataset(
-                    key, data=value.value, dtype=float
-                )
-                ds.attrs["units"] = str(value.units)
+        write_instrument_attribute(group, "Depth", self.depth)
+        write_instrument_attribute(
+            group, "DepthApertureRadius", self.depth_app_radius
+        )
+        write_instrument_attribute(group, "SNRs", self.snrs)
+        write_instrument_attribute(group, "NoiseMaps", self.noise_maps)
+        write_instrument_attribute(
+            group, "NoiseSourceMaps", self.noise_source_maps
+        )
 
     @classmethod
     @timed("LineImager.load")
@@ -716,35 +660,11 @@ class LineImager(InstrumentBase):
             group["Resolution"][...], group["Resolution"].attrs["units"]
         )
 
-        if "Depth" in group and isinstance(group["Depth"], h5py.Group):
-            depth = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["Depth"].items()
-            }
-        elif "Depth" in group:
-            depth = unyt_array(
-                group["Depth"][...], group["Depth"].attrs["units"]
-            )
-        else:
-            depth = None
-
-        if "DepthApertureRadius" in group:
-            depth_app_radius = unyt_array(
-                group["DepthApertureRadius"][...],
-                group["DepthApertureRadius"].attrs["units"],
-            )
-        else:
-            depth_app_radius = None
-
-        if "SNRs" in group and isinstance(group["SNRs"], h5py.Group):
-            snrs = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["SNRs"].items()
-            }
-        elif "SNRs" in group:
-            snrs = unyt_array(group["SNRs"][...], group["SNRs"].attrs["units"])
-        else:
-            snrs = None
+        depth = read_instrument_attribute(group, "Depth")
+        depth_app_radius = read_instrument_attribute(
+            group, "DepthApertureRadius"
+        )
+        snrs = read_instrument_attribute(group, "SNRs")
 
         if "PSFs" in group and isinstance(group["PSFs"], h5py.Group):
             psfs = {key: group["PSFs"][key][...] for key in group["PSFs"]}
@@ -756,23 +676,8 @@ class LineImager(InstrumentBase):
         else:
             psf_resample_factor = 1
 
-        if "NoiseMaps" in group and isinstance(group["NoiseMaps"], h5py.Group):
-            noise_maps = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["NoiseMaps"].items()
-            }
-        else:
-            noise_maps = None
-
-        if "NoiseSourceMaps" in group and isinstance(
-            group["NoiseSourceMaps"], h5py.Group
-        ):
-            noise_source_maps = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["NoiseSourceMaps"].items()
-            }
-        else:
-            noise_source_maps = None
+        noise_maps = read_instrument_attribute(group, "NoiseMaps")
+        noise_source_maps = read_instrument_attribute(group, "NoiseSourceMaps")
 
         payload = {
             "label": group.attrs["label"],

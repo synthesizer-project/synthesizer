@@ -48,12 +48,17 @@ const char *typenum_to_string(int typenum) {
  * @return The dtype name.
  */
 static std::string get_dtype_name(PyArrayObject *np_arr) {
+
+  /* Get the dtype's string representation from NumPy. */
   PyObject *str =
       PyObject_Str(reinterpret_cast<PyObject *>(PyArray_DESCR(np_arr)));
   if (str == NULL) {
     PyErr_Clear();
     return typenum_to_string(PyArray_TYPE(np_arr));
   }
+
+  /* Copy it into a std::string, falling back to our own name if the
+   * conversion fails. */
   const char *utf8 = PyUnicode_AsUTF8(str);
   std::string name =
       utf8 != NULL ? utf8 : typenum_to_string(PyArray_TYPE(np_arr));
@@ -76,12 +81,7 @@ bool is_c_contiguous(PyArrayObject *np_arr, const char *name) {
 
   /* Reject arrays that would force strided access in the hot kernels. */
   if (!PyArray_IS_C_CONTIGUOUS(np_arr)) {
-    PyErr_Format(PyExc_ValueError,
-                 "'%s' is not stored contiguously in memory (this usually "
-                 "happens after slicing with a step or transposing). Make a "
-                 "contiguous copy with np.ascontiguousarray(arr) before "
-                 "passing it in.",
-                 name);
+    PyErr_Format(PyExc_ValueError, "%s must be C-contiguous.", name);
     return false;
   }
 
@@ -98,7 +98,7 @@ bool is_c_contiguous(PyArrayObject *np_arr, const char *name) {
  */
 bool is_float32_or_float64(PyArrayObject *np_arr, const char *name) {
 
-  /* We support only float32 and float64. */
+  /* For the first mixed-precision pass we support only float32 and float64. */
   const int typenum = PyArray_TYPE(np_arr);
   if (typenum != NPY_FLOAT32 && typenum != NPY_FLOAT64) {
     PyErr_Format(PyExc_TypeError,
@@ -184,7 +184,8 @@ bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
     return false;
   }
 
-  /* Every input must be contiguous before we hand out raw pointers. */
+  /* Every input must be contiguous before we hand out raw pointers. While
+   * we're here, count the float32 arrays to see if the precision is mixed. */
   int n32 = 0;
   for (int i = 0; i < count; ++i) {
     if (!is_c_contiguous(arrays[i], names[i])) {
@@ -205,6 +206,8 @@ bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
   const int from_typenum = to64 ? NPY_FLOAT32 : NPY_FLOAT64;
   const char *to_name = to64 ? "float64" : "float32";
   const char *from_name = to64 ? "float32" : "float64";
+  /* List every array with its dtype, and collect the names of the ones that
+   * need converting. */
   std::string listing;
   std::string offenders;
   int n_offenders = 0;
@@ -223,6 +226,8 @@ bool is_matching_float_dtypes(PyArrayObject **arrays, const char **names,
       "precision (all float32 or all float64), but they are "
       "mixed:%s\nTo fix this, convert %s (%s) to %s, e.g. "
       "arr = arr.astype(np.%s), or convert all of them to %s. "
+      "For grid arrays, load the grid at the matching precision with "
+      "Grid(..., use_precision=...). "
       "Synthesizer never converts arrays for you because that "
       "would silently create copies of potentially very large "
       "arrays.",

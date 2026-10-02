@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
-from unyt import Hz, Lsun, angstrom, c, erg, s, unyt_array, unyt_quantity
+from unyt import Hz, angstrom, c, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
@@ -177,7 +177,12 @@ class Blackbody(DustEmission):
 
         # Scale the normalised emission, at the output precision
         sed._lnu = self.get_scaled_emission(
-            lnu, scaling, emitter, model, out_dtype, cmb_factor
+            lnu,
+            scaling,
+            emitter,
+            model,
+            out_dtype,
+            cmb_factor,
         )
 
         return sed
@@ -270,7 +275,12 @@ class Blackbody(DustEmission):
 
         # Scale the normalised emission, at the output precision
         lnu = self.get_scaled_emission(
-            lnu, scaling, emitter, model, out_dtype, cmb_factor
+            lnu,
+            scaling,
+            emitter,
+            model,
+            out_dtype,
+            cmb_factor,
         )
 
         # OK, now we have used the Sed magic lets return the LineCollection
@@ -281,7 +291,7 @@ class Blackbody(DustEmission):
         lines = LineCollection(
             line_ids,
             line_lams,
-            np.zeros(lnu.shape, dtype=lnu.dtype) * Lsun,
+            np.zeros(lnu.shape, dtype=lnu.dtype) * erg / s,
             cont=lnu * erg / s / Hz,
         )
 

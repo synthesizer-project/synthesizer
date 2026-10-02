@@ -10,13 +10,18 @@ This module contains tests for all Grid functionality including:
 - Utility methods
 """
 
+import h5py
 import numpy as np
 import pytest
-from unyt import Hz, angstrom, erg, s
+from unyt import Hz, Msun, Unit, angstrom, deg, erg, s, unyt_array, yr
+from unyt.dimensions import mass as mass_dim
 
 from synthesizer import exceptions
+from synthesizer.emission_models.utils import get_param
 from synthesizer.grid import Grid, Template
 from synthesizer.instruments.filters import UVJ
+from synthesizer.particle import BlackHoles
+from synthesizer.units import Units
 
 
 @pytest.fixture
@@ -212,6 +217,77 @@ class TestGridAxes:
             index = Grid.get_nearest_index(test_age, ages)
             assert isinstance(index, (int, np.integer))
             assert 0 <= index < len(ages)
+
+    @pytest.mark.parametrize("precision", [np.float32, np.float64])
+    def test_mass_axis_matches_emitter_masses(self, precision):
+        """Mass axes are in the internal mass unit, like emitter masses.
+
+        AGN grid files store black hole masses in the units the grid was
+        made with (e.g. kg). Extraction compares log10 of the axis with
+        log10 of the emitter masses (stored in the internal mass unit), so
+        the axis must be converted when the grid is loaded, before any
+        reduction in precision.
+        """
+        # Load the AGN grid
+        grid = Grid("test_grid_agn-blr.hdf5", use_precision=precision)
+
+        # Find the mass axis and read it (with its units) straight from the
+        # file. We find it by its dimensions since grid files don't all use
+        # the same axis name.
+        with h5py.File(grid.grid_filename, "r") as hf:
+            name, dset = next(
+                (name, dset)
+                for name, dset in hf["axes"].items()
+                if dset.attrs.get("Units") not in (None, "None", "")
+                and Unit(dset.attrs["Units"]).dimensions == mass_dim
+            )
+            raw = unyt_array(dset[...], dset.attrs["Units"])
+
+        # Make a black hole with a mass on the grid
+        bh = BlackHoles(
+            masses=unyt_array([1e8], Msun),
+            accretion_rates=unyt_array([1.0], Msun / yr),
+            inclinations=np.zeros(1) * deg,
+        )
+
+        # The axis should be the raw values in the internal mass unit
+        axis = getattr(grid, name)
+        assert axis.units == Units().mass
+        np.testing.assert_allclose(
+            axis.value,
+            raw.to_value(Units().mass),
+            rtol=1e-6,
+        )
+
+        # The black hole's logged mass should be on the same scale as the
+        # logged axis (log10 of the mass in the internal mass unit)
+        np.testing.assert_allclose(
+            get_param(f"log10{name}", None, None, bh),
+            8.0,
+            rtol=1e-6,
+        )
+
+    @pytest.mark.parametrize("units", [None, "None", ""])
+    def test_axes_without_units_are_read_unchanged(self, test_grid, units):
+        """Axes with no units (or a "None"/empty sentinel) are left alone."""
+        # Write a small axis with the given units to an in-memory file
+        with h5py.File(
+            "axis.hdf5",
+            "w",
+            driver="core",
+            backing_store=False,
+        ) as hf:
+            dset = hf.create_dataset("axis", data=np.array([1.0, 2.0, 3.0]))
+            if units is not None:
+                dset.attrs["Units"] = units
+
+            # Read it as a grid axis
+            values, axis_units = test_grid._read_float_axis(dset)
+
+        # The values and units should come back unchanged
+        np.testing.assert_allclose(values, [1.0, 2.0, 3.0])
+        assert values.dtype == test_grid._dtype
+        assert axis_units == units
 
 
 class TestGridSpectra:

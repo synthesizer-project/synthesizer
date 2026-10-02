@@ -6,13 +6,16 @@ and signal-to-noise definitions for noisy photometric measurements.
 """
 
 import h5py
-from unyt import unyt_array
 
 from synthesizer import exceptions
 from synthesizer.instruments.filters import FilterCollection
 from synthesizer.instruments.instrument_base import (
     InstrumentBase,
     _hashable_state,
+)
+from synthesizer.instruments.utils import (
+    read_instrument_attribute,
+    write_instrument_attribute,
 )
 from synthesizer.utils.operation_timers import timed
 
@@ -270,65 +273,11 @@ class PhotometricInstrument(InstrumentBase):
         filters_group = group.create_group("Filters")
         self.filters._write_filters_to_group(filters_group)
 
-        if self.depth is not None:
-            if isinstance(self.depth, dict):
-                depth_group = group.create_group("Depth")
-                for key, value in self.depth.items():
-                    raw = value.value if hasattr(value, "value") else value
-                    units = (
-                        str(value.units)
-                        if hasattr(value, "units")
-                        else "dimensionless"
-                    )
-                    ds = depth_group.create_dataset(key, data=raw, dtype=float)
-                    ds.attrs["units"] = units
-            else:
-                raw = (
-                    self.depth.value
-                    if hasattr(self.depth, "value")
-                    else self.depth
-                )
-                units = (
-                    str(self.depth.units)
-                    if hasattr(self.depth, "units")
-                    else "dimensionless"
-                )
-                ds = group.create_dataset("Depth", data=raw, dtype=float)
-                ds.attrs["units"] = units
-
-        if self.depth_app_radius is not None:
-            ds = group.create_dataset(
-                "DepthApertureRadius",
-                data=self.depth_app_radius.value,
-                dtype=float,
-            )
-            ds.attrs["units"] = str(self.depth_app_radius.units)
-
-        if self.snrs is not None:
-            if isinstance(self.snrs, dict):
-                snrs_group = group.create_group("SNRs")
-                for key, value in self.snrs.items():
-                    raw = value.value if hasattr(value, "value") else value
-                    units = (
-                        str(value.units)
-                        if hasattr(value, "units")
-                        else "dimensionless"
-                    )
-                    ds = snrs_group.create_dataset(key, data=raw, dtype=float)
-                    ds.attrs["units"] = units
-            else:
-                raw = (
-                    self.snrs.value
-                    if hasattr(self.snrs, "value")
-                    else self.snrs
-                )
-                units = (
-                    str(self.snrs.units)
-                    if hasattr(self.snrs, "units")
-                    else "dimensionless"
-                )
-                ds = group.create_dataset("SNRs", data=raw, dtype=float)
-                ds.attrs["units"] = units
+        write_instrument_attribute(group, "Depth", self.depth)
+        write_instrument_attribute(
+            group, "DepthApertureRadius", self.depth_app_radius
+        )
+        write_instrument_attribute(group, "SNRs", self.snrs)
 
     @classmethod
     @timed("PhotometricInstrument.load")
@@ -359,35 +308,11 @@ class PhotometricInstrument(InstrumentBase):
         """
         filters = FilterCollection._from_hdf5(group["Filters"])
 
-        if "Depth" in group and isinstance(group["Depth"], h5py.Group):
-            depth = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["Depth"].items()
-            }
-        elif "Depth" in group:
-            depth = unyt_array(
-                group["Depth"][...], group["Depth"].attrs["units"]
-            )
-        else:
-            depth = None
-
-        if "DepthApertureRadius" in group:
-            depth_app_radius = unyt_array(
-                group["DepthApertureRadius"][...],
-                group["DepthApertureRadius"].attrs["units"],
-            )
-        else:
-            depth_app_radius = None
-
-        if "SNRs" in group and isinstance(group["SNRs"], h5py.Group):
-            snrs = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["SNRs"].items()
-            }
-        elif "SNRs" in group:
-            snrs = unyt_array(group["SNRs"][...], group["SNRs"].attrs["units"])
-        else:
-            snrs = None
+        depth = read_instrument_attribute(group, "Depth")
+        depth_app_radius = read_instrument_attribute(
+            group, "DepthApertureRadius"
+        )
+        snrs = read_instrument_attribute(group, "SNRs")
 
         payload = {
             "label": group.attrs["label"],

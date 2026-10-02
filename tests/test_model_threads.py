@@ -226,6 +226,26 @@ class TestThreadedParity:
         threaded = _get_lines(random_part_stars, varied_model, line_ids, 4)
         _assert_same(serial, threaded)
 
+    def test_vel_shifted_flags(self, no_gil, varied_model, random_part_stars):
+        """Test velocity shift flags propagate as they do in serial."""
+        varied_model.set_per_particle(False)
+        flags = []
+        for nr_model_threads in (1, 4):
+            random_part_stars.clear_all_emissions()
+            random_part_stars.get_spectra(
+                varied_model,
+                vel_shift=True,
+                nr_model_threads=nr_model_threads,
+            )
+            flags.append(
+                {
+                    label: sed.vel_shifted
+                    for label, sed in random_part_stars.spectra.items()
+                }
+            )
+        assert flags[0] == flags[1]
+        assert flags[1][varied_model.label]
+
     def test_existing_spectra_reused(
         self, no_gil, varied_model, random_part_stars
     ):

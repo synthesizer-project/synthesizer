@@ -34,7 +34,8 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.colors import LogNorm
 from scipy.interpolate import interp1d
 from spectres import spectres
-from unyt import Hz, Lsun, angstrom, erg, s, unyt_array, unyt_quantity
+from unyt import Hz, Lsun, Unit, angstrom, erg, s, unyt_array, unyt_quantity
+from unyt.dimensions import mass as mass_dim
 
 from synthesizer import exceptions
 from synthesizer.data.initialise import get_grids_dir
@@ -312,6 +313,48 @@ class Grid:
             return dset.astype(self._dtype)[...]
         return dset[...]
 
+    def _read_float_axis(self, dset):
+        """Read a grid axis from an HDF5 dataset along with its units.
+
+        Axes are read like any other floating point dataset (see
+        _read_floats), with one exception: mass axes. Grid files store these
+        in whatever units the grid was made with but unyt treats Msun as a
+        composite unit made up of kg. When logged this can lead to values in
+        the range of 38 when values are expected in the range of 0-10 (i.e.
+        kg vs Msun). To avoid this we convert any mass axes to the internal
+        mass unit (Msun) before returning them just to be sure. Note that
+        this is safe for grids made with pure Msun (in the galactic base)
+        units.
+
+        The conversion is done before the values are reduced to the grid's
+        precision since masses in kg (~1e39 for black holes) exceed the
+        float32 range.
+
+        Args:
+            dset (h5py.Dataset):
+                The axis dataset to read.
+
+        Returns:
+            tuple
+                The axis values (at the grid's target dtype) and their units
+                (as a string, matching the Units attribute of the file).
+        """
+        # What are the units of this axis?
+        units = dset.attrs.get("Units")
+
+        # Anything without units (including the "None" and empty string
+        # sentinels) or that isn't a mass can be read as is, reducing the
+        # precision during the read itself
+        if units in (None, "None", "") or Unit(units).dimensions != mass_dim:
+            return self._read_floats(dset), units
+
+        # Mass axes are read at the precision they were stored at, converted
+        # to the internal mass unit, and only then reduced to the grid's
+        # precision (the axes are tiny so this intermediate copy is cheap)
+        mass_units = Units().mass
+        values = unyt_array(dset[...], units).to_value(mass_units)
+        return values.astype(self._dtype), str(mass_units)
+
     def _ensure_axis_data_contiguous(self):
         """Ensure stored axis arrays are contiguous."""
         for axis_name in self.axes:
@@ -447,8 +490,6 @@ class Grid:
             # Set the values of each axis as an attribute
             # e.g. self.log10age == hdf["axes"]["log10age"]
             for axis in axes:
-                # What are the units of this axis?
-                axis_units = hf["axes"][axis].attrs.get("Units")
                 log_axis = hf["axes"][axis].attrs.get("log_on_read")
 
                 if "log10" in axis:
@@ -457,19 +498,15 @@ class Grid:
                         "of ambiguous units. Please update your grid file."
                     )
 
-                # Get the values. Axes are tiny so we read them at float64
-                # and only then convert, which means log10 is taken before
-                # any reduction in precision. A raw axis too large for the
-                # grid's precision (e.g. a black hole mass axis in kg, ~1e39,
-                # at float32) stays at float64 rather than becoming inf.
-                values = hf["axes"][axis][...].astype(np.float64)
+                # Get the values and their units (mass axes are converted to
+                # the internal mass unit so they match the emitter masses
+                # they are compared against during extraction)
+                values, axis_units = self._read_float_axis(hf["axes"][axis])
 
                 # Set all the axis attributes as is (without accounting
                 # for any log10 conversions needed for extraction)
                 self.axes.append(axis)
-                self._axes_values[axis] = convert_array_dtype(
-                    values, self._dtype, overflow="keep"
-                )
+                self._axes_values[axis] = values
                 self._axes_units[axis] = axis_units
 
                 # Now we handle the extractions
@@ -477,12 +514,10 @@ class Grid:
                     self._extract_axes.append(f"log10{axis}")
                     self._extract_axes_values[f"log10{axis}"] = np.log10(
                         values
-                    ).astype(self._dtype)
+                    )
                 else:
                     self._extract_axes.append(axis)
-                    self._extract_axes_values[axis] = values.astype(
-                        self._dtype
-                    )
+                    self._extract_axes_values[axis] = values
 
             # Number of axes
             self.naxes = len(self.axes)
@@ -929,9 +964,7 @@ class Grid:
         # Convert all the grid axis arrays to the target precision
         for axis_name in grid.axes:
             grid._axes_values[axis_name] = convert_array_dtype(
-                np.asarray(grid._axes_values[axis_name], dtype=np.float64),
-                dtype,
-                overflow="keep",
+                grid._axes_values[axis_name], dtype
             )
 
         # Convert all the extraction axis arrays to the target precision
@@ -1032,7 +1065,8 @@ class Grid:
             # Update this spectra, keeping the grid's precision (spectres
             # always returns float64)
             self.spectra[spectra_type] = new_spectra.astype(
-                self._dtype, copy=False
+                self._dtype,
+                copy=False,
             )
 
         # Update wavelength array, again at the grid's precision
@@ -2890,9 +2924,6 @@ class Template:
                 The precision of the spectra. Defaults to the global default
                 output dtype.
 
-        Returns:
-            Sed:
-                The scaled spectra, one per bolometric luminosity.
         """
         # Ensure we have units for safety
         if bolometric_luminosity is not None and not isinstance(
@@ -2909,7 +2940,7 @@ class Template:
         luminosities = bolometric_luminosity.ndview
         lnu = np.multiply(
             self._sed._lnu,
-            np.asarray(luminosities)[..., np.newaxis],
+            luminosities[..., np.newaxis],
             out=np.empty(
                 (*np.shape(luminosities), self._sed._lnu.size),
                 dtype=resolve_out_dtype(out_dtype),

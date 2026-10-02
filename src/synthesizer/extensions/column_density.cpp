@@ -52,12 +52,10 @@ static std::vector<std::string> density_attr_names(PyObject *py_names,
                              : NULL;
       if (utf8 != NULL) {
         name = std::string(utf8) + " of the absorbing particles";
-      } else {
-        /* Names are only for error messages, so fall back quietly. */
-        PyErr_Clear();
       }
       Py_XDECREF(item);
     }
+    PyErr_Clear();
     names.push_back(name);
   }
   return names;

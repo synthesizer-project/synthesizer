@@ -24,6 +24,10 @@ from synthesizer.instruments.photometric_instrument import (
     PhotometricInstrument,
 )
 from synthesizer.instruments.photometric_noise import CorrelatedNoiseModel
+from synthesizer.instruments.utils import (
+    read_instrument_attribute,
+    write_instrument_attribute,
+)
 from synthesizer.units import accepts
 from synthesizer.utils.operation_timers import timed
 
@@ -575,21 +579,10 @@ class PhotometricImager(PhotometricInstrument):
         )
         ds.attrs["units"] = "dimensionless"
 
-        if self.noise_maps is not None:
-            noise_group = group.create_group("NoiseMaps")
-            for key, value in self.noise_maps.items():
-                ds = noise_group.create_dataset(
-                    key, data=value.value, dtype=float
-                )
-                ds.attrs["units"] = str(value.units)
-
-        if self.noise_source_maps is not None:
-            noise_source_group = group.create_group("NoiseSourceMaps")
-            for key, value in self.noise_source_maps.items():
-                ds = noise_source_group.create_dataset(
-                    key, data=value.value, dtype=float
-                )
-                ds.attrs["units"] = str(value.units)
+        write_instrument_attribute(group, "NoiseMaps", self.noise_maps)
+        write_instrument_attribute(
+            group, "NoiseSourceMaps", self.noise_source_maps
+        )
 
     @classmethod
     @timed("PhotometricImager.load")
@@ -630,35 +623,11 @@ class PhotometricImager(PhotometricInstrument):
             group["Resolution"][...], group["Resolution"].attrs["units"]
         )
 
-        if "Depth" in group and isinstance(group["Depth"], h5py.Group):
-            depth = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["Depth"].items()
-            }
-        elif "Depth" in group:
-            depth = unyt_array(
-                group["Depth"][...], group["Depth"].attrs["units"]
-            )
-        else:
-            depth = None
-
-        if "DepthApertureRadius" in group:
-            depth_app_radius = unyt_array(
-                group["DepthApertureRadius"][...],
-                group["DepthApertureRadius"].attrs["units"],
-            )
-        else:
-            depth_app_radius = None
-
-        if "SNRs" in group and isinstance(group["SNRs"], h5py.Group):
-            snrs = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["SNRs"].items()
-            }
-        elif "SNRs" in group:
-            snrs = unyt_array(group["SNRs"][...], group["SNRs"].attrs["units"])
-        else:
-            snrs = None
+        depth = read_instrument_attribute(group, "Depth")
+        depth_app_radius = read_instrument_attribute(
+            group, "DepthApertureRadius"
+        )
+        snrs = read_instrument_attribute(group, "SNRs")
 
         if "PSFs" in group and isinstance(group["PSFs"], h5py.Group):
             psfs = {}
@@ -682,23 +651,8 @@ class PhotometricImager(PhotometricInstrument):
         else:
             psf_resample_factor = 1
 
-        if "NoiseMaps" in group and isinstance(group["NoiseMaps"], h5py.Group):
-            noise_maps = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["NoiseMaps"].items()
-            }
-        else:
-            noise_maps = None
-
-        if "NoiseSourceMaps" in group and isinstance(
-            group["NoiseSourceMaps"], h5py.Group
-        ):
-            noise_source_maps = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["NoiseSourceMaps"].items()
-            }
-        else:
-            noise_source_maps = None
+        noise_maps = read_instrument_attribute(group, "NoiseMaps")
+        noise_source_maps = read_instrument_attribute(group, "NoiseSourceMaps")
 
         payload = {
             "label": group.attrs["label"],
