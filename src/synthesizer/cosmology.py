@@ -33,6 +33,43 @@ from synthesizer import exceptions
 # stored here by key, rather than reconstructing one.
 _cosmologies = {}
 
+# The most cosmologies to keep, matching the distance caches' size
+_MAX_COSMOLOGIES = 1000
+
+
+def _remember_cosmology(cosmo_key, cosmo):
+    """Store a cosmology so distance cache misses can use it.
+
+    The distance caches are keyed by a hashable representation of the
+    cosmology (see _get_cosmo_key), since astropy cosmologies aren't hashable.
+    On a cache miss they need an actual cosmology object to compute the
+    distance with. Rather than reconstructing one from the key, which leaves
+    reference cycles that pin the caller's frames (see the note on
+    _cosmologies), they look up the caller's own cosmology stored here.
+
+    The store keeps at most _MAX_COSMOLOGIES entries, so it can't grow without
+    bound if a run sees many distinct cosmologies. When it is full the oldest
+    entry is dropped. A cache miss for a dropped cosmology falls back to
+    reconstructing it, which is still correct, just without avoiding the
+    reference cycles.
+
+    Args:
+        cosmo_key (tuple):
+            The hashable representation of the cosmology, as used to key
+            the distance caches.
+        cosmo (astropy.cosmology.FLRW):
+            The cosmology the key was made from.
+    """
+    # Keep the first cosmology stored for a key, they are all equivalent
+    if cosmo_key in _cosmologies:
+        return
+
+    # Make room by dropping the oldest entry (dicts keep insertion order)
+    if len(_cosmologies) >= _MAX_COSMOLOGIES:
+        del _cosmologies[next(iter(_cosmologies))]
+
+    _cosmologies[cosmo_key] = cosmo
+
 
 def _get_cosmo_key(cosmo):
     """Create a hashable key for a cosmology object.
@@ -148,7 +185,7 @@ def _reconstruct_cosmology(cosmo_key):
     return cosmo_class(**kwargs)
 
 
-@lru_cache(maxsize=1000)  # Cache up to 1000 different combinations
+@lru_cache(maxsize=_MAX_COSMOLOGIES)  # Cache up to 1000 combinations
 def _cached_luminosity_distance(cosmo_key, redshift):
     """Internal cached function for luminosity distance calculation.
 
@@ -171,7 +208,7 @@ def _cached_luminosity_distance(cosmo_key, redshift):
     return cosmo.luminosity_distance(redshift).to("Mpc").value
 
 
-@lru_cache(maxsize=1000)  # Cache up to 1000 different combinations
+@lru_cache(maxsize=_MAX_COSMOLOGIES)  # Cache up to 1000 combinations
 def _cached_angular_diameter_distance(cosmo_key, redshift):
     """Internal cached function for angular diameter distance calculation.
 
@@ -216,7 +253,7 @@ def get_luminosity_distance(cosmo, redshift):
         )
 
     cosmo_key = _get_cosmo_key(cosmo)
-    _cosmologies.setdefault(cosmo_key, cosmo)
+    _remember_cosmology(cosmo_key, cosmo)
     result_value = _cached_luminosity_distance(cosmo_key, redshift)
     return result_value * Mpc
 
@@ -238,6 +275,6 @@ def get_angular_diameter_distance(cosmo, redshift):
         unyt_quantity: The angular diameter distance in Mpc.
     """
     cosmo_key = _get_cosmo_key(cosmo)
-    _cosmologies.setdefault(cosmo_key, cosmo)
+    _remember_cosmology(cosmo_key, cosmo)
     result_value = _cached_angular_diameter_distance(cosmo_key, redshift)
     return result_value * Mpc

@@ -138,7 +138,7 @@ The benchmarks shown in this documentation were run on the Cosma8 HPC at Durham 
     Socket(s):                2
     NUMA node(s):             8
 
-All benchmarks were run on nodes of this type (the ``cosma8-milan`` partition), using 32 threads unless otherwise specified.
+All the benchmark plots were run on nodes of this type (the ``cosma8-milan`` partition), using 32 threads unless otherwise specified. The ``NATIVE`` and NUMA interleave figures quoted above were measured separately, on COSMA8 nodes with two AMD EPYC 7H12 processors.
 
 Memory Footprint Note
 ~~~~~~~~~~~~~~~~~~~~~

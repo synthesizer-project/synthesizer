@@ -41,13 +41,20 @@ if [ ! -d "$SYNVENTORY_DIR/profiling" ]; then
 fi
 
 # Copy each group of plots that has been generated
+copied=0
 for group in pipeline problem_size thread_scaling mpi_weak mpi_strong; do
 	if compgen -G "$OUTPUT_ROOT/$group/*.png" >/dev/null; then
 		mkdir -p "$SYNVENTORY_DIR/profiling/$group"
 		cp "$OUTPUT_ROOT/$group"/*.png "$SYNVENTORY_DIR/profiling/$group/"
 		echo "Copied $group plots"
+		copied=1
 	fi
 done
+
+if [ "$copied" -eq 0 ]; then
+	echo "Error: no plots found in $OUTPUT_ROOT, pass --output-dir"
+	exit 1
+fi
 
 echo "Copied profiling plots from $OUTPUT_ROOT to $SYNVENTORY_DIR/profiling"
 echo "Commit and push them in synventory to update the documentation."
