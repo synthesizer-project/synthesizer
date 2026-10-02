@@ -3214,11 +3214,9 @@ class BaseGalaxy:
         `_grid_weights` dictionary.
         """
         if self.stars is not None:
-            if hasattr(self.stars, "_grid_weights"):
-                self._grid_weights = {"cic": {}, "ngp": {}}
+            self.stars.clear_weights()
         if self.black_holes is not None:
-            if hasattr(self.black_holes, "_grid_weights"):
-                self._grid_weights = {"cic": {}, "ngp": {}}
+            self.black_holes.clear_weights()
 
     def plot_spectroscopy(
         self,

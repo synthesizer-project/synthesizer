@@ -134,6 +134,10 @@ class Component(ABC):
         # A container for any grid weights we already computed
         self._grid_weights = {"cic": {}, "ngp": {}}
 
+        # A container for the order to visit particles in to walk each grid
+        # (see Extractor._get_grid_order), valid as long as the grid weights
+        self._grid_orders = {"cic": {}, "ngp": {}}
+
         # A container for caching parameters calculated by emission models
         self.model_param_cache = {}
 
@@ -2052,6 +2056,8 @@ class Component(ABC):
         """
         if hasattr(self, "_grid_weights"):
             self._grid_weights = {"cic": {}, "ngp": {}}
+        if hasattr(self, "_grid_orders"):
+            self._grid_orders = {"cic": {}, "ngp": {}}
 
     def print_used_parameters(self, *models):
         """Print the parameters used by emission models in a formatted table.

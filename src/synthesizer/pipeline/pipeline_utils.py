@@ -74,6 +74,7 @@ def clear_pipeline_outputs(gal):
             ("data_cubes_fnu", {}),
             ("model_param_cache", {}),
             ("_grid_weights", {"cic": {}, "ngp": {}}),
+            ("_grid_orders", {"cic": {}, "ngp": {}}),
             ("sfh", None),
             ("sfzh", None),
         ):

@@ -194,7 +194,8 @@ static void spectra_loop_cic_with_lam_mask_serial(
   }
 
   /* Loop over particles. */
-  for (size_t p = 0; p < npart; p++) {
+  for (size_t i = 0; i < npart; i++) {
+    const size_t p = parts->ordered_index(i);
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -310,7 +311,8 @@ static void spectra_loop_cic_no_lam_mask_serial(GridProps *grid_props,
   }
 
   /* Loop over particles. */
-  for (size_t p = 0; p < npart; p++) {
+  for (size_t i = 0; i < npart; i++) {
+    const size_t p = parts->ordered_index(i);
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -475,7 +477,8 @@ static void spectra_loop_cic_with_lam_mask_omp(
     std::vector<OutT> cell_weights(ncells);
 
     /* Loop over particles in this thread's range. */
-    for (size_t p = start_idx; p < end_idx; p++) {
+    for (size_t i = start_idx; i < end_idx; i++) {
+      const size_t p = parts->ordered_index(i);
 
       /* Skip masked particles. */
       if (parts->part_is_masked(p)) {
@@ -609,7 +612,8 @@ static void spectra_loop_cic_no_lam_mask_omp(GridProps *grid_props,
     std::vector<OutT> cell_weights(ncells);
 
     /* Loop over particles in this thread's range. */
-    for (size_t p = start_idx; p < end_idx; p++) {
+    for (size_t i = start_idx; i < end_idx; i++) {
+      const size_t p = parts->ordered_index(i);
 
       /* Skip masked particles. */
       if (parts->part_is_masked(p)) {
@@ -784,7 +788,8 @@ static void spectra_loop_ngp_with_lam_mask_serial(
   size_t npart = static_cast<size_t>(parts->npart);
 
   /* Loop over particles. */
-  for (size_t p = 0; p < npart; p++) {
+  for (size_t i = 0; i < npart; i++) {
+    const size_t p = parts->ordered_index(i);
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -843,7 +848,8 @@ static void spectra_loop_ngp_no_lam_mask_serial(GridProps *grid_props,
   size_t npart = static_cast<size_t>(parts->npart);
 
   /* Loop over particles. */
-  for (size_t p = 0; p < npart; p++) {
+  for (size_t i = 0; i < npart; i++) {
+    const size_t p = parts->ordered_index(i);
 
     /* Skip masked particles. */
     if (parts->part_is_masked(p)) {
@@ -963,7 +969,8 @@ static void spectra_loop_ngp_with_lam_mask_omp(
     std::vector<OutT> this_part_spectra(nlam, static_cast<OutT>(0));
 
     /* Loop over particles. */
-    for (size_t p = start_idx; p < end_idx; p++) {
+    for (size_t i = start_idx; i < end_idx; i++) {
+      const size_t p = parts->ordered_index(i);
 
       /* Skip masked particles. */
       if (parts->part_is_masked(p)) {
@@ -1055,7 +1062,8 @@ static void spectra_loop_ngp_no_lam_mask_omp(GridProps *grid_props,
     std::vector<OutT> this_part_spectra(nlam, static_cast<OutT>(0));
 
     /* Loop over particles. */
-    for (size_t p = start_idx; p < end_idx; p++) {
+    for (size_t i = start_idx; i < end_idx; i++) {
+      const size_t p = parts->ordered_index(i);
 
       /* Skip masked particles. */
       if (parts->part_is_masked(p)) {
@@ -1186,6 +1194,173 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
 }
 
 /**
+ * @brief Compute the order that visits particles in grid order.
+ *
+ * Each particle reads the grid rows of the cell it is assigned to (and its
+ * neighbours for CIC). Visiting particles in the order of their (flattened,
+ * row-major) base cell means consecutive particles read the same or adjacent
+ * rows, which are then still in cache, rather than rereading them from main
+ * memory for every particle. The base cell is found with the same helpers
+ * the extraction kernels use.
+ *
+ * @tparam PartReal The floating-point type of particle data.
+ * @tparam GridReal The floating-point type of the grid axes.
+ *
+ * @param grid_props: A struct containing the properties along each grid axis.
+ * @param parts: A struct containing the particle properties.
+ * @param cic: Use the CIC (true) or NGP (false) base cell.
+ * @param nthreads: The number of threads to use.
+ * @param order: The output order, with an entry per particle.
+ *
+ * @return False if the particles are already in grid order (order is then
+ *         left unset), true otherwise.
+ */
+template <typename PartReal, typename GridReal>
+static bool compute_grid_order(GridProps *grid_props, Particles *parts,
+                               bool cic, int nthreads, int *order) {
+  const int ndim = grid_props->ndim;
+  const int npart = parts->npart;
+
+  /* Find each particle's base cell. */
+  std::vector<int> cells(npart);
+#ifdef WITH_OPENMP
+#pragma omp parallel for num_threads(nthreads) \
+    schedule(static) if (nthreads > 1)
+#else
+  (void)nthreads;
+#endif
+  for (int p = 0; p < npart; p++) {
+    std::array<int, MAX_GRID_NDIM> part_indices;
+    if (cic) {
+      std::array<GridReal, MAX_GRID_NDIM> axis_fracs;
+      get_part_ind_frac_cic<PartReal, GridReal>(part_indices, axis_fracs,
+                                                grid_props, parts, p);
+    } else {
+      get_part_inds_ngp<PartReal, GridReal>(part_indices, grid_props, parts,
+                                            p);
+    }
+    cells[p] = get_flat_index(part_indices, grid_props->dims.data(), ndim);
+  }
+
+  /* Nothing to do if the particles are already in grid order. */
+  bool sorted = true;
+  for (int p = 1; p < npart; p++) {
+    if (cells[p] < cells[p - 1]) {
+      sorted = false;
+      break;
+    }
+  }
+  if (sorted) {
+    return false;
+  }
+
+  /* Counting sort the particles by cell (stable, so particles in the same
+   * cell keep their relative order). */
+  size_t ncells = 1;
+  for (int idim = 0; idim < ndim; idim++) {
+    ncells *= static_cast<size_t>(grid_props->dims[idim]);
+  }
+  std::vector<int> cell_start(ncells + 1, 0);
+  for (int p = 0; p < npart; p++) {
+    cell_start[cells[p] + 1]++;
+  }
+  for (size_t c = 0; c < ncells; c++) {
+    cell_start[c + 1] += cell_start[c];
+  }
+  for (int p = 0; p < npart; p++) {
+    order[cell_start[cells[p]]++] = p;
+  }
+
+  return true;
+}
+
+/**
+ * @brief Compute the order to visit particles in so they walk the grid.
+ *
+ * The result can be passed to compute_particle_seds (grid_order) to extract
+ * the particles in grid order, which reuses grid rows from cache instead of
+ * rereading them. The outputs are unchanged: each particle's spectrum is
+ * still written to its own row.
+ *
+ * @param np_grid_spectra: The SPS spectra array.
+ * @param grid_tuple: The tuple containing arrays of grid axis properties.
+ * @param part_tuple: The tuple of particle property arrays (in the same
+ * order as grid_tuple).
+ * @param np_part_mass: The particle weight array.
+ * @param npart: The number of particles.
+ * @param nlam: The number of wavelength elements.
+ * @param method: The grid assignment method ("cic" or "ngp").
+ * @param nthreads: The number of threads to use.
+ * @param prop_names: Optional names of the particle properties (for errors).
+ *
+ * @return An int32 array giving the order to visit the particles in, or None
+ *         if they are already in grid order.
+ */
+PyObject *compute_particle_grid_order(PyObject *self, PyObject *args) {
+  tic("compute_particle_grid_order");
+
+  (void)self;
+
+  int npart, nlam, nthreads;
+  PyObject *grid_tuple, *part_tuple;
+  PyObject *prop_names = NULL;
+  PyArrayObject *np_grid_spectra, *np_part_mass;
+  char *method;
+
+  if (!PyArg_ParseTuple(args, "OOOOiisi|O", &np_grid_spectra, &grid_tuple,
+                        &part_tuple, &np_part_mass, &npart, &nlam, &method,
+                        &nthreads, &prop_names)) {
+    return NULL;
+  }
+
+  const bool cic = strcmp(method, "cic") == 0;
+  if (!cic && strcmp(method, "ngp") != 0) {
+    PyErr_Format(PyExc_ValueError, "Unknown grid assignment method (%s).",
+                 method);
+    return NULL;
+  }
+
+  GridProps *grid_props =
+      new GridProps(np_grid_spectra, grid_tuple, /*np_lam*/ nullptr,
+                    /*np_lam_mask*/ nullptr, nlam,
+                    /*np_grid_weights*/ nullptr, prop_names);
+  RETURN_IF_PYERR();
+  Particles *part_props =
+      new Particles(np_part_mass, /*np_velocities*/ NULL, /*np_mask*/ NULL,
+                    part_tuple, prop_names, npart);
+  RETURN_IF_PYERR();
+
+  npy_intp dims[1] = {npart};
+  PyArrayObject *np_order =
+      (PyArrayObject *)PyArray_SimpleNew(1, dims, NPY_INT32);
+  if (np_order == NULL) {
+    delete part_props;
+    delete grid_props;
+    return NULL;
+  }
+
+  bool reordered = false;
+  dispatch_float(part_props->get_float_typenum(), [&](auto p) {
+    dispatch_float(grid_props->get_float_typenum(), [&](auto g) {
+      reordered = compute_grid_order<decltype(p), decltype(g)>(
+          grid_props, part_props, cic, nthreads,
+          static_cast<int *>(PyArray_DATA(np_order)));
+    });
+  });
+
+  delete part_props;
+  delete grid_props;
+
+  toc("compute_particle_grid_order");
+
+  if (!reordered) {
+    Py_DECREF(np_order);
+    Py_RETURN_NONE;
+  }
+  return Py_BuildValue("N", np_order);
+}
+
+/**
  * @brief Computes per-particle spectra for a collection of particles.
  *
  * @param np_grid_spectra: The SPS spectra array.
@@ -1199,6 +1374,9 @@ void spectra_loop_ngp(GridProps *grid_props, Particles *parts,
  * @param nlam: The number of wavelength elements.
  * @param out_dtype: Requested floating-point dtype for the returned
  *                   per-particle spectra array.
+ * @param prop_names: Optional names of the particle properties (for errors).
+ * @param grid_order: Optional order to visit the particles in, from
+ *                    compute_particle_grid_order, or None for index order.
  *
  * @return The per-particle spectra array.
  */
@@ -1214,15 +1392,17 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
   PyObject *grid_tuple, *part_tuple;
   PyObject *out_dtype;
   PyObject *prop_names = NULL;
+  PyObject *grid_order = NULL;
   PyArrayObject *np_grid_spectra;
   PyArrayObject *np_part_mass, *np_ndims;
   PyArrayObject *np_mask, *np_lam_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(
-          args, "OOOOOiiisiOOpO|O", &np_grid_spectra, &grid_tuple, &part_tuple,
-          &np_part_mass, &np_ndims, &ndim, &npart, &nlam, &method, &nthreads,
-          &np_mask, &np_lam_mask, &has_lam_mask, &out_dtype, &prop_names)) {
+  if (!PyArg_ParseTuple(args, "OOOOOiiisiOOpO|OO", &np_grid_spectra,
+                        &grid_tuple, &part_tuple, &np_part_mass, &np_ndims,
+                        &ndim, &npart, &nlam, &method, &nthreads, &np_mask,
+                        &np_lam_mask, &has_lam_mask, &out_dtype, &prop_names,
+                        &grid_order)) {
     return NULL;
   }
 
@@ -1238,6 +1418,22 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
       new Particles(np_part_mass, /*np_velocities*/ NULL, np_mask, part_tuple,
                     prop_names, npart);
   RETURN_IF_PYERR();
+
+  /* Visit the particles in grid order if we were given one. */
+  if (grid_order != NULL && grid_order != Py_None) {
+    PyArrayObject *np_order = (PyArrayObject *)grid_order;
+    if (!PyArray_Check(grid_order) || PyArray_TYPE(np_order) != NPY_INT32 ||
+        PyArray_NDIM(np_order) != 1 || PyArray_DIM(np_order, 0) != npart ||
+        !PyArray_IS_C_CONTIGUOUS(np_order)) {
+      PyErr_SetString(PyExc_ValueError,
+                      "grid_order must be a C-contiguous 1D int32 array with "
+                      "an entry per particle.");
+      delete part_props;
+      delete grid_props;
+      return NULL;
+    }
+    part_props->order = static_cast<const int *>(PyArray_DATA(np_order));
+  }
 
   const int grid_typenum = grid_props->get_float_typenum();
   const int part_typenum = part_props->get_float_typenum();
@@ -1343,6 +1539,9 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 static PyMethodDef SedMethods[] = {
     {"compute_particle_seds", (PyCFunction)compute_particle_seds, METH_VARARGS,
      "Method for calculating particle intrinsic spectra."},
+    {"compute_particle_grid_order", (PyCFunction)compute_particle_grid_order,
+     METH_VARARGS,
+     "Compute the order to visit particles in so they walk the grid."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */

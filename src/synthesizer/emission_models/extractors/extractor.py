@@ -27,6 +27,7 @@ from synthesizer.extensions.doppler_particle_spectra import (
 )
 from synthesizer.extensions.integrated_spectra import compute_integrated_sed
 from synthesizer.extensions.particle_spectra import (
+    compute_particle_grid_order,
     compute_particle_seds,
 )
 from synthesizer.synth_warnings import warn
@@ -294,6 +295,59 @@ class Extractor(ABC):
                 f"{frac_outside * 100:.2f}% of the attributes outside"
                 " the grid axes.",
             )
+
+    def _get_grid_order(
+        self, emitter, extracted, weight, grid_assignment_method, nthreads
+    ):
+        """Get the order to visit the emitter's particles in to walk the grid.
+
+        Visiting particles in the order of their grid cell lets consecutive
+        particles reuse the same grid rows from cache, instead of rereading
+        them from main memory for every particle. The outputs are unchanged.
+
+        The order is computed on the first extraction from this grid and
+        cached on the emitter alongside its grid weights, so it is valid for
+        as long as they are (see clear_weights).
+
+        Args:
+            emitter (Stars/BlackHoles/Gas):
+                The emitter object.
+            extracted (tuple):
+                The emitter attributes along each grid axis.
+            weight (np.ndarray):
+                The emitter's weights.
+            grid_assignment_method (str):
+                The grid assignment method ("cic" or "ngp").
+            nthreads (int):
+                The number of threads to use.
+
+        Returns:
+            np.ndarray/None:
+                The order to visit the particles in, or None if they are
+                already in grid order.
+        """
+        method = grid_assignment_method.lower()
+        orders = emitter._grid_orders[method]
+        if self._grid.grid_name not in orders:
+            # The order only depends on the grid axes, so any of the grid's
+            # arrays will do
+            grid_array = (
+                self._spectra_grid
+                if hasattr(self, "_spectra_grid")
+                else self._line_lum_grid
+            )
+            orders[self._grid.grid_name] = compute_particle_grid_order(
+                grid_array,
+                self._grid_axes,
+                extracted,
+                weight,
+                emitter.nparticles,
+                grid_array.shape[-1],
+                method,
+                nthreads,
+                (*self._emitter_attributes, self._weight_label),
+            )
+        return orders[self._grid.grid_name]
 
     def _spectra_extraction_fits_dtype(self, dtype, emitter, model, **kwargs):
         """Check whether this spectra extraction fits the output dtype.
@@ -1064,6 +1118,11 @@ class ParticleExtractor(Extractor):
         else:
             grid_weights = None
 
+        # Visit the particles in grid order (computed once and cached)
+        grid_order = self._get_grid_order(
+            emitter, extracted, weight, grid_assignment_method, nthreads
+        )
+
         # Compute the per-particle lnu array.
         spec = compute_particle_seds(
             self._spectra_grid,
@@ -1081,6 +1140,7 @@ class ParticleExtractor(Extractor):
             lam_mask is not None,
             out_dtype,
             emitter_attr_names,
+            grid_order,
         )
 
         # Compute the integrated lnu array using grid weights rather than a
@@ -1266,6 +1326,11 @@ class ParticleExtractor(Extractor):
         else:
             grid_weights = None
 
+        # Visit the particles in grid order (computed once and cached)
+        grid_order = self._get_grid_order(
+            emitter, extracted, weight, grid_assignment_method, nthreads
+        )
+
         # Compute the per-particle line lum array.
         lum = compute_particle_seds(
             self._line_lum_grid,
@@ -1283,6 +1348,7 @@ class ParticleExtractor(Extractor):
             lam_mask is not None,
             out_dtype,
             emitter_attr_names,
+            grid_order,
         )
 
         # Compute the integrated line lum array.
@@ -1321,6 +1387,7 @@ class ParticleExtractor(Extractor):
             lam_mask is not None,
             out_dtype,
             emitter_attr_names,
+            grid_order,
         )
 
         # Compute the integrated continuum array using the line luminosity grid

@@ -5,7 +5,10 @@ import pytest
 from synthesizer.extensions.doppler_particle_spectra import (
     compute_part_seds_with_vel_shift,
 )
-from synthesizer.extensions.particle_spectra import compute_particle_seds
+from synthesizer.extensions.particle_spectra import (
+    compute_particle_grid_order,
+    compute_particle_seds,
+)
 
 
 def _particle_spectra_inputs():
@@ -78,6 +81,83 @@ def test_compute_particle_seds_matches_expected(method, expected_func):
 
     expected = expected_func(grid_spectra, weights)
     np.testing.assert_allclose(part_spectra, expected, rtol=0.0, atol=0.0)
+
+
+@pytest.mark.parametrize(
+    ("method", "expected_func"),
+    [
+        ("ngp", _expected_ngp_spectra),
+        ("cic", _expected_cic_spectra),
+    ],
+)
+@pytest.mark.parametrize("nthreads", [1, 2])
+def test_grid_ordered_particle_seds_match_expected(
+    method, expected_func, nthreads
+):
+    """Visiting particles in grid order leaves every output row unchanged."""
+    grid_spectra, axes, part_props, weights, grid_dims = (
+        _particle_spectra_inputs()
+    )
+
+    # The particles sit in cells 0, 1/2, 0, 1/2, so they need reordering and
+    # the stable counting sort keeps same-cell particles in index order
+    order = compute_particle_grid_order(
+        grid_spectra,
+        axes,
+        part_props,
+        weights,
+        weights.size,
+        grid_spectra.shape[-1],
+        method,
+        nthreads,
+        ("x",),
+    )
+    np.testing.assert_array_equal(order, [0, 2, 1, 3])
+
+    part_spectra = compute_particle_seds(
+        grid_spectra,
+        axes,
+        part_props,
+        weights,
+        grid_dims,
+        len(axes),
+        weights.size,
+        grid_spectra.shape[-1],
+        method,
+        nthreads,
+        None,
+        None,
+        False,
+        np.float64,
+        ("x",),
+        order,
+    )
+
+    expected = expected_func(grid_spectra, weights)
+    np.testing.assert_allclose(part_spectra, expected, rtol=0.0, atol=0.0)
+
+
+@pytest.mark.parametrize("method", ["ngp", "cic"])
+def test_grid_order_is_none_for_ordered_particles(method):
+    """Particles already in grid order need no reordering."""
+    grid_spectra, axes, part_props, weights, _ = _particle_spectra_inputs()
+    order = np.array([0, 2, 1, 3])
+    sorted_props = tuple(np.ascontiguousarray(p[order]) for p in part_props)
+
+    assert (
+        compute_particle_grid_order(
+            grid_spectra,
+            axes,
+            sorted_props,
+            np.ascontiguousarray(weights[order]),
+            weights.size,
+            grid_spectra.shape[-1],
+            method,
+            1,
+            ("x",),
+        )
+        is None
+    )
 
 
 @pytest.mark.parametrize("method", ["ngp", "cic"])

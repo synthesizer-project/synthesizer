@@ -435,6 +435,7 @@ class Particles:
                         "data_cubes_fnu",
                         "model_param_cache",
                         "_grid_weights",
+                        "_grid_orders",
                         "sfh",
                         "sfzh",
                     }

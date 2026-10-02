@@ -447,6 +447,9 @@ def test_integrated_doppler_shifted_generate_lnu(
 
 
 @patch(
+    "synthesizer.emission_models.extractors.extractor.compute_particle_grid_order"
+)
+@patch(
     "synthesizer.emission_models.extractors.extractor.compute_integrated_sed"
 )
 @patch(
@@ -455,6 +458,7 @@ def test_integrated_doppler_shifted_generate_lnu(
 def test_particle_generate_lnu(
     mock_compute_particle_seds,
     mock_compute_integrated_sed,
+    mock_compute_particle_grid_order,
     test_grid,
     particle_stars_A,
     nebular_emission_model,
@@ -474,6 +478,8 @@ def test_particle_generate_lnu(
     mock_int_spectrum = np.ones(test_grid.nlam)
     mock_compute_particle_seds.return_value = mock_spectrum
     mock_compute_integrated_sed.return_value = (mock_int_spectrum, None)
+    mock_order = np.arange(n_particles, dtype=np.int32)
+    mock_compute_particle_grid_order.return_value = mock_order
 
     # Call generate_lnu
     part_spec, spec = extractor.generate_lnu(
@@ -487,6 +493,13 @@ def test_particle_generate_lnu(
     assert args[1] is extractor._grid_axes  # grid_axes
     assert args[2] == ("mock_extracted",)  # extracted
     assert args[3] == "mock_weight"  # weight
+    assert args[-1] is mock_order  # grid order
+
+    # The grid order is computed once and cached on the emitter
+    mock_compute_particle_grid_order.assert_called_once()
+    assert (
+        particle_stars_A._grid_orders["cic"][test_grid.grid_name] is mock_order
+    )
 
     # Check that compute_integrated_sed was called with the right parameters
     mock_compute_integrated_sed.assert_called_once()

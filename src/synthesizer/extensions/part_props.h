@@ -28,6 +28,15 @@ class Particles {
   /* The number of particles. */
   int npart;
 
+  /* An optional order to visit the particles in (see
+   * compute_particle_grid_order), or NULL to visit them in index order. */
+  const int *order = NULL;
+
+  /* Get the index of the i-th particle to visit. */
+  size_t ordered_index(size_t i) const {
+    return order != NULL ? static_cast<size_t>(order[i]) : i;
+  }
+
   /* Constructor */
   Particles(PyArrayObject *np_weights, PyArrayObject *np_velocities,
             PyArrayObject *np_mask, PyObject *part_tuple,
