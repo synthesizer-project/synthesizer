@@ -119,10 +119,10 @@ class Extractor(ABC):
             else str(self._weight_var)
         )
 
-        # Attach the spectra and line grids to the Extractor object, keeping
-        # the emission they hold
+        # Store the emission we extract, used to look up its grid bounds
         self._extract = extract
 
+        # Attach the spectra and line grids to the Extractor object
         if extract in grid.available_spectra_emissions:
             self._spectra_grid = grid.spectra[extract]
         if grid.lines_available:
@@ -223,16 +223,35 @@ class Extractor(ABC):
         if do_grid_check:
             self.check_emitter_attrs(extracted)
 
-        # Also extract the weight variable
+        # Also extract the weight variable, at the same precision as the
+        # extracted attributes if we have to make unit weights (the extension
+        # requires the weights and attributes to share a dtype)
+        weight = self._get_emitter_weights(
+            emitter, model, dtype=np.result_type(*extracted)
+        )
+
+        return tuple(extracted), weight
+
+    def _get_emitter_weights(self, emitter, model, dtype=np.float64):
+        """Get the weights the grid is weighted by for the emitter.
+
+        Args:
+            emitter (Stars/BlackHoles/Gas):
+                The emitter object.
+            model (EmissionModel):
+                The emission model object.
+            dtype (np.dtype):
+                The dtype of the unit weights made when the grid has no
+                weight variable.
+
+        Returns:
+            np.ndarray/float:
+                The weights, without units.
+        """
         if self._weight_var in [None, "None"]:
-            # If no weight variable is provided, use a weight of 1.0 at the
-            # same precision as the extracted attributes (the extension
-            # requires the weights and attributes to share a dtype)
+            # If no weight variable is provided, use a weight of 1.0
             if hasattr(emitter, "nparticles"):
-                weight = np.ones(
-                    emitter.nparticles,
-                    dtype=np.result_type(*extracted),
-                )
+                weight = np.ones(emitter.nparticles, dtype=dtype)
             else:
                 weight = 1.0
         else:
@@ -242,7 +261,7 @@ class Extractor(ABC):
         if isinstance(weight, (unyt_array, unyt_quantity)):
             weight = weight.ndview
 
-        return tuple(extracted), weight
+        return weight
 
     @timed("Extractor.check_emitter_attrs")
     def check_emitter_attrs(self, emitter, extracted_attrs):
@@ -276,42 +295,15 @@ class Extractor(ABC):
                 " the grid axes.",
             )
 
-    def _cannot_overflow(self, dtype, emitter, model, grid_max):
-        """Check whether extracted emission is provably finite at dtype.
+    def _spectra_extraction_fits_dtype(self, dtype, emitter, model, **kwargs):
+        """Check whether this spectra extraction fits the output dtype.
 
-        Every output (per-particle or integrated) is a sum of grid values
-        times non-negative weights whose grid assignment fractions sum to at
-        most one per particle, so it is bounded by the largest absolute grid
-        value times the total weight (see weighted_sum_fits). If that bound
-        fits in dtype, the caller can skip scanning the outputs for inf.
-
-        Args:
-            dtype (np.dtype):
-                The output dtype.
-            emitter (Stars/BlackHoles/Gas):
-                The emitter the emission is extracted for.
-            model (EmissionModel):
-                The emission model defining the extraction.
-            grid_max (float):
-                The largest absolute value in the grid arrays being
-                extracted from.
-
-        Returns:
-            bool:
-                True if the outputs cannot overflow at dtype.
-        """
-        # Get the total weight (the same weights the extraction uses)
-        if self._weight_var in [None, "None"]:
-            total_weight = float(getattr(emitter, "nparticles", 1))
-        else:
-            weight = get_param(self._weight_var, model, None, emitter)
-            weight = getattr(weight, "ndview", weight)
-            total_weight = float(np.sum(np.abs(weight), dtype=np.float64))
-
-        return weighted_sum_fits(dtype, grid_max, total_weight)
-
-    def _spectra_cannot_overflow(self, dtype, emitter, model, **kwargs):
-        """Check whether extracted spectra are provably finite at dtype.
+        Every extracted value (per-particle or integrated) is a sum of grid
+        values times the emitter's weights, with grid assignment fractions
+        summing to at most one per particle. It is therefore bounded by the
+        largest absolute grid value times the total weight, and if that bound
+        fits in dtype the outputs cannot overflow (see weighted_sum_fits), so
+        they needn't be scanned for inf.
 
         Args:
             dtype (np.dtype):
@@ -325,17 +317,19 @@ class Extractor(ABC):
 
         Returns:
             bool:
-                True if the spectra cannot overflow at dtype.
+                True if the extracted spectra cannot overflow dtype.
         """
-        return self._cannot_overflow(
+        return weighted_sum_fits(
             dtype,
-            emitter,
-            model,
             self._grid._max_abs["spectra"][self._extract],
+            self._get_emitter_weights(emitter, model),
         )
 
-    def _lines_cannot_overflow(self, dtype, emitter, model, **kwargs):
-        """Check whether extracted lines are provably finite at dtype.
+    def _line_extraction_fits_dtype(self, dtype, emitter, model, **kwargs):
+        """Check whether this line extraction fits the output dtype.
+
+        As for _spectra_extraction_fits_dtype, using the larger of the line
+        luminosity and continuum grids' largest absolute values.
 
         Args:
             dtype (np.dtype):
@@ -349,17 +343,16 @@ class Extractor(ABC):
 
         Returns:
             bool:
-                True if the line luminosities and continua cannot overflow at
-                dtype.
+                True if the extracted line luminosities and continua cannot
+                overflow dtype.
         """
-        return self._cannot_overflow(
+        return weighted_sum_fits(
             dtype,
-            emitter,
-            model,
             max(
                 self._grid._max_abs["line_lum"][self._extract],
                 self._grid._max_abs["line_cont"][self._extract],
             ),
+            self._get_emitter_weights(emitter, model),
         )
 
     @abstractmethod
@@ -384,7 +377,9 @@ class IntegratedParticleExtractor(Extractor):
     """
 
     @timed("IntegratedParticleExtractor.generate_lnu")
-    @verify_out_precision(cannot_overflow=Extractor._spectra_cannot_overflow)
+    @verify_out_precision(
+        skip_inf_scan_if=Extractor._spectra_extraction_fits_dtype
+    )
     def generate_lnu(
         self,
         emitter,
@@ -501,7 +496,9 @@ class IntegratedParticleExtractor(Extractor):
         )
 
     @timed("IntegratedParticleExtractor.generate_line")
-    @verify_out_precision(cannot_overflow=Extractor._lines_cannot_overflow)
+    @verify_out_precision(
+        skip_inf_scan_if=Extractor._line_extraction_fits_dtype
+    )
     def generate_line(
         self,
         emitter,
@@ -951,7 +948,9 @@ class ParticleExtractor(Extractor):
     """
 
     @timed("ParticleExtractor.generate_lnu")
-    @verify_out_precision(cannot_overflow=Extractor._spectra_cannot_overflow)
+    @verify_out_precision(
+        skip_inf_scan_if=Extractor._spectra_extraction_fits_dtype
+    )
     def generate_lnu(
         self,
         emitter,
@@ -1128,7 +1127,9 @@ class ParticleExtractor(Extractor):
         return part_sed, integrated_sed
 
     @timed("ParticleExtractor.generate_line")
-    @verify_out_precision(cannot_overflow=Extractor._lines_cannot_overflow)
+    @verify_out_precision(
+        skip_inf_scan_if=Extractor._line_extraction_fits_dtype
+    )
     def generate_line(
         self,
         emitter,

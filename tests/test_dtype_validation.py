@@ -705,11 +705,11 @@ class TestVerifyOutPrecision:
             func(nthreads=4, out_dtype=np.float32)
 
     @pytest.mark.parametrize("finite", [False, True])
-    def test_cannot_overflow_skips_scan(self, finite):
+    def test_skip_inf_scan_if_skips_scan(self, finite):
         """The inf scan is skipped only when outputs are provably finite."""
 
         @verify_out_precision(
-            cannot_overflow=lambda dtype, scale, **kwargs: finite
+            skip_inf_scan_if=lambda dtype, scale, **kwargs: finite
         )
         def func(scale, out_dtype=None):
             return np.full(3, np.inf, dtype=np.float32)

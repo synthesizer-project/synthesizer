@@ -355,7 +355,7 @@ def max_abs(values):
     )
 
 
-def weighted_sum_fits(dtype, max_abs_value, total_weight):
+def weighted_sum_fits(dtype, max_abs_value, weights):
     """Check a weighted sum of values cannot overflow a dtype.
 
     A sum of values times non-negative weights, where each value is at most
@@ -368,17 +368,19 @@ def weighted_sum_fits(dtype, max_abs_value, total_weight):
             The dtype the sum is computed and stored at.
         max_abs_value (float):
             The largest absolute value being summed.
-        total_weight (float):
-            The total of the (non-negative) weights.
+        weights (np.ndarray/unyt_array/float):
+            The weights (their absolute values are totalled).
 
     Returns:
         bool:
             True if the sum cannot overflow dtype.
     """
+    weights = getattr(weights, "ndview", weights)
+    total_weight = float(np.sum(np.abs(weights), dtype=np.float64))
     return 2.0 * max_abs_value * total_weight < float(np.finfo(dtype).max)
 
 
-def verify_out_precision(cannot_overflow=None):
+def verify_out_precision(skip_inf_scan_if=None):
     """Verify a function's outputs respect its out_dtype argument.
 
     Decorates any function or method taking an ``out_dtype`` argument. The
@@ -395,7 +397,7 @@ def verify_out_precision(cannot_overflow=None):
     PhotometryCollection) or dicts, lists and tuples of these.
 
     Args:
-        cannot_overflow (callable, optional):
+        skip_inf_scan_if (callable, optional):
             Called with the resolved dtype and the function's arguments (as
             keywords) before the inf scan. Returning True means the outputs
             are provably finite at that dtype, so the scan is skipped.
@@ -426,8 +428,8 @@ def verify_out_precision(cannot_overflow=None):
 
             # Skip the inf scan where the outputs are provably finite
             check_inf = dtype.itemsize < 8 and not (
-                cannot_overflow is not None
-                and cannot_overflow(dtype=dtype, **bound.arguments)
+                skip_inf_scan_if is not None
+                and skip_inf_scan_if(dtype=dtype, **bound.arguments)
             )
             return _convert_output_dtype(
                 result, dtype, func.__qualname__, nthreads, check_inf
