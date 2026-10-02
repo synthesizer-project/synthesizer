@@ -17,7 +17,7 @@ from unyt import Msun, Myr, km, kpc, s
 from synthesizer import exceptions
 from synthesizer.emission_models import PacmanEmission
 from synthesizer.grid import Grid
-from synthesizer.instruments.premade import JWSTNIRCamWide
+from synthesizer.instruments import PhotometricImager
 from synthesizer.kernel_functions import Kernel
 from synthesizer.particle import BlackHoles, Galaxy, Gas, Stars
 
@@ -146,7 +146,7 @@ def get_test_instrument(grid: Grid):
 
     try:
         with h5py.File(INSTRUMENT_PATH, "r") as hdf:
-            photometry_inst = JWSTNIRCamWide._from_hdf5(hdf)
+            photometry_inst = PhotometricImager._from_hdf5(hdf)
             return photometry_inst
     except (OSError, KeyError, ValueError) as err:
         raise exceptions.MissingArgument(
@@ -180,3 +180,59 @@ def get_test_emission_model(grid: Grid):
     model = PacmanEmission(grid=grid, tau_v="tau_v", fesc="fesc")
     model.set_per_particle(True)  # Per-particle emissions
     return model
+
+
+def add_test_operations(
+    pipeline,
+    grid: Grid,
+    include_observer_frame: bool = False,
+    fov_kpc: float = 60.0,
+):
+    """Add the standard profiling operations to a Pipeline.
+
+    These are the same operations profile_timing.py and profile_memory.py
+    run: LOS optical depths, SFZH/SFH, spectra, photometry, lines and
+    imaging, plus their observer frame versions if requested.
+
+    Args:
+        pipeline (Pipeline): The Pipeline to add the operations to.
+        grid (Grid): The SPS grid the Pipeline's emission model uses.
+        include_observer_frame (bool, optional): Also add the observer frame
+            (flux) operations. Defaults to False.
+        fov_kpc (float, optional): Field of view for imaging in kpc.
+            Defaults to 60.0.
+    """
+    from astropy.cosmology import Planck18
+
+    instrument = get_test_instrument(grid)
+    kernel = get_test_kernel()
+    image_kernel = kernel.get_kernel()
+    fov = fov_kpc * kpc
+
+    # Rest frame operations
+    pipeline.get_los_optical_depths(kernel=kernel)
+    pipeline.get_sfzh(grid.log10ages, grid.metallicities)
+    pipeline.get_sfh(grid.log10ages)
+    pipeline.get_spectra()
+    pipeline.get_photometry_luminosities(instrument)
+    pipeline.get_lines(line_ids=grid.available_lines)
+    pipeline.get_images_luminosity(
+        instrument,
+        fov=fov,
+        kernel=image_kernel,
+        cosmo=Planck18,
+        labels="intrinsic",
+    )
+
+    # Observer frame operations
+    if include_observer_frame:
+        pipeline.get_observed_spectra(cosmo=Planck18)
+        pipeline.get_photometry_fluxes(instrument, cosmo=Planck18)
+        pipeline.get_observed_lines(cosmo=Planck18)
+        pipeline.get_images_flux(
+            instrument,
+            fov=fov,
+            kernel=image_kernel,
+            cosmo=Planck18,
+            labels="intrinsic",
+        )

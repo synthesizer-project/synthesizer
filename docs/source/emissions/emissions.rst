@@ -21,9 +21,9 @@ Emission Type Glossary
 When working with premade emission models, these emission are given standard labels that reflect their origin and the masks that have been applied (though custom labels can be provided).
 The flowchart also shows how these different spectra are typically generated and related by an emission model.
 
-.. image:: ../img/synthesizer_flowchart.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/diagrams/synthesizer_flowchart.png
   :alt: Flowchart showing the different emission types in synthesizer
-  :target: ../img/synthesizer_flowchart.png
+  :target: https://raw.githubusercontent.com/synthesizer-project/synventory/main/diagrams/synthesizer_flowchart.png
 
 Our standard naming system, which is used in the premade ``EmissionModels``, is listed below.
 

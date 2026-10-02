@@ -6,8 +6,9 @@ ReStructuredText (.rst) files suitable for documentation.
 Notes:
     - Parses multiple configuration sets (All, Technical, Applications).
     - Extracts metadata: Title, Authors, Date, Journal, and ADS Links.
-    - Checks for local images (inside plots) corresponding to the
-      BibCode (e.g., 2020ApJ...123.jpeg) and embeds them.
+    - Checks a local synventory checkout for images corresponding to the
+      BibCode (e.g., publications/2020ApJ...123.jpeg) and embeds them by
+      their synventory URL.
     - Sorts entries chronologically by Year and Month.
     - This is intended to be run locally to generate publication
       lists for the documentation. It is not generated automatically
@@ -19,6 +20,7 @@ Usage:
 
 import argparse
 import os
+from urllib.parse import quote
 
 try:
     import bibtexparser
@@ -58,8 +60,13 @@ application_pubs = {
 
 # At the top of the file, after imports:
 script_dir = os.path.dirname(os.path.abspath(__file__))
-# Directory containing the plot images (filename format: bibcode.jpeg)
-image_dir = "plots"
+# Local synventory checkout holding the images (filename format:
+# publications/bibcode.jpeg), by default cloned next to synthesizer
+synventory_dir = os.path.join(script_dir, "..", "..", "..", "..", "synventory")
+# The URL the documentation loads the images from
+synventory_url = (
+    "https://raw.githubusercontent.com/synthesizer-project/synventory/main"
+)
 
 
 def get_author_string(author_field: str, max_authors: int = 5) -> str:
@@ -275,10 +282,10 @@ def get_paper_rst(
     # We expect images to be named exactly as the
     # BibCode (e.g., 2020ApJ...123.jpeg)
     image_filename = f"{bibcode}.jpeg"
-    image_path = os.path.join(script_dir, image_dir, image_filename)
+    image_path = os.path.join(synventory_dir, "publications", image_filename)
     has_image = os.path.exists(image_path)
-    # Need the relative path from the RST file to the images
-    relative_image_path = os.path.join(image_dir, image_filename)
+    # The URL the image is served from (bibcodes can contain e.g. "&")
+    image_url = f"{synventory_url}/publications/{quote(image_filename)}"
 
     # Build RST for entry
     rst = ""
@@ -291,7 +298,7 @@ def get_paper_rst(
         rst += "   :class: borderless\n\n"
 
         # Column 1: The Image
-        rst += f"   * - .. image:: {relative_image_path}\n"
+        rst += f"   * - .. image:: {image_url}\n"
         rst += "          :width: 100%\n"  # Fills the 40% column width
         rst += f"          :target: {ads_link}\n"  # Makes the image clickable
 
@@ -399,6 +406,8 @@ def main() -> None:
     Raises:
         SystemExit: If required arguments are missing or invalid.
     """
+    global synventory_dir
+
     parser = argparse.ArgumentParser(
         description="Convert .bib file to a release-ordered, hyperlink-rich "
         "reStructuredText reference list."
@@ -409,7 +418,14 @@ def main() -> None:
         default=5,
         help="Maximum authors to list before 'and others' (default: 5)",
     )
+    parser.add_argument(
+        "--synventory",
+        default=synventory_dir,
+        help="Path to a local synventory checkout, used to check which "
+        "publications have an image (default: next to synthesizer)",
+    )
     args = parser.parse_args()
+    synventory_dir = args.synventory
 
     generate_rst(all_pubs, max_authors=args.max_authors)
     generate_rst(technical_pubs, max_authors=args.max_authors)
