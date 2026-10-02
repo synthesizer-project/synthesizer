@@ -160,23 +160,6 @@ def get_quantity_unit(obj, attr_name):
     )
 
 
-def get_quantity_view(obj, attr_name):
-    """Wrap a raw ndarray attribute in units without copying data.
-
-    Args:
-        obj (object):
-            Object holding the raw ndarray attribute and the corresponding
-            Quantity descriptor on its class.
-        attr_name (str):
-            Private ndarray attribute name, e.g. ``"_fnu"``.
-
-    Returns:
-        unyt_array:
-            Unit-bearing view of the raw ndarray data.
-    """
-    return getattr(obj, attr_name[1:])
-
-
 class DefaultUnits:
     """The DefaultUnits class is a container for the default unit system.
 
@@ -496,7 +479,9 @@ class Quantity:
         private_name (str):
             The name of the class variable with a leading underscore. Used the
             mostly internally for (or when the user wants) values without a
-            unit returned.
+            unit returned. A _QuantityView is installed on the class under
+            this name, and the value with units is stored in the instance
+            dict under this key.
     """
 
     def __init__(self, category):
@@ -538,12 +523,11 @@ class Quantity:
         """Return the value of the attribute with units.
 
         When referencing an attribute with its public_name this method is
-        called. It handles the returning of the values stored in the
-        private_name variable with units.
-
-        The value is stored under the private_name variable on the instance
-        of the class. If we instead used the private name directly we would
-        bypass the Quantity descriptor and return the value without units.
+        called. It returns the stored unyt_array/unyt_quantity itself (not a
+        copy), so in-place unit conversions of the returned value are
+        reflected on the object. The stored value may therefore not be in
+        the internal unit system, use the private_name (which goes through
+        _QuantityView) for unit-free values in the internal unit system.
 
         If the value is None then None is returned regardless.
 
@@ -567,7 +551,8 @@ class Quantity:
 
         When setting a Quantity variable this method is called, firstly the
         value is converted to the expected units. Once converted the value is
-        stored on the instance of the class under the private_name variable.
+        stored with units attached in the instance dict under the private_name
+        key. Values without units are assumed to be in the expected units.
 
         Args:
             obj (Any):
@@ -582,13 +567,14 @@ class Quantity:
             if value.units != self.unit and value.units != dimensionless:
                 # Convert out of place. The value being assigned is not ours,
                 # converting it in place would rewrite the caller's data.
-                value = value.to(self.unit)
+                value = value.to(self.unit).ndview
             else:
-                # Attach our unit to a view so we store the canonical unit
-                # object rather than an equivalent one (e.g. 1.0*Msun), which
-                # unyt would otherwise carry into float64 arithmetic
-                value = _attach_unit(value.ndview, self.unit)
-        elif value is not None:
+                value = value.ndview
+
+        # Attach our own unit object rather than keeping the caller's. An
+        # equivalent unit (e.g. 1.0*Msun) would otherwise be carried into
+        # arithmetic and promote float32 values to float64.
+        if value is not None:
             value = _attach_unit(value, self.unit)
 
         # Store the unit-bearing value under the private name in the instance
@@ -667,8 +653,10 @@ class _QuantityView:
         # pay for this once. The setter stores our unit object itself, so the
         # identity check skips unyt's slow unit comparison on the hot path.
         unit = self.quantity.unit
-        if value.units is not unit and value.units != unit:
-            value = value.to(unit)
+        if value.units is not unit:
+            if value.units != unit:
+                value = value.to(unit)
+            value = _attach_unit(value.ndview, unit)
             obj.__dict__[name] = value
 
         if value.ndim == 0:
@@ -721,10 +709,10 @@ def unyt_to_ndview(arr, unit=None):
     passing an array that anything else holds a reference to will silently
     change that other thing's data. In practice that means passing an array
     you just computed, not one read back off an object: attribute reads return
-    views onto the stored buffer, so converting one corrupts the object it
-    came from. Callers holding an array they do not own should convert it
-    themselves with ``arr.to(unit)``, which copies, and take the ndview of the
-    result.
+    the stored array itself, so converting one changes the object's stored
+    units and rewrites any unit-free view of it already handed out. Callers
+    holding an array they do not own should convert it themselves with
+    ``arr.to(unit)``, which copies, and take the ndview of the result.
 
     Args:
         arr (unyt_array/unyt_quantity): The unyt_array or unyt_quantity to

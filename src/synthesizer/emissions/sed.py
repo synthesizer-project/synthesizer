@@ -64,7 +64,6 @@ from synthesizer.units import (
     accepts,
     get_array_quantity_view,
     get_quantity_unit,
-    get_quantity_view,
 )
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
@@ -145,8 +144,8 @@ class Sed:
         self._nu = np.empty_like(self._lam)
         np.divide(
             c,
-            get_quantity_view(self, "_lam"),
-            out=get_quantity_view(self, "_nu"),
+            self.lam,
+            out=self.nu,
         )
 
         # If no lnu is provided create an empty array with the same shape as
@@ -1213,7 +1212,7 @@ class Sed:
         )
 
         # Return the fnu with units, without making a copy
-        return get_quantity_view(self, "_fnu")
+        return self.fnu
 
     @accepts(peculiar_velocity=km / s)
     @timed("Sed.get_fnu")
@@ -1344,7 +1343,7 @@ class Sed:
                 self._fnu *= igm.get_transmission(z, obslam)
 
         # Return the fnu with units, without making a copy
-        return get_quantity_view(self, "_fnu")
+        return self.fnu
 
     @timed("Sed.get_photo_lnu")
     def get_photo_lnu(
