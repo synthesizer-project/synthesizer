@@ -15,14 +15,18 @@
 #     scripts
 #
 # Usage:
-#   bash profiling/mpi/run_mpi_scaling.sh --mode weak --ngalaxies 25
+#   bash profiling/mpi/run_mpi_scaling.sh --mode weak --ngalaxies 100
 #   bash profiling/mpi/run_mpi_scaling.sh --mode strong --ngalaxies 1000
+#   bash profiling/mpi/run_mpi_scaling.sh --mode strong --ngalaxies 1000 \
+#       --particle-dist powerlaw --max-npart 10000
 
 set -e
 
 MODE=""
 NGALAXIES=""
 NPARTICLES=10000
+PARTICLE_DIST=fixed
+MAX_NPART=""
 NTHREADS=16
 RANKS_PER_NODE=8
 RANKS="1 2 4 8 16 32"
@@ -41,6 +45,14 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--nparticles)
 		NPARTICLES="$2"
+		shift 2
+		;;
+	--particle-dist)
+		PARTICLE_DIST="$2"
+		shift 2
+		;;
+	--max-npart)
+		MAX_NPART="$2"
 		shift 2
 		;;
 	--nthreads)
@@ -70,6 +82,9 @@ while [[ $# -gt 0 ]]; do
 		echo "  --mode weak|strong      Weak (per-rank work) or strong (fixed total)"
 		echo "  --ngalaxies N           Galaxies per rank (weak) or in total (strong)"
 		echo "  --nparticles N          Stellar particles per galaxy (default: 10000)"
+		echo "  --particle-dist DIST    fixed (every galaxy --nparticles) or powerlaw"
+		echo "                          (dN/dn ~ n^-2 from 10^3 to 10^5) (default: fixed)"
+		echo "  --max-npart N           Chunk galaxies above N star particles"
 		echo "  --nthreads N            Threads per rank (default: 16)"
 		echo "  --ranks-per-node N      Ranks per node (default: 8)"
 		echo "  --ranks \"LIST\"          Rank counts to run (default: \"1 2 4 8 16 32\")"
@@ -90,8 +105,17 @@ if [[ "$MODE" != "weak" && "$MODE" != "strong" ]] || [ -z "$NGALAXIES" ]; then
 	exit 1
 fi
 
+# Power law results sit next to the balanced ones with their own names
+SUFFIX=""
+if [ "$PARTICLE_DIST" = "powerlaw" ]; then
+	SUFFIX="_powerlaw"
+fi
 OUT_DIR="$OUTPUT_ROOT/mpi_$MODE"
-CSV="$OUT_DIR/mpi_$MODE.csv"
+CSV="$OUT_DIR/mpi_$MODE$SUFFIX.csv"
+EXTRA_ARGS=()
+if [ -n "$MAX_NPART" ]; then
+	EXTRA_ARGS+=(--max-npart "$MAX_NPART")
+fi
 mkdir -p "$OUT_DIR"
 
 # Start a fresh set of measurements
@@ -107,13 +131,15 @@ for nranks in $RANKS; do
 		python profiling/mpi/pipeline_mpi_scaling.py \
 		--mode "$MODE" \
 		--ngalaxies "$NGALAXIES" \
+		--particle-dist "$PARTICLE_DIST" \
 		--nparticles "$NPARTICLES" \
 		--nthreads "$NTHREADS" \
 		--grid-precision "$GRID_PRECISION" \
 		--out-dtype "$GRID_PRECISION" \
-		--out_csv "$CSV"
+		--out_csv "$CSV" \
+		"${EXTRA_ARGS[@]}"
 done
 
 python profiling/mpi/analyse_mpi_scaling.py \
 	--input "$CSV" \
-	--output "$OUT_DIR/mpi_${MODE}_scaling.png"
+	--output "$OUT_DIR/mpi_${MODE}${SUFFIX}_scaling.png"
