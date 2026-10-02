@@ -293,23 +293,23 @@ class TestGridAxes:
 class TestGridSpectra:
     """Tests for Grid spectra handling."""
 
-    def test_max_abs_bounds_the_emission_arrays(self, test_grid):
+    def test_max_grid_values_bound_the_emission_arrays(self, test_grid):
         """Each emission array's largest absolute value is recorded."""
         for emission, spectra in test_grid.spectra.items():
-            assert test_grid._max_abs["spectra"][emission] == np.max(
+            assert test_grid._max_grid_values["spectra"][emission] == np.max(
                 np.abs(spectra)
             )
         for emission, lums in test_grid.line_lums.items():
-            assert test_grid._max_abs["line_lum"][emission] == np.max(
+            assert test_grid._max_grid_values["line_lum"][emission] == np.max(
                 np.abs(lums)
             )
 
-    def test_max_abs_updated_after_interp_spectra(self):
+    def test_max_grid_values_updated_after_interp_spectra(self):
         """Resampling the spectra recomputes their bounds."""
         grid = Grid("test_grid")
         grid.interp_spectra(np.logspace(3, 4, 50) * angstrom)
         for emission, spectra in grid.spectra.items():
-            assert grid._max_abs["spectra"][emission] == np.max(
+            assert grid._max_grid_values["spectra"][emission] == np.max(
                 np.abs(spectra)
             )
 

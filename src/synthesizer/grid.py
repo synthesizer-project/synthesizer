@@ -247,9 +247,9 @@ class Grid:
             self.convert_precision(use_precision, inplace=True)
 
         # Record the largest absolute value in each emission array
-        self._compute_max_abs()
+        self._compute_max_grid_values()
 
-    def _compute_max_abs(self):
+    def _compute_max_grid_values(self):
         """Record the largest absolute value in each emission array.
 
         These bound the values extraction can produce, which lets it skip
@@ -260,7 +260,7 @@ class Grid:
         NOTE: If you assign to or modify the spectra or line arrays directly,
         call this afterwards so the bounds stay valid.
         """
-        self._max_abs = {
+        self._max_grid_values = {
             "spectra": {k: max_abs(v) for k, v in self.spectra.items()},
             "line_lum": {k: max_abs(v) for k, v in self.line_lums.items()},
             "line_cont": {k: max_abs(v) for k, v in self.line_conts.items()},
@@ -1100,7 +1100,7 @@ class Grid:
             self._remove_lines_outside_lam()
 
         # Resampling changes the values, so update their bounds
-        self._compute_max_abs()
+        self._compute_max_grid_values()
 
     @accepts(lam=angstrom)
     @timed("Grid.get_spectra_at_lam")
@@ -2051,7 +2051,7 @@ class Grid:
         grid.naxes -= 1
 
         # Marginalising can change the values, so update their bounds
-        grid._compute_max_abs()
+        grid._compute_max_grid_values()
 
         # Return the grid if not inplace
         if not inplace:

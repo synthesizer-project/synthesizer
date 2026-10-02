@@ -321,7 +321,7 @@ class Extractor(ABC):
         """
         return weighted_sum_fits(
             dtype,
-            self._grid._max_abs["spectra"][self._extract],
+            self._grid._max_grid_values["spectra"][self._extract],
             self._get_emitter_weights(emitter, model),
         )
 
@@ -349,8 +349,8 @@ class Extractor(ABC):
         return weighted_sum_fits(
             dtype,
             max(
-                self._grid._max_abs["line_lum"][self._extract],
-                self._grid._max_abs["line_cont"][self._extract],
+                self._grid._max_grid_values["line_lum"][self._extract],
+                self._grid._max_grid_values["line_cont"][self._extract],
             ),
             self._get_emitter_weights(emitter, model),
         )
