@@ -254,13 +254,17 @@ class TestGridAxes:
         axis = getattr(grid, name)
         assert axis.units == Units().mass
         np.testing.assert_allclose(
-            axis.value, raw.to_value(Units().mass), rtol=1e-6
+            axis.value,
+            raw.to_value(Units().mass),
+            rtol=1e-6,
         )
 
         # The black hole's logged mass should be on the same scale as the
         # logged axis (log10 of the mass in the internal mass unit)
         np.testing.assert_allclose(
-            get_param(f"log10{name}", None, None, bh), 8.0, rtol=1e-6
+            get_param(f"log10{name}", None, None, bh),
+            8.0,
+            rtol=1e-6,
         )
 
     @pytest.mark.parametrize("units", [None, "None", ""])
@@ -268,7 +272,10 @@ class TestGridAxes:
         """Axes with no units (or a "None"/empty sentinel) are left alone."""
         # Write a small axis with the given units to an in-memory file
         with h5py.File(
-            "axis.hdf5", "w", driver="core", backing_store=False
+            "axis.hdf5",
+            "w",
+            driver="core",
+            backing_store=False,
         ) as hf:
             dset = hf.create_dataset("axis", data=np.array([1.0, 2.0, 3.0]))
             if units is not None:

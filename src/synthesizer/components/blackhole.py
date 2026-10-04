@@ -10,12 +10,13 @@ from unyt import G, Lsun, Msun, c, cm, deg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, get_quantity_unit
 from synthesizer.utils import (
     TableFormatter,
     array_to_scalar,
     scalar_to_array,
 )
+from synthesizer.utils.precision import convert_array_dtype
 
 
 class BlackholesComponent(Component):
@@ -459,10 +460,11 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole accretion rate
         """
-        self.accretion_rate = (
+        self.accretion_rate = convert_array_dtype(
             self.accretion_rate_eddington
             * self.eddington_luminosity
-            / (self.epsilon * c**2)
+            / (self.epsilon * c**2),
+            self.mass.dtype,
         )
 
         return self.accretion_rate
@@ -474,7 +476,13 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole bolometric luminosity
         """
-        self.bolometric_luminosity = self.epsilon * self.accretion_rate * c**2
+        # Derived properties keep the precision of the masses
+        self.bolometric_luminosity = convert_array_dtype(
+            (self.epsilon * self.accretion_rate * c**2).to(
+                get_quantity_unit(self, "bolometric_luminosity"),
+            ),
+            self.mass.dtype,
+        )
 
         return self.bolometric_luminosity
 
@@ -502,9 +510,12 @@ class BlackholesComponent(Component):
         """
         # Dividing the luminosities cancels their units. NOTE: to_value makes
         # a copy, which is fine for these small per-blackhole arrays.
-        self.eddington_ratio = (
-            self.bolometric_luminosity / self.eddington_luminosity
-        ).to_value("dimensionless")
+        self.eddington_ratio = convert_array_dtype(
+            (self.bolometric_luminosity / self.eddington_luminosity).to_value(
+                "dimensionless",
+            ),
+            self.mass.dtype,
+        )
 
         return self.eddington_ratio
 
@@ -533,9 +544,12 @@ class BlackholesComponent(Component):
         """
         # Dividing the luminosities cancels their units. NOTE: to_value makes
         # a copy, which is fine for these small per-blackhole arrays.
-        self.accretion_rate_eddington = (
-            self.bolometric_luminosity / self.eddington_luminosity
-        ).to_value("dimensionless")
+        self.accretion_rate_eddington = convert_array_dtype(
+            (self.bolometric_luminosity / self.eddington_luminosity).to_value(
+                "dimensionless",
+            ),
+            self.mass.dtype,
+        )
 
         return self.accretion_rate_eddington
 

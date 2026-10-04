@@ -318,6 +318,7 @@ extensions = [
             "src/synthesizer/extensions/kernel_extensions/truncated_kernel.cpp",
             "src/synthesizer/extensions/kernel_extensions/overlap_kernel.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
+            "src/synthesizer/extensions/python_to_cpp.cpp",
             "src/synthesizer/extensions/numpy_init.cpp",
         ],
         compile_flags=compile_flags,

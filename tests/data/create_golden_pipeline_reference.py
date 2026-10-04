@@ -1,7 +1,7 @@
 """Regenerate the golden full-pipeline regression reference.
 
 This script computes the reference output used by
-``tests/test_pipeline_regression.py`` and writes it to
+``TestGoldenPipelineRegression`` in ``tests/test_pipeline.py`` and writes it to
 ``golden_pipeline_reference.hdf5``.
 
 The golden test exists to catch *accidental* numeric drift in the full

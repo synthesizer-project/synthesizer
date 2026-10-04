@@ -45,8 +45,12 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, Units, accepts, get_quantity_unit
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.operation_timers import timed
-from synthesizer.utils.precision import resolve_out_dtype
-from synthesizer.utils.util_funcs import as_contiguous, convert_array_dtype
+from synthesizer.utils.precision import (
+    convert_array_dtype,
+    resolve_out_dtype,
+    verify_out_precision,
+)
+from synthesizer.utils.util_funcs import as_contiguous
 
 
 class Grid:
@@ -1058,11 +1062,15 @@ class Grid:
                     verbose=False,
                 )
 
-            # Update this spectra
-            self.spectra[spectra_type] = new_spectra
+            # Update this spectra, keeping the grid's precision (spectres
+            # always returns float64)
+            self.spectra[spectra_type] = new_spectra.astype(
+                self._dtype,
+                copy=False,
+            )
 
-        # Update wavelength array
-        self.lam = new_lam
+        # Update wavelength array, again at the grid's precision
+        self.lam = new_lam.astype(self._dtype, copy=False)
 
         self._ensure_spectra_data_contiguous()
 
@@ -2902,15 +2910,19 @@ class Template:
 
         # Normalise, just in case
         self.normalisation = sed.bolometric_luminosity
-        self._sed._lnu /= self.normalisation.to(self._sed.lnu.units * Hz).value
+        self._sed._lnu /= self.normalisation.to_value(Lsun)
 
     @accepts(bolometric_luminosity=Lsun)
-    def get_spectra(self, bolometric_luminosity):
+    @verify_out_precision()
+    def get_spectra(self, bolometric_luminosity, out_dtype=None):
         """Calculate the blackhole spectra by scaling the template.
 
         Args:
             bolometric_luminosity (float):
                 The bolometric luminosity of the blackhole(s) for scaling.
+            out_dtype (np.dtype):
+                The precision of the spectra. Defaults to the global default
+                output dtype.
 
         """
         # Ensure we have units for safety
@@ -2921,5 +2933,18 @@ class Template:
                 "bolometric luminosity must be provided with units"
             )
 
-        # Scale the spectra and return
-        return self._sed * (bolometric_luminosity / Hz)
+        # The template is normalised per Lsun of bolometric luminosity (the
+        # units accepts converts to), so scale it by each luminosity, writing
+        # straight into an array at the output precision
+        lnu_units = get_quantity_unit(self._sed, "lnu")
+        luminosities = bolometric_luminosity.ndview
+        lnu = np.multiply(
+            self._sed._lnu,
+            luminosities[..., np.newaxis],
+            out=np.empty(
+                (*np.shape(luminosities), self._sed._lnu.size),
+                dtype=resolve_out_dtype(out_dtype),
+            ),
+            casting="same_kind",
+        )
+        return Sed(self._sed.lam, lnu * lnu_units)

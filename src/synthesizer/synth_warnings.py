@@ -27,6 +27,14 @@ import warnings
 from pathlib import Path
 
 
+class InternalPrecisionWarning(RuntimeWarning):
+    """Warning for outputs that didn't respect the requested out_dtype.
+
+    This always indicates a bug in Synthesizer rather than a problem with the
+    user's inputs. The test suite turns it into an error.
+    """
+
+
 def deprecation(message, category=FutureWarning):
     """Issue a deprecation warning to the end user.
 

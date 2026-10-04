@@ -76,6 +76,8 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
    * one supported dtype family before any hot kernels use raw pointers. */
   PyArrayObject *float_arrays[MAX_GRID_NDIM + 3] = {NULL};
   const char *float_names[MAX_GRID_NDIM + 3] = {NULL};
+  /* Storage for the axis labels, since float_names only holds pointers. */
+  std::array<std::string, MAX_GRID_NDIM> axis_labels;
   int float_count = 0;
 
   if (np_spectra_ != NULL &&
@@ -94,8 +96,35 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
       return;
     }
 
+    /* Extract the axis name (if given) so dtype errors can name the axis.
+     * A missing or invalid name is not fatal, we just fall back to an
+     * unnamed axis. */
+    axis_names_[idim].clear();
+    if (axis_names_tuple != NULL && PySequence_Check(axis_names_tuple) &&
+        !PyUnicode_Check(axis_names_tuple)) {
+      PyObject *name_obj = PySequence_GetItem(axis_names_tuple, idim);
+      if (name_obj != NULL) {
+        if (PyUnicode_Check(name_obj)) {
+          const char *name = PyUnicode_AsUTF8(name_obj);
+          if (name != NULL) {
+            axis_names_[idim] = name;
+          } else {
+            PyErr_Clear();
+          }
+        }
+        Py_DECREF(name_obj);
+      } else {
+        PyErr_Clear();
+      }
+    }
+
+    /* Label the axis for error messages, e.g. "grid axis ages". */
     float_arrays[float_count] = np_axis_arr;
-    float_names[float_count] = "grid axis";
+    axis_labels[idim] = "grid axis";
+    if (!axis_names_[idim].empty()) {
+      axis_labels[idim] += " " + axis_names_[idim];
+    }
+    float_names[float_count] = axis_labels[idim].c_str();
     float_count++;
   }
 
@@ -128,25 +157,6 @@ GridProps::GridProps(PyArrayObject *np_spectra, PyObject *axes_tuple,
       return;
     }
     dims[idim] = PyArray_DIM(np_axis_arr, 0);
-
-    axis_names_[idim].clear();
-    if (axis_names_tuple != NULL && PySequence_Check(axis_names_tuple) &&
-        !PyUnicode_Check(axis_names_tuple)) {
-      PyObject *name_obj = PySequence_GetItem(axis_names_tuple, idim);
-      if (name_obj != NULL) {
-        if (PyUnicode_Check(name_obj)) {
-          const char *name = PyUnicode_AsUTF8(name_obj);
-          if (name != NULL) {
-            axis_names_[idim] = name;
-          } else {
-            PyErr_Clear();
-          }
-        }
-        Py_DECREF(name_obj);
-      } else {
-        PyErr_Clear();
-      }
-    }
   }
 
   /* Calculate the size of the grid. */

@@ -2593,6 +2593,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         self.lam,
                         emitter,
                         nthreads,
+                        out_dtype=out_dtype,
                     )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
@@ -2992,6 +2993,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         line_ids,
                         spectra,
                         particle_spectra,
+                        out_dtype=out_dtype,
                         nthreads=nthreads,
                     )
                     if line_lams is None and label in lines:

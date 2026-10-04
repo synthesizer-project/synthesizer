@@ -3,6 +3,7 @@
 #include "cpp_to_python.h"
 
 #include "numpy_init.h"
+#include "python_to_cpp.h"
 
 /**
  * @brief Resolve and validate a requested floating-point output dtype.
@@ -31,8 +32,9 @@ int resolve_output_typenum(PyObject *dtype_obj, const char *argument_name) {
 
   /* Only float32 and float64 are valid output dtypes for this pass. */
   if (typenum != NPY_FLOAT32 && typenum != NPY_FLOAT64) {
-    PyErr_Format(PyExc_TypeError, "%s must be float32 or float64.",
-                 argument_name);
+    PyErr_Format(PyExc_TypeError,
+                 "%s must be np.float32 or np.float64 (got %s).",
+                 argument_name, typenum_to_string(typenum));
     return -1;
   }
 
