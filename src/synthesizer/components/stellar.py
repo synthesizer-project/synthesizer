@@ -73,7 +73,8 @@ class StarsComponent(Component):
         self.ages = ages
         self.metallicities = metallicities
         self.log10metallicities = np.log10(self.metallicities)
-        self.log10ages = np.log10(self.ages.to(yr))
+        self.ages.convert_to_units(yr)
+        self.log10ages = np.log10(self.ages)
 
         # The type of stars object (parametric or particle). This is useful for
         # determining the type of stars object without relying on isinstance

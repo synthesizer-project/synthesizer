@@ -877,9 +877,7 @@ class Particles:
         if frac == 0:
             return 0 * get_quantity_unit(self, "radii")
         elif frac == 1:
-            return np.max(self.radii.value) * get_quantity_unit(
-                self, "coordinates"
-            )
+            return np.max(self._radii) * get_quantity_unit(self, "coordinates")
         elif self.nparticles == 1:
             return (
                 self.radii[0].value

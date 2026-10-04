@@ -550,7 +550,8 @@ class Quantity:
         """Set the value of the attribute with units.
 
         When setting a Quantity variable this method is called, firstly the
-        value is converted to the expected units. Once converted the value is
+        value is converted to the expected units, in place where possible so
+        the caller's array is not duplicated. Once converted the value is
         stored with units attached in the instance dict under the private_name
         key. Values without units are assumed to be in the expected units.
 
@@ -564,17 +565,26 @@ class Quantity:
         # Do we need to perform a unit conversion? If not we assume value
         # is already in the default unit system
         if isinstance(value, (unyt_quantity, unyt_array)):
-            if value.units != self.unit and value.units != dimensionless:
-                # Convert out of place. The value being assigned is not ours,
-                # converting it in place would rewrite the caller's data.
-                value = value.to(self.unit).ndview
-            else:
+            if value.units == dimensionless:
                 value = value.ndview
+            elif value.units != self.unit:
+                # Convert in place rather than copying. The caller's array
+                # carries a record of the conversion so stays consistent, and
+                # a copy would double the memory for as long as the caller
+                # holds a reference. Read-only arrays can only be copied.
+                if value.flags.writeable:
+                    value.convert_to_units(self.unit)
+                else:
+                    value = value.to(self.unit)
 
         # Attach our own unit object rather than keeping the caller's. An
         # equivalent unit (e.g. 1.0*Msun) would otherwise be carried into
-        # arithmetic and promote float32 values to float64.
-        if value is not None:
+        # arithmetic and promote float32 values to float64. The units are
+        # equal so we can rebind them on the caller's array directly, which
+        # keeps the stored value and the caller's array the same object.
+        if isinstance(value, (unyt_quantity, unyt_array)):
+            value.units = self.unit
+        elif value is not None:
             value = _attach_unit(value, self.unit)
 
         # Store the unit-bearing value under the private name in the instance
@@ -767,13 +777,17 @@ def _raise_or_convert(expected_unit, name, value):
     """
     # Handle the unyt_array/unyt_quantity cases
     if isinstance(value, (unyt_array, unyt_quantity)):
-        # We know we have units but are they compatible? Convert out of place:
-        # this runs from the @accepts decorator, so converting in place would
-        # rewrite the array the caller passed in as a side effect of calling
-        # the function.
+        # We know we have units but are they compatible? Convert in place
+        # rather than copying, the caller's array carries a record of the
+        # conversion so stays consistent, and a copy would double the memory
+        # for as long as the caller holds a reference. Read-only arrays can
+        # only be copied.
         if value.units != expected_unit:
             try:
-                return value.to(expected_unit)
+                if not value.flags.writeable:
+                    return value.to(expected_unit)
+                value.convert_to_units(expected_unit)
+                return value
             except UnitConversionError:
                 raise exceptions.IncorrectUnits(
                     f"{name} passed with incompatible units. "

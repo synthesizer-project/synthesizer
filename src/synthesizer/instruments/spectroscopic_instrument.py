@@ -248,7 +248,7 @@ class SpectroscopicInstrument(InstrumentBase):
             group.attrs["resolving_power"] = float(self.resolving_power)
 
         ds = group.create_dataset(
-            "Wavelength", data=self.lam.value, dtype=float
+            "Wavelength", data=self.lam.ndview, dtype=float
         )
         ds.attrs["units"] = str(self.lam.units)
 

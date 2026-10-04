@@ -8,7 +8,20 @@ from synthesizer.extensions.reductions import (
     combine_spectra_2d,
     reduce_particle_spectra,
 )
-from unyt import Hz, Unit, angstrom, c, cm, erg, km, m, nJy, pc, s
+from unyt import (
+    Hz,
+    Unit,
+    angstrom,
+    c,
+    cm,
+    erg,
+    km,
+    m,
+    nJy,
+    pc,
+    s,
+    unyt_array,
+)
 
 from synthesizer import exceptions
 from synthesizer.cosmology import get_luminosity_distance
@@ -172,6 +185,27 @@ def test_quantity_in_place_conversion_keeps_units_consistent():
 
     # The private value is still in the internal unit system
     assert np.allclose(sed._lnu, 1.0)
+
+
+def test_quantity_set_converts_in_place_without_copying():
+    """Setting a Quantity in other units must not duplicate the array."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.ones(8) * Unit("W/Hz")
+    sed = Sed(lam=lam, lnu=lnu)
+
+    # The caller's array is the stored array, converted in place
+    assert sed.lnu is lnu
+    assert lnu.units == erg / s / Hz
+    assert np.allclose(sed._lnu, 1e7)
+
+    # Read-only arrays can't be converted in place so fall back to a copy
+    ro = np.ones(8)
+    ro.flags.writeable = False
+    ro_lnu = unyt_array(ro, "W/Hz")
+    assert not ro_lnu.flags.writeable
+    sed.lnu = ro_lnu
+    assert ro_lnu.units == Unit("W/Hz")
+    assert np.allclose(sed._lnu, 1e7)
 
 
 def test_get_fnu0_reuses_final_contiguous_wavelength_buffers():

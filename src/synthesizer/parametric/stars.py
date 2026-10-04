@@ -575,7 +575,8 @@ class Stars(StarsComponent):
         # Otherwise, remap the existing SFZH onto the shifted age bins.
         else:
             # Construct linear age bins.
-            ages = self.ages.to("yr").value
+            self.ages.convert_to_units("yr")
+            ages = self.ages.ndview
             age_edges = np.empty(len(ages) + 1)
             age_edges[0] = 0.0
             age_edges[1:-1] = 0.5 * (ages[1:] + ages[:-1])

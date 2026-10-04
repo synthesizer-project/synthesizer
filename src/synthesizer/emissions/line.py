@@ -374,7 +374,9 @@ class LineCollection:
             nu (unyt_quantity):
                 The frequency of the line in Hz.
         """
-        return (c / self.lam).to(Hz)
+        nu = c / self.lam
+        nu.convert_to_units(Hz)
+        return nu
 
     @property
     def obsnu(self):
@@ -386,7 +388,9 @@ class LineCollection:
         """
         if self.obslam is None:
             return None
-        return (c / self.obslam).to(Hz)
+        obsnu = c / self.obslam
+        obsnu.convert_to_units(Hz)
+        return obsnu
 
     @property
     def energy(self):
@@ -1306,13 +1310,7 @@ class LineCollection:
         # luminosity units, continuum units, or is already unitless.
         scaling_lum, scaling_cont = normalise_line_scaling(
             scaling,
-            lambda: (
-                c
-                / get_array_quantity_view(
-                    self._lam,
-                    get_quantity_unit(self, "lam"),
-                )
-            ).to(Hz),
+            lambda: self.nu,
             lum_units,
             cont_units,
         )
@@ -1610,7 +1608,8 @@ class LineCollection:
         # Collect luminosities and wavelengths
         line_ids = plot_lines.line_ids
         luminosities = plot_lines.luminosity
-        wavelengths = plot_lines.lam.to("angstrom").value
+        plot_lines.lam.convert_to_units("angstrom")
+        wavelengths = plot_lines.lam.ndview
 
         # Remove 0s and nans
         mask = np.logical_and(luminosities > 0, ~np.isnan(luminosities))

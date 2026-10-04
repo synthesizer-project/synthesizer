@@ -1328,13 +1328,7 @@ class Sed:
 
         # If we are applying an IGM model apply it
         if igm is not None:
-            # Bypass the Quantity descriptor here so IGM attenuation reuses the
-            # observer-frame wavelength buffer without allocating a new
-            # unit-bearing array wrapper via multiplication.
-            obslam = get_array_quantity_view(
-                self._obslam,
-                self.__class__.__dict__["obslam"].unit,
-            )
+            obslam = self.obslam
 
             # Support bot class references and instantiated objects
             if callable(igm):
