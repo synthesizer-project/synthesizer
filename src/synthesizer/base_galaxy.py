@@ -32,7 +32,7 @@ from synthesizer.imaging.postprocess import (
     _postprocess_existing_line_maps,
 )
 from synthesizer.synth_warnings import deprecated, warn
-from synthesizer.units import accepts, unit_is_compatible
+from synthesizer.units import accepts, convert_in_place, unit_is_compatible
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
 
@@ -220,11 +220,13 @@ class BaseGalaxy:
 
         # At redshift > 0 we can calculate the luminosity distance explicitly
         if self.redshift > 0:
-            return get_luminosity_distance(cosmo, self.redshift).to("kpc")
+            return convert_in_place(
+                get_luminosity_distance(cosmo, self.redshift), "kpc"
+            )
 
         # At redshift 0 just place the galaxy at 10 pc to
         # avoid any issues with 0s
-        return (10 * pc).to(kpc)
+        return convert_in_place(10 * pc, kpc)
 
     def get_angular_diameter_distance(self, cosmo):
         """Get the angular diameter distance of the galaxy.
@@ -253,14 +255,17 @@ class BaseGalaxy:
         # At redshift > 0 we can calculate the angular diameter distance
         # explicitly
         if self.redshift > 0:
-            return get_angular_diameter_distance(
-                cosmo,
-                self.redshift,
-            ).to("kpc")
+            return convert_in_place(
+                get_angular_diameter_distance(
+                    cosmo,
+                    self.redshift,
+                ),
+                "kpc",
+            )
 
         # At redshift 0 just place the galaxy at 10 pc to
         # avoid any issues with 0s
-        return (10 * pc).to(kpc)
+        return convert_in_place(10 * pc, kpc)
 
     def get_equivalent_width(self, feature, blue, red, spectra_type):
         """Get all equivalent widths associated with a sed object.
@@ -3843,11 +3848,11 @@ class BaseGalaxy:
 
         # Calculate the log10 of the stellar mass if we don't have it
         if log10_mstar is None:
-            log10_mstar = np.log10(mstar.to("Msun").value)
+            log10_mstar = np.log10(convert_in_place(mstar, "Msun").value)
 
         # Calculate the specific star formation rate if we don't have it
         if ssfr is None:
-            ssfr = (sfr / mstar).to(Gyr**-1)
+            ssfr = convert_in_place(sfr / mstar, Gyr**-1)
         elif not hasattr(ssfr, "units"):
             ssfr = ssfr / Gyr
 

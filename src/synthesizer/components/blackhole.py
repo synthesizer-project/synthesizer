@@ -10,7 +10,12 @@ from unyt import G, Lsun, Msun, c, cm, deg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
-from synthesizer.units import Quantity, accepts, get_quantity_unit
+from synthesizer.units import (
+    Quantity,
+    accepts,
+    convert_in_place,
+    get_quantity_unit,
+)
 from synthesizer.utils import (
     TableFormatter,
     array_to_scalar,
@@ -477,7 +482,8 @@ class BlackholesComponent(Component):
         """
         # Derived properties keep the precision of the masses
         self.bolometric_luminosity = convert_array_dtype(
-            (self.epsilon * self.accretion_rate * c**2).to(
+            convert_in_place(
+                self.epsilon * self.accretion_rate * c**2,
                 get_quantity_unit(self, "bolometric_luminosity"),
             ),
             self.mass.dtype,

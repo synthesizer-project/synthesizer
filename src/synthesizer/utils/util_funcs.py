@@ -14,7 +14,7 @@ from unyt import Hz, K, Unit, cm, erg, pc, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.synth_warnings import warn
-from synthesizer.units import accepts
+from synthesizer.units import accepts, convert_in_place
 
 
 @accepts(frequency=Hz, temperature=K)
@@ -44,7 +44,7 @@ def planck(frequency, temperature):
     lnu = spectral_radiance * 4 * np.pi * (10 * pc) ** 2
 
     # Convert the result to erg/s/Hz and return
-    return lnu.to(erg / s / Hz)
+    return convert_in_place(lnu, erg / s / Hz)
 
 
 @lru_cache(maxsize=128)
@@ -385,7 +385,7 @@ def wavelengths_to_rgba(wavelengths, gamma=0.8):
     # If wavelengths provided as a unyt_array convert to nm otherwise assume
     # in Angstrom and convert.
     if isinstance(wavelengths, unyt_array):
-        wavelengths_ = wavelengths.to("nm").ndview
+        wavelengths_ = convert_in_place(wavelengths, "nm").ndview
     else:
         wavelengths_ = wavelengths / 10.0
 
@@ -435,14 +435,14 @@ def combine_arrays(arr1, arr2, verbose=False):
         return None
 
     # Arrays with compatible but different units (e.g. ages in yr and Myr)
-    # are combined in the units of the first array. Convert out of place so
-    # the caller's array is left untouched.
+    # are combined in the units of the first array. Convert in place rather
+    # than copying, the caller's array carries a record of the conversion.
     if (
         isinstance(arr1, unyt_array)
         and isinstance(arr2, unyt_array)
         and arr1.units != arr2.units
     ):
-        arr2 = arr2.to(arr1.units)
+        arr2 = convert_in_place(arr2, arr1.units)
 
     # Combine them
     return np.concatenate([arr1, arr2])

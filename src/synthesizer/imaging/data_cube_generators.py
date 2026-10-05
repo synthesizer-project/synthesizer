@@ -28,7 +28,7 @@ from synthesizer.imaging.image_generators import (
     _validate_centered_coordinates,
 )
 from synthesizer.kernel_functions import Kernel
-from synthesizer.units import unit_is_compatible
+from synthesizer.units import convert_in_place, unit_is_compatible
 from synthesizer.utils.operation_timers import timed, timer
 
 
@@ -171,7 +171,7 @@ def _generate_ifu_particle_hist(
 
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
-        _coords = cent_coords.to(spatial_units).value
+        _coords = cent_coords.to(spatial_units).ndview
 
         # Ensure coordinates have been centred
         _validate_centered_coordinates(cent_coords, warn_only=True)
@@ -524,7 +524,7 @@ def _generate_ifu_generic(
     # existing units when the caller already supplied a unitful grid and only
     # attach angstrom when the wavelength array is still unitless.
     if hasattr(lam, "units"):
-        lam = lam.to(angstrom)
+        lam = convert_in_place(lam, angstrom)
     else:
         lam = lam * angstrom
 

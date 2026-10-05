@@ -30,7 +30,7 @@ from synthesizer.imaging.image_generators import (
     _generate_image_particle_smoothed,
 )
 from synthesizer.synth_warnings import deprecated, warn
-from synthesizer.units import accepts, unit_is_compatible
+from synthesizer.units import accepts, convert_in_place, unit_is_compatible
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
 
@@ -594,7 +594,9 @@ class Image(ImagingBase):
 
         # Add the noise array to the image
         if self.units is not None:
-            noisy_img = self.arr * self.units + noise_arr.to(self.units)
+            noisy_img = self.arr * self.units + convert_in_place(
+                noise_arr, self.units
+            )
         else:
             noisy_img = self.arr + noise_arr
 
@@ -693,7 +695,9 @@ class Image(ImagingBase):
                     f"resolution units. (aperture_radius = {aperture_radius}, "
                     f"resolution = {self.resolution})"
                 )
-            aperture_radius = aperture_radius.to(self.resolution.units).value
+            aperture_radius = convert_in_place(
+                aperture_radius, self.resolution.units
+            ).value
 
         # Ensure we have units if we need them
         if self.units is not None and not isinstance(depth, unyt_quantity):
@@ -1090,7 +1094,9 @@ class Image(ImagingBase):
                 The sum of the image within the aperture.
         """
         # Convert the aperture radius to the correct units
-        aperture_radius = aperture_radius.to(self.resolution.units).value
+        aperture_radius = convert_in_place(
+            aperture_radius, self.resolution.units
+        ).value
 
         # If the aperture centre isn't passed, assume it's the maximum
         # pixel

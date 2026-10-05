@@ -16,7 +16,12 @@ from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts, get_quantity_unit
+from synthesizer.units import (
+    Quantity,
+    accepts,
+    convert_in_place,
+    get_quantity_unit,
+)
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.utils.operation_timers import timed, timer
@@ -1626,10 +1631,14 @@ class Particles:
         )
 
         # Cross product of position and velocity, weighted by mass
-        return np.sum(
-            np.cross(self.coordinates, self.velocities) * self.masses[:, None],
-            axis=0,
-        ).to(ang_mom_unit)
+        return convert_in_place(
+            np.sum(
+                np.cross(self.coordinates, self.velocities)
+                * self.masses[:, None],
+                axis=0,
+            ),
+            ang_mom_unit,
+        )
 
     @timed("Particles.rotate_edge_on")
     def rotate_edge_on(self, inplace=True):

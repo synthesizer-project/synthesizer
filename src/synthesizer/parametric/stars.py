@@ -34,7 +34,7 @@ from synthesizer.emission_models.utils import get_param
 from synthesizer.grid import Grid
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, convert_in_place, has_units
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.stats import weighted_mean, weighted_median
@@ -428,8 +428,8 @@ class Stars(StarsComponent):
                 initial_masses=np.array([1.0]) * Msun,
                 ages=np.array(
                     [
-                        self._instant_sf.to("yr").value
-                        + age_offset.to("yr").value
+                        convert_in_place(self._instant_sf, "yr").value
+                        + convert_in_place(age_offset, "yr").value
                     ]
                 )
                 * yr,
@@ -469,8 +469,8 @@ class Stars(StarsComponent):
                 initial_masses=np.array([1.0]) * Msun,
                 ages=np.array(
                     [
-                        self._instant_sf.to("yr").value
-                        + age_offset.to("yr").value
+                        convert_in_place(self._instant_sf, "yr").value
+                        + convert_in_place(age_offset, "yr").value
                     ]
                 )
                 * yr,
@@ -508,8 +508,8 @@ class Stars(StarsComponent):
                 max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
                 sf = integrate.quad(
                     self.sf_hist_func.get_sfr,
-                    min_age + age_offset.to("yr").value,
-                    max_age + age_offset.to("yr").value,
+                    min_age + convert_in_place(age_offset, "yr").value,
+                    max_age + convert_in_place(age_offset, "yr").value,
                 )[0]
                 sf_hist[ia] = sf
                 min_age = max_age
@@ -582,7 +582,7 @@ class Stars(StarsComponent):
             age_edges[1:-1] = 0.5 * (ages[1:] + ages[:-1])
             age_edges[-1] = ages[-1]
 
-            offset = age_offset.to("yr").value
+            offset = convert_in_place(age_offset, "yr").value
             sfzh = np.zeros_like(self.sfzh)
 
             # Loop over each bin in the original SFZH.
@@ -1203,10 +1203,10 @@ class Stars(StarsComponent):
 
         # Support unyt quantities in t_range
         t_start, t_end = t_range
-        if hasattr(t_start, "to"):
-            t_start = t_start.to("yr").value
-        if hasattr(t_end, "to"):
-            t_end = t_end.to("yr").value
+        if has_units(t_start):
+            t_start = convert_in_place(t_start, "yr").value
+        if has_units(t_end):
+            t_end = convert_in_place(t_end, "yr").value
         # Ensure consistent ordering
         order = np.argsort(age_points)
         age_points = age_points[order]
@@ -1254,7 +1254,7 @@ class Stars(StarsComponent):
         range_duration = (t_end - t_start) * yr
         average_sfr = total_mass_in_range / range_duration
 
-        return average_sfr.to("Msun/yr")
+        return convert_in_place(average_sfr, "Msun/yr")
 
     def calculate_surviving_sfzh(self, grid: Grid):
         """Calculate the surviving SFZH of the stellar population.

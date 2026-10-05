@@ -4,7 +4,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 from unyt import Mpc, rad, unyt_array
 
-from synthesizer.units import accepts
+from synthesizer.units import accepts, convert_in_place
 
 
 @accepts(phi=rad, theta=rad)
@@ -115,8 +115,8 @@ def calculate_smoothing_lengths(
     """
     nparts: int = coordinates.shape[0]
     source_coords = coordinates if source_coords is None else source_coords
-    query_coords = coordinates.value
-    source_values = source_coords.to(coordinates.units).value
+    query_coords = coordinates.ndview
+    source_values = convert_in_place(source_coords, coordinates.units).ndview
 
     # Ensure the number of neighbours and speedup factor are valid
     if num_neighbours < 1:
@@ -130,7 +130,8 @@ def calculate_smoothing_lengths(
         tree = cKDTree(source_values)
     else:
         tree = cKDTree(
-            source_values, boxsize=boxsize.to(coordinates.units).value
+            source_values,
+            boxsize=convert_in_place(boxsize, coordinates.units).ndview,
         )
 
     # Prepare an array to hold the resultant smoothing lengths

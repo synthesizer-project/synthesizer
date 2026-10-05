@@ -13,6 +13,7 @@ from unyt import Mpc, Msun, km, kpc, s, yr
 
 from synthesizer.load_data.utils import age_lookup_table, lookup_age
 from synthesizer.synth_warnings import warn
+from synthesizer.units import convert_in_place
 
 from ..particle.galaxy import Galaxy
 from ..particle.particles import Particles
@@ -211,7 +212,7 @@ def load_Simba(
         if galaxy.sf_gas_mass > 0:
             galaxy.sf_gas_metallicity = (
                 np.sum(h2_masses * g_metals[g_start:g_end])
-                / galaxy.sf_gas_mass.to(Msun).value
+                / convert_in_place(galaxy.sf_gas_mass, Msun).value
             )
         else:
             galaxy.sf_gas_metallicity = 0.0
@@ -288,7 +289,7 @@ def load_Simba_slab(
             "[[xmin, xmax], [ymin, ymax], [zmin, zmax]]"
         )
 
-    bounds = (bounds * Mpc).to("kpc").value
+    bounds = convert_in_place(bounds * Mpc, "kpc").ndview
 
     with h5py.File(f"{directory}/{snap_name}", "r") as hf:
         scale_factor = hf["Header"].attrs["Time"]
@@ -449,7 +450,7 @@ def load_Simba_slab(
         if galaxy.sf_gas_mass > 0:
             galaxy.sf_gas_metallicity = (
                 np.sum(h2_masses * g_metals)
-                / galaxy.sf_gas_mass.to(Msun).value
+                / convert_in_place(galaxy.sf_gas_mass, Msun).value
             )
         else:
             galaxy.sf_gas_metallicity = 0.0

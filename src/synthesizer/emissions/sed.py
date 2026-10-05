@@ -62,6 +62,7 @@ from synthesizer.units import (
     Quantity,
     Units,
     accepts,
+    convert_in_place,
     get_array_quantity_view,
     get_quantity_unit,
 )
@@ -646,7 +647,9 @@ class Sed:
             flux (unyt_array):
                 The spectral flux density per Angstrom array.
         """
-        return (self.obsnu * self.fnu / self.obslam).to("erg/s/cm**2/angstrom")
+        return convert_in_place(
+            self.obsnu * self.fnu / self.obslam, "erg/s/cm**2/angstrom"
+        )
 
     @property
     def _flam(self):
@@ -706,7 +709,7 @@ class Sed:
             energy (unyt_array):
                 The energy coordinate.
         """
-        return (h * c / self.lam).to(eV)
+        return convert_in_place(h * c / self.lam, eV)
 
     @property
     def ndim(self):
@@ -946,7 +949,7 @@ class Sed:
             # Compute lnu
             lnu = lum / tran * get_quantity_unit(self, "lnu")
 
-        return lnu.to(get_quantity_unit(self, "lnu"))
+        return convert_in_place(lnu, get_quantity_unit(self, "lnu"))
 
     @accepts(blue=angstrom, red=angstrom)
     def measure_break(self, blue, red, nthreads=1, integration_method="trapz"):
@@ -1516,9 +1519,9 @@ class Sed:
             continuum = (
                 np.column_stack(
                     continuum_fits[0]
-                    * feature_lam.to(get_quantity_unit(self, "lam")).value[
-                        :, np.newaxis
-                    ]
+                    * convert_in_place(
+                        feature_lam, get_quantity_unit(self, "lam")
+                    ).ndview[:, np.newaxis]
                 )
                 + continuum_fits[1][:, np.newaxis]
             ) * get_quantity_unit(self, "lnu")
@@ -1546,7 +1549,9 @@ class Sed:
             continuum = (
                 (
                     continuum_fit[0]
-                    * feature_lam.to(get_quantity_unit(self, "lam")).value
+                    * convert_in_place(
+                        feature_lam, get_quantity_unit(self, "lam")
+                    ).ndview
                 )
                 + continuum_fit[1]
             ) * get_quantity_unit(self, "lnu")
@@ -1932,15 +1937,12 @@ class Sed:
         # axis produces a Fortran-ordered result, so we explicitly restore C
         # order for the C extension.
         x = self._lam[ionisation_mask].astype(np.float64)
-        factor = (
-            (
-                self.nu[ionisation_mask].astype(np.float64)
-                * self.lnu.units
-                / (h * c)
-            )
-            .to(1 / s / angstrom)
-            .value
-        )
+        factor = convert_in_place(
+            self.nu[ionisation_mask].astype(np.float64)
+            * self.lnu.units
+            / (h * c),
+            1 / s / angstrom,
+        ).ndview
         y = np.ascontiguousarray(
             self._lnu[..., ionisation_mask],
             dtype=np.float64,
@@ -1949,7 +1951,7 @@ class Sed:
 
         # Add a final data point at the ionising energy to ensure full
         # coverage.
-        x0 = ionisation_wavelength.to(angstrom).value
+        x0 = convert_in_place(ionisation_wavelength, angstrom).value
         if len(y.shape) == 1:
             y0 = np.interp(x0, x, y)
             y = np.append(y, y0)
@@ -2845,14 +2847,14 @@ def plot_spectra_as_rainbow(
         wavelength_indices = np.logical_and(
             sed._obslam < lam_max, sed._obslam > lam_min
         )
-        lam = sed.obslam[wavelength_indices].to("nm").value
+        lam = convert_in_place(sed.obslam[wavelength_indices], "nm").ndview
         spectra = sed._fnu[wavelength_indices]
     else:
         # define filter for spectra
         wavelength_indices = np.logical_and(
             sed._lam < lam_max, sed._lam > lam_min
         )
-        lam = sed.lam[wavelength_indices].to("nm").value
+        lam = convert_in_place(sed.lam[wavelength_indices], "nm").ndview
         spectra = sed._lnu[wavelength_indices]
 
     # Normalise spectrum

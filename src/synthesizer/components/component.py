@@ -34,7 +34,7 @@ from synthesizer.imaging.postprocess import (
     _postprocess_existing_line_maps,
 )
 from synthesizer.synth_warnings import deprecated
-from synthesizer.units import unit_is_compatible
+from synthesizer.units import convert_in_place, unit_is_compatible
 from synthesizer.utils.ascii_table import TableFormatter
 
 
@@ -245,11 +245,13 @@ class Component(ABC):
 
         # At redshift > 0 we can calculate the luminosity distance explicitly
         if self.redshift > 0:
-            return get_luminosity_distance(cosmo, self.redshift).to("kpc")
+            return convert_in_place(
+                get_luminosity_distance(cosmo, self.redshift), "kpc"
+            )
 
         # At redshift 0 just place the component at 10 pc to
         # avoid any issues with 0s
-        return (10 * pc).to(kpc)
+        return convert_in_place(10 * pc, kpc)
 
     def get_angular_diameter_distance(self, cosmo):
         """Get the angular diameter distance of the component.
@@ -285,14 +287,17 @@ class Component(ABC):
         # At redshift > 0 we can calculate the angular diameter distance
         # explicitly
         if self.redshift > 0:
-            return get_angular_diameter_distance(
-                cosmo,
-                self.redshift,
-            ).to("kpc")
+            return convert_in_place(
+                get_angular_diameter_distance(
+                    cosmo,
+                    self.redshift,
+                ),
+                "kpc",
+            )
 
         # At redshift 0 just place the component at 10 pc to
         # avoid any issues with 0s
-        return (10 * pc).to(kpc)
+        return convert_in_place(10 * pc, kpc)
 
     def get_photo_lnu(
         self,

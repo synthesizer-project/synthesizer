@@ -51,7 +51,7 @@ from unyt import angstrom, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.extensions.reductions import reduce_particle_spectra
-from synthesizer.units import accepts, get_quantity_unit
+from synthesizer.units import accepts, convert_in_place, get_quantity_unit
 from synthesizer.utils.util_funcs import as_contiguous
 
 
@@ -527,7 +527,7 @@ def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
     # Ensure lam is in the same units as the sed
     lam_unit = get_quantity_unit(intrinsic_sed, "lam")
     if lam.units != lam_unit:
-        lam = lam.to(lam_unit)
+        lam = convert_in_place(lam, lam_unit)
 
     # Calcilate the transmission array
     attenuation = get_attenuation(intrinsic_sed, attenuated_sed)

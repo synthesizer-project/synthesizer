@@ -579,7 +579,7 @@ def _generate_image_particle_smoothed(
 
         # Shift the centred coordinates by half the FOV
         # (this is to ensure the image is centered on the emitter)
-        _coords = cent_coords.to(spatial_units).value
+        _coords = cent_coords.to(spatial_units).ndview
         _coords[:, 0] += fov[0] / 2.0
         _coords[:, 1] += fov[1] / 2.0
         _smoothing_lengths = smoothing_lengths.to_value(spatial_units)
@@ -752,7 +752,7 @@ def _generate_images_particle_smoothed(
 
         # Shift the centred coordinates by half the FOV
         # (this is to ensure the image is centered on the emitter)
-        _coords = cent_coords.to(spatial_units).value
+        _coords = cent_coords.to(spatial_units).ndview
         _coords[:, 0] += fov[0] / 2.0
         _coords[:, 1] += fov[1] / 2.0
         _smoothing_lengths = smoothing_lengths.to_value(spatial_units)

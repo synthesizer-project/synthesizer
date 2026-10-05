@@ -567,15 +567,10 @@ class Quantity:
         if isinstance(value, (unyt_quantity, unyt_array)):
             if value.units == dimensionless:
                 value = value.ndview
-            elif value.units != self.unit:
-                # Convert in place rather than copying. The caller's array
-                # carries a record of the conversion so stays consistent, and
-                # a copy would double the memory for as long as the caller
-                # holds a reference. Read-only arrays can only be copied.
-                if value.flags.writeable:
-                    value.convert_to_units(self.unit)
-                else:
-                    value = value.to(self.unit)
+            else:
+                # Convert in place rather than copying, a copy would double
+                # the memory for as long as the caller holds a reference
+                value = convert_in_place(value, self.unit)
 
         # Attach our own unit object rather than keeping the caller's. An
         # equivalent unit (e.g. 1.0*Msun) would otherwise be carried into
@@ -706,33 +701,68 @@ def has_units(x):
     return False
 
 
+def convert_in_place(arr, unit):
+    """Convert a `unyt_array` or `unyt_quantity` to ``unit`` in place.
+
+    Converting in place avoids duplicating the array. The array carries a
+    record of the conversion in its units, so anything else holding a
+    reference to it stays consistent. Read-only arrays can't be converted in
+    place, so these (and only these) are copied.
+
+    Args:
+        arr (unyt_array/unyt_quantity):
+            The array to convert.
+        unit (unyt.unit_object.Unit/str):
+            The unit to convert to.
+
+    Returns:
+        unyt_array/unyt_quantity:
+            The converted array, which is ``arr`` itself unless ``arr`` is
+            read-only.
+
+    Raises:
+        UnitConversionError: If the unit is not compatible with the existing
+            unit.
+    """
+    # Coerce before comparing, a unyt Unit never compares equal to a str
+    if not isinstance(unit, Unit):
+        unit = Unit(unit)
+
+    # Nothing to do if we are already in the right units
+    if arr.units == unit:
+        return arr
+
+    if not arr.flags.writeable:
+        return arr.to(unit)
+
+    arr.convert_to_units(unit)
+    return arr
+
+
 def unyt_to_ndview(arr, unit=None):
     """Return the raw buffer of a `unyt_array` or `unyt_quantity`.
 
     The point of this helper is to hand downstream NumPy code a plain ndarray
     so it does not pay unyt's ufunc dispatch on every operation, and to do so
-    without copying. Nothing is ever copied here: with no unit, or a unit the
-    array already carries, the buffer comes back untouched, and a unit that
-    differs is converted in place before the buffer is returned.
+    without copying. With no unit, or a unit the array already carries, the
+    buffer comes back untouched, and a unit that differs is converted in place
+    (see convert_in_place) before the buffer is returned.
 
-    THE CALLER MUST OWN ``arr``. Converting in place rewrites its values, so
-    passing an array that anything else holds a reference to will silently
-    change that other thing's data. In practice that means passing an array
-    you just computed, not one read back off an object: attribute reads return
-    the stored array itself, so converting one changes the object's stored
-    units and rewrites any unit-free view of it already handed out. Callers
-    holding an array they do not own should convert it themselves with
-    ``arr.to(unit)``, which copies, and take the ndview of the result.
+    Converting in place rewrites ``arr``'s values and units, so anything else
+    holding ``arr`` sees the conversion recorded in its units. Any unit-free
+    view of ``arr`` already handed out (e.g. a Quantity's private name) is
+    rewritten without that record.
 
     Args:
         arr (unyt_array/unyt_quantity): The unyt_array or unyt_quantity to
-            extract the data from. Must be owned by the caller.
+            extract the data from.
         unit (unyt.unit_object.Unit): The unit to convert to. If None, the
             existing unit is used. If the unit is not compatible with the
             existing unit, an error will be raised.
 
     Returns:
-        np.ndarray: The underlying data as a numpy array, WITHOUT a copy.
+        np.ndarray: The underlying data as a numpy array, without a copy
+            unless ``arr`` is read-only and needs converting.
 
     Raises:
         UnitConversionError: If the unit is not compatible with the existing
@@ -742,21 +772,7 @@ def unyt_to_ndview(arr, unit=None):
     if unit is None:
         return arr.ndview
 
-    # Coerce before comparing: callers pass units as strings (grid axis units
-    # are stored that way) and a unyt Unit never compares equal to a str, so a
-    # raw comparison reports a difference even when there is none and we copy
-    # the buffer to convert something into the units it is already in.
-    if not isinstance(unit, Unit):
-        unit = Unit(unit)
-
-    # If the units are the same then just return the ndview
-    if arr.units == unit:
-        return arr.ndview
-
-    # A conversion is needed, and the caller owns arr, so do it in place and
-    # hand back the buffer without allocating anything.
-    arr.convert_to_units(unit)
-    return arr.ndview
+    return convert_in_place(arr, unit).ndview
 
 
 def _raise_or_convert(expected_unit, name, value):
@@ -778,16 +794,11 @@ def _raise_or_convert(expected_unit, name, value):
     # Handle the unyt_array/unyt_quantity cases
     if isinstance(value, (unyt_array, unyt_quantity)):
         # We know we have units but are they compatible? Convert in place
-        # rather than copying, the caller's array carries a record of the
-        # conversion so stays consistent, and a copy would double the memory
-        # for as long as the caller holds a reference. Read-only arrays can
-        # only be copied.
+        # rather than copying, a copy would double the memory for as long as
+        # the caller holds a reference.
         if value.units != expected_unit:
             try:
-                if not value.flags.writeable:
-                    return value.to(expected_unit)
-                value.convert_to_units(expected_unit)
-                return value
+                return convert_in_place(value, expected_unit)
             except UnitConversionError:
                 raise exceptions.IncorrectUnits(
                     f"{name} passed with incompatible units. "

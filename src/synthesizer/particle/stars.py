@@ -45,7 +45,7 @@ from synthesizer.particle.resample_utils import (
     validate_resample_factor,
 )
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, convert_in_place
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.util_funcs import combine_arrays
@@ -395,7 +395,7 @@ class Stars(Particles, StarsComponent):
         """
         age_mask = self.ages < timescale
         sfr = np.sum(self.initial_masses[age_mask]) / timescale  # Msun / Myr
-        return sfr.to("Msun / yr")
+        return convert_in_place(sfr, "Msun / yr")
 
     @property
     def total_mass(self):
