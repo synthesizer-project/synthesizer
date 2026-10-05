@@ -24,9 +24,10 @@ Example usage:
 
 """
 
+import copy
 import os
 import shutil
-from functools import wraps
+from functools import lru_cache, wraps
 from inspect import Parameter, signature
 
 import numpy
@@ -82,6 +83,36 @@ def _load_and_convert_unit_categories() -> dict:
 # Get the default units system (this can be modified by the user).
 # NOTE: This module-level variable will be initialized only once on import
 UNIT_CATEGORIES = _load_and_convert_unit_categories()
+
+
+def _deepcopy_unit(unit, memo):
+    """Share Unit objects when deep copying instead of duplicating them.
+
+    unyt deep copies a Unit by deep copying its entire unit registry, and
+    ignores the memo while doing so, which costs milliseconds and a full
+    registry's worth of memory for every array copied. Quantities store
+    unyt_arrays so copying any object holding them (e.g. an Instrument) pays
+    this per attribute. Units are immutable in practice so sharing them is
+    safe, and it keeps a stored Quantity's own unit object so the identity
+    check in _QuantityView still applies to copies.
+
+    Args:
+        unit (unyt.Unit):
+            The unit being copied.
+        memo (dict):
+            The deepcopy memo (unused).
+
+    Returns:
+        unyt.Unit:
+            The same unit.
+    """
+    return unit
+
+
+# NOTE: This is registered process wide since unyt_array.__deepcopy__ calls
+# copy.deepcopy on its units without a memo, so there is nowhere more local
+# to hook in.
+copy._deepcopy_dispatch[Unit] = _deepcopy_unit
 
 
 def unit_is_compatible(value, unit):
@@ -701,6 +732,24 @@ def has_units(x):
     return False
 
 
+@lru_cache(maxsize=None)
+def _parse_unit(unit):
+    """Parse a unit string into a Unit, caching the result.
+
+    Parsing a unit string goes through sympy and is slow, while the set of
+    unit strings used in the code is small and fixed.
+
+    Args:
+        unit (str):
+            The unit string to parse.
+
+    Returns:
+        unyt.unit_object.Unit:
+            The parsed unit.
+    """
+    return Unit(unit)
+
+
 def convert_in_place(arr, unit):
     """Convert a `unyt_array` or `unyt_quantity` to ``unit`` in place.
 
@@ -725,7 +774,9 @@ def convert_in_place(arr, unit):
             unit.
     """
     # Coerce before comparing, a unyt Unit never compares equal to a str
-    if not isinstance(unit, Unit):
+    if isinstance(unit, str):
+        unit = _parse_unit(unit)
+    elif not isinstance(unit, Unit):
         unit = Unit(unit)
 
     # Nothing to do if we are already in the right units
