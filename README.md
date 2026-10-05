@@ -68,6 +68,27 @@ Please cite **both** of the following papers ([Lovell et al. 2025](https://astro
         pages = {9436},
     }
 
+And if you use any of the pre-built grids from the [database](https://synthesizer-project.org/syndex). Then please cite the grids release paper (and any other applicable citations as listed on Syndex):
+
+    @article{Vijayan2026Synthesizer,
+       author = {{Vijayan}, Aswin P. and {Wilkins}, Stephen M. and {Newman}, Sophie L. and {Lovell}, Christopher C. and {Roper}, William J. and {Berger}, Sabrina and {Harvey}, Thomas and {Turner}, Jack C.},
+        title = "{Stellar photoionisation modelling in SYNTHESIZER}",
+      journal = {arXiv e-prints},
+     keywords = {Astrophysics of Galaxies},
+         year = 2026,
+        month = jul,
+          eid = {arXiv:2607.27467},
+        pages = {arXiv:2607.27467},
+          doi = {10.48550/arXiv.2607.27467},
+       archivePrefix = {arXiv},
+       eprint = {2607.27467},
+       primaryClass = {astro-ph.GA},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2026arXiv260727467V},
+       adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+    }
+
+
+
 ## Licence
 
 [GNU General Public License v3.0](https://github.com/synthesizer-project/synthesizer/blob/main/LICENSE.md)
