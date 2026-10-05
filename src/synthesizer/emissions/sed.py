@@ -612,9 +612,11 @@ class Sed:
                 The factor including the unit conversion, at the precision
                 of lnu.
         """
-        return convert_in_place(
-            factor * get_quantity_unit(self, "lnu"), units
-        ).ndview.astype(self._lnu.dtype)
+        return (
+            (factor * get_quantity_unit(self, "lnu"))
+            .to_value(units)
+            .astype(self._lnu.dtype)
+        )
 
     @property
     def flux(self):
@@ -711,7 +713,7 @@ class Sed:
             energy (unyt_array):
                 The energy coordinate.
         """
-        return convert_in_place(h * c / self.lam, eV)
+        return (h * c / self.lam).to(eV)
 
     @property
     def ndim(self):
@@ -1306,9 +1308,7 @@ class Sed:
         one_plus_z = 1.0 + z_obs
         # d_L is set by the cosmological z, rescaled to the observed frame
         # (factor 1 when there is no peculiar velocity).
-        luminosity_distance_cm = convert_in_place(
-            get_luminosity_distance(cosmo, z), cm
-        ).value
+        luminosity_distance_cm = get_luminosity_distance(cosmo, z).to_value(cm)
         luminosity_distance_cm *= one_plus_z / (1.0 + float(z))
         conversion = (
             get_attr_unit_conversion(
@@ -1523,9 +1523,9 @@ class Sed:
             continuum = (
                 np.column_stack(
                     continuum_fits[0]
-                    * convert_in_place(
-                        feature_lam, get_quantity_unit(self, "lam")
-                    ).ndview[:, np.newaxis]
+                    * feature_lam.to(get_quantity_unit(self, "lam")).value[
+                        :, np.newaxis
+                    ]
                 )
                 + continuum_fits[1][:, np.newaxis]
             ) * get_quantity_unit(self, "lnu")
@@ -1553,9 +1553,7 @@ class Sed:
             continuum = (
                 (
                     continuum_fit[0]
-                    * convert_in_place(
-                        feature_lam, get_quantity_unit(self, "lam")
-                    ).ndview
+                    * feature_lam.to(get_quantity_unit(self, "lam")).value
                 )
                 + continuum_fit[1]
             ) * get_quantity_unit(self, "lnu")
@@ -1941,12 +1939,15 @@ class Sed:
         # axis produces a Fortran-ordered result, so we explicitly restore C
         # order for the C extension.
         x = self._lam[ionisation_mask].astype(np.float64)
-        factor = convert_in_place(
-            self.nu[ionisation_mask].astype(np.float64)
-            * self.lnu.units
-            / (h * c),
-            1 / s / angstrom,
-        ).ndview
+        factor = (
+            (
+                self.nu[ionisation_mask].astype(np.float64)
+                * self.lnu.units
+                / (h * c)
+            )
+            .to(1 / s / angstrom)
+            .value
+        )
         y = np.ascontiguousarray(
             self._lnu[..., ionisation_mask],
             dtype=np.float64,
@@ -1955,7 +1956,7 @@ class Sed:
 
         # Add a final data point at the ionising energy to ensure full
         # coverage.
-        x0 = convert_in_place(ionisation_wavelength, angstrom).value
+        x0 = ionisation_wavelength.to(angstrom).value
         if len(y.shape) == 1:
             y0 = np.interp(x0, x, y)
             y = np.append(y, y0)
@@ -2027,7 +2028,7 @@ class Sed:
             """Get the log-lambda broadening kernel."""
             # Convert velocity sigma to log-lambda sigma. Delta x = ln(lambda)
             # gives Delta v = c * Delta x.
-            sigma_x = convert_in_place(this_sigma_v / c, "").ndview
+            sigma_x = (this_sigma_v / c).to_value("")
             kernel = np.exp(-(kernel_x**2) / (2 * sigma_x**2))
             kernel /= kernel.sum()
             return kernel
@@ -2851,14 +2852,14 @@ def plot_spectra_as_rainbow(
         wavelength_indices = np.logical_and(
             sed._obslam < lam_max, sed._obslam > lam_min
         )
-        lam = convert_in_place(sed.obslam[wavelength_indices], "nm").ndview
+        lam = sed.obslam[wavelength_indices].to("nm").value
         spectra = sed._fnu[wavelength_indices]
     else:
         # define filter for spectra
         wavelength_indices = np.logical_and(
             sed._lam < lam_max, sed._lam > lam_min
         )
-        lam = convert_in_place(sed.lam[wavelength_indices], "nm").ndview
+        lam = sed.lam[wavelength_indices].to("nm").value
         spectra = sed._lnu[wavelength_indices]
 
     # Normalise spectrum

@@ -15,7 +15,7 @@ import numpy as np
 from unyt import Mpc, km, s, unyt_array
 
 from synthesizer import exceptions
-from synthesizer.units import accepts, convert_in_place
+from synthesizer.units import accepts
 
 #: Valid string mode names for :func:`resample_by_mode`.
 RESAMPLE_MODES = frozenset(
@@ -377,7 +377,7 @@ def add_velocity_dispersion(velocities, dispersion, seed=None):
     # Get the raw numeric value of the dispersion, converting units
     # if necessary
     if hasattr(dispersion, "units"):
-        disp_value = convert_in_place(dispersion, velocities.units).value
+        disp_value = dispersion.to(velocities.units).value
     else:
         disp_value = dispersion
 

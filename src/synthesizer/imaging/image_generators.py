@@ -382,7 +382,7 @@ def _generate_image_particle_hist(
 
         # Unpack the image properties and ensure we agree on the units
         spatial_units = img.resolution.units
-        fov = convert_in_place(img.fov, spatial_units).ndview
+        fov = img.fov.to_value(spatial_units)
 
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
@@ -574,8 +574,8 @@ def _generate_image_particle_smoothed(
         spatial_units = img.resolution.units
 
         # Unpack the image properties we need
-        fov = convert_in_place(img.fov, spatial_units).ndview
-        res = convert_in_place(img.resolution, spatial_units).value
+        fov = img.fov.to_value(spatial_units)
+        res = img.resolution.to_value(spatial_units)
 
         # Shift the centred coordinates by half the FOV
         # (this is to ensure the image is centered on the emitter)
@@ -749,8 +749,8 @@ def _generate_images_particle_smoothed(
         spatial_units = imgs.resolution.units
 
         # Unpack the image properties we need
-        fov = convert_in_place(imgs.fov, spatial_units).ndview
-        res = convert_in_place(imgs.resolution, spatial_units).value
+        fov = imgs.fov.to_value(spatial_units)
+        res = imgs.resolution.to_value(spatial_units)
 
         # Shift the centred coordinates by half the FOV
         # (this is to ensure the image is centered on the emitter)

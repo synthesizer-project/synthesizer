@@ -1635,14 +1635,10 @@ class Particles:
         )
 
         # Cross product of position and velocity, weighted by mass
-        return convert_in_place(
-            np.sum(
-                np.cross(self.coordinates, self.velocities)
-                * self.masses[:, None],
-                axis=0,
-            ),
-            ang_mom_unit,
-        )
+        return np.sum(
+            np.cross(self.coordinates, self.velocities) * self.masses[:, None],
+            axis=0,
+        ).to(ang_mom_unit)
 
     @timed("Particles.rotate_edge_on")
     def rotate_edge_on(self, inplace=True):

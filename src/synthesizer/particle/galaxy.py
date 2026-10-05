@@ -33,12 +33,7 @@ from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
 from synthesizer.synth_warnings import warn
-from synthesizer.units import (
-    accepts,
-    convert_in_place,
-    get_quantity_unit,
-    unyt_to_ndview,
-)
+from synthesizer.units import accepts, get_quantity_unit, unyt_to_ndview
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import resolve_out_dtype
@@ -1284,7 +1279,7 @@ class Galaxy(BaseGalaxy):
         age_unit = get_quantity_unit(self.stars, "ages")
         if isinstance(age_bin, unyt_quantity):
             if age_bin.units != age_unit:
-                age_bin = convert_in_place(age_bin, age_unit)
+                age_bin = age_bin.to(age_unit)
         else:
             age_bin *= age_unit
 
@@ -1356,7 +1351,7 @@ class Galaxy(BaseGalaxy):
         age_unit = get_quantity_unit(self.stars, "ages")
         if isinstance(age_bin, unyt_quantity):
             if age_bin.units != age_unit:
-                age_bin = convert_in_place(age_bin, age_unit)
+                age_bin = age_bin.to(age_unit)
         else:
             age_bin *= age_unit
 

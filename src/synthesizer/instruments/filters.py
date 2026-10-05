@@ -44,7 +44,6 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import (
     Quantity,
     accepts,
-    convert_in_place,
     deepcopy_with_shared_units,
 )
 from synthesizer.utils.ascii_table import TableFormatter
@@ -1038,7 +1037,7 @@ class FilterCollection:
         trans_2d = np.vstack(
             [self.filters[code].t for code in self.filter_codes]
         )
-        nu_native = convert_in_place(c / self.lam, "Hz").ndview
+        nu_native = (c / self.lam).to("Hz").value
 
         self._batch_cache.set(
             native_key,
@@ -1219,9 +1218,7 @@ class FilterCollection:
                 )
 
             # The xs will be frequency values in Hz matching the input dtype
-            xs = np.asarray(
-                convert_in_place(c / self.lam, "Hz").ndview, dtype=input_dtype
-            )
+            xs = np.asarray((c / self.lam).to("Hz").value, dtype=input_dtype)
             space = "nu"
 
         # Frequencies provided, xs will be frequency values in Hz
@@ -1828,8 +1825,8 @@ class Filter:
             self.original_t = self.t
 
         # Calculate frequencies
-        self.nu = convert_in_place(c / self.lam, "Hz")
-        self.original_nu = convert_in_place(c / self.original_lam, "Hz")
+        self.nu = (c / self.lam).to("Hz").value
+        self.original_nu = (c / self.original_lam).to("Hz").value
         self._update_native_grid_keys()
 
         # Ensure transmission curves are in a valid range (we expect 0-1,
@@ -2208,7 +2205,7 @@ class Filter:
         self.clip_transmission()
 
         # Keep dependent frequency grid in sync with the wavelength grid.
-        self.nu = convert_in_place(c / self.lam, "Hz")
+        self.nu = (c / self.lam).to("Hz").value
         self._update_native_grid_keys()
 
         # Reset any cached integration data because the transmission curve has
@@ -2345,9 +2342,9 @@ class Filter:
             self._get_weighted_integration_data(xs, self._original_lam, "lam")
             # If we have a wavelength grid we can also precompute the matching
             # frequency-grid cache entries.
-            nu = convert_in_place(c / (xs * angstrom), "Hz")
+            nu = (c / (xs * angstrom)).to("Hz")
             self._get_weighted_integration_data(
-                nu.ndview,
+                nu.value,
                 self._original_nu,
                 "nu",
             )

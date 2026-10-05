@@ -130,8 +130,7 @@ def calculate_smoothing_lengths(
         tree = cKDTree(source_values)
     else:
         tree = cKDTree(
-            source_values,
-            boxsize=convert_in_place(boxsize, coordinates.units).ndview,
+            source_values, boxsize=boxsize.to(coordinates.units).value
         )
 
     # Prepare an array to hold the resultant smoothing lengths

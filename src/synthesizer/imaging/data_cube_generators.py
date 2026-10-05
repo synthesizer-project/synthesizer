@@ -166,8 +166,8 @@ def _generate_ifu_particle_hist(
         spatial_units = ifu.resolution.units
 
         # Get some IFU properties we'll need
-        fov = convert_in_place(ifu.fov, spatial_units).ndview
-        res = convert_in_place(ifu.resolution, spatial_units).value
+        fov = ifu.fov.to_value(spatial_units)
+        res = ifu.resolution.to_value(spatial_units)
 
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
@@ -313,8 +313,8 @@ def _generate_ifu_particle_smoothed(
         spatial_units = ifu.resolution.units
 
         # Get some IFU properties we'll need
-        fov = convert_in_place(ifu.fov, spatial_units).ndview
-        res = convert_in_place(ifu.resolution, spatial_units).value
+        fov = ifu.fov.to_value(spatial_units)
+        res = ifu.resolution.to_value(spatial_units)
 
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
@@ -526,7 +526,7 @@ def _generate_ifu_generic(
     # existing units when the caller already supplied a unitful grid and only
     # attach angstrom when the wavelength array is still unitless.
     if hasattr(lam, "units"):
-        lam = convert_in_place(lam, angstrom)
+        lam = lam.to(angstrom)
     else:
         lam = lam * angstrom
 

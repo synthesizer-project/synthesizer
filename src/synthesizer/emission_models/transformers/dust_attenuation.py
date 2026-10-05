@@ -43,7 +43,7 @@ from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.extensions.particle_spectra import compute_particle_seds
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
-from synthesizer.units import accepts, convert_in_place
+from synthesizer.units import accepts
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import scalar_like
 
@@ -61,9 +61,7 @@ __all__ = [
 
 _DRAINE_LI_MEAN_MOLECULAR_WEIGHT = 1.4
 _HYDROGEN_MASS = 1.6738e-24 * g
-_GAS_MASS_PER_H = convert_in_place(
-    _DRAINE_LI_MEAN_MOLECULAR_WEIGHT * _HYDROGEN_MASS, Msun
-)
+_GAS_MASS_PER_H = (_DRAINE_LI_MEAN_MOLECULAR_WEIGHT * _HYDROGEN_MASS).to(Msun)
 
 
 class AttenuationLaw(Transformer):
@@ -533,8 +531,8 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     # it did not.
     dtype = lam.dtype if lam.dtype.kind == "f" else np.dtype(np.float64)
     _lam = np.linspace(0.01, 3.0, 10000, endpoint=True, dtype=dtype)
-    _cent_lam = dtype.type(convert_in_place(cent_lam, "um").value)
-    _gamma = dtype.type(convert_in_place(gamma, "um").value)
+    _cent_lam = dtype.type(cent_lam.to_value("um"))
+    _gamma = dtype.type(gamma.to_value("um"))
     lam_v = dtype.type(0.55)  # in um
 
     k_lam = np.zeros_like(_lam)
@@ -589,7 +587,7 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
 
     # Query at the wavelength dtype: unyt's own conversion widens, and a
     # widened query would pull a widened result back out of the interpolation.
-    return func(np.asarray(convert_in_place(lam, "um").ndview, dtype=dtype))
+    return func(np.asarray(lam.to_value("um"), dtype=dtype))
 
 
 class Calzetti2000(AttenuationLaw):
@@ -984,10 +982,10 @@ class GrainModels(AttenuationLaw):
         """
         # Inverse wavelength range in 1/um
         _inverse_lam_range = self.extmodel.data_x * 1 / um
-        _lam_range = convert_in_place(1 / _inverse_lam_range, "angstrom")
+        _lam_range = (1 / _inverse_lam_range).to("angstrom")
         # Change to increasing order
         _lam_range = np.unique(_lam_range[::-1])
-        _lam = np.atleast_1d(convert_in_place(lam, "angstrom"))
+        _lam = np.atleast_1d(lam.to("angstrom").value) * angstrom
         if np.any((_lam < np.min(_lam_range)) | (_lam > np.max(_lam_range))):
             warn(
                 f"Wavelengths outside the range "
@@ -999,13 +997,13 @@ class GrainModels(AttenuationLaw):
             lower = self.extmodel(_lam_range[0].to_astropy())
             upper = self.extmodel(_lam_range[-1].to_astropy())
             func = interpolate.interp1d(
-                convert_in_place(_lam_range, "Angstrom").ndview,
+                _lam_range.to("Angstrom").value,
                 self.extmodel(_lam_range.to_astropy()),
                 kind=interp,
                 bounds_error=False,
                 fill_value=(lower, upper),
             )
-            out = func(convert_in_place(_lam, "Angstrom").ndview)
+            out = func(_lam.to("Angstrom").value)
         else:
             out = self.extmodel(lam.to_astropy())
 
@@ -1047,12 +1045,12 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
         UV_slope, OPT_NIR_slope, FUV_slope, bump = 4.47, 2.39, -0.988, 0.0221
 
     # Converting lam from AA to um for ease
-    _lam = convert_in_place(lam, "um")
+    _lam = lam.to("um")
 
     # Attenuation curve (normalized to Av)
     term1 = UV_slope / (
-        (_lam.ndview / 0.08) ** OPT_NIR_slope
-        + (_lam.ndview / 0.08) ** -OPT_NIR_slope
+        (_lam.value / 0.08) ** OPT_NIR_slope
+        + (_lam.value / 0.08) ** -OPT_NIR_slope
         + FUV_slope
     )
     term2 = (
@@ -1063,9 +1061,9 @@ def Li08(lam, UV_slope, OPT_NIR_slope, FUV_slope, bump, model):
             / (6.88**OPT_NIR_slope + 0.145**OPT_NIR_slope + FUV_slope)
             - bump / 4.6
         )
-    ) / ((_lam.ndview / 0.046) ** 2.0 + (_lam.ndview / 0.046) ** -2.0 + 90.0)
+    ) / ((_lam.value / 0.046) ** 2.0 + (_lam.value / 0.046) ** -2.0 + 90.0)
     term3 = bump / (
-        (_lam.ndview / 0.2175) ** 2.0 + (_lam.ndview / 0.2175) ** -2.0 - 1.95
+        (_lam.value / 0.2175) ** 2.0 + (_lam.value / 0.2175) ** -2.0 - 1.95
     )
 
     AlamAV = term1 + term2 + term3
@@ -1257,7 +1255,7 @@ def sb26_tau(lam, B_0, B_1s, B_2s, B_3):
             V-band normalised optical depth (A_lambda / A_V).
     """
     # Convert wavelength to microns and normalise to V-band
-    x = convert_in_place(lam, "um").ndview / 0.5542
+    x = lam.to("um").value / 0.5542
 
     # Unscale the slope parameters
     B_1 = 1e3 * B_1s
@@ -1769,7 +1767,7 @@ class DraineLiGrainCurves(AttenuationLaw):
 
         # Store the target wavelengths if provided
         if lam is not None:
-            self.lam = convert_in_place(lam, "Angstrom")
+            self.lam = lam.to("Angstrom")
 
         # We always need to be passed a grain dict, we only have it as a
         # keyword argument so we can raise a clear error message if it is
@@ -2040,9 +2038,9 @@ class DraineLiGrainCurves(AttenuationLaw):
         # evaluate_dust_curve_at_dtype)
         tau_dtype = np.result_type(np.asarray(lam).dtype, np.float32)
         tau_all = np.zeros((nparticles, grid.nlam), dtype=tau_dtype)
-        tau_scale = convert_in_place(
-            (1.0 * cm**2) / _GAS_MASS_PER_H, 1 / column_units
-        ).ndview
+        tau_scale = (
+            ((1.0 * cm**2) / _GAS_MASS_PER_H).to(1 / column_units).ndview
+        )
         grid_dtg_axis = grid._extract_axes_values[dtg_axis_name]
         grid_shape = np.array(grid.shape, dtype=np.int32)
         grid_weights = np.ones(nparticles)

@@ -25,7 +25,7 @@ from synthesizer.extensions.spectra_operations import (
     scale_line_2d,
     scale_spectra_2d,
 )
-from synthesizer.units import convert_in_place, get_array_quantity_view
+from synthesizer.units import get_array_quantity_view
 from synthesizer.utils.precision import convert_array_dtype
 
 
@@ -111,8 +111,7 @@ def normalise_scaling_for_units(scaling, units):
 
     # The kernels operate on raw doubles, so once the units are compatible we
     # convert into the target units and strip the unit wrapper.
-    scaling = convert_in_place(scaling, units)
-    return scaling.ndview if scaling.ndim else scaling.value
+    return scaling.to(units).value
 
 
 def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
@@ -149,21 +148,15 @@ def normalise_line_scaling(scaling, get_nu, lum_units, cont_units):
     # Continuum-compatible scaling can be pushed onto luminosity by
     # multiplying through by nu.
     if cont_units.dimensions == scaling.units.dimensions:
-        scaling_lum = convert_in_place(scaling * nu, lum_units).ndview
-        scaling_cont = convert_in_place(scaling, cont_units)
-        scaling_cont = (
-            scaling_cont.ndview if scaling_cont.ndim else scaling_cont.value
-        )
+        scaling_cont = scaling.to(cont_units).value
+        scaling_lum = (scaling * nu).to(lum_units).value
         return scaling_lum, scaling_cont
 
     # Luminosity-compatible scaling takes the opposite route: divide by nu to
     # recover the matching continuum factor.
     if lum_units.dimensions == scaling.units.dimensions:
-        scaling_cont = convert_in_place(scaling / nu, cont_units).ndview
-        scaling_lum = convert_in_place(scaling, lum_units)
-        scaling_lum = (
-            scaling_lum.ndview if scaling_lum.ndim else scaling_lum.value
-        )
+        scaling_lum = scaling.to(lum_units).value
+        scaling_cont = (scaling / nu).to(cont_units).value
         return scaling_lum, scaling_cont
 
     raise exceptions.InconsistentMultiplication(

@@ -80,7 +80,6 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import (
     Quantity,
     accepts,
-    convert_in_place,
     deepcopy_with_shared_units,
     get_array_quantity_view,
     get_quantity_unit,
@@ -405,7 +404,7 @@ class LineCollection:
             energy (unyt_array):
                 The energy coordinate.
         """
-        return convert_in_place(h * c / self.lam, eV)
+        return (h * c / self.lam).to(eV)
 
     @property
     def continuum_llam(self):
@@ -1053,15 +1052,11 @@ class LineCollection:
             igm = None
         else:
             # Get the luminosity distance
-            luminosity_distance = convert_in_place(
-                get_luminosity_distance(cosmo, z), "cm"
-            )
+            luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
         # Compute flux and observed continuum in one threaded pass, folding
         # the unit conversion into the scale factors
-        area = convert_in_place(
-            4 * np.pi * luminosity_distance**2, "cm**2"
-        ).value
+        area = (4 * np.pi * luminosity_distance**2).to_value("cm**2")
         nspec = self._luminosity.shape[0]
         self.flux, self.continuum_flux = scale_line_arrays(
             self._luminosity,

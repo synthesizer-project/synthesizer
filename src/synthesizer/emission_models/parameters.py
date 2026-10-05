@@ -51,7 +51,6 @@ from unyt.exceptions import UnitConversionError
 
 from synthesizer import exceptions
 from synthesizer.synth_warnings import warn
-from synthesizer.units import convert_in_place
 
 
 class ParameterFunction:
@@ -633,11 +632,7 @@ class ParameterDistribution:
                 self.units = value.units
 
             try:
-                setattr(
-                    self,
-                    attr,
-                    float(convert_in_place(value, self.units).value),
-                )
+                setattr(self, attr, float(value.to(self.units).value))
             except UnitConversionError:
                 raise exceptions.InconsistentArguments(
                     f"{attr} on a {self.__class__.__name__} is in "

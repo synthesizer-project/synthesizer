@@ -31,7 +31,7 @@ import numpy as np
 from unyt import unyt_array, yr
 
 from synthesizer import exceptions
-from synthesizer.units import accepts, convert_in_place
+from synthesizer.units import accepts
 
 # Define a list of the available kernels
 kernels = ("DampedRandomWalk",)
@@ -200,7 +200,7 @@ class DampedRandomWalk(Kernel):
 
         # Store the parameters in base units
         self.sigma = float(sigma)
-        self.tau = convert_in_place(tau, "yr").value
+        self.tau = tau.to("yr").value
 
         # Validate
         if self.sigma <= 0:

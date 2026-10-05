@@ -71,11 +71,7 @@ def _get_arcsec_per_kpc_at_z(cosmo, redshift):
             "local-object convention of placing the object at 10 pc for "
             "spatial/angular conversions."
         )
-        return (
-            convert_in_place(kpc / _LOCAL_DISTANCE, "").value
-            * (180 / np.pi)
-            * 3600
-        )
+        return (kpc / _LOCAL_DISTANCE).to("").value * (180 / np.pi) * 3600
 
     # Get the conversion factor from the cosmology
     arcsec_per_kpc = cosmo.arcsec_per_kpc_proper(redshift).value
@@ -119,7 +115,7 @@ def flux_to_luminosity(flux, cosmo, redshift):
             If units are missing an error is raised.
     """
     # Calculate the luminosity distance (need to convert from astropy to unyt)
-    lum_dist = convert_in_place(get_luminosity_distance(cosmo, redshift), "cm")
+    lum_dist = get_luminosity_distance(cosmo, redshift).to("cm")
 
     # Calculate the luminosity in interim units
     lum = flux * 4 * np.pi * lum_dist**2
@@ -158,7 +154,7 @@ def fnu_to_lnu(fnu, cosmo, redshift):
             If units are missing an error is raised.
     """
     # Calculate the luminosity distance (need to convert from astropy to unyt)
-    lum_dist = convert_in_place(get_luminosity_distance(cosmo, redshift), "cm")
+    lum_dist = get_luminosity_distance(cosmo, redshift).to("cm")
 
     # Calculate the luminosity in interim units
     lnu = fnu * 4 * np.pi * lum_dist**2
@@ -197,7 +193,7 @@ def lnu_to_fnu(lnu, cosmo, redshift):
             If units are missing an error is raised.
     """
     # Calculate the luminosity distance (need to convert from astropy to unyt)
-    lum_dist = convert_in_place(get_luminosity_distance(cosmo, redshift), "cm")
+    lum_dist = get_luminosity_distance(cosmo, redshift).to("cm")
 
     # Calculate the flux in interim units
     fnu = lnu * (1 + redshift) / 4 / np.pi / lum_dist**2
@@ -381,7 +377,7 @@ def absolute_mag_to_lnu(ab_mag):
             The luminosity in erg / s / Hz.
     """
     # Define the distance modulus at 10 pcs
-    dist_mod = 4 * np.pi * convert_in_place(10 * pc, "cm").value ** 2
+    dist_mod = 4 * np.pi * (10 * pc).to("cm").value ** 2
 
     return 10 ** (-0.4 * (ab_mag + 48.6)) * dist_mod * erg / s / Hz
 
@@ -407,10 +403,10 @@ def lnu_to_absolute_mag(lnu):
             If units are missing an error is raised.
     """
     # Define the distance modulus at 10 pcs
-    dist_mod = 4 * np.pi * (convert_in_place(10 * pc, "cm").value * cm) ** 2
+    dist_mod = 4 * np.pi * ((10 * pc).to("cm").value * cm) ** 2
 
     # Make sure the units are consistent
-    lnu = convert_in_place(lnu, erg / s / Hz)
+    lnu = lnu.to(erg / s / Hz)
 
     return -2.5 * np.log10(lnu / dist_mod / (erg / s / Hz)) - 48.6
 
@@ -428,7 +424,7 @@ def vacuum_to_air(wavelength):
             A wavelength in vacuum.
     """
     # Calculate wavelenegth squared for simplicty
-    wave2 = convert_in_place(wavelength, "angstrom").ndview ** 2.0
+    wave2 = wavelength.to("angstrom").value ** 2.0
 
     # Calcualte conversion factor
     conversion = (
@@ -451,7 +447,7 @@ def air_to_vacuum(wavelength):
             A wavelength in vacuum.
     """
     # Convert to wavenumber squared
-    sigma2 = (1.0e4 / convert_in_place(wavelength, "angstrom").ndview) ** 2.0
+    sigma2 = (1.0e4 / wavelength.to("angstrom").value) ** 2.0
 
     # Compute conversion factor
     conversion = (
@@ -599,7 +595,7 @@ def tau_lam_to_tau_v(dust_curve, tau_lam, lam):
             The converted optical depth.
     """
     # Convert to angstrom
-    lam = convert_in_place(lam, "angstrom")
+    lam = lam.to("angstrom")
 
     tau_norm = dust_curve.get_tau(lam)
     return tau_lam / tau_norm

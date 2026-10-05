@@ -13,7 +13,6 @@ from synthesizer.components.component import Component
 from synthesizer.units import (
     Quantity,
     accepts,
-    convert_in_place,
     deepcopy_with_shared_units,
     get_quantity_unit,
 )
@@ -486,8 +485,7 @@ class BlackholesComponent(Component):
         """
         # Derived properties keep the precision of the masses
         self.bolometric_luminosity = convert_array_dtype(
-            convert_in_place(
-                self.epsilon * self.accretion_rate * c**2,
+            (self.epsilon * self.accretion_rate * c**2).to(
                 get_quantity_unit(self, "bolometric_luminosity"),
             ),
             self.mass.dtype,
@@ -517,12 +515,12 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole eddington ratio
         """
-        # Dividing the luminosities cancels their units
+        # Dividing the luminosities cancels their units. NOTE: to_value makes
+        # a copy, which is fine for these small per-blackhole arrays.
         self.eddington_ratio = convert_array_dtype(
-            convert_in_place(
-                self.bolometric_luminosity / self.eddington_luminosity,
+            (self.bolometric_luminosity / self.eddington_luminosity).to_value(
                 "dimensionless",
-            ).ndview,
+            ),
             self.mass.dtype,
         )
 
@@ -551,12 +549,12 @@ class BlackholesComponent(Component):
             unyt_array
                 The black hole accretion rate in units of the Eddington rate.
         """
-        # Dividing the luminosities cancels their units
+        # Dividing the luminosities cancels their units. NOTE: to_value makes
+        # a copy, which is fine for these small per-blackhole arrays.
         self.accretion_rate_eddington = convert_array_dtype(
-            convert_in_place(
-                self.bolometric_luminosity / self.eddington_luminosity,
+            (self.bolometric_luminosity / self.eddington_luminosity).to_value(
                 "dimensionless",
-            ).ndview,
+            ),
             self.mass.dtype,
         )
 

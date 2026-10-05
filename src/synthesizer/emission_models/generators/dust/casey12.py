@@ -25,7 +25,7 @@ from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
 )
 from synthesizer.emissions import LineCollection, Sed
-from synthesizer.units import accepts, convert_in_place
+from synthesizer.units import accepts
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import verify_out_precision
 
@@ -125,7 +125,7 @@ class Casey12(DustEmission):
         b4 = 0.00007243
         lum = (
             (b1 + b2 * alpha) ** -2
-            + (b3 + b4 * alpha) * convert_in_place(temperature, "K").value
+            + (b3 + b4 * alpha) * temperature.to("K").value
         ) ** -1
 
         self.lam_c = (3.0 / 4.0) * lum * um
@@ -287,7 +287,7 @@ class Casey12(DustEmission):
         temperature = params["temperature"]
 
         # Define frequencies
-        nu = convert_in_place(c / lams, Hz)
+        nu = (c / lams).to(Hz)
 
         # Account for CMB heating
         cmb_factor, temperature = self.apply_cmb_heating(
@@ -304,7 +304,7 @@ class Casey12(DustEmission):
         b4 = 0.00007243
         lum = (
             (b1 + b2 * self.alpha) ** -2
-            + (b3 + b4 * self.alpha) * convert_in_place(temperature, "K").value
+            + (b3 + b4 * self.alpha) * temperature.to("K").value
         ) ** -1
 
         lam_c = (3.0 / 4.0) * lum * um
@@ -414,7 +414,7 @@ class Casey12(DustEmission):
         temperature = params["temperature"]
 
         # Define frequencies
-        nu = convert_in_place(c / line_lams, Hz)
+        nu = (c / line_lams).to(Hz)
         sed_nu = sed.nu
 
         # Account for CMB heating
@@ -432,7 +432,7 @@ class Casey12(DustEmission):
         b4 = 0.00007243
         lum = (
             (b1 + b2 * self.alpha) ** -2
-            + (b3 + b4 * self.alpha) * convert_in_place(temperature, "K").value
+            + (b3 + b4 * self.alpha) * temperature.to("K").value
         ) ** -1
 
         lam_c = (3.0 / 4.0) * lum * um

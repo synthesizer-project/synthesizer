@@ -124,10 +124,9 @@ class TestCombineArrays:
         assert combined.units == arr1.units
         np.testing.assert_allclose(combined.value, [1e6, 2e6, 3e6, 4e6])
 
-        # The second array is converted in place rather than copied, so it
-        # carries a record of the conversion
-        assert arr2.units == unyt.yr
-        np.testing.assert_allclose(arr2.to_value("Myr"), [3.0, 4.0])
+        # The input arrays are left untouched
+        assert arr2.units == unyt.Myr
+        np.testing.assert_allclose(arr2.value, [3.0, 4.0])
 
 
 class TestPrecisionConfig:

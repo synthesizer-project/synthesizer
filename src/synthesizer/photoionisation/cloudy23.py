@@ -15,7 +15,6 @@ from synthesizer.exceptions import (
 )
 from synthesizer.photoionisation import calculate_Q_from_U
 from synthesizer.synth_warnings import warn
-from synthesizer.units import convert_in_place
 
 
 class ShapeCommands:
@@ -60,7 +59,7 @@ class ShapeCommands:
         E = h * nu
 
         # define energy in units of Rydbergs
-        E_Ryd = convert_in_place(E, "Ry").ndview
+        E_Ryd = E.to("Ry").value
 
         # get rid of negative/zero luminosities, which are unphysical and seem
         # to make cloudy break

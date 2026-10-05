@@ -25,7 +25,6 @@ from scipy.integrate import cumulative_trapezoid as cumtrapz
 from unyt import Gyr, unyt_array, yr
 
 from synthesizer import exceptions
-from synthesizer.units import convert_in_place
 from synthesizer.utils.stats import weighted_mean, weighted_median
 
 # Define a list of the available parametrisations
@@ -315,10 +314,10 @@ class Common:
         pstr += str(self.__class__) + "\n"
         for parameter_name, parameter_value in self.parameters.items():
             pstr += f"{parameter_name}: {parameter_value}" + "\n"
-        median_age = convert_in_place(self.calculate_median_age(), "Myr")
-        mean_age = convert_in_place(self.calculate_mean_age(), "Myr")
-        pstr += f"median age: {median_age:.2f}" + "\n"
-        pstr += f"mean age: {mean_age:.2f}" + "\n"
+        pstr += (
+            f"median age: {self.calculate_median_age().to('Myr'):.2f}" + "\n"
+        )
+        pstr += f"mean age: {self.calculate_mean_age().to('Myr'):.2f}" + "\n"
         pstr += "-" * 10 + "\n"
 
         return pstr
@@ -372,8 +371,8 @@ class Constant(Common):
         )
 
         # Set the model parameters
-        self.max_age = convert_in_place(max_age, "yr").value
-        self.min_age = convert_in_place(min_age, "yr").value
+        self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
     def _sfr(self, age):
         """Get the amount SFR weight in a single age bin.
@@ -440,10 +439,10 @@ class Gaussian(Common):
         )
 
         # Set the model parameters
-        self.peak_age = convert_in_place(peak_age, "yr").value
-        self.sigma = convert_in_place(sigma, "yr").value
-        self.max_age = convert_in_place(max_age, "yr").value
-        self.min_age = convert_in_place(min_age, "yr").value
+        self.peak_age = peak_age.to("yr").value
+        self.sigma = sigma.to("yr").value
+        self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
     def _sfr(self, age):
         """Get the amount SFR weight in a single age bin.
@@ -516,9 +515,9 @@ class Exponential(Common):
         )
 
         # Set the model parameters
-        self.tau = convert_in_place(tau, "yr").value
-        self.max_age = convert_in_place(max_age, "yr").value
-        self.min_age = convert_in_place(min_age, "yr").value
+        self.tau = tau.to("yr").value
+        self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
     def _sfr(self, age):
         """Get the amount SFR weight in a single age bin.
@@ -661,9 +660,9 @@ class DelayedExponential(Common):
         )
 
         # Set the model parameters
-        self.tau = convert_in_place(tau, "yr").value
-        self.max_age = convert_in_place(max_age, "yr").value
-        self.min_age = convert_in_place(min_age, "yr").value
+        self.tau = tau.to("yr").value
+        self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
     def _sfr(self, age):
         """Get the amount SFR weight in a single age bin.
@@ -739,10 +738,10 @@ class LogNormal(Common):
         )
 
         # Set the model parameters
-        self.peak_age = convert_in_place(peak_age, "yr").value
+        self.peak_age = peak_age.to("yr").value
         self.tau = tau
-        self.max_age = convert_in_place(max_age, "yr").value
-        self.min_age = convert_in_place(min_age, "yr").value
+        self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
         # Calculate the relative ages and peak for the calculation
         self.tpeak = self.max_age - self.peak_age
@@ -830,11 +829,11 @@ class DoublePowerLaw(Common):
         )
 
         # Set the model parameters
-        self.peak_age = convert_in_place(peak_age, "yr").value
+        self.peak_age = peak_age.to("yr").value
         self.alpha = alpha
         self.beta = beta
-        self.max_age = convert_in_place(max_age, "yr").value
-        self.min_age = convert_in_place(min_age, "yr").value
+        self.max_age = max_age.to("yr").value
+        self.min_age = min_age.to("yr").value
 
     def _sfr(self, age):
         """Get the amount SFR weight in a single age bin.
@@ -1104,7 +1103,7 @@ class Continuity(Common):
                 "agebins must be a 2D array with shape (N, 2)"
             )
 
-            agebins = np.log10(convert_in_place(agebins, "yr").ndview)
+            agebins = np.log10(agebins.to("yr").value)
 
         nbins = agebins.shape[0]
         # Set default logsfr_ratios if not provided (nbins-1 ratios needed)
@@ -1134,8 +1133,8 @@ class Continuity(Common):
 
         self.logsfr_ratios = logsfr_ratios
         self.agebins = agebins
-        self.min_age = convert_in_place(min_age, "yr").value
-        self.max_age = convert_in_place(max_age, "yr").value
+        self.min_age = min_age.to("yr").value
+        self.max_age = max_age.to("yr").value
         # Calculate masses using transformation function
         self.masses = self._logsfr_ratios_to_masses()
 
@@ -1308,9 +1307,7 @@ class ContinuityFlex(Common):
                 "fixed_young_bin must be a list of [start, end] ages"
             )
             if isinstance(fixed_young_bin, unyt_array):
-                fixed_young_bin = convert_in_place(
-                    fixed_young_bin, "yr"
-                ).ndview
+                fixed_young_bin = fixed_young_bin.to("yr").value
                 fixed_young_bin = np.log10(fixed_young_bin)
 
         if fixed_old_bin is None:
@@ -1321,7 +1318,7 @@ class ContinuityFlex(Common):
                 "fixed_old_bin must be a list of [start, end] ages"
             )
             if isinstance(fixed_old_bin, unyt_array):
-                fixed_old_bin = convert_in_place(fixed_old_bin, "yr").ndview
+                fixed_old_bin = fixed_old_bin.to("yr").value
                 fixed_old_bin = np.log10(fixed_old_bin)
 
         # Initialize parent
@@ -1343,8 +1340,8 @@ class ContinuityFlex(Common):
         self.logsfr_ratios = logsfr_ratios
         self.fixed_young_bin = np.array(fixed_young_bin)
         self.fixed_old_bin = np.array(fixed_old_bin)
-        self.min_age = convert_in_place(min_age, "yr").value
-        self.max_age = convert_in_place(max_age, "yr").value
+        self.min_age = min_age.to("yr").value
+        self.max_age = max_age.to("yr").value
 
         # Calculate age bins and masses
         self.agebins = self._logsfr_ratios_to_agebins()
@@ -1538,7 +1535,7 @@ class Dirichlet(Common):
                 "agebins must be a 2D array with shape (N, 2)"
             )
 
-            agebins = convert_in_place(agebins, "yr").ndview
+            agebins = agebins.to("yr").value
             agebins = np.log10(agebins)
 
         nbins = agebins.shape[0]
@@ -1573,8 +1570,8 @@ class Dirichlet(Common):
         # Store parameters
         self.z_fraction = z_fraction
         self.agebins = agebins
-        self.min_age = convert_in_place(min_age, "yr").value
-        self.max_age = convert_in_place(max_age, "yr").value
+        self.min_age = min_age.to("yr").value
+        self.max_age = max_age.to("yr").value
 
         # Calculate masses
         self.masses = self._zfrac_to_masses()
@@ -1794,12 +1791,12 @@ class ContinuityPSB(Common):
         self.logsfr_ratio_young = logsfr_ratio_young
         self.logsfr_ratio_old = np.array(logsfr_ratio_old)
         self.logsfr_ratios = np.array(logsfr_ratios)
-        self.tlast = convert_in_place(tlast, "yr").value
-        self.tflex = convert_in_place(tflex, "yr").value
+        self.tlast = tlast.to("yr").value
+        self.tflex = tflex.to("yr").value
         self.nflex = nflex
         self.nfixed = nfixed
-        self.min_age = convert_in_place(min_age, "yr").value
-        self.max_age = convert_in_place(max_age, "yr").value
+        self.min_age = min_age.to("yr").value
+        self.max_age = max_age.to("yr").value
 
         # Calculate age bins and masses from parameters
         self.agebins = self._calculate_agebins()

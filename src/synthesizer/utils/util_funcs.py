@@ -14,7 +14,7 @@ from unyt import Hz, K, Unit, cm, erg, pc, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.synth_warnings import warn
-from synthesizer.units import accepts, convert_in_place
+from synthesizer.units import accepts
 
 
 @accepts(frequency=Hz, temperature=K)
@@ -44,7 +44,7 @@ def planck(frequency, temperature):
     lnu = spectral_radiance * 4 * np.pi * (10 * pc) ** 2
 
     # Convert the result to erg/s/Hz and return
-    return convert_in_place(lnu, erg / s / Hz)
+    return lnu.to(erg / s / Hz)
 
 
 @lru_cache(maxsize=128)
@@ -61,7 +61,7 @@ def _get_attr_unit_conversion_cached(from_unit, to_unit):
         float:
             Scalar conversion factor from ``from_unit`` to ``to_unit``.
     """
-    return convert_in_place(1 * Unit(from_unit), Unit(to_unit)).value
+    return (1 * Unit(from_unit)).to_value(Unit(to_unit))
 
 
 def get_attr_unit_conversion(from_unit, to_unit):
@@ -92,7 +92,7 @@ def get_distance_in_cm(distance_pc=10.0):
         float:
             Distance converted to centimetres.
     """
-    return convert_in_place(distance_pc * pc, cm).value
+    return (distance_pc * pc).to_value(cm)
 
 
 def ensure_array_buffer(obj, attr_name, shape_like, dtype=None):
@@ -385,7 +385,7 @@ def wavelengths_to_rgba(wavelengths, gamma=0.8):
     # If wavelengths provided as a unyt_array convert to nm otherwise assume
     # in Angstrom and convert.
     if isinstance(wavelengths, unyt_array):
-        wavelengths_ = convert_in_place(wavelengths, "nm").ndview
+        wavelengths_ = wavelengths.to("nm").ndview
     else:
         wavelengths_ = wavelengths / 10.0
 
@@ -435,14 +435,14 @@ def combine_arrays(arr1, arr2, verbose=False):
         return None
 
     # Arrays with compatible but different units (e.g. ages in yr and Myr)
-    # are combined in the units of the first array. Convert in place rather
-    # than copying, the caller's array carries a record of the conversion.
+    # are combined in the units of the first array. Convert out of place so
+    # the caller's array is left untouched.
     if (
         isinstance(arr1, unyt_array)
         and isinstance(arr2, unyt_array)
         and arr1.units != arr2.units
     ):
-        arr2 = convert_in_place(arr2, arr1.units)
+        arr2 = arr2.to(arr1.units)
 
     # Combine them
     return np.concatenate([arr1, arr2])

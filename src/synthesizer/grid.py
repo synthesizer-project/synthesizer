@@ -46,7 +46,6 @@ from synthesizer.units import (
     Quantity,
     Units,
     accepts,
-    convert_in_place,
     deepcopy_with_shared_units,
     get_quantity_unit,
 )
@@ -278,9 +277,7 @@ class Grid:
         ):
             return
 
-        factor = convert_in_place(
-            unyt_quantity(1.0, Units().luminosity), "erg/s"
-        ).value
+        factor = unyt_quantity(1.0, Units().luminosity).to_value("erg/s")
         for spectra in self.spectra.values():
             spectra *= factor
         for cont in self.line_conts.values():
@@ -364,9 +361,7 @@ class Grid:
         # to the internal mass unit, and only then reduced to the grid's
         # precision (the axes are tiny so this intermediate copy is cheap)
         mass_units = Units().mass
-        values = convert_in_place(
-            unyt_array(dset[...], units), mass_units
-        ).ndview
+        values = unyt_array(dset[...], units).to_value(mass_units)
         return values.astype(self._dtype), str(mass_units)
 
     def _ensure_axis_data_contiguous(self):
@@ -630,7 +625,7 @@ class Grid:
             lam_units = hf[spectra_key + "/wavelength"].attrs.get("Units")
             if lam_units is None:
                 lam_units = angstrom
-            self.lam = convert_in_place(unyt_array(lams, lam_units), angstrom)
+            self.lam = unyt_array(lams, lam_units).to(angstrom)
 
             # Get all our spectra
             for spectra_id in spectra_to_read:
@@ -677,9 +672,7 @@ class Grid:
             # Read the line wavelengths
             lams = self._read_floats(hf["lines"]["wavelength"])
             lam_units = hf["lines"]["wavelength"].attrs.get("Units")
-            self.line_lams = convert_in_place(
-                unyt_array(lams, lam_units), angstrom
-            )
+            self.line_lams = unyt_array(lams, lam_units).to(angstrom)
 
             # Get the units, we only do this once since all the
             # luminosities and continuums will have the same units
@@ -946,7 +939,7 @@ class Grid:
             # Read the line wavelengths
             lams = self._read_floats(hf["lines"]["wavelength"])
             lam_units = hf["lines"]["wavelength"].attrs.get("Units")
-            lams = convert_in_place(unyt_array(lams, lam_units), angstrom)
+            lams = unyt_array(lams, lam_units).to(angstrom)
 
         return lines, lams
 
@@ -1109,7 +1102,7 @@ class Grid:
                 shape as the source spectra, but with the wavelength axis
                 removed.
         """
-        lam = np.atleast_1d(convert_in_place(lam, angstrom))
+        lam = np.atleast_1d(lam.to(angstrom))
         if lam.size != 1:
             raise exceptions.InconsistentArguments(
                 "get_spectra_at_lam expects exactly one wavelength."
@@ -1690,7 +1683,7 @@ class Grid:
         # First do we need a conversion?
         if isinstance(array, unyt_array) and isinstance(value, unyt_quantity):
             if array.units != value.units:
-                value = convert_in_place(value, array.units)
+                value = value.to(array.units)
 
         # Get the values
         if isinstance(array, unyt_array):
@@ -2303,7 +2296,7 @@ class Grid:
             if axis in normalized_kwargs:
                 val = normalized_kwargs.pop(axis)
                 if isinstance(val, (unyt_array, unyt_quantity)):
-                    val = convert_in_place(val, grid_axis_units).ndview
+                    val = val.to(grid_axis_units).value
                 else:
                     val = np.asarray(val)
 
@@ -2717,7 +2710,7 @@ class Grid:
         cax.set_yticks([])
 
         # Set custom tick marks
-        ax.set_yticks(y, self.metallicities.ndview)
+        ax.set_yticks(y, self.metallicities.to_value())
         ax.minorticks_off()
 
         # Set labels
@@ -2920,7 +2913,7 @@ class Template:
 
         # Normalise, just in case
         self.normalisation = sed.bolometric_luminosity
-        self._sed._lnu /= convert_in_place(self.normalisation, Lsun).value
+        self._sed._lnu /= self.normalisation.to_value(Lsun)
 
     @accepts(bolometric_luminosity=Lsun)
     @verify_out_precision()

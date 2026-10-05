@@ -13,7 +13,7 @@ from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
 )
 from synthesizer.emissions import LineCollection, Sed
-from synthesizer.units import accepts, convert_in_place
+from synthesizer.units import accepts
 from synthesizer.utils import planck
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import verify_out_precision
@@ -150,7 +150,7 @@ class Blackbody(DustEmission):
         temperature = params["temperature"]
 
         # Define frequencies
-        nu = convert_in_place(c / lams, Hz)
+        nu = (c / lams).to(Hz)
 
         # Account for CMB heating
         cmb_factor, temperature = self.apply_cmb_heating(
@@ -247,7 +247,7 @@ class Blackbody(DustEmission):
         temperature = params["temperature"]
 
         # Define frequencies
-        nu = convert_in_place(c / line_lams, Hz)
+        nu = (c / line_lams).to(Hz)
         sed_nu = sed.nu
 
         # Account for CMB heating
