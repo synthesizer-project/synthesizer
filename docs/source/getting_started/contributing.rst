@@ -101,6 +101,23 @@ Some specific examples of common style issues:
 
 - Inheritance should use ``Parent.__init__`` instansiation of the parent class over ``super()`` for clarity. While this is against the usual guidelines, we feel this is clearer for new users and developers, and is therefore worth the exception.
 
+What belongs in the repository
+------------------------------
+
+The Synthesizer repository should only contain source code, tests, documentation sources (reStructuredText, notebooks and example scripts) and the configuration needed to build and run them. Keeping binary files out keeps clones small and the history clean.
+
+**Data never belongs in the repository.** This applies to all data files, big or small: grids, simulation outputs, test data, HDF5/FITS/NumPy/CSV files, profiling outputs and the like. Data needed by tests, examples or the documentation should be hosted externally and fetched with ``synthesizer-download`` (see `Test data`_).
+
+**Plots, images and other static assets belong in** `synventory <https://github.com/synthesizer-project/synventory>`_. This includes documentation figures, logos and branding, diagrams, publication thumbnails and profiling/scaling plots. Add the file to the appropriate directory in synventory (e.g. ``branding/``, ``diagrams/``, ``profiling/``, ``publications/``) and reference it from the documentation by its raw URL:
+
+.. code-block:: rst
+
+   .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/diagrams/synthesizer_flowchart.png
+
+Figures produced by notebooks and ``plot_*.py`` examples are generated when the documentation is built, so they should not be saved to disk or committed anywhere.
+
+The pre-commit hooks (see `Setting up pre-commit hooks`_) offer some protection against accidentally committing files that shouldn't be included: the ``check-added-large-files`` hook will reject any newly added file over 500 kB. This is only a safety net though, small data files and images will pass straight through, so please check what you are staging before you commit.
+
 Development documentation 
 -------------------------
 
@@ -195,3 +212,8 @@ If you are writing C extensions for Synthesizer you ran include debugging checks
 To activate debugging checks, install with ``WITH_DEBUGGING_CHECKS=1 pip install .``.
 
 It is also advisable to turn warnings into errors by including ``-Werror`` in the CFLAGS; however, the Python source code itself will fail with this turned on for some compilers because it does produce some warnings (observed with gcc). Keep this in mind. We provide a ``RUTHLESS`` config option which will treat warnings as errors. 
+
+Becoming a core member
+----------------------
+
+In the event of "significant and ongoing contribution to the project" we will invite the contributor to become a full member of the core team. This could be contributing sufficiently large new functionality into Synthesizer itself, maintaining existing functionality through ongoing code review and bug fixes, or developing a new package in the Synthesizer "family". Core membership does not impart much beyond a warm fuzzy feeling, a front row seat to internal arguments in ``#core``, and "Member" status in the Synthesizer GitHub Organisation, but we state this here as a clear threshold for those interested.
