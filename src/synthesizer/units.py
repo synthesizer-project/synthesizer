@@ -85,36 +85,6 @@ def _load_and_convert_unit_categories() -> dict:
 UNIT_CATEGORIES = _load_and_convert_unit_categories()
 
 
-def _deepcopy_unit(unit, memo):
-    """Share Unit objects when deep copying instead of duplicating them.
-
-    unyt deep copies a Unit by deep copying its entire unit registry, and
-    ignores the memo while doing so, which costs milliseconds and a full
-    registry's worth of memory for every array copied. Quantities store
-    unyt_arrays so copying any object holding them (e.g. an Instrument) pays
-    this per attribute. Units are immutable in practice so sharing them is
-    safe, and it keeps a stored Quantity's own unit object so the identity
-    check in _QuantityView still applies to copies.
-
-    Args:
-        unit (unyt.Unit):
-            The unit being copied.
-        memo (dict):
-            The deepcopy memo (unused).
-
-    Returns:
-        unyt.Unit:
-            The same unit.
-    """
-    return unit
-
-
-# NOTE: This is registered process wide since unyt_array.__deepcopy__ calls
-# copy.deepcopy on its units without a memo, so there is nowhere more local
-# to hook in.
-copy._deepcopy_dispatch[Unit] = _deepcopy_unit
-
-
 def unit_is_compatible(value, unit):
     """Check if two values have compatible units.
 
@@ -638,6 +608,44 @@ def _attach_unit(value, unit):
     if numpy.ndim(value) == 0:
         return unyt_quantity(value, unit)
     return unyt_array(value, unit)
+
+
+def deepcopy_with_shared_units(self, memo):
+    """Deep copy an object while sharing the units of the unyt arrays it holds.
+
+    This is assigned as ``__deepcopy__`` on classes holding Quantities. unyt
+    deep copies a Unit by deep copying its entire unit registry (ignoring the
+    memo), which costs milliseconds and a full registry's worth of memory for
+    every array copied. Units are immutable in practice so sharing them is
+    safe, and it keeps each Quantity's own unit object so the identity check
+    in _QuantityView still applies to the copy. The array data and every
+    other attribute are deep copied as normal.
+
+    Args:
+        self (object):
+            The object to copy.
+        memo (dict):
+            The deepcopy memo.
+
+    Returns:
+        object:
+            The deep copy.
+    """
+    cls = type(self)
+    new = cls.__new__(cls)
+    memo[id(self)] = new
+    for key, value in self.__dict__.items():
+        # Only plain unyt types, subclasses (e.g. yt's) get their own copy
+        if (
+            type(value) in (unyt_array, unyt_quantity)
+            and id(value) not in memo
+        ):
+            copied = _attach_unit(value.ndview.copy(order="K"), value.units)
+            memo[id(value)] = copied
+            new.__dict__[key] = copied
+        else:
+            new.__dict__[key] = copy.deepcopy(value, memo)
+    return new
 
 
 class _QuantityView:

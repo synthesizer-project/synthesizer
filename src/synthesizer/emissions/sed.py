@@ -63,6 +63,7 @@ from synthesizer.units import (
     Units,
     accepts,
     convert_in_place,
+    deepcopy_with_shared_units,
     get_array_quantity_view,
     get_quantity_unit,
 )
@@ -118,6 +119,9 @@ class Sed:
     fnu = Quantity("flux_density_frequency")
     obsnu = Quantity("frequency")
     obslam = Quantity("wavelength")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
     @timed("Sed.__init__")

@@ -47,6 +47,7 @@ from synthesizer.units import (
     Units,
     accepts,
     convert_in_place,
+    deepcopy_with_shared_units,
     get_quantity_unit,
 )
 from synthesizer.utils.ascii_table import TableFormatter
@@ -114,6 +115,9 @@ class Grid:
     # Define Quantities
     lam = Quantity("wavelength")
     line_lams = Quantity("wavelength")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(new_lam=angstrom)
     @timed("Grid.__init__")
@@ -2876,6 +2880,9 @@ class Template:
     # Define Quantities
     lam = Quantity("wavelength")
     lnu = Quantity("luminosity_density_frequency")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
     def __init__(

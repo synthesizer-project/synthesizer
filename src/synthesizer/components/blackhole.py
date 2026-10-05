@@ -14,6 +14,7 @@ from synthesizer.units import (
     Quantity,
     accepts,
     convert_in_place,
+    deepcopy_with_shared_units,
     get_quantity_unit,
 )
 from synthesizer.utils import (
@@ -103,6 +104,9 @@ class BlackholesComponent(Component):
     eddington_luminosity = Quantity("luminosity_solar")
     bb_temperature = Quantity("temperature")
     mass = Quantity("mass")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(
         mass=Msun.in_base("galactic"),

@@ -81,6 +81,7 @@ from synthesizer.units import (
     Quantity,
     accepts,
     convert_in_place,
+    deepcopy_with_shared_units,
     get_array_quantity_view,
     get_quantity_unit,
 )
@@ -141,6 +142,9 @@ class LineCollection:
     continuum_flux = Quantity("flux_density_frequency")
     obslam = Quantity("wavelength")
     vacuum_wavelength = Quantity("wavelength")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(lam=angstrom, lum=Lsun, cont=erg / s / Hz)
     @timed("LineCollection.__init__")

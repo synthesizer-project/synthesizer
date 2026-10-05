@@ -1,5 +1,7 @@
 """A test suite for testing the Sed class."""
 
+import copy
+
 import numpy as np
 import pytest
 from astropy.cosmology import Planck18
@@ -185,6 +187,18 @@ def test_quantity_in_place_conversion_keeps_units_consistent():
 
     # The private value is still in the internal unit system
     assert np.allclose(sed._lnu, 1.0)
+
+
+def test_deepcopy_shares_units_and_copies_data():
+    """Deep copies must copy Quantity data but share the unit objects."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    sed = Sed(lam=lam, lnu=np.ones(8) * erg / s / Hz)
+
+    sed_copy = copy.deepcopy(sed)
+
+    assert sed_copy.lnu.units is sed.lnu.units
+    assert not np.shares_memory(sed_copy._lnu, sed._lnu)
+    assert np.array_equal(sed_copy.lnu, sed.lnu)
 
 
 def test_quantity_set_converts_in_place_without_copying():

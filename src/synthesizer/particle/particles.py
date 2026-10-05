@@ -20,6 +20,7 @@ from synthesizer.units import (
     Quantity,
     accepts,
     convert_in_place,
+    deepcopy_with_shared_units,
     get_quantity_unit,
 )
 from synthesizer.utils import TableFormatter
@@ -71,6 +72,9 @@ class Particles:
     softening_lengths = Quantity("spatial")
     centre = Quantity("spatial")
     radii = Quantity("spatial")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(
         coordinates=Mpc,
