@@ -513,12 +513,12 @@ class BlackholesComponent(Component):
             unyt_array:
                 The black hole eddington ratio
         """
-        # Dividing the luminosities cancels their units. NOTE: to_value makes
-        # a copy, which is fine for these small per-blackhole arrays.
+        # Dividing the luminosities cancels their units
         self.eddington_ratio = convert_array_dtype(
-            (self.bolometric_luminosity / self.eddington_luminosity).to_value(
+            convert_in_place(
+                self.bolometric_luminosity / self.eddington_luminosity,
                 "dimensionless",
-            ),
+            ).ndview,
             self.mass.dtype,
         )
 
@@ -547,12 +547,12 @@ class BlackholesComponent(Component):
             unyt_array
                 The black hole accretion rate in units of the Eddington rate.
         """
-        # Dividing the luminosities cancels their units. NOTE: to_value makes
-        # a copy, which is fine for these small per-blackhole arrays.
+        # Dividing the luminosities cancels their units
         self.accretion_rate_eddington = convert_array_dtype(
-            (self.bolometric_luminosity / self.eddington_luminosity).to_value(
+            convert_in_place(
+                self.bolometric_luminosity / self.eddington_luminosity,
                 "dimensionless",
-            ),
+            ).ndview,
             self.mass.dtype,
         )
 

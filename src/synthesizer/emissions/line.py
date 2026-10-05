@@ -1055,7 +1055,9 @@ class LineCollection:
 
         # Compute flux and observed continuum in one threaded pass, folding
         # the unit conversion into the scale factors
-        area = (4 * np.pi * luminosity_distance**2).to_value("cm**2")
+        area = convert_in_place(
+            4 * np.pi * luminosity_distance**2, "cm**2"
+        ).value
         nspec = self._luminosity.shape[0]
         self.flux, self.continuum_flux = scale_line_arrays(
             self._luminosity,

@@ -259,9 +259,9 @@ class Particles:
                 )
 
         # Ensure the distances are in the right units
-        x = cent_coords[:, 0].value
-        y = cent_coords[:, 1].value
-        d = los_dists.to_value(cent_coords.units)
+        x = cent_coords[:, 0].ndview
+        y = cent_coords[:, 1].ndview
+        d = convert_in_place(los_dists, cent_coords.units).ndview
 
         # Get the angular coordinates and store them in a (N, 3) array
         coords = np.zeros((self.nparticles, 3), dtype=np.float64)
@@ -338,7 +338,7 @@ class Particles:
                 )
 
         # Ensure the distances are in the right units
-        d = los_dists.to_value(self.smoothing_lengths.units)
+        d = convert_in_place(los_dists, self.smoothing_lengths.units).ndview
 
         # Calculate and return the projected angular smoothing lengths
         projected_smoothing_lengths = np.ascontiguousarray(

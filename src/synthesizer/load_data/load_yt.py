@@ -1692,8 +1692,8 @@ def _infer_centre(stars, gas, black_holes):
             continue
 
         unit = coordinates.units
-        coords = coordinates.to_value(unit)
-        w = np.ravel(weights.to_value(weights.units))
+        coords = coordinates.ndview
+        w = np.ravel(weights.ndview)
         if w.shape[0] == coords.shape[0]:
             return unyt_array(np.average(coords, axis=0, weights=w), unit)
         return unyt_array(np.mean(coords, axis=0), unit)
@@ -1705,7 +1705,7 @@ def _infer_centre(stars, gas, black_holes):
         if coordinates is not None and coordinates.shape[0] > 0:
             unit = coordinates.units
             return unyt_array(
-                np.mean(coordinates.to_value(unit), axis=0),
+                np.mean(coordinates.ndview, axis=0),
                 unit,
             )
 

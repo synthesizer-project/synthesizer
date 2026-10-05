@@ -61,7 +61,7 @@ def _get_attr_unit_conversion_cached(from_unit, to_unit):
         float:
             Scalar conversion factor from ``from_unit`` to ``to_unit``.
     """
-    return (1 * Unit(from_unit)).to_value(Unit(to_unit))
+    return convert_in_place(1 * Unit(from_unit), Unit(to_unit)).value
 
 
 def get_attr_unit_conversion(from_unit, to_unit):
@@ -92,7 +92,7 @@ def get_distance_in_cm(distance_pc=10.0):
         float:
             Distance converted to centimetres.
     """
-    return (distance_pc * pc).to_value(cm)
+    return convert_in_place(distance_pc * pc, cm).value
 
 
 def ensure_array_buffer(obj, attr_name, shape_like, dtype=None):

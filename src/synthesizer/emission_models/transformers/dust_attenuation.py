@@ -533,8 +533,8 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
     # it did not.
     dtype = lam.dtype if lam.dtype.kind == "f" else np.dtype(np.float64)
     _lam = np.linspace(0.01, 3.0, 10000, endpoint=True, dtype=dtype)
-    _cent_lam = dtype.type(cent_lam.to_value("um"))
-    _gamma = dtype.type(gamma.to_value("um"))
+    _cent_lam = dtype.type(convert_in_place(cent_lam, "um").value)
+    _gamma = dtype.type(convert_in_place(gamma, "um").value)
     lam_v = dtype.type(0.55)  # in um
 
     k_lam = np.zeros_like(_lam)
@@ -589,7 +589,7 @@ def N09Tau(lam, slope, cent_lam, ampl, gamma):
 
     # Query at the wavelength dtype: unyt's own conversion widens, and a
     # widened query would pull a widened result back out of the interpolation.
-    return func(np.asarray(lam.to_value("um"), dtype=dtype))
+    return func(np.asarray(convert_in_place(lam, "um").ndview, dtype=dtype))
 
 
 class Calzetti2000(AttenuationLaw):

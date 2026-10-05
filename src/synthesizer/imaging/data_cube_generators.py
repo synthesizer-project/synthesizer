@@ -166,8 +166,8 @@ def _generate_ifu_particle_hist(
         spatial_units = ifu.resolution.units
 
         # Get some IFU properties we'll need
-        fov = ifu.fov.to_value(spatial_units)
-        res = ifu.resolution.to_value(spatial_units)
+        fov = convert_in_place(ifu.fov, spatial_units).ndview
+        res = convert_in_place(ifu.resolution, spatial_units).value
 
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
@@ -313,8 +313,8 @@ def _generate_ifu_particle_smoothed(
         spatial_units = ifu.resolution.units
 
         # Get some IFU properties we'll need
-        fov = ifu.fov.to_value(spatial_units)
-        res = ifu.resolution.to_value(spatial_units)
+        fov = convert_in_place(ifu.fov, spatial_units).ndview
+        res = convert_in_place(ifu.resolution, spatial_units).value
 
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
@@ -335,7 +335,9 @@ def _generate_ifu_particle_smoothed(
     # Generate the smoothed IFU from the prepared particle inputs
     ifu.arr = make_img(
         spectra,
-        np.ascontiguousarray(smoothing_lengths.to_value(spatial_units)),
+        np.ascontiguousarray(
+            convert_in_place(smoothing_lengths, spatial_units).ndview
+        ),
         np.ascontiguousarray(_coords),
         kernel_arr,
         res,

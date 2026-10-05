@@ -608,11 +608,9 @@ class Sed:
                 The factor including the unit conversion, at the precision
                 of lnu.
         """
-        return (
-            (factor * get_quantity_unit(self, "lnu"))
-            .to_value(units)
-            .astype(self._lnu.dtype)
-        )
+        return convert_in_place(
+            factor * get_quantity_unit(self, "lnu"), units
+        ).ndview.astype(self._lnu.dtype)
 
     @property
     def flux(self):
@@ -1304,7 +1302,9 @@ class Sed:
         one_plus_z = 1.0 + z_obs
         # d_L is set by the cosmological z, rescaled to the observed frame
         # (factor 1 when there is no peculiar velocity).
-        luminosity_distance_cm = get_luminosity_distance(cosmo, z).to_value(cm)
+        luminosity_distance_cm = convert_in_place(
+            get_luminosity_distance(cosmo, z), cm
+        ).value
         luminosity_distance_cm *= one_plus_z / (1.0 + float(z))
         conversion = (
             get_attr_unit_conversion(
@@ -2023,7 +2023,7 @@ class Sed:
             """Get the log-lambda broadening kernel."""
             # Convert velocity sigma to log-lambda sigma. Delta x = ln(lambda)
             # gives Delta v = c * Delta x.
-            sigma_x = (this_sigma_v / c).to_value("")
+            sigma_x = convert_in_place(this_sigma_v / c, "").ndview
             kernel = np.exp(-(kernel_x**2) / (2 * sigma_x**2))
             kernel /= kernel.sum()
             return kernel

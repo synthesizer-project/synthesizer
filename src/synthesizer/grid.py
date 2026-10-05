@@ -274,7 +274,9 @@ class Grid:
         ):
             return
 
-        factor = unyt_quantity(1.0, Units().luminosity).to_value("erg/s")
+        factor = convert_in_place(
+            unyt_quantity(1.0, Units().luminosity), "erg/s"
+        ).value
         for spectra in self.spectra.values():
             spectra *= factor
         for cont in self.line_conts.values():
@@ -358,7 +360,9 @@ class Grid:
         # to the internal mass unit, and only then reduced to the grid's
         # precision (the axes are tiny so this intermediate copy is cheap)
         mass_units = Units().mass
-        values = unyt_array(dset[...], units).to_value(mass_units)
+        values = convert_in_place(
+            unyt_array(dset[...], units), mass_units
+        ).ndview
         return values.astype(self._dtype), str(mass_units)
 
     def _ensure_axis_data_contiguous(self):
@@ -2709,7 +2713,7 @@ class Grid:
         cax.set_yticks([])
 
         # Set custom tick marks
-        ax.set_yticks(y, self.metallicities.to_value())
+        ax.set_yticks(y, self.metallicities.ndview)
         ax.minorticks_off()
 
         # Set labels
@@ -2909,7 +2913,7 @@ class Template:
 
         # Normalise, just in case
         self.normalisation = sed.bolometric_luminosity
-        self._sed._lnu /= self.normalisation.to_value(Lsun)
+        self._sed._lnu /= convert_in_place(self.normalisation, Lsun).value
 
     @accepts(bolometric_luminosity=Lsun)
     @verify_out_precision()
