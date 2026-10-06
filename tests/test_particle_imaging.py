@@ -398,6 +398,21 @@ class TestImageCollection:
         with pytest.raises(InconsistentArguments):
             collection.make_rgb_image({"X": ["red"]})
 
+    def test_make_rgb_image_duplicate_channel(self):
+        """Test keys naming the same channel in different cases raise."""
+        res, fov = 1 * kpc, 4 * kpc
+        collection = ImageCollection(
+            res,
+            fov,
+            imgs={
+                "a": Image(res, fov, img=np.ones((4, 4))),
+                "b": Image(res, fov, img=np.ones((4, 4))),
+            },
+        )
+
+        with pytest.raises(InconsistentArguments, match="Duplicate"):
+            collection.make_rgb_image({"R": ["a"], "r": ["b"]})
+
 
 class TestSpectralCube:
     """Test SpectralCube functionality."""

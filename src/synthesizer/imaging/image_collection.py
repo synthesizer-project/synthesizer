@@ -1073,6 +1073,15 @@ class ImageCollection(ImagingBase):
             raise exceptions.InconsistentArguments(
                 f"rgb_filters keys must be 'R', 'G' or 'B' (got {invalid})."
             )
+        seen_channels = set()
+        for rgb in rgb_filters:
+            channel = rgb.upper()
+            if channel in seen_channels:
+                raise exceptions.InconsistentArguments(
+                    f"Duplicate RGB channel key: {rgb!r}. "
+                    "Channel keys are case insensitive."
+                )
+            seen_channels.add(channel)
         rgb_filters = {
             rgb: [filts] if isinstance(filts, str) else filts
             for rgb, filts in rgb_filters.items()
