@@ -26,6 +26,7 @@ from unyt import kpc, mas, unyt_array
 from unyt.dimensions import angle, length
 
 from synthesizer import exceptions
+from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 
@@ -383,7 +384,7 @@ class Gaussian2DAnnuli(Gaussian2D):
         stddev_y: (float): The standard deviation along the y-axis.
         rho: (float): The population correlation coefficient between x and y.
         radii (list of float): The radii defining the annuli.
-        annulus_index (int): Index of the annulus to be used.
+        annulus (int): Index of the annulus to be used when imaging.
     """
 
     @accepts(
@@ -401,6 +402,7 @@ class Gaussian2DAnnuli(Gaussian2D):
         stddev_y,
         radii,
         rho=0,
+        annulus=None,
     ):
         """Initialise the Gaussian morphology with optional annulus masking.
 
@@ -415,6 +417,8 @@ class Gaussian2DAnnuli(Gaussian2D):
                 the y-axis.
             radii (unyt_array of float): The radii defining the annuli.
             rho (float): The correlation coefficient between x and y.
+            annulus (int): The index of the annulus this morphology
+                describes, used when imaging.
         """
         # Initialise the parent class
         Gaussian2D.__init__(self, x_mean, y_mean, stddev_x, stddev_y, rho)
@@ -434,36 +438,50 @@ class Gaussian2DAnnuli(Gaussian2D):
         # Attach the radii for annuli
         self.radii = radii
 
-        # Add an infinite outer radius for the last annulus (this is safe
-        # if the user has already defined the last radius as infinity, we
-        # will just never touch this new entry)
-        self.radii = np.append(self.radii, np.inf * radii.units)
+        # Add an infinite outer radius for the last annulus unless the user
+        # has already defined the last radius as infinity
+        if np.isfinite(self.radii[-1]):
+            self.radii = np.append(self.radii, np.inf * radii.units)
 
-        # How many annuli are there?
-        self.n_annuli = len(self.radii)
+        # How many annuli are there? (each is bounded by consecutive radii)
+        self.n_annuli = len(self.radii) - 1
+
+        # The annulus this morphology describes, used when no annulus is
+        # passed to get_density_grid (e.g. when imaging)
+        self.annulus = annulus
 
     @accepts(x=(kpc, mas), y=(kpc, mas))
-    def compute_density_grid(self, x, y, annulus):
+    def compute_density_grid(self, x, y, annulus=None):
         """Compute the Gaussian density grid with optional annulus masking.
 
         Args:
             x (array-like): x values on a 2D grid.
             y (array-like): y values on a 2D grid.
-            annulus (int): Index of the annulus to be used.
+            annulus (int): Index of the annulus to be used. Defaults to
+                the annulus given at instantiation.
 
         Returns:
             np.ndarray: The masked Gaussian density grid.
             float: The normalisation factor for the density grid.
         """
+        # Fall back on the annulus given at instantiation
+        if annulus is None:
+            annulus = self.annulus
+        if annulus is None:
+            raise exceptions.InconsistentArguments(
+                "No annulus index given. Pass annulus when instantiating the "
+                "morphology or when getting the density grid."
+            )
+
         # Ensure the annulus index is valid
         if annulus < 0 or annulus >= self.n_annuli:
             raise exceptions.InconsistentArguments(
                 f"Invalid annulus index: {annulus}. "
-                f"Must be between 0 and {self.n_annuli - 2}."
+                f"Must be between 0 and {self.n_annuli - 1}."
             )
 
         # Get the whole density grid first
-        density_grid, norm = super().compute_density_grid(x, y)
+        density_grid, _ = super().compute_density_grid(x, y)
 
         # Compute elliptical radius from (x, y)
         dx = x - self.x_mean
@@ -477,6 +495,16 @@ class Gaussian2DAnnuli(Gaussian2D):
         # Create a mask for the annulus
         mask = (radius >= inner_radius) & (radius < outer_radius)
         density_grid = np.where(mask, density_grid, 0)
+
+        # Normalise over the annulus itself since an annulus population only
+        # holds the mass within that annulus
+        norm = np.sum(density_grid)
+        if norm == 0:
+            warn(
+                f"Annulus {annulus} contains no pixel centres at this "
+                "resolution, its emission will be missing from the image."
+            )
+            norm = 1.0
 
         return density_grid, norm
 
@@ -708,7 +736,7 @@ class Sersic2DAnnuli(Sersic2D):
         grid : The 2D Sersic model in kpc.
         model_mas : The 2D Sersic model in milliarcseconds.
         radii (list of float): The radii defining the annuli.
-        annulus_index (int): Index of the annulus to be used.
+        annulus (int): Index of the annulus to be used when imaging.
     """
 
     @accepts(
@@ -723,12 +751,13 @@ class Sersic2DAnnuli(Sersic2D):
         radii,
         amplitude=1,
         sersic_index=1,
-        x_0=0,
-        y_0=0,
+        x_0=0 * kpc,
+        y_0=0 * kpc,
         theta=0,
         ellipticity=0,
         cosmo=None,
         redshift=None,
+        annulus=None,
     ):
         """Initialise the morphology with optional annulus masking.
 
@@ -743,6 +772,8 @@ class Sersic2DAnnuli(Sersic2D):
             ellipticity (float): Ellipticity.
             cosmo (astropy.cosmology.Cosmology): astropy cosmology object.
             redshift (float): Redshift.
+            annulus (int): The index of the annulus this morphology
+                describes, used when imaging.
         """
         Sersic2D.__init__(
             self,
@@ -760,36 +791,50 @@ class Sersic2DAnnuli(Sersic2D):
         # Attach the radii for annuli
         self.radii = radii
 
-        # Add an infinite outer radius for the last annulus (this is safe
-        # if the user has already defined the last radius as infinity, we
-        # will just never touch this new entry)
-        self.radii = np.append(self.radii, np.inf * radii.units)
+        # Add an infinite outer radius for the last annulus unless the user
+        # has already defined the last radius as infinity
+        if np.isfinite(self.radii[-1]):
+            self.radii = np.append(self.radii, np.inf * radii.units)
 
-        # How many annuli are there?
-        self.n_annuli = len(self.radii)
+        # How many annuli are there? (each is bounded by consecutive radii)
+        self.n_annuli = len(self.radii) - 1
+
+        # The annulus this morphology describes, used when no annulus is
+        # passed to get_density_grid (e.g. when imaging)
+        self.annulus = annulus
 
     @accepts(x=(kpc, mas), y=(kpc, mas))
-    def compute_density_grid(self, x, y, annulus):
+    def compute_density_grid(self, x, y, annulus=None):
         """Compute the density grid with optional annulus masking.
 
         Args:
             x (array-like): x values on a 2D grid.
             y (array-like): y values on a 2D grid.
-            annulus (int): Index of the annulus to be used.
+            annulus (int): Index of the annulus to be used. Defaults to
+                the annulus given at instantiation.
 
         Returns:
             np.ndarray: The computed density grid, optionally masked by annuli.
             float: The normalisation factor for the density grid.
         """
+        # Fall back on the annulus given at instantiation
+        if annulus is None:
+            annulus = self.annulus
+        if annulus is None:
+            raise exceptions.InconsistentArguments(
+                "No annulus index given. Pass annulus when instantiating the "
+                "morphology or when getting the density grid."
+            )
+
         # Ensure the annulus index is valid
         if annulus < 0 or annulus >= self.n_annuli:
             raise exceptions.InconsistentArguments(
                 f"Invalid annulus index: {annulus}. "
-                f"Must be between 0 and {self.n_annuli - 2}."
+                f"Must be between 0 and {self.n_annuli - 1}."
             )
 
         # Get the density grid for the whole profile
-        density_grid, norm = super().compute_density_grid(x, y)
+        density_grid, _ = super().compute_density_grid(x, y)
 
         # Compute the radius of each grid cell in the full profile.
         a = (x - self.x_0) * np.cos(self.theta) + (y - self.y_0) * np.sin(
@@ -807,5 +852,15 @@ class Sersic2DAnnuli(Sersic2D):
         # Apply annulus mask
         mask = (radius >= inner_radius) & (radius < outer_radius)
         density_grid = np.where(mask, density_grid, 0)
+
+        # Normalise over the annulus itself since an annulus population only
+        # holds the mass within that annulus
+        norm = np.sum(density_grid)
+        if norm == 0:
+            warn(
+                f"Annulus {annulus} contains no pixel centres at this "
+                "resolution, its emission will be missing from the image."
+            )
+            norm = 1.0
 
         return density_grid, norm

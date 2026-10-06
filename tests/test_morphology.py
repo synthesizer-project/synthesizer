@@ -16,9 +16,12 @@ import numpy as np
 import pytest
 from astropy.cosmology import FlatLambdaCDM
 from astropy.modeling import models as astropy_models
-from unyt import kpc, mas, unyt_array
+from unyt import Msun, angstrom, kpc, mas, unyt_array, yr
 
 from synthesizer import exceptions
+from synthesizer.emission_models import IncidentEmission
+from synthesizer.instruments import FilterCollection, Instrument
+from synthesizer.parametric import Stars
 from synthesizer.parametric.morphology import (
     Gaussian2D,
     Gaussian2DAnnuli,
@@ -106,16 +109,14 @@ class TestGaussian2D:
 class TestGaussian2DAnnuli:
     """Tests for the Gaussian2DAnnuli morphology class."""
 
-    def test_annulus_masking_sums(self):
-        """The sum of a single annulus mask should be < than the full grid."""
+    def test_annulus_normalised_to_itself(self):
+        """A single annulus should be normalised over its own pixels."""
         radii = unyt_array([1.0, 2.0], kpc)
         ga_ann = Gaussian2DAnnuli(
             0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc, radii=radii, rho=0
         )
-        ga = Gaussian2D(0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc, rho=0)
-        full = ga.get_density_grid(RESOLUTION, NPIX)
         shell0 = ga_ann.get_density_grid(RESOLUTION, NPIX, annulus=0)
-        assert shell0.sum() < full.sum()
+        assert np.isclose(shell0.sum(), 1.0)
 
     def test_outside_annulus_zero(self):
         """Regions outside the specified annulus should be zero."""
@@ -179,8 +180,8 @@ class TestSersic2D:
 class TestSersic2DAnnuli:
     """Tests for the Sersic2DAnnuli morphology class."""
 
-    def test_annulus_masking_sums(self):
-        """The sum of a single annulus mask should be < than the full grid."""
+    def test_annulus_normalised_to_itself(self):
+        """A single annulus should be normalised over its own pixels."""
         radii = unyt_array([1.0, 2.0, 3.0], kpc)
         s_ann = Sersic2DAnnuli(
             r_eff=3 * kpc,
@@ -207,7 +208,8 @@ class TestSersic2DAnnuli:
         )
         full = s.get_density_grid(RESOLUTION, NPIX)
         shell1 = s_ann.get_density_grid(RESOLUTION, NPIX, annulus=1)
-        assert shell1.sum() < full.sum()
+        assert np.isclose(shell1.sum(), 1.0)
+        assert np.count_nonzero(shell1) < np.count_nonzero(full)
 
     def test_invalid_annulus_index_raises(self):
         """Negative annulus index should raise ValueError."""
@@ -430,14 +432,14 @@ class TestParameterValidation:
             0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc, radii=radii
         )
         assert len(gauss_ann.radii) == len(radii) + 1  # +1 for infinity
-        assert gauss_ann.n_annuli == len(radii) + 1
+        assert gauss_ann.n_annuli == len(radii)
 
         # Sersic2DAnnuli
         sersic_ann = Sersic2DAnnuli(
             r_eff=2 * kpc, radii=radii, x_0=0 * kpc, y_0=0 * kpc
         )
         assert len(sersic_ann.radii) == len(radii) + 1
-        assert sersic_ann.n_annuli == len(radii) + 1
+        assert sersic_ann.n_annuli == len(radii)
 
 
 class TestEdgeCases:
@@ -600,7 +602,7 @@ class TestNormalization:
             assert pytest.approx(1.0, rel=1e-6) == grid.sum()
 
     def test_annuli_normalization_consistency(self):
-        """Test that annuli preserve total normalization."""
+        """Test that every annulus, including the last, is normalised."""
         radii = unyt_array([0.5, 1.0, 2.0], kpc)
 
         # Gaussian annuli
@@ -608,17 +610,10 @@ class TestNormalization:
             0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc, radii=radii
         )
 
-        # Sum all annuli should be less than or equal to full profile
-        total_ann = 0
-        for i in range(gauss_ann.n_annuli - 1):
+        # Each annulus is normalised over its own pixels
+        for i in range(gauss_ann.n_annuli):
             ann_grid = gauss_ann.get_density_grid(RESOLUTION, NPIX, annulus=i)
-            total_ann += ann_grid.sum()
-
-        gauss_full = Gaussian2D(0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc)
-        full_grid = gauss_full.get_density_grid(RESOLUTION, NPIX)
-
-        # Total should be close to full (within numerical precision)
-        assert total_ann <= full_grid.sum() + 1e-10
+            assert np.isclose(ann_grid.sum(), 1.0)
 
 
 class TestParameterRecovery:
@@ -728,7 +723,7 @@ class TestParameterRecovery:
         # Annuli-specific parameters (note: radii gets infinity appended)
         assert np.allclose(gauss_ann.radii[:-1].value, radii.value)
         assert gauss_ann.radii[:-1].units == radii.units
-        assert gauss_ann.n_annuli == len(radii) + 1
+        assert gauss_ann.n_annuli == len(radii)
 
         # Sersic2DAnnuli
         sersic_ann = Sersic2DAnnuli(
@@ -754,7 +749,7 @@ class TestParameterRecovery:
         # Annuli-specific parameters
         assert np.allclose(sersic_ann.radii[:-1].value, radii.value)
         assert sersic_ann.radii[:-1].units == radii.units
-        assert sersic_ann.n_annuli == len(radii) + 1
+        assert sersic_ann.n_annuli == len(radii)
 
 
 class TestProfileFitting:
@@ -1013,3 +1008,79 @@ class TestProfileFitting:
             assert abs(fit_n - true_n) < 0.1, (
                 f"Case {case}: Sersic index expected {true_n}, got {fit_n}"
             )
+
+
+class TestAnnuliFixes:
+    """Tests for annulus construction, indexing and selection."""
+
+    def test_sersic_annuli_default_centre(self):
+        """Test Sersic2DAnnuli can be created with its default centre."""
+        s_ann = Sersic2DAnnuli(r_eff=2 * kpc, radii=unyt_array([1.0], kpc))
+        assert s_ann.x_0 == 0 * kpc and s_ann.y_0 == 0 * kpc
+
+    def test_last_annulus_is_valid(self):
+        """Test the outermost annulus (out to infinity) can be requested."""
+        s_ann = Sersic2DAnnuli(r_eff=2 * kpc, radii=unyt_array([1.0], kpc))
+        grid = s_ann.get_density_grid(
+            RESOLUTION, NPIX, annulus=s_ann.n_annuli - 1
+        )
+        assert np.isclose(grid.sum(), 1.0)
+        with pytest.raises(exceptions.InconsistentArguments):
+            s_ann.get_density_grid(RESOLUTION, NPIX, annulus=s_ann.n_annuli)
+
+    def test_infinite_last_radius_not_duplicated(self):
+        """Test an explicit infinite last radius is not appended again."""
+        radii = unyt_array([1.0, np.inf], kpc)
+        s_ann = Sersic2DAnnuli(r_eff=2 * kpc, radii=radii)
+        assert s_ann.n_annuli == 1
+
+    def test_annulus_from_instantiation(self):
+        """Test the annulus given at instantiation is used by default."""
+        radii = unyt_array([1.0, 2.0], kpc)
+        s_ann = Sersic2DAnnuli(r_eff=2 * kpc, radii=radii, annulus=1)
+        assert np.array_equal(
+            s_ann.get_density_grid(RESOLUTION, NPIX),
+            s_ann.get_density_grid(RESOLUTION, NPIX, annulus=1),
+        )
+
+    def test_missing_annulus_raises(self):
+        """Test a density grid without any annulus index raises."""
+        s_ann = Sersic2DAnnuli(r_eff=2 * kpc, radii=unyt_array([1.0], kpc))
+        with pytest.raises(exceptions.InconsistentArguments):
+            s_ann.get_density_grid(RESOLUTION, NPIX)
+
+    def test_annulus_imaging(self, test_grid):
+        """Test a Stars with an annulus morphology can be imaged.
+
+        The annulus image should carry the full luminosity of the Stars.
+        """
+        filters = FilterCollection(
+            tophat_dict={
+                "f1": {"lam_eff": 2000 * angstrom, "lam_fwhm": 400 * angstrom}
+            },
+            new_lam=test_grid.lam,
+        )
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e7 * yr,
+            metal_dist=0.01,
+            initial_mass=1e9 * Msun,
+            morphology=Sersic2DAnnuli(
+                r_eff=2 * kpc,
+                radii=unyt_array([1.0, 3.0], kpc),
+                annulus=1,
+            ),
+        )
+        stars.get_spectra(IncidentEmission(test_grid, label="int"))
+        stars.get_photo_lnu(filters)
+        imgs = stars.get_images_luminosity(
+            "int",
+            fov=20 * kpc,
+            instrument=Instrument(
+                "img", filters=filters, resolution=0.1 * kpc
+            ),
+        )
+        assert np.isclose(
+            imgs["f1"].arr.sum(), stars.photo_lnu["int"]["f1"].value
+        )
