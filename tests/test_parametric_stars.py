@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 from unyt import Msun, Myr, yr
 
+from synthesizer.parametric import SFH
 from synthesizer.parametric.stars import Stars
 from synthesizer.units import Units
 
@@ -511,3 +512,21 @@ class TestCalculateSurvivingMassAtAge:
         initial = constant_sfh_stars.calculate_initial_mass_at_age(100 * Myr)
         assert result >= 0 * Msun
         assert result <= initial + 1e-30 * Msun
+
+
+class TestGetSFZHRemap:
+    """Tests for remapping a parametric SFZH onto new axes."""
+
+    def test_remap_to_different_length_axes(self, test_grid):
+        """Test remapping onto axes of a different length conserves mass."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=100 * Myr),
+            metal_dist=0.01,
+            initial_mass=1e9 * Msun,
+        )
+        new_log10ages = np.linspace(6, 10, 20)
+        remapped = stars.get_sfzh(new_log10ages, test_grid.metallicities)
+        assert remapped.sfzh.shape == (20, len(test_grid.metallicities))
+        assert np.isclose(remapped.sfzh.sum(), stars.sfzh.sum())
