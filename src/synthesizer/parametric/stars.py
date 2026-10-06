@@ -34,6 +34,7 @@ from synthesizer.emission_models.utils import get_param
 from synthesizer.grid import Grid
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.plt import single_histxy
@@ -764,7 +765,26 @@ class Stars(StarsComponent):
                 "SFZH must be the same shape"
             )
 
-        return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
+        # Carry over the attributes both populations share. Differing values
+        # can't be combined into a single population so they are dropped.
+        shared = {}
+        for name in ("fesc", "fesc_ly_alpha", "morphology"):
+            this = getattr(self, name, None)
+            other = getattr(other_stars, name, None)
+            if this is other or (name != "morphology" and this == other):
+                shared[name] = this
+            else:
+                warn(
+                    f"The added Stars have different {name} values, "
+                    f"the combined Stars will use the default {name}."
+                )
+
+        return Stars(
+            self.log10ages,
+            self.metallicities,
+            sfzh=new_sfzh,
+            **shared,
+        )
 
     def __radd__(self, other_stars):
         """Add two Stars instances together (reflected addition).
@@ -778,17 +798,7 @@ class Stars(StarsComponent):
             other_stars (parametric.Stars):
                 The other instance of Stars to add to this one.
         """
-        if np.all(self.log10ages == other_stars.log10ages) and np.all(
-            self.metallicities == other_stars.metallicities
-        ):
-            new_sfzh = self.sfzh + other_stars.sfzh
-
-        else:
-            raise exceptions.InconsistentAddition(
-                "SFZH must be the same shape"
-            )
-
-        return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
+        return self.__add__(other_stars)
 
     @accepts(lum=erg / s / Hz)
     def scale_mass_by_luminosity(self, lum, scale_filter, spectra_type):
