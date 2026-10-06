@@ -1013,3 +1013,34 @@ class TestProfileFitting:
             assert abs(fit_n - true_n) < 0.1, (
                 f"Case {case}: Sersic index expected {true_n}, got {fit_n}"
             )
+
+
+class TestPixelGrid:
+    """Tests for the pixel grid the density grids are evaluated on."""
+
+    @staticmethod
+    def _gaussian():
+        """Return a centred circular Gaussian with a 1 kpc width."""
+        return Gaussian2D(
+            x_mean=0 * kpc,
+            y_mean=0 * kpc,
+            stddev_x=1 * kpc,
+            stddev_y=1 * kpc,
+        )
+
+    def test_peak_on_centre_pixel(self):
+        """Test a centred profile peaks on the centre pixel for odd npix."""
+        grid = self._gaussian().get_density_grid(RESOLUTION, (51, 51))
+        assert np.unravel_index(np.argmax(grid), grid.shape) == (25, 25)
+
+    def test_pixel_spacing_matches_resolution(self):
+        """Test the profile width in pixels matches the resolution.
+
+        The variance of the density grid about the centre, using pixel
+        centres spaced by the resolution, should recover the input width.
+        """
+        npix = 101
+        grid = self._gaussian().get_density_grid(RESOLUTION, (npix, npix))
+        x = RESOLUTION.value * (np.arange(npix) - (npix - 1) / 2)
+        var = np.sum(grid.sum(axis=0) * x**2) / grid.sum()
+        assert np.isclose(var, 1.0, rtol=5e-3)
