@@ -19,6 +19,7 @@ from unyt import (
     unyt_array,
 )
 
+from synthesizer.exceptions import InconsistentArguments
 from synthesizer.imaging.image import Image
 from synthesizer.imaging.image_collection import ImageCollection
 from synthesizer.imaging.spectral_cube import SpectralCube
@@ -357,6 +358,45 @@ class TestImageCollection:
         rgb_img = collection.make_rgb_image(rgb_filters)
 
         assert np.all(rgb_img.shape == (10, 10, 3))
+
+    def test_make_rgb_image_channels_follow_keys(self):
+        """Test RGB channels are set by the keys, not the dict order."""
+        res, fov = 1 * kpc, 4 * kpc
+        collection = ImageCollection(
+            res,
+            fov,
+            imgs={
+                "red": Image(res, fov, img=np.full((4, 4), 1.0)),
+                "green": Image(res, fov, img=np.full((4, 4), 0.5)),
+                "blue": Image(res, fov, img=np.zeros((4, 4))),
+            },
+        )
+
+        rgb_ordered = collection.make_rgb_image(
+            {"R": ["red"], "G": ["green"], "B": ["blue"]}
+        )
+        rgb_reversed = collection.make_rgb_image(
+            {"B": ["blue"], "G": ["green"], "R": ["red"]}
+        )
+        rgb_strings = collection.make_rgb_image(
+            {"b": "blue", "r": "red", "g": "green"}
+        )
+
+        np.testing.assert_array_equal(rgb_ordered[0, 0], [1.0, 0.5, 0.0])
+        np.testing.assert_array_equal(rgb_reversed, rgb_ordered)
+        np.testing.assert_array_equal(rgb_strings, rgb_ordered)
+
+    def test_make_rgb_image_invalid_key(self):
+        """Test an unknown channel key raises an error."""
+        res, fov = 1 * kpc, 4 * kpc
+        collection = ImageCollection(
+            res,
+            fov,
+            imgs={"red": Image(res, fov, img=np.ones((4, 4)))},
+        )
+
+        with pytest.raises(InconsistentArguments):
+            collection.make_rgb_image({"X": ["red"]})
 
 
 class TestSpectralCube:
