@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 from unyt import Msun, Myr, yr
 
+from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric.stars import Stars
 from synthesizer.units import Units
 
@@ -511,3 +512,36 @@ class TestCalculateSurvivingMassAtAge:
         initial = constant_sfh_stars.calculate_initial_mass_at_age(100 * Myr)
         assert result >= 0 * Msun
         assert result <= initial + 1e-30 * Msun
+
+
+class TestFunctionSFZHEdgeBins:
+    """Tests that function based SFZHs populate the outermost grid bins."""
+
+    def test_oldest_age_bin_populated(self, test_grid):
+        """Test a constant SFH beyond the oldest grid age fills the last bin.
+
+        With a unit SFR the mass in the oldest bin is its width, which runs
+        from the midpoint of the last two grid ages to the oldest grid age.
+        """
+        ages = 10**test_grid.log10ages
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=2 * ages[-1] * yr),
+            metal_dist=0.01,
+        )
+        expected = ages[-1] - 0.5 * (ages[-1] + ages[-2])
+        assert np.isclose(stars.sf_hist[-1], expected, rtol=1e-6)
+
+    def test_most_metal_rich_bin_populated(self, test_grid):
+        """Test a ZDist peaked at the highest grid Z fills the last bin."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e7 * yr,
+            metal_dist=ZDist.Normal(
+                mean=test_grid.metallicities[-1],
+                sigma=0.002,
+            ),
+        )
+        assert stars.metal_dist[-1] > 0

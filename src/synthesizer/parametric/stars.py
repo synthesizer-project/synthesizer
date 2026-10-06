@@ -502,10 +502,14 @@ class Stars(StarsComponent):
             # Set up SFH array
             sf_hist = np.zeros(self.ages.size)
 
-            # Loop over age bins calculating the amount of mass in each bin
+            # Loop over age bins calculating the amount of mass in each bin,
+            # the oldest bin extends up to the oldest grid age
             min_age = 0
-            for ia, age in enumerate(self.ages[:-1]):
-                max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
+            for ia in range(self.ages.size):
+                if ia < self.ages.size - 1:
+                    max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
+                else:
+                    max_age = self.ages[-1].to("yr").value
                 sf = integrate.quad(
                     self.sf_hist_func.get_sfr,
                     min_age + age_offset.to("yr").value,
@@ -519,15 +523,19 @@ class Stars(StarsComponent):
             # Set up ZH array
             metal_dist = np.zeros(self.metallicities.size)
             # Loop over metallicity bins calculating the amount of mass in
-            # each bin
+            # each bin, the most metal rich bin extends up to the highest
+            # grid metallicity
             min_metal = 0
-            for imetal, metal in enumerate(self.metallicities[:-1]):
-                max_metal = np.mean(
-                    [
-                        self.metallicities[imetal + 1],
-                        self.metallicities[imetal],
-                    ]
-                )
+            for imetal in range(self.metallicities.size):
+                if imetal < self.metallicities.size - 1:
+                    max_metal = np.mean(
+                        [
+                            self.metallicities[imetal + 1],
+                            self.metallicities[imetal],
+                        ]
+                    )
+                else:
+                    max_metal = self.metallicities[-1]
                 sf = integrate.quad(
                     self.metal_dist_func.get_dist_weight, min_metal, max_metal
                 )[0]
