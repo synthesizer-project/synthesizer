@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-from unyt import Hz, erg, s
+from unyt import Hz, Msun, erg, s, yr
 
 from synthesizer.emission_models.extractors.extractor import (
     DopplerShiftedParticleExtractor,
@@ -17,6 +17,7 @@ from synthesizer.emission_models.extractors.extractor import (
 from synthesizer.emissions import Sed
 from synthesizer.exceptions import InconsistentArguments
 from synthesizer.parametric import Stars as ParametricStars
+from synthesizer.particle import Stars as ParticleStars
 
 
 # Mock Extractor implementation for testing abstract base class methods
@@ -508,80 +509,70 @@ def test_particle_generate_lnu(
 
 
 def test_integrated_parametric_generate_lnu(test_grid, nebular_emission_model):
-    """Test that IntegratedParametricExtractor.generate_lnu works correctly."""
-    # Create an IntegratedParametricExtractor
+    """Test a SFZH on the grid axes multiplies the grid spectra directly."""
     extractor = IntegratedParametricExtractor(test_grid, "incident")
-
-    # Create a mock parametric stars object
-    mock_parametric_stars = MagicMock(spec=ParametricStars)
-    mock_parametric_stars.get_mask.return_value = np.array(
-        [[True, False], [True, True], [True, False]]
+    sfzh = np.random.default_rng(0).random(
+        (len(test_grid.log10ages), len(test_grid.metallicities))
+    )
+    stars = ParametricStars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sfzh=sfzh,
+    )
+    result = extractor.generate_lnu(
+        stars,
+        nebular_emission_model,
+        None,
+        None,
+        "cic",
+        1,
+        False,
     )
 
-    # Create mock SFZH and spectra grid
-    mock_sfzh = np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 0.0]])
-    mock_parametric_stars.sfzh = mock_sfzh
-
-    # Set a mock spectra grid with known values
-    mock_spectra = np.ones((*mock_sfzh.shape, 1))
-    extractor._spectra_grid = mock_spectra
-    extractor._grid_naxes = 2
-
-    # Give the mock stars and grid matching axes
-    extractor._grid_axes = (np.arange(3.0), np.arange(2.0))
-    for name, axis in zip(extractor._emitter_attributes, extractor._grid_axes):
-        setattr(mock_parametric_stars, name, axis)
-
-    # Call generate_lnu
-    with patch.object(nebular_emission_model, "_lam", np.array([1.0])):
-        result = extractor.generate_lnu(
-            mock_parametric_stars,
-            nebular_emission_model,
-            None,
-            None,
-            "cic",
-            1,
-            False,
-        )
-
-    # Check that get_mask was called with the right parameters
-    mock_parametric_stars.get_mask.assert_called_once_with(
-        "sfzh", 0, ">", mask=None
-    )
-
-    # Check that the result is a Sed object with the right values
+    # Check that the result is an integrated Sed with the right values
     assert isinstance(result, Sed), f"Expected Sed, got {type(result)}"
-
-    # Ensure the output sed is "integrated" (has ndim == 1)
     assert result.lnu.ndim == 1, f"Expected 1D lnu, got {result.lnu.ndim}"
-
-    # Ensure we have the correct "spectrum" for the parametric stars, this
-    # can be check by summing the sfzh values for the particles that are
-    # included in the mask
-    expected = mock_sfzh.sum()
-    assert np.array_equal(result.lnu.sum(), expected * erg / s / Hz), (
-        f"Expected {expected * erg / s / Hz}, got {result.lnu.sum()}"
-        f"{result.lnu} {mock_sfzh}"
+    expected = np.sum(
+        sfzh[..., None] * test_grid.spectra["incident"], axis=(0, 1)
     )
+    np.testing.assert_allclose(result.lnu.ndview, expected, rtol=1e-10)
 
 
-def test_integrated_parametric_axis_mismatch(
+def test_integrated_parametric_off_grid_axes(
     test_grid, nebular_emission_model
 ):
-    """Test that a SFZH on different axes to the grid is rejected."""
-    extractor = IntegratedParametricExtractor(test_grid, "incident")
-    stars = ParametricStars(
-        test_grid.log10ages + 0.5,
-        test_grid.metallicities,
-        sfzh=np.ones((len(test_grid.log10ages), len(test_grid.metallicities))),
+    """Test a SFZH on other axes is mapped onto the grid like particles.
+
+    Each point of the parametric axes is a zero width bin, so it must be
+    spread onto the grid exactly as a particle at that point is by CIC.
+    """
+    log10ages = np.linspace(6.05, 9.95, 7)
+    metallicities = np.array([0.0005, 0.003, 0.017])
+    sfzh = np.random.default_rng(1).random((log10ages.size, 3))
+    stars = ParametricStars(log10ages, metallicities, sfzh=sfzh)
+    param = IntegratedParametricExtractor(test_grid, "incident").generate_lnu(
+        stars,
+        nebular_emission_model,
+        None,
+        None,
+        "cic",
+        1,
+        False,
     )
-    with pytest.raises(InconsistentArguments):
-        extractor.generate_lnu(
-            stars,
-            nebular_emission_model,
-            None,
-            None,
-            "cic",
-            1,
-            False,
-        )
+
+    ages, metals = np.meshgrid(10**log10ages, metallicities, indexing="ij")
+    particles = ParticleStars(
+        initial_masses=sfzh.ravel() * Msun,
+        ages=ages.ravel() * yr,
+        metallicities=metals.ravel(),
+    )
+    part = IntegratedParticleExtractor(test_grid, "incident").generate_lnu(
+        particles,
+        nebular_emission_model,
+        None,
+        None,
+        "cic",
+        1,
+        False,
+    )
+    np.testing.assert_allclose(param.lnu.ndview, part.lnu.ndview, rtol=1e-10)

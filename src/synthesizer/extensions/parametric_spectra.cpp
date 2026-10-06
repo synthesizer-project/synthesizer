@@ -726,12 +726,92 @@ PyObject *compute_population_seds(PyObject *self, PyObject *args) {
   return Py_BuildValue("N", np_pop_spectra);
 }
 
+/**
+ * @brief Computes the grid weights of a set of parametric populations.
+ *
+ * Every population is spread onto the grid with the bin in cell (BIC)
+ * approach and summed into a single set of grid weights. No spectra are
+ * involved, so this can map populations onto any set of axes (e.g. to view a
+ * population's SFZH or remap it onto new axes).
+ *
+ * @param grid_tuple: The tuple of grid axis arrays (log10 where flagged).
+ * @param edges_tuple: The tuple of bin edge arrays (linear units), in the
+ *                     same order as grid_tuple.
+ * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
+ * @param log_flags: One boolean per axis flagging log10 grid axes.
+ * @param nthreads: The number of threads to use.
+ * @param mask: A boolean mask with the shape of the masses or None.
+ * @param prop_names: Optional names for the grid axes (for error messages).
+ *
+ * @return The grid weights (with the grid's shape and dtype).
+ */
+PyObject *compute_parametric_weights(PyObject *self, PyObject *args) {
+
+  tic("compute_parametric_weights");
+
+  /* We don't need the self argument but it has to be there. */
+  (void)self;
+
+  int nthreads;
+  PyObject *grid_tuple, *edges_tuple, *log_flags, *mask_obj;
+  PyObject *prop_names = NULL;
+  PyArrayObject *np_masses;
+
+  if (!PyArg_ParseTuple(args, "OOOOiO|O", &grid_tuple, &edges_tuple,
+                        &np_masses, &log_flags, &nthreads, &mask_obj,
+                        &prop_names)) {
+    return NULL;
+  }
+
+  /* Extract the grid struct (without any spectra). */
+  auto grid_props = std::unique_ptr<GridProps>(
+      new GridProps(/*np_spectra*/ NULL, grid_tuple, /*np_lam*/ NULL,
+                    /*np_lam_mask*/ NULL, /*nlam*/ 0,
+                    /*np_grid_weights*/ NULL, prop_names));
+  RETURN_IF_PYERR();
+
+  /* Extract the populations. */
+  Populations pops;
+  if (!build_populations(edges_tuple, np_masses, log_flags, mask_obj,
+                         grid_props.get(), pops)) {
+    return NULL;
+  }
+
+  /* Resolve the grid dtype. */
+  int grid_typenum = grid_props->get_float_typenum();
+  if (grid_typenum == -1) {
+    grid_typenum = NPY_FLOAT64;
+  }
+
+  /* Spread the populations onto the grid. */
+  dispatch_float(pops.float_typenum, [&](auto p) {
+    dispatch_float(grid_typenum, [&](auto g) {
+      using PopReal = decltype(p);
+      using GridReal = decltype(g);
+      GridReal *grid_weights = grid_props->get_grid_weights<GridReal>();
+      if (grid_weights == NULL || PyErr_Occurred()) {
+        return;
+      }
+      weight_loop_bic<PopReal, GridReal, GridReal>(
+          grid_props.get(), &pops, grid_props->size, grid_weights, nthreads);
+    });
+  });
+  RETURN_IF_PYERR();
+
+  toc("compute_parametric_weights");
+
+  return (PyObject *)grid_props->get_np_grid_weights();
+}
+
 /* Below is all the gubbins needed to make the module importable in Python. */
 static PyMethodDef ParametricSedMethods[] = {
     {"compute_integrated_parametric_sed",
      (PyCFunction)compute_integrated_parametric_sed, METH_VARARGS,
      "Method for calculating the integrated spectra of parametric "
      "populations."},
+    {"compute_parametric_weights", (PyCFunction)compute_parametric_weights,
+     METH_VARARGS,
+     "Method for calculating the grid weights of parametric populations."},
     {"compute_population_seds", (PyCFunction)compute_population_seds,
      METH_VARARGS,
      "Method for calculating the spectra of each parametric population."},

@@ -26,6 +26,9 @@ from synthesizer.extensions.doppler_particle_spectra import (
     compute_part_seds_with_vel_shift,
 )
 from synthesizer.extensions.integrated_spectra import compute_integrated_sed
+from synthesizer.extensions.parametric_spectra import (
+    compute_integrated_parametric_sed,
+)
 from synthesizer.extensions.particle_spectra import (
     compute_particle_seds,
 )
@@ -1393,40 +1396,76 @@ class ParticleExtractor(Extractor):
 
 
 class IntegratedParametricExtractor(Extractor):
-    """A class to extract the integrated parametric emission from a particle.
+    """A class to extract the integrated parametric emission from a grid.
 
     This Extractor will produce integrated emission from parametric based
-    components. This differs from particle based components only in that we
-    can straight multiply the SFZH by the grid spectra to get the integrated
-    emission.
+    components. A parametric population is a set of bins (e.g. in age and
+    metallicity) each holding a mass, which are spread onto the grid with the
+    bin in cell (BIC) approach before being combined with the grid spectra
+    (see synthesizer.extensions.parametric_spectra).
+
+    If no mask is being used it will reuse any stored grid weights to reduce
+    the computation time.
     """
 
-    def _check_emitter_axes(self, emitter):
-        """Ensure the emitter's SFZH axes match the grid axes.
-
-        The SFZH is multiplied bin by bin with the grid, so it is only
-        meaningful if both are defined on the same axes.
+    def _get_population_inputs(self, emitter, mask):
+        """Get the bins of a parametric emitter in the grid's axes.
 
         Args:
             emitter (Stars):
-                The parametric emitter to check.
+                The parametric emitter.
+            mask (BinMask):
+                A mask to apply to the bins, or None.
 
-        Raises:
-            InconsistentArguments:
-                If the emitter axes differ from the grid axes.
+        Returns:
+            tuple:
+                The bin edges along each grid axis (in the grid's units), the
+                (masked) bin masses and the log10 flag for each grid axis.
         """
-        for name, grid_axis in zip(self._emitter_attributes, self._grid_axes):
-            emitter_axis = getattr(emitter, name, None)
-            if (
-                emitter_axis is None
-                or len(emitter_axis) != len(grid_axis)
-                or not np.allclose(np.asarray(emitter_axis), grid_axis)
-            ):
-                raise exceptions.InconsistentArguments(
-                    f"The {emitter.__class__.__name__} {name} axis does not "
-                    f"match the grid's {name} axis. A parametric SFZH must "
-                    "be defined on the grid axes, use get_sfzh to remap it."
+        # Apply the mask, which clips the bins to the parts that pass and
+        # scales their masses to match
+        if mask is not None:
+            bin_edges, bin_masses = mask.get_masked_bins(emitter)
+        else:
+            bin_edges = {
+                axis: emitter.get_bin_edges(axis, values_only=True)
+                for axis in emitter.bin_axes
+            }
+            bin_masses = emitter.bin_masses
+
+        edges = []
+        for axis_name, units, log in zip(
+            self._emitter_attributes,
+            self._axes_units,
+            self._log_emitter_attr,
+        ):
+            # Each grid axis maps onto the emitter's bin axis of the same
+            # name (with any log10 prefix removed)
+            bin_axis = axis_name[5:] if log else axis_name
+            axis_edges = bin_edges[bin_axis]
+
+            # Convert to the grid's units if the edges have units
+            unit_edges = emitter.get_bin_edges(bin_axis)
+            if isinstance(unit_edges, unyt_array):
+                axis_edges = (
+                    unyt_array(axis_edges, unit_edges.units).to(units).ndview
                 )
+            edges.append(np.ascontiguousarray(axis_edges, dtype=np.float64))
+
+        # The bins must be ordered like the grid axes
+        bin_order = [
+            emitter.bin_axes.index(name[5:] if log else name)
+            for name, log in zip(
+                self._emitter_attributes, self._log_emitter_attr
+            )
+        ]
+        masses = np.transpose(bin_masses, [0] + [i + 1 for i in bin_order])
+
+        return (
+            tuple(edges),
+            np.ascontiguousarray(masses, dtype=np.float64),
+            tuple(self._log_emitter_attr),
+        )
 
     @timed("IntegratedParametricExtractor.generate_lnu")
     @verify_out_precision()
@@ -1448,54 +1487,64 @@ class IntegratedParametricExtractor(Extractor):
                 The emitter object from which to extract the emission.
             model (EmissionModel):
                 The emission model defining the emission to extract.
-            mask (np.ndarray of bool):
-                A mask to apply to the particles.
+            mask (BinMask):
+                A mask to apply to the bins.
             lam_mask (np.ndarray of bool):
                 A mask to apply to the spectra's wavelength axis.
             grid_assignment_method (str):
-                The method to assign particles to the grid. Either
-                "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point).
+                Unused, parametric populations are always spread onto the
+                grid with the bin in cell approach.
             nthreads (int):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Whether to check how many particles lie outside the grid. This
-                is a sanity check that can be used to check the consistency
-                of your particles with the grid. It is False by default
-                because the check is extreme expensive.
+                Unused, mass outside the grid is clamped onto its edges.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned spectra arrays.
 
         Returns:
             Sed: The integrated spectra.
         """
-        # Ensure the SFZH is defined on the grid axes
-        self._check_emitter_axes(emitter)
+        out_dtype = resolve_out_dtype(out_dtype)
 
-        # Get a mask for non-zero bins in the SFZH
-        mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
+        # Get the bins in the grid's axes
+        edges, masses, log_flags = self._get_population_inputs(emitter, mask)
 
-        # Add an extra dimension to enable later summation
-        sfzh = np.expand_dims(emitter.sfzh, axis=self._grid_naxes)
+        # If nthreads is -1 then use all available threads
+        if nthreads == -1:
+            nthreads = os.cpu_count()
 
-        # Get the grid spectra including any lam mask
-        if lam_mask is None:
-            grid_spectra = self._spectra_grid
-        else:
-            grid_spectra = self._spectra_grid[..., lam_mask]
-
-        # Compute the integrated lnu array by multiplying the sfzh by the
-        # grid spectra
-        spec = np.sum(grid_spectra[mask] * sfzh[mask], axis=0).astype(
-            resolve_out_dtype(out_dtype),
-            copy=False,
+        # Reuse stored grid weights if we have them and don't have a mask
+        grid_name = self._grid.grid_name
+        grid_weights = (
+            emitter._grid_weights.get(grid_name) if mask is None else None
         )
+
+        # Compute the integrated lnu array
+        spec, grid_weights = compute_integrated_parametric_sed(
+            self._spectra_grid,
+            self._grid_axes,
+            edges,
+            masses,
+            log_flags,
+            nthreads,
+            grid_weights,
+            None,
+            lam_mask,
+            out_dtype,
+            self._emitter_attributes,
+        )
+
+        # Store the grid weights for reuse if we had no mask
+        if mask is None:
+            emitter._grid_weights[grid_name] = grid_weights
 
         return Sed(
             model.lam,
             unyt_array(spec, erg / s / Hz, bypass_validation=True),
         )
 
+    @timed("IntegratedParametricExtractor.generate_line")
     @verify_out_precision()
     def generate_line(
         self,
@@ -1515,76 +1564,72 @@ class IntegratedParametricExtractor(Extractor):
                 The emitter object from which to extract the emission.
             model (EmissionModel):
                 The emission model defining the emission to extract.
-            mask (np.ndarray of bool):
-                A mask to apply to the particles.
+            mask (BinMask):
+                A mask to apply to the bins.
             lam_mask (np.ndarray of bool):
-                A mask to apply to the spectra's wavelength axis.
+                A mask to apply to the lines.
             grid_assignment_method (str):
-                The method to assign particles to the grid. Either
-                "cic" (Cloud-in-Cell) or "ngp" (Nearest Grid Point).
+                Unused, parametric populations are always spread onto the
+                grid with the bin in cell approach.
             nthreads (int):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Whether to check how many particles lie outside the grid. This
-                is a sanity check that can be used to check the consistency
-                of your particles with the grid. It is False by default
-                because the check is extreme expensive.
+                Unused, mass outside the grid is clamped onto its edges.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned line arrays.
         """
-        with timer("IntegratedParametricExtractor.generate_line"):
-            out_dtype = resolve_out_dtype(out_dtype)
-            # Ensure the SFZH is defined on the grid axes
-            self._check_emitter_axes(emitter)
+        out_dtype = resolve_out_dtype(out_dtype)
 
-            # Get a mask for non-zero bins in the SFZH
-            mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
+        # Get the bins in the grid's axes
+        edges, masses, log_flags = self._get_population_inputs(emitter, mask)
 
-            # Add an extra dimension to enable later summation
-            sfzh = np.expand_dims(emitter.sfzh, axis=self._grid_naxes)
+        # If nthreads is -1 then use all available threads
+        if nthreads == -1:
+            nthreads = os.cpu_count()
 
-            # Get the grid line lunminosities and continua including any lam
-            # mask.
-            if lam_mask is None:
-                grid_line_lums = self._line_lum_grid
-                grid_line_conts = self._line_cont_grid
-            else:
-                grid_line_lums = self._line_lum_grid[..., lam_mask]
-                grid_line_conts = self._line_cont_grid[..., lam_mask]
+        # Reuse stored grid weights if we have them and don't have a mask
+        grid_name = self._grid.grid_name
+        grid_weights = (
+            emitter._grid_weights.get(grid_name) if mask is None else None
+        )
 
-            # Compute the integrated line array by multiplying the sfzh by the
-            # grids.
-            if lam_mask is not None:
-                lum = (
-                    np.zeros(self._grid.nlines, dtype=out_dtype)
-                    * self._line_lum_grid.units
-                )
-                cont = (
-                    np.zeros(self._grid.nlines, dtype=out_dtype)
-                    * self._line_cont_grid.units
-                )
-                lum[lam_mask] = np.sum(
-                    grid_line_lums[mask] * sfzh[mask],
-                    axis=0,
-                )
-                cont[lam_mask] = np.sum(
-                    grid_line_conts[mask] * sfzh[mask],
-                    axis=0,
-                )
-            else:
-                lum = np.sum(grid_line_lums[mask] * sfzh[mask], axis=0).astype(
-                    out_dtype,
-                    copy=False,
-                )
-                cont = np.sum(
-                    grid_line_conts[mask] * sfzh[mask],
-                    axis=0,
-                ).astype(out_dtype, copy=False)
+        # Compute the integrated line luminosities, then reuse the weights
+        # for the continuum
+        lum, grid_weights = compute_integrated_parametric_sed(
+            self._line_lum_grid,
+            self._grid_axes,
+            edges,
+            masses,
+            log_flags,
+            nthreads,
+            grid_weights,
+            None,
+            lam_mask,
+            out_dtype,
+            self._emitter_attributes,
+        )
+        cont, _ = compute_integrated_parametric_sed(
+            self._line_cont_grid,
+            self._grid_axes,
+            edges,
+            masses,
+            log_flags,
+            nthreads,
+            grid_weights,
+            None,
+            lam_mask,
+            out_dtype,
+            self._emitter_attributes,
+        )
+
+        # Store the grid weights for reuse if we had no mask
+        if mask is None:
+            emitter._grid_weights[grid_name] = grid_weights
 
         return LineCollection(
             line_ids=self._grid.line_ids,
             lam=self._grid.line_lams,
-            lum=lum,
-            cont=cont,
+            lum=lum * self._line_lum_grid.units,
+            cont=cont * self._line_cont_grid.units,
         )

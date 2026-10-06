@@ -10,7 +10,7 @@ Tests cover:
 
 import numpy as np
 import pytest
-from unyt import Msun, Myr, kpc, yr
+from unyt import Msun, Myr, dimensionless, kpc, yr
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.parametric import SFH, Galaxy, PointSource, ZDist
@@ -649,3 +649,170 @@ class TestAddition:
             galaxies[0].stars.lines[label].luminosity
             + galaxies[1].stars.lines[label].luminosity,
         )
+
+
+def _set_age_bin(stars, lo, hi, mass, metallicity_index=0):
+    """Give a Stars a single finite age bin at one metallicity point."""
+    metals = np.asarray(stars.metallicities)
+    masses = np.zeros((1, 1, 1))
+    masses[0, 0, 0] = mass
+    stars._set_bins(
+        {
+            "ages": np.array([lo, hi]),
+            "metallicities": np.repeat(metals[metallicity_index], 2),
+        },
+        masses,
+    )
+
+
+class TestBinStorage:
+    """Tests for the binned representation of a parametric Stars."""
+
+    def test_sfzh_view_matches_input(self, test_grid):
+        """An SFZH on the axes must be returned unchanged by the view."""
+        sfzh = np.random.default_rng(0).random(
+            (test_grid.log10ages.size, test_grid.metallicities.size)
+        )
+        stars = Stars(test_grid.log10ages, test_grid.metallicities, sfzh=sfzh)
+        np.testing.assert_allclose(stars.sfzh, sfzh, rtol=1e-12)
+
+    def test_sfzh_view_is_read_only(self, instantaneous_stars):
+        """The SFZH view can't be modified in place."""
+        with pytest.raises(ValueError):
+            instantaneous_stars.sfzh[0, 0] = 1.0
+
+    def test_input_sfzh_is_not_modified(self, test_grid):
+        """Normalising to an initial mass must not touch the input array."""
+        sfzh = np.ones(
+            (test_grid.log10ages.size, test_grid.metallicities.size)
+        )
+        Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sfzh=sfzh,
+            initial_mass=1e9 * Msun,
+        )
+        assert np.all(sfzh == 1.0)
+
+    def test_setting_bins_clears_derived_state(self, test_grid):
+        """New bins must invalidate the SFZH view and stored weights."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e7 * yr,
+            metal_dist=0.01,
+            initial_mass=1e9 * Msun,
+        )
+        model = IncidentEmission(test_grid)
+        lnu = stars.get_spectra(model).lnu.copy()
+        stars._set_bins(stars._bin_edges, stars.bin_masses * 2)
+        np.testing.assert_allclose(stars.sfzh.sum(), 2e9)
+        np.testing.assert_allclose(stars.get_spectra(model).lnu, 2 * lnu)
+
+
+class TestBinMask:
+    """Tests for fractional masks on binned parametric populations."""
+
+    @pytest.fixture
+    def stars(self, test_grid):
+        """Return a Stars with a single 5-20 Myr bin."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e7 * yr,
+            metal_dist=0.01,
+        )
+        _set_age_bin(stars, 5e6, 2e7, 1.0, metallicity_index=3)
+        return stars
+
+    def test_straddling_bin_fraction(self, stars):
+        """A threshold through a bin passes the fraction below it."""
+        mask = stars.get_mask("log10ages", 7, "<")
+        np.testing.assert_allclose(mask.get_fractions(stars), 5.0 / 15.0)
+        mask = stars.get_mask("ages", 10 * Myr, ">=")
+        np.testing.assert_allclose(mask.get_fractions(stars), 10.0 / 15.0)
+
+    def test_same_axis_conditions_intersect(self, stars):
+        """Two conditions on one axis keep the intersection of intervals."""
+        mask = stars.get_mask("ages", 8 * Myr, ">")
+        mask = stars.get_mask("ages", 12 * Myr, "<", mask=mask)
+        np.testing.assert_allclose(mask.get_fractions(stars), 4.0 / 15.0)
+
+    def test_conditions_on_different_axes_multiply(self, test_grid):
+        """Conditions on different axes multiply their fractions."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e7 * yr,
+            metal_dist=0.01,
+        )
+        stars._set_bins(
+            {
+                "ages": np.array([5e6, 2e7]),
+                "metallicities": np.array([0.001, 0.005]),
+            },
+            np.ones((1, 1, 1)),
+        )
+        mask = stars.get_mask("log10ages", 7, "<")
+        mask = stars.get_mask("metallicities", 0.002, "<", mask=mask)
+        np.testing.assert_allclose(
+            mask.get_fractions(stars), (5.0 / 15.0) * (1.0 / 4.0)
+        )
+
+    def test_points_are_exact(self, instantaneous_stars):
+        """Zero width bins are evaluated exactly, including equality."""
+        stars = instantaneous_stars
+        mask = stars.get_mask("log10ages", 7, "<")
+        fracs = mask.get_fractions(stars)[0, :, 0]
+
+        # The point bins (even indices) pass exactly when below the
+        # threshold, the empty bins between them get the clipped fraction
+        edges = stars.get_bin_edges("ages", values_only=True)
+        lo, hi = edges[:-1], edges[1:]
+        expected = np.where(
+            lo == hi,
+            (lo < 1e7).astype(float),
+            np.clip(np.minimum(hi, 1e7) - lo, 0, None)
+            / np.where(lo == hi, 1.0, hi - lo),
+        )
+        np.testing.assert_allclose(fracs, expected)
+
+        # Equality is allowed on points
+        mask = stars.get_mask("metallicities", stars.metallicities[2], "==")
+        fracs = mask.get_fractions(stars)[0, 0, ::2]
+        np.testing.assert_allclose(fracs, np.arange(fracs.size) == 2)
+
+    def test_equality_on_finite_bins(self, stars):
+        """No mass in a finite bin sits exactly at a single value."""
+        mask = stars.get_mask("ages", 10 * Myr, "==")
+        np.testing.assert_allclose(mask.get_fractions(stars), 0.0)
+        mask = stars.get_mask("ages", 10 * Myr, "!=")
+        np.testing.assert_allclose(mask.get_fractions(stars), 1.0)
+
+    def test_masked_extraction_matches_clipped_bin(self, test_grid, stars):
+        """A masked straddling bin must equal the clipped bin on its own.
+
+        Masking a 5-20 Myr bin at 10 Myr must give exactly the emission of
+        a 5-10 Myr bin holding the passing fraction of the mass.
+        """
+        model = IncidentEmission(test_grid)
+        model.add_mask("log10ages", "<", 7 * dimensionless)
+        masked = stars.get_spectra(model).lnu
+
+        clipped = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e7 * yr,
+            metal_dist=0.01,
+        )
+        _set_age_bin(clipped, 5e6, 1e7, 5.0 / 15.0, metallicity_index=3)
+        expected = clipped.get_spectra(IncidentEmission(test_grid)).lnu
+        np.testing.assert_allclose(masked, expected, rtol=1e-10)
+
+    def test_fixed_parameter_masks_whole_population(self, test_grid, stars):
+        """A mask on a fixed model parameter includes or excludes it all."""
+        model = IncidentEmission(test_grid, fesc=0.3)
+        mask = stars.get_mask("fesc", 0.5, "<", attr_override_obj=model)
+        np.testing.assert_allclose(mask.get_fractions(stars), 1.0)
+        mask = stars.get_mask("fesc", 0.1, "<", attr_override_obj=model)
+        np.testing.assert_allclose(mask.get_fractions(stars), 0.0)

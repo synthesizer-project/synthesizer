@@ -32,6 +32,7 @@ from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
 from synthesizer.emission_models.utils import get_param
 from synthesizer.grid import Grid
+from synthesizer.parametric.bin_mask import BinMask, to_axis_threshold
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.synth_warnings import warn
@@ -299,19 +300,17 @@ class Stars(StarsComponent):
             self.stellar_fraction = grid.stellar_fraction
 
         # If we have been handed an explict SFZH grid we can ignore all the
-        # calculation methods
-        if sfzh is not None:
-            # Store the SFZH grid
-            self.sfzh = sfzh
-        else:
-            # Compute the SFZH grid
-            self.sfzh = self._get_sfzh()
+        # calculation methods. Either way we take a copy so normalising it
+        # below doesn't modify the caller's (or another Stars') array.
+        if sfzh is None:
+            sfzh = self._get_sfzh()
+        sfzh = np.array(sfzh, dtype=np.float64)
 
         # Check the SFZH grid doesn't contain any NaN or Inf values, this can
         # happen if the SFH or ZH functions return NaN or Inf values for some
         # reason, and this will cause all kinds of problems downstream if we
         # don't catch it here.
-        if np.any(~np.isfinite(self.sfzh)):
+        if np.any(~np.isfinite(sfzh)):
             raise exceptions.InconsistentArguments(
                 "SFZH grid contains NaN or Inf values! "
                 "Please check the input parameters."
@@ -323,23 +322,28 @@ class Stars(StarsComponent):
         # constraint, and if we have been given neither then we can just sum
         # the SFZH grid to get the total initial mass.
         if self.surviving_mass is not None:
-            current_surviving_mass = np.sum(self.sfzh * self.stellar_fraction)
+            current_surviving_mass = np.sum(sfzh * self.stellar_fraction)
             self.sfzh_normalisation = (
                 self._surviving_mass / current_surviving_mass
             )
-            self.sfzh *= self.sfzh_normalisation
+            sfzh *= self.sfzh_normalisation
 
             # now calculate the initial mass
-            self.initial_mass = np.sum(self.sfzh) * Msun
+            self.initial_mass = np.sum(sfzh) * Msun
 
         elif self.initial_mass is not None:
-            self.sfzh_normalisation = self._initial_mass / np.sum(self.sfzh)
-            self.sfzh *= self.sfzh_normalisation
+            self.sfzh_normalisation = self._initial_mass / np.sum(sfzh)
+            sfzh *= self.sfzh_normalisation
 
         else:
             # Otherwise calculate the total initial mass by just summing the
             # SFZH grid
-            self.initial_mass = np.sum(self.sfzh) * Msun
+            self.initial_mass = np.sum(sfzh) * Msun
+
+        # Store the population as bins. Every SFZH built above is defined at
+        # the points of the age and metallicity axes, so each becomes a zero
+        # width bin
+        self._set_point_bins(sfzh)
 
         # Ensure sf_hist and metal_dist reflect the rescaled sfzh
         self.sf_hist = np.sum(self.sfzh, axis=1)
@@ -651,6 +655,133 @@ class Stars(StarsComponent):
 
         return Stars(self.log10ages, self.metallicities, sfzh=sfzh)
 
+    def _set_bins(self, edges, masses):
+        """Set the bins describing this population.
+
+        Args:
+            edges (dict):
+                The bin edges along each axis in bin_axes, in linear units
+                (ages in yr), keyed by axis name.
+            masses (np.ndarray):
+                The mass in each bin (Msun) with shape (npop, nbins_0, ...,
+                nbins_N) in the order of bin_axes.
+        """
+        self._bin_edges = edges
+        self._bin_masses = masses
+
+        # Anything derived from the bins is now stale
+        self._sfzh_view = None
+        self._grid_weights = {}
+
+    def _set_point_bins(self, sfzh):
+        """Set the bins from a SFZH defined at the points of the axes.
+
+        Each point of the age and metallicity axes becomes a zero width bin,
+        with the (empty) finite bins between them. Mapping these onto any
+        grid is then exactly cloud in cell, and onto this object's own axes
+        it returns the SFZH unchanged.
+
+        Args:
+            sfzh (np.ndarray):
+                The mass (Msun) at each (age, metallicity) point.
+        """
+        edges = {
+            "ages": np.repeat(self.ages.to("yr").ndview.astype(np.float64), 2),
+            "metallicities": np.repeat(
+                np.asarray(self.metallicities, dtype=np.float64), 2
+            ),
+        }
+        masses = np.zeros(
+            (1, 2 * self.ages.size - 1, 2 * self.metallicities.size - 1)
+        )
+        masses[0, ::2, ::2] = sfzh
+        self._set_bins(edges, masses)
+
+    @property
+    def bin_axes(self):
+        """The names of the axes the population is binned along.
+
+        Returns:
+            tuple of str:
+                The bin axis names in the order of the bin_masses axes.
+        """
+        return ("ages", "metallicities")
+
+    @property
+    def bin_masses(self):
+        """The mass in each bin (Msun).
+
+        Returns:
+            np.ndarray:
+                The masses with shape (npop, nbins_0, ..., nbins_N).
+        """
+        return self._bin_masses
+
+    def get_bin_edges(self, axis, values_only=False):
+        """Get the bin edges along an axis.
+
+        Args:
+            axis (str):
+                The axis name (one of bin_axes).
+            values_only (bool):
+                Return the values without units.
+
+        Returns:
+            unyt_array/np.ndarray:
+                The bin edges in linear units.
+        """
+        if axis not in self._bin_edges:
+            raise exceptions.MissingAttribute(
+                f"This parametric Stars has no bins along {axis} (it is "
+                f"binned along {self.bin_axes})."
+            )
+        edges = self._bin_edges[axis]
+        if values_only or axis != "ages":
+            return edges
+        return edges * yr
+
+    @property
+    def sfzh(self):
+        """The SFZH on this object's age and metallicity axes.
+
+        This is a read-only view of the bins mapped onto the points of the
+        age and metallicity axes with the bin in cell approach (see
+        synthesizer.extensions.parametric_spectra).
+
+        Returns:
+            np.ndarray:
+                The mass (Msun) at each (age, metallicity) point.
+        """
+        # Imported here to avoid importing the extension at module load
+        from synthesizer.extensions.parametric_spectra import (
+            compute_parametric_weights,
+        )
+
+        if self._sfzh_view is None:
+            # Use log10 metallicity axes like the grids unless a metallicity
+            # of zero makes that impossible
+            log_metals = bool(np.all(self.metallicities > 0))
+            metal_axis = (
+                self.log10metallicities if log_metals else self.metallicities
+            )
+            view = compute_parametric_weights(
+                (
+                    np.ascontiguousarray(self.log10ages, dtype=np.float64),
+                    np.ascontiguousarray(metal_axis, dtype=np.float64),
+                ),
+                tuple(
+                    self.get_bin_edges(axis, values_only=True)
+                    for axis in self.bin_axes
+                ),
+                self._bin_masses,
+                (True, log_metals),
+                1,
+                None,
+            )
+            view.setflags(write=False)
+            self._sfzh_view = view
+        return self._sfzh_view
+
     @timed("Stars.get_mask")
     def get_mask(
         self,
@@ -664,6 +795,12 @@ class Stars(StarsComponent):
 
         Will derive a mask of the form attr op thresh, e.g. age > 10 Myr.
 
+        A condition on a bin axis (ages or metallicities, or their log10)
+        can cut through a bin, so the mask records the allowed interval and
+        converts it into the fraction of each bin passing (see BinMask).
+        Conditions on a population level value (e.g. a fixed model parameter)
+        include or exclude the whole population.
+
         Args:
             attr (str):
                 The attribute to derive the mask from.
@@ -672,7 +809,7 @@ class Stars(StarsComponent):
             op (str):
                 The operation to apply. Can be '<', '>', '<=', '>=', "==",
                 or "!=".
-            mask (np.ndarray):
+            mask (BinMask):
                 Optionally, a mask to combine with the new mask.
             attr_override_obj (object):
                 An alternative object to check from the attribute. This
@@ -680,64 +817,55 @@ class Stars(StarsComponent):
                 fixed parameter override, but can be used more generally.
 
         Returns:
-            mask (np.ndarray):
-                The mask array.
+            mask (BinMask):
+                The combined mask.
         """
-        # Get the attribute
-        attr = get_param(attr, attr_override_obj, None, self)
+        # Start from a copy of the mask we're combining with
+        if mask is None:
+            new_mask = BinMask()
+        elif isinstance(mask, BinMask):
+            new_mask = mask.copy()
+        else:
+            raise exceptions.InconsistentArguments(
+                "Parametric Stars masks must be BinMask objects, "
+                f"got {type(mask)}."
+            )
 
         # Resolve a string threshold as an attribute alias on the emitter
         if isinstance(thresh, str):
-            thresh = get_param(thresh, attr_override_obj, None, self)
+            thresh = get_param(
+                thresh, attr_override_obj, None, self, preserve_units=True
+            )
 
-        # Apply the operator
-        if op == ">":
-            new_mask = attr > thresh
-        elif op == "<":
-            new_mask = attr < thresh
-        elif op == ">=":
-            new_mask = attr >= thresh
-        elif op == "<=":
-            new_mask = attr <= thresh
-        elif op == "==":
-            new_mask = attr == thresh
-        elif op == "!=":
-            new_mask = attr != thresh
-        else:
+        # A fixed model parameter applies to the whole population
+        override = None
+        if attr in getattr(attr_override_obj, "fixed_parameters", {}):
+            override = get_param(
+                attr, attr_override_obj, None, self, preserve_units=True
+            )
+
+        # Otherwise, is this a condition on a bin axis?
+        axis = attr[5:] if attr.startswith("log10") else attr
+        if override is None and axis in self.bin_axes:
+            axis_units = yr if axis == "ages" else None
+            new_mask.add_axis_condition(
+                axis, op, to_axis_threshold(thresh, attr, axis_units)
+            )
+            return new_mask
+
+        # Anything else must be a single population level value
+        value = (
+            override
+            if override is not None
+            else get_param(attr, None, None, self, preserve_units=True)
+        )
+        if np.size(value) != 1:
             raise exceptions.InconsistentArguments(
-                "Masking operation must be '<', '>', '<=', '>=', '==', or "
-                f"'!=', not {op}"
+                f"Can't mask a parametric Stars on {attr}: only the bin axes "
+                f"({self.bin_axes}) and single valued quantities can be "
+                "masked."
             )
-
-        # Broadcast the mask to get a mask for SFZH bins
-        if new_mask.size == self.sfzh.shape[0]:
-            new_mask = np.outer(
-                new_mask, np.ones(self.sfzh.shape[1], dtype=bool)
-            )
-        elif new_mask.size == self.sfzh.shape[1]:
-            new_mask = np.outer(
-                np.ones(self.sfzh.shape[0], dtype=bool), new_mask
-            )
-        elif new_mask.shape == self.sfzh.shape:
-            pass  # nothing to do here
-        else:
-            raise exceptions.InconsistentArguments(
-                "Masking array must be the same shape as the SFZH grid "
-                f"or an axis (mask.shape={new_mask.shape}, "
-                f"sfzh.shape={self.sfzh.shape})"
-            )
-
-        # Combine with the existing mask
-        if mask is not None:
-            if mask.shape == new_mask.shape:
-                new_mask = np.logical_and(new_mask, mask)
-            else:
-                raise exceptions.InconsistentArguments(
-                    "Masking array must be the same shape as the SFZH grid "
-                    f"or an axis (mask.shape={new_mask.shape}, "
-                    f"sfzh.shape={self.sfzh.shape})"
-                )
-
+        new_mask.add_population_condition(value, op, thresh)
         return new_mask
 
     def calculate_median_age(self):
@@ -855,7 +983,9 @@ class Stars(StarsComponent):
                 self.spectra[key]._fnu *= conversion
 
         # Apply correction to the SFZH
-        self.sfzh *= conversion
+        self._set_bins(
+            self._bin_edges, self._bin_masses * np.asarray(conversion)
+        )
 
     @accepts(flux=nJy)
     def scale_mass_by_flux(self, flux, scale_filter, spectra_type):
@@ -913,7 +1043,9 @@ class Stars(StarsComponent):
                 self.spectra[key]._fnu *= conversion
 
         # Apply correction to the SFZH
-        self.sfzh *= conversion
+        self._set_bins(
+            self._bin_edges, self._bin_masses * np.asarray(conversion)
+        )
 
     @timed("ParametricStars.get_sfzh")
     def get_sfzh(
