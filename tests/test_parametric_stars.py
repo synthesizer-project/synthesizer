@@ -545,3 +545,23 @@ class TestFunctionSFZHEdgeBins:
             ),
         )
         assert stars.metal_dist[-1] > 0
+
+
+class TestCalculateAverageSFR:
+    """Tests for the average SFR of a parametric Stars."""
+
+    def test_constant_sfh_over_full_range(self, test_grid):
+        """Test a unit SFR covering the whole grid averages to 1 Msun/yr.
+
+        The oldest bin must end at the oldest grid age, as it does when the
+        SFZH is integrated, otherwise its mass is spread past the range.
+        """
+        ages = 10**test_grid.log10ages
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=2 * ages[-1] * yr),
+            metal_dist=0.01,
+        )
+        sfr = stars.calculate_average_sfr(t_range=(0, ages[-1]))
+        assert np.isclose(sfr.to("Msun/yr").value, 1.0, rtol=1e-6)

@@ -1224,17 +1224,17 @@ class Stars(StarsComponent):
 
         # --- Construct Bins from Age Points ---
         if age_points.size == 1:
-            # For a single point, assume the bin is centered on it,
-            # starting from 0.
-            age_edges = np.array([0, 2 * age_points[0]])
+            # For a single point, the bin runs from 0 up to that age,
+            # matching the bin used when integrating the SFZH.
+            age_edges = np.array([0, age_points[0]])
         else:
             # Bin edges are the midpoints between age points.
             internal_edges = (age_points[:-1] + age_points[1:]) / 2.0
-            # Extrapolate the first and last edges to define the outer bounds.
+            # Extrapolate the first edge to define the lower bound, the last
+            # edge is the oldest age, matching the bin used when integrating
+            # the SFZH.
             first_edge = age_points[0] - (age_points[1] - age_points[0]) / 2.0
-            last_edge = (
-                age_points[-1] + (age_points[-1] - age_points[-2]) / 2.0
-            )
+            last_edge = age_points[-1]
             age_edges = np.concatenate(
                 ([first_edge], internal_edges, [last_edge])
             )
