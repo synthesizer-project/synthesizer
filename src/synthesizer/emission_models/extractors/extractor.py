@@ -1311,6 +1311,33 @@ class IntegratedParametricExtractor(Extractor):
     emission.
     """
 
+    def _check_emitter_axes(self, emitter):
+        """Ensure the emitter's SFZH axes match the grid axes.
+
+        The SFZH is multiplied bin by bin with the grid, so it is only
+        meaningful if both are defined on the same axes.
+
+        Args:
+            emitter (Stars):
+                The parametric emitter to check.
+
+        Raises:
+            InconsistentArguments:
+                If the emitter axes differ from the grid axes.
+        """
+        for name, grid_axis in zip(self._emitter_attributes, self._grid_axes):
+            emitter_axis = getattr(emitter, name, None)
+            if (
+                emitter_axis is None
+                or len(emitter_axis) != len(grid_axis)
+                or not np.allclose(np.asarray(emitter_axis), grid_axis)
+            ):
+                raise exceptions.InconsistentArguments(
+                    f"The {emitter.__class__.__name__} {name} axis does not "
+                    f"match the grid's {name} axis. A parametric SFZH must "
+                    "be defined on the grid axes, use get_sfzh to remap it."
+                )
+
     @timed("IntegratedParametricExtractor.generate_lnu")
     @verify_out_precision()
     def generate_lnu(
@@ -1352,6 +1379,9 @@ class IntegratedParametricExtractor(Extractor):
         Returns:
             Sed: The integrated spectra.
         """
+        # Ensure the SFZH is defined on the grid axes
+        self._check_emitter_axes(emitter)
+
         # Get a mask for non-zero bins in the SFZH
         mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
 
@@ -1415,6 +1445,9 @@ class IntegratedParametricExtractor(Extractor):
         """
         with timer("IntegratedParametricExtractor.generate_line"):
             out_dtype = resolve_out_dtype(out_dtype)
+            # Ensure the SFZH is defined on the grid axes
+            self._check_emitter_axes(emitter)
+
             # Get a mask for non-zero bins in the SFZH
             mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
 
