@@ -579,3 +579,21 @@ class TestGetAtEarlierTime:
         """Test that shifting past a 10 Myr burst removes all its mass."""
         earlier = instantaneous_stars.get_at_earlier_time(20 * Myr)
         assert np.isclose(earlier.sfzh.sum(), 0.0)
+
+
+class TestGetSFZHRemap:
+    """Tests for remapping a parametric SFZH onto new axes."""
+
+    def test_remap_to_different_length_axes(self, test_grid):
+        """Test remapping onto axes of a different length conserves mass."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=100 * Myr),
+            metal_dist=0.01,
+            initial_mass=1e9 * Msun,
+        )
+        new_log10ages = np.linspace(6, 10, 20)
+        remapped = stars.get_sfzh(new_log10ages, test_grid.metallicities)
+        assert remapped.sfzh.shape == (20, len(test_grid.metallicities))
+        assert np.isclose(remapped.sfzh.sum(), stars.sfzh.sum())
