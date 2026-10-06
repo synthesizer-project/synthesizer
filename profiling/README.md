@@ -320,6 +320,31 @@ Results and plots go to `profiling/outputs/mpi_weak/` and `profiling/outputs/mpi
 
 ---
 
+## Parametric Profiling (`parametric/`)
+
+The parametric counterpart of `general/`, scaling with the number of
+parametric populations (e.g. bulge+disk components or annuli) rather than the
+number of particles.
+
+```bash
+# Run all parametric profiling scripts
+python profiling/parametric/make_all_plots.py --nthreads 8 --n_averages 3 \
+  --output_dir profiling/outputs/parametric
+
+# Or individual scripts
+python profiling/parametric/profile_npops_scaling.py --nthreads 8
+python profiling/parametric/profile_wavelength_scaling.py --nthreads 8
+```
+
+- `profile_npops_scaling.py`: construction, spectra, photometry and imaging time vs number of populations.
+- `profile_npops_memory.py`: spectra and photometry result size vs number of populations.
+- `profile_wavelength_scaling.py` / `profile_wavelength_memory.py`: spectra time and size vs wavelength elements.
+
+All scripts accept the same `--nthreads`, `--n_averages`, `--output_dir`,
+`--grid-precision` and `--out-dtype` options as `general/`.
+
+---
+
 ## Output Directory Structure
 
 ```
