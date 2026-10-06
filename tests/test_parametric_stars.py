@@ -565,3 +565,17 @@ class TestCalculateAverageSFR:
         )
         sfr = stars.calculate_average_sfr(t_range=(0, ages[-1]))
         assert np.isclose(sfr.to("Msun/yr").value, 1.0, rtol=1e-6)
+
+
+class TestGetAtEarlierTime:
+    """Tests for getting a parametric Stars at an earlier time."""
+
+    def test_age_offset_is_required(self, instantaneous_stars):
+        """Test that omitting the age offset raises a clear TypeError."""
+        with pytest.raises(TypeError):
+            instantaneous_stars.get_at_earlier_time()
+
+    def test_earlier_time_removes_young_mass(self, instantaneous_stars):
+        """Test that shifting past a 10 Myr burst removes all its mass."""
+        earlier = instantaneous_stars.get_at_earlier_time(20 * Myr)
+        assert np.isclose(earlier.sfzh.sum(), 0.0)
