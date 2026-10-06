@@ -66,6 +66,7 @@ Synthesizer provides a set of parametric star formation histories (SFHs) that ca
 - ContinuityPSB
 - Stochastic
 - CombinedSFH
+- MadauDickinsonCSFH
 
 In the example below, we demonstrate how to instantiate and use these parametric SFHs to generate star formation histories.
 
