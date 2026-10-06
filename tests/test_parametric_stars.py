@@ -10,9 +10,10 @@ Tests cover:
 
 import numpy as np
 import pytest
-from unyt import Msun, Myr, yr
+from unyt import Msun, Myr, kpc, yr
 
-from synthesizer.parametric import SFH, ZDist
+from synthesizer.emission_models import IncidentEmission
+from synthesizer.parametric import SFH, Galaxy, PointSource, ZDist
 from synthesizer.parametric.stars import Stars
 from synthesizer.units import Units
 
@@ -597,3 +598,54 @@ class TestGetSFZHRemap:
         remapped = stars.get_sfzh(new_log10ages, test_grid.metallicities)
         assert remapped.sfzh.shape == (20, len(test_grid.metallicities))
         assert np.isclose(remapped.sfzh.sum(), stars.sfzh.sum())
+
+
+class TestAddition:
+    """Tests for adding parametric Stars and Galaxies."""
+
+    @staticmethod
+    def _make_stars(test_grid, **kwargs):
+        """Return a parametric Stars with a constant SFH."""
+        return Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=100 * Myr),
+            metal_dist=0.01,
+            initial_mass=1e9 * Msun,
+            **kwargs,
+        )
+
+    def test_shared_attributes_survive_addition(self, test_grid):
+        """Test that attributes shared by both Stars are kept."""
+        morph = PointSource(offset=[0, 0] * kpc)
+        stars1 = self._make_stars(test_grid, fesc=0.1, morphology=morph)
+        stars2 = self._make_stars(test_grid, fesc=0.1, morphology=morph)
+        combined = stars1 + stars2
+        assert combined.fesc == 0.1
+        assert combined.morphology is morph
+        assert np.allclose(combined.sfzh, stars1.sfzh + stars2.sfzh)
+
+    def test_differing_attributes_are_dropped(self, test_grid):
+        """Test that attributes the Stars disagree on are dropped."""
+        stars1 = self._make_stars(test_grid, fesc=0.1)
+        stars2 = self._make_stars(test_grid, fesc=0.2)
+        with pytest.warns(RuntimeWarning):
+            combined = stars1 + stars2
+        assert combined.fesc == self._make_stars(test_grid).fesc
+
+    def test_galaxy_addition_with_lines(self, test_grid):
+        """Test that galaxies with lines can be added together."""
+        model = IncidentEmission(test_grid)
+        galaxies = []
+        for _ in range(2):
+            gal = Galaxy(self._make_stars(test_grid))
+            gal.stars.get_spectra(model)
+            gal.stars.get_lines(test_grid.available_lines[:2], model)
+            galaxies.append(gal)
+        combined = galaxies[0] + galaxies[1]
+        label = model.label
+        assert np.allclose(
+            combined.stars.lines[label].luminosity,
+            galaxies[0].stars.lines[label].luminosity
+            + galaxies[1].stars.lines[label].luminosity,
+        )
