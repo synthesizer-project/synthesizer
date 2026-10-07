@@ -936,8 +936,12 @@ class Stars(StarsComponent):
             Stars: New Stars object on the requested grid.
         """
         # If the axes are the same as our existing ones just return our SFZH
-        if np.allclose(log10ages, self.log10ages) and np.allclose(
-            metallicities, self.metallicities
+        # (the lengths must be checked first since allclose broadcasts)
+        if (
+            len(log10ages) == len(self.log10ages)
+            and len(metallicities) == len(self.metallicities)
+            and np.allclose(log10ages, self.log10ages)
+            and np.allclose(metallicities, self.metallicities)
         ):
             return deepcopy(self)
 
