@@ -46,14 +46,14 @@ Please see [here](docs/CONTRIBUTING.md) for contribution guidelines.
 Please cite **both** of the following papers ([Lovell et al. 2025](https://astro.theoj.org/article/145766-synthesizer-a-software-package-for-synthetic-astronomical-observables), [Roper et al. 2026](https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R/abstract)) if you use Synthesizer in your research:
 
     @article{Lovell2025Synthesizer,
-    	author = {Lovell, Christopher C. and Roper, William J. and Vijayan, Aswin P. and Wilkins, Stephen M. and Newman, Sophie and Seeyave, Louise},
-    	journal = {The Open Journal of Astrophysics},
-    	doi = {10.33232/001c.145766},
-    	year = {2025},
-    	month = {oct 9},
-    	publisher = {Maynooth Academic Publishing},
-    	title = {Synthesizer: a {Software} {Package} for {Synthetic} {Astronomical} {Observables}},
-    	volume = {8},
+        author = {Lovell, Christopher C. and Roper, William J. and Vijayan, Aswin P. and Wilkins, Stephen M. and Newman, Sophie and Seeyave, Louise},
+        journal = {The Open Journal of Astrophysics},
+        doi = {10.33232/001c.145766},
+        year = {2025},
+        month = {oct 9},
+        publisher = {Maynooth Academic Publishing},
+        title = {Synthesizer: a {Software} {Package} for {Synthetic} {Astronomical} {Observables}},
+        volume = {8},
     }
 
     @article{Roper2026Synthesizer,
@@ -68,7 +68,7 @@ Please cite **both** of the following papers ([Lovell et al. 2025](https://astro
         pages = {9436},
     }
 
-And if you use any of the pre-built grids from the [database](https://synthesizer-project.org/syndex). Then please cite the grids release paper (and any other applicable citations as listed on Syndex):
+If you use any of the pre-built grids from the [database](https://synthesizer-project.org/syndex) please cite the grids release paper (and any other applicable citations as listed on Syndex):
 
     @article{Vijayan2026Synthesizer,
        author = {{Vijayan}, Aswin P. and {Wilkins}, Stephen M. and {Newman}, Sophie L. and {Lovell}, Christopher C. and {Roper}, William J. and {Berger}, Sabrina and {Harvey}, Thomas and {Turner}, Jack C.},
