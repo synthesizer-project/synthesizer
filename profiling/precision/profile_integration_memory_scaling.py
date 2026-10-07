@@ -1,8 +1,7 @@
 """Profile integration memory across input and output precisions.
 
-This script benchmarks the integration extension for one isolated workload per
-subprocess. For each array size, all four input/output precision combinations
-are profiled:
+This script benchmarks the integration extension for a 1D workload.
+For each array size, all four input/output precision combinations are profiled:
 
 - float32 -> float32
 - float32 -> float64
@@ -10,9 +9,8 @@ are profiled:
 - float64 -> float64
 
 Memory (RSS) is sampled continuously at a configurable frequency by a
-background thread while each isolated worker process builds its inputs and runs
-the extension. The x-axis is normalised to % progress so runtime does not
-affect the plot shape.
+background thread while the extension runs.  The x-axis is normalised to
+% progress so runtime does not affect the plot shape.
 
 Usage:
     python profile_integration_memory_scaling.py --basename test
@@ -22,11 +20,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
-import logging
-import subprocess
-import sys
-import tempfile
 import threading
 import time
 from pathlib import Path
@@ -38,8 +31,6 @@ from synthesizer.extensions.integration import (
     simps_last_axis,
     trapz_last_axis,
 )
-
-LOGGER = logging.getLogger(__name__)
 
 plt.rcParams["font.family"] = "DejaVu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]
@@ -57,49 +48,44 @@ METHODS = {
 
 def make_synthetic_inputs(nentries, nlam, dtype, rng):
     """Create contiguous synthetic inputs for last-axis integration."""
-    xs = np.linspace(dtype(0.0), dtype(10.0), nlam, dtype=dtype)
+    xs = np.linspace(0.0, 10.0, nlam, dtype=np.float64)
 
-    phases = rng.uniform(0.0, np.pi, size=(nentries, 1)).astype(dtype)
-    amplitudes = rng.uniform(0.5, 2.0, size=(nentries, 1)).astype(dtype)
-    frequencies = rng.uniform(0.5, 2.5, size=(nentries, 1)).astype(dtype)
-    continuum = np.linspace(dtype(0.8), dtype(1.2), nlam, dtype=dtype)[None, :]
+    phases = rng.uniform(0.0, np.pi, size=(nentries, 1))
+    amplitudes = rng.uniform(0.5, 2.0, size=(nentries, 1))
+    frequencies = rng.uniform(0.5, 2.5, size=(nentries, 1))
+    continuum = np.linspace(0.8, 1.2, nlam, dtype=np.float64)[None, :]
 
     ys = (
         amplitudes * np.sin(frequencies * xs[None, :] + phases)
-        + dtype(0.1) * continuum
-        + dtype(0.05) * np.cos(dtype(0.5) * xs[None, :])
+        + 0.1 * continuum
+        + 0.05 * np.cos(0.5 * xs[None, :])
     )
 
     return {
-        "xs": np.array(xs, dtype=dtype, order="C", copy=False),
-        "ys": np.array(ys, dtype=dtype, order="C", copy=False),
+        "xs": np.array(xs, dtype=dtype, order="C", copy=True),
+        "ys": np.array(ys, dtype=dtype, order="C", copy=True),
     }
 
 
-def _sample_worker_case(
+def _sample_integration(
     method,
-    nentries,
-    nlam,
-    input_dtype_name,
-    output_dtype_name,
+    inputs,
+    out_dtype,
     nthreads,
     repeats,
     sample_freq_hz,
-    seed,
 ):
-    """Run one isolated precision case while continuously sampling RSS.
+    """Run integration repeats while continuously sampling RSS.
 
-    The worker process starts from a fresh interpreter so previous profiling
-    cases cannot inflate the resident set of the current measurement.
-    Sampling starts before inputs are created so input precision differences
-    are reflected directly in the reported memory usage.
+    RSS is sampled on a background daemon thread at ``sample_freq_hz``
+    using a busy-wait loop so the requested frequency is respected even
+    for sub-ms calls.
+
+    Returns (memory_trace, peak_mib).  Always includes at least a start
+    and end sample so even fast operations produce a visible trace.
     """
     func = METHODS[method]
-    input_dtype = PRECISIONS[input_dtype_name]
-    output_dtype = PRECISIONS[output_dtype_name]
-    rng = np.random.default_rng(seed)
-
-    rss_start = psutil.Process().memory_info().rss / (1024**2)
+    rss_start = psutil.Process().memory_info().rss / 1e6
     samples = []
     stop_sampling = False
     interval = 1.0 / sample_freq_hz
@@ -109,129 +95,27 @@ def _sample_worker_case(
         while not stop_sampling:
             now = time.perf_counter()
             if now >= next_sample:
-                rss_mib = psutil.Process().memory_info().rss / (1024**2)
-                samples.append(rss_mib)
+                rss_mb = psutil.Process().memory_info().rss / 1e6
+                samples.append(rss_mb)
                 next_sample += interval
 
     sampler_thread = threading.Thread(target=sampler, daemon=True)
     sampler_thread.start()
 
-    inputs = make_synthetic_inputs(nentries, nlam, input_dtype, rng)
-    result = None
     for _ in range(repeats):
-        result = func(inputs["xs"], inputs["ys"], nthreads, output_dtype)
+        func(inputs["xs"], inputs["ys"], nthreads, out_dtype)
 
     stop_sampling = True
     sampler_thread.join()
 
-    rss_end = psutil.Process().memory_info().rss / (1024**2)
-
-    # Keep the allocated arrays alive until after sampling ends so the trace
-    # reflects the full memory footprint of the isolated case.
-    _ = (inputs, result)
+    rss_end = psutil.Process().memory_info().rss / 1e6
 
     all_samples = [rss_start] + samples + [rss_end]
     n = len(all_samples)
-    peak_rss_mib = max(all_samples)
-    memory_trace = []
-    for i, rss_mib in enumerate(all_samples):
-        memory_trace.append(
-            {
-                "pct_complete": i / (n - 1) * 100.0,
-                "rss_mib": rss_mib,
-                "delta_mib": rss_mib - rss_start,
-            }
-        )
-
-    return {
-        "baseline_rss_mib": rss_start,
-        "peak_rss_mib": peak_rss_mib,
-        "peak_delta_mib": peak_rss_mib - rss_start,
-        "memory_trace": memory_trace,
-    }
-
-
-def _run_worker_subprocess(
-    method,
-    nentries,
-    nlam,
-    input_dtype_name,
-    output_dtype_name,
-    nthreads,
-    repeats,
-    sample_freq,
-    seed,
-):
-    """Run one profiling case in a fresh subprocess.
-
-    The worker serializes its result to JSON for the parent process to read.
-    """
-    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as handle:
-        result_path = Path(handle.name)
-
-    command = [
-        sys.executable,
-        __file__,
-        "--worker-mode",
-        "--worker-output",
-        str(result_path),
-        "--worker-method",
-        method,
-        "--worker-nentries",
-        str(nentries),
-        "--worker-nlam",
-        str(nlam),
-        "--worker-input-dtype",
-        input_dtype_name,
-        "--worker-output-dtype",
-        output_dtype_name,
-        "--worker-nthreads",
-        str(nthreads),
-        "--worker-repeats",
-        str(repeats),
-        "--worker-sample-freq",
-        str(sample_freq),
-        "--worker-seed",
-        str(seed),
+    memory_trace = [
+        (i / (n - 1) * 100.0, s) for i, s in enumerate(all_samples)
     ]
-
-    try:
-        try:
-            subprocess.run(command, check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as error:
-            LOGGER.error(
-                "Worker subprocess failed for %s %s -> %s at nentries=%s\n"
-                "stdout:\n%s\n"
-                "stderr:\n%s",
-                method,
-                input_dtype_name,
-                output_dtype_name,
-                nentries,
-                error.stdout,
-                error.stderr,
-            )
-            raise
-        with result_path.open() as handle:
-            return json.load(handle)
-    finally:
-        result_path.unlink(missing_ok=True)
-
-
-def _run_worker_mode(args):
-    """Execute one isolated case and serialize the result to JSON."""
-    result = _sample_worker_case(
-        method=args.worker_method,
-        nentries=args.worker_nentries,
-        nlam=args.worker_nlam,
-        input_dtype_name=args.worker_input_dtype,
-        output_dtype_name=args.worker_output_dtype,
-        nthreads=args.worker_nthreads,
-        repeats=args.worker_repeats,
-        sample_freq_hz=args.worker_sample_freq,
-        seed=args.worker_seed,
-    )
-    with Path(args.worker_output).open("w") as handle:
-        json.dump(result, handle)
+    return {"peak_mib": max(all_samples), "memory_trace": memory_trace}
 
 
 def write_results_csv(results, output_path):
@@ -244,10 +128,7 @@ def write_results_csv(results, output_path):
         "output_dtype",
         "pct_complete",
         "rss_mib",
-        "delta_mib",
-        "baseline_rss_mib",
-        "peak_rss_mib",
-        "peak_delta_mib",
+        "peak_mib",
     ]
 
     with output_path.open("w", newline="") as handle:
@@ -257,73 +138,37 @@ def write_results_csv(results, output_path):
 
 
 def plot_results(results, output_path):
-    """Plot RSS above baseline against % progress for each precision pair."""
+    """Plot RSS memory against % progress for each precision pair."""
     methods = sorted({row["method"] for row in results})
-    nentries_values = sorted({row["nentries"] for row in results})
-    figure, axes = plt.subplots(
-        len(nentries_values),
-        len(methods),
-        figsize=(6 * len(methods), 3.5 * len(nentries_values)),
-        squeeze=False,
-        sharex=True,
-    )
+    figure, axes = plt.subplots(1, len(methods), figsize=(6 * len(methods), 5))
+    axes = np.atleast_1d(axes)
 
-    row_max_delta = {
-        nentries: max(
-            (
-                row["delta_mib"]
-                for row in results
-                if row["nentries"] == nentries
-            ),
-            default=0.0,
-        )
-        for nentries in nentries_values
-    }
-
-    for row_index, nentries in enumerate(nentries_values):
-        for col_index, method in enumerate(methods):
-            axis = axes[row_index][col_index]
-
-            for input_name in PRECISIONS:
-                for output_name in PRECISIONS:
-                    rows = [
-                        row
-                        for row in results
-                        if row["method"] == method
-                        and row["nentries"] == nentries
-                        and row["input_dtype"] == input_name
-                        and row["output_dtype"] == output_name
-                    ]
-                    rows.sort(key=lambda row: row["pct_complete"])
-                    if not rows:
-                        continue
-
-                    axis.step(
-                        [row["pct_complete"] for row in rows],
-                        [row["delta_mib"] for row in rows],
-                        where="post",
-                        linewidth=1.2,
-                        label=f"{input_name} -> {output_name}",
-                    )
-
-            if row_index == 0:
-                axis.set_title(method)
-            if col_index == 0:
-                axis.set_ylabel(
-                    f"nentries={nentries}\nRSS above baseline (MiB)"
+    for axis, method in zip(axes, methods, strict=True):
+        for input_name in PRECISIONS:
+            for output_name in PRECISIONS:
+                rows = [
+                    row
+                    for row in results
+                    if row["method"] == method
+                    and row["input_dtype"] == input_name
+                    and row["output_dtype"] == output_name
+                ]
+                rows.sort(key=lambda row: row["pct_complete"])
+                if not rows:
+                    continue
+                axis.plot(
+                    [row["pct_complete"] for row in rows],
+                    [row["rss_mib"] for row in rows],
+                    linewidth=1,
+                    label=f"{input_name} -> {output_name}",
                 )
-            if row_index == len(nentries_values) - 1:
-                axis.set_xlabel("Progress through benchmark (%)")
 
-            axis.grid(True, alpha=0.3)
-            upper_limit = (
-                row_max_delta[nentries] * 1.05
-                if row_max_delta[nentries] > 0.0
-                else 1.0
-            )
-            axis.set_ylim(0.0, upper_limit)
+        axis.set_xlabel("Progress through benchmark (%)")
+        axis.set_title(method)
+        axis.grid(True, alpha=0.3)
 
-    axes[0][-1].legend(loc="best", fontsize=9)
+    axes[0].set_ylabel("RSS memory (MiB)")
+    axes[-1].legend(loc="best", fontsize=9)
     figure.suptitle("Integration Memory Scaling")
     figure.tight_layout()
     figure.savefig(output_path, dpi=300, bbox_inches="tight")
@@ -342,6 +187,8 @@ def profile_integration_memory_scaling(
     seed,
 ):
     """Run integration memory scaling benchmarks."""
+    rng = np.random.default_rng(seed)
+
     output_dir = Path(out_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     csv_path = output_dir / f"{basename}_integration_memory_scaling.csv"
@@ -351,25 +198,26 @@ def profile_integration_memory_scaling(
     for entry_count in nentries:
         print(f"Profiling integration memory for nentries={entry_count}")
 
+        inputs_by_dtype = {}
+        for input_name, input_dtype in PRECISIONS.items():
+            inputs_by_dtype[input_name] = make_synthetic_inputs(
+                entry_count, nlam, input_dtype, rng
+            )
+
         for method in methods:
             for input_name in PRECISIONS:
                 for output_name, output_dtype in PRECISIONS.items():
-                    result = _run_worker_subprocess(
-                        method=method,
-                        nentries=entry_count,
-                        nlam=nlam,
-                        input_dtype_name=input_name,
-                        output_dtype_name=output_name,
-                        nthreads=nthreads,
-                        repeats=repeats,
-                        sample_freq=sample_freq,
-                        seed=seed,
+                    result = _sample_integration(
+                        method,
+                        inputs_by_dtype[input_name],
+                        output_dtype,
+                        nthreads,
+                        repeats,
+                        sample_freq,
                     )
 
-                    peak_rss = round(result["peak_rss_mib"], 3)
-                    peak_delta = round(result["peak_delta_mib"], 3)
-                    baseline = round(result["baseline_rss_mib"], 3)
-                    for sample in result["memory_trace"]:
+                    peak = round(result["peak_mib"], 3)
+                    for pct, rss_mib in result["memory_trace"]:
                         results.append(
                             {
                                 "method": method,
@@ -377,21 +225,15 @@ def profile_integration_memory_scaling(
                                 "nlam": int(nlam),
                                 "input_dtype": input_name,
                                 "output_dtype": output_name,
-                                "pct_complete": round(
-                                    sample["pct_complete"], 2
-                                ),
-                                "rss_mib": round(sample["rss_mib"], 3),
-                                "delta_mib": round(sample["delta_mib"], 3),
-                                "baseline_rss_mib": baseline,
-                                "peak_rss_mib": peak_rss,
-                                "peak_delta_mib": peak_delta,
+                                "pct_complete": round(pct, 2),
+                                "rss_mib": round(rss_mib, 3),
+                                "peak_mib": peak,
                             }
                         )
 
                     print(
                         f"  {method} {input_name} -> {output_name}: "
-                        f"peak_delta={peak_delta:.3f}MiB, "
-                        f"peak_rss={peak_rss:.3f}MiB, "
+                        f"peak={peak:.3f}MiB, "
                         f"samples={len(result['memory_trace'])}"
                     )
 
@@ -419,7 +261,7 @@ if __name__ == "__main__":
         "--nentries",
         type=int,
         nargs="+",
-        default=[10**3, 10**5],
+        default=[10**3, 3 * 10**3, 10**4, 3 * 10**4, 10**5],
         help="Number of integration entries to profile.",
     )
     parser.add_argument(
@@ -460,32 +302,7 @@ if __name__ == "__main__":
         default=42,
         help="Random seed used for synthetic input generation.",
     )
-    parser.add_argument(
-        "--worker-mode",
-        action="store_true",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument("--worker-output", type=str, help=argparse.SUPPRESS)
-    parser.add_argument("--worker-method", type=str, help=argparse.SUPPRESS)
-    parser.add_argument("--worker-nentries", type=int, help=argparse.SUPPRESS)
-    parser.add_argument("--worker-nlam", type=int, help=argparse.SUPPRESS)
-    parser.add_argument(
-        "--worker-input-dtype", type=str, help=argparse.SUPPRESS
-    )
-    parser.add_argument(
-        "--worker-output-dtype", type=str, help=argparse.SUPPRESS
-    )
-    parser.add_argument("--worker-nthreads", type=int, help=argparse.SUPPRESS)
-    parser.add_argument("--worker-repeats", type=int, help=argparse.SUPPRESS)
-    parser.add_argument(
-        "--worker-sample-freq", type=float, help=argparse.SUPPRESS
-    )
-    parser.add_argument("--worker-seed", type=int, help=argparse.SUPPRESS)
     args = parser.parse_args()
-
-    if args.worker_mode:
-        _run_worker_mode(args)
-        sys.exit(0)
 
     profile_integration_memory_scaling(
         basename=args.basename,

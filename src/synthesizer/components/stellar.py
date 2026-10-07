@@ -72,11 +72,8 @@ class StarsComponent(Component):
         # The common stellar attributes between particle and parametric stars
         self.ages = ages
         self.metallicities = metallicities
-        self.log10metallicities = np.log10(
-            self.metallicities,
-            dtype=np.float64,
-        )
-        self.log10ages = np.log10(self.ages.to(yr), dtype=np.float64)
+        self.log10metallicities = np.log10(self.metallicities)
+        self.log10ages = np.log10(self.ages.to(yr))
 
         # The type of stars object (parametric or particle). This is useful for
         # determining the type of stars object without relying on isinstance

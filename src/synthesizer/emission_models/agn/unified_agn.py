@@ -28,12 +28,12 @@ from synthesizer.emission_models.models import (
     AttenuatedEmission,
     DustEmission,
 )
+from synthesizer.emission_models.parameters import ParameterFunction
 from synthesizer.emission_models.transformers import (
     CoveringFraction,
     DopplerBroadening,
     EscapingFraction,
 )
-from synthesizer.emission_models.utils import ParameterFunction
 from synthesizer.exceptions import (
     InconsistentParameter,
 )

@@ -26,9 +26,6 @@ from synthesizer.conversions import (
 from synthesizer.imaging.extensions.image import make_img
 from synthesizer.synth_warnings import warn
 from synthesizer.units import unit_is_compatible
-from synthesizer.utils import (
-    ensure_array_c_compatible_double,
-)
 from synthesizer.utils.operation_timers import timed, timer
 
 _CENTERING_TOLERANCE = 1e-6
@@ -50,8 +47,9 @@ def _standardize_sph_kernel(kernel):
     if hasattr(kernel, "get_kernel"):
         kernel = kernel.get_kernel()
 
-    # Ensure the backend always receives a contiguous float64 lookup array.
-    return ensure_array_c_compatible_double(kernel)
+    # The kernel lookup table is generated internally so we build it at
+    # float64 explicitly (it is tiny and the backend interpolates in double).
+    return np.ascontiguousarray(kernel, dtype=np.float64)
 
 
 def _validate_centered_coordinates(cent_coords, *, warn_only=False):
@@ -379,7 +377,7 @@ def _generate_image_particle_hist(
 
         # Return an empty image if there are no particles
         if signal.size == 0:
-            img.arr = np.zeros(img.npix)
+            img.arr = np.zeros(img.npix, dtype=signal.dtype)
             return img.arr * img.units if img.units is not None else img.arr
 
         # Unpack the image properties and ensure we agree on the units
@@ -408,6 +406,12 @@ def _generate_image_particle_hist(
             ),
             weights=signal,
         )[0]
+
+        # The histogram computes in float64; cast the (small) image back so
+        # it inherits the signal dtype.
+        sig_dtype = getattr(signal, "dtype", None)
+        if sig_dtype is not None and img.arr.dtype != sig_dtype:
+            img.arr = img.arr.astype(sig_dtype)
 
     # Normalise the image by the normalisation if applicable
     if normalisation is not None:
@@ -593,9 +597,9 @@ def _generate_image_particle_smoothed(
 
     # Get the (npix_x, npix_y, Nimg) array of images
     imgs_arr = make_img(
-        ensure_array_c_compatible_double(signal),
-        ensure_array_c_compatible_double(_smoothing_lengths),
-        ensure_array_c_compatible_double(_coords),
+        np.ascontiguousarray(signal),
+        np.ascontiguousarray(_smoothing_lengths),
+        np.ascontiguousarray(_coords),
         kernel_arr,
         res,
         img.npix[0],
@@ -773,9 +777,9 @@ def _generate_images_particle_smoothed(
 
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
-        ensure_array_c_compatible_double(signals),
-        ensure_array_c_compatible_double(_smoothing_lengths),
-        ensure_array_c_compatible_double(_coords),
+        np.ascontiguousarray(signals),
+        np.ascontiguousarray(_smoothing_lengths),
+        np.ascontiguousarray(_coords),
         kernel_arr,
         res,
         imgs.npix[0],
@@ -1017,6 +1021,168 @@ def _generate_image_collection_generic(
                 imgs.resolution, imgs.npix
             ),
             signals=photometry,
+        )
+
+    else:
+        raise exceptions.UnknownImageType(
+            f"Unknown img_type {img_type} for a {type(emitter)} emitter. "
+            " (Options are 'hist' (only for particle based emitters)"
+            " or 'smoothed')"
+        )
+
+    return imgs
+
+
+def _generate_line_map_collection_generic(
+    instrument,
+    lines,
+    fov,
+    img_type,
+    kernel,
+    kernel_threshold,
+    nthreads,
+    emitter,
+    cosmo,
+    quantity="luminosity",
+):
+    """Generate a line map collection for a generic emitter.
+
+    This mirrors :func:`_generate_image_collection_generic`, but rather than
+    projecting a `PhotometryCollection` (one signal per filter) it projects a
+    `LineCollection` (one signal per requested emission line), producing one
+    `Image` (line map) per line id.
+
+    Particle based mapping can either be hist or smoothed, while parametric
+    mapping can only be smoothed.
+
+    Args:
+        instrument (Instrument):
+            The instrument to create the maps for.
+        lines (LineCollection):
+            The lines to use for the maps.
+        fov (unyt_quantity/tuple, unyt_quantity):
+            The width of the map.
+        img_type (str):
+            The type of map to create. Options are "hist" or "smoothed".
+        kernel (str):
+            The array describing the kernel. This is derived from the
+            kernel_functions module. (Only applicable to particle mapping)
+        kernel_threshold (float):
+            The threshold for the kernel. Particles with a kernel value
+            below this threshold are included in the map. (Only
+            applicable to particle mapping)
+        nthreads (int):
+            The number of threads to use when smoothing the map. This
+            only applies to particle mapping.
+        emitter (Stars/BlackHoles/BlackHole):
+            The emitter object to create the maps for.
+        cosmo (astropy.cosmology.Cosmology):
+            A cosmology object defining the cosmology to use for the maps.
+            This is only relevant for angular maps where a conversion to
+            projected angular coordinates is needed.
+        quantity (str):
+            Either "luminosity" or "flux", selecting which LineCollection
+            attribute is mapped.
+
+    Returns:
+        ImageCollection
+            An image collection containing one line map (Image) per line id.
+    """
+    # Avoid cyclic imports
+    from synthesizer.imaging import ImageCollection
+    from synthesizer.particle import Particles
+
+    # Pull out the signal array (and its per-line labels) we are mapping
+    if quantity not in ("luminosity", "flux"):
+        raise exceptions.InconsistentArguments(
+            f"Unknown quantity {quantity} for line maps. Options are "
+            "'luminosity' or 'flux'."
+        )
+    signal = getattr(lines, quantity)
+    if signal is None:
+        raise exceptions.MissingAttribute(
+            f"LineCollection has no {quantity} data. Did you forget to call "
+            "get_flux?"
+            if quantity == "flux"
+            else f"LineCollection has no {quantity} data."
+        )
+    line_ids = [str(line_id) for line_id in lines.line_ids]
+
+    # For particle emitters, standardize units to ensure resolution, fov,
+    # and emitter data are all in the same system (both angular or both
+    # Cartesian). Parametric emitters handle their own geometry via
+    # morphology.get_density_grid() and don't need this standardization.
+    if isinstance(emitter, Particles):
+        needs_smoothing_lengths = img_type == "smoothed"
+        resolution, fov, coords, smls = _standardize_imaging_units(
+            resolution=instrument.resolution,
+            fov=fov,
+            emitter=emitter,
+            cosmo=cosmo,
+            include_smoothing_lengths=needs_smoothing_lengths,
+        )
+
+        if img_type == "smoothed" and smls is None:
+            raise exceptions.InconsistentArguments(
+                "Smoothed particle imaging requires smoothing_lengths. "
+                "The emitter must have a smoothing_lengths attribute."
+            )
+    else:
+        resolution = instrument.resolution
+        fov = fov
+        coords = smls = None
+
+    # Create the image collection
+    imgs = ImageCollection(
+        resolution=resolution,
+        fov=fov,
+    )
+
+    # Make the image handling the different types of image creation
+    # NOTE: Black holes are always a histogram, safer to just hack this here
+    # since a user can set the "global" method as smoothed for a galaxy
+    # with both stars and black holes.
+    if (img_type == "hist" and isinstance(emitter, Particles)) or (
+        getattr(emitter, "name", None) == "Black Holes"
+    ):
+        signal_dict = {
+            line_id: signal[..., i] for i, line_id in enumerate(line_ids)
+        }
+        return _generate_images_particle_hist(
+            imgs,
+            coordinates=coords,
+            signals=signal_dict,
+        )
+
+    elif img_type == "hist":
+        raise exceptions.InconsistentArguments(
+            "Parametric images can only be made using the smoothed image type."
+        )
+
+    elif img_type == "smoothed" and isinstance(emitter, Particles):
+        # The C++ backend expects the signal axis first, (Nlines, Nparticles),
+        # whereas LineCollection stores it with the line axis last.
+        return _generate_images_particle_smoothed(
+            imgs=imgs,
+            signals=signal.T,
+            cent_coords=coords,
+            smoothing_lengths=smls,
+            labels=line_ids,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+        )
+
+    elif img_type == "smoothed":
+        signal_dict = {
+            line_id: signal[i] for i, line_id in enumerate(line_ids)
+        }
+        return _generate_images_parametric_smoothed(
+            imgs,
+            density_grid=emitter.morphology.get_density_grid(
+                imgs.resolution, imgs.npix
+            ),
+            signals=signal_dict,
         )
 
     else:

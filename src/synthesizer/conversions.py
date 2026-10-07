@@ -15,6 +15,7 @@ Example usage:
 import numpy as np
 from unyt import (
     Hz,
+    Lsun,
     angstrom,
     arcsecond,
     c,
@@ -29,7 +30,7 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.synth_warnings import warn
-from synthesizer.units import accepts
+from synthesizer.units import Units, accepts
 
 # When converting between spatial and angular distances at z=0, we adopt a
 # "local distance" convention of placing the object at 10 pc, this is also
@@ -245,7 +246,7 @@ def apparent_mag_to_fnu(app_mag):
     return 10**9 * 10 ** (-0.4 * (app_mag - 8.9)) * nJy
 
 
-@accepts(lam=angstrom, llam=erg / s / angstrom)
+@accepts(lam=angstrom, llam=Lsun / angstrom)
 def llam_to_lnu(lam, llam):
     """Convert spectral luminosity density per wavelength to per frequency.
 
@@ -280,7 +281,8 @@ def lnu_to_llam(lam, lnu):
 
                     L_lam = L_nu * c / lam**2
 
-    The result will be in units of erg / s / A.
+    The result is in the internal luminosity density per wavelength unit
+    (Lsun / A by default).
 
     Args:
         lam (unyt_quantity/unyt_array):
@@ -290,14 +292,14 @@ def lnu_to_llam(lam, lnu):
 
     Returns:
         unyt_quantity/unyt_array:
-            The spectral luminoisty density in terms of wavelength, in units
-            of erg / s / A.
+            The spectral luminoisty density in terms of wavelength, in the
+            internal luminosity density per wavelength unit.
 
     Raises:
         IncorrectUnits:
             If units are missing an error is raised.
     """
-    return ((lnu * c) / lam**2).to("erg / s / angstrom")
+    return ((lnu * c) / lam**2).to(Units().luminosity_density_wavelength)
 
 
 @accepts(lam=angstrom, flam=erg / s / cm**2 / angstrom)

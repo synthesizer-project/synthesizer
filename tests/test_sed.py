@@ -1,11 +1,19 @@
 """A test suite for testing the Sed class."""
 
 import numpy as np
+import pytest
 from astropy.cosmology import Planck18
-from unyt import Hz, angstrom, cm, erg, nJy, pc, s
+from synthesizer.extensions.observed_spectra import compute_fnu
+from synthesizer.extensions.reductions import (
+    combine_spectra_2d,
+    reduce_particle_spectra,
+)
+from unyt import Hz, angstrom, c, cm, erg, km, m, nJy, pc, s
 
+from synthesizer import exceptions
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.emission_models.attenuation import PowerLaw
+from synthesizer.emissions import Sed
 from synthesizer.emissions.sed import Sed
 
 
@@ -13,6 +21,31 @@ def test_sed_empty(empty_sed):
     """Test the empty SED object."""
     all_zeros = not np.any(empty_sed.lnu)
     assert all_zeros
+
+
+def test_sed_init_frequency_matches_wavelength_dtype_family():
+    """The frequency computed in __init__ should track lam's dtype.
+
+    Regression test: dividing by the ``c`` unyt physical constant always
+    upcasts the result to float64 regardless of the dividend's dtype (a
+    unyt quirk, not something specific to Sed), so a naive
+    ``self.nu = c / self.lam`` in Sed.__init__ silently gave every Sed
+    built from a float32 grid a float64 frequency array -- breaking the
+    dtype-family invariant enforced everywhere else in the C extensions.
+    """
+    lam32 = np.linspace(1e3, 1e4, 32).astype(np.float32) * angstrom
+    sed32 = Sed(lam32, np.ones(32, dtype=np.float32) * erg / s / Hz)
+    assert sed32._lam.dtype == np.float32
+    assert sed32._nu.dtype == np.float32
+    np.testing.assert_allclose(
+        sed32._nu,
+        (299792458.0e10 / sed32._lam.astype(np.float64)),
+        rtol=1e-6,
+    )
+
+    lam64 = np.linspace(1e3, 1e4, 32).astype(np.float64) * angstrom
+    sed64 = Sed(lam64, np.ones(32, dtype=np.float64) * erg / s / Hz)
+    assert sed64._nu.dtype == np.float64
 
 
 def test_scale_threaded_row_broadcast_matches_numpy():
@@ -166,3 +199,260 @@ def test_get_fnu_applies_igm_with_observer_frame_wavelengths():
     assert igm.last_z == z
     np.testing.assert_allclose(igm.last_lam_obs.value, sed._obslam)
     np.testing.assert_allclose(fnu.value, 0.5 * baseline.value)
+
+
+def test_reduce_particle_spectra_supports_float32_inputs_and_outputs():
+    """Particle spectra reduction should preserve float32 output requests."""
+    part_spectra = np.arange(15, dtype=np.float32).reshape(3, 5)
+
+    reduced = reduce_particle_spectra(part_spectra, 1, np.float32)
+
+    assert reduced.dtype == np.float32
+    np.testing.assert_allclose(reduced, np.sum(part_spectra, axis=0))
+
+
+def test_reduce_particle_spectra_supports_float64_output_from_float32():
+    """Particle spectra reduction should allow widening the output dtype."""
+    part_spectra = np.arange(15, dtype=np.float32).reshape(3, 5)
+
+    reduced = reduce_particle_spectra(part_spectra, 1, np.float64)
+
+    assert reduced.dtype == np.float64
+    np.testing.assert_allclose(
+        reduced, np.sum(part_spectra.astype(np.float64), axis=0)
+    )
+
+
+def test_combine_spectra_supports_adaptive_precision_and_nan_masks():
+    """Spectrum combination should preserve dtype and ignore NaNs."""
+    for dtype in (np.float32, np.float64):
+        first = np.array([[1.0, np.nan], [3.0, 4.0]], dtype=dtype)
+        second = np.array([[5.0, 6.0], [np.nan, 8.0]], dtype=dtype)
+
+        combined = combine_spectra_2d((first, second), 2)
+
+        assert combined.dtype == dtype
+        np.testing.assert_allclose(combined, [[6.0, 6.0], [3.0, 12.0]])
+
+
+def test_sum_preserves_input_precision():
+    """Summing per-particle spectra should keep the luminosity dtype."""
+    lam = np.linspace(1000.0, 2000.0, 5) * angstrom
+    lnu = (np.arange(15, dtype=np.float32).reshape(3, 5) + 1.0) * erg / s / Hz
+
+    reduced = Sed(lam=lam, lnu=lnu).sum(nthreads=1)
+
+    assert reduced._lnu.dtype == np.float32
+    np.testing.assert_allclose(reduced._lnu, np.sum(lnu.value, axis=0))
+
+
+def test_get_fnu_inherits_lnu_dtype():
+    """Observed fluxes should inherit the luminosity dtype by default."""
+    lam = np.linspace(1e3, 1e4, 64) * angstrom
+    sed32 = Sed(lam, np.ones(64, dtype=np.float32) * erg / s / Hz)
+    sed32.get_fnu(Planck18, z=1.0)
+    assert sed32._fnu.dtype == np.float32
+
+    sed64 = Sed(lam, np.ones(64, dtype=np.float64) * erg / s / Hz)
+    sed64.get_fnu(Planck18, z=1.0)
+    assert sed64._fnu.dtype == np.float64
+
+
+def test_get_fnu_out_dtype_overrides_lnu_dtype():
+    """An explicit out_dtype should control the flux dtype."""
+    lam = np.linspace(1e3, 1e4, 64) * angstrom
+    sed = Sed(lam, np.ones(64, dtype=np.float64) * erg / s / Hz)
+    sed.get_fnu(Planck18, z=1.0, out_dtype=np.float32)
+    assert sed._fnu.dtype == np.float32
+
+    # And at redshift zero (the get_fnu0 path)
+    sed0 = Sed(lam, np.ones(64, dtype=np.float64) * erg / s / Hz)
+    sed0.get_fnu(Planck18, z=0.0, out_dtype=np.float32)
+    assert sed0._fnu.dtype == np.float32
+
+
+def test_sed_cast():
+    """Sed.cast should cast lnu and fnu in place."""
+    lam = np.linspace(1e3, 1e4, 64) * angstrom
+    sed = Sed(lam, np.ones(64, dtype=np.float64) * erg / s / Hz)
+    sed.get_fnu(Planck18, z=1.0)
+    sed.cast(np.float32)
+    assert sed._lnu.dtype == np.float32
+    assert sed._fnu.dtype == np.float32
+
+
+def test_ionising_photon_production_rate_multidimensional():
+    """The ionising rate must handle multi-spectra Seds.
+
+    Boolean masking the final axis of a 2D array yields a Fortran-ordered
+    result; this is a regression test for that reaching the C extension.
+    """
+    lam = np.logspace(2, 5, 500) * angstrom
+    sed = Sed(lam, np.ones((4, 500)) * erg / s / Hz)
+    rates = sed.calculate_ionising_photon_production_rate()
+    assert rates.shape == (4,)
+    assert np.all(rates.value > 0)
+
+    # And the 1D result should match a single row of the 2D result
+    sed1d = Sed(lam, np.ones(500) * erg / s / Hz)
+    rate1d = sed1d.calculate_ionising_photon_production_rate()
+    assert np.isclose(rates[0].value, rate1d.value)
+
+
+def test_compute_fnu_rejects_non_contiguous_inputs():
+    """Strided inputs must be rejected rather than silently misread.
+
+    The kernel walks lnu/lam/nu as flat buffers, so a strided view would
+    read the wrong elements. The guard lives in ``is_matching_float_dtypes``;
+    this test catches any regression that loosens it.
+    """
+    lam = np.linspace(1000.0, 2000.0, 10)
+    nu = (c / (lam * angstrom)).to(Hz).value
+    lnu = np.ones((4, 10))
+    out = np.zeros((4, 10))
+
+    def call(lnu_arr, lam_arr, nu_arr):
+        compute_fnu(
+            lnu_arr, lam_arr, nu_arr, 1.0, 1.0, 1, out, None, None, None
+        )
+
+    # The contiguous case is the control: it must not raise.
+    call(lnu, lam, nu)
+
+    # Slicing the last axis of a 2D array gives a strided view.
+    with pytest.raises(ValueError, match="lnu must be C-contiguous"):
+        call(np.ones((4, 20))[:, ::2], lam, nu)
+
+    with pytest.raises(ValueError, match="lam must be C-contiguous"):
+        call(lnu, np.linspace(1000.0, 2000.0, 20)[::2], nu)
+
+    with pytest.raises(ValueError, match="nu must be C-contiguous"):
+        call(lnu, lam, np.linspace(1e14, 1e15, 20)[::2])
+
+
+@pytest.mark.parametrize("method", ["average", "trapz"])
+def test_measure_window_lnu_keeps_sed_precision(method):
+    """Window lnu measurements keep the precision of the Sed."""
+    lam = np.linspace(1000.0, 5000.0, 200) * angstrom
+    lnu = np.full((3, 200), 1e20, np.float32) * erg / s / Hz
+    sed32 = Sed(lam, lnu)
+    sed64 = Sed(lam, lnu.astype(np.float64))
+    window = (2000.0, 3000.0) * angstrom
+
+    result = sed32.measure_window_lnu(window, integration_method=method)
+    reference = sed64.measure_window_lnu(window, integration_method=method)
+
+    assert result.dtype == np.float32
+    assert result.shape == (3,)
+    np.testing.assert_allclose(result.value, reference.value, rtol=1e-5)
+
+
+@pytest.mark.parametrize("method", ["average", "trapz"])
+def test_measure_window_lnu_of_integer_spectra(method):
+    """Integer spectra are measured at float64, like float64 spectra."""
+    lam = np.linspace(1000.0, 5000.0, 200) * angstrom
+    lnu = np.arange(1, 201) * erg / s / Hz
+    window = (2000.0, 3000.0) * angstrom
+
+    result = Sed(lam, lnu).measure_window_lnu(
+        window, integration_method=method
+    )
+    reference = Sed(lam, lnu.astype(np.float64)).measure_window_lnu(
+        window, integration_method=method
+    )
+
+    assert result.dtype == np.float64
+    np.testing.assert_allclose(result.value, reference.value)
+
+
+def test_get_fnu_peculiar_velocity_zero_matches_default():
+    """peculiar_velocity of None or 0 reproduces the cosmological get_fnu."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
+    z = 1.5
+
+    base = Sed(lam=lam, lnu=lnu).get_fnu(Planck18, z)
+    none = Sed(lam=lam, lnu=lnu).get_fnu(Planck18, z, peculiar_velocity=None)
+    zero = Sed(lam=lam, lnu=lnu).get_fnu(
+        Planck18, z, peculiar_velocity=0.0 * km / s
+    )
+
+    np.testing.assert_array_equal(none.value, base.value)
+    np.testing.assert_allclose(zero.value, base.value)
+
+
+def test_get_fnu_peculiar_velocity_shifts_to_observed_redshift():
+    """Distances are affected by the correct redshift.
+
+    A peculiar velocity shifts to z_obs while the luminosity distance and (1+z)
+    factor stay tied to the cosmological z.
+    """
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
+    z = 1.0
+    v = 600.0 * km / s  # receding
+
+    z_obs = (1.0 + z) * (1.0 + float(v / c)) - 1.0
+    d_l = get_luminosity_distance(Planck18, z).to(cm)
+    d_l_eff = d_l * (1.0 + z_obs) / (1.0 + z)
+    expected = lnu * (1.0 + z_obs) / (4 * np.pi * d_l_eff**2)
+
+    sed = Sed(lam=lam, lnu=lnu)
+    fnu = sed.get_fnu(Planck18, z, peculiar_velocity=v)
+
+    np.testing.assert_allclose(sed._obslam, sed._lam * (1.0 + z_obs))
+    np.testing.assert_allclose(sed._obsnu, sed._nu / (1.0 + z_obs))
+    np.testing.assert_allclose(fnu.to("nJy").value, expected.to("nJy").value)
+
+    # Equivalent velocity units give the same result.
+    fnu_ms = Sed(lam=lam, lnu=lnu).get_fnu(
+        Planck18, z, peculiar_velocity=v.to(m / s)
+    )
+    np.testing.assert_allclose(fnu_ms.to("nJy").value, fnu.to("nJy").value)
+
+
+def test_get_fnu_peculiar_velocity_requires_units():
+    """peculiar_velocity without velocity units is rejected."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
+
+    with pytest.raises(exceptions.MissingUnits):
+        Sed(lam=lam, lnu=lnu).get_fnu(Planck18, 1.0, peculiar_velocity=600.0)
+    with pytest.raises(exceptions.IncorrectUnits):
+        Sed(lam=lam, lnu=lnu).get_fnu(
+            Planck18, 1.0, peculiar_velocity=600.0 * cm
+        )
+
+
+def test_get_resampled_sed_keeps_peculiar_velocity_shift():
+    """Resampling keeps the observer frame at z_obs."""
+    lam = np.linspace(1000, 2000, 16) * angstrom
+    lnu = np.linspace(1.0, 16.0, 16) * erg / s / Hz
+    z = 1.0
+    v = 600.0 * km / s
+
+    sed = Sed(lam=lam, lnu=lnu)
+    sed.get_fnu(Planck18, z, peculiar_velocity=v)
+    z_obs = (1.0 + z) * (1.0 + float(v / c)) - 1.0
+    assert np.isclose(sed.redshift, z_obs)
+
+    resampled = sed.get_resampled_sed(new_lam=lam[2:-2])
+    np.testing.assert_allclose(
+        resampled._obslam, resampled._lam * (1.0 + z_obs)
+    )
+    np.testing.assert_allclose(resampled._fnu, sed._fnu[2:-2])
+
+
+def test_get_fnu_peculiar_velocity_rejects_vel_shifted_sed():
+    """A peculiar velocity can't be applied on top of vel_shift spectra."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    lnu = np.linspace(1.0, 8.0, 8) * erg / s / Hz
+
+    sed = Sed(lam=lam, lnu=lnu)
+    sed.vel_shifted = True
+
+    with pytest.raises(exceptions.InconsistentArguments):
+        sed.get_fnu(Planck18, 1.0, peculiar_velocity=600.0 * km / s)
+
+    # Without a peculiar velocity the flux is computed as normal
+    sed.get_fnu(Planck18, 1.0)

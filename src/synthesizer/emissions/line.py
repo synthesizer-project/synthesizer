@@ -41,8 +41,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import (
     Hz,
+    Lsun,
     angstrom,
     c,
+    cm,
     erg,
     eV,
     h,
@@ -63,10 +65,12 @@ from synthesizer.emissions.scaling import (
 from synthesizer.emissions.sed import Sed
 from synthesizer.emissions.utils import (
     alias_to_line_id,
+    evaluate_dust_curve_at_dtype,
     get_available_diagram_ids,
     get_available_ratio_ids,
     get_line2index,
     get_line_id_signature,
+    nansum_leading_axes,
 )
 from synthesizer.extensions.spectra_operations import (
     apply_separable_attenuation_2d,
@@ -81,6 +85,8 @@ from synthesizer.units import (
 )
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import get_float_dtype, resolve_out_dtype
+from synthesizer.utils.util_funcs import get_attr_unit_conversion
 
 
 class LineCollection:
@@ -135,7 +141,7 @@ class LineCollection:
     obslam = Quantity("wavelength")
     vacuum_wavelength = Quantity("wavelength")
 
-    @accepts(lam=angstrom, lum=erg / s, cont=erg / s / Hz)
+    @accepts(lam=angstrom, lum=Lsun, cont=erg / s / Hz)
     @timed("LineCollection.__init__")
     def __init__(self, line_ids, lam, lum, cont, description=None):
         """Initialise the collection of emission lines.
@@ -630,29 +636,34 @@ class LineCollection:
                     obslam.extend(single_line.obslam)
                     cont_flux.extend(single_line.continuum_flux)
 
-            # Convert to arrays
+            # Convert to arrays (transposing back to (..., nlines) and making
+            # the result contiguous for the extensions)
             line_ids = np.array(line_ids)
             lam = np.array(lam)
-            lum = np.array(lum).T
-            cont = np.array(cont).T
-            flux = np.array(flux).T
-            obslam = np.array(obslam).T
-            cont_flux = np.array(cont_flux).T
+            lum = np.ascontiguousarray(np.array(lum).T)
+            cont = np.ascontiguousarray(np.array(cont).T)
+            flux = np.ascontiguousarray(np.array(flux).T)
+            obslam = np.ascontiguousarray(np.array(obslam).T)
+            cont_flux = np.ascontiguousarray(np.array(cont_flux).T)
 
             # Create the new line (converting to unyt_arrays)
             new_line = LineCollection(
                 line_ids=line_ids,
-                lam=unyt_array(lam, self.lam.units),
-                lum=unyt_array(lum, self.luminosity.units),
-                cont=unyt_array(cont, self.continuum.units),
+                lam=unyt_array(lam, get_quantity_unit(self, "lam")),
+                lum=unyt_array(lum, get_quantity_unit(self, "luminosity")),
+                cont=unyt_array(cont, get_quantity_unit(self, "continuum")),
             )
 
             # Copy over the flux and observed wavelength if they exist
             if len(flux) > 0:
-                new_line.flux = unyt_array(flux, self.flux.units)
-                new_line.obslam = unyt_array(obslam, self.obslam.units)
+                new_line.flux = unyt_array(
+                    flux, get_quantity_unit(self, "flux")
+                )
+                new_line.obslam = unyt_array(
+                    obslam, get_quantity_unit(self, "obslam")
+                )
                 new_line.continuum_flux = unyt_array(
-                    cont_flux, self.continuum_flux.units
+                    cont_flux, get_quantity_unit(self, "continuum_flux")
                 )
 
             return new_line
@@ -670,15 +681,15 @@ class LineCollection:
                 line_ids=[line_id],
                 lam=unyt_array(
                     [self.lam[self.line2index[line_id]]],
-                    self.lam.units,
+                    get_quantity_unit(self, "lam"),
                 ),
                 lum=unyt_array(
                     [self.luminosity[..., self.line2index[line_id]]],
-                    self.luminosity.units,
+                    get_quantity_unit(self, "luminosity"),
                 ),
                 cont=unyt_array(
                     [self.continuum[..., self.line2index[line_id]]],
-                    self.continuum.units,
+                    get_quantity_unit(self, "continuum"),
                 ),
             )
 
@@ -686,15 +697,15 @@ class LineCollection:
             if self.flux is not None:
                 new_line.flux = unyt_array(
                     [self.flux[..., self.line2index[line_id]]],
-                    self.flux.units,
+                    get_quantity_unit(self, "flux"),
                 )
                 new_line.continuum_flux = unyt_array(
                     [self.continuum_flux[..., self.line2index[line_id]]],
-                    self.continuum_flux.units,
+                    get_quantity_unit(self, "continuum_flux"),
                 )
                 new_line.obslam = unyt_array(
                     [self.obslam[self.line2index[line_id]]],
-                    self.obslam.units,
+                    get_quantity_unit(self, "obslam"),
                 )
 
             return new_line
@@ -707,24 +718,23 @@ class LineCollection:
                 alias_to_line_id(li.strip()) for li in line_id.split(",")
             ]
 
-            # Loop over the lines and combine them into a single line
-            new_lam = self.lam[self.line2index[line_ids[0]]]
-            new_lum = self.luminosity[..., self.line2index[line_ids[0]]]
-            new_cont = self.continuum[..., self.line2index[line_ids[0]]]
+            # Loop over the lines and combine them into a single line. Each
+            # first selection is a view onto this collection's arrays, and the
+            # loop below accumulates into it, so start from copies.
+            first = self.line2index[line_ids[0]]
+            new_lam = self.lam[first].copy()
+            new_lum = self.luminosity[..., first].copy()
+            new_cont = self.continuum[..., first].copy()
             new_flux = (
-                self.flux[..., self.line2index[line_ids[0]]]
-                if self.flux is not None
-                else None
+                self.flux[..., first].copy() if self.flux is not None else None
             )
             new_obs_cont = (
-                self.continuum_flux[..., self.line2index[line_ids[0]]]
+                self.continuum_flux[..., first].copy()
                 if self.continuum_flux is not None
                 else None
             )
             new_obslam = (
-                self.obslam[self.line2index[line_ids[0]]]
-                if self.obslam is not None
-                else None
+                self.obslam[first].copy() if self.obslam is not None else None
             )
             for li in line_ids[1:]:
                 new_lam += self.lam[self.line2index[li]]
@@ -741,20 +751,30 @@ class LineCollection:
             # individual lines)
             new_line = LineCollection(
                 line_ids=[line_id],
-                lam=unyt_array([new_lam / len(line_ids)], self.lam.units),
-                lum=unyt_array([new_lum], self.luminosity.units),
-                cont=unyt_array([new_cont], self.continuum.units),
+                lam=unyt_array(
+                    [new_lam / len(line_ids)], get_quantity_unit(self, "lam")
+                ),
+                lum=unyt_array(
+                    [new_lum], get_quantity_unit(self, "luminosity")
+                ),
+                cont=unyt_array(
+                    [new_cont], get_quantity_unit(self, "continuum")
+                ),
             )
 
             # Copy over the flux and observed wavelength if they exist
             # (converting the wavelength to the mean of the individual lines)
             if self.flux is not None:
-                new_line.flux = unyt_array([new_flux], self.flux.units)
+                new_line.flux = unyt_array(
+                    [new_flux], get_quantity_unit(self, "flux")
+                )
                 new_line.continuum_flux = unyt_array(
-                    [new_obs_cont], self.continuum_flux.units
+                    [new_obs_cont],
+                    get_quantity_unit(self, "continuum_flux"),
                 )
                 new_line.obslam = unyt_array(
-                    [new_obslam / len(line_ids)], self.obslam.units
+                    [new_obslam / len(line_ids)],
+                    get_quantity_unit(self, "obslam"),
                 )
 
             return new_line
@@ -770,13 +790,64 @@ class LineCollection:
             f"comma separated string (type={type(line_id)} line_id={line_id})"
         )
 
-    def sum(self, axis=None):
+    def items(self):
+        """Return an iterator over the line_id, LineCollection pairs.
+
+        This mirrors the dict-like interface of PhotometryCollection and
+        enables syntax such as ``for line_id, line in lines.items()``.
+
+        Returns:
+            iterator:
+                An iterator over (line_id, LineCollection) pairs, one per
+                line in the collection.
+        """
+        for line_id in self.line_ids:
+            yield str(line_id), self[line_id]
+
+    def keys(self):
+        """Return an iterator over the line_ids in the collection.
+
+        This enables syntax such as ``for line_id in lines.keys()``.
+
+        Returns:
+            iterator:
+                An iterator over the line_ids in the collection.
+        """
+        for line_id in self.line_ids:
+            yield str(line_id)
+
+    def __contains__(self, line_id):
+        """Check whether a line_id is in the collection.
+
+        This enables syntax such as ``if line_id in lines``. A blended
+        line_id (a comma separated string) is considered present if it was
+        stored as a blend or if every one of its component lines is in the
+        collection.
+
+        Args:
+            line_id (str):
+                The line_id to check for.
+
+        Returns:
+            bool:
+                True if the line_id is in the collection, False otherwise.
+        """
+        line_id = str(alias_to_line_id(line_id))
+        return line_id in self.line2index or all(
+            lid.strip() in self.line2index for lid in line_id.split(",")
+        )
+
+    @timed("LineCollection.sum")
+    def sum(self, axis=None, nthreads=1):
         """Sum the lines in the collection.
 
         Args:
             axis (int/tuple):
                 The axis/axes to sum over. By default this will sum over all
                 but the final axis (the axis containing different lines).
+            nthreads (int):
+                The number of threads to use for the default reduction. If -1
+                all available CPU cores will be used.
         """
         # First lets check if we have a multidimensional line collection, if
         # not we can just return the single line object
@@ -799,7 +870,14 @@ class LineCollection:
 
         # If no axes are passed we will sum over all but the last axis
         if axis is None:
-            axis = tuple(range(self.ndim - 1))
+            return LineCollection(
+                line_ids=self.line_ids,
+                lam=self.lam,
+                lum=nansum_leading_axes(self._luminosity, nthreads)
+                * get_quantity_unit(self, "luminosity"),
+                cont=nansum_leading_axes(self._continuum, nthreads)
+                * get_quantity_unit(self, "continuum"),
+            )
 
         return LineCollection(
             line_ids=self.line_ids,
@@ -906,7 +984,7 @@ class LineCollection:
         self.available_diagrams = get_available_diagram_ids(signature)
         return self.available_diagrams
 
-    def get_flux0(self):
+    def get_flux0(self, out_dtype=None, nthreads=1):
         """Calculate the rest frame line flux.
 
         Uses a standard distance of 10pc to calculate the flux.
@@ -915,22 +993,23 @@ class LineCollection:
         wavelength of the line when observed (which in the rest frame is the
         same as the emitted wavelength).
 
+        Args:
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the flux arrays. If None
+                the fluxes inherit the luminosity's dtype.
+            nthreads (int):
+                The number of threads to scale the fluxes with.
+
         Returns:
             flux (unyt_quantity):
                 Flux of the line in units of erg/s/cm2 by default.
         """
-        # Compute flux
-        self.flux = self.luminosity / (4 * np.pi * (10 * pc) ** 2)
-        self.continuum_flux = self.continuum / (4 * np.pi * (10 * pc) ** 2)
-
-        # Set the observed wavelength (in this case this is the rest frame
-        # wavelength)
-        self.obslam = self.lam
-
-        return self.flux
+        return self.get_flux(
+            cosmo=None, z=0, out_dtype=out_dtype, nthreads=nthreads
+        )
 
     @timed("LineCollection.get_flux")
-    def get_flux(self, cosmo, z, igm=None):
+    def get_flux(self, cosmo, z, igm=None, out_dtype=None, nthreads=1):
         """Calculate the line flux given a redshift and cosmology.
 
         This will also populate the observed_wavelength attribute with the
@@ -948,6 +1027,11 @@ class LineCollection:
             igm (igm):
                 The IGM class. e.g. `synthesizer.igm.Inoue14`.
                 Defaults to None.
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the flux arrays. If None
+                the fluxes inherit the luminosity's dtype.
+            nthreads (int):
+                The number of threads to scale the fluxes with.
 
         Returns:
             flux (unyt_quantity):
@@ -956,15 +1040,38 @@ class LineCollection:
         # If the redshift is 0 we can assume a distance of 10pc and ignore
         # the IGM
         if z == 0:
-            return self.get_flux0()
+            luminosity_distance = 10 * pc
+            igm = None
+        else:
+            # Get the luminosity distance
+            luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
 
-        # Get the luminosity distance
-        luminosity_distance = get_luminosity_distance(cosmo, z).to("cm")
-
-        # Compute flux and observed continuum
-        self.flux = self.luminosity / (4 * np.pi * luminosity_distance**2)
-        self.continuum_flux = self.continuum / (
-            4 * np.pi * luminosity_distance**2
+        # Compute flux and observed continuum in one threaded pass, folding
+        # the unit conversion into the scale factors
+        area = (4 * np.pi * luminosity_distance**2).to_value("cm**2")
+        nspec = self._luminosity.shape[0]
+        self.flux, self.continuum_flux = scale_line_arrays(
+            self._luminosity,
+            self._continuum,
+            np.full(
+                nspec,
+                get_attr_unit_conversion(
+                    get_quantity_unit(self, "luminosity"),
+                    get_quantity_unit(self, "flux") * cm**2,
+                )
+                / area,
+                dtype=self._luminosity.dtype,
+            ),
+            np.full(
+                nspec,
+                get_attr_unit_conversion(
+                    get_quantity_unit(self, "continuum"),
+                    get_quantity_unit(self, "continuum_flux") * cm**2,
+                )
+                / area,
+                dtype=self._continuum.dtype,
+            ),
+            nthreads=nthreads,
         )
 
         # Set the observed wavelength
@@ -979,6 +1086,16 @@ class LineCollection:
                 igm_transmission = igm.get_transmission(z, self.obslam)
             self.flux *= igm_transmission
             self.continuum_flux *= igm_transmission
+
+        # Unit arithmetic can promote float32 values, so explicitly restore
+        # the luminosity dtype when no output precision was requested.
+        dtype = (
+            self.luminosity.dtype
+            if out_dtype is None
+            else resolve_out_dtype(out_dtype)
+        )
+        self.flux = self.flux.astype(dtype, copy=False)
+        self.continuum_flux = self.continuum_flux.astype(dtype, copy=False)
 
         return self.flux
 
@@ -1329,11 +1446,18 @@ class LineCollection:
             is AttenuationLaw.get_transmission
         ):
             # Pull out just the wavelength-dependent extinction curve once and
-            # reuse it for both luminosity and continuum.
-            tau_x_v = dust_curve.get_extinction_curve(
+            # reuse it for both luminosity and continuum. The curve is
+            # evaluated at the emission dtype (with overflow trapped) so the
+            # attenuation arrays are born at the right precision.
+            lum_dtype = self._luminosity.dtype
+            tau_x_v = evaluate_dust_curve_at_dtype(
+                dust_curve.get_extinction_curve,
+                lum_dtype,
                 self.lam,
                 **dust_curve_kwargs,
             )
+            if isinstance(tau_v, np.ndarray) and tau_v.dtype != lum_dtype:
+                tau_v = tau_v.astype(lum_dtype, copy=False)
             # Both arrays see the same attenuation structure, so we run the
             # same kernel twice rather than building two transmission matrices.
             att_lum = apply_separable_attenuation_2d(
@@ -1357,9 +1481,16 @@ class LineCollection:
                 cont=get_array_quantity_view(att_cont, cont_units),
             )
 
-        # Compute the transmission for the remaining generic cases.
-        transmission = dust_curve.get_transmission(
-            tau_v, self.lam, **dust_curve_kwargs
+        # Compute the transmission for the remaining generic cases. The curve
+        # is evaluated at the emission dtype (with overflow trapped) so the
+        # transmission is intialised at the right precision rather than
+        # computed at float64 and downcast.
+        transmission = evaluate_dust_curve_at_dtype(
+            dust_curve.get_transmission,
+            self._luminosity.dtype,
+            tau_v,
+            self.lam,
+            **dust_curve_kwargs,
         )
 
         # When attenuation reduces to a wavelength-only transmission curve we
@@ -1419,8 +1550,8 @@ class LineCollection:
         # If neither fast path applies we fall back to NumPy broadcasting,
         # copying the arrays and applying the transmission with or without
         # a mask
-        att_lum = self.luminosity
-        att_cont = self.continuum
+        att_lum = self.luminosity.copy()
+        att_cont = self.continuum.copy()
         if mask is None:
             att_lum *= transmission
             att_cont *= transmission
@@ -1575,12 +1706,21 @@ class LineCollection:
         new_shape = list(self.shape)
         new_shape[-1] = len(wavelength_bins) - 1
 
-        # Create the arrays we'll need to store the blended lines
+        # Create the arrays we'll need to store the blended lines (at the
+        # precision of the lines being blended, or float64 if they aren't
+        # floating point)
         blended_lines_counts = np.zeros(len(wavelength_bins) - 1, dtype=int)
         blended_line_ids = [[] for _ in range(len(wavelength_bins) - 1)]
-        blended_line_lams = np.zeros(len(wavelength_bins) - 1, dtype=float)
-        blended_line_lums = np.zeros(new_shape, dtype=float)
-        blended_line_conts = np.zeros(new_shape, dtype=float)
+        blended_line_lams = np.zeros(
+            len(wavelength_bins) - 1,
+            dtype=get_float_dtype(self._lam.dtype),
+        )
+        blended_line_lums = np.zeros(
+            new_shape, dtype=get_float_dtype(self._luminosity.dtype)
+        )
+        blended_line_conts = np.zeros(
+            new_shape, dtype=get_float_dtype(self._continuum.dtype)
+        )
 
         # Loop bin indices and combine the lines into the blended_lines array
         for i, bin_ind in enumerate(bin_inds):
@@ -1622,9 +1762,15 @@ class LineCollection:
 
         return LineCollection(
             line_ids=blended_line_ids,
-            lam=blended_line_lams * self.lam.units,
-            lum=blended_line_lums * self.luminosity.units,
-            cont=blended_line_conts * self.continuum.units,
+            lam=get_array_quantity_view(
+                blended_line_lams, get_quantity_unit(self, "lam")
+            ),
+            lum=get_array_quantity_view(
+                blended_line_lums, get_quantity_unit(self, "luminosity")
+            ),
+            cont=get_array_quantity_view(
+                blended_line_conts, get_quantity_unit(self, "continuum")
+            ),
         )
 
     @accepts(sed_lam=angstrom)
@@ -1640,8 +1786,10 @@ class LineCollection:
                 synthesizer.sed.Sed object.
 
         """
-        # Create empty spectra with correct units
-        sed_lnu = np.zeros(len(sed_lam)) * erg / s / Hz
+        # Create empty spectra with correct units (at the precision of the
+        # line luminosities, or float64 if they aren't floating point)
+        dtype = get_float_dtype(self._luminosity.dtype)
+        sed_lnu = np.zeros(len(sed_lam), dtype=dtype) * erg / s / Hz
 
         # Loop over the vacuum wavelengths and luminosities in the collection
         # and add them to the spectra

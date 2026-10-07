@@ -132,6 +132,21 @@ class ImageCollection(ImagingBase):
                 self.imgs[f] = img
                 self.filter_codes.append(f)
 
+    def cast(self, dtype):
+        """Cast all images in the collection to a new dtype in place.
+
+        Args:
+            dtype (np.dtype/type):
+                The dtype to cast to.
+
+        Returns:
+            ImageCollection:
+                This collection (to allow chaining).
+        """
+        for img in self.imgs.values():
+            img.cast(dtype)
+        return self
+
     @property
     def shape(self):
         """Return the shape of the image collection.
@@ -1017,9 +1032,12 @@ class ImageCollection(ImagingBase):
         with the option of providing weights for each filter.
 
         Args:
-            rgb_filters (dict, array_like, str):
+            rgb_filters (dict):
                 A dictionary containing lists of each filter to combine to
-                create the red, green, and blue channels.
+                create the red, green, and blue channels. The keys ("R", "G"
+                and "B", case insensitive) define the channel each filter is
+                placed in, regardless of their order in the dictionary. A
+                single filter can be given as a string rather than a list.
                 e.g.
                 {
                 "R": "Webb/NIRCam.F277W",
@@ -1045,6 +1063,30 @@ class ImageCollection(ImagingBase):
             def scaling_func(x):
                 return x
 
+        # Map each key to its channel index so the output does not depend
+        # on the order of the dictionary, and wrap single filter strings
+        channel_inds = {"R": 0, "G": 1, "B": 2}
+        invalid = [
+            rgb for rgb in rgb_filters if rgb.upper() not in channel_inds
+        ]
+        if len(invalid) > 0:
+            raise exceptions.InconsistentArguments(
+                f"rgb_filters keys must be 'R', 'G' or 'B' (got {invalid})."
+            )
+        seen_channels = set()
+        for rgb in rgb_filters:
+            channel = rgb.upper()
+            if channel in seen_channels:
+                raise exceptions.InconsistentArguments(
+                    f"Duplicate RGB channel key: {rgb!r}. "
+                    "Channel keys are case insensitive."
+                )
+            seen_channels.add(channel)
+        rgb_filters = {
+            rgb: [filts] if isinstance(filts, str) else filts
+            for rgb, filts in rgb_filters.items()
+        }
+
         # Handle the case where we haven't been passed weights
         if weights is None:
             weights = {}
@@ -1064,7 +1106,8 @@ class ImageCollection(ImagingBase):
         rgb_img = np.zeros((self.npix[0], self.npix[1], 3), dtype=np.float64)
 
         # Loop over each filter calcualting the RGB channels
-        for rgb_ind, rgb in enumerate(rgb_filters):
+        for rgb in rgb_filters:
+            rgb_ind = channel_inds[rgb.upper()]
             for f in rgb_filters[rgb]:
                 rgb_img[:, :, rgb_ind] += scaling_func(
                     weights[f] * self.imgs[f].arr

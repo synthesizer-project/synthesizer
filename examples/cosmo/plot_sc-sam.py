@@ -42,6 +42,7 @@ if __name__ == "__main__":
 
     # Plot the SEDs from each method
     for method, gals in galaxies.items():
+        plt.figure()
         for galaxy in gals:
             if galaxy.stars is None:
                 continue

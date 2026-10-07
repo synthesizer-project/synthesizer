@@ -1,6 +1,5 @@
 """A submodule with helpers for writing out Synthesizer pipeline results."""
 
-import copy
 import inspect
 import sys
 from collections import defaultdict
@@ -60,6 +59,12 @@ def clear_pipeline_outputs(gal):
             ("images_psf_fnu", {}),
             ("images_noise_lnu", {}),
             ("images_noise_fnu", {}),
+            ("line_maps_lnu", {}),
+            ("line_maps_fnu", {}),
+            ("line_maps_psf_lnu", {}),
+            ("line_maps_psf_fnu", {}),
+            ("line_maps_noise_lnu", {}),
+            ("line_maps_noise_fnu", {}),
             ("particle_spectra", {}),
             ("particle_lines", {}),
             ("particle_photo_lnu", {}),
@@ -100,9 +105,15 @@ def accumulate_pipeline_results_from_child(parent, *children):
         if current is None:
             return other
 
-        # Handle the dictionary recursive case
+        # Handle the dictionary recursive case. A shallow copy is enough:
+        # every entry this loop touches is replaced by whatever combine
+        # returns, and the entries it does not touch are carried over
+        # unchanged, so nothing here ever mutates a value in place. Copying
+        # deeply instead duplicated the parent's entire accumulated state on
+        # every child merged, which is quadratic in the number of children and
+        # was the dominant cost of running with max_npart set.
         if isinstance(current, dict):
-            combined = copy.deepcopy(current)
+            combined = dict(current)
             for key, value in other.items():
                 combined[key] = combine(combined.get(key), value)
             return combined
@@ -137,6 +148,12 @@ def accumulate_pipeline_results_from_child(parent, *children):
             "images_psf_fnu",
             "images_noise_lnu",
             "images_noise_fnu",
+            "line_maps_lnu",
+            "line_maps_fnu",
+            "line_maps_psf_lnu",
+            "line_maps_psf_fnu",
+            "line_maps_noise_lnu",
+            "line_maps_noise_fnu",
             "data_cubes_lnu",
             "data_cubes_fnu",
         ):
@@ -172,6 +189,12 @@ def accumulate_pipeline_results_from_child(parent, *children):
                 "images_psf_fnu",
                 "images_noise_lnu",
                 "images_noise_fnu",
+                "line_maps_lnu",
+                "line_maps_fnu",
+                "line_maps_psf_lnu",
+                "line_maps_psf_fnu",
+                "line_maps_noise_lnu",
+                "line_maps_noise_fnu",
                 "sfh",
                 "sfzh",
             ):
@@ -647,6 +670,27 @@ def discover_dict_structure(data):
     return output_set
 
 
+def cast_products_recursive(store, dtype):
+    """Recursively cast pipeline products in nested dicts to a dtype.
+
+    Walks nested dictionaries and calls ``cast(dtype)`` on any leaf object
+    that supports it (Image, ImageCollection, SpectralCube, Sed). Used to
+    honour a requested output dtype on products whose generation pipeline
+    computes at the source dtype.
+
+    Args:
+        store (dict/object): The nested product store to cast in place.
+        dtype (np.dtype/None): The dtype to cast to. None is a no-op.
+    """
+    if store is None or dtype is None:
+        return
+    if isinstance(store, dict):
+        for value in store.values():
+            cast_products_recursive(value, dtype)
+    elif hasattr(store, "cast"):
+        store.cast(dtype)
+
+
 def count_and_check_dict_recursive(data, prefix=""):
     """Recursively count the number of leaves in a dictionary.
 
@@ -949,7 +993,11 @@ def get_full_memory(obj, seen=None):
     return size
 
 
-def validate_noise_unit_compatibility(instruments, expected_unit):
+def validate_noise_unit_compatibility(
+    instruments,
+    expected_unit,
+    capability_attr="can_do_noisy_imaging",
+):
     """Validate that noise attributes have compatible units.
 
     This function checks that instruments with noise capabilities have
@@ -968,6 +1016,11 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
         expected_unit (unyt.Unit):
             The expected unit for the image type (e.g., "erg/s/Hz" for
             luminosity images or "nJy" for flux images).
+        capability_attr (str):
+            The name of the boolean capability property to check before
+            validating an instrument's noise attributes. Defaults to
+            ``"can_do_noisy_imaging"`` for photometric images; pass
+            ``"can_do_noisy_line_mapping"`` for line maps.
 
     Raises:
         InconsistentArguments:
@@ -978,7 +1031,7 @@ def validate_noise_unit_compatibility(instruments, expected_unit):
         expected_unit = Unit(expected_unit)
 
     for inst in instruments:
-        if inst.can_do_noisy_imaging:
+        if getattr(inst, capability_attr):
             # Check depth units if using SNR-based noise
             if inst.depth is not None:
                 if isinstance(inst.depth, dict):

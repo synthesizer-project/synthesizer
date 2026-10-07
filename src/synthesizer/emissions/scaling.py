@@ -26,6 +26,7 @@ from synthesizer.extensions.spectra_operations import (
     scale_spectra_2d,
 )
 from synthesizer.units import get_array_quantity_view
+from synthesizer.utils.precision import convert_array_dtype
 
 
 def normalise_scale_masks(mask, lam_mask, shape):
@@ -288,6 +289,14 @@ def scale_line_arrays(
     nlam = luminosity.shape[-1]
     lum_1d = isinstance(scaling_lum, np.ndarray) and scaling_lum.ndim == 1
     cont_1d = isinstance(scaling_cont, np.ndarray) and scaling_cont.ndim == 1
+
+    # Per-row scalings are cheap to convert, so give them the line precision
+    # for the fused kernel (matching scale_array)
+    if lum_1d:
+        scaling_lum = convert_array_dtype(scaling_lum, luminosity.dtype)
+    if cont_1d:
+        scaling_cont = convert_array_dtype(scaling_cont, continuum.dtype)
+
     use_fused = (
         luminosity.ndim == 2
         and lum_1d
@@ -366,12 +375,20 @@ def scale_array(
     # scalars using one variable.
     scaling_ndim = getattr(scaling, "ndim", 0)
 
+    # A lower-dimensional scaling (one factor per row or per wavelength) is
+    # cheap to convert, so it takes the array's precision for the kernels.
+    # Full-size scalings are never converted so we never make a hidden
+    # spectra-sized copy.
+    if isinstance(scaling, np.ndarray) and scaling_ndim < array.ndim:
+        scaling = convert_array_dtype(scaling, array.dtype)
+
     # When scaling is one factor per row and the masks are in the simple 1D
     # forms the extension understands, hand the whole operation over to the
     # specialised kernel.
     use_row_scaling_kernel = (
         isinstance(scaling, np.ndarray)
         and array.ndim == 2
+        and array.flags.c_contiguous
         and scaling_ndim == 1
         and scaling.shape[0] == array.shape[0]
         and (
@@ -396,6 +413,7 @@ def scale_array(
     # kernel after materialising the repeated row factor once.
     if (
         array.ndim == 2
+        and array.flags.c_contiguous
         and np.isscalar(scaling)
         and (
             mask is None
@@ -416,7 +434,7 @@ def scale_array(
     ):
         # The kernel expects a per-row vector, so for masked scalar scaling we
         # materialise the obvious repeated row factor once.
-        scaling_arr = np.empty(array.shape[0], dtype=float)
+        scaling_arr = np.empty(array.shape[0], dtype=array.dtype)
         scaling_arr.fill(scaling)
         return scale_spectra_2d(
             array, scaling_arr, mask, lam_mask, nthreads, out
@@ -522,6 +540,8 @@ def scale_array(
         # This is the last-resort broadcast shape we still support: treat the
         # scaling as living one axis above the data and let NumPy broadcast.
         work = scaling[..., np.newaxis] * work
+        if array.dtype.kind == "f":
+            work = work.astype(array.dtype, copy=False)
         if mask is not None:
             raise exceptions.InconsistentMultiplication(
                 "Masking is not supported for scaling arrays with "

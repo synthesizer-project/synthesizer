@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
-import inspect
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from unyt import km, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
+
+# ParameterFunction now lives in the parameters submodule. It is imported here
+# both for the isinstance checks in get_param and to preserve the historic
+# import location.
+from synthesizer.emission_models.parameters import (  # noqa: F401
+    VARIATION_TYPES,
+    ParameterFunction,
+)
+from synthesizer.units import accepts
 from synthesizer.utils import (
     depluralize,
-    ensure_array_c_compatible_double,
-    get_attr_c_compatible_double,
     pluralize,
 )
 
@@ -22,6 +29,62 @@ if TYPE_CHECKING:
 
 # A sentinel object for detecting if a default value was provided
 _NO_DEFAULT = object()
+
+
+@accepts(velocity_dispersion=km / s)
+def _apply_broadening_to_model(model, label, velocity_dispersion, kwargs):
+    """Wrap an existing model in a scalar Doppler broadening transformation.
+
+    Args:
+        model (EmissionModel):
+            The model whose output spectrum will be broadened.
+        label (str):
+            The label for the broadened output model.
+        velocity_dispersion (unyt.unyt_quantity):
+            Scalar velocity dispersion. ``None`` disables broadening.
+        kwargs (dict):
+            Additional keyword arguments for the broadened model.
+
+    Returns:
+        EmissionModel:
+            The original model when broadening is disabled, otherwise a model
+            applying ``DopplerBroadening`` to the original model.
+
+    """
+    # Local imports avoid a cycle because base_model imports this module.
+    from synthesizer.emission_models.base_model import (
+        EmissionModel,
+        StellarEmissionModel,
+    )
+    from synthesizer.emission_models.transformers import DopplerBroadening
+
+    # If broadening is disabled, return the original model unchanged.
+    if velocity_dispersion is None:
+        return model
+
+    # Keep the requested label on the public output. The unbroadened spectrum
+    # remains in the graph for evaluation but is not saved separately.
+    predispersion_label = f"{label}_predispersion"
+    model._relabel_models({model.label: predispersion_label})
+    model.set_save(False)
+
+    # Preserve galaxy-level models when broadening a total containing dust
+    # emission; component-only models retain their stellar emitter type.
+    model_class = (
+        StellarEmissionModel if model.emitter == "stellar" else EmissionModel
+    )
+    broadened = model_class(
+        label=label,
+        apply_to=model,
+        emitter=model.emitter,
+        transformer=DopplerBroadening(
+            sigma_v_attr="velocity_dispersion",
+        ),
+        velocity_dispersion=velocity_dispersion,
+        **kwargs,
+    )
+
+    return broadened
 
 
 def cache_param(
@@ -137,6 +200,57 @@ def cache_model_params(
         )
 
 
+def _finalize_param_value(
+    value,
+    param,
+    model,
+    emission,
+    emitter,
+    obj,
+    preserve_units,
+):
+    """Call parameter functions, cache values, and optionally strip units."""
+    if isinstance(value, ParameterFunction):
+        value = value(
+            model,
+            emission,
+            emitter,
+            obj,
+            preserve_units=preserve_units,
+        )
+    elif model is not None and emitter is not None:
+        cache_param(
+            param=param,
+            emitter=emitter,
+            model_label=model.label,
+            value=value,
+        )
+
+    if not preserve_units and isinstance(value, (unyt_array, unyt_quantity)):
+        value = value.value
+
+    return value
+
+
+def get_emission_label(emission):
+    """Return the emission dictionary key for an emission.
+
+    Emissions can be referred to either by their label or by the
+    EmissionModel itself. This resolves either into the label used to key
+    the dictionaries of generated emissions. The label is resolved lazily
+    (rather than stored) so that relabelling a model is picked up.
+
+    Args:
+        emission (EmissionModel/str):
+            The emission, either an EmissionModel or a label.
+
+    Returns:
+        str:
+            The label of the emission.
+    """
+    return getattr(emission, "label", emission)
+
+
 def get_param(
     param,
     model,
@@ -205,41 +319,30 @@ def get_param(
 
     # Check the model's fixed parameters first
     if model is not None and param in model.fixed_parameters:
-        if not isinstance(
-            model.fixed_parameters[param], str
-        ) and not isinstance(
-            model.fixed_parameters[param],
-            ParameterFunction,
-        ):
-            value = model.fixed_parameters[param]
-            if not preserve_units:
-                value = ensure_array_c_compatible_double(value)
-        else:
-            value = model.fixed_parameters[param]
+        # A variation marker is a declaration, not a value. If one is still
+        # here then the model tree was never expanded.
+        if isinstance(model.fixed_parameters[param], VARIATION_TYPES):
+            marker_type = type(model.fixed_parameters[param]).__name__
+            raise exceptions.InconsistentArguments(
+                f"Found an unexpanded {marker_type} "
+                f"for '{param}' on model '{model.label}'. Call "
+                "expand_models() on the root model to generate the variant "
+                "models before generating an emission."
+            )
+
+        value = model.fixed_parameters[param]
 
     # Check the emission next
     elif emission is not None and hasattr(emission, param):
-        value = (
-            getattr(emission, param)
-            if preserve_units
-            else get_attr_c_compatible_double(emission, param)
-        )
+        value = getattr(emission, param)
 
     # Check the emitter
     elif emitter is not None and hasattr(emitter, param):
-        value = (
-            getattr(emitter, param)
-            if preserve_units
-            else get_attr_c_compatible_double(emitter, param)
-        )
+        value = getattr(emitter, param)
 
     # Finally, if we have an additional object, check that
     elif obj is not None and hasattr(obj, param):
-        value = (
-            getattr(obj, param)
-            if preserve_units
-            else get_attr_c_compatible_double(obj, param)
-        )
+        value = getattr(obj, param)
 
     # Do we need to recursively look for the parameter? (We know we're only
     # looking on the emitter at this point)
@@ -265,22 +368,11 @@ def get_param(
             _visited=new_visited,
         )
 
-    # If we found a ParameterFunction, call it to get the value
-    elif value is not None and isinstance(value, ParameterFunction):
-        return value(model, emission, emitter, obj)
-
-    # If we found a value, return it
+    # If we found a value (or a ParameterFunction to produce one), finalise it
     elif value is not None:
-        # Only cache if we are in a cacheable context (have a model
-        # and emitter)
-        if model is not None and emitter is not None:
-            cache_param(
-                param=param,
-                emitter=emitter,
-                model_label=model.label,
-                value=value,
-            )
-        return value
+        return _finalize_param_value(
+            value, param, model, emission, emitter, obj, preserve_units
+        )
 
     # If we were finding a logged parameter but failed, try the non-logged
     # version and log it
@@ -340,28 +432,29 @@ def get_param(
     if value is None and default is not _NO_DEFAULT:
         value = default
 
-    # If we found a value, return it
+    # If we found a value (or a ParameterFunction to produce one), finalise it
     if value is not None:
-        # Only cache if we are in a cacheable context (have a model
-        # and emitter)
-        if model is not None and emitter is not None:
-            cache_param(
-                param=param,
-                emitter=emitter,
-                model_label=model.label,
-                value=value,
-            )
-        return value
+        return _finalize_param_value(
+            value, param, model, emission, emitter, obj, preserve_units
+        )
 
     # Otherwise raise an exception
     else:
-        raise exceptions.MissingAttribute(
-            f"{param} can't be found on the model "
+        # Report everywhere we looked, including the fallback object if one
+        # was given
+        searched = (
+            f"the model "
             f"({model.label if model is not None else None}),"
             " emission ("
             f"{emission.__class__.__name__ if emission is not None else None}"
             "), or emitter ("
-            f"{emitter.__class__.__name__ if emitter is not None else None})."
+            f"{emitter.__class__.__name__ if emitter is not None else None})"
+        )
+        if obj is not None:
+            searched = searched.replace(", or emitter (", ", emitter (")
+            searched += f", or {obj.__class__.__name__} itself"
+        raise exceptions.MissingAttribute(
+            f"{param} can't be found on {searched}."
         )
 
 
@@ -414,161 +507,3 @@ def get_params(
         )
 
     return values
-
-
-class ParameterFunction:
-    """A class for wrapping functions that compute parameters for emitters.
-
-    This class can be used to wrap functions which take emitter attributes
-    as inputs and return a computed parameter value or array of values. This
-    class is designed as a dependency injection mechanism to be passed to
-    EmissionModel arguments that require dynamic parameter computation from
-    an emitter. As such, this is mostly designed for internal use within the
-    Synthesizer package, but it can also be used by an experienced user to
-    create custom parameter functions.
-
-    Any function wrapped by this class must:
-        - Follow this signature: func(**kwargs) -> value
-        - Return a single value or numpy/unyt array of values. If an array is
-          returned, it must be the same shape as arrays on the emitter (i.e.
-          nstar in length for per star properties etc.).
-        - Have kwargs which are either attributes of the emitter object or
-          fixed parameters on an EmissionModel.
-        - Have kwargs which are all defined in the "func_args" list
-          (set during initialization).
-
-    Example:
-        def compute_metallicity(mass, age, fixed_param):
-            # Compute metallicity based on mass, age, and a fixed parameter
-            return (mass * 0.01) + (age * 0.001) + fixed_param
-
-        param_func = ParameterFunction(
-            func=compute_metallicity,
-            func_args=['mass', 'age', 'fixed_param']
-        )
-
-        # Define an emission model that fixes 'fixed_param' to 0.02
-        model = EmissionModel(
-            label='custom_model',
-            fixed_param=0.02,
-            grid=grid,
-            metallicity_param=param_func,
-        )
-
-        # Later... call get spectra on an emitter which will use the function
-        # to compute metallicity dynamically.
-        emitter.get_spectra(model)
-
-        # And you can see the cached value to was used
-        print(emitter.model_param_cache['custom_model']['metallicity_param'])
-    """
-
-    def __init__(self, func: callable, sets: str, func_args: list) -> None:
-        """Initialize the function wrapper.
-
-        This will attach the function and set the list of argument names
-        that the function takes ready for later extraction.
-
-        Args:
-            func (callable):
-                The function to wrap.
-            sets (str):
-                A string indicating the attribute on the emitter that this
-                function sets.
-            func_args (list):
-                A list of argument names that the function takes. These must
-                correspond to attributes on the emitter or fixed parameters
-                on an EmissionModel.
-
-        Raises:
-            ValueError:
-                If func is not callable.
-        """
-        if not callable(func):
-            raise ValueError("func must be a callable function.")
-
-        self.func = func
-        self.func_args = func_args
-        self.sets = sets
-
-        # Ensure the function signature matches the func_args
-        sig = inspect.signature(func)
-        for arg in func_args:
-            if arg not in sig.parameters:
-                raise exceptions.InconsistentArguments(
-                    f"Found func_arg '{arg}' on ParameterFunction which is "
-                    "not an argument of the wrapped function "
-                    f"'{func.__name__}'."
-                )
-        for param in sig.parameters:
-            if param not in func_args:
-                raise exceptions.InconsistentArguments(
-                    f"Found argument '{param}' on the wrapped function "
-                    f"'{func.__name__}' which is not in the func_args list "
-                    "of the ParameterFunction."
-                )
-
-    def __call__(self, model, emission, emitter, obj=None):
-        """Call the wrapped function with parameters extracted from objects.
-
-        This will extract the required parameters from the model, emission,
-        emitter, or optional object and call the wrapped function with those
-        parameters.
-
-        Args:
-            model (EmissionModel):
-                The model object.
-            emission (Sed/LineCollection):
-                The emission object.
-            emitter (Stars/Gas/Galaxy):
-                The emitter object.
-            obj (object, optional):
-                An optional additional object to look for parameters on last.
-
-        Returns:
-            value:
-                The value returned by the wrapped function.
-        """
-        # Extract the required parameters
-        func_kwargs = {}
-        for arg in self.func_args:
-            func_kwargs[arg] = get_param(
-                arg,
-                model,
-                emission,
-                emitter,
-                obj,
-            )
-
-        # Call the function with the extracted parameters
-        try:
-            val = self.func(**func_kwargs)
-        except Exception as e:
-            raise exceptions.ParameterFunctionError(
-                f"Error calling ParameterFunction "
-                f"'{self.func.__name__}': {str(e)}"
-            ) from e
-
-        # Cache the computed value on the emitter for later use (if provided)
-        if emitter is not None:
-            cache_param(
-                param=self.sets,
-                emitter=emitter,
-                model_label=model.label,
-                value=val,
-            )
-
-        return val
-
-    def __repr__(self):
-        """Return a string representation of the ParameterFunction.
-
-        Returns:
-            str:
-                A string representation of the ParameterFunction.
-        """
-        return (
-            f"ParameterFunction({self.func.__name__}, "
-            f"sets='{self.sets}', "
-            f"args={self.func_args})"
-        )

@@ -16,7 +16,6 @@
 #include "timers.h"
 
 #include <Python.h>
-
 #include <atomic>
 #include <mutex>
 #include <string>

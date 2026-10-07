@@ -40,5 +40,5 @@ if __name__ == "__main__":
     grid = Grid(args.grid_name)
 
     # plot grid of HI ionising luminosities
-    fig, ax = grid.plot_specific_ionising_lum(ion=args.ion)
+    fig, ax, cax = grid.plot_specific_ionising_lum(ion=args.ion)
     plt.show()

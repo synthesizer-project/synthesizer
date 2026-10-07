@@ -32,6 +32,36 @@ import numpy as np
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.transformer import Transformer
 from synthesizer.synth_warnings import warn
+from synthesizer.utils.operation_timers import timed
+
+
+def _check_fraction_shape(fraction, emission, model):
+    """Ensure per-particle fractions are only applied to per-particle emission.
+
+    Scaling an integrated spectrum by one fraction per particle would
+    silently broadcast it into one spectrum per particle, which is
+    meaningless, so we stop with a clear error instead.
+
+    Args:
+        fraction (float/np.ndarray):
+            The combined fraction to apply.
+        emission (Sed/LineCollection):
+            The emission being transformed.
+        model (EmissionModel):
+            The emission model doing the transformation.
+
+    Raises:
+        InconsistentArguments:
+            If a per-particle fraction is applied to integrated emission.
+    """
+    if np.size(fraction) > 1 and len(emission.shape) == 1:
+        label = getattr(model, "label", None)
+        raise exceptions.InconsistentArguments(
+            f"Model '{label}' applies a fraction with one value per particle "
+            f"({np.size(fraction)} values) to integrated emission. Either set "
+            "per_particle=True on the model or use a single value for the "
+            "fraction.",
+        )
 
 
 class ProcessedFraction(Transformer):
@@ -77,6 +107,7 @@ class ProcessedFraction(Transformer):
         """Return a string representation of the ProcessedFraction object."""
         return f"ProcessedFraction(fesc_attrs={self._required_params})"
 
+    @timed("ProcessedFraction._transform")
     def _transform(
         self,
         emission,
@@ -127,6 +158,8 @@ class ProcessedFraction(Transformer):
             raise exceptions.InconsistentParameter(
                 f"Escape fraction must be between 0 and 1 (got {fesc})."
             )
+
+        _check_fraction_shape(fesc, emission, model)
 
         return emission.scale(
             1 - fesc,
@@ -179,6 +212,7 @@ class EscapedFraction(Transformer):
         """Return a string representation of the EscapedFraction object."""
         return f"EscapedFraction(fesc_attrs={self._required_params})"
 
+    @timed("EscapedFraction._transform")
     def _transform(
         self,
         emission,
@@ -229,6 +263,8 @@ class EscapedFraction(Transformer):
             raise exceptions.InconsistentParameter(
                 f"Escape fraction must be between 0 and 1 (got {fesc})."
             )
+
+        _check_fraction_shape(fesc, emission, model)
 
         return emission.scale(
             fesc,
@@ -282,6 +318,7 @@ class CoveringFraction(Transformer):
         """Return a string representation of the CoveringFraction object."""
         return f"CoveringFraction(covering_attrs={self._required_params})"
 
+    @timed("CoveringFraction._transform")
     def _transform(
         self,
         emission,
@@ -332,6 +369,8 @@ class CoveringFraction(Transformer):
             raise exceptions.InconsistentParameter(
                 f"Covering fraction must be between 0 and 1 (got {fcov})."
             )
+
+        _check_fraction_shape(fcov, emission, model)
 
         return emission.scale(
             fcov,
@@ -385,6 +424,7 @@ class EscapingFraction(Transformer):
         """Return a string representation of the EscapingFraction object."""
         return f"EscapingFraction(covering_attrs={self._required_params})"
 
+    @timed("EscapingFraction._transform")
     def _transform(
         self,
         emission,
@@ -435,6 +475,8 @@ class EscapingFraction(Transformer):
             raise exceptions.InconsistentParameter(
                 f"Covering fraction must be between 0 and 1 (got {fcov})."
             )
+
+        _check_fraction_shape(fcov, emission, model)
 
         return emission.scale(
             1 - fcov,

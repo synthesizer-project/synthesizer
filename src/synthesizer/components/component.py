@@ -19,6 +19,7 @@ from synthesizer.cosmology import (
     get_luminosity_distance,
 )
 from synthesizer.emissions import plot_spectra
+from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.imaging.data_cube_generators import (
     _combine_spectral_cubes,
     _prepare_component_data_cube_labels,
@@ -30,6 +31,7 @@ from synthesizer.imaging.image_generators import (
 from synthesizer.imaging.postprocess import (
     _postprocess_existing_data_cubes,
     _postprocess_existing_images,
+    _postprocess_existing_line_maps,
 )
 from synthesizer.synth_warnings import deprecated
 from synthesizer.units import unit_is_compatible
@@ -101,6 +103,16 @@ class Component(ABC):
         self.images_psf_fnu = {}
         self.images_noise_lnu = {}
         self.images_noise_fnu = {}
+
+        # Define the dictionaries to hold the emission line maps (same
+        # structure as the photometric images above, but keyed by line id
+        # rather than filter code)
+        self.line_maps_lnu = {}
+        self.line_maps_fnu = {}
+        self.line_maps_psf_lnu = {}
+        self.line_maps_psf_fnu = {}
+        self.line_maps_noise_lnu = {}
+        self.line_maps_noise_fnu = {}
 
         # Define the dictionaries to hold instrument specific spectroscopy
         self.spectroscopy = {}
@@ -282,7 +294,14 @@ class Component(ABC):
         # avoid any issues with 0s
         return (10 * pc).to(kpc)
 
-    def get_photo_lnu(self, filters, verbose=True, nthreads=1, limit_to=None):
+    def get_photo_lnu(
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        limit_to=None,
+        out_dtype=None,
+    ):
         """Calculate luminosity photometry using a FilterCollection object.
 
         Args:
@@ -297,6 +316,8 @@ class Component(ABC):
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             photo_lnu (dict):
@@ -312,11 +333,19 @@ class Component(ABC):
                 filters,
                 verbose,
                 nthreads=nthreads,
+                out_dtype=out_dtype,
             )
 
         return self.photo_lnu
 
-    def get_photo_fnu(self, filters, verbose=True, nthreads=1, limit_to=None):
+    def get_photo_fnu(
+        self,
+        filters,
+        verbose=True,
+        nthreads=1,
+        limit_to=None,
+        out_dtype=None,
+    ):
         """Calculate flux photometry using a FilterCollection object.
 
         Args:
@@ -331,6 +360,8 @@ class Component(ABC):
                 If None, then photometry is calculated for all spectra in the
                 galaxy. If a string or list of strings is provided, then
                 photometry is only calculated for the specified spectra.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the returned photometry.
 
         Returns:
             dict:
@@ -346,6 +377,7 @@ class Component(ABC):
                 filters,
                 verbose,
                 nthreads=nthreads,
+                out_dtype=out_dtype,
             )
 
         return self.photo_fnu
@@ -361,6 +393,7 @@ class Component(ABC):
         verbose=True,
         nthreads=1,
         grid_assignment_method="cic",
+        out_dtype=None,
         **kwargs,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -411,6 +444,8 @@ class Component(ABC):
             grid_assignment_method (str):
                 The method to use for assigning particles to the grid. Options
                 are "cic" (cloud-in-cell) or "ngp" (nearest grid point)."
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted spectra arrays.
             **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -434,6 +469,7 @@ class Component(ABC):
             verbose=verbose,
             nthreads=nthreads,
             grid_assignment_method=grid_assignment_method,
+            out_dtype=out_dtype,
             **kwargs,
         )
 
@@ -458,6 +494,7 @@ class Component(ABC):
         fesc=None,
         mask=None,
         verbose=True,
+        out_dtype=None,
         **kwargs,
     ):
         """Generate stellar lines as described by the emission model.
@@ -503,6 +540,8 @@ class Component(ABC):
                       a particular model.
             verbose (bool):
                 Are we talking?
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted line arrays.
             kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -523,6 +562,7 @@ class Component(ABC):
             fesc=fesc,
             mask=mask,
             verbose=verbose,
+            out_dtype=out_dtype,
             **kwargs,
         )
 
@@ -893,6 +933,375 @@ class Component(ABC):
             phot_type="fnu",
         )
 
+    def _generate_line_maps(
+        self,
+        *labels,
+        line_ids,
+        fov,
+        instrument,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        cosmo=None,
+        phot_type="lnu",
+        postprocess=True,
+    ):
+        """Make an ImageCollection of emission line maps per line id.
+
+        For Parametric components, maps can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle components, maps can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        Which maps are produced is defined by the labels passed. If any
+        of the necessary lines are missing for generating a particular
+        map, an exception will be raised.
+
+        All maps that are created will be stored on the emitter (Stars or
+        BlackHole/s) under the line_maps_lnu attribute (for
+        phot_type='lnu') or line_maps_fnu attribute (for phot_type='fnu').
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make line maps for.
+                These must be present in the lines dicts of the component.
+                For particle components, these labels must be present in the
+                particle lines dict.
+            line_ids (list):
+                The line ids to make maps for. Each requested label must
+                have all of these lines available.
+                Blended lines (e.g. doublets) can be given as a comma separated
+                string (e.g. "O 3 4958.91A, O 3 5006.84A") or a nested list of
+                line ids; these produce a single map of the summed lines keyed
+                by the ", " joined id.
+            fov (unyt_quantity of float):
+                The width of the map in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the map (typically a
+                LineImager).
+            img_type (str):
+                The type of map to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed maps.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+            phot_type (str):
+                The type of line quantity to use for the maps, either
+                'lnu' for luminosity maps, or 'fnu' for flux.
+            postprocess (bool):
+                If True, automatically apply the instrument-defined mapping
+                post-processing after raw map generation.
+
+        Returns:
+            dict
+                A dict of dicts of the form
+                {label: {line_id: ImageCollection}}, one ImageCollection per
+                requested label, each containing one line map (Image) per
+                line id.
+        """
+        labels = list(labels)
+        for label in labels:
+            if not isinstance(label, str):
+                raise exceptions.InconsistentArguments(
+                    f"All labels must be strings, got {type(label).__name__}. "
+                    "If passing an EmissionModel, use model.label instead."
+                )
+
+        if isinstance(line_ids, str):
+            line_ids = [line_ids]
+
+        # Canonicalise aliases so requested ids match the instrument's ids
+        line_ids = [str(alias_to_line_id(lid)) for lid in line_ids]
+        unsupported = [
+            lid for lid in line_ids if lid not in instrument.line_ids
+        ]
+        if len(unsupported) > 0:
+            raise exceptions.InconsistentArguments(
+                f"Lines {unsupported} are not mapped by instrument "
+                f"{instrument.label}. Available lines: {instrument.line_ids}"
+            )
+
+        # Are we doing a parametric map?
+        is_param = hasattr(self, "morphology")
+
+        if is_param and img_type == "hist":
+            raise exceptions.InconsistentArguments(
+                f"Parametric {self.component_type} can only produce "
+                "smoothed maps."
+            )
+
+        if unit_is_compatible(instrument.resolution, arcsecond):
+            if cosmo is None:
+                raise exceptions.InconsistentArguments(
+                    "Cosmology must be provided when using an angular "
+                    "resolution and FOV."
+                )
+            if self.redshift is None:
+                raise exceptions.MissingAttribute(
+                    "Redshift must be set when using an angular "
+                    "resolution and FOV."
+                )
+
+        quantity = "luminosity" if phot_type == "lnu" else "flux"
+        if phot_type not in ("lnu", "fnu"):
+            raise exceptions.InconsistentArguments(
+                f"Photometry type {phot_type} not recognised. Must be "
+                "'lnu' or 'fnu'."
+            )
+
+        # Find which maps must be generated and which can simply
+        # be combined
+        combine_labels, generate_labels = _prepare_component_image_labels(
+            labels,
+            self.model_param_cache,
+            remove_missing=True,
+        )
+
+        out_maps = {}
+
+        # Get the appropriate lines dict
+        if is_param:
+            lines_dict = self.lines
+        else:
+            lines_dict = self.particle_lines
+
+        for label in generate_labels:
+            if label not in lines_dict:
+                raise exceptions.MissingLines(
+                    f"Lines for model {label} not found on the "
+                    f"{self.component_type} component. "
+                    f"Available line sets: {list(lines_dict.keys())}"
+                )
+
+            lines = lines_dict[label]
+            missing_lines = [lid for lid in line_ids if lid not in lines]
+            if len(missing_lines) > 0:
+                raise exceptions.MissingLines(
+                    f"Lines {missing_lines} not found in the lines saved "
+                    f"for model {label}."
+                )
+
+            if quantity == "flux" and lines.flux is None:
+                raise exceptions.MissingAttribute(
+                    f"Lines for model {label} have no flux. Did you forget "
+                    "to call get_observed_lines?"
+                )
+
+            out_maps[label] = instrument.generate_maps(
+                lines=lines[line_ids],
+                fov=fov,
+                img_type=img_type,
+                kernel=kernel,
+                kernel_threshold=kernel_threshold,
+                nthreads=nthreads,
+                emitter=self,
+                cosmo=cosmo,
+                quantity=quantity,
+            )
+
+        for label in combine_labels:
+            out_maps.update(
+                {
+                    label: _combine_image_collections(
+                        images=out_maps,
+                        label=label,
+                        model_cache=self.model_param_cache,
+                    )
+                }
+            )
+
+        instrument_name = instrument.label
+
+        if instrument_name is not None:
+            if phot_type == "lnu":
+                self.line_maps_lnu.setdefault(instrument_name, {})
+                self.line_maps_lnu[instrument_name].update(out_maps)
+            else:
+                self.line_maps_fnu.setdefault(instrument_name, {})
+                self.line_maps_fnu[instrument_name].update(out_maps)
+        else:
+            if phot_type == "lnu":
+                self.line_maps_lnu.update(out_maps)
+            else:
+                self.line_maps_fnu.update(out_maps)
+
+        if len(out_maps) == 0:
+            return out_maps
+
+        if not postprocess:
+            if len(labels) == 1:
+                return out_maps[labels[0]]
+            return out_maps
+
+        out_maps = _postprocess_existing_line_maps(
+            self,
+            instrument=instrument,
+            phot_type=phot_type,
+            limit_to=labels,
+        )
+
+        if len(labels) == 1:
+            return out_maps[labels[0]]
+        return out_maps
+
+    def get_line_maps_luminosity(
+        self,
+        *labels,
+        line_ids,
+        fov,
+        instrument,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Make an ImageCollection of emission line maps from luminosities.
+
+        For Parametric components, maps can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle components, maps can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        All maps that are created will be stored on the emitter (Stars or
+        BlackHole/s) under the line_maps_lnu attribute.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make line maps for.
+                These must be present in the lines dicts of the component.
+            line_ids (list):
+                The line ids to make maps for.
+                Blended lines (e.g. doublets) can be given as a comma separated
+                string (e.g. "O 3 4958.91A, O 3 5006.84A") or a nested list of
+                line ids; these produce a single map of the summed lines keyed
+                by the ", " joined id.
+            fov (unyt_quantity of float):
+                The width of the map in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the map (typically a
+                LineImager).
+            img_type (str):
+                The type of map to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed maps.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+
+        Returns:
+            dict
+                A dict of the form {label: ImageCollection}, each containing
+                one line map (Image) per requested line id.
+        """
+        return self._generate_line_maps(
+            *labels,
+            line_ids=line_ids,
+            fov=fov,
+            instrument=instrument,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            cosmo=cosmo,
+            phot_type="lnu",
+        )
+
+    def get_line_maps_flux(
+        self,
+        *labels,
+        line_ids,
+        fov,
+        instrument,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1,
+        nthreads=1,
+        cosmo=None,
+    ):
+        """Make an ImageCollection of emission line maps from fluxes.
+
+        For Parametric components, maps can only be smoothed. An
+        exception will be raised if a histogram is requested.
+
+        For Particle components, maps can either be a simple
+        histogram ("hist") or an image with particles smoothed over
+        their SPH kernel.
+
+        All maps that are created will be stored on the emitter (Stars or
+        BlackHole/s) under the line_maps_fnu attribute.
+
+        Args:
+            *labels (str):
+                The labels of the emission models to make line maps for.
+                These must be present in the lines dicts of the component.
+            line_ids (list):
+                The line ids to make maps for.
+                Blended lines (e.g. doublets) can be given as a comma separated
+                string (e.g. "O 3 4958.91A, O 3 5006.84A") or a nested list of
+                line ids; these produce a single map of the summed lines keyed
+                by the ", " joined id.
+            fov (unyt_quantity of float):
+                The width of the map in image coordinates.
+            instrument (Instrument):
+                The instrument to use for the map (typically a
+                LineImager).
+            img_type (str):
+                The type of map to be made, either "hist" -> a histogram, or
+                "smoothed" -> particles smoothed over a kernel for a particle
+                galaxy. Otherwise, only smoothed is applicable.
+            kernel (np.ndarray of float):
+                The values from one of the kernels from the kernel_functions
+                module. Only used for smoothed maps.
+            kernel_threshold (float):
+                The kernel's impact parameter threshold (by default 1).
+            nthreads (int):
+                The number of threads to use in the tree search. Default is 1.
+            cosmo (astropy.cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+
+        Returns:
+            dict
+                A dict of the form {label: ImageCollection}, each containing
+                one line map (Image) per requested line id.
+        """
+        return self._generate_line_maps(
+            *labels,
+            line_ids=line_ids,
+            fov=fov,
+            instrument=instrument,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            nthreads=nthreads,
+            cosmo=cosmo,
+            phot_type="fnu",
+        )
+
     @deprecated(
         "is deprecated and will be removed in version 1.3.0. "
         "Use component.get_images_luminosity(...) instead."
@@ -1177,6 +1586,7 @@ class Component(ABC):
         self,
         instrument,
         limit_to=None,
+        out_dtype=None,
     ):
         """Get spectroscopy for the component based on a specific instrument.
 
@@ -1193,6 +1603,9 @@ class Component(ABC):
                 the component. If a string or list of strings is provided,
                 then spectroscopy is only calculated for the specified
                 spectra.
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the resulting spectra.
+                If None the spectroscopy inherits the source spectra dtype.
 
         Returns:
             dict
@@ -1216,6 +1629,8 @@ class Component(ABC):
             spectrum = instrument.apply_lam_array(self.spectra[label])
             if instrument.can_do_noisy_spectroscopy:
                 spectrum = instrument.apply_noise(spectrum)
+            if out_dtype is not None:
+                spectrum.cast(out_dtype)
             self.spectroscopy[instrument.label][label] = spectrum
 
         # If we have particle spectra then do the same for them
@@ -1244,6 +1659,8 @@ class Component(ABC):
                 )
                 if instrument.can_do_noisy_spectroscopy:
                     spectrum = instrument.apply_noise(spectrum)
+                if out_dtype is not None:
+                    spectrum.cast(out_dtype)
                 self.particle_spectroscopy[instrument.label][label] = spectrum
 
         # Return the spectroscopy for the component

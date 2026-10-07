@@ -60,6 +60,7 @@ def load_SHARK(
     method="particle",
     components=_COMPONENTS,
     verbose=False,
+    dtype=np.float64,
 ):
     """Read a SHARK star formation histories file.
 
@@ -88,6 +89,11 @@ def load_SHARK(
             ('disks', 'bulges_mergers', 'bulges_diskins').
         verbose (bool):
             Are we talking?
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
 
     Returns:
         list: particle.Galaxy (method='particle') or parametric.Galaxy
@@ -97,8 +103,8 @@ def load_SHARK(
 
     Raises:
         InconsistentArguments:
-            If method is unknown or components contains an unknown
-            component.
+            If method is unknown, components contains an unknown or
+            repeated component, or a history has the wrong shape.
     """
     if method not in ("particle", "parametric"):
         raise exceptions.InconsistentArguments(
@@ -108,6 +114,10 @@ def load_SHARK(
     if unknown:
         raise exceptions.InconsistentArguments(
             f"Unknown components {unknown} (available: {_COMPONENTS})"
+        )
+    if len(set(components)) != len(components):
+        raise exceptions.InconsistentArguments(
+            f"Duplicate components in {components}"
         )
 
     with h5py.File(fname, "r") as hf:
@@ -122,6 +132,14 @@ def load_SHARK(
         zmets = [
             hf[f"{comp}/metallicity_histories"][:] for comp in components
         ]  # absolute Z of stars formed per bin
+
+    shape = (gal_ids.size, delta_t.size)
+    for comp, sfr, zm in zip(components, sfrs, zmets):
+        if sfr.shape != shape or zm.shape != shape:
+            raise exceptions.InconsistentArguments(
+                f"{comp} histories have shapes {sfr.shape} and {zm.shape}, "
+                f"expected {shape}"
+            )
 
     ncomp = len(components)
 
@@ -161,9 +179,11 @@ def load_SHARK(
                 print(f"Galaxy {gal_id} formed no stars in {components}")
         elif method == "particle":
             stars = ParticleStars(
-                initial_masses=m[keep] * Msun,
-                ages=age[keep] * yr,
-                metallicities=z[keep],
+                initial_masses=(m[keep] * Msun)
+                .in_base("galactic")
+                .astype(dtype),
+                ages=(age[keep] * yr).astype(dtype),
+                metallicities=z[keep].astype(dtype),
                 redshift=redshift,
                 star_component=tags[keep],
             )

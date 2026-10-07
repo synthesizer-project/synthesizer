@@ -67,3 +67,14 @@ def test_cic_matrix():
     grid = np.array([-3.0, -2.0, -1.0])
     w = cic_matrix(np.array([-2.25, -5.0, 0.0]), grid)
     np.testing.assert_allclose(w, [[0.25, 0.75, 0.0], [1, 0, 0], [0, 0, 1]])
+
+
+def test_zero_width_bin_is_burst():
+    """A zero-width bin puts all its mass at its age."""
+    lo = hi = np.array([5e6])
+    b, mid, frac = split_age_bins(lo, hi, GRID)
+    assert b.tolist() == [0]
+    assert mid.tolist() == [5e6]
+    assert frac.tolist() == [1.0]
+    overlap = bin_overlap_matrix(lo, hi, GRID)
+    assert overlap.tolist() == [[0.0, 1.0, 0.0, 0.0, 0.0]]

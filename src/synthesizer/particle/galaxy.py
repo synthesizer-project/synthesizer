@@ -33,9 +33,10 @@ from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.gas import Gas
 from synthesizer.particle.stars import Stars
 from synthesizer.synth_warnings import warn
-from synthesizer.units import accepts, unyt_to_ndview
+from synthesizer.units import accepts, get_quantity_unit, unyt_to_ndview
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import resolve_out_dtype
 
 
 class Galaxy(BaseGalaxy):
@@ -473,7 +474,12 @@ class Galaxy(BaseGalaxy):
         )
 
         # Loop over black holes
-        metallicities = np.zeros(self.black_holes.nbh)
+        # Match the precision of the black hole masses so the metallicities
+        # don't break the extensions' shared-dtype requirement
+        metallicities = np.zeros(
+            self.black_holes.nbh,
+            dtype=self.black_holes._masses.dtype,
+        )
         for ind, gas_in_range in enumerate(inds):
             # Handle black holes with no neighbouring gas
             if len(gas_in_range) == 0:
@@ -532,6 +538,7 @@ class Galaxy(BaseGalaxy):
         force_loop=0,
         min_count=100,
         nthreads=1,
+        out_dtype=None,
     ):
         """Calculate the LOS optical depth for each star particle.
 
@@ -576,6 +583,9 @@ class Galaxy(BaseGalaxy):
                 will be performed with a brute force loop.
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            out_dtype (np.dtype):
+                The floating-point dtype for the output optical depth array.
+                Default is np.float64.
         """
         # Ensure we have stars and gas
         if self.stars is None:
@@ -609,10 +619,14 @@ class Galaxy(BaseGalaxy):
 
         # Apply the mask if provided
         if mask is not None:
-            tau_vs = np.zeros(self.stars.nparticles)
+            tau_vs = np.zeros(
+                self.stars.nparticles, dtype=resolve_out_dtype(out_dtype)
+            )
             tau_vs[mask] = tau_v
         else:
-            tau_vs = tau_v
+            tau_vs = np.array(
+                tau_v, dtype=resolve_out_dtype(out_dtype), copy=True
+            )
 
         # Store the result in self.stars
         setattr(self.stars, tau_v_attr, tau_vs)
@@ -631,6 +645,7 @@ class Galaxy(BaseGalaxy):
         force_loop=0,
         min_count=100,
         nthreads=1,
+        out_dtype=None,
     ):
         """Calculate the LOS optical depth for each black hole particle.
 
@@ -676,6 +691,9 @@ class Galaxy(BaseGalaxy):
                 will be performed with a brute force loop.
             nthreads (int):
                 The number of threads to use in the tree search. Default is 1.
+            out_dtype (np.dtype):
+                The floating-point dtype for the output optical depth array.
+                Default is np.float64.
         """
         # Ensure we have black holes and gas
         if self.black_holes is None:
@@ -702,20 +720,25 @@ class Galaxy(BaseGalaxy):
             force_loop=force_loop,
             min_count=min_count,
             nthreads=nthreads,
-        )
+        )  # Msun / Mpc**2
 
         # Finalise the calculation
         tau_v = kappa * unyt_to_ndview(los_dustsds, Msun / pc**2)
 
         # Apply the mask if provided
         if mask is not None:
-            tau_vs = np.zeros(self.black_holes.nbh)
+            tau_vs = np.zeros(
+                self.black_holes.nparticles,
+                dtype=resolve_out_dtype(out_dtype),
+            )
             tau_vs[mask] = tau_v
         else:
-            tau_vs = tau_v
+            tau_vs = np.array(
+                tau_v, dtype=resolve_out_dtype(out_dtype), copy=True
+            )
 
         # Store the result in self.black_holes
-        setattr(self.black_holes, "tau_v", tau_vs)
+        setattr(self.black_holes, tau_v_attr, tau_vs)
 
         return tau_v
 
@@ -1145,7 +1168,7 @@ class Galaxy(BaseGalaxy):
         # Divide out the mass contribution, handling zero contribution pixels
         img = weighted_img.arr
         img[img > 0] /= mass_img.arr[mass_img.arr > 0]
-        img *= self.stars.ages.units
+        img *= get_quantity_unit(self.stars, "ages")
 
         return Image(
             resolution=resolution,
@@ -1206,7 +1229,7 @@ class Galaxy(BaseGalaxy):
         # Divide out the mass contribution, handling zero contribution pixels
         img = weighted_img.arr
         img[img > 0] /= mass_img.arr[mass_img.arr > 0]
-        img *= self.stars.ages.units
+        img *= get_quantity_unit(self.stars, "ages")
 
         return Image(
             resolution=resolution,
@@ -1253,11 +1276,12 @@ class Galaxy(BaseGalaxy):
             Image: The SFR image.
         """
         # Convert the age bin if necessary
+        age_unit = get_quantity_unit(self.stars, "ages")
         if isinstance(age_bin, unyt_quantity):
-            if age_bin.units != self.stars.ages.units:
-                age_bin = age_bin.to(self.stars.ages.units)
+            if age_bin.units != age_unit:
+                age_bin = age_bin.to(age_unit)
         else:
-            age_bin *= self.stars.ages.units
+            age_bin *= age_unit
 
         # Get the mask for stellar particles in the age bin
         mask = self.stars.ages < age_bin
@@ -1324,11 +1348,12 @@ class Galaxy(BaseGalaxy):
             Image: The sSFR image.
         """
         # Convert the age bin if necessary
+        age_unit = get_quantity_unit(self.stars, "ages")
         if isinstance(age_bin, unyt_quantity):
-            if age_bin.units != self.stars.ages.units:
-                age_bin = age_bin.to(self.stars.ages.units)
+            if age_bin.units != age_unit:
+                age_bin = age_bin.to(age_unit)
         else:
-            age_bin *= self.stars.ages.units
+            age_bin *= age_unit
 
         # Get the mask for stellar particles in the age bin
         mask = self.stars.ages < age_bin

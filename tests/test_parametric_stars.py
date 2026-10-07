@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 from unyt import Msun, Myr, yr
 
+from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric.stars import Stars
 from synthesizer.units import Units
 
@@ -43,7 +44,112 @@ def constant_sfh_stars(test_grid):
         sf_hist=sf_hist,
         metal_dist=metal_dist,
         initial_mass=1e10 * Msun,
+        grid=test_grid,
     )
+
+
+@pytest.fixture
+def surviving_mass_stars(test_grid):
+    """Constant SFH constructed with surviving_mass."""
+    n_ages = len(test_grid.log10ages)
+    n_metals = len(test_grid.metallicities)
+    # Uniform SFH distributed equally across age bins
+    sf_hist = np.ones(n_ages)
+    sf_hist = sf_hist / sf_hist.sum()  # normalise
+    metal_dist = np.ones(n_metals) / n_metals
+    return Stars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sf_hist=sf_hist,
+        metal_dist=metal_dist,
+        surviving_mass=1e10 * Msun,
+        grid=test_grid,
+    )
+
+
+@pytest.fixture
+def sfzh_stars(test_grid):
+    """Return a parametric Stars constructed from an explicit SFZH."""
+    n_ages = len(test_grid.log10ages)
+    n_metals = len(test_grid.metallicities)
+
+    sfzh = np.ones((n_ages, n_metals))
+
+    return Stars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sfzh=sfzh,
+        initial_mass=1e10 * Msun,
+    )
+
+
+class TestSurvivingMassNormalisation:
+    """Tests surviving_mass SFZHs have the correct shape."""
+
+    def test_sfzh_normalisation_is_scalar(self, surviving_mass_stars):
+        """sfzh_normalisation must be a scalar."""
+        assert np.shape(surviving_mass_stars.sfzh_normalisation) == ()
+
+    def test_sfzh_shape_preserved(
+        self, constant_sfh_stars, surviving_mass_stars
+    ):
+        """The SFZH shape is preserved.
+
+        The SFZH shape should be the same regardless of whether the
+        initial_mass or surviving_mass is used.
+        """
+        mask = constant_sfh_stars.sfzh > 0
+        ratios = (
+            surviving_mass_stars.sfzh[mask] / constant_sfh_stars.sfzh[mask]
+        )
+        np.testing.assert_allclose(
+            ratios, np.full_like(ratios, ratios[0]), rtol=1e-6
+        )
+
+    def test_constant_sfh_remains_constant(self, surviving_mass_stars):
+        """Check the SFH remains constant.
+
+        The constant_sfh_stars forms the same mass in each age bin, and
+        the same should be true after rescaling.
+        """
+        sf_hist = np.sum(surviving_mass_stars.sfzh, axis=1)
+        np.testing.assert_allclose(
+            sf_hist, np.full_like(sf_hist, sf_hist[0]), rtol=1e-6
+        )
+
+    def test_initial_mass_matches_shape_based_normalisation(
+        self, constant_sfh_stars, surviving_mass_stars, test_grid
+    ):
+        """Check initial masses are consistent.
+
+        The initial_mass computed from surviving_mass must match a
+        single scalar normalisation of the SFZH shape.
+        """
+        surviving_mass = surviving_mass_stars.surviving_mass
+
+        # Use constant_sfh_stars' SFZH as the shape reference.
+        shape_sfzh = constant_sfh_stars.sfzh
+        expected_norm = surviving_mass.to("Msun").value / np.sum(
+            shape_sfzh * test_grid.stellar_fraction
+        )
+        expected_initial_mass = expected_norm * np.sum(shape_sfzh)
+
+        assert surviving_mass_stars.initial_mass.to(
+            "Msun"
+        ).value == pytest.approx(expected_initial_mass, rel=1e-6)
+
+    def test_surviving_mass_matches_requested(self, surviving_mass_stars):
+        """Check the surviving mass matches the requested value.
+
+        Sum of sfzh * stellar_fraction should equal the requested
+        surviving_mass.
+        """
+        recovered = np.sum(
+            surviving_mass_stars.sfzh * surviving_mass_stars.stellar_fraction
+        )
+        assert recovered == pytest.approx(
+            surviving_mass_stars.surviving_mass.to("Msun").value, rel=1e-8
+        )
 
 
 class TestCalculateSurvivingSFZH:
@@ -261,6 +367,26 @@ class TestCalculateInitialMassAtAge:
             result = constant_sfh_stars.calculate_initial_mass_at_age(age)
             assert result <= constant_sfh_stars.initial_mass + 1e-30 * Msun
 
+    def test_nonzero_age_with_sfzh(self, sfzh_stars):
+        """Test that an explicit SFZH works at a non-zero age."""
+        result = sfzh_stars.calculate_initial_mass_at_age(100 * Myr)
+        assert result >= 0 * Msun
+        assert result <= sfzh_stars.initial_mass + 1e-30 * Msun
+
+    def test_nonzero_age_with_array_sfh(self, constant_sfh_stars):
+        """Test that array-based SFH and ZH work at a non-zero age."""
+        result = constant_sfh_stars.calculate_initial_mass_at_age(100 * Myr)
+        assert result >= 0 * Msun
+        assert result <= constant_sfh_stars.initial_mass + 1e-30 * Msun
+
+    def test_sfzh_is_not_modified(self, constant_sfh_stars):
+        """Test that SFZH is unchanged by calculate_initial_mass_at_age."""
+        sfzh = constant_sfh_stars.sfzh.copy()
+
+        constant_sfh_stars.calculate_initial_mass_at_age(100 * Myr)
+
+        np.testing.assert_array_equal(constant_sfh_stars.sfzh, sfzh)
+
 
 class TestCalculateSurvivingMassAtAge:
     """Tests for Stars.calculate_surviving_mass_at_age."""
@@ -368,3 +494,92 @@ class TestCalculateSurvivingMassAtAge:
             5 * Myr, test_grid
         )
         assert result.to("Msun").value > 0
+
+    def test_nonzero_age_with_sfzh(self, sfzh_stars, test_grid):
+        """Test that an explicit SFZH works at a non-zero age."""
+        result = sfzh_stars.calculate_surviving_mass_at_age(
+            100 * Myr, test_grid
+        )
+        initial = sfzh_stars.calculate_initial_mass_at_age(100 * Myr)
+        assert result >= 0 * Msun
+        assert result <= initial + 1e-30 * Msun
+
+    def test_nonzero_age_with_array_sfh(self, constant_sfh_stars, test_grid):
+        """Test that array-based SFH and ZH work at a non-zero age."""
+        result = constant_sfh_stars.calculate_surviving_mass_at_age(
+            100 * Myr, test_grid
+        )
+        initial = constant_sfh_stars.calculate_initial_mass_at_age(100 * Myr)
+        assert result >= 0 * Msun
+        assert result <= initial + 1e-30 * Msun
+
+
+class TestFunctionSFZHEdgeBins:
+    """Tests that function based SFZHs populate the outermost grid bins."""
+
+    def test_oldest_age_bin_populated(self, test_grid):
+        """Test a constant SFH beyond the oldest grid age fills the last bin.
+
+        With a unit SFR the mass in the oldest bin is its width, which runs
+        from the midpoint of the last two grid ages to the oldest grid age.
+        """
+        ages = 10**test_grid.log10ages
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=2 * ages[-1] * yr),
+            metal_dist=0.01,
+        )
+        expected = ages[-1] - 0.5 * (ages[-1] + ages[-2])
+        assert np.isclose(stars.sf_hist[-1], expected, rtol=1e-6)
+
+    def test_most_metal_rich_bin_populated(self, test_grid):
+        """Test a ZDist peaked at the highest grid Z fills the last bin."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e7 * yr,
+            metal_dist=ZDist.Normal(
+                mean=test_grid.metallicities[-1],
+                sigma=0.002,
+            ),
+        )
+        assert stars.metal_dist[-1] > 0
+
+
+class TestCalculateAverageSFR:
+    """Tests for the average SFR of a parametric Stars."""
+
+    def test_constant_sfh_over_full_range(self, test_grid):
+        """Test a unit SFR covering the whole grid averages to 1 Msun/yr.
+
+        The oldest bin must end at the oldest grid age, as it does when the
+        SFZH is integrated, otherwise its mass is spread past the range.
+        """
+        ages = 10**test_grid.log10ages
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=2 * ages[-1] * yr),
+            metal_dist=0.01,
+        )
+        sfr = stars.calculate_average_sfr(t_range=(0, ages[-1]))
+        assert np.isclose(sfr.to("Msun/yr").value, 1.0, rtol=1e-6)
+
+
+class TestGetSFZHRemap:
+    """Tests for remapping a parametric SFZH onto new axes."""
+
+    def test_remap_to_different_length_axes(self, test_grid):
+        """Test remapping onto axes of a different length conserves mass."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=100 * Myr),
+            metal_dist=0.01,
+            initial_mass=1e9 * Msun,
+        )
+        new_log10ages = np.linspace(6, 10, 20)
+        remapped = stars.get_sfzh(new_log10ages, test_grid.metallicities)
+        assert remapped.sfzh.shape == (20, len(test_grid.metallicities))
+        assert np.isclose(remapped.sfzh.sum(), stars.sfzh.sum())

@@ -34,7 +34,7 @@ from synthesizer.particle.stars import Stars as ParticleStars
 _ZSUN = 0.02  # SC-SAM solar metallicity
 
 
-def load_SCSAM(fname, method, grid, verbose=False):
+def load_SCSAM(fname, method, grid, verbose=False, dtype=np.float64):
     """Read an SC-SAM star formation history file.
 
     Each (age bin, Z bin) cell is a top-hat of star formation between the
@@ -57,6 +57,11 @@ def load_SCSAM(fname, method, grid, verbose=False):
             whose age spacing sets how finely the SC-SAM bins are split.
         verbose (bool):
             Are we talking?
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
 
     Returns:
         tuple:
@@ -67,7 +72,7 @@ def load_SCSAM(fname, method, grid, verbose=False):
 
     Raises:
         InconsistentArguments:
-            If method is unknown or the header is inconsistent.
+            If method is unknown or the header or payload is inconsistent.
     """
     if method in ("parametric_NNI", "parametric_RGI"):
         warnings.warn(
@@ -92,15 +97,10 @@ def load_SCSAM(fname, method, grid, verbose=False):
             f"{zs.size} and {centres.size}"
         )
 
-    # Bin edges: zero, the midpoints, and half a bin past the last centre
-    edges = np.concatenate(
-        (
-            [0.0],
-            0.5 * (centres[1:] + centres[:-1]),
-            [1.5 * centres[-1] - 0.5 * centres[-2]],
-        )
-    )
-    lo, hi = edges[:-1], edges[1:]
+    # Bin edges: zero, the midpoints, and the last bin symmetric about its
+    # centre (so a single bin spans zero to twice its centre)
+    lo = np.concatenate(([0.0], 0.5 * (centres[1:] + centres[:-1])))
+    hi = np.append(lo[1:], 2 * centres[-1] - lo[-1])
     grid_ages = 10**grid.log10ages
 
     if method == "particle":
@@ -113,10 +113,20 @@ def load_SCSAM(fname, method, grid, verbose=False):
 
     galaxies, halo_inds, birthhalo_ids = [], [], []
     block = nage + 1
-    for start in range(3, 3 + block * ((len(lines) - 3) // block), block):
+    if (len(lines) - 3) % block:
+        raise exceptions.InconsistentArguments(
+            f"{len(lines) - 3} galaxy lines is not a whole number of "
+            f"{block}-line galaxy blocks"
+        )
+    for start in range(3, len(lines), block):
         halo_ind, birthhalo_id, redshift = lines[start].split()
         redshift = float(redshift)
         sfh = np.loadtxt(lines[start + 1 : start + block], ndmin=2) * 1e9
+        if sfh.shape != (nage, nz):
+            raise exceptions.InconsistentArguments(
+                f"Halo {halo_ind} SFH has shape {sfh.shape}, "
+                f"expected {(nage, nz)}"
+            )
 
         stars = None
         if method == "particle":
@@ -125,9 +135,11 @@ def load_SCSAM(fname, method, grid, verbose=False):
             if keep.any():
                 seg, iz = np.nonzero(keep)
                 stars = ParticleStars(
-                    initial_masses=m[keep] * Msun,
-                    ages=age[seg] * yr,
-                    metallicities=zs[iz],
+                    initial_masses=(m[keep] * Msun)
+                    .in_base("galactic")
+                    .astype(dtype),
+                    ages=(age[seg] * yr).astype(dtype),
+                    metallicities=zs[iz].astype(dtype),
                     redshift=redshift,
                 )
             galaxy = ParticleGalaxy(stars=stars, redshift=redshift)

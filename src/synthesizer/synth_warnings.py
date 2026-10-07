@@ -19,11 +19,20 @@ Example usage::
 
 """
 
+import functools
 import inspect
 import os
 import textwrap
 import warnings
 from pathlib import Path
+
+
+class InternalPrecisionWarning(RuntimeWarning):
+    """Warning for outputs that didn't respect the requested out_dtype.
+
+    This always indicates a bug in Synthesizer rather than a problem with the
+    user's inputs. The test suite turns it into an error.
+    """
 
 
 def deprecation(message, category=FutureWarning):
@@ -63,6 +72,7 @@ def deprecated(message=None, category=FutureWarning):
     """
 
     def _deprecated(func):
+        @functools.wraps(func)
         def wrapped(*args, **kwargs):
             # Determine the specific deprecation message
             if message is None:

@@ -27,6 +27,7 @@ def load_Simba(
     load_halo=False,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
+    dtype=np.float64,
 ):
     """Load Simba galaxy data from a caesar file and snapshot.
 
@@ -53,6 +54,11 @@ def load_Simba(
             faster age calculation.
         age_lookup_delta_a (float):
             The resolution of the age lookup table in terms of scale factor.
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
 
     Returns:
         galaxies (list):
@@ -190,18 +196,22 @@ def load_Simba(
         g_start, g_end = g_offsets[i], g_offsets[i] + g_particle_counts[i]
 
         galaxy.load_stars(
-            initial_masses=imasses[s_start:s_end] * Msun,
-            ages=ages[s_start:s_end] * yr,
-            metallicities=metallicity[s_start:s_end],
-            s_oxygen=s_oxygen[s_start:s_end],
-            s_hydrogen=s_hydrogen[s_start:s_end],
-            coordinates=coods[s_start:s_end, :] * kpc,
-            current_masses=masses[s_start:s_end] * Msun,
+            initial_masses=(imasses[s_start:s_end] * Msun)
+            .in_base("galactic")
+            .astype(dtype),
+            ages=(ages[s_start:s_end] * yr).astype(dtype),
+            metallicities=metallicity[s_start:s_end].astype(dtype),
+            s_oxygen=s_oxygen[s_start:s_end].astype(dtype),
+            s_hydrogen=s_hydrogen[s_start:s_end].astype(dtype),
+            coordinates=(coods[s_start:s_end, :] * kpc).astype(dtype),
+            current_masses=(masses[s_start:s_end] * Msun)
+            .in_base("galactic")
+            .astype(dtype),
             centre=centres[i] * kpc,
         )
 
         h2_masses = g_masses[g_start:g_end] * g_h2fraction[g_start:g_end]
-        galaxy.sf_gas_mass = np.sum(h2_masses) * Msun
+        galaxy.sf_gas_mass = (np.sum(h2_masses) * Msun).in_base("galactic")
         if galaxy.sf_gas_mass > 0:
             galaxy.sf_gas_metallicity = (
                 np.sum(h2_masses * g_metals[g_start:g_end])
@@ -211,11 +221,15 @@ def load_Simba(
             galaxy.sf_gas_metallicity = 0.0
 
         galaxy.load_gas(
-            coordinates=g_coods[g_start:g_end] * kpc,
-            masses=g_masses[g_start:g_end] * Msun,
-            metallicities=g_metals[g_start:g_end],
-            smoothing_lengths=g_hsml[g_start:g_end] * kpc,
-            dust_masses=g_dustmass[g_start:g_end] * Msun,
+            coordinates=(g_coods[g_start:g_end] * kpc).astype(dtype),
+            masses=(g_masses[g_start:g_end] * Msun)
+            .in_base("galactic")
+            .astype(dtype),
+            metallicities=g_metals[g_start:g_end].astype(dtype),
+            smoothing_lengths=(g_hsml[g_start:g_end] * kpc).astype(dtype),
+            dust_masses=(g_dustmass[g_start:g_end] * Msun)
+            .in_base("galactic")
+            .astype(dtype),
             centre=centres[i] * kpc,
         )
         galaxies.append(galaxy)
@@ -232,6 +246,7 @@ def load_Simba_slab(
     load_dark_matter=False,
     age_lookup=True,
     age_lookup_delta_a=1e-4,
+    dtype=np.float64,
 ):
     """Load a cuboid region of Simba simulation data into a Galaxy object.
 
@@ -258,6 +273,11 @@ def load_Simba_slab(
             faster age calculation.
         age_lookup_delta_a (float):
             The resolution of the age lookup table in terms of scale factor.
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
 
     Returns:
         galaxy (synthesizer.particle.galaxy.Galaxy):
@@ -419,13 +439,13 @@ def load_Simba_slab(
     # Load star data if requested and available
     if load_stars and masses is not None and len(masses) > 0:
         galaxy.load_stars(
-            initial_masses=imasses * Msun,
-            ages=ages * yr,
-            metallicities=metallicity,
-            s_oxygen=s_oxygen,
-            s_hydrogen=s_hydrogen,
-            coordinates=coods * kpc,
-            current_masses=masses * Msun,
+            initial_masses=(imasses * Msun).in_base("galactic").astype(dtype),
+            ages=(ages * yr).astype(dtype),
+            metallicities=metallicity.astype(dtype),
+            s_oxygen=s_oxygen.astype(dtype),
+            s_hydrogen=s_hydrogen.astype(dtype),
+            coordinates=(coods * kpc).astype(dtype),
+            current_masses=(masses * Msun).in_base("galactic").astype(dtype),
             centre=center * kpc,
         )
 
@@ -433,7 +453,7 @@ def load_Simba_slab(
     if load_gas and g_masses is not None and len(g_masses) > 0:
         # Calculate star-forming gas properties
         h2_masses = g_masses * g_h2fraction
-        galaxy.sf_gas_mass = np.sum(h2_masses) * Msun
+        galaxy.sf_gas_mass = (np.sum(h2_masses) * Msun).in_base("galactic")
         if galaxy.sf_gas_mass > 0:
             galaxy.sf_gas_metallicity = (
                 np.sum(h2_masses * g_metals)
@@ -444,16 +464,16 @@ def load_Simba_slab(
 
         # Load gas data
         galaxy.load_gas(
-            coordinates=g_coods * kpc,
-            masses=g_masses * Msun,
-            metallicities=g_metals,
-            smoothing_lengths=g_hsml * kpc,
-            dust_masses=g_dustmass * Msun,
+            coordinates=(g_coods * kpc).astype(dtype),
+            masses=(g_masses * Msun).in_base("galactic").astype(dtype),
+            metallicities=g_metals.astype(dtype),
+            smoothing_lengths=(g_hsml * kpc).astype(dtype),
+            dust_masses=(g_dustmass * Msun).in_base("galactic").astype(dtype),
             centre=center * kpc,
             internal_energy=g_internalenergy,
         )
     else:
-        galaxy.sf_gas_mass = 0.0 * Msun
+        galaxy.sf_gas_mass = (0.0 * Msun).in_base("galactic")
         galaxy.sf_gas_metallicity = 0.0
 
     # Load dark matter data if requested and available
@@ -465,7 +485,7 @@ def load_Simba_slab(
             coordinates=dm_coods * kpc,
             velocities=np.zeros((len(dm_masses), 3))
             * (km / s),  # No velocity data
-            masses=dm_masses * Msun,
+            masses=(dm_masses * Msun).in_base("galactic"),
             redshift=redshift,
             softening_lengths=np.zeros(len(dm_masses))
             * kpc,  # No softening data

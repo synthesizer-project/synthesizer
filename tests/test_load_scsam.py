@@ -93,3 +93,46 @@ def test_bad_method(scsam_file, test_grid):
     """An unknown method raises."""
     with pytest.raises(exceptions.InconsistentArguments):
         load_SCSAM(scsam_file, "spherical_cow", test_grid)
+
+
+def test_truncated_payload(scsam_file, test_grid):
+    """A trailing incomplete galaxy block raises."""
+    with open(scsam_file, "a") as f:
+        f.write("49 400 5.0\n1.0 0.0\n")
+    with pytest.raises(exceptions.InconsistentArguments):
+        load_SCSAM(scsam_file, "particle", test_grid)
+
+
+def test_dtype(scsam_file, test_grid):
+    """Particle arrays are cast to the requested dtype."""
+    galaxies, _, _ = load_SCSAM(
+        scsam_file, "particle", test_grid, dtype=np.float32
+    )
+    stars = galaxies[0].stars
+    for arr in (stars.initial_masses, stars.ages, stars.metallicities):
+        assert arr.dtype == np.float32
+    assert str(stars.initial_masses.units) == "Msun"
+
+
+def test_single_age_bin(tmp_path, test_grid):
+    """A single age bin spans zero to twice its centre."""
+    fname = tmp_path / "sfhist.dat"
+    fname.write_text("1 1\n0.0\n0.005\n37 100 5.0\n1.0\n")
+    galaxies, _, _ = load_SCSAM(str(fname), "particle", test_grid)
+    stars = galaxies[0].stars
+    assert np.isclose(stars.initial_masses.to("Msun").value.sum(), 1e9)
+    assert stars.ages.to("yr").value.max() < 1e7
+
+
+def test_wrong_sfh_width(scsam_file, test_grid):
+    """An SFH grid with the wrong number of Z columns raises."""
+    with open(scsam_file) as f:
+        lines = f.read().splitlines()
+    lines = lines[:3] + [
+        line if i % (len(CENTRES) + 1) == 0 else line + " 0.0"
+        for i, line in enumerate(lines[3:])
+    ]
+    with open(scsam_file, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    with pytest.raises(exceptions.InconsistentArguments):
+        load_SCSAM(scsam_file, "particle", test_grid)

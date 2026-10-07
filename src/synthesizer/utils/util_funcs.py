@@ -95,7 +95,7 @@ def get_distance_in_cm(distance_pc=10.0):
     return (distance_pc * pc).to_value(cm)
 
 
-def ensure_array_buffer(obj, attr_name, shape_like):
+def ensure_array_buffer(obj, attr_name, shape_like, dtype=None):
     """Return a reusable ndarray buffer on ``obj`` matching ``shape_like``.
 
     Args:
@@ -104,15 +104,24 @@ def ensure_array_buffer(obj, attr_name, shape_like):
         attr_name (str):
             Name of the ndarray attribute to reuse or create.
         shape_like (np.ndarray):
-            Array whose shape and dtype define the required buffer.
+            Array whose shape (and, when dtype is None, dtype) define the
+            required buffer.
+        dtype (np.dtype, optional):
+            The dtype for the buffer. Defaults to shape_like's dtype.
 
     Returns:
         np.ndarray:
-            Reusable buffer with the same shape and dtype as ``shape_like``.
+            Reusable buffer with the same shape as ``shape_like`` at the
+            requested dtype.
     """
+    target_dtype = shape_like.dtype if dtype is None else np.dtype(dtype)
     buffer = getattr(obj, attr_name, None)
-    if buffer is None or buffer.shape != shape_like.shape:
-        buffer = np.empty_like(shape_like)
+    if (
+        buffer is None
+        or buffer.shape != shape_like.shape
+        or buffer.dtype != target_dtype
+    ):
+        buffer = np.empty(shape_like.shape, dtype=target_dtype)
         setattr(obj, attr_name, buffer)
     return buffer
 
@@ -395,7 +404,9 @@ def combine_arrays(arr1, arr2, verbose=False):
     combinations.
 
     If both arrays are None then None is returned. If one array is None and
-    the other is not then None is returned along with a warning.
+    the other is not then None is returned along with a warning. Arrays with
+    compatible but different units (e.g. ages in yr and Myr) are combined in
+    the units of the first array.
 
     Args:
         arr1 (np.ndarray):
@@ -423,9 +434,18 @@ def combine_arrays(arr1, arr2, verbose=False):
     elif arr1.ndim == 0 or arr2.ndim == 0:
         return None
 
-    # If both are not None then combine them
-    else:
-        return np.concatenate([arr1, arr2])
+    # Arrays with compatible but different units (e.g. ages in yr and Myr)
+    # are combined in the units of the first array. Convert out of place so
+    # the caller's array is left untouched.
+    if (
+        isinstance(arr1, unyt_array)
+        and isinstance(arr2, unyt_array)
+        and arr1.units != arr2.units
+    ):
+        arr2 = arr2.to(arr1.units)
+
+    # Combine them
+    return np.concatenate([arr1, arr2])
 
 
 def pluralize(word: str) -> str:
@@ -493,52 +513,6 @@ def depluralize(word: str) -> str:
         return word  # Already singular or unknown pattern
 
 
-def ensure_double_precision(value):
-    """Ensure that the input value is a double precision float.
-
-    Args:
-        value (float or unyt_quantity): The value to be converted.
-
-    Returns:
-        unyt_quantity: The input value as a double precision float.
-    """
-    # If the value is None, return it as is
-    if value is None:
-        return value
-
-    # Convert the value to double precision
-    if isinstance(value, (unyt_quantity, unyt_array, np.ndarray)):
-        return value.astype(np.float64)
-    elif isinstance(value, (int, float)):
-        return np.float64(value)
-    elif np.isscalar(value):
-        return np.float64(value)
-    else:
-        raise exceptions.InconsistentArguments(
-            "Value to convert to double precision wasn't compatible:"
-            f"type(value) = {type(value)}"
-        )
-
-
-def is_c_compatible_double(arr):
-    """Check if the input array is compatible with our C extensions.
-
-    Being "compatible" means that the numpy array is both C contiguous and
-    is a double array for floating point numbers.
-
-    If we don't do this then the C extensions will produce garbage due to the
-    mismatch between the data types.
-
-    Args:
-        arr (np.ndarray): The input array to be checked.
-
-    Returns:
-        bool: True if the array is C contiguous and of double precision,
-              False otherwise.
-    """
-    return arr.flags["C_CONTIGUOUS"] and arr.dtype == np.float64
-
-
 def is_c_compatible_int(arr):
     """Check if the input array is compatible with our C extensions.
 
@@ -556,67 +530,6 @@ def is_c_compatible_int(arr):
               False otherwise.
     """
     return arr.flags["C_CONTIGUOUS"] and arr.dtype == np.intc
-
-
-def ensure_array_c_compatible_double(arr):
-    """Ensure that the input array is compatible with our C extensions.
-
-    Being "compatible" means that the numpy array is both C contiguous and
-    is a double array for floating point numbers.
-
-    If we don't do this then the C extensions will produce garbage due to the
-    mismatch between the data types.
-
-    Args:
-        arr (np.ndarray): The input array to be checked.
-    """
-    # If the array is None, return it as is
-    if arr is None:
-        return arr
-
-    # Convert a list to a numpy array before we move on
-    if isinstance(arr, list):
-        arr = np.array(arr)
-
-    # If we have units we need to strip them off temporarily
-    units = None
-    if isinstance(arr, (unyt_array, unyt_quantity)):
-        units = arr.units
-        arr = arr.ndview
-
-    # If its a scalar then just return it as a double
-    if np.isscalar(arr):
-        return np.float64(arr)
-
-    # Do we need to do anything?
-    need_contiguous = False
-    need_double = False
-    if not arr.flags["C_CONTIGUOUS"]:
-        need_contiguous = True
-    if arr.dtype != np.float64:
-        need_double = True
-
-    # If there's nothing to do then just return
-    if not need_double and not need_contiguous:
-        return arr
-
-    # If we need both we can do it all at once
-    if need_double and need_contiguous:
-        arr = np.ascontiguousarray(arr, dtype=np.float64)
-
-    # If we only need to make it contiguous then do that
-    elif need_contiguous:
-        arr = np.ascontiguousarray(arr)
-
-    # If we only need to make it double then do that
-    elif need_double:
-        arr = arr.astype(np.float64)
-
-    # If we had units then reattach them
-    if units is not None:
-        arr = unyt_array(arr, units)
-
-    return arr
 
 
 def as_contiguous(array):
@@ -640,88 +553,6 @@ def as_contiguous(array):
         return unyt_array(np.ascontiguousarray(array.value), array.units)
 
     return np.ascontiguousarray(array)
-
-
-def convert_array_dtype(array, dtype):
-    """Convert a array-like object to a target dtype.
-
-    This works for NumPy arrays and unyt_arrays, preserving units for the
-    latter while ensuring the underlying storage is contiguous and of the
-    correct dtype.
-
-    Note that this will always make a copy of the array.
-
-    Args:
-        array (array-like):
-            The input array-like object.
-        dtype (np.dtype/type):
-            The target dtype to convert to.
-
-    Returns:
-        array-like:
-            Converted array with contiguous storage where applicable.
-    """
-    # Nothing to do if input is None
-    if array is None:
-        return None
-
-    # Handle the unyt_array case where we act on the underlying array and
-    # then reattach the units
-    if isinstance(array, unyt_array):
-        return unyt_array(
-            np.ascontiguousarray(array.ndview, dtype=dtype),
-            array.units,
-            bypass_validation=True,
-        )
-
-    # Convert to a plain NumPy array (always makes a copy)
-    array = np.array(array, copy=True)
-
-    # Validate it's floating-point
-    if not np.issubdtype(array.dtype, np.floating):
-        raise ValueError(
-            f"Unsupported array type or dtype for conversion: "
-            f"type(array)={type(array)}, dtype={getattr(array, 'dtype', None)}"
-        )
-
-    return np.ascontiguousarray(array, dtype=dtype)
-
-
-def get_attr_c_compatible_double(obj, attr):
-    """Ensure an attribute of an object is compatible with our C extensions.
-
-    This function checks if the attribute of the object is a numpy array and
-    ensures that it is both C contiguous and of double precision. If the
-    attribute is not compatible, it modifies it in place.
-
-    Args:
-        obj (object): The object containing the attribute to be checked.
-        attr (str): The name of the attribute to be checked.
-    """
-    # Get the attribute from the object
-    arr = getattr(obj, attr)
-
-    # Just return it if it's None
-    if arr is None:
-        return arr
-
-    # Handle singular floats
-    if np.isscalar(arr):
-        return np.float64(arr)
-
-    # Ensure the attribute is compatible with C extensions
-    if not is_c_compatible_double(arr):
-        # It's not compatible, make it compatible
-        arr = ensure_array_c_compatible_double(arr)
-
-        # Assign it inplace so we only do this conversion once (but only if we
-        # can actually set it)
-        if hasattr(obj, attr):
-            # Set the attribute to the new array
-            setattr(obj, attr, arr)
-
-    # Also return the array
-    return arr
 
 
 def sigmoid(x, A, a, c, center):
@@ -849,3 +680,35 @@ def obj_to_hashable(obj):
     # Anything else: bail, we can't hash it
     else:
         raise exceptions.CannotHashThat(f"Unhashable type: {type(obj)}")
+
+
+def hdf5_attr_value(value):
+    """Return a value HDF5 can store as an attribute, and its units.
+
+    HDF5 attributes take numbers, booleans and strings. A unyt quantity is an
+    ndarray subclass, so writing one directly stores the magnitude and silently
+    drops the units; they are returned separately here so a caller can write
+    them alongside. Anything else HDF5 cannot store (a class instance, say) is
+    described by its repr, which records what it was even though it cannot be
+    read back as an object.
+
+    Args:
+        value:
+            The value to store.
+
+    Returns:
+        tuple:
+            The value to store, and the string naming its units, or None when
+            it has none.
+    """
+    # A quantity, whose units would otherwise be silently dropped
+    if hasattr(value, "units"):
+        return float(value.value), str(value.units)
+
+    if isinstance(
+        value,
+        (str, bool, int, float, np.integer, np.floating, np.bool_),
+    ):
+        return value, None
+
+    return repr(value), None

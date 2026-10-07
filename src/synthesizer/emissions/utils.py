@@ -42,14 +42,17 @@ Example usage:
 
 """
 
+import os
 from functools import lru_cache
 from types import MappingProxyType
 
 import numpy as np
-from unyt import angstrom
+from unyt import angstrom, unyt_array
 
 from synthesizer import exceptions
-from synthesizer.units import accepts
+from synthesizer.extensions.reductions import reduce_particle_spectra
+from synthesizer.units import accepts, get_quantity_unit
+from synthesizer.utils.util_funcs import as_contiguous
 
 
 def get_composite_line_id_from_list(id):
@@ -437,16 +440,26 @@ S2 = aliases["S2"]
 def alias_to_line_id(alias):
     """Convert a line alias to a line id.
 
+    Blended line ids (comma separated strings, e.g. "Ha, [NII]6583", or a
+    list/tuple of ids) are canonicalised component-wise and rejoined with
+    ", " so equivalent spellings of the same blend map to the same id.
+
     Args:
-        alias (str):
-            The line alias.
+        alias (str/list):
+            The line alias, or a list of aliases defining a blend.
 
     Returns:
         line_id (str):
             The line id.
     """
+    if isinstance(alias, (list, tuple)):
+        alias = ",".join(alias)
     if alias in aliases:
         return aliases[alias]
+    if isinstance(alias, str) and "," in alias:
+        return ", ".join(
+            alias_to_line_id(li.strip()) for li in alias.split(",")
+        )
     return alias
 
 
@@ -512,8 +525,9 @@ def get_attenuation_at_lam(lam, intrinsic_sed, attenuated_sed):
             The attenuation at the passed wavelength/s in magnitudes.
     """
     # Ensure lam is in the same units as the sed
-    if lam.units != intrinsic_sed.lam.units:
-        lam = lam.to(intrinsic_sed.lam.units)
+    lam_unit = get_quantity_unit(intrinsic_sed, "lam")
+    if lam.units != lam_unit:
+        lam = lam.to(lam_unit)
 
     # Calcilate the transmission array
     attenuation = get_attenuation(intrinsic_sed, attenuated_sed)
@@ -577,3 +591,123 @@ def combine_list_of_seds(sed_list):
         out_sed = out_sed.concat(sed)
 
     return out_sed
+
+
+def _cast_curve_input(value, dtype):
+    """Cast a dust curve input to the requested dtype.
+
+    Only small 1D inputs (tau_v, lam) pass through here so the cast is
+    cheap; the potentially large transmission result is then born at the
+    right precision rather than computed at float64 and downcast.
+
+    Args:
+        value (object):
+            The input value (array, unyt_array, scalar, or None).
+        dtype (np.dtype):
+            The dtype the dust curve should be evaluated at.
+
+    Returns:
+        The input cast to dtype where applicable.
+    """
+    if isinstance(value, unyt_array):
+        if value.dtype != dtype:
+            return unyt_array(
+                value.ndview.astype(dtype),
+                value.units,
+                bypass_validation=True,
+            )
+        return value
+    if isinstance(value, np.ndarray) and value.dtype != dtype:
+        return value.astype(dtype)
+    # Python floats (e.g. tau_v=0.3) would otherwise promote float32 inputs
+    # to float64 inside unyt arithmetic
+    if isinstance(value, (float, np.floating)):
+        return np.dtype(dtype).type(value)
+    return value
+
+
+def evaluate_dust_curve_at_dtype(func, dtype, /, *args, **kwargs):
+    """Evaluate a dust curve method at a requested floating-point dtype.
+
+    Array arguments are cast to the target dtype before the call so the
+    result is computed (and allocated) directly at that precision. Overflow
+    during a reduced precision evaluation is trapped and converted into an
+    actionable error instead of silently propagating infs into the spectra.
+
+    Args:
+        func (callable):
+            The dust curve method to call (e.g. get_transmission).
+        dtype (np.dtype):
+            The dtype to evaluate at (the spectra dtype).
+        *args:
+            Positional arguments for func; arrays are cast to dtype.
+        **kwargs:
+            Keyword arguments for func, passed through unchanged.
+
+    Returns:
+        The result of func evaluated at the requested dtype.
+
+    Raises:
+        InconsistentArguments:
+            If the result cannot be represented at the requested precision.
+    """
+    cast_args = [_cast_curve_input(arg, dtype) for arg in args]
+    try:
+        with np.errstate(over="raise"):
+            result = func(*cast_args, **kwargs)
+    except FloatingPointError:
+        # An intermediate overflowed at reduced precision. Evaluate at
+        # float64 instead, and only fail if the result itself cannot be
+        # represented at the requested precision.
+        args64 = [_cast_curve_input(arg, np.float64) for arg in args]
+        result = func(*args64, **kwargs)
+        with np.errstate(over="ignore"):
+            cast = np.asarray(result).astype(dtype)
+        if np.all(np.isfinite(cast) | ~np.isfinite(np.asarray(result))):
+            return cast
+        raise exceptions.InconsistentArguments(
+            f"Overflow while evaluating the dust curve at {np.dtype(dtype)}. "
+            "This attenuation model cannot be represented at reduced "
+            "precision; use float64 spectra (e.g. leave out_dtype unset or "
+            "pass out_dtype=np.float64) when applying it."
+        )
+
+    # Some curves compute internally at float64 regardless of their inputs
+    # (e.g. interpolated tables), so make sure the result has the requested
+    # precision
+    if isinstance(result, np.ndarray) and result.dtype != dtype:
+        result = result.astype(dtype)
+    return result
+
+
+def nansum_leading_axes(arr, nthreads=1):
+    """Sum an emission array over all but its final axis, ignoring NaNs.
+
+    This is the reduction behind ``Sed.sum`` and ``LineCollection.sum``.
+    Per-particle arrays (shape ``(nparticle, nlam)`` or
+    ``(nparticle, nline)``) are the hot path, so these are reduced with the
+    threaded C++ particle reduction. Any other shape falls back to
+    ``np.nansum``.
+
+    Args:
+        arr (np.ndarray):
+            The raw (unitless) array to reduce.
+        nthreads (int):
+            The number of threads to use for the C++ reduction. If -1 all
+            available CPU cores will be used.
+
+    Returns:
+        np.ndarray:
+            The summed array, with the same dtype as ``arr``.
+    """
+    if arr.ndim != 2:
+        return np.nansum(arr, axis=tuple(range(arr.ndim - 1)))
+
+    if nthreads == -1:
+        nthreads = os.cpu_count() or 1
+
+    # The kernel walks the buffer directly, so strided views (e.g. from
+    # subsetting) have to be made contiguous first. This is a no-op for a
+    # freshly built array.
+    arr = as_contiguous(arr)
+    return reduce_particle_spectra(arr, nthreads, arr.dtype)

@@ -1,9 +1,9 @@
 #ifndef INDEX_UTILS_H_
 #define INDEX_UTILS_H_
 
-#include <array>
-
 #include "grid_props.h"
+
+#include <array>
 
 /**
  * @brief Compute an ndimensional index from a flat index.

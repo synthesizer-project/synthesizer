@@ -35,6 +35,7 @@ import numpy as np
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import check_atomic_timing, check_openmp, exceptions
+from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.instruments import InstrumentCollection
 from synthesizer.particle import Galaxy as ParticleGalaxy
 from synthesizer.pipeline.pipeline_io import PipelineIO
@@ -42,6 +43,7 @@ from synthesizer.pipeline.pipeline_utils import (
     NO_MODEL_LABEL,
     OperationKwargsHandler,
     accumulate_pipeline_results_from_child,
+    cast_products_recursive,
     clear_pipeline_outputs,
     combine_atomic_timing_snapshots,
     combine_list_of_dicts,
@@ -63,6 +65,7 @@ from synthesizer.utils.operation_timers import (
     timed,
     timer,
 )
+from synthesizer.utils.precision import resolve_out_dtype
 
 
 class Pipeline:
@@ -98,6 +101,11 @@ class Pipeline:
     For images (with optional PSF and noise based on the instrument):
         - get_images_luminosity
         - get_images_flux
+
+    For emission line maps (with optional PSF and noise based on the
+    instrument):
+        - get_line_maps_luminosity
+        - get_line_maps_flux
 
     For the SFZH grid:
         - get_sfzh (passing a Grid object)
@@ -246,12 +254,20 @@ class Pipeline:
         self._do_flux_lines = False
         self._do_images_lum = False
         self._do_images_flux = False
+        self._do_line_maps_lum = False
+        self._do_line_maps_flux = False
         self._do_lnu_data_cubes = False
         self._do_fnu_data_cubes = False
         self._do_spectroscopy_lnu = False
         self._do_spectroscopy_fnu = False
         self._do_sfzh = False
         self._do_sfh = False
+
+        # The requested output dtype for each operation, keyed by operation
+        # name. The first dtype each signalling method is called with wins;
+        # a missing/None entry defers to the global default at the point of
+        # use (see synthesizer.utils.precision).
+        self._out_dtypes = {}
 
         # Define the container for all the kwargs needed by each operation
         # This is a handler that manages kwargs for each
@@ -276,6 +292,12 @@ class Pipeline:
         self._write_images_flux = False
         self._write_images_flux_psf = False
         self._write_images_flux_noise = False
+        self._write_line_maps_lum = False
+        self._write_line_maps_lum_psf = False
+        self._write_line_maps_lum_noise = False
+        self._write_line_maps_flux = False
+        self._write_line_maps_flux_psf = False
+        self._write_line_maps_flux_noise = False
         self._write_lnu_data_cubes = False
         self._write_fnu_data_cubes = False
         self._write_spectroscopy_lnu = False
@@ -326,6 +348,24 @@ class Pipeline:
         self.images_flux = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_flux_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_flux_noise = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_maps_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_maps_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_maps_lum_noise = {
+            "Galaxy": {},
+            "Stars": {},
+            "BlackHole": {},
+        }
+        self.line_maps_flux = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.line_maps_flux_psf = {
+            "Galaxy": {},
+            "Stars": {},
+            "BlackHole": {},
+        }
+        self.line_maps_flux_noise = {
+            "Galaxy": {},
+            "Stars": {},
+            "BlackHole": {},
+        }
         self.lnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.fnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.spectroscopy = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
@@ -351,6 +391,12 @@ class Pipeline:
             "Flux Images": 0.0,
             "Flux Images (With PSF)": 0.0,
             "Flux Images (With Noise)": 0.0,
+            "Line Luminosity Maps": 0.0,
+            "Line Luminosity Maps (With PSF)": 0.0,
+            "Line Luminosity Maps (With Noise)": 0.0,
+            "Line Flux Maps": 0.0,
+            "Line Flux Maps (With PSF)": 0.0,
+            "Line Flux Maps (With Noise)": 0.0,
             "Lnu Data Cubes": 0.0,
             "Fnu Data Cubes": 0.0,
             "Spectroscopy Lnu": 0.0,
@@ -378,6 +424,12 @@ class Pipeline:
             "Flux Images": 0,
             "Flux Images (With PSF)": 0,
             "Flux Images (With Noise)": 0,
+            "Line Luminosity Maps": 0,
+            "Line Luminosity Maps (With PSF)": 0,
+            "Line Luminosity Maps (With Noise)": 0,
+            "Line Flux Maps": 0,
+            "Line Flux Maps (With PSF)": 0,
+            "Line Flux Maps (With Noise)": 0,
             "Lnu Data Cubes": 0,
             "Fnu Data Cubes": 0,
             "Spectroscopy Lnu": 0,
@@ -1095,6 +1147,16 @@ class Pipeline:
             + str(self._write_images_flux).rjust(15)
         )
         self._print(
+            "Line Luminosity Maps".ljust(30)
+            + str(self._do_line_maps_lum).rjust(15)
+            + str(self._write_line_maps_lum).rjust(15)
+        )
+        self._print(
+            "Line Flux Maps".ljust(30)
+            + str(self._do_line_maps_flux).rjust(15)
+            + str(self._write_line_maps_flux).rjust(15)
+        )
+        self._print(
             "Lnu Data Cubes".ljust(30)
             + str(self._do_lnu_data_cubes).rjust(15)
             + str(self._write_lnu_data_cubes).rjust(15)
@@ -1344,6 +1406,7 @@ class Pipeline:
         kappa=0.0795,
         tau_v_attr="tau_v",
         as_points=True,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the LOS optical depths.
 
@@ -1371,6 +1434,8 @@ class Pipeline:
                 Whether to treat the input particles as point-like when
                 evaluating LOS optical depths. If False, the input particle
                 kernels must also be accounted for. Default is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for LOS optical depth outputs.
         """
         # Store the arguments for the operation
         self._operation_kwargs.add(
@@ -1382,6 +1447,9 @@ class Pipeline:
             tau_v_attr=tau_v_attr,
             as_points=as_points,
         )
+
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("los_optical_depths", out_dtype)
 
         # Flag that we will compute the LOS optical depths
         self._do_los_optical_depths = True
@@ -1418,6 +1486,7 @@ class Pipeline:
                     tau_v_attr=op_kwargs["tau_v_attr"],
                     as_points=op_kwargs["as_points"],
                     nthreads=self.nthreads,
+                    out_dtype=self._out_dtypes.get("los_optical_depths"),
                 )
             if (
                 galaxy.black_holes is not None
@@ -1431,6 +1500,7 @@ class Pipeline:
                     tau_v_attr=op_kwargs["tau_v_attr"],
                     as_points=op_kwargs["as_points"],
                     nthreads=self.nthreads,
+                    out_dtype=self._out_dtypes.get("los_optical_depths"),
                 )
 
         # Count how many optical depths we have generated (1 per particle) and
@@ -1443,7 +1513,7 @@ class Pipeline:
         # Record the time taken
         self._op_timing["LOS optical depths"] += time.perf_counter() - start
 
-    def get_sfzh(self, log10ages, metallicities, write=True):
+    def get_sfzh(self, log10ages, metallicities, write=True, out_dtype=None):
         """Flag that the Pipeline should compute the SFZH grid.
 
         This will signal the Pipeline to compute the SFZH grid when the run
@@ -1458,6 +1528,8 @@ class Pipeline:
                 The metallicity axis of the SFZH grid.
             write (bool):
                 Whether to write out the SFZH grid. Default is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for SFZH outputs.
         """
         # Store the arguments for the operation
         self._operation_kwargs.add_unique(
@@ -1465,6 +1537,9 @@ class Pipeline:
             log10ages=log10ages,
             metallicities=metallicities,
         )
+
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("sfzh", out_dtype)
 
         # Flag that we will compute the SFZH grid
         self._do_sfzh = True
@@ -1511,7 +1586,8 @@ class Pipeline:
                 (
                     len(op_kwargs["log10ages"]),
                     len(op_kwargs["metallicities"]),
-                )
+                ),
+                dtype=resolve_out_dtype(self._out_dtypes.get("sfzh")),
             )
             return galaxy.sfzh
 
@@ -1523,7 +1599,7 @@ class Pipeline:
 
         return galaxy.sfzh
 
-    def get_sfh(self, log10ages, write=True):
+    def get_sfh(self, log10ages, write=True, out_dtype=None):
         """Flag that the Pipeline should compute the binned SFH.
 
         This will signal the Pipeline to compute the binned SFH when the run
@@ -1537,12 +1613,17 @@ class Pipeline:
                 The log10 age axis of the SFH grid.
             write (bool):
                 Whether to write out the SFH grid. Default is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for SFH outputs.
         """
         # Store the arguments for the operation
         self._operation_kwargs.add_unique(
             "get_sfh",
             log10ages=log10ages,
         )
+
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("sfh", out_dtype)
 
         # Flag that we will compute the SFH grid
         self._do_sfh = True
@@ -1581,7 +1662,10 @@ class Pipeline:
             galaxy.sfh = galaxy.stars.sfh
         else:
             # No stars, no SFH, store a zeroed grid
-            galaxy.sfh = np.zeros(len(op_kwargs["log10ages"]))
+            galaxy.sfh = np.zeros(
+                len(op_kwargs["log10ages"]),
+                dtype=resolve_out_dtype(self._out_dtypes.get("sfh")),
+            )
             return galaxy.sfh
 
         # Count the number of SFH grids we have generated
@@ -1592,7 +1676,7 @@ class Pipeline:
 
         return galaxy.sfh
 
-    def get_spectra(self, write=True):
+    def get_spectra(self, write=True, out_dtype=None):
         """Flag that the Pipeline should compute the rest frame spectra.
 
         This will signal the Pipeline to compute the rest frame spectral
@@ -1609,7 +1693,12 @@ class Pipeline:
         Args:
             write (bool):
                 Whether to write out the spectra. Default is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for generated spectra arrays.
         """
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("spectra", out_dtype)
+
         # Flag that we will compute the spectra
         self._do_lnu_spectra = True
 
@@ -1618,8 +1707,8 @@ class Pipeline:
         # by default)
         self._write_lnu_spectra = write or self._write_lnu_spectra
 
-        # Spectra has no kwargs so we don't need to store anything in
-        # the handler (self._operation_kwargs)
+        # Spectra has no model-specific kwargs so we don't need to store
+        # anything in the handler (self._operation_kwargs)
 
     @timed("Pipeline._get_spectra")
     def _get_spectra(self, galaxy):
@@ -1632,7 +1721,11 @@ class Pipeline:
         start = time.perf_counter()
 
         # Get the spectra
-        galaxy.get_spectra(self.emission_model, nthreads=self.nthreads)
+        galaxy.get_spectra(
+            self.emission_model,
+            nthreads=self.nthreads,
+            out_dtype=self._out_dtypes.get("spectra"),
+        )
 
         # Count the number of spectra we have generated
         self._op_counts["Lnu Spectra"] += count_and_check_dict_recursive(
@@ -1650,7 +1743,9 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Lnu Spectra"] += time.perf_counter() - start
 
-    def get_observed_spectra(self, cosmo, igm=None, write=True):
+    def get_observed_spectra(
+        self, cosmo, igm=None, write=True, out_dtype=None
+    ):
         """Flag that the Pipeline should compute the observed spectra.
 
         This will signal the Pipeline to compute the observed spectral flux
@@ -1666,6 +1761,8 @@ class Pipeline:
                 The IGM model to use for the attenuation of the spectra.
             write (bool):
                 Whether to write out the observed spectra. Default is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for generated spectra arrays.
         """
         # Store the cosmology for the operation
         self._operation_kwargs.add_unique(
@@ -1673,6 +1770,9 @@ class Pipeline:
             cosmo=cosmo,
             igm=igm,
         )
+
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("observed_spectra", out_dtype)
 
         # Flag that we will compute the observed spectra
         self._do_fnu_spectra = True
@@ -1686,7 +1786,7 @@ class Pipeline:
         # NOTE: this is safe if the user has already called get_spectra, it
         # will just leave the flag as True and respect the original intent to
         # write or not write
-        self.get_spectra(write=False)
+        self.get_spectra(write=False, out_dtype=out_dtype)
 
     @timed("Pipeline._get_observed_spectra")
     def _get_observed_spectra(self, galaxy):
@@ -1708,6 +1808,7 @@ class Pipeline:
             cosmo=op_kwargs["cosmo"],
             igm=op_kwargs["igm"],
             nthreads=self.nthreads,
+            out_dtype=self._out_dtypes.get("observed_spectra"),
         )
 
         # Count the number of observed spectra we have generated
@@ -1735,6 +1836,7 @@ class Pipeline:
         average=False,
         volume=None,
         write=True,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the cosmic SED.
 
@@ -1775,6 +1877,8 @@ class Pipeline:
                 accumulation. Default is None.
             write (bool):
                 Whether to write out the cosmic SED. Default is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for prerequisite spectra.
         """
         # If either bound is provided we need an emitter attribute to apply
         # the filter to
@@ -1819,6 +1923,9 @@ class Pipeline:
             volume=volume,
         )
 
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("cosmic_sed", out_dtype)
+
         # Flag that we will compute the cosmic SED
         self._do_cosmic_lnu = True
 
@@ -1831,7 +1938,7 @@ class Pipeline:
         # first. Note that this is safe if the user has already called
         # get_spectra, it will just leave the flag as True and respect the
         # original intent to write or not write the spectra.
-        self.get_spectra(write=False)
+        self.get_spectra(write=False, out_dtype=out_dtype)
 
     @timed("Pipeline._get_cosmic_sed")
     def _get_cosmic_sed(self, galaxy):
@@ -1969,6 +2076,7 @@ class Pipeline:
         average=False,
         volume=None,
         write=True,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the observed cosmic SED.
 
@@ -1997,6 +2105,8 @@ class Pipeline:
                 accumulation. Default is None.
             write (bool):
                 Whether to write out the observed cosmic SED. Default is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for prerequisite spectra.
         """
         # If either bound is provided we need an emitter attribute to apply
         # the filter to
@@ -2043,6 +2153,9 @@ class Pipeline:
             volume=volume,
         )
 
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("observed_cosmic_sed", out_dtype)
+
         # Flag that we will compute the observed cosmic SED
         self._do_cosmic_fnu = True
 
@@ -2050,7 +2163,9 @@ class Pipeline:
         self._write_cosmic_fnu = write or self._write_cosmic_fnu
 
         # To compute the observed cosmic SED we need the observed spectra.
-        self.get_observed_spectra(cosmo=cosmo, igm=igm, write=False)
+        self.get_observed_spectra(
+            cosmo=cosmo, igm=igm, write=False, out_dtype=out_dtype
+        )
 
     @timed("Pipeline._get_observed_cosmic_sed")
     def _get_observed_cosmic_sed(self, galaxy):
@@ -2170,6 +2285,7 @@ class Pipeline:
         *instruments,
         labels=None,
         write=True,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the photometric luminosities.
 
@@ -2194,15 +2310,9 @@ class Pipeline:
             write (bool):
                 Whether to write out the photometric luminosities. Default is
                 True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for prerequisite spectra.
         """
-        # Flag that we will compute the photometric luminosities
-        self._do_luminosities = True
-
-        # Flag that we will want to write out the photometric luminosities
-        # (calling the get_photometry_luminosities method is considered the
-        # intent to write it out by default)
-        self._write_luminosities = write or self._write_luminosities
-
         # Check that we have instruments to compute the photometry for
         if len(instruments) == 0:
             raise exceptions.PipelineNotReady(
@@ -2227,11 +2337,22 @@ class Pipeline:
             instruments=_instruments,
         )
 
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("photometry_luminosities", out_dtype)
+
+        # Flag that we will compute the photometric luminosities
+        self._do_luminosities = True
+
+        # Flag that we will want to write out the photometric luminosities
+        # (calling the get_photometry_luminosities method is considered the
+        # intent to write it out by default)
+        self._write_luminosities = write or self._write_luminosities
+
         # We need to ensure the lnu spectra are computed first
         # NOTE: this is safe if the user has already called get_spectra, it
         # will just leave the flag as True and respect the original intent to
         # write or not write
-        self.get_spectra(write=False)
+        self.get_spectra(write=False, out_dtype=out_dtype)
 
     @timed("Pipeline._get_photometry_luminosities")
     def _get_photometry_luminosities(self, galaxy):
@@ -2255,6 +2376,7 @@ class Pipeline:
                 filters=instruments.all_filters,
                 nthreads=self.nthreads,
                 limit_to=model_label,
+                out_dtype=self._out_dtypes.get("photometry_luminosities"),
             )
 
         # Count the number of photometric luminosities we have generated
@@ -2280,6 +2402,7 @@ class Pipeline:
         igm=None,
         labels=None,
         write=True,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the photometric fluxes.
 
@@ -2310,15 +2433,9 @@ class Pipeline:
                 sets to different models. Default is None.
             write (bool):
                 Whether to write out the photometric fluxes. Default is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for prerequisite spectra.
         """
-        # Flag that we will compute the photometric fluxes
-        self._do_fluxes = True
-
-        # Flag that we will want to write out the photometric fluxes (calling
-        # the get_photometry_fluxes method is considered the intent to write it
-        # out by default)
-        self._write_fluxes = write or self._write_fluxes
-
         # Check that we have instruments to compute the photometry for
         if len(instruments) == 0:
             raise exceptions.PipelineNotReady(
@@ -2345,11 +2462,24 @@ class Pipeline:
             igm=igm,
         )
 
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("photometry_fluxes", out_dtype)
+
+        # Flag that we will compute the photometric fluxes
+        self._do_fluxes = True
+
+        # Flag that we will want to write out the photometric fluxes (calling
+        # the get_photometry_fluxes method is considered the intent to write it
+        # out by default)
+        self._write_fluxes = write or self._write_fluxes
+
         # We need to ensure the fnu spectra are computed first
         # NOTE: this is safe if the user has already calculated
         # get_observed_spectra, it will just leave the flag as True and respect
         # the original intent to write or not write
-        self.get_observed_spectra(cosmo=cosmo, igm=igm, write=False)
+        self.get_observed_spectra(
+            cosmo=cosmo, igm=igm, write=False, out_dtype=out_dtype
+        )
 
     @timed("Pipeline._get_photometry_fluxes")
     def _get_photometry_fluxes(self, galaxy):
@@ -2373,6 +2503,7 @@ class Pipeline:
                 filters=instruments.all_filters,
                 nthreads=self.nthreads,
                 limit_to=model_label,
+                out_dtype=self._out_dtypes.get("photometry_fluxes"),
             )
 
         # Count the number of photometric fluxes we have generated
@@ -2391,7 +2522,7 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Fluxes"] += time.perf_counter() - start
 
-    def get_lines(self, line_ids, write=True):
+    def get_lines(self, line_ids, write=True, out_dtype=None):
         """Flag that the Pipeline should compute the emission lines.
 
         This will signal the Pipeline to compute the emission lines for each
@@ -2405,12 +2536,33 @@ class Pipeline:
                 The emission line IDs to generate.
             write (bool):
                 Whether to write out the emission lines. Default is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for generated line arrays.
         """
-        # Store the line IDs for the operation
-        self._operation_kwargs.add_unique(
+        # Store the line IDs for the operation (the first call wins, later
+        # calls must request a subset of the configured lines)
+        op_kwargs = self._operation_kwargs.add_unique(
             "get_lines",
             line_ids=line_ids,
         )
+        if line_ids is not None and op_kwargs["line_ids"] is not None:
+            configured = {
+                str(alias_to_line_id(lid)) for lid in op_kwargs["line_ids"]
+            }
+            missing = [
+                lid
+                for lid in line_ids
+                if str(alias_to_line_id(lid)) not in configured
+            ]
+            if len(missing) > 0:
+                raise exceptions.InconsistentArguments(
+                    f"Lines {missing} are not covered by the configured "
+                    f"get_lines call ({op_kwargs['line_ids']}). Call "
+                    "get_lines first with every line id you need."
+                )
+
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("lines", out_dtype)
 
         # Flag that we will compute the emission lines
         self._do_lum_lines = True
@@ -2431,8 +2583,8 @@ class Pipeline:
         # by default)
         self._write_lines = write or self._write_lines
 
-        # Store the line IDs, we'll write these once later
-        self.line_ids = line_ids
+        # Store the line IDs actually computed, we'll write these once later
+        self.line_ids = op_kwargs["line_ids"]
 
     @timed("Pipeline._get_lines")
     def _get_lines(self, galaxy):
@@ -2455,6 +2607,7 @@ class Pipeline:
             line_ids=op_kwargs["line_ids"],
             emission_model=self.emission_model,
             nthreads=self.nthreads,
+            out_dtype=self._out_dtypes.get("lines"),
         )
 
         # Store the line wavelengths for writing, we only do this once since
@@ -2498,6 +2651,7 @@ class Pipeline:
         igm=None,
         line_ids=None,
         write=True,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the observed emission lines.
 
@@ -2518,6 +2672,8 @@ class Pipeline:
             write (bool):
                 Whether to write out the observed emission lines. Default is
                 True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for prerequisite line arrays.
         """
         # Store the kwargs for the operation
         self._operation_kwargs.add_unique(
@@ -2525,6 +2681,9 @@ class Pipeline:
             cosmo=cosmo,
             igm=igm,
         )
+
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("observed_lines", out_dtype)
 
         # Flag that we will compute the observed emission lines
         self._do_flux_lines = True
@@ -2552,7 +2711,7 @@ class Pipeline:
         # NOTE: this is safe if the user has already called get_lines, it
         # will just leave the flag as True and respect the original intent to
         # write or not write
-        self.get_lines(line_ids=line_ids, write=False)
+        self.get_lines(line_ids=line_ids, write=False, out_dtype=out_dtype)
 
     @timed("Pipeline._get_observed_lines")
     def _get_observed_lines(self, galaxy):
@@ -2573,6 +2732,8 @@ class Pipeline:
         galaxy.get_observed_lines(
             cosmo=op_kwargs["cosmo"],
             igm=op_kwargs["igm"],
+            nthreads=self.nthreads,
+            out_dtype=self._out_dtypes.get("observed_lines"),
         )
 
         # Store the observed line wavelengths for writing, we only do this once
@@ -2618,6 +2779,7 @@ class Pipeline:
         labels=None,
         cosmo=None,
         write=True,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the luminosity images.
 
@@ -2654,6 +2816,8 @@ class Pipeline:
                 Default is None.
             write (bool):
                 Whether to write out the luminosity images. Default is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for prerequisite photometry.
         """
         # If we have no labels then use all saved models
         if labels is None:
@@ -2704,6 +2868,9 @@ class Pipeline:
             cosmo=cosmo,
         )
 
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("images_luminosity", out_dtype)
+
         # Validate noise attribute units for luminosity images
         validate_noise_unit_compatibility(_instruments, "erg/s/Hz")
 
@@ -2725,6 +2892,7 @@ class Pipeline:
             *instruments,
             labels=labels,
             write=False,
+            out_dtype=out_dtype,
         )
 
     @timed("Pipeline._get_images_luminosity")
@@ -2763,6 +2931,15 @@ class Pipeline:
                     instrument=inst,
                     cosmo=op_kwargs["cosmo"],
                 )
+
+        # Honour any requested output dtype for the stored images
+        img_dtype = self._out_dtypes.get("images_luminosity")
+        for obj in (galaxy, galaxy.stars, galaxy.black_holes):
+            if obj is None:
+                continue
+            cast_products_recursive(obj.images_lnu, img_dtype)
+            cast_products_recursive(obj.images_psf_lnu, img_dtype)
+            cast_products_recursive(obj.images_noise_lnu, img_dtype)
 
         # Count the number of images we have generated
         self._op_counts["Luminosity Images"] += count_and_check_dict_recursive(
@@ -2813,6 +2990,7 @@ class Pipeline:
         igm=None,
         labels=None,
         write=True,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the flux images.
 
@@ -2853,6 +3031,8 @@ class Pipeline:
                 either be a list of strings or a single string.
             write (bool):
                 Whether to write out the flux images. Default is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for prerequisite photometry.
         """
         # If we have no labels then use all saved models
         if labels is None:
@@ -2915,6 +3095,9 @@ class Pipeline:
             cosmo=cosmo,
         )
 
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("images_flux", out_dtype)
+
         # Validate noise attribute units for flux images
         validate_noise_unit_compatibility(_instruments, "nJy")
 
@@ -2938,6 +3121,7 @@ class Pipeline:
             cosmo=cosmo,
             igm=igm,
             write=False,
+            out_dtype=out_dtype,
         )
 
     @timed("Pipeline._get_images_flux")
@@ -2977,6 +3161,15 @@ class Pipeline:
                     instrument=inst,
                 )
 
+        # Honour any requested output dtype for the stored images
+        img_dtype = self._out_dtypes.get("images_flux")
+        for obj in (galaxy, galaxy.stars, galaxy.black_holes):
+            if obj is None:
+                continue
+            cast_products_recursive(obj.images_fnu, img_dtype)
+            cast_products_recursive(obj.images_psf_fnu, img_dtype)
+            cast_products_recursive(obj.images_noise_fnu, img_dtype)
+
         # Count the number of images we have generated
         self._op_counts["Flux Images"] += count_and_check_dict_recursive(
             galaxy.images_fnu
@@ -3015,6 +3208,426 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Flux Images"] += time.perf_counter() - start
 
+    def get_line_maps_luminosity(
+        self,
+        *instruments,
+        line_ids,
+        fov=None,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1.0,
+        labels=None,
+        cosmo=None,
+        write=True,
+        out_dtype=None,
+    ):
+        """Flag that the Pipeline should compute emission line maps.
+
+        This will signal the Pipeline to compute the luminosity line maps
+        for each galaxy when the run method is called.
+
+        The line maps are generated from the per-particle luminosities of
+        the requested emission lines, in turn requiring get_lines to have
+        been run for the requested labels.
+
+        Args:
+            instruments (Instrument/InstrumentCollection):
+                The instruments to use for the line maps (typically
+                LineImager instances). This can be any number of instruments
+                or instrument collections, they will all be combined into a
+                single InstrumentCollection for this operation.
+            line_ids (list):
+                The emission line ids to make images for.
+                Blended lines (e.g. doublets) can be given as a comma separated
+                string (e.g. "O 3 4958.91A, O 3 5006.84A") or a nested list of
+                line ids; these produce a single map of the summed lines keyed
+                by the ", " joined id.
+            fov (unyt_quantity):
+                The field of view of the image with units.
+            img_type (str):
+                The type of image to generate. Options are 'smoothed' or
+                'hist'. Default is 'smoothed'.
+            kernel (array-like):
+                The kernel to use for smoothing the image. Default is None.
+                Required for 'smoothed' images from a particle distribution.
+            kernel_threshold (float):
+                The threshold of the kernel. Default is 1.0.
+            labels (list/str):
+                The emission models to generate line maps for. By default
+                this is None and all saved labels will be used.
+            cosmo (astropy.cosmology.Cosmology):
+                The cosmology to use for the calculation of the luminosity
+                distance. Only needed for internal conversions from cartesian
+                to angular coordinates when an angular resolution is used.
+                Default is None.
+            write (bool):
+                Whether to write out the line maps. Default is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for prerequisite lines.
+        """
+        if labels is None:
+            warn(
+                "No labels were passed to get_line_maps_luminosity. We "
+                f"will generate images for: {self.emission_model.saved_labels}"
+                ". This could be very expensive depending on the number of "
+                "models and image sizes."
+            )
+            labels = self.emission_model.saved_labels
+
+        # Canonicalise ids so nested lists become comma separated blends
+        line_ids = [str(alias_to_line_id(lid)) for lid in line_ids]
+
+        self._do_line_maps_lum = True
+
+        if fov is None:
+            raise exceptions.InconsistentArguments(
+                "Cannot generate line maps without a field of view, "
+                "please pass one to the fov argument of "
+                "get_line_maps_luminosity."
+            )
+
+        if len(instruments) == 0:
+            raise exceptions.PipelineNotReady(
+                "Cannot generate line maps without instruments! "
+                "Pass instruments to the get_line_maps_luminosity method."
+            )
+
+        _instruments = self._add_instruments(instruments)
+
+        for inst in _instruments:
+            if not inst.can_do_line_mapping:
+                raise exceptions.PipelineNotReady(
+                    f"Cannot generate line maps with {inst.label}!"
+                )
+
+        self._operation_kwargs.add(
+            labels,
+            "get_line_maps_luminosity",
+            instruments=_instruments,
+            line_ids=line_ids,
+            fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            cosmo=cosmo,
+        )
+
+        self._out_dtypes.setdefault("line_maps_luminosity", out_dtype)
+
+        validate_noise_unit_compatibility(
+            _instruments,
+            "erg/s",
+            capability_attr="can_do_noisy_line_mapping",
+        )
+
+        if write:
+            self._write_line_maps_lum = True
+            for inst in _instruments:
+                if inst.can_do_psf_line_mapping:
+                    self._write_line_maps_lum_psf = True
+                if inst.can_do_noisy_line_mapping:
+                    self._write_line_maps_lum_noise = True
+
+        # We need to ensure the lines are computed first
+        # NOTE: this is safe if the user has already called get_lines, it
+        # will just leave the flag as True and respect the original intent
+        # to write or not write
+        self.get_lines(line_ids=line_ids, write=False, out_dtype=out_dtype)
+
+    @timed("Pipeline._get_line_maps_luminosity")
+    def _get_line_maps_luminosity(self, galaxy):
+        """Compute the luminosity line maps for the galaxies.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to generate the luminosity line maps for.
+        """
+        start = time.perf_counter()
+
+        for model_label, op_kwargs in self._operation_kwargs[
+            "get_line_maps_luminosity"
+        ]:
+            instruments = op_kwargs["instruments"]
+
+            for inst in instruments:
+                galaxy.get_line_maps_luminosity(
+                    *model_label,
+                    line_ids=op_kwargs["line_ids"],
+                    fov=op_kwargs["fov"],
+                    img_type=op_kwargs["img_type"],
+                    kernel=op_kwargs["kernel"],
+                    kernel_threshold=op_kwargs["kernel_threshold"],
+                    nthreads=self.nthreads,
+                    instrument=inst,
+                    cosmo=op_kwargs["cosmo"],
+                )
+
+        img_dtype = self._out_dtypes.get("line_maps_luminosity")
+        for obj in (galaxy, galaxy.stars, galaxy.black_holes):
+            if obj is None:
+                continue
+            cast_products_recursive(obj.line_maps_lnu, img_dtype)
+            cast_products_recursive(obj.line_maps_psf_lnu, img_dtype)
+            cast_products_recursive(obj.line_maps_noise_lnu, img_dtype)
+
+        self._op_counts["Line Luminosity Maps"] += (
+            count_and_check_dict_recursive(galaxy.line_maps_lnu)
+        )
+        self._op_counts["Line Luminosity Maps (With PSF)"] += (
+            count_and_check_dict_recursive(galaxy.line_maps_psf_lnu)
+        )
+        self._op_counts["Line Luminosity Maps (With Noise)"] += (
+            count_and_check_dict_recursive(galaxy.line_maps_noise_lnu)
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Line Luminosity Maps"] += (
+                count_and_check_dict_recursive(galaxy.stars.line_maps_lnu)
+            )
+            self._op_counts["Line Luminosity Maps (With PSF)"] += (
+                count_and_check_dict_recursive(galaxy.stars.line_maps_psf_lnu)
+            )
+            self._op_counts["Line Luminosity Maps (With Noise)"] += (
+                count_and_check_dict_recursive(
+                    galaxy.stars.line_maps_noise_lnu
+                )
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Line Luminosity Maps"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.line_maps_lnu
+                )
+            )
+            self._op_counts["Line Luminosity Maps (With PSF)"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.line_maps_psf_lnu
+                )
+            )
+            self._op_counts["Line Luminosity Maps (With Noise)"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.line_maps_noise_lnu
+                )
+            )
+
+        self._op_timing["Line Luminosity Maps"] += time.perf_counter() - start
+
+    def get_line_maps_flux(
+        self,
+        *instruments,
+        line_ids,
+        fov=None,
+        img_type="smoothed",
+        kernel=None,
+        kernel_threshold=1.0,
+        cosmo=None,
+        igm=None,
+        labels=None,
+        write=True,
+        out_dtype=None,
+    ):
+        """Flag that the Pipeline should compute emission line flux images.
+
+        This will signal the Pipeline to compute the flux line maps for
+        each galaxy when the run method is called.
+
+        Args:
+            instruments (Instrument/InstrumentCollection):
+                The instruments to use for the line maps (typically
+                LineImager instances). This can be any number of instruments
+                or instrument collections, they will all be combined into a
+                single InstrumentCollection for this operation.
+            line_ids (list):
+                The emission line ids to make images for.
+                Blended lines (e.g. doublets) can be given as a comma separated
+                string (e.g. "O 3 4958.91A, O 3 5006.84A") or a nested list of
+                line ids; these produce a single map of the summed lines keyed
+                by the ", " joined id.
+            fov (unyt_quantity):
+                The field of view of the image with units.
+            img_type (str):
+                The type of image to generate. Options are 'smoothed' or
+                'hist'. Default is 'smoothed'.
+            kernel (array-like):
+                The kernel to use for smoothing the image. Default is None.
+                Required for 'smoothed' images from a particle distribution.
+            kernel_threshold (float):
+                The threshold of the kernel. Default is 1.0.
+            cosmo (astropy.cosmology.Cosmology):
+                If get_observed_lines has not been called explicitly, then we
+                will need the cosmology to compute the observed lines first.
+                Default is None.
+            igm (IGMBase):
+                If get_observed_lines has not been called explicitly, then we
+                will need the IGM model to compute the observed lines first.
+                Default is None.
+            labels (list/str):
+                The emission models to generate line maps for. By default
+                this is None and all saved labels will be used.
+            write (bool):
+                Whether to write out the line maps. Default is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for prerequisite lines.
+        """
+        if labels is None:
+            warn(
+                "No labels were passed to get_line_maps_flux. We will "
+                f"generate images for: {self.emission_model.saved_labels}. "
+                "This could be very expensive depending on the number of "
+                "models and image sizes."
+            )
+            labels = self.emission_model.saved_labels
+
+        # Canonicalise ids so nested lists become comma separated blends
+        line_ids = [str(alias_to_line_id(lid)) for lid in line_ids]
+
+        self._do_line_maps_flux = True
+
+        if fov is None:
+            raise exceptions.InconsistentArguments(
+                "Cannot generate line maps without a field of view, "
+                "please pass one to the fov argument of "
+                "get_line_maps_flux."
+            )
+
+        if (
+            not self._operation_kwargs.has("get_observed_lines")
+            and cosmo is None
+        ):
+            raise exceptions.PipelineNotReady(
+                "Cannot generate flux line maps without an "
+                "astropy.cosmology object, please pass one to the cosmo "
+                "argument of get_line_maps_flux."
+            )
+
+        if len(instruments) == 0:
+            raise exceptions.PipelineNotReady(
+                "Cannot generate line maps without instruments! "
+                "Pass instruments to the get_line_maps_flux method."
+            )
+
+        _instruments = self._add_instruments(instruments)
+
+        for inst in _instruments:
+            if not inst.can_do_line_mapping:
+                raise exceptions.PipelineNotReady(
+                    f"Cannot generate line maps with {inst.label}!"
+                )
+
+        self._operation_kwargs.add(
+            labels,
+            "get_line_maps_flux",
+            instruments=_instruments,
+            line_ids=line_ids,
+            fov=fov,
+            img_type=img_type,
+            kernel=kernel,
+            kernel_threshold=kernel_threshold,
+            cosmo=cosmo,
+        )
+
+        self._out_dtypes.setdefault("line_maps_flux", out_dtype)
+
+        validate_noise_unit_compatibility(
+            _instruments,
+            "erg/s/cm**2",
+            capability_attr="can_do_noisy_line_mapping",
+        )
+
+        if write:
+            self._write_line_maps_flux = True
+            for inst in _instruments:
+                if inst.can_do_psf_line_mapping:
+                    self._write_line_maps_flux_psf = True
+                if inst.can_do_noisy_line_mapping:
+                    self._write_line_maps_flux_noise = True
+
+        # We need to ensure the observed lines are computed first
+        # NOTE: this is safe if the user has already called
+        # get_observed_lines, it will just leave the flag as True and
+        # respect the original intent to write or not write
+        self.get_observed_lines(
+            cosmo=cosmo,
+            igm=igm,
+            line_ids=line_ids,
+            write=False,
+            out_dtype=out_dtype,
+        )
+
+    @timed("Pipeline._get_line_maps_flux")
+    def _get_line_maps_flux(self, galaxy):
+        """Compute the flux line maps for the galaxies.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to generate the flux line maps for.
+        """
+        start = time.perf_counter()
+
+        for model_label, op_kwargs in self._operation_kwargs[
+            "get_line_maps_flux"
+        ]:
+            instruments = op_kwargs["instruments"]
+
+            for inst in instruments:
+                galaxy.get_line_maps_flux(
+                    *model_label,
+                    line_ids=op_kwargs["line_ids"],
+                    fov=op_kwargs["fov"],
+                    img_type=op_kwargs["img_type"],
+                    kernel=op_kwargs["kernel"],
+                    kernel_threshold=op_kwargs["kernel_threshold"],
+                    cosmo=op_kwargs.get("cosmo", None),
+                    nthreads=self.nthreads,
+                    instrument=inst,
+                )
+
+        img_dtype = self._out_dtypes.get("line_maps_flux")
+        for obj in (galaxy, galaxy.stars, galaxy.black_holes):
+            if obj is None:
+                continue
+            cast_products_recursive(obj.line_maps_fnu, img_dtype)
+            cast_products_recursive(obj.line_maps_psf_fnu, img_dtype)
+            cast_products_recursive(obj.line_maps_noise_fnu, img_dtype)
+
+        self._op_counts["Line Flux Maps"] += count_and_check_dict_recursive(
+            galaxy.line_maps_fnu
+        )
+        self._op_counts["Line Flux Maps (With PSF)"] += (
+            count_and_check_dict_recursive(galaxy.line_maps_psf_fnu)
+        )
+        self._op_counts["Line Flux Maps (With Noise)"] += (
+            count_and_check_dict_recursive(galaxy.line_maps_noise_fnu)
+        )
+        if galaxy.stars is not None:
+            self._op_counts["Line Flux Maps"] += (
+                count_and_check_dict_recursive(galaxy.stars.line_maps_fnu)
+            )
+            self._op_counts["Line Flux Maps (With PSF)"] += (
+                count_and_check_dict_recursive(galaxy.stars.line_maps_psf_fnu)
+            )
+            self._op_counts["Line Flux Maps (With Noise)"] += (
+                count_and_check_dict_recursive(
+                    galaxy.stars.line_maps_noise_fnu
+                )
+            )
+        if galaxy.black_holes is not None:
+            self._op_counts["Line Flux Maps"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.line_maps_fnu
+                )
+            )
+            self._op_counts["Line Flux Maps (With PSF)"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.line_maps_psf_fnu
+                )
+            )
+            self._op_counts["Line Flux Maps (With Noise)"] += (
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.line_maps_noise_fnu
+                )
+            )
+
+        self._op_timing["Line Flux Maps"] += time.perf_counter() - start
+
     def get_data_cubes_lnu(
         self,
         *instruments,
@@ -3025,6 +3638,7 @@ class Pipeline:
         cosmo=None,
         labels=None,
         write=True,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute luminosity data cubes.
 
@@ -3060,6 +3674,8 @@ class Pipeline:
             write (bool):
                 Whether to write out the luminosity data cubes. Default is
                 True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for prerequisite spectra.
         """
         # If we have no labels then use all saved models
         if labels is None:
@@ -3126,11 +3742,14 @@ class Pipeline:
             cosmo=cosmo,
         )
 
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("data_cubes_lnu", out_dtype)
+
         # We need to ensure the lnu spectra are computed first
         # NOTE: this is safe if the user has already called
         # get_spectra, it will just leave the flag as True and
         # respect the original intent to write or not write
-        self.get_spectra(write=False)
+        self.get_spectra(write=False, out_dtype=out_dtype)
 
     @timed("Pipeline._get_data_cubes_lnu")
     def _get_data_cubes_lnu(self, galaxy):
@@ -3175,6 +3794,13 @@ class Pipeline:
                         nthreads=self.nthreads,
                     )
 
+        # Honour any requested output dtype for the stored data cubes
+        cube_dtype = self._out_dtypes.get("data_cubes_lnu")
+        for obj in (galaxy, galaxy.stars, galaxy.black_holes):
+            if obj is None:
+                continue
+            cast_products_recursive(obj.data_cubes_lnu, cube_dtype)
+
         # Count the number of data cubes we have generated
         self._op_counts["Lnu Data Cubes"] += count_and_check_dict_recursive(
             galaxy.data_cubes_lnu
@@ -3204,6 +3830,7 @@ class Pipeline:
         igm=None,
         labels=None,
         write=True,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute flux density data cubes.
 
@@ -3241,6 +3868,8 @@ class Pipeline:
             write (bool):
                 Whether to write out the flux density data cubes. Default is
                 True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for prerequisite spectra.
         """
         # If we have no labels then use all saved models
         if labels is None:
@@ -3308,11 +3937,16 @@ class Pipeline:
             igm=igm,
         )
 
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("data_cubes_fnu", out_dtype)
+
         # We need to ensure the observed spectra are computed first
         # NOTE: this is safe if the user has already called
         # get_observed_spectra, it will just leave the flag as True and
         # respect the original intent to write or not write
-        self.get_observed_spectra(write=False, cosmo=cosmo, igm=igm)
+        self.get_observed_spectra(
+            write=False, cosmo=cosmo, igm=igm, out_dtype=out_dtype
+        )
 
     @timed("Pipeline._get_data_cubes_fnu")
     def _get_data_cubes_fnu(self, galaxy):
@@ -3357,6 +3991,13 @@ class Pipeline:
                         nthreads=self.nthreads,
                     )
 
+        # Honour any requested output dtype for the stored data cubes
+        cube_dtype = self._out_dtypes.get("data_cubes_fnu")
+        for obj in (galaxy, galaxy.stars, galaxy.black_holes):
+            if obj is None:
+                continue
+            cast_products_recursive(obj.data_cubes_fnu, cube_dtype)
+
         # Count the number of data cubes we have generated
         self._op_counts["Fnu Data Cubes"] += count_and_check_dict_recursive(
             galaxy.data_cubes_fnu
@@ -3375,7 +4016,9 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Fnu Data Cubes"] += time.perf_counter() - start
 
-    def get_spectroscopy_lnu(self, *instruments, labels=None, write=True):
+    def get_spectroscopy_lnu(
+        self, *instruments, labels=None, write=True, out_dtype=None
+    ):
         """Flag that the Pipeline should compute spectral luminosity density.
 
         This will signal the Pipeline to compute the spectral luminosity
@@ -3394,6 +4037,8 @@ class Pipeline:
             write (bool):
                 Whether to write out the spectral luminosity density. Default
                 is True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for prerequisite spectra.
         """
         # If we have no labels then use all saved models
         if labels is None:
@@ -3432,11 +4077,14 @@ class Pipeline:
             instruments=_instruments,
         )
 
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("spectroscopy_lnu", out_dtype)
+
         # We need to ensure the lnu spectra are computed first
         # NOTE: this is safe if the user has already called
         # get_spectra, it will just leave the flag as True and
         # respect the original intent to write or not write
-        self.get_spectra(write=False)
+        self.get_spectra(write=False, out_dtype=out_dtype)
 
     @timed("Pipeline._get_spectroscopy_lnu")
     def _get_spectroscopy_lnu(self, galaxy):
@@ -3461,7 +4109,11 @@ class Pipeline:
             # Loop over instruments
             for inst in instruments:
                 # Get the spectroscopy for this instrument
-                galaxy.get_spectroscopy(inst, limit_to=model_label)
+                galaxy.get_spectroscopy(
+                    inst,
+                    limit_to=model_label,
+                    out_dtype=self._out_dtypes.get("spectroscopy_lnu"),
+                )
 
         # Count the number of spectroscopy items we have generated
         self._op_counts["Spectroscopy Lnu"] += count_and_check_dict_recursive(
@@ -3486,6 +4138,7 @@ class Pipeline:
         cosmo=None,
         igm=None,
         write=True,
+        out_dtype=None,
     ):
         """Flag that the Pipeline should compute the spectral flux density.
 
@@ -3511,6 +4164,8 @@ class Pipeline:
             write (bool):
                 Whether to write out the spectral flux density. Default is
                 True.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for prerequisite spectra.
         """
         # If we have no labels then use all saved models
         if labels is None:
@@ -3549,11 +4204,16 @@ class Pipeline:
             instruments=_instruments,
         )
 
+        # Record the requested output dtype (first call wins)
+        self._out_dtypes.setdefault("spectroscopy_fnu", out_dtype)
+
         # We need to ensure the fnu spectra are computed first
         # NOTE: this is safe if the user has already called
         # get_observed_spectra, it will just leave the flag as True and
         # respect the original intent to write or not write
-        self.get_observed_spectra(write=False, cosmo=cosmo, igm=igm)
+        self.get_observed_spectra(
+            write=False, cosmo=cosmo, igm=igm, out_dtype=out_dtype
+        )
 
     @timed("Pipeline._get_spectroscopy_fnu")
     def _get_spectroscopy_fnu(self, galaxy):
@@ -3578,7 +4238,11 @@ class Pipeline:
             # Loop over instruments
             for inst in instruments:
                 # Get the spectroscopy for this instrument
-                galaxy.get_spectroscopy(inst, limit_to=model_label)
+                galaxy.get_spectroscopy(
+                    inst,
+                    limit_to=model_label,
+                    out_dtype=self._out_dtypes.get("spectroscopy_fnu"),
+                )
 
         # Count the number of spectroscopy items we have generated
         self._op_counts["Spectroscopy Fnu"] += count_and_check_dict_recursive(
@@ -3983,6 +4647,53 @@ class Pipeline:
                                 f, []
                             ).append(img.arr * img.units)
 
+        # Unpack each requested line-map family using the same nested schema.
+        line_map_stores = (
+            ("_write_line_maps_lum", "line_maps_lnu", "line_maps_lum"),
+            ("_write_line_maps_flux", "line_maps_fnu", "line_maps_flux"),
+            (
+                "_write_line_maps_lum_psf",
+                "line_maps_psf_lnu",
+                "line_maps_lum_psf",
+            ),
+            (
+                "_write_line_maps_flux_psf",
+                "line_maps_psf_fnu",
+                "line_maps_flux_psf",
+            ),
+            (
+                "_write_line_maps_lum_noise",
+                "line_maps_noise_lnu",
+                "line_maps_lum_noise",
+            ),
+            (
+                "_write_line_maps_flux_noise",
+                "line_maps_noise_fnu",
+                "line_maps_flux_noise",
+            ),
+        )
+        components = (
+            ("Galaxy", galaxy),
+            ("Stars", galaxy.stars),
+            ("BlackHole", galaxy.black_holes),
+        )
+        for write_attr, source_attr, target_attr in line_map_stores:
+            if not getattr(self, write_attr):
+                continue
+            target_store = getattr(self, target_attr)
+            for component_name, component in components:
+                if component is None:
+                    continue
+                source_store = getattr(component, source_attr)
+                for inst_label, maps in source_store.items():
+                    for spec_type, images in maps.items():
+                        for line_id, image in images.items():
+                            target_store[component_name].setdefault(
+                                inst_label, {}
+                            ).setdefault(spec_type, {}).setdefault(
+                                line_id, []
+                            ).append(image.arr * image.units)
+
         # Do we need to unpack the extra analysis results?
         if hasattr(galaxy, "_extra_analysis_results"):
             for key, res in galaxy._extra_analysis_results.items():
@@ -4032,6 +4743,8 @@ class Pipeline:
             self._do_flux_lines,
             self._do_images_lum,
             self._do_images_flux,
+            self._do_line_maps_lum,
+            self._do_line_maps_flux,
             self._do_lnu_data_cubes,
             self._do_fnu_data_cubes,
             self._do_spectroscopy_lnu,
@@ -4060,8 +4773,17 @@ class Pipeline:
         # Loop over galaxies and compute what has been requested using get_*
         # signalling methods
         igal = 0
+        _gal = None
         while len(self.galaxies) > 0:
             start_gal = time.perf_counter()
+
+            # Drop the reference the previous iteration left on its last chunk
+            # before the next galaxy is pulled in. The outer pop below rebinds
+            # gal, but until this reference goes too the previous galaxy stays
+            # resident, so its arrays were being freed later and the cost was
+            # landing on the next chunk pop rather than being named here.
+            with timer("Pipeline.run.release_prev_galaxy"):
+                _gal = None
 
             # Pop the first galaxy from the list
             with timer("Pipeline.run.pop_galaxy"):
@@ -4131,6 +4853,14 @@ class Pipeline:
                 # Are we generating flux images?
                 if self._do_images_flux:
                     self._get_images_flux(_gal)
+
+                # Are we generating luminosity line maps?
+                if self._do_line_maps_lum:
+                    self._get_line_maps_luminosity(_gal)
+
+                # Are we generating flux line maps?
+                if self._do_line_maps_flux:
+                    self._get_line_maps_flux(_gal)
 
                 # Are we generating luminosity data cubes?
                 if self._do_lnu_data_cubes:
@@ -4329,18 +5059,25 @@ class Pipeline:
                         )
                         averaged.add((component, label))
 
+        # Convert accumulated cosmic SEDs to unyt arrays, honouring any
+        # requested output dtype (accumulation itself always happens at the
+        # contribution dtype for accuracy).
+        cosmic_lnu_dtype = self._out_dtypes.get("cosmic_sed")
+        cosmic_fnu_dtype = self._out_dtypes.get("observed_cosmic_sed")
         for component in self.cosmic_lnus:
             for label, spectra in self.cosmic_lnus[component].items():
                 for spec_type, spec in spectra.items():
-                    self.cosmic_lnus[component][label][spec_type] = unyt_array(
-                        spec
-                    )
+                    spec = unyt_array(spec)
+                    if cosmic_lnu_dtype is not None:
+                        spec = spec.astype(cosmic_lnu_dtype, copy=False)
+                    self.cosmic_lnus[component][label][spec_type] = spec
         for component in self.cosmic_fnus:
             for label, spectra in self.cosmic_fnus[component].items():
                 for spec_type, spec in spectra.items():
-                    self.cosmic_fnus[component][label][spec_type] = unyt_array(
-                        spec
-                    )
+                    spec = unyt_array(spec)
+                    if cosmic_fnu_dtype is not None:
+                        spec = spec.astype(cosmic_fnu_dtype, copy=False)
+                    self.cosmic_fnus[component][label][spec_type] = spec
 
         # Convert the lists of luminosities to unyt arrays
         for spec_type, phot in self.luminosities["Galaxy"].items():
@@ -4517,6 +5254,140 @@ class Pipeline:
                     self.images_flux_noise["BlackHole"][inst_label][spec_type][
                         f
                     ] = unyt_array(img)
+
+        # Convert the lists of luminosity line maps to unyt arrays
+        for inst_label, inst_data in self.line_maps_lum["Galaxy"].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_lum["Galaxy"][inst_label][spec_type][f] = (
+                        unyt_array(img)
+                    )
+        for inst_label, inst_data in self.line_maps_lum["Stars"].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_lum["Stars"][inst_label][spec_type][f] = (
+                        unyt_array(img)
+                    )
+        for inst_label, inst_data in self.line_maps_lum["BlackHole"].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_lum["BlackHole"][inst_label][spec_type][
+                        f
+                    ] = unyt_array(img)
+
+        # Convert the lists of flux line maps to unyt arrays
+        for inst_label, inst_data in self.line_maps_flux["Galaxy"].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_flux["Galaxy"][inst_label][spec_type][f] = (
+                        unyt_array(img)
+                    )
+        for inst_label, inst_data in self.line_maps_flux["Stars"].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_flux["Stars"][inst_label][spec_type][f] = (
+                        unyt_array(img)
+                    )
+        for inst_label, inst_data in self.line_maps_flux["BlackHole"].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_flux["BlackHole"][inst_label][spec_type][
+                        f
+                    ] = unyt_array(img)
+
+        # Convert the lists of psf luminosity line maps to unyt arrays
+        for inst_label, inst_data in self.line_maps_lum_psf["Galaxy"].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_lum_psf["Galaxy"][inst_label][spec_type][
+                        f
+                    ] = unyt_array(img)
+        for inst_label, inst_data in self.line_maps_lum_psf["Stars"].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_lum_psf["Stars"][inst_label][spec_type][
+                        f
+                    ] = unyt_array(img)
+        for inst_label, inst_data in self.line_maps_lum_psf[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_lum_psf["BlackHole"][inst_label][spec_type][
+                        f
+                    ] = unyt_array(img)
+
+        # Convert the lists of psf flux line maps to unyt arrays
+        for inst_label, inst_data in self.line_maps_flux_psf["Galaxy"].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_flux_psf["Galaxy"][inst_label][spec_type][
+                        f
+                    ] = unyt_array(img)
+        for inst_label, inst_data in self.line_maps_flux_psf["Stars"].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_flux_psf["Stars"][inst_label][spec_type][
+                        f
+                    ] = unyt_array(img)
+        for inst_label, inst_data in self.line_maps_flux_psf[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_flux_psf["BlackHole"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+
+        # Convert the lists of noise luminosity line maps to unyt arrays
+        for inst_label, inst_data in self.line_maps_lum_noise[
+            "Galaxy"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_lum_noise["Galaxy"][inst_label][spec_type][
+                        f
+                    ] = unyt_array(img)
+        for inst_label, inst_data in self.line_maps_lum_noise["Stars"].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_lum_noise["Stars"][inst_label][spec_type][
+                        f
+                    ] = unyt_array(img)
+        for inst_label, inst_data in self.line_maps_lum_noise[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_lum_noise["BlackHole"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+
+        # Convert the lists of noise flux line maps to unyt arrays
+        for inst_label, inst_data in self.line_maps_flux_noise[
+            "Galaxy"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_flux_noise["Galaxy"][inst_label][spec_type][
+                        f
+                    ] = unyt_array(img)
+        for inst_label, inst_data in self.line_maps_flux_noise[
+            "Stars"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_flux_noise["Stars"][inst_label][spec_type][
+                        f
+                    ] = unyt_array(img)
+        for inst_label, inst_data in self.line_maps_flux_noise[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.line_maps_flux_noise["BlackHole"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
 
         # Convert the lists of extra analysis results to unyt arrays
         # Unlike the previous data we need to do some checks here to ensure
@@ -4886,6 +5757,114 @@ class Pipeline:
             self.io_helper.write_data(
                 self.images_flux_noise["BlackHole"],
                 "Galaxies/BlackHoles/NoiseImages/Flux",
+                galaxy_indices,
+            )
+
+        # Write luminosity line maps
+        if self._write_line_maps_lum:
+            self.io_helper.write_data(
+                self.line_maps_lum["Galaxy"],
+                "Galaxies/LineMaps/Luminosity",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_maps_lum["Stars"],
+                "Galaxies/Stars/LineMaps/Luminosity",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_maps_lum["BlackHole"],
+                "Galaxies/BlackHoles/LineMaps/Luminosity",
+                galaxy_indices,
+            )
+
+        # Write PSF luminosity line maps
+        if self._write_line_maps_lum_psf:
+            self.io_helper.write_data(
+                self.line_maps_lum_psf["Galaxy"],
+                "Galaxies/PSFLineMaps/Luminosity",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_maps_lum_psf["Stars"],
+                "Galaxies/Stars/PSFLineMaps/Luminosity",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_maps_lum_psf["BlackHole"],
+                "Galaxies/BlackHoles/PSFLineMaps/Luminosity",
+                galaxy_indices,
+            )
+
+        # Write noise luminosity line maps
+        if self._write_line_maps_lum_noise:
+            self.io_helper.write_data(
+                self.line_maps_lum_noise["Galaxy"],
+                "Galaxies/NoiseLineMaps/Luminosity",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_maps_lum_noise["Stars"],
+                "Galaxies/Stars/NoiseLineMaps/Luminosity",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_maps_lum_noise["BlackHole"],
+                "Galaxies/BlackHoles/NoiseLineMaps/Luminosity",
+                galaxy_indices,
+            )
+
+        # Write flux line maps
+        if self._write_line_maps_flux:
+            self.io_helper.write_data(
+                self.line_maps_flux["Galaxy"],
+                "Galaxies/LineMaps/Flux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_maps_flux["Stars"],
+                "Galaxies/Stars/LineMaps/Flux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_maps_flux["BlackHole"],
+                "Galaxies/BlackHoles/LineMaps/Flux",
+                galaxy_indices,
+            )
+
+        # Write PSF flux line maps
+        if self._write_line_maps_flux_psf:
+            self.io_helper.write_data(
+                self.line_maps_flux_psf["Galaxy"],
+                "Galaxies/PSFLineMaps/Flux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_maps_flux_psf["Stars"],
+                "Galaxies/Stars/PSFLineMaps/Flux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_maps_flux_psf["BlackHole"],
+                "Galaxies/BlackHoles/PSFLineMaps/Flux",
+                galaxy_indices,
+            )
+
+        # Write noise flux line maps
+        if self._write_line_maps_flux_noise:
+            self.io_helper.write_data(
+                self.line_maps_flux_noise["Galaxy"],
+                "Galaxies/NoiseLineMaps/Flux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_maps_flux_noise["Stars"],
+                "Galaxies/Stars/NoiseLineMaps/Flux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_maps_flux_noise["BlackHole"],
+                "Galaxies/BlackHoles/NoiseLineMaps/Flux",
                 galaxy_indices,
             )
 

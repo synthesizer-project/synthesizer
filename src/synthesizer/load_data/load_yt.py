@@ -30,7 +30,11 @@ from unyt import Mpc, Msun, deg, km, s, unyt_array, yr
 from unyt.exceptions import UnitConversionError, UnitOperationError
 
 from synthesizer.exceptions import InconsistentArguments, UnmetDependency
-from synthesizer.load_data.utils import age_lookup_table, lookup_age
+from synthesizer.load_data.utils import (
+    age_lookup_table,
+    cast_component_dtype,
+    lookup_age,
+)
 
 try:
     import yt
@@ -1232,12 +1236,16 @@ def _build_stellar_component(
         return None
 
     kwargs = {
-        "initial_masses": _to_unit(initial_masses, Msun),
+        "initial_masses": _to_unit(
+            initial_masses, Msun.in_base("galactic").units
+        ),
         "ages": _to_unit(ages, yr),
         "metallicities": _to_dimensionless(metallicities),
         "coordinates": _to_unit(coordinates, Mpc),
         "velocities": _to_unit(velocities, km / s),
-        "current_masses": _to_unit(current_masses, Msun),
+        "current_masses": _to_unit(
+            current_masses, Msun.in_base("galactic").units
+        ),
         "smoothing_lengths": _to_unit(
             smoothing_lengths,
             Mpc,
@@ -1486,7 +1494,7 @@ def _build_gas_component(
         return None
 
     kwargs = {
-        "masses": _to_unit(masses, Msun),
+        "masses": _to_unit(masses, Msun.in_base("galactic").units),
         "metallicities": _to_dimensionless(metallicities),
         "coordinates": _to_unit(coordinates, Mpc),
         "velocities": _to_unit(velocities, km / s),
@@ -1496,7 +1504,7 @@ def _build_gas_component(
             reference=coordinates,
         ),
         "star_forming": _coerce_bool_array(star_forming),
-        "dust_masses": _to_unit(dust_masses, Msun),
+        "dust_masses": _to_unit(dust_masses, Msun.in_base("galactic").units),
         "dust_to_metal_ratio": (
             _to_dimensionless(dust_to_metal_ratio)
             if dust_to_metal_ratio is not None
@@ -1595,8 +1603,8 @@ def _build_black_hole_component(
     }
 
     for property_name, unit in (
-        ("masses", Msun),
-        ("accretion_rates", Msun / yr),
+        ("masses", Msun.in_base("galactic").units),
+        ("accretion_rates", Msun.in_base("galactic").units / yr),
         ("accretion_rates_eddington", None),
         ("epsilons", None),
         ("inclinations", deg),
@@ -1719,6 +1727,7 @@ def load_yt(
     load_derived_extra_fields=False,
     galaxy_name_prefix="yt_galaxy",
     verbose=False,
+    dtype=np.float64,
 ):
     """Load one or more yt selections into Synthesizer particle galaxies.
 
@@ -1767,6 +1776,11 @@ def load_yt(
             Prefix used when naming the output galaxy objects.
         verbose (bool):
             If `True`, print progress information during loading.
+        dtype (type):
+            The numpy dtype to cast all numerical particle arrays to.
+            Defaults to np.float64 to match standard SPS grids. Set to
+            np.float32 (with Grid(use_precision=np.float32)) to reduce
+            memory.
 
     Returns:
         tuple[list[Galaxy], dict]:
@@ -1923,12 +1937,15 @@ def load_yt(
         )
 
         if stars is not None:
+            stars = cast_component_dtype(stars, dtype)
             galaxy.load_stars(**stars)
 
         if gas is not None:
+            gas = cast_component_dtype(gas, dtype)
             galaxy.load_gas(**gas)
 
         if black_holes is not None:
+            black_holes = cast_component_dtype(black_holes, dtype)
             black_hole_kwargs = dict(black_holes)
             galaxy.black_holes = BlackHoles(
                 masses=black_hole_kwargs.pop("masses"),

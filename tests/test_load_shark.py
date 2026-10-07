@@ -125,8 +125,23 @@ def test_parametric(shark_file, test_grid):
 
 
 def test_bad_arguments(shark_file, test_grid):
-    """Unknown method and component raise."""
+    """Unknown method, unknown or repeated component and bad shapes raise."""
     with pytest.raises(exceptions.InconsistentArguments):
         load_SHARK(shark_file, test_grid, method="spherical_cow")
     with pytest.raises(exceptions.InconsistentArguments):
         load_SHARK(shark_file, test_grid, components=("disks", "bar"))
+    with pytest.raises(exceptions.InconsistentArguments):
+        load_SHARK(shark_file, test_grid, components=("disks", "disks"))
+    with h5py.File(shark_file, "a") as hf:
+        del hf["disks/metallicity_histories"]
+        hf["disks/metallicity_histories"] = _zmet(0)[:, :-1]
+    with pytest.raises(exceptions.InconsistentArguments):
+        load_SHARK(shark_file, test_grid)
+
+
+def test_dtype(shark_file, test_grid):
+    """Particle arrays are cast to the requested dtype."""
+    stars = load_SHARK(shark_file, test_grid, dtype=np.float32)[0].stars
+    for arr in (stars.initial_masses, stars.ages, stars.metallicities):
+        assert arr.dtype == np.float32
+    assert str(stars.initial_masses.units) == "Msun"

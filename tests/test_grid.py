@@ -10,13 +10,18 @@ This module contains tests for all Grid functionality including:
 - Utility methods
 """
 
+import h5py
 import numpy as np
 import pytest
-from unyt import Hz, angstrom, erg, s
+from unyt import Hz, Msun, Unit, angstrom, deg, erg, s, unyt_array, yr
+from unyt.dimensions import mass as mass_dim
 
 from synthesizer import exceptions
+from synthesizer.emission_models.utils import get_param
 from synthesizer.grid import Grid, Template
 from synthesizer.instruments.filters import UVJ
+from synthesizer.particle import BlackHoles
+from synthesizer.units import Units
 
 
 @pytest.fixture
@@ -212,6 +217,77 @@ class TestGridAxes:
             index = Grid.get_nearest_index(test_age, ages)
             assert isinstance(index, (int, np.integer))
             assert 0 <= index < len(ages)
+
+    @pytest.mark.parametrize("precision", [np.float32, np.float64])
+    def test_mass_axis_matches_emitter_masses(self, precision):
+        """Mass axes are in the internal mass unit, like emitter masses.
+
+        AGN grid files store black hole masses in the units the grid was
+        made with (e.g. kg). Extraction compares log10 of the axis with
+        log10 of the emitter masses (stored in the internal mass unit), so
+        the axis must be converted when the grid is loaded, before any
+        reduction in precision.
+        """
+        # Load the AGN grid
+        grid = Grid("test_grid_agn-blr.hdf5", use_precision=precision)
+
+        # Find the mass axis and read it (with its units) straight from the
+        # file. We find it by its dimensions since grid files don't all use
+        # the same axis name.
+        with h5py.File(grid.grid_filename, "r") as hf:
+            name, dset = next(
+                (name, dset)
+                for name, dset in hf["axes"].items()
+                if dset.attrs.get("Units") not in (None, "None", "")
+                and Unit(dset.attrs["Units"]).dimensions == mass_dim
+            )
+            raw = unyt_array(dset[...], dset.attrs["Units"])
+
+        # Make a black hole with a mass on the grid
+        bh = BlackHoles(
+            masses=unyt_array([1e8], Msun),
+            accretion_rates=unyt_array([1.0], Msun / yr),
+            inclinations=np.zeros(1) * deg,
+        )
+
+        # The axis should be the raw values in the internal mass unit
+        axis = getattr(grid, name)
+        assert axis.units == Units().mass
+        np.testing.assert_allclose(
+            axis.value,
+            raw.to_value(Units().mass),
+            rtol=1e-6,
+        )
+
+        # The black hole's logged mass should be on the same scale as the
+        # logged axis (log10 of the mass in the internal mass unit)
+        np.testing.assert_allclose(
+            get_param(f"log10{name}", None, None, bh),
+            8.0,
+            rtol=1e-6,
+        )
+
+    @pytest.mark.parametrize("units", [None, "None", ""])
+    def test_axes_without_units_are_read_unchanged(self, test_grid, units):
+        """Axes with no units (or a "None"/empty sentinel) are left alone."""
+        # Write a small axis with the given units to an in-memory file
+        with h5py.File(
+            "axis.hdf5",
+            "w",
+            driver="core",
+            backing_store=False,
+        ) as hf:
+            dset = hf.create_dataset("axis", data=np.array([1.0, 2.0, 3.0]))
+            if units is not None:
+                dset.attrs["Units"] = units
+
+            # Read it as a grid axis
+            values, axis_units = test_grid._read_float_axis(dset)
+
+        # The values and units should come back unchanged
+        np.testing.assert_allclose(values, [1.0, 2.0, 3.0])
+        assert values.dtype == test_grid._dtype
+        assert axis_units == units
 
 
 class TestGridSpectra:
@@ -1313,3 +1389,117 @@ class TestGridErrorHandling:
         # Accessing shape should raise an UnrecognisedOption error
         with pytest.raises(exceptions.UnrecognisedOption):
             _ = grid.shape
+
+
+class TestGridInterpolation:
+    """Tests for Grid interpolation (CIC and NGP)."""
+
+    def test_grid_interpolation_cic_and_ngp(self, test_grid):
+        """Test grid interpolation using both 'cic' and 'ngp' methods."""
+        if not test_grid.has_spectra:
+            pytest.skip("Grid has no spectra")
+
+        # Retrieve valid coordinate limits for axes
+        axis_vals = {}
+        for axis in test_grid.axes:
+            axis_vals[axis] = getattr(test_grid, axis)
+
+        # Let's define some coordinate points to interpolate at (within bounds)
+        # Pick a point in the middle of each axis
+        coords = {}
+        for axis in test_grid.axes:
+            vals = axis_vals[axis]
+            mid_val = vals[len(vals) // 2]
+            coords[axis] = np.array([mid_val.value]) * mid_val.units
+
+        # 1. Test NGP interpolation
+        res_ngp = test_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident", method="ngp", **coords
+        )
+        sed_ngp = res_ngp["spectra"]
+        assert sed_ngp is not None
+        assert sed_ngp.lnu.shape[0] == 1  # 1 target coordinate
+
+        # 2. Test CIC interpolation
+        res_cic = test_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident", method="cic", **coords
+        )
+        sed_cic = res_cic["spectra"]
+        assert sed_cic is not None
+        assert sed_cic.lnu.shape[0] == 1  # 1 target coordinate
+
+        # Compare exact point matches if we interpolate exactly at a grid point
+        grid_coords = {}
+        grid_indices = []
+        for axis in test_grid.axes:
+            vals = axis_vals[axis]
+            # Pick index 1 (second point)
+            grid_indices.append(1)
+            grid_coords[axis] = np.array([vals[1].value]) * vals[1].units
+
+        # Interpolate exactly at a grid point
+        res_exact = test_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident", method="cic", **grid_coords
+        )
+        sed_exact = res_exact["spectra"]
+
+        # Get the SED at the actual grid point
+        sed_point = test_grid.get_sed(grid_point=tuple(grid_indices))
+
+        # The interpolated SED at the grid point should match the exact
+        # grid point SED
+        assert np.allclose(
+            sed_exact.lnu[0].value, sed_point.lnu.value, rtol=1e-5
+        )
+
+    @pytest.mark.parametrize("method", ["cic", "ngp"])
+    @pytest.mark.parametrize("out_dtype", [np.float32, np.float64])
+    def test_grid_interpolation_out_dtype(self, test_grid, method, out_dtype):
+        """Test the interpolation honours the requested output dtype."""
+        if not test_grid.has_spectra:
+            pytest.skip("Grid has no spectra")
+
+        coords = {}
+        for axis in test_grid.axes:
+            vals = getattr(test_grid, axis)
+            mid_val = vals[len(vals) // 2]
+            coords[axis] = np.array([mid_val.value]) * mid_val.units
+
+        res = test_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident",
+            method=method,
+            out_dtype=out_dtype,
+            **coords,
+        )
+
+        assert res["spectra"].lnu.dtype == np.dtype(out_dtype)
+
+    @pytest.mark.parametrize("method", ["cic", "ngp"])
+    def test_grid_interpolation_float32_grid(self, test_grid, method):
+        """Test interpolating a float32 grid agrees with the float64 grid."""
+        if not test_grid.has_spectra:
+            pytest.skip("Grid has no spectra")
+
+        f32_grid = test_grid.convert_precision(np.float32)
+
+        coords = {}
+        for axis in test_grid.axes:
+            vals = getattr(test_grid, axis)
+            mid_val = vals[len(vals) // 2]
+            coords[axis] = np.array([mid_val.value]) * mid_val.units
+
+        res_f64 = test_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident", method=method, **coords
+        )
+        res_f32 = f32_grid.interpolate_grid_at_axes_value(
+            spectra_type="incident", method=method, **coords
+        )
+
+        # The output dtype is controlled by out_dtype, not the grid dtype.
+        assert res_f32["spectra"].lnu.dtype == np.float64
+
+        assert np.allclose(
+            res_f32["spectra"].lnu.value,
+            res_f64["spectra"].lnu.value,
+            rtol=1e-5,
+        )

@@ -5,13 +5,20 @@ dimensional spectroscopy. It stores a wavelength grid together with optional
 depth, signal-to-noise, and noise-map definitions.
 """
 
+from numbers import Real
+
 import h5py
+import numpy as np
 from unyt import angstrom, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.instruments.instrument_base import (
     InstrumentBase,
     _hashable_state,
+)
+from synthesizer.instruments.utils import (
+    read_instrument_attribute,
+    write_instrument_attribute,
 )
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.operation_timers import timed
@@ -39,6 +46,13 @@ class SpectroscopicInstrument(InstrumentBase):
             this should be a dictionary keyed by the relevant labels.
         noise_maps (unyt_array, optional): An optional array with noise as a
             function of wavelength, in the same units as the spectral noise.
+        resolving_power (float or callable, optional): Resolving power
+            (R = lambda / delta_lambda) of the instrument. May be a constant
+            or a function of wavelength. Only a constant (float/int) value is
+            persisted by :meth:`to_hdf5`; a callable resolving power cannot be
+            serialised to HDF5 and is silently dropped on save (it is not
+            restored on load either, since there is nothing to restore it
+            from).
     """
 
     lam = Quantity("wavelength")
@@ -53,6 +67,7 @@ class SpectroscopicInstrument(InstrumentBase):
         depth_app_radius=None,
         snrs=None,
         noise_maps=None,
+        resolving_power=None,
     ):
         """Initialise a spectroscopic instrument.
 
@@ -73,6 +88,10 @@ class SpectroscopicInstrument(InstrumentBase):
             noise_maps (unyt_array, optional): An optional array with noise as
                 a function of wavelength, in the same units as the spectral
                 noise.
+            resolving_power (float or callable, optional): Resolving power
+                (R = lambda / delta_lambda) of the instrument. May be a
+                constant or a function of wavelength. Only a constant value is
+                persisted when the instrument is saved to HDF5.
         """
         super().__init__(label)
         self.lam = lam
@@ -80,6 +99,7 @@ class SpectroscopicInstrument(InstrumentBase):
         self.depth_app_radius = depth_app_radius
         self.snrs = snrs
         self.noise_maps = noise_maps
+        self.resolving_power = resolving_power
         SpectroscopicInstrument._validate(self)
 
     @timed("SpectroscopicInstrument._validate")
@@ -113,6 +133,19 @@ class SpectroscopicInstrument(InstrumentBase):
                 "You cannot set depths and SNRs at the same time as noise maps"
             )
 
+        if self.resolving_power is not None and not callable(
+            self.resolving_power
+        ):
+            if (
+                isinstance(self.resolving_power, bool)
+                or not isinstance(self.resolving_power, Real)
+                or not np.isfinite(self.resolving_power)
+                or self.resolving_power <= 0
+            ):
+                raise exceptions.InconsistentArguments(
+                    "resolving_power must be a positive number or callable."
+                )
+
     @property
     def instrument_type(self):
         """Return the serialised type tag for this instrument."""
@@ -141,6 +174,7 @@ class SpectroscopicInstrument(InstrumentBase):
             _hashable_state(self.depth_app_radius),
             _hashable_state(self.snrs),
             _hashable_state(self.noise_maps),
+            _hashable_state(self.resolving_power),
         )
 
     @timed("SpectroscopicInstrument.apply_lam_array")
@@ -202,60 +236,28 @@ class SpectroscopicInstrument(InstrumentBase):
         group.attrs["label"] = self.label
         group.attrs["instrument_type"] = self.instrument_type
 
+        # Only a constant resolving power can be represented as an HDF5
+        # attribute; a callable resolving_power(wavelength) is not
+        # serialisable and is intentionally dropped here. NumPy scalars count
+        # as constants: np.float32 and np.int64 are not instances of float or
+        # int, so testing those alone would silently discard a resolving
+        # power that came out of an array.
+        if isinstance(self.resolving_power, Real) and not isinstance(
+            self.resolving_power, bool
+        ):
+            group.attrs["resolving_power"] = float(self.resolving_power)
+
         ds = group.create_dataset(
             "Wavelength", data=self.lam.value, dtype=float
         )
         ds.attrs["units"] = str(self.lam.units)
 
-        if self.depth is not None:
-            if isinstance(self.depth, dict):
-                depth_group = group.create_group("Depth")
-                for key, value in self.depth.items():
-                    raw = value.value if hasattr(value, "value") else value
-                    units = (
-                        str(value.units)
-                        if hasattr(value, "units")
-                        else "dimensionless"
-                    )
-                    ds = depth_group.create_dataset(key, data=raw, dtype=float)
-                    ds.attrs["units"] = units
-            else:
-                ds = group.create_dataset(
-                    "Depth", data=self.depth.value, dtype=float
-                )
-                ds.attrs["units"] = "dimensionless"
-
-        if self.depth_app_radius is not None:
-            ds = group.create_dataset(
-                "DepthApertureRadius",
-                data=self.depth_app_radius.value,
-                dtype=float,
-            )
-            ds.attrs["units"] = str(self.depth_app_radius.units)
-
-        if self.snrs is not None:
-            if isinstance(self.snrs, dict):
-                snrs_group = group.create_group("SNRs")
-                for key, value in self.snrs.items():
-                    raw = value.value if hasattr(value, "value") else value
-                    units = (
-                        str(value.units)
-                        if hasattr(value, "units")
-                        else "dimensionless"
-                    )
-                    ds = snrs_group.create_dataset(key, data=raw, dtype=float)
-                    ds.attrs["units"] = units
-            else:
-                ds = group.create_dataset(
-                    "SNRs", data=self.snrs.value, dtype=float
-                )
-                ds.attrs["units"] = "dimensionless"
-
-        if self.noise_maps is not None:
-            ds = group.create_dataset(
-                "NoiseMaps", data=self.noise_maps.value, dtype=float
-            )
-            ds.attrs["units"] = str(self.noise_maps.units)
+        write_instrument_attribute(group, "Depth", self.depth)
+        write_instrument_attribute(
+            group, "DepthApertureRadius", self.depth_app_radius
+        )
+        write_instrument_attribute(group, "SNRs", self.snrs)
+        write_instrument_attribute(group, "NoiseMaps", self.noise_maps)
 
     @classmethod
     @timed("SpectroscopicInstrument.load")
@@ -288,42 +290,13 @@ class SpectroscopicInstrument(InstrumentBase):
             group["Wavelength"][...], group["Wavelength"].attrs["units"]
         )
 
-        if "Depth" in group and isinstance(group["Depth"], h5py.Group):
-            depth = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["Depth"].items()
-            }
-        elif "Depth" in group:
-            depth = unyt_array(
-                group["Depth"][...], group["Depth"].attrs["units"]
-            )
-        else:
-            depth = None
+        depth = read_instrument_attribute(group, "Depth")
+        depth_app_radius = read_instrument_attribute(
+            group, "DepthApertureRadius"
+        )
+        snrs = read_instrument_attribute(group, "SNRs")
 
-        if "DepthApertureRadius" in group:
-            depth_app_radius = unyt_array(
-                group["DepthApertureRadius"][...],
-                group["DepthApertureRadius"].attrs["units"],
-            )
-        else:
-            depth_app_radius = None
-
-        if "SNRs" in group and isinstance(group["SNRs"], h5py.Group):
-            snrs = {
-                key: unyt_array(value[...], value.attrs["units"])
-                for key, value in group["SNRs"].items()
-            }
-        elif "SNRs" in group:
-            snrs = unyt_array(group["SNRs"][...], group["SNRs"].attrs["units"])
-        else:
-            snrs = None
-
-        if "NoiseMaps" in group:
-            noise_maps = unyt_array(
-                group["NoiseMaps"][...], group["NoiseMaps"].attrs["units"]
-            )
-        else:
-            noise_maps = None
+        noise_maps = read_instrument_attribute(group, "NoiseMaps")
 
         payload = {
             "label": group.attrs["label"],
@@ -332,6 +305,7 @@ class SpectroscopicInstrument(InstrumentBase):
             "depth_app_radius": depth_app_radius,
             "snrs": snrs,
             "noise_maps": noise_maps,
+            "resolving_power": group.attrs.get("resolving_power"),
         }
         payload.update(kwargs)
 
@@ -342,4 +316,5 @@ class SpectroscopicInstrument(InstrumentBase):
             depth_app_radius=payload["depth_app_radius"],
             snrs=payload["snrs"],
             noise_maps=payload["noise_maps"],
+            resolving_power=payload["resolving_power"],
         )

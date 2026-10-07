@@ -136,6 +136,148 @@ def _apply_image_noise(final_images, noise_store, instrument):
     }
 
 
+def _get_line_map_postprocess_stores(owner, phot_type):
+    """Return the raw, PSF, and noise stores for a line map family.
+
+    Args:
+        owner:
+            Object holding the line map stores.
+        phot_type (str):
+            Either ``"lnu"`` or ``"fnu"``.
+
+    Returns:
+        tuple:
+            ``(raw_store, psf_store, noise_store)`` for the requested
+            line map family.
+    """
+    if phot_type == "lnu":
+        raw_store = owner.line_maps_lnu
+        if not hasattr(owner, "line_maps_psf_lnu"):
+            owner.line_maps_psf_lnu = {}
+        if not hasattr(owner, "line_maps_noise_lnu"):
+            owner.line_maps_noise_lnu = {}
+        return (
+            raw_store,
+            owner.line_maps_psf_lnu,
+            owner.line_maps_noise_lnu,
+        )
+
+    if phot_type == "fnu":
+        raw_store = owner.line_maps_fnu
+        if not hasattr(owner, "line_maps_psf_fnu"):
+            owner.line_maps_psf_fnu = {}
+        if not hasattr(owner, "line_maps_noise_fnu"):
+            owner.line_maps_noise_fnu = {}
+        return (
+            raw_store,
+            owner.line_maps_psf_fnu,
+            owner.line_maps_noise_fnu,
+        )
+
+    raise exceptions.InconsistentArguments(
+        f"Photometry type {phot_type} not recognised. Must be 'lnu' or 'fnu'."
+    )
+
+
+def _apply_line_map_psfs(final_maps, psf_store, instrument):
+    """Apply the instrument PSF configuration to line map collections.
+
+    Args:
+        final_maps (dict):
+            Current map collections keyed by label.
+        psf_store (dict):
+            Store for PSF-processed maps.
+        instrument (Instrument):
+            Instrument defining the PSF application.
+
+    Returns:
+        dict:
+            Updated map collections after PSF processing.
+    """
+    # Skip this stage entirely when the instrument has no line mapping PSF
+    # model.
+    if not instrument.can_do_psf_line_mapping:
+        return final_maps
+
+    psf_store.setdefault(instrument.label, {})
+    for label, imgs in final_maps.items():
+        psf_store[instrument.label][label] = instrument.apply_psfs(imgs)
+
+    return {label: psf_store[instrument.label][label] for label in final_maps}
+
+
+def _apply_line_map_noise(final_maps, noise_store, instrument):
+    """Apply the instrument noise configuration to line map collections.
+
+    Args:
+        final_maps (dict):
+            Current map collections keyed by label.
+        noise_store (dict):
+            Store for noise-processed maps.
+        instrument (Instrument):
+            Instrument defining the noise application.
+
+    Returns:
+        dict:
+            Updated map collections after noise processing.
+    """
+    # Skip this stage entirely when the instrument has no configured line
+    # mapping noise model.
+    if not instrument.can_do_noisy_line_mapping:
+        return final_maps
+
+    noise_store.setdefault(instrument.label, {})
+    for label, imgs in final_maps.items():
+        noise_store[instrument.label][label] = instrument.apply_noises(
+            imgs,
+            aperture_radius=instrument.depth_app_radius,
+        )
+
+    return {
+        label: noise_store[instrument.label][label] for label in final_maps
+    }
+
+
+def _postprocess_existing_line_maps(
+    owner,
+    instrument,
+    phot_type,
+    limit_to=None,
+):
+    """Apply the instrument-defined line mapping post-processing to maps.
+
+    Args:
+        owner:
+            Object holding the raw and post-processed line map stores.
+            This is typically a Component or BaseGalaxy instance.
+        instrument (Instrument):
+            Instrument defining the observation.
+        phot_type (str):
+            Either ``"lnu"`` or ``"fnu"``.
+        limit_to (list, optional):
+            Specific labels to post-process.
+
+    Returns:
+        dict:
+            Final map collections keyed by label.
+    """
+    raw_store, psf_store, noise_store = _get_line_map_postprocess_stores(
+        owner, phot_type
+    )
+
+    final_maps = _get_raw_images_for_postprocess(
+        raw_store,
+        instrument.label,
+        limit_to=limit_to,
+    )
+
+    final_maps = _apply_line_map_psfs(final_maps, psf_store, instrument)
+
+    final_maps = _apply_line_map_noise(final_maps, noise_store, instrument)
+
+    return final_maps
+
+
 def _postprocess_existing_images(
     owner,
     instrument,

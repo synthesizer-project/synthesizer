@@ -20,6 +20,31 @@ import math
 import numpy as np
 
 
+def cast_component_dtype(component, dtype):
+    """Cast floating-point arrays in component input data to one dtype.
+
+    Args:
+        component (mapping or None):
+            Component constructor arguments from any data source.
+        dtype (numpy dtype):
+            Target floating-point dtype.
+
+    Returns:
+        dict or None:
+            Shallow copy with floating-point arrays cast, preserving units.
+    """
+    if component is None:
+        return None
+
+    return {
+        key: value.astype(dtype, copy=False)
+        if isinstance(value, np.ndarray)
+        and np.issubdtype(value.dtype, np.floating)
+        else value
+        for key, value in component.items()
+    }
+
+
 def get_begin_end_pointers(length):
     """Find the beginning and ending indices from a length array.
 
@@ -85,6 +110,7 @@ def split_age_bins(lo, hi, grid_ages):
     A bin narrower than the grid spacing is returned unchanged (one segment
     at its midpoint). Wider bins become one segment per grid age they
     straddle, so a constant SFR across the bin is resolved by the grid.
+    A zero-width bin is an instantaneous burst: one segment at its age.
 
     Args:
         lo (np.ndarray of float):
@@ -104,7 +130,7 @@ def split_age_bins(lo, hi, grid_ages):
         )
         bin_index.append(np.full(cuts.size - 1, b))
         mid.append(0.5 * (cuts[1:] + cuts[:-1]))
-        frac.append(np.diff(cuts) / (c - a))
+        frac.append(np.diff(cuts) / (c - a) if c > a else [1.0])
     return np.concatenate(bin_index), np.concatenate(mid), np.concatenate(frac)
 
 
@@ -113,7 +139,8 @@ def bin_overlap_matrix(lo, hi, grid_ages):
 
     Cell edges follow ``parametric.Stars``: zero, the linear midpoints
     between adjacent grid ages, then infinity so mass older than the grid
-    is kept in the last cell.
+    is kept in the last cell. A zero-width bin is an instantaneous burst
+    placed wholly in the cell containing its age.
 
     Args:
         lo (np.ndarray of float):
@@ -131,7 +158,13 @@ def bin_overlap_matrix(lo, hi, grid_ages):
         ([0.0], 0.5 * (grid_ages[:-1] + grid_ages[1:]), [np.inf])
     )
     overlap = np.minimum(hi, edges[1:]) - np.maximum(lo, edges[:-1])
-    return np.clip(overlap, 0.0, None) / (hi - lo)
+    width = hi - lo
+    burst = (edges[:-1] <= lo) & (lo < edges[1:])
+    return np.where(
+        width > 0,
+        np.clip(overlap, 0.0, None) / np.where(width > 0, width, 1.0),
+        burst,
+    )
 
 
 def cic_matrix(values, grid):

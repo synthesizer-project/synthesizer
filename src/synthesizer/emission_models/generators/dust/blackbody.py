@@ -15,6 +15,8 @@ from synthesizer.emission_models.generators.dust.dust_emission_base import (
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.units import accepts
 from synthesizer.utils import planck
+from synthesizer.utils.operation_timers import timed
+from synthesizer.utils.precision import verify_out_precision
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
@@ -100,6 +102,8 @@ class Blackbody(DustEmission):
         return f"Blackbody({', '.join(parts)})"
 
     @accepts(lams=angstrom)
+    @timed("Blackbody._generate_spectra")
+    @verify_out_precision()
     def _generate_spectra(
         self,
         lams: unyt_array,
@@ -107,6 +111,7 @@ class Blackbody(DustEmission):
         model: EmissionModel,
         emissions: dict,
         redshift: float = 0,
+        out_dtype=None,
     ) -> Sed:
         """Generate the dust emission spectra.
 
@@ -130,6 +135,9 @@ class Blackbody(DustEmission):
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
+            out_dtype (np.dtype):
+                The output precision. Defaults to the global default output
+                dtype.
 
         Returns:
             Sed:
@@ -167,20 +175,20 @@ class Blackbody(DustEmission):
         # Get the scaling we will need
         scaling = self.get_scaling(emitter, model, emissions)
 
-        # Handle per particle scaling (we need to expand the scaling shape)
-        if model is not None and model.per_particle:
-            if not hasattr(scaling, "shape"):
-                # scaling is a float, need to convert to array
-                scaling = np.full(emitter.nparticles, scaling)
-            scaling = scaling[:, np.newaxis]
-
-        # Properly handle units: normalize then scale
-        result = lnu * scaling * cmb_factor
-        sed._lnu = result.value if hasattr(result, "value") else result
+        # Scale the normalised emission, at the output precision
+        sed._lnu = self.get_scaled_emission(
+            lnu,
+            scaling,
+            emitter,
+            model,
+            out_dtype,
+            cmb_factor,
+        )
 
         return sed
 
     @accepts(line_lams=angstrom)
+    @verify_out_precision()
     def _generate_lines(
         self,
         line_ids,
@@ -190,6 +198,7 @@ class Blackbody(DustEmission):
         emissions,
         spectra,
         redshift=0,
+        out_dtype=None,
     ) -> LineCollection:
         """Generate line emission spectra.
 
@@ -213,6 +222,9 @@ class Blackbody(DustEmission):
             redshift (float):
                 The redshift at which to calculate the CMB heating. (Ignored
                 if not applying CMB heating).
+            out_dtype (np.dtype):
+                The output precision. Defaults to the global default output
+                dtype.
 
         Returns:
             LineCollection:
@@ -261,15 +273,15 @@ class Blackbody(DustEmission):
         # Normalise the spectrum and apply scaling with proper unit handling
         scaling = self.get_scaling(emitter, model, spectra)
 
-        # Handle per particle scaling (we need to expand the scaling shape)
-        if model is not None and model.per_particle:
-            if not hasattr(scaling, "shape"):
-                # scaling is a float, need to convert to array
-                scaling = np.full(emitter.nparticles, scaling)
-            scaling = scaling[:, np.newaxis]
-
-        # Properly handle units: normalize then scale
-        lnu = (lnu * scaling * cmb_factor).value
+        # Scale the normalised emission, at the output precision
+        lnu = self.get_scaled_emission(
+            lnu,
+            scaling,
+            emitter,
+            model,
+            out_dtype,
+            cmb_factor,
+        )
 
         # OK, now we have used the Sed magic lets return the LineCollection
         # the outside world expects. Note that the line luminosities are
@@ -279,7 +291,7 @@ class Blackbody(DustEmission):
         lines = LineCollection(
             line_ids,
             line_lams,
-            np.zeros(lnu.shape) * erg / s,
+            np.zeros(lnu.shape, dtype=lnu.dtype) * erg / s,
             cont=lnu * erg / s / Hz,
         )
 

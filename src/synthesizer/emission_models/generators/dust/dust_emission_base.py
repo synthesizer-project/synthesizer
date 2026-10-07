@@ -13,12 +13,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Tuple, Union
 
+import numpy as np
 from unyt import K, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.generator import Generator
+from synthesizer.emission_models.utils import get_emission_label
 from synthesizer.units import accepts
+from synthesizer.utils.precision import resolve_out_dtype
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
@@ -185,7 +188,7 @@ class DustEmission(Generator):
         """
         self.is_energy_balance = True
         self.is_scaled = False
-        self.required_emissions = (intrinsic, attenuated)
+        self._required_emissions = (intrinsic, attenuated)
         self._intrinsic = intrinsic
         self._attenuated = attenuated
         self._scaler = None
@@ -199,7 +202,7 @@ class DustEmission(Generator):
         """
         self.is_energy_balance = False
         self.is_scaled = True
-        self.required_emissions = (scaler,)
+        self._required_emissions = (scaler,)
         self._intrinsic = None
         self._attenuated = None
         self._scaler = scaler
@@ -218,21 +221,13 @@ class DustEmission(Generator):
             unyt_quantity:
                 The bolometric luminosity absorbed by dust.
         """
-        # For ease, unpack the intrinsic and attenuated emissions
-        # Handle both string labels and EmissionModel objects
-        intrinsic_key = (
-            self._intrinsic.label
-            if hasattr(self._intrinsic, "label")
-            else self._intrinsic
-        )
-        attenuated_key = (
-            self._attenuated.label
-            if hasattr(self._attenuated, "label")
-            else self._attenuated
-        )
+        # Extract the required emissions (this will raise if any of them
+        # are missing)
+        required = self._extract_emissions(emissions)
 
-        intrinsic = emissions[intrinsic_key]
-        attenuated = emissions[attenuated_key]
+        # For ease, unpack the intrinsic and attenuated emissions
+        intrinsic = required[get_emission_label(self._intrinsic)]
+        attenuated = required[get_emission_label(self._attenuated)]
 
         # Calculate the bolometric luminosity absorbed by dust
         ldust = (
@@ -255,14 +250,12 @@ class DustEmission(Generator):
             unyt_quantity:
                 The bolometric luminosity to scale the dust emission by.
         """
+        # Extract the required emissions (this will raise if the scaler is
+        # missing)
+        required = self._extract_emissions(emissions)
+
         # For ease, unpack the scaler emission
-        # Handle both string labels and EmissionModel objects
-        scaler_key = (
-            self._scaler.label
-            if hasattr(self._scaler, "label")
-            else self._scaler
-        )
-        scaler = emissions[scaler_key]
+        scaler = required[get_emission_label(self._scaler)]
 
         # Get the bolometric luminosity to scale by
         lscale = scaler.bolometric_luminosity
@@ -301,12 +294,67 @@ class DustEmission(Generator):
         else:
             return 1.0
 
+    def get_scaled_emission(
+        self,
+        normalised,
+        scaling,
+        emitter,
+        model,
+        out_dtype=None,
+        cmb_factor=1.0,
+    ):
+        """Get the normalised emission scaled by the scaling luminosity.
+
+        The normalised emission (per unit luminosity, on the wavelength or
+        line grid) is multiplied by the scaling from get_scaling, one per
+        particle for per-particle models, and by the CMB heating factor. The
+        product is written straight into an array at the output precision.
+
+        Args:
+            normalised (np.ndarray):
+                The emission per unit scaling luminosity.
+            scaling (float/unyt_quantity/unyt_array):
+                The scaling luminosity (from get_scaling).
+            emitter (Stars/Gas/BlackHole):
+                The object emitting the emission.
+            model (EmissionModel):
+                The emission model generating the emission.
+            out_dtype (np.dtype):
+                The output precision. Defaults to the global default output
+                dtype.
+            cmb_factor (float):
+                The CMB heating factor.
+
+        Returns:
+            np.ndarray:
+                The scaled emission, (nparticles, n) for per-particle models
+                and (n,) otherwise.
+        """
+        scaling = np.asarray(getattr(scaling, "value", scaling))
+        if model is not None and model.per_particle:
+            if scaling.ndim == 0:
+                scaling = np.full(emitter.nparticles, scaling)
+            scaling = scaling[:, np.newaxis]
+        normalised = np.asarray(normalised) * cmb_factor
+        out = np.empty(
+            np.broadcast_shapes(normalised.shape, scaling.shape),
+            dtype=resolve_out_dtype(out_dtype),
+        )
+        return np.multiply(normalised, scaling, out=out, casting="same_kind")
+
     def apply_cmb_heating(self, temperature, emissivity, redshift) -> Tuple:
         """Compute the cmb heating factor and modify the temperature.
 
         This stores the effective temperature in last_effective_temperature
         which can be returned by temperature_z for labelling. This feature is
         mostly only useful when using the generators in isolation.
+
+        Note that those stored values belong to whichever call ran last. One
+        generator can be attached to several models and used for many
+        emitters, so they say nothing about which emission they came from, and
+        they are not safe to read if generation is ever threaded. See
+        https://github.com/synthesizer-project/synthesizer/issues/1196. Take
+        the returned values instead when it matters which call they came from.
         """
         # Return immediately if we aren't applying cmb heating
         if not self.do_cmb_heating:

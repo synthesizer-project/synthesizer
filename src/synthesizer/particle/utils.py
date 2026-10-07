@@ -134,7 +134,7 @@ def calculate_smoothing_lengths(
         )
 
     # Prepare an array to hold the resultant smoothing lengths
-    smoothing_lengths: np.ndarray = np.empty(nparts, dtype=np.float32)
+    smoothing_lengths: np.ndarray = np.empty(nparts, dtype=coordinates.dtype)
 
     # Derive the number of neighbours to search for and the correction factor
     # to apply to the smoothing lengths based on the speedup factor around
