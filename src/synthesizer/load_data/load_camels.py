@@ -116,13 +116,17 @@ def _load_CAMELS(
             smoothing_lengths = (s_hsml[b:e] * kpc).astype(dtype)
 
         galaxies[i].load_stars(
-            initial_masses=(imasses[b:e] * Msun).astype(dtype),
+            initial_masses=(imasses[b:e] * Msun)
+            .in_base("galactic")
+            .astype(dtype),
             ages=(ages[b:e] * yr).astype(dtype),
             metallicities=metallicities[b:e].astype(dtype),
             s_oxygen=s_oxygen[b:e].astype(dtype),
             s_hydrogen=s_hydrogen[b:e].astype(dtype),
             coordinates=(coods[b:e, :] * kpc).astype(dtype),
-            current_masses=(masses[b:e] * Msun).astype(dtype),
+            current_masses=(masses[b:e] * Msun)
+            .in_base("galactic")
+            .astype(dtype),
             smoothing_lengths=smoothing_lengths,
         )
 
@@ -130,7 +134,7 @@ def _load_CAMELS(
     for i, (b, e) in enumerate(zip(begin, end)):
         galaxies[i].load_gas(
             coordinates=(g_coods[b:e] * kpc).astype(dtype),
-            masses=(g_masses[b:e] * Msun).astype(dtype),
+            masses=(g_masses[b:e] * Msun).in_base("galactic").astype(dtype),
             metallicities=g_metallicities[b:e].astype(dtype),
             star_forming=star_forming[b:e],
             smoothing_lengths=(g_hsml[b:e] * kpc).astype(dtype),
@@ -833,13 +837,17 @@ def load_CAMELS_SwiftEAGLE_subfind(
             smoothing_lengths = sh_hsml * Mpc
 
         gal.load_stars(
-            initial_masses=(sh_imasses * Msun).astype(dtype),
+            initial_masses=(sh_imasses * Msun)
+            .in_base("galactic")
+            .astype(dtype),
             ages=(sh_ages * yr).astype(dtype),
             metallicities=sh_metallicity.astype(dtype),
             s_oxygen=s_oxygen.astype(dtype),
             s_hydrogen=s_hydrogen.astype(dtype),
             coordinates=(sh_coods * Mpc).astype(dtype),
-            current_masses=(sh_masses * Msun).astype(dtype),
+            current_masses=(sh_masses * Msun)
+            .in_base("galactic")
+            .astype(dtype),
             smoothing_lengths=smoothing_lengths,
         )
 
@@ -867,7 +875,7 @@ def load_CAMELS_SwiftEAGLE_subfind(
 
             gal.load_gas(
                 coordinates=(sh_g_coods * Mpc).astype(dtype),
-                masses=(sh_g_masses * Msun).astype(dtype),
+                masses=(sh_g_masses * Msun).in_base("galactic").astype(dtype),
                 metallicities=sh_g_metals.astype(dtype),
                 star_forming=star_forming,
                 smoothing_lengths=(sh_g_hsml * Mpc).astype(dtype),
