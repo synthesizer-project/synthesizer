@@ -41,11 +41,7 @@ import numpy as np
 from unyt import Msun, yr
 
 from synthesizer import exceptions
-from synthesizer.load_data.utils import (
-    bin_overlap_matrix,
-    cic_matrix,
-    split_age_bins,
-)
+from synthesizer.load_data.utils import split_age_bins
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
 from synthesizer.parametric.stars import Stars as ParametricStars
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
@@ -79,11 +75,10 @@ def load_SHARK(
             'particle' (default) returns particle galaxies with one
             particle per non-zero bin per component, split at every grid
             age the bin contains so young star formation is resolved.
-            'parametric' integrates each bin over the grid age cells
-            (the ``parametric.Stars`` convention) and returns parametric
-            galaxies. Note the per-particle component tags are lost in
-            the combined SFZH; pass e.g. ``components=("disks",)`` for
-            per-component parametric galaxies.
+            'parametric' returns parametric galaxies holding the bins
+            exactly (via ``parametric.Stars.from_binned``), with each
+            component a named population (e.g. ``stars["disks"]``) and
+            each bin's metallicity a single value.
         components (tuple):
             SHARK components to include, a subset of
             ('disks', 'bulges_mergers', 'bulges_diskins').
@@ -161,8 +156,8 @@ def load_SHARK(
         b, age, frac = split_age_bins(lo, hi, grid_ages)
         mass, zmet, tags = mass[:, b] * frac, zmet[:, b], tags[b]
     else:
-        overlap = bin_overlap_matrix(lo, hi, grid_ages)
-        log10zs = np.log10(grid.metallicities)
+        # Ages of the bin edges, oldest first, ending at the output
+        age_edges = np.append(hi[: delta_t.size], 0.0)
 
     if verbose:
         print(
@@ -188,13 +183,19 @@ def load_SHARK(
                 star_component=tags[keep],
             )
         else:
-            # Z = 0 bins clamp to the lowest grid metallicity
-            with np.errstate(divide="ignore"):
-                zw = cic_matrix(np.log10(z[keep]), log10zs)
-            stars = ParametricStars(
+            # Each bin's metallicity is a single value (a zero width bin)
+            # shared by every component; Z = 0 clamps to the lowest grid
+            # metallicity
+            zs, iz = np.unique(z[keep], return_inverse=True)
+            masses = np.zeros((ncomp * delta_t.size, 2 * zs.size - 1))
+            masses[np.flatnonzero(keep), 2 * iz] = m[keep]
+            stars = ParametricStars.from_binned(
                 grid.log10ages,
                 grid.metallicities,
-                sfzh=overlap[keep].T @ (m[keep, None] * zw),
+                age_edges,
+                np.repeat(zs, 2),
+                masses.reshape(ncomp, delta_t.size, -1),
+                names=list(components),
             )
 
         galaxy_cls = (
