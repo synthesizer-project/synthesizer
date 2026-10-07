@@ -1236,12 +1236,16 @@ def _build_stellar_component(
         return None
 
     kwargs = {
-        "initial_masses": _to_unit(initial_masses, Msun),
+        "initial_masses": _to_unit(
+            initial_masses, Msun.in_base("galactic").units
+        ),
         "ages": _to_unit(ages, yr),
         "metallicities": _to_dimensionless(metallicities),
         "coordinates": _to_unit(coordinates, Mpc),
         "velocities": _to_unit(velocities, km / s),
-        "current_masses": _to_unit(current_masses, Msun),
+        "current_masses": _to_unit(
+            current_masses, Msun.in_base("galactic").units
+        ),
         "smoothing_lengths": _to_unit(
             smoothing_lengths,
             Mpc,
@@ -1490,7 +1494,7 @@ def _build_gas_component(
         return None
 
     kwargs = {
-        "masses": _to_unit(masses, Msun),
+        "masses": _to_unit(masses, Msun.in_base("galactic").units),
         "metallicities": _to_dimensionless(metallicities),
         "coordinates": _to_unit(coordinates, Mpc),
         "velocities": _to_unit(velocities, km / s),
@@ -1500,7 +1504,7 @@ def _build_gas_component(
             reference=coordinates,
         ),
         "star_forming": _coerce_bool_array(star_forming),
-        "dust_masses": _to_unit(dust_masses, Msun),
+        "dust_masses": _to_unit(dust_masses, Msun.in_base("galactic").units),
         "dust_to_metal_ratio": (
             _to_dimensionless(dust_to_metal_ratio)
             if dust_to_metal_ratio is not None
@@ -1599,8 +1603,8 @@ def _build_black_hole_component(
     }
 
     for property_name, unit in (
-        ("masses", Msun),
-        ("accretion_rates", Msun / yr),
+        ("masses", Msun.in_base("galactic").units),
+        ("accretion_rates", Msun.in_base("galactic").units / yr),
         ("accretion_rates_eddington", None),
         ("epsilons", None),
         ("inclinations", deg),
