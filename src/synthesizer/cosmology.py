@@ -34,7 +34,7 @@ from synthesizer import exceptions
 _cosmologies = {}
 
 # The most cosmologies to keep, matching the distance caches' size
-_MAX_COSMOLOGIES = 1000
+_MAX_COSMOLOGIES = 1024
 
 
 def _remember_cosmology(cosmo_key, cosmo):
