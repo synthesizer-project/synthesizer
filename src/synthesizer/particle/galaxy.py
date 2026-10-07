@@ -20,7 +20,7 @@ import copy
 
 import numpy as np
 from scipy.spatial import cKDTree
-from unyt import Mpc, Msun, Myr, pc, rad, unyt_quantity
+from unyt import Gyr, Mpc, Msun, Myr, pc, rad, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
@@ -830,7 +830,7 @@ class Galaxy(BaseGalaxy):
 
         return gamma
 
-    @accepts(stellar_mass_weighted_age=Myr)
+    @accepts(stellar_mass_weighted_age=Gyr)
     def calculate_dust_to_metal_vijayan19(
         self,
         stellar_mass_weighted_age=None,
@@ -847,9 +847,10 @@ class Galaxy(BaseGalaxy):
         metal ratio.
 
         Args:
-            stellar_mass_weighted_age (float):
-                Mass weighted age of stars in Myr. Defaults to None,
-                and uses value provided on this galaxy object (in Gyr)
+            stellar_mass_weighted_age (unyt_quantity):
+                Mass weighted age of stars. Defaults to None, and uses the
+                value provided on this galaxy object. Any time unit is
+                accepted and converted internally.
             ism_metallicity (float):
                 Mass weighted gas-phase metallicity. Defaults to None,
                 and uses value provided on this galaxy object
@@ -859,11 +860,7 @@ class Galaxy(BaseGalaxy):
         if stellar_mass_weighted_age is None:
             if self.stellar_mass_weighted_age is None:
                 raise ValueError("No stellar_mass_weighted_age provided")
-            else:
-                # Formula uses Age in Gyr while the supplied Age is in Myr
-                stellar_mass_weighted_age = (
-                    self.stellar_mass_weighted_age.value / 1e6
-                )  # Myr
+            stellar_mass_weighted_age = self.stellar_mass_weighted_age
 
         if ism_metallicity is None:
             if self.mass_weighted_gas_metallicity is None:
@@ -871,15 +868,20 @@ class Galaxy(BaseGalaxy):
             else:
                 ism_metallicity = self.mass_weighted_gas_metallicity
 
-        # Fixed parameters from Vijayan+21
+        # The fitting function takes the age in Gyr (tau below is in Gyr).
+        # Note this converts in place, so the age quantity (this galaxy's
+        # stored attribute or the caller's) will be left in Gyr
+        stellar_mass_weighted_age.convert_to_units("Gyr")
+        age_gyr = float(stellar_mass_weighted_age.ndview)
+        ism_metallicity = float(ism_metallicity)
+
+        # Fixed parameters from Vijayan+19
         D0, D1, alpha, beta, gamma = 0.008, 0.329, 0.017, -1.337, 2.122
         tau = 5e-5 / (D0 * ism_metallicity)
         dtm = D0 + (D1 - D0) * (
             1.0
             - np.exp(
-                -alpha
-                * (ism_metallicity**beta)
-                * ((stellar_mass_weighted_age / (1e3 * tau)) ** gamma)
+                -alpha * (ism_metallicity**beta) * ((age_gyr / tau) ** gamma)
             )
         )
         if np.isnan(dtm) or np.isinf(dtm):

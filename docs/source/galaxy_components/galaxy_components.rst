@@ -67,6 +67,10 @@ Synthesizer provides a set of parametric star formation histories (SFHs) that ca
 - Stochastic
 - CombinedSFH
 
+Parametric cosmic star formation histories (CSFH) are also available, which tie the relative star formation rate to the age of the universe. These currently include:
+
+- MadauDickinson
+
 In the example below, we demonstrate how to instantiate and use these parametric SFHs to generate star formation histories.
 
 .. toctree::
