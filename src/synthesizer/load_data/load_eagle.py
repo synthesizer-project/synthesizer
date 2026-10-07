@@ -1060,6 +1060,6 @@ def assign_galaxy_prop(
         **g_kwargs,
     )
 
-    galaxy.gas.dust_to_metal_ratio = galaxy.dust_to_metal_vijayan19()
+    galaxy.calculate_dust_to_metal_vijayan19()
 
     return galaxy
