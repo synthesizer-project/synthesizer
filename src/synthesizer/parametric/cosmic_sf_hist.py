@@ -1,7 +1,9 @@
-"""A submodule for creating and manipulating cosmicstar formation histories.
+"""A submodule for creating and manipulating cosmic star formation histories.
 
-These differ from other parametric SFHs in that the relative star
-formation rate is tied to the age of the universe.
+NOTE: These differ from other parametric SFHs in that the relative star
+      formation rate is tied to the age of the universe. They are
+      therefore redshift dependent, so the redshift must be set
+      consistently when a CSFH object is used to construct a Galaxy.
 
 NOTE: This module is imported as CSFH in parametric.__init__ enabling the
       syntax shown below.
