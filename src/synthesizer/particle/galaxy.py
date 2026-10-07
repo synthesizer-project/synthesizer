@@ -868,8 +868,11 @@ class Galaxy(BaseGalaxy):
             else:
                 ism_metallicity = self.mass_weighted_gas_metallicity
 
-        # The fitting function takes the age in Gyr (tau below is in Gyr)
-        age_gyr = float(stellar_mass_weighted_age.to("Gyr").value)
+        # The fitting function takes the age in Gyr (tau below is in Gyr).
+        # Note this converts in place, so the age quantity (this galaxy's
+        # stored attribute or the caller's) will be left in Gyr
+        stellar_mass_weighted_age.convert_to_units("Gyr")
+        age_gyr = float(stellar_mass_weighted_age.ndview)
         ism_metallicity = float(ism_metallicity)
 
         # Fixed parameters from Vijayan+19
