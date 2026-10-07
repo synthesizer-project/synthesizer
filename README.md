@@ -68,7 +68,7 @@ Please cite **both** of the following papers ([Lovell et al. 2025](https://astro
         pages = {9436},
     }
 
-If you use any of the pre-built grids from the [database](https://synthesizer-project.org/syndex) please cite the grids release paper (and any other applicable citations as listed on Syndex):
+If you use any of the pre-built grids from the [Syndex](https://synthesizer-project.org/syndex) database please cite the grids release paper ([Vijayan et al. 2026](https://ui.adsabs.harvard.edu/abs/2026arXiv260727467V/abstract)) and any other applicable citations as listed on Syndex:
 
     @article{Vijayan2026Synthesizer,
        author = {{Vijayan}, Aswin P. and {Wilkins}, Stephen M. and {Newman}, Sophie L. and {Lovell}, Christopher C. and {Roper}, William J. and {Berger}, Sabrina and {Harvey}, Thomas and {Turner}, Jack C.},
