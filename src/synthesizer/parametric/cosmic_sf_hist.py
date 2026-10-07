@@ -120,6 +120,13 @@ class MadauDickinson(Common):
         # The age of the universe at the observation redshift.
         self.t_univ = cosmo.age(redshift).to("yr").value
 
+        if redshift >= 100:
+            raise ValueError("redshift must be less than 100.")
+        if not isinstance(n_grid, (int, np.integer)) or n_grid < 2:
+            raise ValueError(
+                f"n_grid must be an integer >= 2, got {n_grid!r}."
+            )
+
         # Evaluate the SFRD on a grid log spaced in 1 + z.
         z = (
             np.logspace(np.log10(1.0 + redshift), np.log10(101.0), n_grid)

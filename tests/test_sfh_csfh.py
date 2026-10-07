@@ -12,6 +12,7 @@ from unyt import Gyr, Msun
 
 from synthesizer.parametric import CSFH
 from synthesizer.parametric.stars import Stars
+from synthesizer.utils.integrate import trapezoid
 
 # The parameters fit by MD+14.
 PARAMS = {"b": 2.7, "c": 2.9, "d": 5.6}
@@ -58,7 +59,7 @@ class TestMadauDickinsonSFH:
         t, sfh = md_sfh.calculate_sfh()
         assert np.all(np.isfinite(sfh))
         assert np.all(sfh >= 0)
-        assert np.trapezoid(sfh, t) > 0
+        assert trapezoid(sfh, x=t) > 0
 
     def test_float64(self, md_sfh):
         """The stored SFH must be float64 (precision requirement)."""
@@ -138,22 +139,50 @@ class TestMadauDickinsonSFH:
         assert 2.0 <= sfh.b <= 3.0
         assert 0.0 <= sfh.min_age <= 1e9
 
+    def test_redshift_must_be_below_100(self, cosmo):
+        """Observation redshifts of 100 or above should be rejected."""
+        for redshift in (100.0, 150.0):
+            with pytest.raises(ValueError, match="redshift must be less"):
+                CSFH.MadauDickinson(redshift=redshift, cosmo=cosmo, **PARAMS)
+
+        # Just below the limit should still build a valid SFH
+        sfh = CSFH.MadauDickinson(redshift=99.0, cosmo=cosmo, **PARAMS)
+        assert np.all(np.diff(sfh.finegrid) > 0)
+        assert np.all(np.isfinite(sfh.intsfh))
+
+    def test_n_grid_must_be_integer_of_at_least_two(self, cosmo):
+        """n_grid should be rejected unless it is an integer >= 2."""
+        for n_grid in (1, 0, -5, 10.0, 10.5, "10", None):
+            with pytest.raises(ValueError, match="n_grid must be an integer"):
+                CSFH.MadauDickinson(
+                    redshift=0.0, cosmo=cosmo, n_grid=n_grid, **PARAMS
+                )
+
+        # The smallest grid and numpy integers should be accepted
+        for n_grid in (2, np.int64(10)):
+            sfh = CSFH.MadauDickinson(
+                redshift=0.0, cosmo=cosmo, n_grid=n_grid, **PARAMS
+            )
+            assert sfh.finegrid.size == n_grid
+            assert np.all(np.diff(sfh.finegrid) > 0)
+
 
 class TestMadauDickinsonIntegration:
     """Tests that the SFH plugs into Stars and spectra generation."""
 
-    def test_builds_valid_sfzh(self, md_sfh):
+    def test_builds_valid_sfzh(self, test_grid, md_sfh):
         """A Stars object built with the SFH should have a valid SFZH."""
-        log10ages = np.arange(6.0, 10.1, 0.1)
-        metallicities = np.logspace(-4, -1.5, 8)
         stars = Stars(
-            log10ages,
-            metallicities,
+            test_grid.log10ages,
+            test_grid.metallicities,
             sf_hist=md_sfh,
             metal_dist=0.01,
             initial_mass=1e10 * Msun,
         )
-        assert stars.sfzh.shape == (log10ages.size, metallicities.size)
+        assert stars.sfzh.shape == (
+            test_grid.log10ages.size,
+            test_grid.metallicities.size,
+        )
         assert np.all(np.isfinite(stars.sfzh))
         assert np.all(stars.sfzh >= 0)
         assert np.isclose(stars.sfzh.sum(), 1e10, rtol=1e-6)
