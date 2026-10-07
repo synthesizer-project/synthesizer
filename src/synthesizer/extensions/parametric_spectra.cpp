@@ -617,12 +617,15 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
  * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
  * @param log_flags: One boolean per axis flagging log10 grid axes.
  * @param nthreads: The number of threads to use.
+ * @param np_pop_weights: Precomputed (npop, *grid_shape) weights at the grid
+ *                        dtype, or None.
  * @param mask: A boolean mask with the shape of the masses or None.
  * @param np_lam_mask: A wavelength mask or None.
  * @param out_dtype: Requested floating-point dtype for the returned spectra.
  * @param prop_names: Optional names for the grid axes (for error messages).
  *
- * @return The (npop, nlam) per population spectra.
+ * @return A tuple of the (npop, nlam) per population spectra and the
+ *         (npop, *grid_shape) per population grid weights.
  */
 PyObject *compute_population_seds(PyObject *self, PyObject *args) {
 
@@ -633,13 +636,14 @@ PyObject *compute_population_seds(PyObject *self, PyObject *args) {
 
   int nthreads;
   PyObject *spectra_obj, *grid_tuple, *edges_tuple, *log_flags;
-  PyObject *mask_obj, *lam_mask_obj, *out_dtype;
+  PyObject *weights_obj, *mask_obj, *lam_mask_obj, *out_dtype;
   PyObject *prop_names = NULL;
   PyArrayObject *np_masses;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiOOO|O", &spectra_obj, &grid_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOOiOOOO|O", &spectra_obj, &grid_tuple,
                         &edges_tuple, &np_masses, &log_flags, &nthreads,
-                        &mask_obj, &lam_mask_obj, &out_dtype, &prop_names)) {
+                        &weights_obj, &mask_obj, &lam_mask_obj, &out_dtype,
+                        &prop_names)) {
     return NULL;
   }
 
@@ -685,45 +689,75 @@ PyObject *compute_population_seds(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Spread the populations onto the grid (at the grid precision, since the
-   * weights feed gemm alongside the grid spectra) and contract with the
-   * spectra. */
-  const size_t nweights =
-      static_cast<size_t>(pops.npop) * static_cast<size_t>(grid_props->size);
+  /* Get the per population weights (at the grid precision, since they feed
+   * gemm alongside the grid spectra), either the ones we were given or new
+   * ones we compute below. */
+  npy_intp np_weight_dims[MAX_GRID_NDIM + 1];
+  np_weight_dims[0] = pops.npop;
+  for (int idim = 0; idim < grid_props->ndim; idim++) {
+    np_weight_dims[idim + 1] = grid_props->dims[idim];
+  }
+  PyArrayObject *np_pop_weights;
+  const bool have_weights = weights_obj != Py_None;
+  if (have_weights) {
+    np_pop_weights = array_or_none(weights_obj, "pop_weights");
+    if (np_pop_weights == NULL) {
+      Py_DECREF(np_pop_spectra);
+      return NULL;
+    }
+    if (PyArray_TYPE(np_pop_weights) != grid_typenum ||
+        PyArray_NDIM(np_pop_weights) != grid_props->ndim + 1 ||
+        !PyArray_IS_C_CONTIGUOUS(np_pop_weights) ||
+        PyArray_SIZE(np_pop_weights) !=
+            static_cast<npy_intp>(pops.npop) * grid_props->size) {
+      Py_DECREF(np_pop_spectra);
+      PyErr_SetString(PyExc_ValueError,
+                      "pop_weights must be a contiguous (npop, *grid_shape) "
+                      "array with the grid's dtype.");
+      return NULL;
+    }
+    Py_INCREF(np_pop_weights);
+  } else {
+    np_pop_weights = (PyArrayObject *)PyArray_ZEROS(
+        grid_props->ndim + 1, np_weight_dims, grid_typenum, 0);
+    if (np_pop_weights == NULL) {
+      Py_DECREF(np_pop_spectra);
+      return NULL;
+    }
+  }
+
+  /* Spread the populations onto the grid (unless we were given the weights)
+   * and contract with the spectra. */
   dispatch_float(pops.float_typenum, [&](auto p) {
     dispatch_float(grid_typenum, [&](auto g) {
       dispatch_float(output_typenum, [&](auto o) {
         using PopReal = decltype(p);
         using GridReal = decltype(g);
         using OutT = decltype(o);
-        std::vector<GridReal> weights;
-        try {
-          weights.assign(nweights, 0);
-        } catch (const std::bad_alloc &) {
-          PyErr_SetString(PyExc_MemoryError,
-                          "Could not allocate the per "
-                          "population grid weights.");
-          return;
-        }
-        weight_loop_bic_per_population<PopReal, GridReal, GridReal>(
-            grid_props.get(), &pops, weights.data(), nthreads);
-        if (PyErr_Occurred()) {
-          return;
+        GridReal *weights =
+            static_cast<GridReal *>(PyArray_DATA(np_pop_weights));
+        if (!have_weights) {
+          weight_loop_bic_per_population<PopReal, GridReal, GridReal>(
+              grid_props.get(), &pops, weights, nthreads);
+          if (PyErr_Occurred()) {
+            return;
+          }
         }
         population_spectra_loop<GridReal, OutT>(
-            grid_props.get(), weights.data(), pops.npop,
+            grid_props.get(), weights, pops.npop,
             static_cast<OutT *>(PyArray_DATA(np_pop_spectra)));
       });
     });
   });
   if (PyErr_Occurred()) {
     Py_DECREF(np_pop_spectra);
+    Py_DECREF(np_pop_weights);
     return NULL;
   }
 
   toc("compute_population_seds");
 
-  return Py_BuildValue("N", np_pop_spectra);
+  return Py_BuildValue("NN", np_pop_spectra, np_pop_weights);
 }
 
 /**

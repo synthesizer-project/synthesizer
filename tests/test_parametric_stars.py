@@ -11,13 +11,31 @@ Tests cover:
 import numpy as np
 import pytest
 from scipy.integrate import quad
-from unyt import Msun, Myr, dimensionless, kpc, yr
+from unyt import Msun, Myr, angstrom, dimensionless, kpc, yr
 
 import synthesizer.parametric.stars as stars_module
-from synthesizer.emission_models import IncidentEmission
-from synthesizer.parametric import SFH, Galaxy, PointSource, ZDist
+from synthesizer import exceptions
+from synthesizer.emission_models import (
+    BimodalPacmanEmission,
+    IncidentEmission,
+    PacmanEmission,
+)
+from synthesizer.emission_models.attenuation import Calzetti2000
+from synthesizer.instruments import FilterCollection, Instrument
+from synthesizer.parametric import (
+    SFH,
+    Annuli,
+    Galaxy,
+    PerPopulation,
+    PointSource,
+    Sersic2D,
+    ZDist,
+)
+from synthesizer.parametric import Galaxy as ParametricGalaxy
+from synthesizer.parametric.bin_mask import rebin_axis, union_edges
 from synthesizer.parametric.stars import Stars
 from synthesizer.particle import Stars as ParticleStars
+from synthesizer.pipeline import Pipeline
 from synthesizer.units import Units
 
 
@@ -629,13 +647,12 @@ class TestAddition:
         assert combined.morphology is morph
         assert np.allclose(combined.sfzh, stars1.sfzh + stars2.sfzh)
 
-    def test_differing_attributes_are_dropped(self, test_grid):
-        """Test that attributes the Stars disagree on are dropped."""
+    def test_differing_attributes_become_per_population(self, test_grid):
+        """Escape fractions the Stars disagree on become one per population."""
         stars1 = self._make_stars(test_grid, fesc=0.1)
         stars2 = self._make_stars(test_grid, fesc=0.2)
-        with pytest.warns(RuntimeWarning):
-            combined = stars1 + stars2
-        assert combined.fesc == self._make_stars(test_grid).fesc
+        combined = stars1 + stars2
+        np.testing.assert_allclose(combined.fesc, [0.1, 0.2])
 
     def test_galaxy_addition_with_lines(self, test_grid):
         """Test that galaxies with lines can be added together."""
@@ -813,6 +830,21 @@ class TestBinMask:
         expected = clipped.get_spectra(IncidentEmission(test_grid)).lnu
         np.testing.assert_allclose(masked, expected, rtol=1e-10)
 
+    def test_masked_weights_are_reused(self, test_grid, stars):
+        """Extractions sharing a mask share one set of stored weights."""
+        young = IncidentEmission(test_grid, label="young")
+        young.add_mask("log10ages", "<", 7 * dimensionless)
+        also_young = IncidentEmission(test_grid, label="also_young")
+        also_young.add_mask("log10ages", "<", 7 * dimensionless)
+        old = IncidentEmission(test_grid, label="old")
+        old.add_mask("log10ages", ">=", 7 * dimensionless)
+        for model in (young, also_young, old):
+            stars.get_spectra(model)
+        assert len(stars._grid_weights) == 2
+        np.testing.assert_allclose(
+            stars.spectra["young"].lnu, stars.spectra["also_young"].lnu
+        )
+
     def test_fixed_parameter_masks_whole_population(self, test_grid, stars):
         """A mask on a fixed model parameter includes or excludes it all."""
         model = IncidentEmission(test_grid, fesc=0.3)
@@ -963,3 +995,578 @@ class TestBinnedSFH:
         part = particles.get_spectra(model).lnu.value
         good = part > part.max() * 1e-6
         np.testing.assert_allclose(param[good], part[good], rtol=2e-3)
+
+
+class TestBinConsumers:
+    """Tests for the methods built on the population's bins."""
+
+    def test_earlier_time_is_exact(self, test_grid):
+        """A constant SFH 30 Myr earlier is the same SFH 30 Myr shorter."""
+        model = IncidentEmission(test_grid)
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=100 * Myr),
+            metal_dist=0.01,
+            initial_mass=1e9 * Msun,
+        )
+        earlier = stars.get_at_earlier_time(30 * Myr)
+        direct = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=70 * Myr),
+            metal_dist=0.01,
+            initial_mass=0.7e9 * Msun,
+        )
+        np.testing.assert_allclose(earlier.initial_mass, 0.7e9 * Msun)
+        np.testing.assert_allclose(
+            stars.calculate_initial_mass_at_age(30 * Myr), 0.7e9 * Msun
+        )
+        np.testing.assert_allclose(
+            earlier.get_spectra(model).lnu,
+            direct.get_spectra(model).lnu,
+            rtol=1e-8,
+        )
+
+    def test_surviving_mass_off_grid_matches_particles(self, test_grid):
+        """Surviving mass on axes other than the grid's matches particles."""
+        log10ages = np.linspace(6.05, 9.95, 7)
+        metallicities = np.array([0.0005, 0.003, 0.017])
+        sfzh = np.random.default_rng(3).random((7, 3))
+        stars = Stars(log10ages, metallicities, sfzh=sfzh)
+        ages, metals = np.meshgrid(10**log10ages, metallicities, indexing="ij")
+        particles = ParticleStars(
+            initial_masses=sfzh.ravel() * Msun,
+            ages=ages.ravel() * yr,
+            metallicities=metals.ravel(),
+        )
+        np.testing.assert_allclose(
+            stars.calculate_surviving_mass(test_grid),
+            particles.calculate_surviving_mass(test_grid),
+            rtol=1e-10,
+        )
+
+    def test_get_sfzh_is_lossless(self, test_grid):
+        """Remapping keeps the bins so remapping back recovers the SFZH."""
+        model = IncidentEmission(test_grid)
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.DelayedExponential(tau=1e9 * yr, max_age=5e9 * yr),
+            metal_dist=ZDist.Normal(0.01, 0.005),
+            initial_mass=1e9 * Msun,
+        )
+        coarse = stars.get_sfzh(np.linspace(6, 11, 6), np.array([1e-4, 0.02]))
+        assert coarse.sfzh.shape == (6, 2)
+        np.testing.assert_allclose(coarse.sfzh.sum(), 1e9, rtol=1e-10)
+        back = coarse.get_sfzh(test_grid.log10ages, test_grid.metallicities)
+        np.testing.assert_allclose(back.sfzh, stars.sfzh, rtol=1e-10)
+        np.testing.assert_allclose(
+            coarse.get_spectra(model).lnu,
+            stars.get_spectra(model).lnu,
+            rtol=1e-10,
+        )
+
+    def test_addition_with_different_edges(self, test_grid):
+        """Adding populations binned differently sums their emission."""
+        model = IncidentEmission(test_grid)
+        sfzh = np.random.default_rng(4).random(
+            (test_grid.log10ages.size, test_grid.metallicities.size)
+        )
+        components = [
+            Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sf_hist=SFH.Constant(max_age=50 * Myr),
+                metal_dist=ZDist.Normal(0.01, 0.005),
+                initial_mass=1e9 * Msun,
+            ),
+            Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sf_hist=SFH.Gaussian(peak_age=2e9 * yr, sigma=3e8 * yr),
+                metal_dist=0.004,
+                initial_mass=1e9 * Msun,
+            ),
+            Stars(test_grid.log10ages, test_grid.metallicities, sfzh=sfzh),
+        ]
+        combined = components[0] + components[1] + components[2]
+        expected = sum(c.get_spectra(model).lnu for c in components)
+        np.testing.assert_allclose(
+            combined.get_spectra(model).lnu, expected, rtol=1e-10
+        )
+        np.testing.assert_allclose(
+            combined.initial_mass, 2e9 * Msun + sfzh.sum() * Msun
+        )
+
+    def test_average_sfr_with_straddling_bins(self, test_grid):
+        """A unit SFR averages to 1 over a range cutting through bins."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=100 * Myr),
+            metal_dist=0.01,
+        )
+        sfr = stars.calculate_average_sfr(t_range=(25 * Myr, 60 * Myr))
+        np.testing.assert_allclose(sfr.to("Msun/yr").value, 1.0, rtol=1e-10)
+
+
+class TestRebinning:
+    """Tests for combining bins with different edges."""
+
+    def test_union_keeps_points(self):
+        """Zero width bins survive the union of edges."""
+        edges = union_edges(np.array([1.0, 1.0, 3.0]), np.array([0.0, 2.0]))
+        np.testing.assert_array_equal(edges, [0.0, 1.0, 1.0, 2.0, 3.0])
+
+    def test_rebin_conserves_and_splits(self):
+        """Finite bins split by width and points move to points."""
+        edges = np.array([1.0, 1.0, 3.0])
+        new_edges = np.array([0.0, 1.0, 1.0, 2.0, 3.0])
+        masses = np.array([[2.0, 4.0]])
+        rebinned = rebin_axis(masses, 1, edges, new_edges)
+        np.testing.assert_allclose(rebinned, [[0.0, 2.0, 2.0, 2.0]])
+
+
+class TestPopulations:
+    """Tests for Stars holding several populations."""
+
+    @pytest.fixture
+    def populations(self, test_grid):
+        """Return three differently binned single population Stars."""
+        return [
+            Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sf_hist=SFH.Constant(max_age=50 * Myr),
+                metal_dist=ZDist.Normal(0.01, 0.005),
+                initial_mass=1e9 * Msun,
+            ),
+            Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sf_hist=SFH.DelayedExponential(tau=1e9 * yr, max_age=4e9 * yr),
+                metal_dist=0.004,
+                initial_mass=2e9 * Msun,
+            ),
+            Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sf_hist=1e7 * yr,
+                metal_dist=0.02,
+                initial_mass=5e8 * Msun,
+            ),
+        ]
+
+    def test_populations_are_kept(self, populations):
+        """Combining keeps every population and its mass."""
+        combined = Stars.from_populations(populations)
+        assert combined.bin_masses.shape[0] == 3
+        np.testing.assert_allclose(
+            combined.bin_masses.sum(axis=tuple(range(1, 3))),
+            [1e9, 2e9, 5e8],
+            rtol=1e-10,
+        )
+
+    @pytest.mark.parametrize("masked", [False, True])
+    def test_integrated_emission_is_the_sum(
+        self, test_grid, populations, masked
+    ):
+        """One extraction of all populations equals the sum of each."""
+        model = IncidentEmission(test_grid)
+        if masked:
+            model.add_mask("log10ages", "<", 7.3 * dimensionless)
+        combined = Stars.from_populations(populations)
+        expected = sum(p.get_spectra(model).lnu for p in populations)
+        np.testing.assert_allclose(
+            combined.get_spectra(model).lnu, expected, rtol=1e-10
+        )
+
+
+class TestPerPopulationEmission:
+    """Tests for the emission of each population with its own parameters."""
+
+    TAU_V = (0.1, 0.5, 1.2)
+    FESC = (0.0, 0.2, 0.4)
+
+    def _populations(self, test_grid):
+        """Return three populations with their own tau_v and fesc."""
+        sfhs = (
+            SFH.Constant(max_age=50 * Myr),
+            SFH.DelayedExponential(tau=1e9 * yr, max_age=4e9 * yr),
+            SFH.Gaussian(peak_age=5e8 * yr, sigma=1e8 * yr),
+        )
+        return [
+            Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sf_hist=sfh,
+                metal_dist=ZDist.Normal(0.01, 0.005),
+                initial_mass=1e9 * Msun,
+                tau_v=tau_v,
+                fesc=fesc,
+                fesc_ly_alpha=0.1,
+            )
+            for sfh, tau_v, fesc in zip(sfhs, self.TAU_V, self.FESC)
+        ]
+
+    @pytest.mark.parametrize("bimodal", [False, True])
+    def test_matches_separate_populations(self, test_grid, bimodal):
+        """Per population parameters match each population on its own.
+
+        One per population extraction of the combined Stars must give, for
+        every emission in the model tree, each population's emission and
+        their sum exactly as extracting each population separately with its
+        own scalar parameters does.
+        """
+
+        def make_model(per_particle):
+            if bimodal:
+                return BimodalPacmanEmission(
+                    test_grid,
+                    tau_v_ism="tau_v",
+                    tau_v_birth="tau_v",
+                    dust_curve_ism=Calzetti2000(),
+                    dust_curve_birth=Calzetti2000(),
+                    per_particle=per_particle,
+                )
+            return PacmanEmission(
+                test_grid, dust_curve=Calzetti2000(), per_particle=per_particle
+            )
+
+        expected = {}
+        for stars in self._populations(test_grid):
+            stars.get_spectra(make_model(False))
+            for label, sed in stars.spectra.items():
+                expected.setdefault(label, []).append(sed.lnu.value)
+
+        combined = Stars.from_populations(self._populations(test_grid))
+        combined.tau_v = np.array(self.TAU_V)
+        combined.get_spectra(make_model(True))
+        for label, rows in expected.items():
+            rows = np.array(rows)
+            scale = np.abs(rows).max()
+            np.testing.assert_allclose(
+                combined.particle_spectra[label].lnu.value,
+                rows,
+                rtol=0,
+                atol=1e-12 * scale,
+            )
+            np.testing.assert_allclose(
+                combined.spectra[label].lnu.value,
+                rows.sum(axis=0),
+                rtol=0,
+                atol=1e-12 * scale,
+            )
+
+    def test_lines_match_separate_populations(self, test_grid):
+        """Per population lines match each population on its own."""
+        lines = test_grid.available_lines[:6]
+        expected = {}
+        for stars in self._populations(test_grid):
+            stars.get_lines(
+                lines, PacmanEmission(test_grid, dust_curve=Calzetti2000())
+            )
+            for label, lc in stars.lines.items():
+                expected.setdefault(label, []).append(lc.luminosity.value)
+
+        combined = Stars.from_populations(self._populations(test_grid))
+        combined.tau_v = np.array(self.TAU_V)
+        combined.get_lines(
+            lines,
+            PacmanEmission(
+                test_grid, dust_curve=Calzetti2000(), per_particle=True
+            ),
+        )
+        for label, rows in expected.items():
+            rows = np.array(rows)
+            np.testing.assert_allclose(
+                combined.particle_lines[label].luminosity.value,
+                rows,
+                rtol=0,
+                atol=1e-12 * max(np.abs(rows).max(), 1.0),
+            )
+
+
+class TestPopulationAccessAndImaging:
+    """Tests for named populations and their morphologies."""
+
+    @staticmethod
+    def _filters(test_grid):
+        """Return two top hat filters on the grid's wavelengths."""
+        return FilterCollection(
+            tophat_dict={
+                "f1": {"lam_eff": 2000 * angstrom, "lam_fwhm": 400 * angstrom},
+                "f2": {"lam_eff": 6000 * angstrom, "lam_fwhm": 1e3 * angstrom},
+            },
+            new_lam=test_grid.lam,
+        )
+
+    @staticmethod
+    def _population(test_grid, sfh, tau_v, morphology=None):
+        """Return a single population with its own tau_v and morphology."""
+        return Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=sfh,
+            metal_dist=ZDist.Normal(0.01, 0.005),
+            initial_mass=1e9 * Msun,
+            tau_v=tau_v,
+            fesc=0.1,
+            fesc_ly_alpha=0.1,
+            morphology=morphology,
+        )
+
+    def _bulge_and_disk(self, test_grid):
+        """Return a bulge and a disk with different SFHs and morphologies."""
+        return [
+            self._population(
+                test_grid,
+                SFH.DelayedExponential(tau=5e8 * yr, max_age=8e9 * yr),
+                0.2,
+                Sersic2D(r_eff=1 * kpc, sersic_index=4),
+            ),
+            self._population(
+                test_grid,
+                SFH.Constant(max_age=1e9 * yr),
+                0.8,
+                Sersic2D(
+                    r_eff=4 * kpc, sersic_index=1, ellipticity=0.5, theta=0.3
+                ),
+            ),
+        ]
+
+    def test_named_access(self, test_grid):
+        """Populations can be looked up by name with their own parameters."""
+        stars = Stars.from_populations(
+            self._bulge_and_disk(test_grid), names=["bulge", "disk"]
+        )
+        np.testing.assert_allclose(stars.tau_v, [0.2, 0.8])
+        assert isinstance(stars.morphology, PerPopulation)
+        disk = stars["disk"]
+        assert disk.npop == 1
+        assert disk.tau_v == 0.8
+        assert disk.morphology.r_eff == 4 * kpc
+        np.testing.assert_allclose(disk.initial_mass, 1e9 * Msun)
+        np.testing.assert_allclose(stars[0].tau_v, 0.2)
+
+    def test_bulge_and_disk_images(self, test_grid):
+        """Images, cubes and line maps are the sum over the populations."""
+        filters = self._filters(test_grid)
+        imager = Instrument("img", filters=filters, resolution=0.2 * kpc)
+        ifu = Instrument(
+            "ifu",
+            resolution=0.5 * kpc,
+            lam=np.linspace(1500, 7000, 20) * angstrom,
+        )
+        lines = test_grid.available_lines[:3]
+        line_imager = Instrument("lines", line_ids=lines, resolution=0.2 * kpc)
+        model = PacmanEmission(test_grid, dust_curve=Calzetti2000())
+
+        expected = {"image": 0, "cube": 0, "map": 0}
+        for stars in self._bulge_and_disk(test_grid):
+            stars.get_spectra(model)
+            stars.get_lines(lines, model)
+            stars.get_photo_lnu(filters)
+            expected["image"] += stars.get_images_luminosity(
+                "emergent", fov=20 * kpc, instrument=imager
+            )["f1"].arr
+            expected["cube"] += stars.get_data_cube(
+                "emergent", fov=20 * kpc, instrument=ifu
+            ).arr
+            expected["map"] += stars.get_line_maps_luminosity(
+                "emergent",
+                line_ids=lines,
+                fov=20 * kpc,
+                instrument=line_imager,
+            )[lines[0]].arr
+
+        per_pop = PacmanEmission(
+            test_grid, dust_curve=Calzetti2000(), per_particle=True
+        )
+        stars = Stars.from_populations(self._bulge_and_disk(test_grid))
+        stars.get_spectra(per_pop)
+        stars.get_lines(lines, per_pop)
+        stars.get_particle_photo_lnu(filters)
+        image = stars.get_images_luminosity(
+            "emergent", fov=20 * kpc, instrument=imager
+        )["f1"].arr
+        cube = stars.get_data_cube(
+            "emergent", fov=20 * kpc, instrument=ifu
+        ).arr
+        line_map = stars.get_line_maps_luminosity(
+            "emergent", line_ids=lines, fov=20 * kpc, instrument=line_imager
+        )[lines[0]].arr
+        for name, result in (
+            ("image", image),
+            ("cube", cube),
+            ("map", line_map),
+        ):
+            np.testing.assert_allclose(
+                result,
+                expected[name],
+                rtol=0,
+                atol=1e-12 * expected[name].max(),
+            )
+
+    def test_annuli_images(self, test_grid):
+        """An Annuli image is the sum of each annulus imaged on its own."""
+        filters = self._filters(test_grid)
+        imager = Instrument("img", filters=filters, resolution=0.2 * kpc)
+        model = PacmanEmission(
+            test_grid, dust_curve=Calzetti2000(), per_particle=True
+        )
+        annuli = Annuli(
+            Sersic2D(r_eff=3 * kpc, sersic_index=1),
+            np.array([0, 1, 2, 4, 7, np.inf]) * kpc,
+        )
+        populations = [
+            self._population(
+                test_grid,
+                SFH.Constant(max_age=(2 + 4 * i) * 1e8 * yr),
+                0.2 * i,
+            )
+            for i in range(5)
+        ]
+        stars = Stars.from_populations(populations)
+        stars.morphology = annuli
+        stars.get_spectra(model)
+        stars.get_particle_photo_lnu(filters)
+        image = stars.get_images_luminosity(
+            "emergent", fov=30 * kpc, instrument=imager
+        )["f1"].arr
+
+        expected = 0
+        for i, population in enumerate(populations):
+            population.morphology = annuli.get_population_morphology(i)
+            population.get_spectra(model)
+            population.get_particle_photo_lnu(filters)
+            expected += population.get_images_luminosity(
+                "emergent", fov=30 * kpc, instrument=imager
+            )["f1"].arr
+        np.testing.assert_allclose(
+            image, expected, rtol=0, atol=1e-12 * expected.max()
+        )
+
+        # Every annulus is normalised over its own pixels so the image holds
+        # all of the light
+        np.testing.assert_allclose(
+            image.sum(),
+            stars.particle_photo_lnu["emergent"]["f1"].value.sum(),
+            rtol=1e-10,
+        )
+
+    def test_pipeline(self, test_grid):
+        """Multi population parametric galaxies run through a Pipeline."""
+        filters = self._filters(test_grid)
+        imager = Instrument("img", filters=filters, resolution=0.5 * kpc)
+        model = PacmanEmission(
+            test_grid, dust_curve=Calzetti2000(), per_particle=True
+        )
+        galaxies = [
+            ParametricGalaxy(
+                Stars.from_populations(self._bulge_and_disk(test_grid))
+            )
+            for _ in range(3)
+        ]
+        pipeline = Pipeline(emission_model=model, nthreads=1, verbose=0)
+        pipeline.add_galaxies(list(galaxies))
+        pipeline.get_sfzh(test_grid.log10ages, test_grid.metallicities)
+        pipeline.get_sfh(test_grid.log10ages)
+        pipeline.get_spectra()
+        pipeline.get_photometry_luminosities(imager)
+        pipeline.get_lines(test_grid.available_lines[:3])
+        pipeline.get_images_luminosity(imager, fov=20 * kpc)
+        pipeline.run()
+
+        # The Pipeline adapts its model to its instruments so compare with a
+        # fresh one
+        direct = Stars.from_populations(self._bulge_and_disk(test_grid))
+        direct.get_spectra(
+            PacmanEmission(
+                test_grid, dust_curve=Calzetti2000(), per_particle=True
+            )
+        )
+        np.testing.assert_allclose(
+            np.asarray(pipeline.lnu_spectra["Stars"]["emergent"][0]),
+            direct.spectra["emergent"].lnu.value,
+            rtol=1e-10,
+        )
+        np.testing.assert_allclose(galaxies[0].sfzh.sum(), 2e9, rtol=1e-10)
+
+
+class TestFromBinned:
+    """Tests for creating Stars from binned masses."""
+
+    EDGES = np.array([2e9, 5e8, 1e8, 1e7, 1e6])
+    METALS = np.array([0.002, 0.006, 0.014, 0.02])
+
+    def test_matches_constant_bins(self, test_grid):
+        """Binned masses equal the same bins built from constant SFHs.
+
+        Lookback (decreasing) age edges with one metallicity per age bin
+        (zero width metallicity bins) must give exactly the emission of a
+        constant SFH in each bin.
+        """
+        model = IncidentEmission(test_grid)
+        bin_masses = np.array([3e8, 1e8, 5e7, 1e7])
+        z_edges = np.repeat(self.METALS, 2)
+        masses = np.zeros((4, z_edges.size - 1))
+        masses[np.arange(4), 2 * np.arange(4)] = bin_masses
+        binned = Stars.from_binned(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            self.EDGES,
+            z_edges,
+            masses,
+        )
+
+        constant = None
+        for i in range(4):
+            stars = Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sf_hist=SFH.Constant(
+                    min_age=self.EDGES[i + 1] * yr, max_age=self.EDGES[i] * yr
+                ),
+                metal_dist=ZDist.DeltaConstant(metallicity=self.METALS[i]),
+                initial_mass=bin_masses[i] * Msun,
+            )
+            constant = stars if constant is None else constant + stars
+        np.testing.assert_allclose(
+            binned.initial_mass, bin_masses.sum() * Msun
+        )
+        np.testing.assert_allclose(
+            binned.get_spectra(model).lnu,
+            constant.get_spectra(model).lnu,
+            rtol=1e-10,
+        )
+
+    def test_populations_and_parameters(self, test_grid):
+        """Several populations can be binned at once with their own names."""
+        masses = np.random.default_rng(5).random((3, 4, 2))
+        stars = Stars.from_binned(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            self.EDGES,
+            np.array([0.001, 0.01, 0.03]),
+            masses,
+            names=["a", "b", "c"],
+            tau_v=np.array([0.1, 0.2, 0.3]),
+        )
+        assert stars.npop == 3
+        assert stars["b"].tau_v == 0.2
+        np.testing.assert_allclose(
+            stars["c"].initial_mass, masses[2].sum() * Msun
+        )
+
+    def test_bad_shapes_raise(self, test_grid):
+        """Masses must match the edges."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            Stars.from_binned(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                self.EDGES,
+                np.array([0.001, 0.01]),
+                np.ones((3, 1)),
+            )

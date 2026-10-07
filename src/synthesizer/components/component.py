@@ -26,6 +26,7 @@ from synthesizer.imaging.data_cube_generators import (
 )
 from synthesizer.imaging.image_generators import (
     _combine_image_collections,
+    _has_population_morphology,
     _prepare_component_image_labels,
 )
 from synthesizer.imaging.postprocess import (
@@ -694,10 +695,13 @@ class Component(ABC):
         # Define dictionary to hold the images we are generating
         out_images = {}
 
-        # Get the appropriate photometry
-        if is_param and phot_type == "lnu":
+        # Get the appropriate photometry. A parametric component whose
+        # populations each have their own morphology needs the photometry of
+        # each population, like a particle component.
+        per_population = is_param and _has_population_morphology(self)
+        if is_param and not per_population and phot_type == "lnu":
             photometry_dict = self.photo_lnu
-        elif is_param and phot_type == "fnu":
+        elif is_param and not per_population and phot_type == "fnu":
             photometry_dict = self.photo_fnu
         elif phot_type == "lnu":
             photometry_dict = self.particle_photo_lnu
@@ -1071,8 +1075,10 @@ class Component(ABC):
 
         out_maps = {}
 
-        # Get the appropriate lines dict
-        if is_param:
+        # Get the appropriate lines dict. A parametric component whose
+        # populations each have their own morphology needs the lines of each
+        # population, like a particle component.
+        if is_param and not _has_population_morphology(self):
             lines_dict = self.lines
         else:
             lines_dict = self.particle_lines

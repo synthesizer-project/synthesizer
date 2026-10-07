@@ -21,6 +21,7 @@ from unyt import angstrom
 from synthesizer import exceptions
 from synthesizer.imaging.extensions.image import make_img
 from synthesizer.imaging.image_generators import (
+    _has_population_morphology,
     _prepare_component_image_labels,
     _prepare_galaxy_image_labels,
     _standardize_imaging_units,
@@ -357,6 +358,7 @@ def _generate_ifu_parametric_smoothed(
     sed,
     quantity,
     density_grid,
+    morphology=None,
 ):
     """Generate a smoothed IFU for a parametric emitter.
 
@@ -371,7 +373,11 @@ def _generate_ifu_parametric_smoothed(
             spectra quantity on an Sed object, e.g. 'lnu', 'fnu', 'luminosity',
             'flux', etc.
         density_grid (unyt_array of float):
-            The density grid to be smoothed over.
+            The density grid to be smoothed over (ignored if morphology is
+            given).
+        morphology (PopulationMorphology):
+            The morphology of each population, for an emitter whose
+            populations have their own spatial distributions, or None.
     """
     # Sample the spectra onto the wavelength grid if we need to
     sed = sed.get_resampled_sed(new_lam=ifu.lam)
@@ -394,9 +400,24 @@ def _generate_ifu_parametric_smoothed(
     ifu.units = spectra.units
     spectra = spectra.value
 
-    # Ensure the spectra is integrated, i.e. 1D
+    # Each population has its own spatial distribution, so the cube is the
+    # sum of each population's density grid times its spectrum
+    if morphology is not None:
+        if spectra.ndim != 2:
+            raise exceptions.InconsistentArguments(
+                "A parametric IFU with a morphology per population needs the "
+                "spectra of each population (use a per_particle model)."
+            )
+        ifu.arr = morphology.get_weighted_density_grid(
+            ifu.resolution, ifu.npix, spectra
+        )
+        return ifu
 
-    # Reject per-particle spectra on the parametric IFU path
+    # Spectra of each population sharing one morphology just sum
+    if spectra.ndim == 2:
+        spectra = spectra.sum(axis=0)
+
+    # Reject anything else on the parametric IFU path
     if spectra.ndim != 1:
         raise exceptions.InconsistentArguments(
             "Spectra must be a 1D array for a parametric IFU"
@@ -572,6 +593,14 @@ def _generate_ifu_generic(
 
     elif img_type == "smoothed":
         # Route parametric cubes through the density-grid IFU backend
+        if _has_population_morphology(emitter):
+            return _generate_ifu_parametric_smoothed(
+                ifu,
+                sed=sed,
+                quantity=quantity,
+                density_grid=None,
+                morphology=emitter.morphology,
+            )
         return _generate_ifu_parametric_smoothed(
             ifu,
             sed=sed,

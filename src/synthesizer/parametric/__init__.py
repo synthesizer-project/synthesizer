@@ -4,8 +4,10 @@ import synthesizer.parametric.sfh_kernels as Kernels
 from synthesizer.parametric.blackholes import BlackHole
 from synthesizer.parametric.galaxy import Galaxy
 from synthesizer.parametric.morphology import (
+    Annuli,
     Gaussian2D,
     Gaussian2DAnnuli,
+    PerPopulation,
     PointSource,
     Sersic2D,
     Sersic2DAnnuli,

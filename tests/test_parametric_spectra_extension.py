@@ -173,7 +173,7 @@ def test_population_seds_sum_to_integrated():
     edges = _wide_edges()
     masses = _random_masses(edges, npop=4)
     spec, _ = _bic(edges, masses)
-    pop_specs = compute_population_seds(
+    pop_specs, pop_weights = compute_population_seds(
         _grid_spectra(),
         GRID_AXES,
         edges,
@@ -183,9 +183,27 @@ def test_population_seds_sum_to_integrated():
         None,
         None,
         None,
+        None,
     )
     assert pop_specs.shape == (4, NLAM)
     np.testing.assert_allclose(pop_specs.sum(axis=0), spec)
+
+    # The per population weights sum to the integrated weights and can be
+    # passed back in to skip computing them
+    np.testing.assert_allclose(pop_weights.sum(axis=0), _bic(edges, masses)[1])
+    again, _ = compute_population_seds(
+        _grid_spectra(),
+        GRID_AXES,
+        edges,
+        np.zeros_like(masses),
+        LOG_FLAGS,
+        1,
+        pop_weights,
+        None,
+        None,
+        None,
+    )
+    np.testing.assert_allclose(again, pop_specs)
 
     # Each population on its own must match the integrated function
     for ipop in range(masses.shape[0]):
@@ -204,8 +222,8 @@ def test_threads_match_serial(nthreads):
     np.testing.assert_allclose(spec_t, spec)
     args = (_grid_spectra(), GRID_AXES, edges, masses, LOG_FLAGS)
     np.testing.assert_allclose(
-        compute_population_seds(*args, nthreads, None, None, None),
-        compute_population_seds(*args, 1, None, None, None),
+        compute_population_seds(*args, nthreads, None, None, None, None)[0],
+        compute_population_seds(*args, 1, None, None, None, None)[0],
     )
 
 
@@ -229,13 +247,14 @@ def test_lam_mask_zeroes_masked_wavelengths():
     spec_masked, _ = _bic(edges, masses, lam_mask=lam_mask)
     np.testing.assert_allclose(spec_masked[lam_mask], spec[lam_mask])
     assert np.all(spec_masked[~lam_mask] == 0)
-    pop_specs = compute_population_seds(
+    pop_specs, _ = compute_population_seds(
         _grid_spectra(),
         GRID_AXES,
         edges,
         masses,
         LOG_FLAGS,
         1,
+        None,
         None,
         lam_mask,
         None,
@@ -313,11 +332,11 @@ def test_blas_thread_limit(nthreads):
     edges = _wide_edges()
     masses = _random_masses(edges, npop=6)
     args = (_grid_spectra(), GRID_AXES, edges, masses, LOG_FLAGS, 1)
-    expected = compute_population_seds(*args, None, None, None)
+    expected = compute_population_seds(*args, None, None, None, None)[0]
     with limit_blas_threads(nthreads):
         if nthreads > 0:
             for info in threadpool_info():
                 if info["user_api"] == "blas":
                     assert info["num_threads"] == nthreads
-        result = compute_population_seds(*args, None, None, None)
+        result = compute_population_seds(*args, None, None, None, None)[0]
     np.testing.assert_allclose(result, expected)
