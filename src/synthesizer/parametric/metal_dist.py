@@ -17,8 +17,13 @@ Example usage:
 """
 
 import numpy as np
+from scipy.integrate import cumulative_trapezoid
+from scipy.special import erf
 
 from synthesizer import exceptions
+
+# The number of points the numerical CDF integrates the distribution over
+NUMERICAL_CDF_POINTS = 8192
 
 # Define a list of the available parametrisations
 parametrisations = (
@@ -90,6 +95,46 @@ class Common:
             return np.array([self._weight(z) for z in metal])
 
         return self._weight(metal)
+
+    def get_cdf(self, metals):
+        """Get the weight between a metallicity of zero and each metallicity.
+
+        Children with a closed form override this, the default integrates
+        the distribution numerically on a dense linear grid.
+
+        Args:
+            metals (np.ndarray of float):
+                The (linear) metallicities at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The integrated weight up to each metallicity.
+        """
+        metals = np.asarray(metals, dtype=np.float64)
+        top = np.max(metals, initial=0.0)
+        if top <= 0.0:
+            return np.zeros_like(metals)
+        fine = np.unique(
+            np.concatenate(
+                (np.linspace(0.0, top, NUMERICAL_CDF_POINTS), metals.ravel())
+            )
+        )
+        weights = np.asarray(self.get_dist_weight(fine), dtype=np.float64)
+        cdf = cumulative_trapezoid(weights, x=fine, initial=0.0)
+        return np.interp(metals, fine, cdf)
+
+    def get_bin_weights(self, edges):
+        """Get the weight of each metallicity bin.
+
+        Args:
+            edges (np.ndarray of float):
+                The (linear) metallicity bin edges.
+
+        Returns:
+            np.ndarray of float:
+                The integrated weight in each bin.
+        """
+        return np.diff(self.get_cdf(edges))
 
 
 class DeltaConstant(Common):
@@ -228,3 +273,19 @@ class Normal(Common):
         norm = 1 / (self.sigma * np.sqrt(2 * np.pi))
         exponent = ((metal - self.mean) / self.sigma) ** 2
         return norm * np.exp(-0.5 * exponent)
+
+    def get_cdf(self, metals):
+        """Get the weight between a metallicity of zero and each metallicity.
+
+        Args:
+            metals (np.ndarray of float):
+                The (linear) metallicities at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The integrated weight up to each metallicity.
+        """
+        metals = np.maximum(np.asarray(metals, dtype=np.float64), 0.0)
+        mean = float(self.mean)
+        scale = float(self.sigma) * np.sqrt(2.0)
+        return 0.5 * (erf((metals - mean) / scale) - erf(-mean / scale))

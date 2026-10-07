@@ -10,11 +10,14 @@ Tests cover:
 
 import numpy as np
 import pytest
+from scipy.integrate import quad
 from unyt import Msun, Myr, dimensionless, kpc, yr
 
+import synthesizer.parametric.stars as stars_module
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.parametric import SFH, Galaxy, PointSource, ZDist
 from synthesizer.parametric.stars import Stars
+from synthesizer.particle import Stars as ParticleStars
 from synthesizer.units import Units
 
 
@@ -521,8 +524,9 @@ class TestFunctionSFZHEdgeBins:
     def test_oldest_age_bin_populated(self, test_grid):
         """Test a constant SFH beyond the oldest grid age fills the last bin.
 
-        With a unit SFR the mass in the oldest bin is its width, which runs
-        from the midpoint of the last two grid ages to the oldest grid age.
+        With a unit SFR the mass formed is the oldest grid age (the SFH is
+        binned up to the oldest grid age) and the oldest point receives some
+        of it.
         """
         ages = 10**test_grid.log10ages
         stars = Stars(
@@ -531,8 +535,8 @@ class TestFunctionSFZHEdgeBins:
             sf_hist=SFH.Constant(max_age=2 * ages[-1] * yr),
             metal_dist=0.01,
         )
-        expected = ages[-1] - 0.5 * (ages[-1] + ages[-2])
-        assert np.isclose(stars.sf_hist[-1], expected, rtol=1e-6)
+        assert stars.sf_hist[-1] > 0
+        assert np.isclose(stars.sf_hist.sum(), ages[-1], rtol=1e-10)
 
     def test_most_metal_rich_bin_populated(self, test_grid):
         """Test a ZDist peaked at the highest grid Z fills the last bin."""
@@ -816,3 +820,146 @@ class TestBinMask:
         np.testing.assert_allclose(mask.get_fractions(stars), 1.0)
         mask = stars.get_mask("fesc", 0.1, "<", attr_override_obj=model)
         np.testing.assert_allclose(mask.get_fractions(stars), 0.0)
+
+
+class TestBinnedSFH:
+    """Tests for binning SFH and metallicity distribution functions."""
+
+    def test_narrow_gaussian_is_resolved(self, test_grid):
+        """A burst far narrower than the age axis spacing keeps its mass."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Gaussian(peak_age=3e9 * yr, sigma=1e6 * yr),
+            metal_dist=0.01,
+        )
+        np.testing.assert_allclose(
+            stars.sfzh.sum(), np.sqrt(np.pi) * 1e6, rtol=1e-6
+        )
+
+    @pytest.mark.parametrize(
+        "sfh",
+        [
+            SFH.Constant(max_age=100 * Myr, min_age=10 * Myr),
+            SFH.Gaussian(
+                peak_age=1e9 * yr,
+                sigma=3e8 * yr,
+                max_age=3e9 * yr,
+                min_age=1e8 * yr,
+            ),
+            SFH.Exponential(tau=1e9 * yr, max_age=5e9 * yr, min_age=2e8 * yr),
+            SFH.Exponential(tau=-2e9 * yr, max_age=5e9 * yr),
+            SFH.DelayedExponential(
+                tau=1e9 * yr, max_age=5e9 * yr, min_age=1e8 * yr
+            ),
+            SFH.LogNormal(tau=0.5, peak_age=1e9 * yr, max_age=5e9 * yr),
+            SFH.Continuity(logsfr_ratios=np.array([0.3, -0.2])),
+        ],
+    )
+    def test_cdf_matches_quad(self, sfh):
+        """Binned masses must match direct integration of the SFR."""
+        edges = np.array([0, 5e6, 3e7, 2e8, 9e8, 1.5e9, 4e9, 6e9, 1e10])
+        expected = []
+        for lo, hi in zip(edges[:-1], edges[1:]):
+            points = [p for p in sfh._get_breakpoints() if lo < p < hi]
+            expected.append(
+                quad(sfh.get_sfr, lo, hi, limit=500, points=points or None)[0]
+            )
+        expected = np.array(expected)
+        np.testing.assert_allclose(
+            sfh.get_bin_masses(edges),
+            expected,
+            rtol=0,
+            atol=1e-5 * np.abs(expected).max(),
+        )
+
+    def test_normal_zdist_cdf_matches_quad(self):
+        """Binned metallicity weights must match direct integration."""
+        zdist = ZDist.Normal(0.01, 0.005)
+        edges = np.array([0, 1e-3, 5e-3, 0.01, 0.02, 0.04])
+        expected = [
+            quad(zdist.get_dist_weight, lo, hi)[0]
+            for lo, hi in zip(edges[:-1], edges[1:])
+        ]
+        np.testing.assert_allclose(
+            zdist.get_bin_weights(edges), expected, atol=1e-12
+        )
+
+    def test_piecewise_constant_sfh_is_exact(self, test_grid, monkeypatch):
+        """A piecewise constant SFH doesn't depend on the subdivisions.
+
+        Its bin edges are breakpoints, so every fine bin has a constant SFR
+        and the uniform mass within each bin is exact.
+        """
+        sfh = SFH.Continuity(logsfr_ratios=np.array([0.3, -0.2]))
+        sfzhs = []
+        for subdivisions in (1, 8):
+            monkeypatch.setattr(
+                stars_module, "SFZH_SUBDIVISIONS", subdivisions
+            )
+            sfzhs.append(
+                Stars(
+                    test_grid.log10ages,
+                    test_grid.metallicities,
+                    sf_hist=sfh,
+                    metal_dist=0.01,
+                ).sfzh
+            )
+        np.testing.assert_allclose(sfzhs[0], sfzhs[1], rtol=1e-12)
+
+    def test_breakpoints_are_bin_edges(self, test_grid):
+        """No age bin may straddle an SFH breakpoint."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=37 * Myr, min_age=3 * Myr),
+            metal_dist=0.01,
+        )
+        edges = stars.get_bin_edges("ages", values_only=True)
+        assert np.any(np.isclose(edges, 37e6, rtol=1e-12))
+        assert np.any(np.isclose(edges, 3e6, rtol=1e-12))
+
+    @pytest.mark.parametrize(
+        ("sf_hist", "metal_dist"),
+        [
+            (1e7 * yr, ZDist.Normal(0.01, 0.005)),
+            (SFH.Constant(max_age=50 * Myr), 0.004),
+            (SFH.Constant(max_age=50 * Myr), ZDist.DeltaConstant(0.004)),
+        ],
+    )
+    def test_mixed_routes(self, test_grid, sf_hist, metal_dist):
+        """Points and bins can be mixed across the two axes."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=sf_hist,
+            metal_dist=metal_dist,
+            initial_mass=1e9 * Msun,
+        )
+        np.testing.assert_allclose(stars.sfzh.sum(), 1e9, rtol=1e-10)
+
+    def test_constant_sfh_matches_particles(self, test_grid):
+        """A constant SFH must match particles spread evenly over its ages.
+
+        The particles are placed at evenly spaced ages (a deterministic
+        quadrature rather than a random sample) so they converge to the
+        exact answer, which the binned SFH must agree with.
+        """
+        model = IncidentEmission(test_grid)
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=50 * Myr),
+            metal_dist=0.004,
+            initial_mass=1e9 * Msun,
+        )
+        nparts = 50000
+        particles = ParticleStars(
+            initial_masses=np.full(nparts, 1e9 / nparts) * Msun,
+            ages=(np.arange(nparts) + 0.5) / nparts * 5e7 * yr,
+            metallicities=np.full(nparts, 0.004),
+        )
+        param = stars.get_spectra(model).lnu.value
+        part = particles.get_spectra(model).lnu.value
+        good = part > part.max() * 1e-6
+        np.testing.assert_allclose(param[good], part[good], rtol=2e-3)
