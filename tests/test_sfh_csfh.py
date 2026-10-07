@@ -1,6 +1,6 @@
-"""A test suite for the Madau & Dickinson (2014) star formation history.
+"""Tests for the Madau & Dickinson (2014) cosmic star formation history.
 
-Covers the ``SFH.MadauDickinsonCSFH`` model, which converts the cosmic star
+Covers the ``CSFH.MadauDickinson`` model, which converts the cosmic star
 formation rate density, parametrised as a function of redshift, into a
 function of stellar age for a galaxy observed at a given redshift.
 """
@@ -10,7 +10,7 @@ import pytest
 from astropy.cosmology import FlatLambdaCDM, LambdaCDM, Planck18
 from unyt import Gyr, Msun
 
-from synthesizer.parametric import SFH
+from synthesizer.parametric import CSFH
 from synthesizer.parametric.stars import Stars
 
 # The parameters fit by MD+14.
@@ -32,7 +32,7 @@ def cosmo():
 @pytest.fixture
 def md_sfh(cosmo):
     """Return a Madau & Dickinson SFH observed at z=0."""
-    return SFH.MadauDickinsonCSFH(redshift=0.0, cosmo=cosmo, **PARAMS)
+    return CSFH.MadauDickinson(redshift=0.0, cosmo=cosmo, **PARAMS)
 
 
 class TestMadauDickinsonSFH:
@@ -48,7 +48,7 @@ class TestMadauDickinsonSFH:
 
     def test_finegrid_spans_universe_age(self, cosmo):
         """The age grid should start at 0 and end within the universe age."""
-        sfh = SFH.MadauDickinsonCSFH(redshift=1.0, cosmo=cosmo, **PARAMS)
+        sfh = CSFH.MadauDickinson(redshift=1.0, cosmo=cosmo, **PARAMS)
         t_univ = cosmo.age(1.0).to("yr").value
         assert np.isclose(sfh.finegrid.min(), 0.0, atol=1.0)
         assert sfh.finegrid.max() < t_univ
@@ -77,14 +77,14 @@ class TestMadauDickinsonSFH:
             LambdaCDM(H0=70, Om0=0.3, Ode0=0.6),
         ]
         for cosmo in cosmologies:
-            sfh = SFH.MadauDickinsonCSFH(redshift=0.0, cosmo=cosmo, **PARAMS)
+            sfh = CSFH.MadauDickinson(redshift=0.0, cosmo=cosmo, **PARAMS)
             for z in (0.5, 1.0, 2.0, 4.0, 6.0):
                 age = sfh.t_univ - cosmo.age(z).to("yr").value
                 assert np.isclose(sfh.get_sfr(age), md_function(z), rtol=1e-3)
 
     def test_observation_redshift_shift(self, cosmo, md_sfh):
         """Observing at z_obs should shift the SFH by the lookback time."""
-        sfh_z = SFH.MadauDickinsonCSFH(redshift=1.0, cosmo=cosmo, **PARAMS)
+        sfh_z = CSFH.MadauDickinson(redshift=1.0, cosmo=cosmo, **PARAMS)
         lookback = md_sfh.t_univ - sfh_z.t_univ
 
         ages = np.linspace(0.0, 0.9 * sfh_z.t_univ, 200)
@@ -99,7 +99,7 @@ class TestMadauDickinsonSFH:
 
     def test_age_window(self, cosmo, md_sfh):
         """The SFH should be zero outside min_age <= age < max_age."""
-        sfh = SFH.MadauDickinsonCSFH(
+        sfh = CSFH.MadauDickinson(
             redshift=0.0,
             cosmo=cosmo,
             min_age=1 * Gyr,
@@ -127,7 +127,7 @@ class TestMadauDickinsonSFH:
     def test_init_from_prior(self, cosmo):
         """init_from_prior should draw parameters within the prior range."""
         np.random.seed(0)
-        sfh = SFH.MadauDickinsonCSFH.init_from_prior(
+        sfh = CSFH.MadauDickinson.init_from_prior(
             redshift=1.0,
             b=[2.0, 3.0],
             c=3.1,
