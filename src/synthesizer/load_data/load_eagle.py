@@ -1028,8 +1028,8 @@ def assign_galaxy_prop(
 
     # Assign stellar properties
     galaxy.load_stars(
-        initial_masses=s_imasses[ok] * Msun,
-        current_masses=s_masses[ok] * Msun,
+        initial_masses=(s_imasses[ok] * Msun).in_base("galactic"),
+        current_masses=(s_masses[ok] * Msun).in_base("galactic"),
         ages=s_ages[ok] * 1e9 * yr,
         metallicities=s_Zsmooth[ok],
         coordinates=s_coords[ok] * Mpc,
@@ -1052,7 +1052,7 @@ def assign_galaxy_prop(
 
     # Assign gas particle properties
     galaxy.load_gas(
-        masses=g_masses[ok] * Msun,
+        masses=(g_masses[ok] * Msun).in_base("galactic"),
         metallicities=g_Zsmooth[ok],
         star_forming=sfr_flag[ok],
         coordinates=g_coords[ok] * Mpc,
@@ -1060,6 +1060,8 @@ def assign_galaxy_prop(
         **g_kwargs,
     )
 
-    galaxy.gas.dust_to_metal_ratio = galaxy.dust_to_metal_vijayan19()
+    # Note: this sets galaxy.gas.dust_to_metal_ratio and
+    # recalculates galaxy.gas.dust_masses
+    galaxy.calculate_dust_to_metal_vijayan19()
 
     return galaxy
