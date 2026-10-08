@@ -805,7 +805,7 @@ static PyObject *compute_column_density_impl(
     struct cell<PartReal> *root = new struct cell<PartReal>;
 
     construct_cell_tree<PartReal>(pos_j, smls, smls, npart_j, root, ncells,
-                                  MAX_DEPTH, min_count);
+                                  MAX_DEPTH, min_count, nthreads);
 
     los_tree<PartReal, KernelReal, ValueReal>(
         root, pos_i, kernel, truncated_kernel, surf_den_vals,
@@ -1588,7 +1588,7 @@ static PyObject *compute_column_density_smoothed_impl(
 
     /* Construct the source-particle cell tree. */
     construct_cell_tree<PartReal>(pos_j, smls, smls, npart_j, root, ncells,
-                                  maxdepth, min_count);
+                                  maxdepth, min_count, nthreads);
 
     /* Calculate the smoothed LOS surface densities using the tree. */
     los_tree_smoothed<PartReal, KernelReal, ValueReal>(

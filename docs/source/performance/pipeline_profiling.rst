@@ -23,30 +23,30 @@ The Pipeline profiling uses the following configuration to represent realistic o
    * - **Galaxies**
      - 10 synthetic galaxies per run, each containing stars, gas, and black holes
    * - **Particle Counts**
-     - 100, 500, 1000, 5000, 10000
+     - 100, 500, 1000, 5000, 10000, 100000
    * - **Hardware**
-     - AMD EPYC 7542 32-Core Processor, 8 threads used
+     - COSMA8 node (two AMD EPYC 7763 processors), 32 threads used
 
 Timing Performance
 ------------------
 
 The following plot shows how the Pipeline runtime scales with the number of stellar particles per galaxy. Only operations contributing ≥5% to the total runtime in at least one particle count are shown. The O(n) reference line is anchored at the first data point (100 particles).
 
-.. image:: plots/pipeline_timing_scaling.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/pipeline/pipeline_timing_scaling.png
    :width: 100%
    :align: center
 
 Memory Performance
 ------------------
 
-The following plots show the memory usage (RSS sampling at high frequency) of the full Pipeline execution across different particle counts. Sampling frequencies range from 5 kHz for 100 particles down to 500 Hz for 10,000 particles to ensure adequate temporal resolution across all test cases.
+The following plots show the memory usage (RSS sampling at high frequency) of the full Pipeline execution across different particle counts. Sampling frequencies range from 5 kHz for 100 particles down to 250 Hz for 100,000 particles to ensure adequate temporal resolution across all test cases.
 
 Normalised Memory Profile
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Memory usage normalised to execution progress (0-100%), shown in MB on a logarithmic scale. Peak memory is marked with circles.
 
-.. image:: plots/pipeline_memory_normalized.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/pipeline/pipeline_memory_normalized.png
    :width: 75%
    :align: center
 
@@ -55,7 +55,7 @@ Peak Memory Scaling
 
 Peak memory vs particle count on log-log axes (shown in MB) with an O(n) reference line anchored at the first data point.
 
-.. image:: plots/pipeline_memory_scaling.png
+.. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/profiling/pipeline/pipeline_memory_scaling.png
    :width: 75%
    :align: center
 
@@ -69,20 +69,23 @@ Peak memory vs particle count on log-log axes (shown in MB) with an O(n) referen
      - Peak Memory
      - Scaling Factor
    * - 100
-     - 882 MB
+     - 953 MB
      - 1.0× (baseline)
    * - 500
-     - 1,578 MB
-     - 1.8× baseline
+     - 1,599 MB
+     - 1.7× baseline
    * - 1000
-     - 2,567 MB
-     - 2.9× baseline
+     - 2,408 MB
+     - 2.5× baseline
    * - 5000
-     - 9,252 MB
-     - 10.5× baseline
+     - 8,916 MB
+     - 9.4× baseline
    * - 10000
-     - 14,575 MB
-     - 16.5× baseline
+     - 17,054 MB
+     - 17.9× baseline
+   * - 100000
+     - 163,431 MB
+     - 171× baseline
 
 Profiling Scripts
 -----------------

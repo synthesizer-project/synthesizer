@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Msun, Myr, kpc
 
+from synthesizer import set_default_out_dtype
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.instruments import Instrument
@@ -37,7 +38,10 @@ np.random.seed(42)
 
 
 def profile_nparticles(
-    nthreads=1, n_averages=3, output_dir=Path("profiling/plots")
+    nthreads=1,
+    n_averages=3,
+    output_dir=Path("profiling/plots"),
+    grid_precision="float64",
 ):
     """Run the profiling."""
     print(
@@ -47,29 +51,21 @@ def profile_nparticles(
     timers = OperationTimers()
     timers.reset()
 
-    grid = Grid("test_grid")
+    grid = Grid("test_grid", use_precision=np.dtype(grid_precision))
     n_lam = grid.nlam
 
     # --- Setup Models ---
-    # Particle, No Shift
+    # Particle
     model_part = IncidentEmission(grid, per_particle=True, label="part")
-    # Particle, With Shift
-    model_part_shift = IncidentEmission(
-        grid, per_particle=True, label="part_shift", vel_shift=True
-    )
-    # Integrated, No Shift
+    # Integrated
     model_int = IncidentEmission(grid, per_particle=False, label="int")
-    # Integrated, With Shift
-    model_int_shift = IncidentEmission(
-        grid, per_particle=False, label="int_shift", vel_shift=True
-    )
 
     # --- Setup Instrument and Filters ---
     # Get cached instrument from pipeline_test_data (no network access)
     instrument = get_test_instrument(grid)
 
     # Use instrument's filters for different test cases
-    filters_3 = instrument.filters.select(*instrument.available_filters[:3])
+    filters_3 = instrument.filters.select(*instrument.filters.filter_codes[:3])
     filters_10 = instrument.filters
 
     # --- Setup Imaging ---
@@ -99,9 +95,7 @@ def profile_nparticles(
     times = {
         "spectra": {
             "Particle": [],
-            "Particle (Doppler)": [],
             "Integrated": [],
-            "Integrated (Doppler)": [],
         },
         "photometry": {
             "Particle (3 filters)": [],
@@ -134,9 +128,7 @@ def profile_nparticles(
         iter_times = {
             "spectra": {
                 "Particle": [],
-                "Particle (Doppler)": [],
                 "Integrated": [],
-                "Integrated (Doppler)": [],
             },
             "photometry": {
                 "Particle (3 filters)": [],
@@ -162,9 +154,6 @@ def profile_nparticles(
                 n,
                 redshift=1,
             )
-            stars.velocities = (
-                np.random.randn(n, 3) * 100 * (kpc / Myr)
-            )  # Needs velocities for shift
 
             # Particle
             start = time.perf_counter()
@@ -173,24 +162,10 @@ def profile_nparticles(
                 time.perf_counter() - start
             )
 
-            # Particle Shift
-            start = time.perf_counter()
-            stars.get_spectra(model_part_shift, nthreads=nthreads)
-            iter_times["spectra"]["Particle (Doppler)"].append(
-                time.perf_counter() - start
-            )
-
             # Integrated
             start = time.perf_counter()
             stars.get_spectra(model_int, nthreads=nthreads)
             iter_times["spectra"]["Integrated"].append(
-                time.perf_counter() - start
-            )
-
-            # Integrated Shift
-            start = time.perf_counter()
-            stars.get_spectra(model_int_shift, nthreads=nthreads)
-            iter_times["spectra"]["Integrated (Doppler)"].append(
                 time.perf_counter() - start
             )
 
@@ -241,7 +216,7 @@ def profile_nparticles(
             stars.centre = np.array([0, 0, 0]) * kpc
             stars.calculate_smoothing_lengths(num_neighbours=50)
 
-            # We use the 'part' (no shift) model for imaging as standard
+            # We use the 'part' model for imaging as standard
 
             # Smoothed (0.1 kpc)
             start = time.perf_counter()
@@ -359,10 +334,27 @@ if __name__ == "__main__":
         type=Path,
         default=Path("profiling/plots"),
     )
+    parser.add_argument(
+        "--grid-precision",
+        choices=("float32", "float64"),
+        default="float64",
+        help="Precision to load the grid arrays at.",
+    )
+    parser.add_argument(
+        "--out-dtype",
+        choices=("float32", "float64"),
+        default=None,
+        help="Requested output precision. Defaults to the global default.",
+    )
     args = parser.parse_args()
+
+    # Set the global output precision if one was requested
+    if args.out_dtype is not None:
+        set_default_out_dtype(np.dtype(args.out_dtype))
 
     profile_nparticles(
         nthreads=args.nthreads,
         n_averages=args.n_averages,
         output_dir=args.output_dir,
+        grid_precision=args.grid_precision,
     )

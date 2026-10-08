@@ -527,6 +527,11 @@ def test_integrated_parametric_generate_lnu(test_grid, nebular_emission_model):
     extractor._spectra_grid = mock_spectra
     extractor._grid_naxes = 2
 
+    # Give the mock stars and grid matching axes
+    extractor._grid_axes = (np.arange(3.0), np.arange(2.0))
+    for name, axis in zip(extractor._emitter_attributes, extractor._grid_axes):
+        setattr(mock_parametric_stars, name, axis)
+
     # Call generate_lnu
     with patch.object(nebular_emission_model, "_lam", np.array([1.0])):
         result = extractor.generate_lnu(
@@ -558,3 +563,25 @@ def test_integrated_parametric_generate_lnu(test_grid, nebular_emission_model):
         f"Expected {expected * erg / s / Hz}, got {result.lnu.sum()}"
         f"{result.lnu} {mock_sfzh}"
     )
+
+
+def test_integrated_parametric_axis_mismatch(
+    test_grid, nebular_emission_model
+):
+    """Test that a SFZH on different axes to the grid is rejected."""
+    extractor = IntegratedParametricExtractor(test_grid, "incident")
+    stars = ParametricStars(
+        test_grid.log10ages + 0.5,
+        test_grid.metallicities,
+        sfzh=np.ones((len(test_grid.log10ages), len(test_grid.metallicities))),
+    )
+    with pytest.raises(InconsistentArguments):
+        extractor.generate_lnu(
+            stars,
+            nebular_emission_model,
+            None,
+            None,
+            "cic",
+            1,
+            False,
+        )

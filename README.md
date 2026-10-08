@@ -1,6 +1,6 @@
 # Synthesizer
 
-<img src="https://raw.githubusercontent.com/synthesizer-project/synthesizer/main/docs/source/img/synthesizer_logo.png" align="right" width="140px"/>
+<img src="https://raw.githubusercontent.com/synthesizer-project/synventory/main/branding/synthesizer_logo.png" align="right" width="140px"/>
 
 [![CI](https://github.com/synthesizer-project/synthesizer/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/synthesizer-project/synthesizer/actions/workflows/python-app.yml)
 [![Documentation Status](https://github.com/synthesizer-project/synthesizer/actions/workflows/static.yml/badge.svg)](https://synthesizer-project.github.io/synthesizer/)
@@ -46,14 +46,14 @@ Please see [here](docs/CONTRIBUTING.md) for contribution guidelines.
 Please cite **both** of the following papers ([Lovell et al. 2025](https://astro.theoj.org/article/145766-synthesizer-a-software-package-for-synthetic-astronomical-observables), [Roper et al. 2026](https://ui.adsabs.harvard.edu/abs/2025arXiv250615811R/abstract)) if you use Synthesizer in your research:
 
     @article{Lovell2025Synthesizer,
-    	author = {Lovell, Christopher C. and Roper, William J. and Vijayan, Aswin P. and Wilkins, Stephen M. and Newman, Sophie and Seeyave, Louise},
-    	journal = {The Open Journal of Astrophysics},
-    	doi = {10.33232/001c.145766},
-    	year = {2025},
-    	month = {oct 9},
-    	publisher = {Maynooth Academic Publishing},
-    	title = {Synthesizer: a {Software} {Package} for {Synthetic} {Astronomical} {Observables}},
-    	volume = {8},
+        author = {Lovell, Christopher C. and Roper, William J. and Vijayan, Aswin P. and Wilkins, Stephen M. and Newman, Sophie and Seeyave, Louise},
+        journal = {The Open Journal of Astrophysics},
+        doi = {10.33232/001c.145766},
+        year = {2025},
+        month = {oct 9},
+        publisher = {Maynooth Academic Publishing},
+        title = {Synthesizer: a {Software} {Package} for {Synthetic} {Astronomical} {Observables}},
+        volume = {8},
     }
 
     @article{Roper2026Synthesizer,
@@ -67,6 +67,21 @@ Please cite **both** of the following papers ([Lovell et al. 2025](https://astro
         number = {119},
         pages = {9436},
     }
+
+If you use any of the pre-built grids from the [Syndex](https://synthesizer-project.org/syndex) database please cite the grids release paper ([Vijayan et al. 2026](https://ui.adsabs.harvard.edu/abs/2026arXiv260727467V/abstract)) and any other applicable citations as listed on Syndex:
+
+    @article{Vijayan2026Synthesizer,
+       author = {{Vijayan}, Aswin P. and {Wilkins}, Stephen M. and {Newman}, Sophie L. and {Lovell}, Christopher C. and {Roper}, William J. and {Berger}, Sabrina and {Harvey}, Thomas and {Turner}, Jack C.},
+       journal = {arXiv e-prints},
+       doi = {10.48550/arXiv.2607.27467},
+       year = 2026,
+       title = "{Stellar photoionisation modelling in SYNTHESIZER}",
+       archivePrefix = {arXiv},
+       eprint = {2607.27467},
+       primaryClass = {astro-ph.GA},
+    }
+
+
 
 ## Licence
 

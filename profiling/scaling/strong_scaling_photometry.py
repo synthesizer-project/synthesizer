@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from unyt import Msun, Myr
 
+from synthesizer import set_default_out_dtype
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
@@ -46,12 +47,13 @@ def photometry_strong_scaling(
     average_over,
     low_thresh,
     paper_style,
+    grid_precision,
 ):
     """Profile the cpu time usage of the photometry calculation."""
     # Define the grid
     grid_name = "test_grid"
 
-    grid = Grid(grid_name)
+    grid = Grid(grid_name, use_precision=grid_precision)
 
     # Get the emission model - use per_particle=True for particle photometry
     model = IncidentEmission(grid, per_particle=True)
@@ -60,7 +62,7 @@ def photometry_strong_scaling(
     webb_inst = get_test_instrument(grid)
 
     # Select the requested number of filters
-    available_filters = webb_inst.available_filters[:nfilters]
+    available_filters = webb_inst.filters.filter_codes[:nfilters]
     filters = webb_inst.filters.select(*available_filters)
 
     # Generate the star formation metallicity history
@@ -180,7 +182,25 @@ if __name__ == "__main__":
         "smaller proportions).",
     )
 
+    args.add_argument(
+        "--grid-precision",
+        choices=("float32", "float64"),
+        default="float64",
+        help="Precision to load the grid arrays at. float32 halves the grid "
+        "read traffic in the extraction kernels.",
+    )
+
+    args.add_argument(
+        "--out-dtype",
+        choices=("float32", "float64"),
+        default=None,
+        help="Requested output precision. Defaults to the global default.",
+    )
     args = args.parse_args()
+
+    # Set the global output precision if one was requested
+    if args.out_dtype is not None:
+        set_default_out_dtype(np.dtype(args.out_dtype))
 
     # Check for atomic timing
     from synthesizer import check_atomic_timing
@@ -200,4 +220,5 @@ if __name__ == "__main__":
         args.average_over,
         args.low_thresh,
         args.paper_style,
+        args.grid_precision,
     )

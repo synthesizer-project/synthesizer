@@ -78,6 +78,27 @@ holds. On a two-socket EPYC 7H12 node (eight domains of sixteen cores) it is
 worth 1.9x at 32 threads and 2.2x at 64 on particle spectra extraction, and
 3.2x and 5.4x respectively on the flux conversion and scaling kernels.
 
+Idle OpenMP threads
+~~~~~~~~~~~~~~~~~~~
+
+When a parallel region finishes, most OpenMP runtimes keep the worker threads
+spinning for a while so the next region can start without waking them. The
+serial work between regions (Python bookkeeping, tree construction, unit
+handling) then shares the node with every spinning thread, and at high thread
+counts it runs measurably slower than it does on one thread.
+
+If your workload alternates between short parallel kernels and serial Python,
+let the idle threads sleep instead:
+
+.. code-block:: bash
+
+    OMP_WAIT_POLICY=passive python my_script.py
+
+The trade-off is that each parallel region then pays to wake its threads, so
+this helps when the serial gaps dominate and hurts when one parallel kernel
+follows another back to back. It is a runtime setting, so try both on your own
+workload.
+
 Profiling Suite
 ~~~~~~~~~~~~~~~
 
@@ -91,7 +112,8 @@ The profiling scripts and documentation can be found in the `profiling directory
 
 - **Particle and Wavelength Scaling**: How individual operations scale with problem size (number of particles or wavelength elements)
 - **Pipeline Profiling**: Real-world benchmarks with multiple operations performed in sequence
-- **Strong Scaling**: How performance scales with thread count for fixed problem sizes
+- **Thread Scaling**: How performance scales with OpenMP thread count for fixed problem sizes
+- **MPI Scaling**: How the Pipeline scales across MPI ranks, for fixed total work (strong) and fixed work per rank (weak)
 
 The profiling suite includes scripts to:
 
@@ -109,21 +131,14 @@ The benchmarks shown in this documentation were run on the Cosma8 HPC at Durham 
 
 .. code-block:: 
 
-    Architecture:             x86_64
-      CPU op-mode(s):         32-bit, 64-bit
-      Address sizes:          43 bits physical, 48 bits virtual
-      Byte Order:             Little Endian
-    CPU(s):                   128
-      On-line CPU(s) list:    0-127
-    Vendor ID:                AuthenticAMD
-      Model name:             AMD EPYC 7542 32-Core Processor
-        CPU family:           23
-        Model:                49
-        Thread(s) per core:   2
-        Core(s) per socket:   32
-        Socket(s):            2
+    CPU(s):                   256
+    Model name:               AMD EPYC 7763 64-Core Processor
+    Thread(s) per core:       2
+    Core(s) per socket:       64
+    Socket(s):                2
+    NUMA node(s):             8
 
-Most benchmarks were run using 8 threads unless otherwise specified.
+All the benchmark plots were run on nodes of this type (the ``cosma8-milan`` partition), using 32 threads unless otherwise specified. The ``NATIVE`` and NUMA interleave figures quoted above were measured separately, on COSMA8 nodes with two AMD EPYC 7H12 processors.
 
 Memory Footprint Note
 ~~~~~~~~~~~~~~~~~~~~~
@@ -143,4 +158,5 @@ Performance Benchmarks
    precision
    particle_wavelength_scaling
    pipeline_profiling
-   strong_scaling
+   thread_scaling
+   mpi_scaling

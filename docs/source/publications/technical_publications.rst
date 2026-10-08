@@ -10,7 +10,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2026arXiv260727467V.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2026arXiv260727467V.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026arXiv260727467V
      - **Stellar photoionisation modelling in SYNTHESIZER**
@@ -25,7 +25,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2026JOSS...11.9436R.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2026JOSS...11.9436R.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026JOSS...11.9436R
      - **Synthesizer: Synthetic Observables for Modern Astronomy**
@@ -40,7 +40,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2025OJAp....8E.152L.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2025OJAp....8E.152L.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025OJAp....8E.152L
      - **Synthesizer: a Software Package for Synthetic Astronomical Observables**

@@ -62,7 +62,9 @@ from synthesizer.synth_warnings import InternalPrecisionWarning
 from synthesizer.units import Units
 from synthesizer.utils.precision import (
     convert_array_dtype,
+    max_abs,
     verify_out_precision,
+    weighted_sum_fits,
 )
 
 
@@ -626,6 +628,25 @@ class TestConvertArrayDtype:
         assert isinstance(converted, np.float32)
 
 
+class TestOverflowBound:
+    """Tests for the tools bounding weighted sums against overflow."""
+
+    def test_max_abs(self):
+        """The largest absolute value is found, with or without units."""
+        assert max_abs(np.array([-3.0, 2.0])) == 3.0
+        assert max_abs(unyt_array([1.0, -5.0], "erg/s")) == 5.0
+        assert max_abs(np.array([])) == 0.0
+
+    def test_weighted_sum_fits(self):
+        """The bound fits only when it is safely below the dtype maximum."""
+        big = float(np.finfo(np.float32).max)
+        assert weighted_sum_fits(np.float32, 1.0, 1e10)
+        assert not weighted_sum_fits(np.float32, big, 1.0)
+        assert weighted_sum_fits(np.float64, big, 1e-10)
+        assert not weighted_sum_fits(np.float32, np.inf, 1.0)
+        assert not weighted_sum_fits(np.float32, np.nan, 1.0)
+
+
 class TestVerifyOutPrecision:
     """Tests for the decorator verifying outputs respect out_dtype."""
 
@@ -669,6 +690,35 @@ class TestVerifyOutPrecision:
 
         with pytest.raises(exceptions.PrecisionOverflow, match="inf"):
             func(out_dtype=np.float32)
+
+    @pytest.mark.parametrize("strided", [False, True])
+    def test_overflowed_output_raises_threaded(self, strided):
+        """A single -inf is caught threaded and in strided views."""
+
+        @verify_out_precision()
+        def func(nthreads=1, out_dtype=None):
+            arr = np.ones((200, 100), dtype=np.float32)
+            arr[-1, -2] = -np.inf
+            return arr[:, ::2] if strided else arr
+
+        with pytest.raises(exceptions.PrecisionOverflow, match="inf"):
+            func(nthreads=4, out_dtype=np.float32)
+
+    @pytest.mark.parametrize("finite", [False, True])
+    def test_skip_inf_scan_if_skips_scan(self, finite):
+        """The inf scan is skipped only when outputs are provably finite."""
+
+        @verify_out_precision(
+            skip_inf_scan_if=lambda dtype, scale, **kwargs: finite
+        )
+        def func(scale, out_dtype=None):
+            return np.full(3, np.inf, dtype=np.float32)
+
+        if finite:
+            assert np.isinf(func(1.0, out_dtype=np.float32)).all()
+        else:
+            with pytest.raises(exceptions.PrecisionOverflow, match="inf"):
+                func(1.0, out_dtype=np.float32)
 
     def test_checks_output_objects(self):
         """The arrays inside Synthesizer output objects are checked."""

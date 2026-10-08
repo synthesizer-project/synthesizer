@@ -149,29 +149,16 @@ class Galaxy(BaseGalaxy):
                 )
 
         # add together lines
-        for line_type in self.stars.lines.keys():
-            new_galaxy.spectra.lines[line_type] = {}
-
-            if line_type not in second_galaxy.stars.lines.keys():
-                raise exceptions.InconsistentAddition(
-                    "Both galaxies must contain the same sets of line types \
-                        (e.g. intrinsic / attenuated)"
+        for line_label, lines in self.stars.lines.items():
+            if line_label in second_galaxy.stars.lines:
+                new_galaxy.stars.lines[line_label] = (
+                    lines + second_galaxy.stars.lines[line_label]
                 )
             else:
-                for line_name, line in self.stars.lines[line_type].items():
-                    if (
-                        line_name
-                        in second_galaxy.stars.lines[line_type].keys()
-                    ):
-                        new_galaxy.stars.lines[line_type][line_name] = (
-                            line
-                            + second_galaxy.stars.lines[line_type][line_name]
-                        )
-                    else:
-                        raise exceptions.InconsistentAddition(
-                            "Both galaxies must contain the same emission \
-                                lines to be added together"
-                        )
+                raise exceptions.InconsistentAddition(
+                    "Both galaxies must contain the same lines to be "
+                    "added together"
+                )
 
         # add together images
         for img_name, image in self.images.items():
