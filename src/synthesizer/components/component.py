@@ -395,6 +395,7 @@ class Component(ABC):
         nthreads=1,
         grid_assignment_method="cic",
         out_dtype=None,
+        do_grid_check=False,
         **kwargs,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -447,6 +448,11 @@ class Component(ABC):
                 are "cic" (cloud-in-cell) or "ngp" (nearest grid point)."
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted spectra arrays.
+            do_grid_check (bool):
+                Whether to warn about attributes (or, for a parametric
+                component, mass) outside the grid axes, which are clamped
+                onto the grid's edges. False by default since the check
+                costs time.
             **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -471,6 +477,7 @@ class Component(ABC):
             nthreads=nthreads,
             grid_assignment_method=grid_assignment_method,
             out_dtype=out_dtype,
+            do_grid_check=do_grid_check,
             **kwargs,
         )
 
@@ -496,6 +503,7 @@ class Component(ABC):
         mask=None,
         verbose=True,
         out_dtype=None,
+        do_grid_check=False,
         **kwargs,
     ):
         """Generate stellar lines as described by the emission model.
@@ -543,6 +551,11 @@ class Component(ABC):
                 Are we talking?
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted line arrays.
+            do_grid_check (bool):
+                Whether to warn about attributes (or, for a parametric
+                component, mass) outside the grid axes, which are clamped
+                onto the grid's edges. False by default since the check
+                costs time.
             kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -564,6 +577,7 @@ class Component(ABC):
             mask=mask,
             verbose=verbose,
             out_dtype=out_dtype,
+            do_grid_check=do_grid_check,
             **kwargs,
         )
 

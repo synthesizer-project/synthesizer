@@ -226,7 +226,7 @@ class Extractor(ABC):
 
         # Check if the attributes are outside the grid axes if necessary
         if do_grid_check:
-            self.check_emitter_attrs(extracted)
+            self.check_emitter_attrs(emitter, extracted)
 
         # Also extract the weight variable, at the same precision as the
         # extracted attributes if we have to make unit weights (the extension
@@ -283,14 +283,14 @@ class Extractor(ABC):
         """
         # Loop over the extracted attributes and check if they are outside the
         # grid axes, we'll do this by updating a mask for each attribute
-        inside = np.zeros_like(extracted_attrs[0], dtype=bool)
-        for i, (attr, axis) in enumerate(
-            zip(extracted_attrs, self._grid_axes),
-        ):
-            inside |= (attr >= axis.min()) & (attr <= axis.max())
+        # (a particle is inside only if it is inside along every axis)
+        nparticles = max(np.size(attr) for attr in extracted_attrs)
+        inside = np.ones(nparticles, dtype=bool)
+        for attr, axis in zip(extracted_attrs, self._grid_axes):
+            inside &= (attr >= axis.min()) & (attr <= axis.max())
 
         # Compute the fraction of attributes outside the grid axes
-        frac_outside = 1 - np.sum(inside) / len(inside)
+        frac_outside = 1 - np.sum(inside) / inside.size
 
         # Warn the user if the fraction is greater than 0.0
         if frac_outside > 0.0:

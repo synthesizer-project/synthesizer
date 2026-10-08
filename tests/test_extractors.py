@@ -576,3 +576,49 @@ def test_integrated_parametric_off_grid_axes(
         False,
     )
     np.testing.assert_allclose(param.lnu.ndview, part.lnu.ndview, rtol=1e-10)
+
+
+class TestGridCheck:
+    """Tests for warning about emitters outside the grid axes."""
+
+    @staticmethod
+    def _model(test_grid):
+        """Return an incident emission model."""
+        from synthesizer.emission_models import IncidentEmission
+
+        return IncidentEmission(test_grid)
+
+    def test_particles_outside_grid_warn(self, test_grid):
+        """Particles older than the grid are reported when asked."""
+        ages = np.array([1e7, 1e8, 1e12])  # the last is beyond the grid
+        stars = ParticleStars(
+            initial_masses=np.full(3, 1e6) * Msun,
+            ages=ages * yr,
+            metallicities=np.full(3, 0.01),
+        )
+        model = self._model(test_grid)
+        with pytest.warns(RuntimeWarning, match=r"33\.33% of the attributes"):
+            stars.get_spectra(model, do_grid_check=True)
+
+    def test_particles_inside_grid_are_quiet(self, test_grid, recwarn):
+        """Particles inside the grid on every axis aren't reported."""
+        stars = ParticleStars(
+            initial_masses=np.full(2, 1e6) * Msun,
+            ages=np.array([1e7, 1e8]) * yr,
+            metallicities=np.full(2, 0.01),
+        )
+        stars.get_spectra(self._model(test_grid), do_grid_check=True)
+        assert not any("outside" in str(w.message) for w in recwarn)
+
+    def test_parametric_outside_grid_warns(self, test_grid):
+        """Parametric mass younger than the grid is reported when asked."""
+        stars = ParametricStars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e5 * yr,  # younger than the youngest grid age
+            metal_dist=0.01,
+            initial_mass=1e9 * Msun,
+        )
+        model = self._model(test_grid)
+        with pytest.warns(RuntimeWarning, match="100.00% of its mass"):
+            stars.get_spectra(model, do_grid_check=True)
