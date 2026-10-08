@@ -503,10 +503,14 @@ class Stars(StarsComponent):
             # Set up SFH array
             sf_hist = np.zeros(self.ages.size)
 
-            # Loop over age bins calculating the amount of mass in each bin
+            # Loop over age bins calculating the amount of mass in each bin,
+            # the oldest bin extends up to the oldest grid age
             min_age = 0
-            for ia, age in enumerate(self.ages[:-1]):
-                max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
+            for ia in range(self.ages.size):
+                if ia < self.ages.size - 1:
+                    max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
+                else:
+                    max_age = self.ages[-1].to("yr").value
                 sf = integrate.quad(
                     self.sf_hist_func.get_sfr,
                     min_age + age_offset.to("yr").value,
@@ -520,15 +524,19 @@ class Stars(StarsComponent):
             # Set up ZH array
             metal_dist = np.zeros(self.metallicities.size)
             # Loop over metallicity bins calculating the amount of mass in
-            # each bin
+            # each bin, the most metal rich bin extends up to the highest
+            # grid metallicity
             min_metal = 0
-            for imetal, metal in enumerate(self.metallicities[:-1]):
-                max_metal = np.mean(
-                    [
-                        self.metallicities[imetal + 1],
-                        self.metallicities[imetal],
-                    ]
-                )
+            for imetal in range(self.metallicities.size):
+                if imetal < self.metallicities.size - 1:
+                    max_metal = np.mean(
+                        [
+                            self.metallicities[imetal + 1],
+                            self.metallicities[imetal],
+                        ]
+                    )
+                else:
+                    max_metal = self.metallicities[-1]
                 sf = integrate.quad(
                     self.metal_dist_func.get_dist_weight, min_metal, max_metal
                 )[0]
@@ -946,8 +954,12 @@ class Stars(StarsComponent):
             Stars: New Stars object on the requested grid.
         """
         # If the axes are the same as our existing ones just return our SFZH
-        if np.allclose(log10ages, self.log10ages) and np.allclose(
-            metallicities, self.metallicities
+        # (the lengths must be checked first since allclose broadcasts)
+        if (
+            len(log10ages) == len(self.log10ages)
+            and len(metallicities) == len(self.metallicities)
+            and np.allclose(log10ages, self.log10ages)
+            and np.allclose(metallicities, self.metallicities)
         ):
             return deepcopy(self)
 
@@ -1226,17 +1238,17 @@ class Stars(StarsComponent):
 
         # --- Construct Bins from Age Points ---
         if age_points.size == 1:
-            # For a single point, assume the bin is centered on it,
-            # starting from 0.
-            age_edges = np.array([0, 2 * age_points[0]])
+            # For a single point, the bin runs from 0 up to that age,
+            # matching the bin used when integrating the SFZH.
+            age_edges = np.array([0, age_points[0]])
         else:
             # Bin edges are the midpoints between age points.
             internal_edges = (age_points[:-1] + age_points[1:]) / 2.0
-            # Extrapolate the first and last edges to define the outer bounds.
+            # Extrapolate the first edge to define the lower bound, the last
+            # edge is the oldest age, matching the bin used when integrating
+            # the SFZH.
             first_edge = age_points[0] - (age_points[1] - age_points[0]) / 2.0
-            last_edge = (
-                age_points[-1] + (age_points[-1] - age_points[-2]) / 2.0
-            )
+            last_edge = age_points[-1]
             age_edges = np.concatenate(
                 ([first_edge], internal_edges, [last_edge])
             )

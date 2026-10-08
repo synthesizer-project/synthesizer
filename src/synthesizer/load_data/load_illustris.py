@@ -221,7 +221,9 @@ def load_IllustrisTNG(
                 smoothing_lengths = hsml * kpc
 
             galaxies[i].load_stars(
-                initial_masses=(imasses * Msun).astype(dtype),
+                initial_masses=(imasses * Msun)
+                .in_base("galactic")
+                .astype(dtype),
                 ages=(ages * yr).astype(dtype),
                 metallicities=metallicities.astype(dtype),
                 s_oxygen=(
@@ -233,7 +235,9 @@ def load_IllustrisTNG(
                     else None
                 ),
                 coordinates=(coods * kpc).astype(dtype),
-                current_masses=(masses * Msun).astype(dtype),
+                current_masses=(masses * Msun)
+                .in_base("galactic")
+                .astype(dtype),
                 smoothing_lengths=smoothing_lengths,
             )
 
@@ -266,7 +270,7 @@ def load_IllustrisTNG(
 
             galaxies[i].load_gas(
                 coordinates=(g_coods * kpc).astype(dtype),
-                masses=(g_masses * Msun).astype(dtype),
+                masses=(g_masses * Msun).in_base("galactic").astype(dtype),
                 metallicities=g_metals.astype(dtype),
                 star_forming=star_forming,
                 smoothing_lengths=(g_hsml * kpc).astype(dtype),

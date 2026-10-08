@@ -13,7 +13,7 @@ import pytest
 from unyt import Msun, Myr, kpc, yr
 
 from synthesizer.emission_models import IncidentEmission
-from synthesizer.parametric import SFH, Galaxy, PointSource
+from synthesizer.parametric import SFH, Galaxy, PointSource, ZDist
 from synthesizer.parametric.stars import Stars
 from synthesizer.units import Units
 
@@ -564,3 +564,74 @@ class TestAddition:
             galaxies[0].stars.lines[label].luminosity
             + galaxies[1].stars.lines[label].luminosity,
         )
+
+
+class TestFunctionSFZHEdgeBins:
+    """Tests that function based SFZHs populate the outermost grid bins."""
+
+    def test_oldest_age_bin_populated(self, test_grid):
+        """Test a constant SFH beyond the oldest grid age fills the last bin.
+
+        With a unit SFR the mass in the oldest bin is its width, which runs
+        from the midpoint of the last two grid ages to the oldest grid age.
+        """
+        ages = 10**test_grid.log10ages
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=2 * ages[-1] * yr),
+            metal_dist=0.01,
+        )
+        expected = ages[-1] - 0.5 * (ages[-1] + ages[-2])
+        assert np.isclose(stars.sf_hist[-1], expected, rtol=1e-6)
+
+    def test_most_metal_rich_bin_populated(self, test_grid):
+        """Test a ZDist peaked at the highest grid Z fills the last bin."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e7 * yr,
+            metal_dist=ZDist.Normal(
+                mean=test_grid.metallicities[-1],
+                sigma=0.002,
+            ),
+        )
+        assert stars.metal_dist[-1] > 0
+
+
+class TestCalculateAverageSFR:
+    """Tests for the average SFR of a parametric Stars."""
+
+    def test_constant_sfh_over_full_range(self, test_grid):
+        """Test a unit SFR covering the whole grid averages to 1 Msun/yr.
+
+        The oldest bin must end at the oldest grid age, as it does when the
+        SFZH is integrated, otherwise its mass is spread past the range.
+        """
+        ages = 10**test_grid.log10ages
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=2 * ages[-1] * yr),
+            metal_dist=0.01,
+        )
+        sfr = stars.calculate_average_sfr(t_range=(0, ages[-1]))
+        assert np.isclose(sfr.to("Msun/yr").value, 1.0, rtol=1e-6)
+
+
+class TestGetSFZHRemap:
+    """Tests for remapping a parametric SFZH onto new axes."""
+
+    def test_remap_to_different_length_axes(self, test_grid):
+        """Test remapping onto axes of a different length conserves mass."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=100 * Myr),
+            metal_dist=0.01,
+            initial_mass=1e9 * Msun,
+        )
+        new_log10ages = np.linspace(6, 10, 20)
+        remapped = stars.get_sfzh(new_log10ages, test_grid.metallicities)
+        assert remapped.sfzh.shape == (20, len(test_grid.metallicities))
+        assert np.isclose(remapped.sfzh.sum(), stars.sfzh.sum())

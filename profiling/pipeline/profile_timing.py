@@ -14,10 +14,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+import numpy as np
 from astropy.cosmology import Planck18
 from unyt import kpc
 
-from synthesizer import check_atomic_timing
+from synthesizer import check_atomic_timing, set_default_out_dtype
 from synthesizer.grid import Grid
 from synthesizer.pipeline import Pipeline
 from synthesizer.utils.operation_timers import OperationTimers
@@ -219,6 +220,8 @@ def run_pipeline_profiling(
     fov_kpc: float = 60.0,
     include_observer_frame: bool = False,
     nthreads: int = 8,
+    grid_precision: str = "float64",
+    max_npart: int | None = None,
 ) -> tuple:
     """Run full Pipeline profiling and return stage timings.
 
@@ -234,6 +237,11 @@ def run_pipeline_profiling(
         include_observer_frame (bool, optional): If True, include
             observer-frame/flux operations in addition to rest-frame/luminosity
             operations. Defaults to False.
+        grid_precision (str, optional): Precision to load the grid at.
+            Defaults to float64.
+        max_npart (int, optional): Split galaxies into chunks of at most
+            this many stellar particles, running the whole operation
+            chain on each chunk. None processes each galaxy whole.
         nthreads (int, optional): Number of threads for Pipeline.
             Defaults to 8.
 
@@ -244,7 +252,7 @@ def run_pipeline_profiling(
             - Pipeline: The pipeline object with all computed results.
     """
     # Setup - load grid
-    grid = Grid("test_grid")
+    grid = Grid("test_grid", use_precision=grid_precision)
 
     # Build test data
     galaxies = build_test_galaxies(grid, nparticles, ngalaxies, seed)
@@ -258,6 +266,7 @@ def run_pipeline_profiling(
         emission_model=model,
         nthreads=nthreads,
         verbose=0,
+        max_npart=max_npart,
     )
     pipeline.add_galaxies(galaxies)
 
@@ -372,6 +381,28 @@ def main() -> None:
     parser.add_argument(
         "--ngalaxies", type=int, default=10, help="Number of galaxies"
     )
+    parser.add_argument(
+        "--grid-precision",
+        choices=("float32", "float64"),
+        default="float64",
+        help="Precision to load the grid at. Must match --out-dtype, since "
+        "Synthesizer never casts between precisions behind the scenes.",
+    )
+    parser.add_argument(
+        "--out-dtype",
+        choices=("float32", "float64"),
+        default=None,
+        help="Requested output precision. Defaults to the global default.",
+    )
+    parser.add_argument(
+        "--max-npart",
+        type=int,
+        default=None,
+        help="Split galaxies into chunks of at most this many stellar "
+        "particles. The whole operation chain runs on each chunk, so a "
+        "cache sized chunk keeps intermediates resident between "
+        "operations. None processes each galaxy whole.",
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument(
         "--fov-kpc",
@@ -413,6 +444,10 @@ def main() -> None:
         particles_str += ", observer-frame=True"
     print(f"Profiling Pipeline timing ({particles_str})...")
 
+    # Set the requested output precision before anything allocates.
+    if args.out_dtype is not None:
+        set_default_out_dtype(np.dtype(args.out_dtype))
+
     # Run pipeline profiling
     timings, pipeline = run_pipeline_profiling(
         args.nparticles,
@@ -421,6 +456,8 @@ def main() -> None:
         args.fov_kpc,
         args.include_observer_frame,
         args.nthreads,
+        args.grid_precision,
+        args.max_npart,
     )
 
     # Write CSV with source and count columns

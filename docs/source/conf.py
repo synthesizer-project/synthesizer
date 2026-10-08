@@ -99,7 +99,7 @@ master_doc = "index"
 
 html_static_path = ["_static"]
 
-html_logo = "img/synthesizer_logo.png"
+html_logo = "https://raw.githubusercontent.com/synthesizer-project/synventory/main/branding/synthesizer_logo.png"
 
 html_theme = "furo"
 html_theme_options = {
