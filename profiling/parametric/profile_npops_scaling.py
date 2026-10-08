@@ -3,7 +3,8 @@
 This script generates four separate plots (Construction, Spectra, Photometry,
 Imaging) showing how parametric operations scale from a single population to
 100 populations (e.g. a bulge+disk galaxy up to a galaxy resolved into 100
-annuli).
+annuli), both with a separate Stars per population and with a single Stars
+holding every population.
 """
 
 import argparse
@@ -26,7 +27,11 @@ from synthesizer.utils.operation_timers import OperationTimers
 
 # Add pipeline profiling to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "pipeline"))
-from parametric_test_data import NPOPS, make_populations
+from parametric_test_data import (
+    NPOPS,
+    combine_populations,
+    make_populations,
+)
 from pipeline_test_data import get_test_instrument
 
 # Set style
@@ -65,6 +70,10 @@ def profile_npops(
         fesc_ly_alpha=0.1,
     )
 
+    # The emission of each population (needed for per population photometry
+    # and for imaging populations with their own morphologies)
+    model_per_pop = IncidentEmission(grid, label="int", per_particle=True)
+
     # --- Setup Instrument and Filters ---
     # Get cached instrument from pipeline_test_data (no network access)
     instrument = get_test_instrument(grid)
@@ -92,15 +101,29 @@ def profile_npops(
 
     # Storage for results
     labels = {
-        "construction": ["Functions (SFH, ZDist)", "Binned (SFZH array)"],
-        "spectra": ["Incident", "Pacman"],
+        "construction": [
+            "Functions (SFH, ZDist)",
+            "Binned (from_sfzh)",
+            "Combined (from_populations)",
+        ],
+        "spectra": [
+            "Incident, separate",
+            "Incident, combined",
+            "Pacman, separate",
+            "Pacman, combined",
+            "Incident per population, combined",
+        ],
         "photometry": [
-            f"Integrated ({nfilt_small} filters)",
-            f"Integrated ({nfilt_large} filters)",
+            f"Separate ({nfilt_small} filters)",
+            f"Separate ({nfilt_large} filters)",
+            f"Per population, combined ({nfilt_small} filters)",
+            f"Per population, combined ({nfilt_large} filters)",
         ],
         "imaging": [
-            f"Smoothed ({npix_low}x{npix_low})",
-            f"Smoothed ({npix_high}x{npix_high})",
+            f"Separate ({npix_low}x{npix_low})",
+            f"Separate ({npix_high}x{npix_high})",
+            f"Combined ({npix_low}x{npix_low})",
+            f"Combined ({npix_high}x{npix_high})",
         ],
     }
     times = {cat: {lab: [] for lab in labs} for cat, labs in labels.items()}
@@ -122,25 +145,43 @@ def profile_npops(
                 time.perf_counter() - start
             )
 
-            # From binned SFZH arrays (the route taken by SAM outputs)
+            # From binned SFZH arrays
             sfzhs = [p.sfzh for p in pops]
             start = time.perf_counter()
             for sfzh in sfzhs:
-                Stars(grid.log10ages, grid.metallicities, sfzh=sfzh)
-            iter_times["construction"]["Binned (SFZH array)"].append(
+                Stars.from_sfzh(grid.log10ages, grid.metallicities, sfzh)
+            iter_times["construction"]["Binned (from_sfzh)"].append(
+                time.perf_counter() - start
+            )
+
+            # Combining the populations into one Stars
+            start = time.perf_counter()
+            combined = combine_populations(pops)
+            iter_times["construction"]["Combined (from_populations)"].append(
                 time.perf_counter() - start
             )
 
             # --- 2. Spectra Profiling ---
-            start = time.perf_counter()
-            for p in pops:
-                p.get_spectra(model_pacman, nthreads=nthreads)
-            iter_times["spectra"]["Pacman"].append(time.perf_counter() - start)
+            for name, model in (
+                ("Incident", model_incident),
+                ("Pacman", model_pacman),
+            ):
+                start = time.perf_counter()
+                for p in pops:
+                    p.get_spectra(model, nthreads=nthreads)
+                iter_times["spectra"][f"{name}, separate"].append(
+                    time.perf_counter() - start
+                )
+
+                start = time.perf_counter()
+                combined.get_spectra(model, nthreads=nthreads)
+                iter_times["spectra"][f"{name}, combined"].append(
+                    time.perf_counter() - start
+                )
 
             start = time.perf_counter()
-            for p in pops:
-                p.get_spectra(model_incident, nthreads=nthreads)
-            iter_times["spectra"]["Incident"].append(
+            combined.get_spectra(model_per_pop, nthreads=nthreads)
+            iter_times["spectra"]["Incident per population, combined"].append(
                 time.perf_counter() - start
             )
 
@@ -153,14 +194,24 @@ def profile_npops(
                 start = time.perf_counter()
                 for sed in seds:
                     sed.get_photo_lnu(filters)
+                iter_times["photometry"][f"Separate ({nfilt} filters)"].append(
+                    time.perf_counter() - start
+                )
+
+                start = time.perf_counter()
+                combined.particle_spectra["int"].get_photo_lnu(filters)
                 iter_times["photometry"][
-                    f"Integrated ({nfilt} filters)"
+                    f"Per population, combined ({nfilt} filters)"
                 ].append(time.perf_counter() - start)
 
             # --- 4. Imaging Profiling ---
-            # Imaging needs the component photometry for the label
+            # Imaging needs the component photometry for the label (per
+            # population for the combined Stars when its populations have
+            # their own morphologies)
             for p in pops:
                 p.get_photo_lnu(filters_small)
+            combined.get_photo_lnu(filters_small)
+            combined.get_particle_photo_lnu(filters_small)
 
             for inst, npix in ((inst_low, npix_low), (inst_high, npix_high)):
                 start = time.perf_counter()
@@ -172,12 +223,24 @@ def profile_npops(
                         img_type="smoothed",
                         nthreads=nthreads,
                     )
-                iter_times["imaging"][f"Smoothed ({npix}x{npix})"].append(
+                iter_times["imaging"][f"Separate ({npix}x{npix})"].append(
+                    time.perf_counter() - start
+                )
+
+                start = time.perf_counter()
+                combined.get_images_luminosity(
+                    "int",
+                    fov=fov,
+                    instrument=inst,
+                    img_type="smoothed",
+                    nthreads=nthreads,
+                )
+                iter_times["imaging"][f"Combined ({npix}x{npix})"].append(
                     time.perf_counter() - start
                 )
 
             # Force garbage collection
-            del pops
+            del pops, combined
             gc.collect()
 
         # Store averages

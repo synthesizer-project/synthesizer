@@ -324,7 +324,9 @@ Results and plots go to `profiling/outputs/mpi_weak/` and `profiling/outputs/mpi
 
 The parametric counterpart of `general/`, scaling with the number of
 parametric populations (e.g. bulge+disk components or annuli) rather than the
-number of particles.
+number of particles. Each operation is profiled both with a separate `Stars`
+per population and with a single `Stars` holding every population
+(`Stars.from_populations`).
 
 ```bash
 # Run all parametric profiling scripts

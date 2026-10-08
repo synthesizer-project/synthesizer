@@ -77,3 +77,14 @@ In the example below, we demonstrate how to instantiate and use these parametric
    :maxdepth: 1
 
    parametric_sfh_example
+Parametric Populations
+~~~~~~~~~~~~~~~~~~~~~~
+
+A parametric ``Stars`` object stores its star formation and metal enrichment history as bins (each holding the mass formed in it) which are used exactly as given, so they never need to match the grid. This makes it straightforward to use tabulated histories such as the outputs of semi-analytic models, and lets a single ``Stars`` hold several populations (e.g. a bulge and a disk, or annuli), each with its own parameters and morphology. Populations can also go beyond a separable star formation and metallicity history, with distributions that depend on age and bins along further grid axes. The examples below cover each of these.
+
+.. toctree::
+   :maxdepth: 1
+
+   parametric_binned
+   parametric_populations
+   parametric_extra_axes

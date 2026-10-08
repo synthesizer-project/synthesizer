@@ -6,6 +6,7 @@
 # the performance documentation:
 #   - Pipeline profiling (timing and memory)
 #   - Particle and wavelength scaling
+#   - Parametric population and wavelength scaling
 #   - Strong scaling (thread count)
 #
 # Can be run from anywhere:
@@ -140,9 +141,10 @@ MEMORY_ANALYSIS_DIR="$OUTPUT_ROOT/memory_analysis"
 # The final plots, grouped as they are in synventory
 PIPELINE_PLOTS_DIR="$OUTPUT_ROOT/pipeline"
 PROBLEM_SIZE_DIR="$OUTPUT_ROOT/problem_size"
+PARAMETRIC_DIR="$OUTPUT_ROOT/parametric"
 THREAD_SCALING_DIR="$OUTPUT_ROOT/thread_scaling"
 
-mkdir -p "$TIMING_DIR" "$MEMORY_DIR" "$TIMING_ANALYSIS_DIR" "$MEMORY_ANALYSIS_DIR" "$PIPELINE_PLOTS_DIR" "$PROBLEM_SIZE_DIR" "$THREAD_SCALING_DIR"
+mkdir -p "$TIMING_DIR" "$MEMORY_DIR" "$TIMING_ANALYSIS_DIR" "$MEMORY_ANALYSIS_DIR" "$PIPELINE_PLOTS_DIR" "$PROBLEM_SIZE_DIR" "$PARAMETRIC_DIR" "$THREAD_SCALING_DIR"
 
 # Run Pipeline timing profiling for different particle counts
 for npart in 100 500 1000 5000 10000 100000; do
@@ -286,6 +288,17 @@ python profiling/general/make_all_plots.py --nthreads $SCALING_THREADS --n_avera
 
 echo ""
 echo "========================================"
+echo "Parametric Population and Wavelength Scaling"
+echo "========================================"
+
+# Run the parametric profiling scripts using make_all_plots.py
+echo "Running parametric population and wavelength scaling profiling..."
+python profiling/parametric/make_all_plots.py --nthreads $SCALING_THREADS --n_averages 3 --output_dir "$PARAMETRIC_DIR" \
+	--grid-precision $GRID_PRECISION \
+	--out-dtype $GRID_PRECISION
+
+echo ""
+echo "========================================"
 echo "Strong Scaling (Thread Count)"
 echo "========================================"
 
@@ -356,7 +369,7 @@ echo "All Profiling Complete!"
 echo "========================================"
 echo ""
 echo "Generated plots:"
-echo "  Output directories: $PIPELINE_PLOTS_DIR, $PROBLEM_SIZE_DIR, $THREAD_SCALING_DIR"
+echo "  Output directories: $PIPELINE_PLOTS_DIR, $PROBLEM_SIZE_DIR, $PARAMETRIC_DIR, $THREAD_SCALING_DIR"
 echo "  Pipeline Profiling ($PIPELINE_THREADS threads):"
 echo "    - pipeline_timing_scaling.png"
 echo "    - pipeline_memory_normalized.png"
@@ -364,6 +377,9 @@ echo "    - pipeline_memory_scaling.png"
 echo "  Particle/Wavelength Scaling ($SCALING_THREADS threads):"
 echo "    - nparticles_performance_*.png (5 plots)"
 echo "    - wavelength_performance_*.png (2 plots)"
+echo "  Parametric Scaling ($SCALING_THREADS threads):"
+echo "    - parametric_npops_performance_*.png (6 plots)"
+echo "    - parametric_wavelength_performance_*.png (2 plots)"
 echo "  Thread Scaling (up to $STRONG_THREADS threads, $STRONG_AVERAGES averages):"
 echo "    - exclusive_docs_int_spectra_cic_totThreads${STRONG_THREADS}_nstars1000000.png"
 echo "    - exclusive_docs_part_spectra_cic_totThreads${STRONG_THREADS}_nstars10000_${GRID_PRECISION}.png"

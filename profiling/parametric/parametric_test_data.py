@@ -2,8 +2,9 @@
 
 A "population" here is one parametric stellar component with its own SFZH
 and morphology, e.g. a bulge, a disk or one annulus of a resolved galaxy.
-Until parametric Stars can hold multiple populations, each population is
-an independent Stars object and every operation loops over them.
+The scripts compare two ways of handling them: a separate Stars object per
+population (every operation loops over them) and a single Stars holding
+every population (Stars.from_populations), where each operation is one call.
 """
 
 import sys
@@ -61,6 +62,21 @@ def make_populations(grid, npops, seed=42):
             )
         )
     return pops
+
+
+def combine_populations(pops):
+    """Combine populations into a single multi population Stars.
+
+    Args:
+        pops (list of Stars):
+            The populations.
+
+    Returns:
+        Stars:
+            One Stars holding every population (with a PerPopulation
+            morphology).
+    """
+    return Stars.from_populations(pops)
 
 
 def get_obj_size_manual(obj):

@@ -930,12 +930,18 @@ def _generate_images_population_smoothed(imgs, morphology, signals):
     # Avoid cyclic imports
     from synthesizer.imaging import Image
 
-    for key, signal in signals.items():
+    # Make every image at once (one trailing axis per signal) so the
+    # populations' density grids are only computed once
+    keys = list(signals.keys())
+    grids = morphology.get_weighted_density_grid(
+        imgs.resolution,
+        imgs.npix,
+        np.stack([np.asarray(signals[key].value) for key in keys], axis=-1),
+    )
+    for index, key in enumerate(keys):
         img = Image(imgs.resolution, imgs.fov)
-        img.arr = morphology.get_weighted_density_grid(
-            imgs.resolution, imgs.npix, np.asarray(signal.value)
-        )
-        img.units = signal.units
+        img.arr = np.ascontiguousarray(grids[..., index])
+        img.units = signals[key].units
         imgs[key] = img
 
     return imgs

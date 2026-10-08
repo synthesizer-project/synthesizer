@@ -11,7 +11,11 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from parametric_test_data import get_obj_size_manual, make_populations
+from parametric_test_data import (
+    combine_populations,
+    get_obj_size_manual,
+    make_populations,
+)
 
 from synthesizer import set_default_out_dtype
 from synthesizer.emission_models import IncidentEmission, PacmanEmission
@@ -54,17 +58,19 @@ def profile_wavelength_memory(
     n_pops = 10
 
     # Storage for results
-    mems = {
-        "spectra": {
-            "Incident": [],
-            "Pacman": [],
-        },
-    }
+    labels = [
+        "Incident, separate",
+        "Incident, combined",
+        "Pacman, separate",
+        "Pacman, combined",
+    ]
+    mems = {"spectra": {label: [] for label in labels}}
 
     # Pre-generate the populations (we use the same populations for all
     # wavelength resolutions)
     print(f"Generating {n_pops} populations...")
     pops = make_populations(base_grid, n_pops)
+    combined = combine_populations(pops)
 
     for n_lam in n_lambdas:
         print(f"Profiling Memory n_lam={n_lam}...")
@@ -89,7 +95,7 @@ def profile_wavelength_memory(
         # 3. Profile
 
         # Local storage for averages
-        iter_mems = {key: [] for key in models}
+        iter_mems = {label: [] for label in labels}
 
         for i in range(n_averages):
             for key, model in models.items():
@@ -98,7 +104,13 @@ def profile_wavelength_memory(
                     p.spectra = {}
                     p.get_spectra(model, nthreads=nthreads)
                     size += get_obj_size_manual(p.spectra)
-                iter_mems[key].append(size / 1024 / 1024 / 1024)
+                iter_mems[f"{key}, separate"].append(size / 1024**3)
+
+                combined.spectra = {}
+                combined.get_spectra(model, nthreads=nthreads)
+                iter_mems[f"{key}, combined"].append(
+                    get_obj_size_manual(combined.spectra) / 1024**3
+                )
 
         # Store averages
         for key in iter_mems:

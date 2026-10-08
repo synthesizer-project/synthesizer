@@ -1188,7 +1188,7 @@ class TestPopulationMorphologies:
         )
         assert cube.shape == (200, 200, 3)
         np.testing.assert_allclose(
-            cube.sum(axis=(0, 1)), spectra.sum(axis=0), rtol=1e-8
+            cube.sum(axis=(0, 1)), spectra.sum(axis=0), rtol=1e-6
         )
 
     def test_annuli_need_a_radius(self):

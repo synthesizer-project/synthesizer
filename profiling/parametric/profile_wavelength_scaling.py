@@ -12,7 +12,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from parametric_test_data import make_populations
+from parametric_test_data import combine_populations, make_populations
 
 from synthesizer import set_default_out_dtype
 from synthesizer.emission_models import IncidentEmission, PacmanEmission
@@ -55,17 +55,19 @@ def profile_wavelength_scaling(
     n_pops = 10
 
     # Storage for results
-    times = {
-        "spectra": {
-            "Incident": [],
-            "Pacman": [],
-        },
-    }
+    labels = [
+        "Incident, separate",
+        "Incident, combined",
+        "Pacman, separate",
+        "Pacman, combined",
+    ]
+    times = {"spectra": {label: [] for label in labels}}
 
     # Pre-generate the populations (the SFZHs only depend on the grid axes
     # so the same populations are used for all wavelength resolutions)
     print(f"Generating {n_pops} populations...")
     pops = make_populations(base_grid, n_pops)
+    combined = combine_populations(pops)
 
     for n_lam in n_lambdas:
         print(f"Profiling n_lam={n_lam}...")
@@ -88,25 +90,30 @@ def profile_wavelength_scaling(
         # 3. Profile
 
         # Local storage for averages
-        iter_times = {
-            "Incident": [],
-            "Pacman": [],
-        }
+        iter_times = {label: [] for label in labels}
 
         for i in range(n_averages):
             # Clear previous spectra
             for p in pops:
                 p.spectra = {}
+            combined.spectra = {}
 
-            start = time.perf_counter()
-            for p in pops:
-                p.get_spectra(model_incident, nthreads=nthreads)
-            iter_times["Incident"].append(time.perf_counter() - start)
+            for name, model in (
+                ("Incident", model_incident),
+                ("Pacman", model_pacman),
+            ):
+                start = time.perf_counter()
+                for p in pops:
+                    p.get_spectra(model, nthreads=nthreads)
+                iter_times[f"{name}, separate"].append(
+                    time.perf_counter() - start
+                )
 
-            start = time.perf_counter()
-            for p in pops:
-                p.get_spectra(model_pacman, nthreads=nthreads)
-            iter_times["Pacman"].append(time.perf_counter() - start)
+                start = time.perf_counter()
+                combined.get_spectra(model, nthreads=nthreads)
+                iter_times[f"{name}, combined"].append(
+                    time.perf_counter() - start
+                )
 
         # Store averages
         for key in iter_times:

@@ -2,7 +2,8 @@
 
 This script generates two separate plots (Spectra, Photometry) showing how
 the size of the result objects scales from a single population to 100
-populations.
+populations, both with a separate Stars per population and with a single
+Stars holding every population.
 """
 
 import argparse
@@ -21,7 +22,12 @@ from synthesizer.utils.operation_timers import OperationTimers
 
 # Add pipeline profiling to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "pipeline"))
-from parametric_test_data import NPOPS, get_obj_size_manual, make_populations
+from parametric_test_data import (
+    NPOPS,
+    combine_populations,
+    get_obj_size_manual,
+    make_populations,
+)
 from pipeline_test_data import get_test_instrument
 
 # Set style
@@ -77,6 +83,7 @@ def profile_npops_memory(
         fesc=0.1,
         fesc_ly_alpha=0.1,
     )
+    model_per_pop = IncidentEmission(grid, label="int", per_particle=True)
 
     # --- Setup Filters ---
     # Get cached instrument from pipeline_test_data (no network access)
@@ -90,10 +97,18 @@ def profile_npops_memory(
 
     # Storage for results
     labels = {
-        "spectra": ["Incident", "Pacman"],
+        "spectra": [
+            "Incident, separate",
+            "Incident, combined",
+            "Pacman, separate",
+            "Pacman, combined",
+            "Incident per population, combined",
+        ],
         "photometry": [
-            f"Integrated ({nfilt_small} filters)",
-            f"Integrated ({nfilt_large} filters)",
+            f"Separate ({nfilt_small} filters)",
+            f"Separate ({nfilt_large} filters)",
+            f"Per population, combined ({nfilt_small} filters)",
+            f"Per population, combined ({nfilt_large} filters)",
         ],
     }
     mems = {cat: {lab: [] for lab in labs} for cat, labs in labels.items()}
@@ -108,25 +123,43 @@ def profile_npops_memory(
 
         for i in range(n_averages):
             pops = make_populations(grid, n, seed=i)
+            combined = combine_populations(pops)
 
             # --- 1. Spectra Profiling ---
-            for p in pops:
-                p.spectra = {}
-            iter_mems["spectra"]["Pacman"].append(
-                measure_pops(
-                    pops,
-                    lambda p: p.get_spectra(model_pacman, nthreads=nthreads),
-                    lambda p: p.spectra,
+            for name, model in (
+                ("Incident", model_incident),
+                ("Pacman", model_pacman),
+            ):
+                for p in pops:
+                    p.spectra = {}
+                iter_mems["spectra"][f"{name}, separate"].append(
+                    measure_pops(
+                        pops,
+                        lambda p, m=model: p.get_spectra(m, nthreads=nthreads),
+                        lambda p: p.spectra,
+                    )
                 )
-            )
+                combined.spectra = {}
+                iter_mems["spectra"][f"{name}, combined"].append(
+                    measure_pops(
+                        [combined],
+                        lambda p, m=model: p.get_spectra(m, nthreads=nthreads),
+                        lambda p: p.spectra,
+                    )
+                )
 
+            # The emission of each population (kept like per particle
+            # emission, alongside the integrated emission)
             for p in pops:
                 p.spectra = {}
-            iter_mems["spectra"]["Incident"].append(
+            combined.spectra = {}
+            for p in pops:
+                p.get_spectra(model_incident, nthreads=nthreads)
+            iter_mems["spectra"]["Incident per population, combined"].append(
                 measure_pops(
-                    pops,
-                    lambda p: p.get_spectra(model_incident, nthreads=nthreads),
-                    lambda p: p.spectra,
+                    [combined],
+                    lambda p: p.get_spectra(model_per_pop, nthreads=nthreads),
+                    lambda p: (p.spectra, p.particle_spectra),
                 )
             )
 
@@ -137,18 +170,27 @@ def profile_npops_memory(
             ):
                 for p in pops:
                     p.spectra["int"].photo_lnu = {}
-                iter_mems["photometry"][
-                    f"Integrated ({nfilt} filters)"
-                ].append(
+                iter_mems["photometry"][f"Separate ({nfilt} filters)"].append(
                     measure_pops(
                         pops,
-                        lambda p: p.spectra["int"].get_photo_lnu(filters),
+                        lambda p, f=filters: p.spectra["int"].get_photo_lnu(f),
                         lambda p: p.spectra["int"].photo_lnu,
+                    )
+                )
+                sed = combined.particle_spectra["int"]
+                sed.photo_lnu = {}
+                iter_mems["photometry"][
+                    f"Per population, combined ({nfilt} filters)"
+                ].append(
+                    measure_pops(
+                        [combined],
+                        lambda p, f=filters: sed.get_photo_lnu(f),
+                        lambda p: sed.photo_lnu,
                     )
                 )
 
             # Force garbage collection
-            del pops
+            del pops, combined
             gc.collect()
 
         # Store averages

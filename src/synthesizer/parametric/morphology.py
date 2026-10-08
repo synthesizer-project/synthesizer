@@ -53,12 +53,17 @@ TANGENT_GRADING = 16
 # an elongated profile (see _integrate_radial_profile)
 MAX_TAPER_SUPERSAMPLE = 64
 
+# The estimated relative error of a pixel's centre sample above which the
+# pixel is sampled within instead (see _integrate_radial_profile)
+SAMPLE_TOLERANCE = 1e-4
+
 
 def _integrate_radial_profile(profile, resolution, npix, radii, supersample):
     """Get the fraction of a radial profile's light in each pixel and annulus.
 
     Away from the centre the profile is integrated over each pixel by
-    sampling it within the pixel. Near the centre the light is placed in
+    sampling it within the pixel (where its curvature means the pixel
+    centre alone isn't accurate enough). Near the centre the light is placed in
     thin elliptical shells whose mass comes from the profile's enclosed
     fraction, each spread evenly around its ellipse, so the light of a cusp
     lands in the right pixels exactly. The two are blended with a smooth
@@ -131,22 +136,50 @@ def _integrate_radial_profile(profile, resolution, npix, radii, supersample):
             )
         return out * res**2 / len(offsets) / profile.get_total(units)
 
-    # Sample the profile within each pixel beyond the central region
-    weights = sample(np.arange(nx * ny), supersample)
+    # Sample the profile at each pixel centre, which is accurate enough
+    # wherever the profile is smooth on the scale of a pixel
+    x0, y0, angle, axis_ratio = profile._get_ellipse(units)
+    weights = sample(np.arange(nx * ny), 1)
+
+    # Find the pixels that need sampling within: where the error of the
+    # centre sample (estimated from the profile's curvature, the discrete
+    # Laplacian of the centre samples, as the midpoint rule's error is
+    # res^2 / 24 times the Laplacian) is too large, near an annulus edge
+    # (where a pixel is split between annuli) and near the central shells
+    xx, yy = MorphologyBase._get_coordinate_grids(resolution, npix)
+    centre = profile.get_radius(xx, yy).to(units).value
+    values = np.pad(np.asarray(profile.compute_density_grid(xx, yy)[0]), 1)
+    laplacian = (
+        values[:-2, 1:-1]
+        + values[2:, 1:-1]
+        + values[1:-1, :-2]
+        + values[1:-1, 2:]
+        - 4 * values[1:-1, 1:-1]
+    )
+    error = np.abs(laplacian) / 24
+    total = profile.get_total(units) / res**2
+    reach = res / axis_ratio  # the furthest a pixel's radii can differ
+    edges = radii[np.isfinite(radii) & (radii > 0)]
+    refine = (error > SAMPLE_TOLERANCE * values[1:-1, 1:-1]) & (
+        error > SAMPLE_TOLERANCE * 1e-5 * total
+    )
+    if edges.size > 0:
+        refine |= np.min(np.abs(centre[..., None] - edges), axis=-1) < reach
+    if shells:
+        refine |= centre < r_out + reach
+    refine = np.flatnonzero(refine.ravel())
+    weights.reshape(nx * ny, nann)[refine] = 0.0
+    weights += sample(refine, supersample)
     if not shells:
         return weights.reshape(nx * ny, nann)
 
     # The taper is a function of the elliptical radius, which changes
     # 1 / axis_ratio times faster along the minor axis, so pixels in the
     # taper of an elongated profile are sampled that much more finely
-    x0, y0, angle, axis_ratio = profile._get_ellipse(units)
     fine = min(int(np.ceil(supersample / axis_ratio)), MAX_TAPER_SUPERSAMPLE)
     if fine > supersample:
-        xx, yy = MorphologyBase._get_coordinate_grids(resolution, npix)
-        centre = profile.get_radius(xx, yy).to(units).value.ravel()
-        reach = res / axis_ratio  # the furthest a pixel's radii can differ
         tapered = np.flatnonzero(
-            (centre > r_in - reach) & (centre < r_out + reach)
+            ((centre > r_in - reach) & (centre < r_out + reach)).ravel()
         )
         weights.reshape(nx * ny, nann)[tapered] = 0.0
         weights += sample(tapered, fine)
