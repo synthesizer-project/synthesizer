@@ -1506,13 +1506,14 @@ class TestPopulationAccessAndImaging:
             image, expected, rtol=0, atol=1e-12 * expected.max()
         )
 
-        # Every annulus is normalised over its own pixels so the image holds
-        # all of the light
-        np.testing.assert_allclose(
-            image.sum(),
-            stars.particle_photo_lnu["emergent"]["f1"].value.sum(),
-            rtol=1e-10,
-        )
+        # The annuli inside the image hold exactly their light, and the
+        # outer one loses only what lies beyond the image (at least the
+        # light within the inscribed 15 kpc ellipse is kept)
+        lums = stars.particle_photo_lnu["emergent"]["f1"].value
+        frac = annuli.profile.get_enclosed_fraction(np.array([7, 15]) * kpc)
+        kept = (frac[1] - frac[0]) / (1 - frac[0])
+        assert image.sum() <= lums.sum() * (1 + 1e-10)
+        assert image.sum() >= lums[:-1].sum() + kept * lums[-1]
 
     def test_pipeline(self, test_grid):
         """Multi population parametric galaxies run through a Pipeline."""
