@@ -1628,3 +1628,207 @@ class TestFromBinned:
                 np.array([0.001, 0.01]),
                 np.ones((3, 1)),
             )
+
+
+@pytest.fixture
+def u_grid(tmp_path, test_grid):
+    """Write a grid with an ionisation parameter axis and return it.
+
+    The incident spectra of the test grid are scaled by a different factor
+    at each ionisation parameter, so the third axis changes the emission.
+    """
+    import h5py
+
+    from synthesizer.grid import Grid
+
+    nlam = 100
+    us = np.array([1e-4, 1e-3, 1e-2])
+    spectra = test_grid.spectra["incident"][..., ::50][..., :nlam]
+    spectra = spectra[:, :, None, :] * np.array([1.0, 3.0, 10.0])[:, None]
+    with h5py.File(tmp_path / "u_grid.hdf5", "w") as hf:
+        hf.attrs["axes"] = ["ages", "metallicities", "ionisation_parameter"]
+        hf.attrs["WeightVariable"] = "initial_masses"
+        for name, values, units in (
+            ("ages", test_grid._axes_values["ages"], "yr"),
+            ("metallicities", test_grid.metallicities, "dimensionless"),
+            ("ionisation_parameter", us, "dimensionless"),
+        ):
+            hf[f"axes/{name}"] = values
+            hf[f"axes/{name}"].attrs["Units"] = units
+            hf[f"axes/{name}"].attrs["log_on_read"] = True
+        hf["spectra/incident"] = spectra
+        hf["spectra/incident"].attrs["Units"] = "erg/(Hz*s)"
+        hf["spectra/wavelength"] = test_grid.lam.value[::50][:nlam]
+        hf["spectra/wavelength"].attrs["Units"] = "Å"
+    return Grid("u_grid.hdf5", grid_dir=str(tmp_path), ignore_lines=True)
+
+
+class TestExtraAxes:
+    """Tests for parametric populations on grids with more axes."""
+
+    U = 3e-3
+
+    @staticmethod
+    def _sfzh(grid):
+        """Return a random SFZH on a grid's age and metallicity axes."""
+        return np.random.default_rng(4).random(
+            (grid.log10ages.size, grid.metallicities.size)
+        )
+
+    @staticmethod
+    def _lnu(stars, grid, **model_kwargs):
+        """Return the incident spectra of an emitter."""
+        model = IncidentEmission(grid, **model_kwargs)
+        return stars.get_spectra(model).lnu.value
+
+    def _particles(self, grid, sfzh, u):
+        """Return particles at the SFZH's axis points with one U."""
+        ages, metals = np.meshgrid(
+            grid._axes_values["ages"], grid.metallicities, indexing="ij"
+        )
+        return ParticleStars(
+            initial_masses=sfzh.ravel() * Msun,
+            ages=ages.ravel() * yr,
+            metallicities=metals.ravel(),
+            ionisation_parameter=np.full(sfzh.size, u),
+        )
+
+    def test_value_on_stars_matches_particles(self, u_grid):
+        """A U attribute on the Stars is a delta, exactly as particles."""
+        sfzh = self._sfzh(u_grid)
+        stars = Stars.from_sfzh(
+            u_grid.log10ages,
+            u_grid.metallicities,
+            sfzh,
+            ionisation_parameter=self.U,
+        )
+        np.testing.assert_allclose(
+            self._lnu(stars, u_grid),
+            self._lnu(self._particles(u_grid, sfzh, self.U), u_grid),
+            rtol=1e-10,
+        )
+
+    def test_model_value_and_extra_axes_match(self, u_grid):
+        """A model fixed parameter and extra_axes give the same delta."""
+        sfzh = self._sfzh(u_grid)
+        on_model = self._lnu(
+            Stars.from_sfzh(u_grid.log10ages, u_grid.metallicities, sfzh),
+            u_grid,
+            ionisation_parameter=self.U,
+        )
+        extra = self._lnu(
+            Stars.from_sfzh(
+                u_grid.log10ages,
+                u_grid.metallicities,
+                sfzh,
+                extra_axes={"ionisation_parameter": self.U},
+            ),
+            u_grid,
+        )
+        reference = self._lnu(self._particles(u_grid, sfzh, self.U), u_grid)
+        np.testing.assert_allclose(on_model, reference, rtol=1e-10)
+        np.testing.assert_allclose(extra, reference, rtol=1e-10)
+
+    def test_joint_bins_are_the_sum_of_their_slices(self, u_grid):
+        """from_binned with an extra axis sums its U slices."""
+        age_edges = [1e6, 1e7, 1e8]
+        metal_edges = [0.002, 0.002, 0.01, 0.01]
+        masses = np.random.default_rng(5).random((2, 3, 3))
+        masses[:, 1] = 0.0  # nothing between the metallicity points
+        masses[..., 1] = 0.0  # or between the U points
+        joint = Stars.from_binned(
+            u_grid.log10ages,
+            u_grid.metallicities,
+            age_edges,
+            metal_edges,
+            masses,
+            extra_edges={"ionisation_parameter": [2e-4, 2e-4, 5e-3, 5e-3]},
+        )
+        assert joint.bin_axes == (
+            "ages",
+            "metallicities",
+            "ionisation_parameter",
+        )
+        slices = sum(
+            self._lnu(
+                Stars.from_binned(
+                    u_grid.log10ages,
+                    u_grid.metallicities,
+                    age_edges,
+                    metal_edges,
+                    masses[..., iu],
+                    ionisation_parameter=u,
+                ),
+                u_grid,
+            )
+            for iu, u in ((0, 2e-4), (2, 5e-3))
+        )
+        np.testing.assert_allclose(self._lnu(joint, u_grid), slices)
+        # The SFZH view sums over the extra axis
+        np.testing.assert_allclose(joint.sfzh.sum(), masses.sum())
+
+    def test_extra_axis_distribution(self, u_grid):
+        """A distribution along an extra axis splits the mass by weight."""
+        sfzh = self._sfzh(u_grid)
+        stars = Stars.from_sfzh(
+            u_grid.log10ages,
+            u_grid.metallicities,
+            sfzh,
+            extra_axes={
+                "ionisation_parameter": (
+                    [2e-4, 2e-4, 5e-3, 5e-3],
+                    [1.0, 0.0, 3.0],
+                )
+            },
+        )
+        expected = 0.25 * self._lnu(
+            self._particles(u_grid, sfzh, 2e-4), u_grid
+        ) + 0.75 * self._lnu(self._particles(u_grid, sfzh, 5e-3), u_grid)
+        np.testing.assert_allclose(self._lnu(stars, u_grid), expected)
+
+    def test_per_population_values(self, u_grid):
+        """Populations with their own U are each a delta at their value."""
+        sfzh = self._sfzh(u_grid)
+        pops = [
+            Stars.from_sfzh(
+                u_grid.log10ages,
+                u_grid.metallicities,
+                sfzh,
+                ionisation_parameter=u,
+            )
+            for u in (2e-4, 5e-3)
+        ]
+        combined = Stars.from_populations(pops)
+        np.testing.assert_allclose(combined.ionisation_parameter, [2e-4, 5e-3])
+        separate = [self._lnu(p, u_grid) for p in pops]
+        np.testing.assert_allclose(self._lnu(combined, u_grid), sum(separate))
+
+        # The emission of each population is at its own value
+        model = IncidentEmission(u_grid, per_particle=True)
+        combined.get_spectra(model)
+        np.testing.assert_allclose(
+            combined.particle_spectra["incident"].lnu.value, separate
+        )
+
+    def test_mask_on_extra_axis(self, u_grid):
+        """A mask on an extra bin axis keeps only the passing part."""
+        sfzh = self._sfzh(u_grid)
+        stars = Stars.from_sfzh(
+            u_grid.log10ages,
+            u_grid.metallicities,
+            sfzh,
+            extra_axes={
+                "ionisation_parameter": ([2e-4, 2e-4, 5e-3, 5e-3], [1, 0, 1])
+            },
+        )
+        mask = stars.get_mask("ionisation_parameter", 1e-3, ">")
+        _, masses, _ = stars.get_bins_for_grid(u_grid, mask=mask)
+        np.testing.assert_allclose(masses.sum(), 0.5 * sfzh.sum())
+
+    def test_missing_value_raises(self, u_grid):
+        """A grid axis with no bins or value raises."""
+        stars = Stars.from_sfzh(
+            u_grid.log10ages, u_grid.metallicities, self._sfzh(u_grid)
+        )
+        with pytest.raises(exceptions.MissingAttribute):
+            self._lnu(stars, u_grid)
