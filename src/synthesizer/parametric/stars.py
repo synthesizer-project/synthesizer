@@ -34,6 +34,7 @@ from synthesizer.emission_models.utils import get_param
 from synthesizer.grid import Grid
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.plt import single_histxy
@@ -502,10 +503,14 @@ class Stars(StarsComponent):
             # Set up SFH array
             sf_hist = np.zeros(self.ages.size)
 
-            # Loop over age bins calculating the amount of mass in each bin
+            # Loop over age bins calculating the amount of mass in each bin,
+            # the oldest bin extends up to the oldest grid age
             min_age = 0
-            for ia, age in enumerate(self.ages[:-1]):
-                max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
+            for ia in range(self.ages.size):
+                if ia < self.ages.size - 1:
+                    max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
+                else:
+                    max_age = self.ages[-1].to("yr").value
                 sf = integrate.quad(
                     self.sf_hist_func.get_sfr,
                     min_age + age_offset.to("yr").value,
@@ -519,15 +524,19 @@ class Stars(StarsComponent):
             # Set up ZH array
             metal_dist = np.zeros(self.metallicities.size)
             # Loop over metallicity bins calculating the amount of mass in
-            # each bin
+            # each bin, the most metal rich bin extends up to the highest
+            # grid metallicity
             min_metal = 0
-            for imetal, metal in enumerate(self.metallicities[:-1]):
-                max_metal = np.mean(
-                    [
-                        self.metallicities[imetal + 1],
-                        self.metallicities[imetal],
-                    ]
-                )
+            for imetal in range(self.metallicities.size):
+                if imetal < self.metallicities.size - 1:
+                    max_metal = np.mean(
+                        [
+                            self.metallicities[imetal + 1],
+                            self.metallicities[imetal],
+                        ]
+                    )
+                else:
+                    max_metal = self.metallicities[-1]
                 sf = integrate.quad(
                     self.metal_dist_func.get_dist_weight, min_metal, max_metal
                 )[0]
@@ -764,7 +773,26 @@ class Stars(StarsComponent):
                 "SFZH must be the same shape"
             )
 
-        return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
+        # Carry over the attributes both populations share. Differing values
+        # can't be combined into a single population so they are dropped.
+        shared = {}
+        for name in ("fesc", "fesc_ly_alpha", "morphology"):
+            this = getattr(self, name, None)
+            other = getattr(other_stars, name, None)
+            if this is other or (name != "morphology" and this == other):
+                shared[name] = this
+            else:
+                warn(
+                    f"The added Stars have different {name} values, "
+                    f"the combined Stars will use the default {name}."
+                )
+
+        return Stars(
+            self.log10ages,
+            self.metallicities,
+            sfzh=new_sfzh,
+            **shared,
+        )
 
     def __radd__(self, other_stars):
         """Add two Stars instances together (reflected addition).
@@ -778,17 +806,7 @@ class Stars(StarsComponent):
             other_stars (parametric.Stars):
                 The other instance of Stars to add to this one.
         """
-        if np.all(self.log10ages == other_stars.log10ages) and np.all(
-            self.metallicities == other_stars.metallicities
-        ):
-            new_sfzh = self.sfzh + other_stars.sfzh
-
-        else:
-            raise exceptions.InconsistentAddition(
-                "SFZH must be the same shape"
-            )
-
-        return Stars(self.log10ages, self.metallicities, sfzh=new_sfzh)
+        return self.__add__(other_stars)
 
     @accepts(lum=erg / s / Hz)
     def scale_mass_by_luminosity(self, lum, scale_filter, spectra_type):
@@ -936,8 +954,12 @@ class Stars(StarsComponent):
             Stars: New Stars object on the requested grid.
         """
         # If the axes are the same as our existing ones just return our SFZH
-        if np.allclose(log10ages, self.log10ages) and np.allclose(
-            metallicities, self.metallicities
+        # (the lengths must be checked first since allclose broadcasts)
+        if (
+            len(log10ages) == len(self.log10ages)
+            and len(metallicities) == len(self.metallicities)
+            and np.allclose(log10ages, self.log10ages)
+            and np.allclose(metallicities, self.metallicities)
         ):
             return deepcopy(self)
 
@@ -1216,17 +1238,17 @@ class Stars(StarsComponent):
 
         # --- Construct Bins from Age Points ---
         if age_points.size == 1:
-            # For a single point, assume the bin is centered on it,
-            # starting from 0.
-            age_edges = np.array([0, 2 * age_points[0]])
+            # For a single point, the bin runs from 0 up to that age,
+            # matching the bin used when integrating the SFZH.
+            age_edges = np.array([0, age_points[0]])
         else:
             # Bin edges are the midpoints between age points.
             internal_edges = (age_points[:-1] + age_points[1:]) / 2.0
-            # Extrapolate the first and last edges to define the outer bounds.
+            # Extrapolate the first edge to define the lower bound, the last
+            # edge is the oldest age, matching the bin used when integrating
+            # the SFZH.
             first_edge = age_points[0] - (age_points[1] - age_points[0]) / 2.0
-            last_edge = (
-                age_points[-1] + (age_points[-1] - age_points[-2]) / 2.0
-            )
+            last_edge = age_points[-1]
             age_edges = np.concatenate(
                 ([first_edge], internal_edges, [last_edge])
             )

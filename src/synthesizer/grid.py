@@ -47,6 +47,7 @@ from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import (
     convert_array_dtype,
+    max_abs,
     resolve_out_dtype,
     verify_out_precision,
 )
@@ -244,6 +245,26 @@ class Grid:
         # because we want to modify self
         if use_precision is not None:
             self.convert_precision(use_precision, inplace=True)
+
+        # Record the largest absolute value in each emission array
+        self._compute_max_grid_values()
+
+    def _compute_max_grid_values(self):
+        """Record the largest absolute value in each emission array.
+
+        These bound the values extraction can produce, which lets it skip
+        scanning reduced precision outputs for overflow (see
+        utils.precision.weighted_sum_fits). Grid methods that change the
+        arrays' values call this again.
+
+        NOTE: If you assign to or modify the spectra or line arrays directly,
+        call this afterwards so the bounds stay valid.
+        """
+        self._max_grid_values = {
+            "spectra": {k: max_abs(v) for k, v in self.spectra.items()},
+            "line_lum": {k: max_abs(v) for k, v in self.line_lums.items()},
+            "line_cont": {k: max_abs(v) for k, v in self.line_conts.items()},
+        }
 
     def _convert_grid_to_internal_units(self):
         """Convert the grid to match Synthesizer's internal units.
@@ -1077,6 +1098,9 @@ class Grid:
         # Remove any lines outside the new wavelength range
         if self.lines_available:
             self._remove_lines_outside_lam()
+
+        # Resampling changes the values, so update their bounds
+        self._compute_max_grid_values()
 
     @accepts(lam=angstrom)
     @timed("Grid.get_spectra_at_lam")
@@ -2025,6 +2049,9 @@ class Grid:
         if hasattr(grid, f"log10{axis_name}"):
             delattr(grid, f"log10{axis_name}")
         grid.naxes -= 1
+
+        # Marginalising can change the values, so update their bounds
+        grid._compute_max_grid_values()
 
         # Return the grid if not inplace
         if not inplace:

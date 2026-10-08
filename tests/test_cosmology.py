@@ -1,5 +1,8 @@
 """A test suite for the cosmology module."""
 
+import gc
+import weakref
+
 import numpy as np
 from astropy.cosmology import (
     WMAP9,
@@ -241,3 +244,31 @@ class TestCosmologyDistanceFunctions:
         assert lum_dist.value < 1e6, (
             "Luminosity distance should be reasonable (< 1 Gpc)"
         )
+
+    def test_cache_miss_does_not_pin_caller(self):
+        """A cache miss must not leave cycles holding the caller's locals.
+
+        Reconstructing an astropy cosmology leaves reference cycles that hold
+        the calling frames alive, which in the Pipeline kept whole galaxies
+        resident until the garbage collector ran.
+        """
+
+        class Payload:
+            pass
+
+        # Built out here, since constructing one pins the constructing frame
+        cosmo = FlatLambdaCDM(H0=71, Om0=0.29)
+
+        def caller(redshift):
+            payload = Payload()  # noqa: F841 (held in this frame's locals)
+            get_luminosity_distance(cosmo, redshift)
+            get_angular_diameter_distance(cosmo, redshift)
+            return weakref.ref(payload)
+
+        gc.collect()
+        gc.disable()
+        try:
+            ref = caller(3.14159)
+            assert ref() is None, "A distance cache miss pinned the caller"
+        finally:
+            gc.enable()

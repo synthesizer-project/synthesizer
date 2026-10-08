@@ -62,8 +62,7 @@ python profiling/pipeline/make_profiling_instruments.py
 This writes `profiling/pipeline/jwst_pipeline_perf_inst.hdf5`, which the
 profiling scripts load without contacting SVO.
 
-To generate the documentation plots into a single directory without copying
-them into the docs tree:
+To generate the documentation plots into a single directory:
 
 ```bash
 bash profiling/run_doc_profiling_plots.sh
@@ -71,10 +70,13 @@ bash profiling/run_doc_profiling_plots.sh
 
 This places the final PNGs in `profiling/outputs/`.
 
-To copy those generated plots into the documentation directory afterwards:
+The documentation loads these plots from the
+[synventory](https://github.com/synthesizer-project/synventory) repository
+rather than the Synthesizer repository. To copy them into a local synventory
+checkout afterwards (then commit and push them there):
 
 ```bash
-bash profiling/move_profiling_to_docs.sh
+bash profiling/move_profiling_to_synventory.sh --synventory ../synventory
 ```
 
 #### `profile_timing.py` - Measure Execution Time
@@ -292,6 +294,32 @@ python profiling/general/make_all_plots.py
 
 ---
 
+## MPI Scaling (`mpi/`)
+
+MPI weak and strong scaling of the `Pipeline`, using the same operations as the pipeline profiling scripts on fake galaxies. Each rank builds its own galaxies and runs with its own OpenMP threads (by default 16, one NUMA domain on COSMA8).
+
+- **Weak scaling** (`--mode weak`): `--ngalaxies` galaxies per rank, so the total work grows with the ranks. Ideally the run time stays constant.
+- **Strong scaling** (`--mode strong`): `--ngalaxies` galaxies in total, split across the ranks. Ideally the run time halves when the ranks double.
+
+Only `Pipeline.run` is timed, as the slowest rank's time.
+
+| Script                    | Purpose                                                  |
+| ------------------------- | -------------------------------------------------------- |
+| `pipeline_mpi_scaling.py` | One measurement at the current rank count (run under MPI) |
+| `analyse_mpi_scaling.py`  | Plot run time and parallel efficiency against ranks      |
+| `run_mpi_scaling.sh`      | Run a mode over a range of rank counts and plot it       |
+
+Requires an MPI implementation and `mpi4py`. Run inside a job allocation large enough for the largest rank count, e.g. 4 COSMA8 nodes for 32 ranks of 16 threads:
+
+```bash
+bash profiling/mpi/run_mpi_scaling.sh --mode weak --ngalaxies 25
+bash profiling/mpi/run_mpi_scaling.sh --mode strong --ngalaxies 1000
+```
+
+Results and plots go to `profiling/outputs/mpi_weak/` and `profiling/outputs/mpi_strong/`.
+
+---
+
 ## Output Directory Structure
 
 ```
@@ -319,12 +347,22 @@ profiling/
 │   ├── profile_wavelength_*.py
 │   └── make_all_plots.py
 │
+├── mpi/                    # MPI weak and strong scaling of the Pipeline
+│   ├── pipeline_mpi_scaling.py
+│   ├── analyse_mpi_scaling.py
+│   └── run_mpi_scaling.sh
+│
 ├── outputs/                # Output data from pipeline profiling
 │   ├── timing/             # timing.csv files
 │   ├── memory/             # memory.csv files
 │   ├── timing_analysis/    # comparison plots & summaries
 │   ├── memory_analysis/    # comparison plots & summaries
-│   └── precision_validation/  # validation plots
+│   ├── precision_validation/  # validation plots
+│   ├── pipeline/           # documentation plots, grouped as in synventory
+│   ├── problem_size/
+│   ├── thread_scaling/
+│   ├── mpi_weak/
+│   └── mpi_strong/
 │
 └── plots/                  # Output plots from scaling analysis
 ```
