@@ -1832,3 +1832,109 @@ class TestExtraAxes:
         )
         with pytest.raises(exceptions.MissingAttribute):
             self._lnu(stars, u_grid)
+
+
+class TestAgeDependence:
+    """Tests for distributions that depend on the stars' age."""
+
+    MAX_AGE = 5e8
+
+    @staticmethod
+    def _z_of_t(age):
+        """A linear enrichment history (age as a unyt quantity)."""
+        return 0.02 - 0.018 * (age.to("yr").value / 5e8)
+
+    def _stars(self, grid, metal_dist, **kwargs):
+        """Return a constant SFH population with a metallicity dist."""
+        return Stars(
+            grid.log10ages,
+            grid.metallicities,
+            sf_hist=SFH.Constant(max_age=self.MAX_AGE * yr),
+            metal_dist=metal_dist,
+            initial_mass=1e9 * Msun,
+            **kwargs,
+        )
+
+    def _dense_particles(self, n=20000, **attrs):
+        """Return particles spread uniformly over the constant SFH."""
+        ages = self.MAX_AGE * (np.arange(n) + 0.5) / n
+        return ParticleStars(
+            initial_masses=np.full(n, 1e9 / n) * Msun,
+            ages=ages * yr,
+            metallicities=self._z_of_t(ages * yr),
+            **{k: f(ages * yr) for k, f in attrs.items()},
+        )
+
+    @staticmethod
+    def _lnu(stars, grid, **model_kwargs):
+        """Return the incident spectra of an emitter."""
+        return stars.get_spectra(
+            IncidentEmission(grid, **model_kwargs)
+        ).lnu.value
+
+    def test_constant_functions_match_fixed_values(self, test_grid):
+        """A constant function of age gives the age independent result."""
+        for fixed, func in (
+            (
+                ZDist.DeltaConstant(metallicity=0.01),
+                ZDist.DeltaConstant(metallicity=lambda age: 0.01),
+            ),
+            (
+                ZDist.Normal(mean=0.01, sigma=0.003),
+                ZDist.Normal(mean=lambda age: 0.01, sigma=0.003),
+            ),
+        ):
+            assert func.depends_on_age and not fixed.depends_on_age
+            np.testing.assert_allclose(
+                self._lnu(self._stars(test_grid, func), test_grid),
+                self._lnu(self._stars(test_grid, fixed), test_grid),
+                rtol=1e-10,
+            )
+
+    def test_enrichment_history_matches_particles(self, test_grid):
+        """Z(t) averaged over each age bin matches dense particles."""
+        stars = self._stars(
+            test_grid, ZDist.DeltaConstant(metallicity=self._z_of_t)
+        )
+        np.testing.assert_allclose(
+            self._lnu(stars, test_grid),
+            self._lnu(self._dense_particles(), test_grid),
+            rtol=1e-3,
+        )
+
+    def test_lognormal_cdf(self):
+        """The LogNormal CDF matches integrating its distribution."""
+        dist = ZDist.LogNormal(log10metallicity=-2.0, sigma=0.3)
+        for z in (0.003, 0.01, 0.05):
+            expected = quad(dist._weight, 0.0, z, points=[0.01], limit=200)[0]
+            np.testing.assert_allclose(dist.get_cdf([z])[0], expected)
+
+    def test_age_dependent_extra_axis_matches_particles(self, u_grid):
+        """U(age) on an extra axis matches particles carrying U(age)."""
+
+        def u_of_age(age):
+            return 1e-2 * (1e-4 / 1e-2) ** (age.to("yr").value / 5e8)
+
+        stars = self._stars(
+            u_grid,
+            ZDist.DeltaConstant(metallicity=self._z_of_t),
+            extra_axes={
+                "ionisation_parameter": (
+                    10 ** np.linspace(-4, -2, 9),
+                    u_of_age,
+                )
+            },
+        )
+        particles = self._dense_particles(ionisation_parameter=u_of_age)
+        np.testing.assert_allclose(
+            self._lnu(stars, u_grid), self._lnu(particles, u_grid), rtol=1e-3
+        )
+
+    def test_age_dependent_value_needs_points(self, test_grid):
+        """A function of age alone can't be placed on an extra axis."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            self._stars(
+                test_grid,
+                0.01,
+                extra_axes={"ionisation_parameter": lambda age: 1e-3},
+            )

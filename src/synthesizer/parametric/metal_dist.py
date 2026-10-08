@@ -11,6 +11,12 @@ Example usage:
 
     metal_dist = ZDist.DeltaConstant(...)
     metal_dist = ZDist.Normal(...)
+    metal_dist = ZDist.LogNormal(...)
+
+Any parameter can instead be a function of the stars' age, called with the
+age (a unyt_quantity or unyt_array in yr), e.g. for an enrichment history:
+
+    metal_dist = ZDist.DeltaConstant(metallicity=lambda age: ...)
 
     metal_dist.get_dist_weight(metals)
 
@@ -29,6 +35,7 @@ NUMERICAL_CDF_POINTS = 8192
 parametrisations = (
     "DeltaConstant",
     "Normal",
+    "LogNormal",
 )
 
 
@@ -60,6 +67,34 @@ class Common:
 
         # Store the model parameters (defined as kwargs)
         self.parameters = kwargs
+
+    @property
+    def depends_on_age(self):
+        """Whether any parameter is a function of the stars' age.
+
+        Returns:
+            bool:
+                True if any parameter is callable.
+        """
+        return any(callable(value) for value in self.parameters.values())
+
+    def at_age(self, age):
+        """Get this distribution with its parameters evaluated at an age.
+
+        Args:
+            age (unyt_quantity):
+                The age of the stars.
+
+        Returns:
+            Common:
+                A distribution of the same type with fixed parameters.
+        """
+        return type(self)(
+            **{
+                name: value(age) if callable(value) else value
+                for name, value in self.parameters.items()
+            }
+        )
 
     def __str__(self):
         """Print basic summary of the metallicity distribution."""
@@ -175,13 +210,37 @@ class DeltaConstant(Common):
         )
 
         # Handled wether we've been passed logged or linear metallicity and
-        # set the attributes accordingly.
-        if metallicity is not None:
+        # set the attributes accordingly (a function of age is evaluated
+        # when the population is binned, see Common.at_age)
+        if self.depends_on_age:
+            self.metallicity_ = None
+            self.log10metallicity_ = None
+        elif metallicity is not None:
             self.metallicity_ = metallicity
             self.log10metallicity_ = np.log10(self.metallicity_)
         else:
             self.log10metallicity_ = log10metallicity
             self.metallicity_ = 10**self.log10metallicity_
+
+    def get_metallicities(self, ages):
+        """Get the metallicity of stars formed at each of a set of ages.
+
+        Args:
+            ages (unyt_array):
+                The ages of the stars (any shape).
+
+        Returns:
+            np.ndarray of float:
+                The (linear) metallicity at each age.
+        """
+        metal = self.parameters["metallicity"]
+        log10metal = self.parameters["log10metallicity"]
+        if metal is None:
+            value = log10metal(ages) if callable(log10metal) else log10metal
+            value = 10 ** _to_float(value)
+        else:
+            value = _to_float(metal(ages) if callable(metal) else metal)
+        return np.broadcast_to(value, np.shape(ages))
 
     def get_metallicity(self, *args):
         """Return the single metallicity.
@@ -289,3 +348,84 @@ class Normal(Common):
         mean = float(self.mean)
         scale = float(self.sigma) * np.sqrt(2.0)
         return 0.5 * (erf((metals - mean) / scale) - erf(-mean / scale))
+
+
+class LogNormal(Common):
+    """A log-normal metallicity distribution.
+
+    Attributes:
+        log10metallicity (float):
+            The mean of log10(metallicity), i.e. the median metallicity.
+        sigma (float):
+            The standard deviation of log10(metallicity) in dex.
+    """
+
+    def __init__(self, log10metallicity, sigma):
+        """Initialise the metallicity distribution and parent.
+
+        Args:
+            log10metallicity (float):
+                The mean of log10(metallicity), i.e. the median metallicity.
+            sigma (float):
+                The standard deviation of log10(metallicity) in dex.
+        """
+        Common.__init__(
+            self,
+            name="LogNormal",
+            log10metallicity=log10metallicity,
+            sigma=sigma,
+        )
+        self.log10metallicity = log10metallicity
+        self.sigma = sigma
+
+    def _weight(self, metal):
+        """Return the distribution (per unit linear metallicity).
+
+        Args:
+            metal (float):
+                The (linear) metallicity at which to evaluate the distribution.
+
+        Returns:
+            float
+                The weight of the metallicity distribution at metal.
+        """
+        if metal <= 0:
+            return 0.0
+        x = (np.log10(metal) - self.log10metallicity) / self.sigma
+        return np.exp(-0.5 * x**2) / (
+            metal * np.log(10) * self.sigma * np.sqrt(2 * np.pi)
+        )
+
+    def get_cdf(self, metals):
+        """Get the weight between a metallicity of zero and each metallicity.
+
+        Args:
+            metals (np.ndarray of float):
+                The (linear) metallicities at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The integrated weight up to each metallicity.
+        """
+        metals = np.asarray(metals, dtype=np.float64)
+        with np.errstate(divide="ignore"):
+            x = (np.log10(metals) - float(self.log10metallicity)) / (
+                float(self.sigma) * np.sqrt(2.0)
+            )
+        return np.where(metals > 0, 0.5 * (1.0 + erf(x)), 0.0)
+
+
+def _to_float(value):
+    """Convert a (possibly dimensionless unyt) value to floats.
+
+    Args:
+        value (float/np.ndarray/unyt_array):
+            The value.
+
+    Returns:
+        np.ndarray of float:
+            The value without units.
+    """
+    if hasattr(value, "units"):
+        value = value.to("dimensionless").ndview
+    return np.asarray(value, dtype=np.float64)

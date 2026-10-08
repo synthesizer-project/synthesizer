@@ -54,6 +54,10 @@ from synthesizer.utils.stats import weighted_mean, weighted_median
 # young Gaussian SFH, and within 0.04% for typical SFHs.
 SFZH_SUBDIVISIONS = 8
 
+# The number of pieces each age bin is split into to average an age dependent
+# distribution (e.g. Z(t)) over the mass formed within the bin
+AGE_DEPENDENCE_SAMPLES = 8
+
 
 class Stars(StarsComponent):
     """The parametric stellar population object.
@@ -364,7 +368,14 @@ class Stars(StarsComponent):
 
         # Add any distributions along other axes
         edges, masses, self._bin_units = self._add_extra_axes(
-            edges, masses, extra_axes
+            edges,
+            masses,
+            extra_axes,
+            age_samples=(
+                self._get_age_samples(edges["ages"], self.sf_hist_func)
+                if extra_axes
+                else None
+            ),
         )
 
         # Check the masses don't contain any NaN or Inf values, this can
@@ -591,13 +602,185 @@ class Stars(StarsComponent):
 
         offset = 0.0 if age_offset is None else age_offset.to("yr").value
         age_edges, age_masses = self._get_age_bins(offset)
+
+        # A metallicity distribution that depends on age is averaged over
+        # the mass formed in each age bin, so it differs between age bins
+        dist = self.metal_dist_func
+        if dist is not None and dist.depends_on_age:
+            metals = np.asarray(self.metallicities, dtype=np.float64)
+            ages, weights = self._get_age_samples(
+                age_edges, self.sf_hist_func, offset
+            )
+            if dist.name == "DeltaConstant":
+                # Each metallicity is a point, split linearly between the
+                # points of a fine metallicity axis
+                points = self._get_fine_edges(metals)[1:]
+                metal_edges = np.repeat(points, 2)
+                metal_weights = self._average_over_samples(
+                    self._deposit_on_points(
+                        dist.get_metallicities(ages * yr), points
+                    ),
+                    weights,
+                )
+            else:
+                metal_edges = self._get_fine_edges(metals)
+                metal_weights = self._average_over_samples(
+                    self._get_sample_bin_weights(dist, ages, metal_edges),
+                    weights,
+                )
+            edges = {"ages": age_edges, "metallicities": metal_edges}
+            return edges, (age_masses[:, None] * metal_weights)[None]
+
         metal_edges, metal_weights = self._get_metal_bins()
         edges = {"ages": age_edges, "metallicities": metal_edges}
         masses = (age_masses[:, None] * metal_weights[None, :])[None]
         return edges, masses
 
     @staticmethod
-    def _add_extra_axes(edges, masses, extra_axes, units=None):
+    def _get_age_samples(age_edges, sf_hist_func=None, offset=0.0):
+        """Sample each age bin to average an age dependent distribution.
+
+        Each bin is split into AGE_DEPENDENCE_SAMPLES pieces (log spaced
+        when the bin is at positive ages), each weighted by the mass formed
+        in it: from the SFH function if there is one, otherwise uniformly
+        (the mass is spread uniformly within each bin). A zero width bin is
+        a single sample.
+
+        Args:
+            age_edges (np.ndarray of float):
+                The increasing age bin edges (in yr).
+            sf_hist_func (SFH.*):
+                The SFH function, or None.
+            offset (float):
+                The offset (in yr) between these ages and the ages the SFH
+                (and the age dependence) are defined at.
+
+        Returns:
+            tuple:
+                The age (in yr, including the offset) of each sample and the
+                fraction of the bin's mass in it, each (n_age_bins,
+                AGE_DEPENDENCE_SAMPLES).
+        """
+        lo = age_edges[:-1, None]
+        hi = age_edges[1:, None]
+        steps = np.arange(AGE_DEPENDENCE_SAMPLES + 1) / AGE_DEPENDENCE_SAMPLES
+        with np.errstate(divide="ignore", invalid="ignore"):
+            sub_edges = np.where(
+                lo > 0, lo * (hi / lo) ** steps, lo + (hi - lo) * steps
+            )
+        ages = 0.5 * (sub_edges[:, 1:] + sub_edges[:, :-1]) + offset
+
+        # Weight each sample by the mass formed in it
+        if sf_hist_func is not None:
+            cdf = sf_hist_func.get_cdf((sub_edges + offset).ravel())
+            weights = np.diff(cdf.reshape(sub_edges.shape), axis=1)
+        else:
+            weights = np.diff(sub_edges, axis=1)
+
+        # A zero width bin is a single sample, and a bin with no mass is
+        # weighted uniformly (it doesn't matter how)
+        weights[(hi == lo)[:, 0]] = 0.0
+        weights[(hi == lo)[:, 0], 0] = 1.0
+        total = np.sum(weights, axis=1, keepdims=True)
+        weights = np.where(
+            total > 0, weights / np.where(total > 0, total, 1.0), 0.0
+        )
+        weights[total[:, 0] <= 0] = 1.0 / AGE_DEPENDENCE_SAMPLES
+        return ages, weights
+
+    @staticmethod
+    def _average_over_samples(sample_weights, weights):
+        """Average per sample bin weights over the samples of each age bin.
+
+        Args:
+            sample_weights (np.ndarray):
+                The bin weights for each sample, (n_age_bins, n_samples,
+                n_bins).
+            weights (np.ndarray):
+                The fraction of each age bin's mass in each sample,
+                (n_age_bins, n_samples).
+
+        Returns:
+            np.ndarray:
+                The (n_age_bins, n_bins) average weights, each row
+                normalised.
+        """
+        average = np.einsum("aib,ai->ab", sample_weights, weights)
+        total = np.sum(average, axis=1, keepdims=True)
+        return average / np.where(total > 0, total, 1.0)
+
+    @staticmethod
+    def _get_sample_bin_weights(dist, ages, edges):
+        """Get the bin weights of an age dependent distribution per sample.
+
+        Args:
+            dist (object):
+                The distribution, with at_age and get_bin_weights methods.
+            ages (np.ndarray of float):
+                The age (in yr) of each sample, (n_age_bins, n_samples).
+            edges (np.ndarray of float):
+                The bin edges.
+
+        Returns:
+            np.ndarray:
+                The (n_age_bins, n_samples, n_bins) bin weights.
+        """
+        return np.array(
+            [
+                dist.at_age(age * yr).get_bin_weights(edges)
+                for age in ages.ravel()
+            ]
+        ).reshape(ages.shape + (edges.size - 1,))
+
+    @staticmethod
+    def _deposit_on_points(values, points):
+        """Split values linearly between their neighbouring points.
+
+        The split is linear in log10 when the points are positive (as the
+        grids' axes are), so for any grid whose points are a subset of these
+        the weights the grid gets are exactly those of the values themselves
+        (cloud in cell is exact for piecewise linear hat functions). Values
+        beyond the points are clamped onto the end points.
+
+        Args:
+            values (np.ndarray of float):
+                The values (any shape).
+            points (np.ndarray of float):
+                The increasing points.
+
+        Returns:
+            np.ndarray:
+                The weights (summing to one) on the zero width bins at the
+                points, with the empty bins between them, shape
+                values.shape + (2 * len(points) - 1,).
+        """
+        weights = np.zeros(np.shape(values) + (2 * points.size - 1,))
+        if points.size == 1:
+            weights[..., 0] = 1.0
+            return weights
+        log = points[0] > 0
+        coords = np.log10(points) if log else points
+        values = np.asarray(values, dtype=np.float64)
+        if log:
+            # Values at or below zero are below the points
+            positive = values > 0
+            x = np.log10(np.where(positive, values, 1.0))
+            x = np.where(positive, x, coords[0])
+        else:
+            x = values
+        x = np.clip(x, coords[0], coords[-1])
+        j = np.clip(np.searchsorted(coords, x, side="right") - 1, 0, None)
+        j = np.minimum(j, points.size - 2)
+        frac = (x - coords[j]) / (coords[j + 1] - coords[j])
+        index = np.indices(np.shape(values))
+        weights[(*index, 2 * j)] = 1.0 - frac
+        weights[(*index, 2 * j + 2)] += frac
+        return weights
+
+    @classmethod
+    def _add_extra_axes(
+        cls, edges, masses, extra_axes, units=None, age_samples=None
+    ):
         """Add distributions along other axes to a set of bins.
 
         Each distribution is combined with the existing bins as an outer
@@ -614,10 +797,18 @@ class Stars(StarsComponent):
                 is a single value (float or unyt_quantity), or a tuple of
                 bin edges and either the weight in each bin or a
                 distribution with a get_bin_weights(edges) method. Weights
-                are normalised, so the mass is unchanged.
+                are normalised, so the mass is unchanged. A value that
+                depends on age is a tuple of points and a function of age
+                (called with the age as a unyt_array), split linearly
+                between the points, and a distribution can depend on age
+                (see ZDist); both are averaged over the mass formed in each
+                age bin.
             units (dict):
                 The units of the existing edges keyed by axis name (ages
                 default to yr).
+            age_samples (tuple):
+                The age samples of each age bin and their weights (see
+                _get_age_samples), needed for age dependent distributions.
 
         Returns:
             tuple:
@@ -636,6 +827,11 @@ class Stars(StarsComponent):
                 )
 
             # Split the distribution into edges and weights
+            if callable(dist):
+                raise exceptions.InconsistentArguments(
+                    f"An age dependent {axis} needs the points to place it "
+                    "on: give (points, function) instead."
+                )
             if isinstance(dist, tuple):
                 axis_edges, weights = dist
             else:
@@ -654,6 +850,37 @@ class Stars(StarsComponent):
                 raise exceptions.InconsistentArguments(
                     f"The {axis} bin edges must be increasing."
                 )
+
+            # An age dependent value or distribution differs between age
+            # bins, so it is averaged over the mass formed in each
+            if callable(weights) or getattr(weights, "depends_on_age", False):
+                if age_samples is None:
+                    raise exceptions.InconsistentArguments(
+                        f"Can't give {axis} an age dependence here."
+                    )
+                ages, sample_weights = age_samples
+                if callable(weights):
+                    values = weights(ages * yr)
+                    if isinstance(values, unyt_array) and axis_units:
+                        values = values.to(axis_units)
+                    if isinstance(values, unyt_array):
+                        values = values.to("dimensionless").ndview
+                    per_sample = cls._deposit_on_points(values, axis_edges)
+                    axis_edges = np.repeat(axis_edges, 2)
+                else:
+                    per_sample = cls._get_sample_bin_weights(
+                        weights, ages, axis_edges
+                    )
+                age_weights = cls._average_over_samples(
+                    per_sample, sample_weights
+                )
+                shape = (1, age_weights.shape[0]) + (1,) * (masses.ndim - 2)
+                edges[axis] = axis_edges
+                units[axis] = axis_units
+                masses = masses[..., None] * age_weights.reshape(
+                    shape + (age_weights.shape[1],)
+                )
+                continue
 
             # Get the weights of a distribution in the bins
             if hasattr(weights, "get_bin_weights"):
@@ -1472,7 +1699,13 @@ class Stars(StarsComponent):
                 "The bin edges must be monotonic."
             )
         edges, masses, units = cls._add_extra_axes(
-            edges, masses, extra_axes, units
+            edges,
+            masses,
+            extra_axes,
+            units,
+            age_samples=(
+                cls._get_age_samples(edges["ages"]) if extra_axes else None
+            ),
         )
 
         stars = cls.from_sfzh(
