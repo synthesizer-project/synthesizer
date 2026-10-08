@@ -731,6 +731,46 @@ class TestBinStorage:
         np.testing.assert_allclose(stars.get_spectra(model).lnu, 2 * lnu)
 
 
+class TestFractionOutsideGrid:
+    """Tests for the fraction of the mass outside a grid's axes."""
+
+    @staticmethod
+    def _stars(test_grid):
+        """Return a Stars on the grid's axes."""
+        return Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e7 * yr,
+            metal_dist=0.01,
+            initial_mass=1 * Msun,
+        )
+
+    def test_inside(self, test_grid):
+        """A bin inside the grid has no mass outside."""
+        stars = self._stars(test_grid)
+        age = 10 ** test_grid.log10ages[3]
+        _set_age_bin(stars, age, 2 * age, 1.0)
+        assert stars.get_fraction_outside_grid(test_grid) == 0.0
+
+    def test_straddling_bin(self, test_grid):
+        """A bin straddling the youngest grid age is partly outside."""
+        stars = self._stars(test_grid)
+        _set_age_bin(stars, 0.0, 2 * 10 ** test_grid.log10ages[0], 1.0)
+        assert np.isclose(stars.get_fraction_outside_grid(test_grid), 0.5)
+
+    def test_point_outside_metallicities(self, test_grid):
+        """A metallicity below the grid puts all of a bin outside."""
+        age = 10 ** test_grid.log10ages[3]
+        stars = Stars.from_binned(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            [age, 2 * age],
+            [0.0, 0.0],
+            np.ones((1, 1)),
+        )
+        assert stars.get_fraction_outside_grid(test_grid) == 1.0
+
+
 class TestBinMask:
     """Tests for fractional masks on binned parametric populations."""
 

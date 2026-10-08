@@ -773,6 +773,58 @@ class Stars(StarsComponent):
             tuple(log_flags),
         )
 
+    def get_fraction_outside_grid(self, grid):
+        """Get the fraction of the mass outside a grid's axes.
+
+        Mass outside the grid is clamped onto the grid's edges when the
+        emission is extracted (as it is for particles), so this is the
+        fraction of the mass whose emission is only approximate. Mass is
+        uniform within each bin, so a bin straddling a grid edge is only
+        partly outside.
+
+        Args:
+            grid (Grid):
+                The grid to compare to.
+
+        Returns:
+            float:
+                The fraction of the mass outside the grid's axes.
+        """
+        edges, masses, log_flags = self.get_bins_for_grid(
+            grid, combine_populations=True
+        )
+        total = np.sum(masses)
+        if total == 0.0:
+            return 0.0
+
+        # Scale the masses by the fraction of each bin inside the grid
+        # along each axis in turn
+        inside = masses
+        for iaxis, (axis, axis_edges, log) in enumerate(
+            zip(grid._extract_axes, edges, log_flags)
+        ):
+            values = grid._extract_axes_values[axis]
+            gmin, gmax = (
+                (10 ** values[0], 10 ** values[-1])
+                if log
+                else (values[0], values[-1])
+            )
+            lo, hi = axis_edges[:-1], axis_edges[1:]
+            width = hi - lo
+            overlap = np.clip(
+                np.minimum(hi, gmax) - np.maximum(lo, gmin), 0.0, None
+            )
+            frac = np.where(
+                width > 0,
+                overlap / np.where(width > 0, width, 1.0),
+                (lo >= gmin) & (lo <= gmax),
+            )
+            shape = [1] * inside.ndim
+            shape[iaxis + 1] = -1
+            inside = inside * frac.reshape(shape)
+
+        return float(1.0 - np.sum(inside) / total)
+
     def _bins_to_grid(self, grid, edges, masses):
         """Map bins onto a grid's axes.
 

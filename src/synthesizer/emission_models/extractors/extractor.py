@@ -1426,6 +1426,24 @@ class IntegratedParametricExtractor(Extractor):
             None if mask is None else mask.get_key(),
         )
 
+    def _check_bins_in_grid(self, emitter):
+        """Warn if any of a parametric emitter's mass is outside the grid.
+
+        Mass outside the grid axes is clamped onto the grid's edges, as it
+        is for particles, so its emission is only approximate.
+
+        Args:
+            emitter (Stars):
+                The parametric emitter.
+        """
+        frac_outside = emitter.get_fraction_outside_grid(self._grid)
+        if frac_outside > 0.0:
+            warn(
+                f"Found a {emitter.__class__.__name__} with "
+                f"{frac_outside * 100:.2f}% of its mass outside the grid "
+                "axes (clamped onto the grid's edges)."
+            )
+
     def _get_population_inputs(self, emitter, mask):
         """Get the bins of a parametric emitter in the grid's axes.
 
@@ -1477,7 +1495,8 @@ class IntegratedParametricExtractor(Extractor):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Unused, mass outside the grid is clamped onto its edges.
+                Whether to warn about mass outside the grid, which is
+                clamped onto its edges. False by default.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned spectra arrays.
 
@@ -1485,6 +1504,9 @@ class IntegratedParametricExtractor(Extractor):
             Sed: The integrated spectra.
         """
         out_dtype = resolve_out_dtype(out_dtype)
+
+        if do_grid_check:
+            self._check_bins_in_grid(emitter)
 
         # Reuse stored grid weights for this grid and mask if we have them
         weights_key = self._get_weights_key(mask)
@@ -1554,11 +1576,15 @@ class IntegratedParametricExtractor(Extractor):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Unused, mass outside the grid is clamped onto its edges.
+                Whether to warn about mass outside the grid, which is
+                clamped onto its edges. False by default.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned line arrays.
         """
         out_dtype = resolve_out_dtype(out_dtype)
+
+        if do_grid_check:
+            self._check_bins_in_grid(emitter)
 
         # Reuse stored grid weights for this grid and mask if we have them
         weights_key = self._get_weights_key(mask)
@@ -1707,7 +1733,8 @@ class PopulationExtractor(IntegratedParametricExtractor):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Unused, mass outside the grid is clamped onto its edges.
+                Whether to warn about mass outside the grid, which is
+                clamped onto its edges. False by default.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned spectra arrays.
 
@@ -1737,6 +1764,9 @@ class PopulationExtractor(IntegratedParametricExtractor):
                 Sed(model.lam, integrated_sed.lnu[None, :]),
                 integrated_sed,
             )
+
+        if do_grid_check:
+            self._check_bins_in_grid(emitter)
 
         # Otherwise the integrated emission is the sum of the populations',
         # which is far cheaper than reading the grid again
@@ -1786,7 +1816,8 @@ class PopulationExtractor(IntegratedParametricExtractor):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Unused, mass outside the grid is clamped onto its edges.
+                Whether to warn about mass outside the grid, which is
+                clamped onto its edges. False by default.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned line arrays.
 
@@ -1821,6 +1852,9 @@ class PopulationExtractor(IntegratedParametricExtractor):
                 ),
                 integrated_lines,
             )
+
+        if do_grid_check:
+            self._check_bins_in_grid(emitter)
 
         # Otherwise the integrated lines are the sum of the populations'
         lum = self._get_population_spectra(
