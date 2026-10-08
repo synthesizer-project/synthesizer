@@ -645,7 +645,8 @@ PyObject *make_img(PyObject *self, PyObject *args) {
 
       /* Construct the cell tree. */
       construct_cell_tree<GeomReal>(pos, smoothing_lengths, smoothing_lengths,
-                                    npart, root, ncells, MAX_DEPTH, 100);
+                                    npart, root, ncells, MAX_DEPTH, 100,
+                                    nthreads);
 
       toc("make_img.construct_cell_tree");
 
