@@ -6,7 +6,7 @@ component.
 
 Example usage::
 
-    stars = Stars(log10ages, metallicities, sfzh=sfzh)
+    stars = Stars(log10ages, metallicities, sf_hist=sfh, metal_dist=zdist)
     stars.get_spectra(emission_model)
     stars.plot_spectra()
 """
@@ -41,7 +41,7 @@ from synthesizer.parametric.morphology import (
     PopulationMorphology,
 )
 from synthesizer.parametric.sf_hist import Common as SFHCommon
-from synthesizer.synth_warnings import warn
+from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.plt import single_histxy
@@ -85,8 +85,9 @@ class Stars(StarsComponent):
             stellar population's morphology. This can be any of the family
             of morphology classes from synthesizer.morphology.
         sfzh (np.ndarray of float):
-            An array describing the binned SFZH. If provided all following
-            arguments are ignored.
+            Deprecated, use Stars.from_sfzh. The mass formed at each (age,
+            metallicity) point. If provided all following arguments are
+            ignored.
         sf_hist (np.ndarray of float):
             An array describing the star formation history.
         metal_dist (np.ndarray of float):
@@ -146,7 +147,7 @@ class Stars(StarsComponent):
         """Initialise the parametric stellar population.
 
         Can either be instantiated by:
-        - Passing a SFZH grid explictly.
+        - Passing a SFZH grid explictly (deprecated, use Stars.from_sfzh).
         - Passing instant_sf and instant_metallicity to get an instantaneous
           SFZH.
         - Passing functions that describe the SFH and ZH.
@@ -175,8 +176,10 @@ class Stars(StarsComponent):
                 stellar population's morphology. This can be any of the family
                 of morphology classes from synthesizer.morphology.
             sfzh (np.ndarray of float):
-                An array describing the binned SFZH. If provided all following
-                arguments are ignored.
+                Deprecated, use Stars.from_sfzh (or Stars.from_binned for
+                bins that don't sit on the axes). The mass formed at each
+                (age, metallicity) point. If provided all following arguments
+                are ignored.
             sf_hist (float/unyt_quantity/np.ndarray of float/SFH.*):
                 Either:
                     - An age at which to compute an instantaneous SFH, i.e. all
@@ -200,6 +203,16 @@ class Stars(StarsComponent):
                 Arbitrary keyword arguments to be set as attributes on the
                 Stars instance.
         """
+        # Passing an SFZH is deprecated in favour of from_sfzh (which passes
+        # it privately)
+        if sfzh is not None:
+            deprecation(
+                "Passing sfzh to Stars is deprecated, use "
+                "Stars.from_sfzh(log10ages, metallicities, sfzh) instead "
+                "(or Stars.from_binned for bins that don't sit on the axes)."
+            )
+        sfzh = kwargs.pop("_point_sfzh", sfzh)
+
         # Instantiate the parent
         StarsComponent.__init__(
             self,
@@ -882,10 +895,10 @@ class Stars(StarsComponent):
             log10ages = self.log10ages
         if metallicities is None:
             metallicities = self.metallicities
-        new = Stars(
+        new = Stars.from_sfzh(
             log10ages,
             metallicities,
-            sfzh=np.zeros((len(log10ages), len(metallicities))),
+            np.zeros((len(log10ages), len(metallicities))),
             **kwargs,
         )
         new._set_bins(edges, masses)
@@ -1102,6 +1115,33 @@ class Stars(StarsComponent):
         return weighted_mean(self.metallicities, self.metal_dist)
 
     @classmethod
+    def from_sfzh(cls, log10ages, metallicities, sfzh, **kwargs):
+        """Create a Stars from the mass formed at each axis point.
+
+        Each (age, metallicity) point of the axes holds the mass formed at
+        exactly that age and metallicity (a zero width bin), e.g. the SFZH
+        of a particle Stars binned onto a grid's axes. Use from_binned for
+        bins that don't sit on the axes.
+
+        Args:
+            log10ages (np.ndarray of float):
+                The log10 age axis.
+            metallicities (np.ndarray of float):
+                The metallicity axis.
+            sfzh (np.ndarray of float):
+                The mass (in Msun) formed at each (age, metallicity) point,
+                with shape (len(log10ages), len(metallicities)).
+            **kwargs (dict):
+                Any other arguments for the Stars, e.g. initial_mass to
+                normalise the SFZH, or fesc.
+
+        Returns:
+            Stars:
+                The population.
+        """
+        return cls(log10ages, metallicities, _point_sfzh=sfzh, **kwargs)
+
+    @classmethod
     def from_binned(
         cls,
         log10ages,
@@ -1177,10 +1217,10 @@ class Stars(StarsComponent):
                 "The bin edges must be monotonic."
             )
 
-        stars = cls(
+        stars = cls.from_sfzh(
             log10ages,
             metallicities,
-            sfzh=np.zeros((len(log10ages), len(metallicities))),
+            np.zeros((len(log10ages), len(metallicities))),
             **kwargs,
         )
         stars._set_bins(

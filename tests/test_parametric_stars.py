@@ -97,10 +97,10 @@ def sfzh_stars(test_grid):
 
     sfzh = np.ones((n_ages, n_metals))
 
-    return Stars(
+    return Stars.from_sfzh(
         test_grid.log10ages,
         test_grid.metallicities,
-        sfzh=sfzh,
+        sfzh,
         initial_mass=1e10 * Msun,
     )
 
@@ -694,8 +694,24 @@ class TestBinStorage:
         sfzh = np.random.default_rng(0).random(
             (test_grid.log10ages.size, test_grid.metallicities.size)
         )
-        stars = Stars(test_grid.log10ages, test_grid.metallicities, sfzh=sfzh)
+        stars = Stars.from_sfzh(
+            test_grid.log10ages, test_grid.metallicities, sfzh
+        )
         np.testing.assert_allclose(stars.sfzh, sfzh, rtol=1e-12)
+
+    def test_passing_sfzh_is_deprecated(self, test_grid):
+        """Passing sfzh warns and matches from_sfzh."""
+        sfzh = np.ones(
+            (test_grid.log10ages.size, test_grid.metallicities.size)
+        )
+        with pytest.warns(FutureWarning, match="from_sfzh"):
+            stars = Stars(
+                test_grid.log10ages, test_grid.metallicities, sfzh=sfzh
+            )
+        expected = Stars.from_sfzh(
+            test_grid.log10ages, test_grid.metallicities, sfzh
+        )
+        np.testing.assert_array_equal(stars.bin_masses, expected.bin_masses)
 
     def test_sfzh_view_is_read_only(self, instantaneous_stars):
         """The SFZH view can't be modified in place."""
@@ -707,10 +723,10 @@ class TestBinStorage:
         sfzh = np.ones(
             (test_grid.log10ages.size, test_grid.metallicities.size)
         )
-        Stars(
+        Stars.from_sfzh(
             test_grid.log10ages,
             test_grid.metallicities,
-            sfzh=sfzh,
+            sfzh,
             initial_mass=1e9 * Msun,
         )
         assert np.all(sfzh == 1.0)
@@ -1073,7 +1089,7 @@ class TestBinConsumers:
         log10ages = np.linspace(6.05, 9.95, 7)
         metallicities = np.array([0.0005, 0.003, 0.017])
         sfzh = np.random.default_rng(3).random((7, 3))
-        stars = Stars(log10ages, metallicities, sfzh=sfzh)
+        stars = Stars.from_sfzh(log10ages, metallicities, sfzh)
         ages, metals = np.meshgrid(10**log10ages, metallicities, indexing="ij")
         particles = ParticleStars(
             initial_masses=sfzh.ravel() * Msun,
@@ -1128,7 +1144,9 @@ class TestBinConsumers:
                 metal_dist=0.004,
                 initial_mass=1e9 * Msun,
             ),
-            Stars(test_grid.log10ages, test_grid.metallicities, sfzh=sfzh),
+            Stars.from_sfzh(
+                test_grid.log10ages, test_grid.metallicities, sfzh
+            ),
         ]
         combined = components[0] + components[1] + components[2]
         expected = sum(c.get_spectra(model).lnu for c in components)

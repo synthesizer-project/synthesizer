@@ -514,10 +514,10 @@ def test_integrated_parametric_generate_lnu(test_grid, nebular_emission_model):
     sfzh = np.random.default_rng(0).random(
         (len(test_grid.log10ages), len(test_grid.metallicities))
     )
-    stars = ParametricStars(
+    stars = ParametricStars.from_sfzh(
         test_grid.log10ages,
         test_grid.metallicities,
-        sfzh=sfzh,
+        sfzh,
     )
     result = extractor.generate_lnu(
         stars,
@@ -549,7 +549,7 @@ def test_integrated_parametric_off_grid_axes(
     log10ages = np.linspace(6.05, 9.95, 7)
     metallicities = np.array([0.0005, 0.003, 0.017])
     sfzh = np.random.default_rng(1).random((log10ages.size, 3))
-    stars = ParametricStars(log10ages, metallicities, sfzh=sfzh)
+    stars = ParametricStars.from_sfzh(log10ages, metallicities, sfzh)
     param = IntegratedParametricExtractor(test_grid, "incident").generate_lnu(
         stars,
         nebular_emission_model,
