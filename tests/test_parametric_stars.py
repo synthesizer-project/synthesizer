@@ -1268,6 +1268,31 @@ class TestPerPopulationEmission:
             for sfh, tau_v, fesc in zip(sfhs, self.TAU_V, self.FESC)
         ]
 
+    def test_integrated_model_needs_per_population(self, test_grid):
+        """An integrated model can't apply a parameter per population."""
+        model = PacmanEmission(test_grid, dust_curve=Calzetti2000())
+        combined = Stars.from_populations(self._populations(test_grid))
+        with pytest.raises(exceptions.InconsistentArguments, match="per_part"):
+            combined.get_spectra(model)
+
+        # A value shared by every population is fine
+        shared = Stars.from_populations(
+            [
+                Stars(
+                    test_grid.log10ages,
+                    test_grid.metallicities,
+                    sf_hist=1e7 * yr,
+                    metal_dist=0.01,
+                    initial_mass=1e9 * Msun,
+                    tau_v=0.3,
+                    fesc=0.1,
+                    fesc_ly_alpha=0.1,
+                )
+                for _ in range(2)
+            ]
+        )
+        shared.get_spectra(model)
+
     @pytest.mark.parametrize("bimodal", [False, True])
     def test_matches_separate_populations(self, test_grid, bimodal):
         """Per population parameters match each population on its own.
