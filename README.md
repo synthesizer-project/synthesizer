@@ -1,6 +1,6 @@
 # Synthesizer
 
-<img src="https://raw.githubusercontent.com/synthesizer-project/synthesizer/main/docs/source/img/synthesizer_logo.png" align="right" width="140px"/>
+<img src="https://raw.githubusercontent.com/synthesizer-project/synventory/main/branding/synthesizer_logo.png" align="right" width="140px"/>
 
 [![CI](https://github.com/synthesizer-project/synthesizer/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/synthesizer-project/synthesizer/actions/workflows/python-app.yml)
 [![Documentation Status](https://github.com/synthesizer-project/synthesizer/actions/workflows/static.yml/badge.svg)](https://synthesizer-project.github.io/synthesizer/)

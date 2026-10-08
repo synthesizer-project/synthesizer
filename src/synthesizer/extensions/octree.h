@@ -69,7 +69,7 @@ template <typename Real>
 void construct_cell_tree(const Real *pos, const Real *sml,
                          const Real *surf_den_val, const int npart,
                          struct cell<Real> *root, int ncells, int maxdepth,
-                         int min_count);
+                         int min_count, int nthreads);
 template <typename Real>
 void cleanup_cell_tree(struct cell<Real> *c);
 template <typename Real>
