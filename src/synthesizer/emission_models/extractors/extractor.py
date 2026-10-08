@@ -35,6 +35,7 @@ from synthesizer.utils.operation_timers import timed, timer
 from synthesizer.utils.precision import (
     resolve_out_dtype,
     verify_out_precision,
+    weighted_sum_fits,
 )
 
 
@@ -118,8 +119,10 @@ class Extractor(ABC):
             else str(self._weight_var)
         )
 
-        # Attach the spectra and line grids to the Extractor object
+        # Store the emission we extract, used to look up its grid bounds
+        self._extract = extract
 
+        # Attach the spectra and line grids to the Extractor object
         if extract in grid.available_spectra_emissions:
             self._spectra_grid = grid.spectra[extract]
         if grid.lines_available:
@@ -220,16 +223,35 @@ class Extractor(ABC):
         if do_grid_check:
             self.check_emitter_attrs(extracted)
 
-        # Also extract the weight variable
+        # Also extract the weight variable, at the same precision as the
+        # extracted attributes if we have to make unit weights (the extension
+        # requires the weights and attributes to share a dtype)
+        weight = self._get_emitter_weights(
+            emitter, model, dtype=np.result_type(*extracted)
+        )
+
+        return tuple(extracted), weight
+
+    def _get_emitter_weights(self, emitter, model, dtype=np.float64):
+        """Get the weights the grid is weighted by for the emitter.
+
+        Args:
+            emitter (Stars/BlackHoles/Gas):
+                The emitter object.
+            model (EmissionModel):
+                The emission model object.
+            dtype (np.dtype):
+                The dtype of the unit weights made when the grid has no
+                weight variable.
+
+        Returns:
+            np.ndarray/float:
+                The weights, without units.
+        """
         if self._weight_var in [None, "None"]:
-            # If no weight variable is provided, use a weight of 1.0 at the
-            # same precision as the extracted attributes (the extension
-            # requires the weights and attributes to share a dtype)
+            # If no weight variable is provided, use a weight of 1.0
             if hasattr(emitter, "nparticles"):
-                weight = np.ones(
-                    emitter.nparticles,
-                    dtype=np.result_type(*extracted),
-                )
+                weight = np.ones(emitter.nparticles, dtype=dtype)
             else:
                 weight = 1.0
         else:
@@ -239,7 +261,7 @@ class Extractor(ABC):
         if isinstance(weight, (unyt_array, unyt_quantity)):
             weight = weight.ndview
 
-        return tuple(extracted), weight
+        return weight
 
     @timed("Extractor.check_emitter_attrs")
     def check_emitter_attrs(self, emitter, extracted_attrs):
@@ -273,6 +295,66 @@ class Extractor(ABC):
                 " the grid axes.",
             )
 
+    def _spectra_extraction_fits_dtype(self, dtype, emitter, model, **kwargs):
+        """Check whether this spectra extraction fits the output dtype.
+
+        Every extracted value (per-particle or integrated) is a sum of grid
+        values times the emitter's weights, with grid assignment fractions
+        summing to at most one per particle. It is therefore bounded by the
+        largest absolute grid value times the total weight, and if that bound
+        fits in dtype the outputs cannot overflow (see weighted_sum_fits), so
+        they needn't be scanned for inf.
+
+        Args:
+            dtype (np.dtype):
+                The output dtype.
+            emitter (Stars/BlackHoles/Gas):
+                The emitter the emission is extracted for.
+            model (EmissionModel):
+                The emission model defining the extraction.
+            **kwargs (dict):
+                The extraction's other arguments (unused).
+
+        Returns:
+            bool:
+                True if the extracted spectra cannot overflow dtype.
+        """
+        return weighted_sum_fits(
+            dtype,
+            self._grid._max_grid_values["spectra"][self._extract],
+            self._get_emitter_weights(emitter, model),
+        )
+
+    def _line_extraction_fits_dtype(self, dtype, emitter, model, **kwargs):
+        """Check whether this line extraction fits the output dtype.
+
+        As for _spectra_extraction_fits_dtype, using the larger of the line
+        luminosity and continuum grids' largest absolute values.
+
+        Args:
+            dtype (np.dtype):
+                The output dtype.
+            emitter (Stars/BlackHoles/Gas):
+                The emitter the emission is extracted for.
+            model (EmissionModel):
+                The emission model defining the extraction.
+            **kwargs (dict):
+                The extraction's other arguments (unused).
+
+        Returns:
+            bool:
+                True if the extracted line luminosities and continua cannot
+                overflow dtype.
+        """
+        return weighted_sum_fits(
+            dtype,
+            max(
+                self._grid._max_grid_values["line_lum"][self._extract],
+                self._grid._max_grid_values["line_cont"][self._extract],
+            ),
+            self._get_emitter_weights(emitter, model),
+        )
+
     @abstractmethod
     def generate_lnu(self, *args, **kwargs):
         """Extract the spectra from the grid for the emitter."""
@@ -295,7 +377,9 @@ class IntegratedParticleExtractor(Extractor):
     """
 
     @timed("IntegratedParticleExtractor.generate_lnu")
-    @verify_out_precision()
+    @verify_out_precision(
+        skip_inf_scan_if=Extractor._spectra_extraction_fits_dtype
+    )
     def generate_lnu(
         self,
         emitter,
@@ -412,7 +496,9 @@ class IntegratedParticleExtractor(Extractor):
         )
 
     @timed("IntegratedParticleExtractor.generate_line")
-    @verify_out_precision()
+    @verify_out_precision(
+        skip_inf_scan_if=Extractor._line_extraction_fits_dtype
+    )
     def generate_line(
         self,
         emitter,
@@ -862,7 +948,9 @@ class ParticleExtractor(Extractor):
     """
 
     @timed("ParticleExtractor.generate_lnu")
-    @verify_out_precision()
+    @verify_out_precision(
+        skip_inf_scan_if=Extractor._spectra_extraction_fits_dtype
+    )
     def generate_lnu(
         self,
         emitter,
@@ -1039,7 +1127,9 @@ class ParticleExtractor(Extractor):
         return part_sed, integrated_sed
 
     @timed("ParticleExtractor.generate_line")
-    @verify_out_precision()
+    @verify_out_precision(
+        skip_inf_scan_if=Extractor._line_extraction_fits_dtype
+    )
     def generate_line(
         self,
         emitter,
@@ -1311,6 +1401,33 @@ class IntegratedParametricExtractor(Extractor):
     emission.
     """
 
+    def _check_emitter_axes(self, emitter):
+        """Ensure the emitter's SFZH axes match the grid axes.
+
+        The SFZH is multiplied bin by bin with the grid, so it is only
+        meaningful if both are defined on the same axes.
+
+        Args:
+            emitter (Stars):
+                The parametric emitter to check.
+
+        Raises:
+            InconsistentArguments:
+                If the emitter axes differ from the grid axes.
+        """
+        for name, grid_axis in zip(self._emitter_attributes, self._grid_axes):
+            emitter_axis = getattr(emitter, name, None)
+            if (
+                emitter_axis is None
+                or len(emitter_axis) != len(grid_axis)
+                or not np.allclose(np.asarray(emitter_axis), grid_axis)
+            ):
+                raise exceptions.InconsistentArguments(
+                    f"The {emitter.__class__.__name__} {name} axis does not "
+                    f"match the grid's {name} axis. A parametric SFZH must "
+                    "be defined on the grid axes, use get_sfzh to remap it."
+                )
+
     @timed("IntegratedParametricExtractor.generate_lnu")
     @verify_out_precision()
     def generate_lnu(
@@ -1352,6 +1469,9 @@ class IntegratedParametricExtractor(Extractor):
         Returns:
             Sed: The integrated spectra.
         """
+        # Ensure the SFZH is defined on the grid axes
+        self._check_emitter_axes(emitter)
+
         # Get a mask for non-zero bins in the SFZH
         mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
 
@@ -1415,6 +1535,9 @@ class IntegratedParametricExtractor(Extractor):
         """
         with timer("IntegratedParametricExtractor.generate_line"):
             out_dtype = resolve_out_dtype(out_dtype)
+            # Ensure the SFZH is defined on the grid axes
+            self._check_emitter_axes(emitter)
+
             # Get a mask for non-zero bins in the SFZH
             mask = emitter.get_mask("sfzh", 0, ">", mask=mask)
 
