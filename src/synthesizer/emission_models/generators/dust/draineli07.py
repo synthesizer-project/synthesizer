@@ -8,8 +8,16 @@ from typing import TYPE_CHECKING, Optional, Union
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import fsolve
-from spectres import spectres
-from unyt import Hz, Lsun, Msun, angstrom, erg, s, unyt_array, unyt_quantity
+from unyt import (
+    Hz,
+    Lsun,
+    Msun,
+    angstrom,
+    erg,
+    s,
+    unyt_array,
+    unyt_quantity,
+)
 
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
@@ -308,17 +316,8 @@ class DraineLi07(DustEmission):
         dust_to_gas_ratio: float = None,
         hydrogen_mass: unyt_quantity = None,
         qpah: float = None,
-    ) -> dict:
+    ) -> None:
         """Set up the DL07 model parameters and grid indices.
-
-        The parameters are returned so that callers can use them directly,
-        and are also stored on the instance so they can be inspected after
-        the fact (e.g. via ``u_avg`` and ``calculated_parameters``).
-
-        NOTE: the stored values are those of the most recent call. When
-        emission models are executed concurrently (nr_model_threads > 1) that
-        is whichever model finished setting up last, so generation only uses
-        the returned values.
 
         Args:
             dust_mass (unyt_quantity):
@@ -331,13 +330,6 @@ class DraineLi07(DustEmission):
                 The hydrogen mass to use. If None, uses instance default.
             qpah (float, optional):
                 The PAH fraction to use. If None, uses instance default.
-
-        Returns:
-            dict:
-                The grid indices (``qpah_indices``, ``umin_indices``,
-                ``alpha_indices``) and derived parameters
-                (``gamma_calculated``, ``hydrogen_mass_calculated``,
-                ``radiation_field_average``, ``umin_calculated``).
         """
         if self.template != "DL07":
             raise exceptions.UnimplementedFunctionality(
@@ -433,36 +425,24 @@ class DraineLi07(DustEmission):
                 "No valid model templates found for the given values"
             )
 
-        setup = {
-            "qpah_indices": qpah_indices,
-            "umin_indices": umin_indices,
-            "alpha_indices": alpha_indices,
-            "gamma_calculated": calculated_gamma,
-            "hydrogen_mass_calculated": calculated_hydrogen_mass,
-            "radiation_field_average": calculated_u_avg,
-            "umin_calculated": calculated_umin,
-        }
+        self.qpah_indices = qpah_indices
+        self.umin_indices = umin_indices
+        self.alpha_indices = alpha_indices
 
         # Store the calculated values for later access
-        for name, value in setup.items():
-            setattr(self, name, value)
+        self.gamma_calculated = calculated_gamma
+        self.hydrogen_mass_calculated = calculated_hydrogen_mass
+        self.radiation_field_average = calculated_u_avg
+        self.umin_calculated = calculated_umin
 
-        return setup
-
-    @accepts(lams=angstrom)
     def _generate_dl07_spectra(
-        self,
-        lams: unyt_array,
-        setup: dict,
-        dust_components: bool = False,
+        self, lams: unyt_array, dust_components: bool = False
     ) -> Union[Sed, tuple[Sed, Sed]]:
         """Generate the DL07 dust emission spectra.
 
         Args:
             lams (unyt_array):
                 The wavelength grid on which to generate the spectra.
-            setup (dict):
-                The parameters returned by ``_setup_dl07_parameters``.
             dust_components (bool):
                 If True, returns the constituent dust components separately.
 
@@ -470,42 +450,35 @@ class DraineLi07(DustEmission):
             Sed or tuple[Sed, Sed]:
                 The generated dust emission SED(s).
         """
-        # Get the grid indices of the template spectra we need
-        iqpah = np.where(setup["qpah_indices"])[0][0]
-        iumin = np.where(setup["umin_indices"])[0][0]
-        ialpha = np.where(setup["alpha_indices"])[0][0]
+        # Ensure parameters are set up
+        if self.qpah_indices is None:
+            raise exceptions.MissingAttribute(
+                "DL07 parameters not set up. Call "
+                "_setup_dl07_parameters first."
+            )
 
-        # Resample just those templates onto the requested wavelengths. This
-        # reads the grid without modifying it, so the grid always holds its
-        # native wavelengths and can be shared between concurrently executing
-        # models.
-        diffuse_template = spectres(
-            lams.value,
-            self.grid._lam,
-            self.grid.spectra["diffuse"][iqpah, iumin],
-            fill=0,
-            verbose=False,
-        )
-        pdr_template = spectres(
-            lams.value,
-            self.grid._lam,
-            self.grid.spectra["pdr"][iqpah, iumin, ialpha],
-            fill=0,
-            verbose=False,
-        )
+        # Interpolate the dust spectra for the given wavelength range
+        self.grid.interp_spectra(new_lam=lams)
 
         # Extract diffuse (old) component spectrum
         diffuse_luminosity = (
-            (1.0 - setup["gamma_calculated"])
-            * diffuse_template
-            * (setup["hydrogen_mass_calculated"] / Msun).value
+            (1.0 - self.gamma_calculated)
+            * self.grid.spectra["diffuse"][
+                np.where(self.qpah_indices)[0][0],
+                np.where(self.umin_indices)[0][0],
+            ]
+            * (self.hydrogen_mass_calculated / Msun).value
         )
 
         # Extract PDR (young) component spectrum
         pdr_luminosity = (
-            setup["gamma_calculated"]
-            * pdr_template
-            * (setup["hydrogen_mass_calculated"] / Msun).value
+            self.gamma_calculated
+            * self.grid.spectra["pdr"][
+                np.where(self.qpah_indices)[0][0],
+                np.where(self.umin_indices)[0][0],
+                np.where(self.alpha_indices)[0][0],
+            ]
+            * (self.hydrogen_mass_calculated / Msun).value
         )
 
         diffuse_sed = Sed(lam=lams, lnu=diffuse_luminosity * (erg / s / Hz))
@@ -565,10 +538,10 @@ class DraineLi07(DustEmission):
             ldust = 1e10 * (dust_mass / (1e6 * Msun)) * Lsun
 
         # Set up DL07 parameters using instance defaults
-        setup = self._setup_dl07_parameters(dust_mass, ldust)
+        self._setup_dl07_parameters(dust_mass, ldust)
 
         # Generate the base spectra
-        return self._generate_dl07_spectra(lams, setup, dust_components)
+        return self._generate_dl07_spectra(lams, dust_components)
 
     @accepts(lams=angstrom)
     @timed("DraineLi07._generate_spectra")
@@ -617,12 +590,12 @@ class DraineLi07(DustEmission):
         ldust = self.get_scaling(emitter, model, emissions)
 
         # Set up DL07 parameters using the extracted parameters
-        setup = self._setup_dl07_parameters(
+        self._setup_dl07_parameters(
             dust_mass, ldust, dust_to_gas_ratio, hydrogen_mass, qpah
         )
 
         # Generate the base spectra
-        sed = self._generate_dl07_spectra(lams, setup)
+        sed = self._generate_dl07_spectra(lams)
 
         # Get the bolometric luminosity with proper units
         bol_lum = sed._bolometric_luminosity
@@ -708,13 +681,13 @@ class DraineLi07(DustEmission):
         ldust = self.get_scaling(emitter, model, spectra)
 
         # Set up DL07 parameters using the extracted parameters
-        setup = self._setup_dl07_parameters(
+        self._setup_dl07_parameters(
             dust_mass, ldust, dust_to_gas_ratio, hydrogen_mass, qpah
         )
 
         # Generate the DL07 function
-        lnu = self._generate_dl07_spectra(line_lams, setup).lnu
-        norm_lnu = self._generate_dl07_spectra(sed.lam, setup).lnu
+        lnu = self._generate_dl07_spectra(line_lams).lnu
+        norm_lnu = self._generate_dl07_spectra(sed.lam).lnu
 
         # Create an SED object for convenience
         norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)

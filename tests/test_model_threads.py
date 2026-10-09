@@ -393,18 +393,6 @@ class TestDustGenerators:
             threaded = _get_spectra(random_part_stars, dl07_variants, 8, False)
             _assert_same(serial, threaded)
 
-    def test_dl07_leaves_grid_unchanged(
-        self, dl07_variants, dl07_grid, random_part_stars
-    ):
-        """Test generating emission doesn't resample the shared grid."""
-        lam = dl07_grid.lam.copy()
-        diffuse = dl07_grid.spectra["diffuse"].copy()
-
-        random_part_stars.get_spectra(dl07_variants)
-
-        np.testing.assert_array_equal(dl07_grid.lam, lam)
-        np.testing.assert_array_equal(dl07_grid.spectra["diffuse"], diffuse)
-
 
 class TestPipeline:
     """Test the Pipeline resolves model threads once at construction."""

@@ -181,19 +181,8 @@ class Casey12(DustEmission):
         return f"Casey12({', '.join(parts)})"
 
     @accepts(nu=Hz)
-    def _lnu(
-        self,
-        nu: unyt_array,
-        temperature: unyt_quantity,
-        lam_c: Optional[unyt_quantity] = None,
-        n_pl: Optional[unyt_quantity] = None,
-    ) -> unyt_array:
+    def _lnu(self, nu: unyt_array, temperature: unyt_quantity) -> unyt_array:
         """Generate unnormalised spectrum for given frequency (nu) grid.
-
-        The power-law turnover wavelength and normalisation depend on the
-        temperature, so they are passed in rather than read from the instance.
-        This keeps the generator free of per-call state, so one instance can
-        generate emission for several models concurrently.
 
         Args:
             nu (unyt_array):
@@ -201,25 +190,11 @@ class Casey12(DustEmission):
                 density.
             temperature (unyt_quantity):
                 The temperature to use for the Casey12 model.
-            lam_c (unyt_quantity, optional):
-                The power-law turnover wavelength for this temperature. If
-                None, the value computed at initialisation for the instance's
-                temperature is used.
-            n_pl (unyt_quantity, optional):
-                The power-law normalisation for this temperature. If None,
-                the value computed at initialisation for the instance's
-                temperature is used.
 
         Returns:
             lnu (unyt_array):
                 The unnormalised spectral luminosity density.
         """
-        # Fall back to the values for the instance's own temperature
-        if lam_c is None:
-            lam_c = self.lam_c
-        if n_pl is None:
-            n_pl = self.n_pl
-
         # Convert to wavelength
         lam = c / nu
 
@@ -233,9 +208,9 @@ class Casey12(DustEmission):
             """
             return (
                 (
-                    n_pl
-                    * ((lam / lam_c) ** self.alpha)
-                    * np.exp(-((lam / lam_c) ** 2))
+                    self.n_pl
+                    * ((lam / self.lam_c) ** self.alpha)
+                    * np.exp(-((lam / self.lam_c) ** 2))
                 ).value
                 * erg
                 / s
@@ -341,8 +316,18 @@ class Casey12(DustEmission):
             / (np.exp(h * c / (lam_c * kb * temperature)) - 1)
         )
 
+        # Store temporary values for _lnu calculation
+        original_lam_c = self.lam_c
+        original_n_pl = self.n_pl
+        self.lam_c = lam_c
+        self.n_pl = n_pl
+
         # Compute the Casey12 function
-        lnu = self._lnu(nu, temperature, lam_c, n_pl)
+        lnu = self._lnu(nu, temperature)
+
+        # Restore original values
+        self.lam_c = original_lam_c
+        self.n_pl = original_n_pl
 
         # Create an SED object for convenience
         sed = Sed(lam=lams, lnu=lnu)
@@ -459,9 +444,19 @@ class Casey12(DustEmission):
             / (np.exp(h * c / (lam_c * kb * temperature)) - 1)
         )
 
+        # Store temporary values for _lnu calculation
+        original_lam_c = self.lam_c
+        original_n_pl = self.n_pl
+        self.lam_c = lam_c
+        self.n_pl = n_pl
+
         # Compute the Casey12 function
-        lnu = self._lnu(nu, temperature, lam_c, n_pl)
-        norm_lnu = self._lnu(sed_nu, temperature, lam_c, n_pl)
+        lnu = self._lnu(nu, temperature)
+        norm_lnu = self._lnu(sed_nu, temperature)
+
+        # Restore original values
+        self.lam_c = original_lam_c
+        self.n_pl = original_n_pl
 
         # Create an SED object for convenience
         norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)
