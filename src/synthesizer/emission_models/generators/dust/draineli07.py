@@ -8,16 +8,8 @@ from typing import TYPE_CHECKING, Optional, Union
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import fsolve
-from unyt import (
-    Hz,
-    Lsun,
-    Msun,
-    angstrom,
-    erg,
-    s,
-    unyt_array,
-    unyt_quantity,
-)
+from spectres import spectres
+from unyt import Hz, Lsun, Msun, angstrom, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
@@ -136,22 +128,6 @@ class DraineLi07(DustEmission):
             Power absorbed per unit dust mass in a radiation field with U = 1.
         verbose (bool):
             Whether to print verbose output.
-        qpah_indices (NDArray):
-            Grid indices for qpah parameter.
-        umin_indices (NDArray):
-            Grid indices for umin parameter.
-        alpha_indices (NDArray):
-            Grid indices for alpha parameter.
-
-        # Calculated values (available after parameter setup):
-        radiation_field_average (float):
-            Average radiation field intensity <U>.
-        umin_calculated (float):
-            Calculated minimum radiation field.
-        gamma_calculated (float):
-            Calculated gamma parameter.
-        hydrogen_mass_calculated (unyt_quantity):
-            Calculated hydrogen mass.
     """
 
     grid: Grid
@@ -165,15 +141,6 @@ class DraineLi07(DustEmission):
     alpha: float
     power_per_unit_mass: float
     verbose: bool
-    qpah_indices: Optional[NDArray]
-    umin_indices: Optional[NDArray]
-    alpha_indices: Optional[NDArray]
-
-    # Calculated values
-    radiation_field_average: Optional[float]
-    umin_calculated: Optional[float]
-    gamma_calculated: Optional[float]
-    hydrogen_mass_calculated: Optional[unyt_quantity]
 
     @accepts(dust_mass=Msun.in_base("galactic"))
     def __init__(
@@ -189,7 +156,6 @@ class DraineLi07(DustEmission):
         alpha: float = 2.0,
         power_per_unit_mass: float = 125.0,
         verbose: bool = True,
-        do_cmb_heating: bool = False,
         intrinsic: Optional[EmissionModel] = None,
         attenuated: Optional[EmissionModel] = None,
         scaler: Optional[EmissionModel] = None,
@@ -225,8 +191,6 @@ class DraineLi07(DustEmission):
                 with U = 1.
             verbose (bool):
                 Whether to print verbose output.
-            do_cmb_heating (bool):
-                Should we apply cmb heating?
             intrinsic (EmissionModel):
                 The name of the intrinsic emission defining the unattenuated
                 emission for energy balance.
@@ -236,13 +200,15 @@ class DraineLi07(DustEmission):
             scaler (EmissionModel):
                 The name of the emission to use to scale the dust emission by.
         """
-        # Call the parent init with required parameters and emissions
+        # Call the parent init with required parameters and emissions. CMB
+        # heating (da Cunha+13) heats a dust temperature, which the DL07
+        # templates don't have, so it is never applied
         DustEmission.__init__(
             self,
             intrinsic,
             attenuated,
             scaler,
-            do_cmb_heating,
+            do_cmb_heating=False,
             required_params=(
                 "dust_mass",
                 "dust_to_gas_ratio",
@@ -262,17 +228,6 @@ class DraineLi07(DustEmission):
         self.alpha = alpha
         self.power_per_unit_mass = power_per_unit_mass
         self.verbose = verbose
-
-        # Initialize grid indices
-        self.qpah_indices = None
-        self.umin_indices = None
-        self.alpha_indices = None
-
-        # Initialize calculated values
-        self.radiation_field_average = None
-        self.umin_calculated = None
-        self.gamma_calculated = None
-        self.hydrogen_mass_calculated = None
 
     def __repr__(self):
         """Return a string representation of the DraineLi07 object."""
@@ -303,10 +258,6 @@ class DraineLi07(DustEmission):
         if self.umin is not None:
             parts.append(f"umin={self.umin}")
 
-        # Add CMB heating if enabled
-        if self.do_cmb_heating:
-            parts.append("do_cmb_heating=True")
-
         return f"DraineLi07({', '.join(parts)})"
 
     def _setup_dl07_parameters(
@@ -316,8 +267,12 @@ class DraineLi07(DustEmission):
         dust_to_gas_ratio: float = None,
         hydrogen_mass: unyt_quantity = None,
         qpah: float = None,
-    ) -> None:
+    ) -> dict:
         """Set up the DL07 model parameters and grid indices.
+
+        Nothing is stored on the generator, since one generator can be shared
+        by several models and emitters. Use the returned values to inspect the
+        parameters of a particular call.
 
         Args:
             dust_mass (unyt_quantity):
@@ -330,6 +285,13 @@ class DraineLi07(DustEmission):
                 The hydrogen mass to use. If None, uses instance default.
             qpah (float, optional):
                 The PAH fraction to use. If None, uses instance default.
+
+        Returns:
+            dict:
+                The grid indices (``qpah_indices``, ``umin_indices``,
+                ``alpha_indices``) and derived parameters
+                (``gamma_calculated``, ``hydrogen_mass_calculated``,
+                ``radiation_field_average``, ``umin_calculated``).
         """
         if self.template != "DL07":
             raise exceptions.UnimplementedFunctionality(
@@ -425,24 +387,30 @@ class DraineLi07(DustEmission):
                 "No valid model templates found for the given values"
             )
 
-        self.qpah_indices = qpah_indices
-        self.umin_indices = umin_indices
-        self.alpha_indices = alpha_indices
+        return {
+            "qpah_indices": qpah_indices,
+            "umin_indices": umin_indices,
+            "alpha_indices": alpha_indices,
+            "gamma_calculated": calculated_gamma,
+            "hydrogen_mass_calculated": calculated_hydrogen_mass,
+            "radiation_field_average": calculated_u_avg,
+            "umin_calculated": calculated_umin,
+        }
 
-        # Store the calculated values for later access
-        self.gamma_calculated = calculated_gamma
-        self.hydrogen_mass_calculated = calculated_hydrogen_mass
-        self.radiation_field_average = calculated_u_avg
-        self.umin_calculated = calculated_umin
-
+    @accepts(lams=angstrom)
     def _generate_dl07_spectra(
-        self, lams: unyt_array, dust_components: bool = False
+        self,
+        lams: unyt_array,
+        setup: dict,
+        dust_components: bool = False,
     ) -> Union[Sed, tuple[Sed, Sed]]:
         """Generate the DL07 dust emission spectra.
 
         Args:
             lams (unyt_array):
                 The wavelength grid on which to generate the spectra.
+            setup (dict):
+                The parameters returned by ``_setup_dl07_parameters``.
             dust_components (bool):
                 If True, returns the constituent dust components separately.
 
@@ -450,35 +418,42 @@ class DraineLi07(DustEmission):
             Sed or tuple[Sed, Sed]:
                 The generated dust emission SED(s).
         """
-        # Ensure parameters are set up
-        if self.qpah_indices is None:
-            raise exceptions.MissingAttribute(
-                "DL07 parameters not set up. Call "
-                "_setup_dl07_parameters first."
-            )
+        # Get the grid indices of the template spectra we need
+        iqpah = np.where(setup["qpah_indices"])[0][0]
+        iumin = np.where(setup["umin_indices"])[0][0]
+        ialpha = np.where(setup["alpha_indices"])[0][0]
 
-        # Interpolate the dust spectra for the given wavelength range
-        self.grid.interp_spectra(new_lam=lams)
+        # Resample just those templates onto the requested wavelengths. This
+        # reads the grid without modifying it, so the grid always holds its
+        # native wavelengths and can be shared between concurrently executing
+        # models.
+        diffuse_template = spectres(
+            lams.value,
+            self.grid._lam,
+            self.grid.spectra["diffuse"][iqpah, iumin],
+            fill=0,
+            verbose=False,
+        )
+        pdr_template = spectres(
+            lams.value,
+            self.grid._lam,
+            self.grid.spectra["pdr"][iqpah, iumin, ialpha],
+            fill=0,
+            verbose=False,
+        )
 
         # Extract diffuse (old) component spectrum
         diffuse_luminosity = (
-            (1.0 - self.gamma_calculated)
-            * self.grid.spectra["diffuse"][
-                np.where(self.qpah_indices)[0][0],
-                np.where(self.umin_indices)[0][0],
-            ]
-            * (self.hydrogen_mass_calculated / Msun).value
+            (1.0 - setup["gamma_calculated"])
+            * diffuse_template
+            * (setup["hydrogen_mass_calculated"] / Msun).value
         )
 
         # Extract PDR (young) component spectrum
         pdr_luminosity = (
-            self.gamma_calculated
-            * self.grid.spectra["pdr"][
-                np.where(self.qpah_indices)[0][0],
-                np.where(self.umin_indices)[0][0],
-                np.where(self.alpha_indices)[0][0],
-            ]
-            * (self.hydrogen_mass_calculated / Msun).value
+            setup["gamma_calculated"]
+            * pdr_template
+            * (setup["hydrogen_mass_calculated"] / Msun).value
         )
 
         diffuse_sed = Sed(lam=lams, lnu=diffuse_luminosity * (erg / s / Hz))
@@ -538,10 +513,10 @@ class DraineLi07(DustEmission):
             ldust = 1e10 * (dust_mass / (1e6 * Msun)) * Lsun
 
         # Set up DL07 parameters using instance defaults
-        self._setup_dl07_parameters(dust_mass, ldust)
+        setup = self._setup_dl07_parameters(dust_mass, ldust)
 
         # Generate the base spectra
-        return self._generate_dl07_spectra(lams, dust_components)
+        return self._generate_dl07_spectra(lams, setup, dust_components)
 
     @accepts(lams=angstrom)
     @timed("DraineLi07._generate_spectra")
@@ -567,8 +542,7 @@ class DraineLi07(DustEmission):
             emissions (dict):
                 Dictionary containing all emissions generated so far.
             redshift (float):
-                The redshift at which to calculate the CMB heating. (Ignored
-                if not applying CMB heating).
+                Unused, since DL07 templates don't support CMB heating.
             out_dtype (np.dtype):
                 The output precision. Defaults to the global default output
                 dtype.
@@ -590,12 +564,12 @@ class DraineLi07(DustEmission):
         ldust = self.get_scaling(emitter, model, emissions)
 
         # Set up DL07 parameters using the extracted parameters
-        self._setup_dl07_parameters(
+        setup = self._setup_dl07_parameters(
             dust_mass, ldust, dust_to_gas_ratio, hydrogen_mass, qpah
         )
 
         # Generate the base spectra
-        sed = self._generate_dl07_spectra(lams)
+        sed = self._generate_dl07_spectra(lams, setup)
 
         # Get the bolometric luminosity with proper units
         bol_lum = sed._bolometric_luminosity
@@ -648,8 +622,7 @@ class DraineLi07(DustEmission):
                 Dictionary containing all spectra generated so far
                 (used for scaling).
             redshift (float):
-                The redshift at which to calculate the CMB heating. (Ignored
-                if not applying CMB heating).
+                Unused, since DL07 templates don't support CMB heating.
             out_dtype (np.dtype):
                 The output precision. Defaults to the global default output
                 dtype.
@@ -681,13 +654,13 @@ class DraineLi07(DustEmission):
         ldust = self.get_scaling(emitter, model, spectra)
 
         # Set up DL07 parameters using the extracted parameters
-        self._setup_dl07_parameters(
+        setup = self._setup_dl07_parameters(
             dust_mass, ldust, dust_to_gas_ratio, hydrogen_mass, qpah
         )
 
         # Generate the DL07 function
-        lnu = self._generate_dl07_spectra(line_lams).lnu
-        norm_lnu = self._generate_dl07_spectra(sed.lam).lnu
+        lnu = self._generate_dl07_spectra(line_lams, setup).lnu
+        norm_lnu = self._generate_dl07_spectra(sed.lam, setup).lnu
 
         # Create an SED object for convenience
         norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)
@@ -710,34 +683,3 @@ class DraineLi07(DustEmission):
         )
 
         return lines
-
-    @property
-    def u_avg(self) -> Optional[float]:
-        """Average radiation field intensity <U>.
-
-        This property provides access to the calculated average radiation field
-        intensity, which is commonly referenced in the literature.
-
-        Returns:
-            float or None: The average radiation field intensity, or None if
-                parameters have not been calculated yet.
-        """
-        return self.radiation_field_average
-
-    @property
-    def calculated_parameters(self) -> dict:
-        """Dictionary of all calculated DL07 parameters.
-
-        Returns:
-            dict: Dictionary containing all calculated parameters with
-                descriptive names.
-        """
-        return {
-            "average_radiation_field": self.radiation_field_average,
-            "minimum_radiation_field": self.umin_calculated,
-            "gamma_parameter": self.gamma_calculated,
-            "hydrogen_mass": self.hydrogen_mass_calculated,
-            "qpah_used": self.qpah,
-            "alpha_parameter": self.alpha,
-            "power_per_unit_mass": self.power_per_unit_mass,
-        }

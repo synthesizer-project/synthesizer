@@ -53,19 +53,11 @@ def mock_dust_grid():
             self.umin = np.array([0.1, 1.0, 10.0, 100.0])
             self.alpha = np.array([1.5, 2.0, 2.5])
 
-            # Mock spectral data
+            # Mock spectral data on a native wavelength grid (in Angstrom)
+            self._lam = np.logspace(3, 7, 100)
             self.spectra = {
                 "diffuse": np.random.random((3, 4, 100)),
                 "pdr": np.random.random((3, 4, 3, 100)),
-            }
-
-        def interp_spectra(self, new_lam):
-            """Mock interpolation method."""
-            # Update spectra shapes to match wavelength grid
-            n_lam = len(new_lam)
-            self.spectra = {
-                "diffuse": np.random.random((3, 4, n_lam)),
-                "pdr": np.random.random((3, 4, 3, n_lam)),
             }
 
     return MockGrid()
@@ -297,18 +289,40 @@ class TestBlackbodyGenerator:
         temperature = 20 * K
         bb = Blackbody(temperature=temperature, do_cmb_heating=True)
 
-        # Test properties exist
-        assert hasattr(bb, "temperature_z")
-        assert hasattr(bb, "cmb_factor")
-        assert hasattr(bb, "last_cmb_factor")
-        assert hasattr(bb, "last_effective_temperature")
-
         # Test apply_cmb_heating method
         cmb_factor, new_temp = bb.apply_cmb_heating(
             temperature=temperature, emissivity=1.0, redshift=2.0
         )
         assert cmb_factor > 1.0
         assert new_temp > temperature
+
+    def test_cmb_heating_not_stored_on_shared_generator(self):
+        """Test calls with different redshifts can't see each other's result.
+
+        One generator can be shared by several models, so the effective
+        temperature of each call must come from its return value rather than
+        from the generator.
+        """
+        temperature = 20 * K
+        bb = Blackbody(temperature=temperature, do_cmb_heating=True)
+
+        factor_z2, temp_z2 = bb.apply_cmb_heating(
+            temperature=temperature, emissivity=1.0, redshift=2.0
+        )
+        factor_z8, temp_z8 = bb.apply_cmb_heating(
+            temperature=temperature, emissivity=1.0, redshift=8.0
+        )
+
+        # The first call's results are unaffected by the second
+        assert temp_z2 < temp_z8
+        assert factor_z2 != factor_z8
+        assert bb.apply_cmb_heating(
+            temperature=temperature, emissivity=1.0, redshift=2.0
+        ) == (factor_z2, temp_z2)
+
+        # And nothing per-call is left on the generator
+        assert not hasattr(bb, "temperature_z")
+        assert not hasattr(bb, "cmb_factor")
 
 
 class TestGreybodyGenerator:
@@ -508,6 +522,15 @@ class TestDraineLi07Generator:
         assert hasattr(dl07, "dust_to_gas_ratio")
         assert hasattr(dl07, "hydrogen_mass")
 
+    def test_draineli07_has_no_cmb_heating_option(self, mock_dust_grid):
+        """Test CMB heating can't be requested, rather than being ignored."""
+        with pytest.raises(TypeError):
+            DraineLi07(
+                grid=mock_dust_grid,
+                dust_mass=1e6 * Msun,
+                do_cmb_heating=True,
+            )
+
     def test_draineli07_parameter_setup(self, mock_dust_grid):
         """Test DraineLi07 parameter setup."""
         dust_mass = 1e6 * Msun
@@ -524,16 +547,17 @@ class TestDraineLi07Generator:
         )
 
         # Test parameter setup
-        dl07._setup_dl07_parameters(dust_mass, ldust)
+        setup = dl07._setup_dl07_parameters(dust_mass, ldust)
 
-        # Check that calculated values are stored
-        assert dl07.radiation_field_average is not None
-        assert dl07.umin_calculated is not None
-        assert dl07.gamma_calculated is not None
-        assert dl07.hydrogen_mass_calculated is not None
+        # Check that calculated values are returned
+        assert setup["radiation_field_average"] is not None
+        assert setup["umin_calculated"] is not None
+        assert setup["gamma_calculated"] is not None
+        assert setup["hydrogen_mass_calculated"] is not None
 
-        # Check the convenience property
-        assert dl07.u_avg == dl07.radiation_field_average
+        # Check nothing per-call is left on the shared generator
+        assert not hasattr(dl07, "radiation_field_average")
+        assert not hasattr(dl07, "u_avg")
 
     def test_draineli07_get_spectra(self, mock_dust_grid, dust_wavelengths):
         """Test DraineLi07 get_spectra method."""
@@ -589,32 +613,28 @@ class TestDraineLi07Generator:
         assert len(sed_diffuse.lam) == len(dust_wavelengths)
         assert len(sed_pdr.lam) == len(dust_wavelengths)
 
-    def test_draineli07_calculated_parameters_property(self, mock_dust_grid):
-        """Test DraineLi07 calculated_parameters property."""
-        dust_mass = 1e6 * Msun
-        ldust = 1e10 * Lsun
-
+    def test_draineli07_leaves_grid_unchanged(
+        self, mock_dust_grid, dust_wavelengths
+    ):
+        """Test generating spectra doesn't resample the shared grid."""
         dl07 = DraineLi07(
             grid=mock_dust_grid,
-            dust_mass=dust_mass,
+            dust_mass=1e6 * Msun,
             dust_to_gas_ratio=0.01,
             qpah=0.025,
             verbose=False,
-            intrinsic="intrinsic",
-            attenuated="attenuated",
         )
+        lam = mock_dust_grid._lam.copy()
+        diffuse = mock_dust_grid.spectra["diffuse"].copy()
+        pdr = mock_dust_grid.spectra["pdr"].copy()
 
-        # Set up parameters
-        dl07._setup_dl07_parameters(dust_mass, ldust)
+        dl07.get_spectra(dust_wavelengths)
 
-        # Test calculated_parameters property
-        params = dl07.calculated_parameters
-        assert isinstance(params, dict)
-        assert "average_radiation_field" in params
-        assert "minimum_radiation_field" in params
-        assert "gamma_parameter" in params
-        assert "hydrogen_mass" in params
-        assert "qpah_used" in params
+        np.testing.assert_array_equal(mock_dust_grid._lam, lam)
+        np.testing.assert_array_equal(
+            mock_dust_grid.spectra["diffuse"], diffuse
+        )
+        np.testing.assert_array_equal(mock_dust_grid.spectra["pdr"], pdr)
 
 
 class TestDustGeneratorIntegration:
