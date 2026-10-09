@@ -471,11 +471,9 @@ class PowerLaw(AttenuationLaw):
         Returns:
             float/np.ndarray of float: The optical depth.
         """
-        # The optical depth is dimensionless, so work on the raw wavelengths
-        # (in Angstrom, courtesy of accepts) rather than paying for unyt
-        # arithmetic on every call.
-        lam = lam.ndview
-        return (lam / scalar_like(5500.0, lam)) ** scalar_like(self.slope, lam)
+        return (lam / (scalar_like(5500.0, lam) * angstrom)) ** scalar_like(
+            self.slope, lam
+        )
 
     @accepts(lam=angstrom)
     def get_tau(self, lam):
@@ -489,9 +487,9 @@ class PowerLaw(AttenuationLaw):
         Returns:
             float/np.ndarray of float: The optical depth.
         """
-        # The curve is normalised at 5500 Angstrom, where it is exactly 1, so
-        # there is nothing to divide by.
-        return self.get_tau_at_lam(lam)
+        return self.get_tau_at_lam(lam) / self.get_tau_at_lam(
+            scalar_like(5500.0, lam) * angstrom
+        )
 
 
 @accepts(lam=angstrom, cent_lam=angstrom, gamma=angstrom)

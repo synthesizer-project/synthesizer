@@ -583,9 +583,7 @@ class Quantity:
         # Do we need to perform a unit conversion? If not we assume value
         # is already in the default unit system
         if isinstance(value, (unyt_quantity, unyt_array)):
-            if _same_unit(value.units, self.unit):
-                value = value.ndview
-            elif value.units != self.unit and value.units != dimensionless:
+            if value.units != self.unit and value.units != dimensionless:
                 # Convert out of place. The value being assigned is not ours:
                 # attribute reads hand back views onto the stored buffer, so
                 # `b.lnu = a.lnu` in mismatched units would rewrite a's data.
@@ -615,32 +613,6 @@ def has_units(x):
         return True
 
     return False
-
-
-def _same_unit(a, b):
-    """Return True if two units are trivially the same unit.
-
-    Comparing unyt units compares their sympy expressions, which is slow and,
-    on free-threaded Python, contends across threads on the shared expression
-    objects. Units built from the same expression in the same registry share
-    that expression object, so identity catches the common case cheaply. A
-    False result only means the units need comparing properly.
-
-    Args:
-        a (unyt.Unit):
-            The first unit.
-        b (unyt.Unit):
-            The second unit.
-
-    Returns:
-        bool:
-            True if the units are the same object or share an expression and
-            registry, otherwise False.
-    """
-    return a is b or (
-        getattr(a, "expr", None) is getattr(b, "expr", False)
-        and a.registry is b.registry
-    )
 
 
 def unyt_to_ndview(arr, unit=None):
@@ -687,7 +659,7 @@ def unyt_to_ndview(arr, unit=None):
         unit = Unit(unit)
 
     # If the units are the same then just return the ndview
-    if _same_unit(arr.units, unit) or arr.units == unit:
+    if arr.units == unit:
         return arr.ndview
 
     # A conversion is needed, and the caller owns arr, so do it in place and
@@ -718,9 +690,7 @@ def _raise_or_convert(expected_unit, name, value):
         # this runs from the @accepts decorator, so converting in place would
         # rewrite the array the caller passed in as a side effect of calling
         # the function.
-        if not _same_unit(value.units, expected_unit) and (
-            value.units != expected_unit
-        ):
+        if value.units != expected_unit:
             try:
                 return value.to(expected_unit)
             except UnitConversionError:
@@ -748,9 +718,7 @@ def _raise_or_convert(expected_unit, name, value):
                 )
 
             # Convert to the expected units
-            elif not _same_unit(v.units, expected_unit) and (
-                v.units != expected_unit
-            ):
+            elif v.units != expected_unit:
                 try:
                     converted[j] = _raise_or_convert(expected_unit, name, v)
                 except UnitConversionError:
