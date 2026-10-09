@@ -631,7 +631,7 @@ class Stars(StarsComponent):
         return sfzh
 
     @accepts(age_offset=yr)
-    def get_at_earlier_time(self, age_offset=age_offset):
+    def get_at_earlier_time(self, age_offset):
         """Get a Stars object representing the population at an earlier time.
 
            Apply an age_offset to the SFZH age grid and use the precomputed
