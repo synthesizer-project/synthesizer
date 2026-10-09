@@ -1579,12 +1579,13 @@ class Pipeline:
                 metallicities=op_kwargs["metallicities"],
             ).sfzh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
-            galaxy.stars.get_sfzh(
+            # The particle SFZH comes back as a parametric Stars, keep its
+            # SFZH array
+            galaxy.sfzh = galaxy.stars.get_sfzh(
                 log10ages=op_kwargs["log10ages"],
                 metallicities=op_kwargs["metallicities"],
                 nthreads=self.nthreads,
-            )
-            galaxy.sfzh = galaxy.stars.sfzh
+            ).sfzh
         else:
             # No stars, no SFZH, store a zeroed grid
             galaxy.sfzh = np.zeros(
@@ -4344,10 +4345,12 @@ class Pipeline:
         # Do we need to unpack the SFZH? (galaxy.sfzh is on the requested
         # axes, which a parametric Stars' own sfzh needn't be)
         if self._write_sfzh:
-            if getattr(galaxy, "sfzh", None) is not None:
-                self.sfzhs.append(galaxy.sfzh)
-            else:
-                self.sfzhs.append(galaxy.stars.sfzh)
+            sfzh = getattr(galaxy, "sfzh", None)
+            if sfzh is None:
+                sfzh = galaxy.stars.sfzh
+            # A particle SFZH is held as a parametric Stars (e.g. when it
+            # was accumulated from split galaxies), we want its array
+            self.sfzhs.append(getattr(sfzh, "sfzh", sfzh))
 
         # Do we need to unpack the SFH?
         if self._write_sfh:
@@ -4949,11 +4952,10 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Convert the lists of SFZHs to unyt arrays
-        self.sfzhs = unyt_array(self.sfzhs)
-
-        # Convert the lists of SFHs to unyt arrays
-        self.sfhs = unyt_array(self.sfhs)
+        # Convert the lists of SFZHs and SFHs (the mass formed in each bin)
+        # to unyt arrays
+        self.sfzhs = unyt_array(np.asarray(self.sfzhs), "Msun")
+        self.sfhs = unyt_array(np.asarray(self.sfhs), "Msun")
 
         # Convert the lists of spectra to unyt arrays
         for spec_type, spec in self.lnu_spectra["Galaxy"].items():
@@ -5479,6 +5481,39 @@ class Pipeline:
             )
         else:
             galaxy_indices = None
+
+        # Write the SFZHs and SFHs, and the axes they are binned on
+        if self._write_sfzh:
+            op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfzh")
+            self.io_helper.write_data(
+                {"SFZH": self.sfzhs},
+                "Galaxies/Stars",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                {
+                    "Log10Ages": np.asarray(op_kwargs["log10ages"]),
+                    "Metallicities": np.asarray(op_kwargs["metallicities"]),
+                }
+                if self.rank == 0
+                else None,
+                "Galaxies/Stars/SFZHAxes",
+                root=0,
+            )
+        if self._write_sfh:
+            op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfh")
+            self.io_helper.write_data(
+                {"SFH": self.sfhs},
+                "Galaxies/Stars",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                {"Log10Ages": np.asarray(op_kwargs["log10ages"])}
+                if self.rank == 0
+                else None,
+                "Galaxies/Stars/SFHAxes",
+                root=0,
+            )
 
         # Write spectral luminosity densities
         if self._write_lnu_spectra:
