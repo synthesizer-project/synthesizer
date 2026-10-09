@@ -2340,7 +2340,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         nthreads=1,
         grid_assignment_method="cic",
         out_dtype=None,
-        do_grid_check=False,
         **fixed_parameters,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -2421,11 +2420,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             grid_assignment_method (str):
                 The method to use when assigning particles to the grid. Options
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
-            do_grid_check (bool):
-                Whether to warn about emitter attributes (or, for a
-                parametric emitter, mass) outside the grid axes, which are
-                clamped onto the grid's edges. False by default since the
-                check costs time.
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted spectra arrays.
             **fixed_parameters (dict):
@@ -2543,7 +2537,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         nthreads=nthreads,
                         grid_assignment_method=grid_assignment_method,
                         out_dtype=out_dtype,
-                        do_grid_check=do_grid_check,
                     )
                 except Exception as e:
                     if sys.version_info >= (3, 11):
@@ -2726,7 +2719,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         nthreads=1,
         grid_assignment_method="cic",
         out_dtype=None,
-        do_grid_check=False,
         **kwargs,
     ):
         """Generate stellar lines as described by the emission model.
@@ -2805,11 +2797,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             grid_assignment_method (str):
                 The method to use when assigning particles to the grid. Options
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
-            do_grid_check (bool):
-                Whether to warn about emitter attributes (or, for a
-                parametric emitter, mass) outside the grid axes, which are
-                clamped onto the grid's edges. False by default since the
-                check costs time.
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted line arrays.
             **kwargs (dict):
@@ -2943,7 +2930,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         nthreads=nthreads,
                         grid_assignment_method=grid_assignment_method,
                         out_dtype=out_dtype,
-                        do_grid_check=do_grid_check,
                     )
                     if line_lams is None and label in lines:
                         line_lams = lines[label].lam

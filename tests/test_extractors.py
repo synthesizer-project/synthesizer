@@ -579,39 +579,28 @@ def test_integrated_parametric_off_grid_axes(
 
 
 class TestGridCheck:
-    """Tests for warning about emitters outside the grid axes."""
+    """Tests for the fraction of an emitter outside the grid axes."""
 
-    @staticmethod
-    def _model(test_grid):
-        """Return an incident emission model."""
-        from synthesizer.emission_models import IncidentEmission
-
-        return IncidentEmission(test_grid)
-
-    def test_particles_outside_grid_warn(self, test_grid):
-        """Particles older than the grid are reported when asked."""
-        ages = np.array([1e7, 1e8, 1e12])  # the last is beyond the grid
+    def test_particles_outside_grid(self, test_grid):
+        """The mass of particles older than the grid is reported."""
         stars = ParticleStars(
-            initial_masses=np.full(3, 1e6) * Msun,
-            ages=ages * yr,
+            initial_masses=np.array([1e6, 1e6, 2e6]) * Msun,
+            ages=np.array([1e7, 1e8, 1e12]) * yr,  # the last is too old
             metallicities=np.full(3, 0.01),
         )
-        model = self._model(test_grid)
-        with pytest.warns(RuntimeWarning, match=r"33\.33% of the attributes"):
-            stars.get_spectra(model, do_grid_check=True)
+        assert np.isclose(stars.get_fraction_outside_grid(test_grid), 0.5)
 
-    def test_particles_inside_grid_are_quiet(self, test_grid, recwarn):
+    def test_particles_inside_grid(self, test_grid):
         """Particles inside the grid on every axis aren't reported."""
         stars = ParticleStars(
             initial_masses=np.full(2, 1e6) * Msun,
             ages=np.array([1e7, 1e8]) * yr,
             metallicities=np.full(2, 0.01),
         )
-        stars.get_spectra(self._model(test_grid), do_grid_check=True)
-        assert not any("outside" in str(w.message) for w in recwarn)
+        assert stars.get_fraction_outside_grid(test_grid) == 0.0
 
-    def test_parametric_outside_grid_warns(self, test_grid):
-        """Parametric mass younger than the grid is reported when asked."""
+    def test_parametric_outside_grid(self, test_grid):
+        """Parametric mass younger than the grid is reported."""
         stars = ParametricStars(
             test_grid.log10ages,
             test_grid.metallicities,
@@ -619,6 +608,18 @@ class TestGridCheck:
             metal_dist=0.01,
             initial_mass=1e9 * Msun,
         )
-        model = self._model(test_grid)
-        with pytest.warns(RuntimeWarning, match="100.00% of its mass"):
-            stars.get_spectra(model, do_grid_check=True)
+        assert stars.get_fraction_outside_grid(test_grid) == 1.0
+
+    def test_galaxy_components(self, test_grid):
+        """A galaxy reports each component with the grid's axes."""
+        from synthesizer.particle import Galaxy
+
+        stars = ParticleStars(
+            initial_masses=np.array([1e6, 3e6]) * Msun,
+            ages=np.array([1e7, 1e12]) * yr,
+            metallicities=np.full(2, 0.01),
+        )
+        galaxy = Galaxy(stars=stars)
+        fractions = galaxy.get_fraction_outside_grid(test_grid)
+        assert set(fractions) == {"stars"}
+        assert np.isclose(fractions["stars"], 0.75)

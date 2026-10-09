@@ -87,7 +87,6 @@ class Extraction:
         nthreads,
         grid_assignment_method,
         out_dtype,
-        do_grid_check=False,
     ):
         """Extract spectra from the grid.
 
@@ -108,9 +107,6 @@ class Extraction:
                 The method to use when assigning particles to the grid.
                 Options are 'cic' (cloud-in-cell) and 'ngp' (nearest
                 grid point).
-            do_grid_check (bool):
-                Whether to warn about emitter attributes (or mass) outside
-                the grid axes.
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted spectra arrays.
 
@@ -186,7 +182,7 @@ class Extraction:
             lam_mask=this_model._lam_mask,
             grid_assignment_method=grid_assignment_method,
             nthreads=nthreads,
-            do_grid_check=do_grid_check,
+            do_grid_check=False,
             out_dtype=out_dtype,
         )
 
@@ -213,7 +209,6 @@ class Extraction:
         nthreads,
         grid_assignment_method,
         out_dtype,
-        do_grid_check=False,
     ):
         """Extract lines from the grid.
 
@@ -236,9 +231,6 @@ class Extraction:
                 The method to use when assigning particles to the grid.
                 Options are 'cic' (cloud-in-cell) and 'ngp' (nearest
                 grid point).
-            do_grid_check (bool):
-                Whether to warn about emitter attributes (or mass) outside
-                the grid axes.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned line arrays.
 
@@ -362,7 +354,7 @@ class Extraction:
             lam_mask=lam_mask,
             grid_assignment_method=grid_assignment_method,
             nthreads=nthreads,
-            do_grid_check=do_grid_check,
+            do_grid_check=False,
             out_dtype=out_dtype,
         )
 

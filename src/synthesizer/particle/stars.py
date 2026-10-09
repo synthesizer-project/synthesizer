@@ -812,11 +812,13 @@ class Stars(Particles, StarsComponent):
 
         # Create new particle stars object from non-empty SFZH entries
         new_stars = self.__class__(
-            stars.sfzh[stars.sfzh > 0] * Msun,
+            (stars.sfzh[stars.sfzh > 0] * Msun).in_base("galactic"),
             10 ** grid.log10ages[grid_indexes[:, 0]] * yr,
             grid.metallicities[grid_indexes[:, 1]],
             redshift=self.redshift,
-            masses=np.zeros(np.sum(stars.sfzh > 0)) * Msun,
+            masses=(np.zeros(np.sum(stars.sfzh > 0)) * Msun).in_base(
+                "galactic"
+            ),
         )
 
         # Save the old stars privately
@@ -1133,7 +1135,7 @@ class Stars(Particles, StarsComponent):
             orig_total_mass = (
                 np.sum(to_resample[2])
                 if to_resample[2] is not None
-                else n_total * Msun
+                else (n_total * Msun).in_base("galactic")
             )
 
             # Derive grid axes from the particle population (sorted, finely
@@ -1815,7 +1817,7 @@ class Stars(Particles, StarsComponent):
 
         surviving_mass = np.sum(_stars.sfzh * grid.stellar_fraction)
 
-        return surviving_mass * Msun
+        return (surviving_mass * Msun).in_base("galactic")
 
     def _prepare_sfh_args(
         self,

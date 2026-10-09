@@ -403,7 +403,7 @@ class Stars(StarsComponent):
             masses = masses * self.sfzh_normalisation
 
             # now calculate the initial mass
-            self.initial_mass = np.sum(masses) * Msun
+            self.initial_mass = (np.sum(masses) * Msun).in_base("galactic")
 
         elif self.initial_mass is not None:
             self.sfzh_normalisation = self._initial_mass / np.sum(masses)
@@ -412,7 +412,7 @@ class Stars(StarsComponent):
         else:
             # Otherwise calculate the total initial mass by just summing the
             # masses
-            self.initial_mass = np.sum(masses) * Msun
+            self.initial_mass = (np.sum(masses) * Msun).in_base("galactic")
 
         # Store the population's bins (which also sets sf_hist and
         # metal_dist from them)
@@ -1367,7 +1367,7 @@ class Stars(StarsComponent):
         new._set_bins(
             edges, masses, self._bin_units if units is None else units
         )
-        new.initial_mass = np.sum(masses) * Msun
+        new.initial_mass = (np.sum(masses) * Msun).in_base("galactic")
         return new
 
     def get_particle_photo_lnu(self, *args, **kwargs):
@@ -1715,7 +1715,7 @@ class Stars(StarsComponent):
             **kwargs,
         )
         stars._set_bins(edges, np.ascontiguousarray(masses), units)
-        stars.initial_mass = np.sum(masses) * Msun
+        stars.initial_mass = (np.sum(masses) * Msun).in_base("galactic")
         if names is not None:
             if len(names) != stars.npop:
                 raise exceptions.InconsistentArguments(
@@ -2329,7 +2329,9 @@ class Stars(StarsComponent):
         mask = BinMask()
         mask.add_axis_condition("ages", ">=", t_start)
         mask.add_axis_condition("ages", "<", t_end)
-        mass = np.sum(self.bin_masses * mask.get_fractions(self)) * Msun
+        mass = (
+            np.sum(self.bin_masses * mask.get_fractions(self)) * Msun
+        ).in_base("galactic")
 
         return (mass / ((t_end - t_start) * yr)).to("Msun/yr")
 
@@ -2387,7 +2389,7 @@ class Stars(StarsComponent):
         """
         surviving_mass = np.sum(self.calculate_surviving_sfzh(grid))
 
-        return surviving_mass * Msun
+        return (surviving_mass * Msun).in_base("galactic")
 
     def get_ionising_photon_luminosity(
         self,
@@ -2434,7 +2436,7 @@ class Stars(StarsComponent):
                 The total initial mass formed prior to this age.
         """
         _, masses = self._get_bins_at_earlier_time(age)
-        return np.sum(masses) * Msun
+        return (np.sum(masses) * Msun).in_base("galactic")
 
     @accepts(age=yr)
     def calculate_surviving_mass_at_age(self, age, grid: Grid):
@@ -2457,4 +2459,6 @@ class Stars(StarsComponent):
         """
         edges, masses = self._get_bins_at_earlier_time(age)
         weights = self._bins_to_grid(grid, edges, masses)
-        return np.sum(weights * grid.stellar_fraction) * Msun
+        return (np.sum(weights * grid.stellar_fraction) * Msun).in_base(
+            "galactic"
+        )
