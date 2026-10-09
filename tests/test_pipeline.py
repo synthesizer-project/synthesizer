@@ -820,6 +820,21 @@ class TestPipelineOperations:
             > 0
         ), "No spectra were calculated"
 
+    def test_clean_outputs_converts_galaxy_fnu_spectra(
+        self,
+        pipeline_with_galaxies,
+    ):
+        """Galaxy fluxes are stacked in place, not under a stray key."""
+        pipeline = pipeline_with_galaxies
+        spec = unyt_array([1.0, 2.0], "erg/s/cm**2/Hz")
+        pipeline.fnu_spectra["Galaxy"]["total"] = [spec, spec]
+
+        pipeline._clean_outputs()
+
+        assert set(pipeline.fnu_spectra) == {"Galaxy", "Stars", "BlackHole"}
+        assert isinstance(pipeline.fnu_spectra["Galaxy"]["total"], unyt_array)
+        assert pipeline.fnu_spectra["Galaxy"]["total"].shape == (2, 2)
+
     def test_run_pipeline_photometry_lums(
         self,
         pipeline_with_galaxies,

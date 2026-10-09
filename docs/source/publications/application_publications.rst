@@ -10,7 +10,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2026MNRAS.551g1230T.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2026MNRAS.551g1230T.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026MNRAS.551g1230T
      - **Hunting the first cosmic giants: formation and detectability of direct collapse black holes around high-redshift quasars**
@@ -25,7 +25,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2026arXiv260807668T.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2026arXiv260807668T.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026arXiv260807668T
      - **First Light and Assembly of GalaxieS (FLAGS) I: The JWST/NIRCam Number Counts and IGL as Constraints on Galaxy Formation Models**
@@ -40,7 +40,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2026MNRAS.550g1227S.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2026MNRAS.550g1227S.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026MNRAS.550g1227S
      - **The Cosmic Rush Hour: Rapid formation of bright, massive, disky, star-forming galaxies as signatures of early-universe physics**
@@ -55,7 +55,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2026arXiv260630726A.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2026arXiv260630726A.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026arXiv260630726A
      - **AGN-driven outflows in dwarf galaxies from cosmological simulations: Internal properties and observational signatures**
@@ -70,7 +70,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2026arXiv260630750I.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2026arXiv260630750I.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026arXiv260630750I
      - **A Pixel-by-Pixel Path to Population III Discovery with JWST**
@@ -85,7 +85,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2026MNRAS.546ag214T.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2026MNRAS.546ag214T.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026MNRAS.546ag214T
      - **The nature of high-redshift massive quiescent galaxies ─ searching for RUBIES-UDS-QG-z7 in FLARES**
@@ -100,7 +100,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2026MNRAS.547ag282H.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2026MNRAS.547ag282H.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026MNRAS.547ag282H
      - **Flexible simulation-based inference for galaxy photometric fitting with synthesizer**
@@ -115,7 +115,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2026OJAp....957554P.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2026OJAp....957554P.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026OJAp....957554P
      - **Interpreting nebular emission lines in the high-redshift Universe**
@@ -130,7 +130,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2026ApJ...998..148J.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2026ApJ...998..148J.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026ApJ...998..148J
      - **Little Red Dots and Their Progenitors from Direct Collapse Black Holes**
@@ -145,7 +145,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2026MNRAS.545f1866N.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2026MNRAS.545f1866N.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2026MNRAS.545f1866N
      - **Cloudy-Maraston: integrating nebular continuum and line emission with the Maraston stellar population synthesis models**
@@ -160,7 +160,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2025arXiv251210839A.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2025arXiv251210839A.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025arXiv251210839A
      - **Resolving the ionizing photon budget crisis with JWST/NIRCam HII clumping constraints at z=6**
@@ -175,7 +175,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2025A&A...704A.248Q.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2025A%26A...704A.248Q.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025A&A...704A.248Q
      - **Super-Eddington accretion in high-redshift quasar hosts: Black-hole-driven outflows, galaxy quenching, and the nature of little red dots**
@@ -190,7 +190,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2025MNRAS.544.3949L.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2025MNRAS.544.3949L.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025MNRAS.544.3949L
      - **Learning the Universe: cosmological and astrophysical parameter inference with galaxy luminosity functions and colours**
@@ -205,7 +205,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2025arXiv251014766F.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2025arXiv251014766F.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025arXiv251014766F
      - **Predicting the Subhalo Mass Functions in Simulations from Galaxy Images**
@@ -220,7 +220,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2025MNRAS.542.2998H.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2025MNRAS.542.2998H.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025MNRAS.542.2998H
      - **Behind the spotlight: a systematic assessment of outshining using NIRCam medium bands in the JADES Origins Field**
@@ -235,7 +235,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2025ApJ...991...83R.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2025ApJ...991...83R.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025ApJ...991...83R
      - **Caught in the Act: Detections of Recoiling Supermassive Black Holes from Simulations**
@@ -250,7 +250,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2025arXiv250505257W.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2025arXiv250505257W.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2025arXiv250505257W
      - **First Light and Reionization Epoch Simulations (FLARES) -- XVIII: the ionising emissivities and hydrogen recombination line properties of early AGN**
@@ -265,7 +265,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2024MNRAS.533.3724V.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2024MNRAS.533.3724V.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2024MNRAS.533.3724V
      - **The sizes of bright Lyman-break galaxies at z ≃ 3-5 with JWST PRIMER**
@@ -280,7 +280,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2024OJAp....7E..54H.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2024OJAp....7E..54H.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2024OJAp....7E..54H
      - **LtU-ILI: An All-in-One Framework for Implicit Inference in Astrophysics and Cosmology**
@@ -295,7 +295,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2024MNRAS.527.7965W.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2024MNRAS.527.7965W.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2024MNRAS.527.7965W
      - **First Light and Reionization Epoch Simulations (FLARES) - XIV. The Balmer/4000 ̊A breaks of distant galaxies**
@@ -310,7 +310,7 @@ A single ADS library of the papers can be found
    :widths: 40 60
    :class: borderless
 
-   * - .. image:: plots/2023MNRAS.525.5520L.jpeg
+   * - .. image:: https://raw.githubusercontent.com/synthesizer-project/synventory/main/publications/2023MNRAS.525.5520L.jpeg
           :width: 100%
           :target: https://ui.adsabs.harvard.edu/abs/2023MNRAS.525.5520L
      - **First light and reionisation epoch simulations (FLARES) - VIII. The emergence of passive galaxies at z \ensuremath≥ 5**

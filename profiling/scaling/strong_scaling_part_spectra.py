@@ -10,7 +10,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from unyt import Msun, Myr, km, s
+from unyt import Msun, Myr
 
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.grid import Grid
@@ -34,8 +34,9 @@ def part_spectra_strong_scaling(
     average_over,
     gam,
     low_thresh,
-    doppler,
     paper_style,
+    grid_precision,
+    out_dtype,
 ):
     """Profile the cpu time usage of the particle spectra calculation."""
     Path(out_dir).mkdir(parents=True, exist_ok=True)
@@ -43,10 +44,10 @@ def part_spectra_strong_scaling(
     # Define the grid
     grid_name = "test_grid"
 
-    grid = Grid(grid_name)
+    grid = Grid(grid_name, use_precision=grid_precision)
 
     # Get the emission model
-    model = IncidentEmission(grid, vel_shift=doppler, per_particle=True)
+    model = IncidentEmission(grid, per_particle=True)
 
     # Generate the star formation metallicity history
     mass = 10**10 * Msun
@@ -65,34 +66,30 @@ def part_spectra_strong_scaling(
         param_stars.log10metallicities,
         nstars,
         redshift=1,
-        velocities=np.random.normal(0.0, 100.0, size=(nstars, 3)) * km / s,
     )
 
     # Get spectra in serial first to get over any overhead due to linking
     # the first time the function is called
     print("Initial serial spectra calculation")
-    stars.get_spectra(model, nthreads=1, grid_assignment_method=gam)
+    dtype = None if out_dtype is None else np.dtype(out_dtype)
+    stars.get_spectra(
+        model,
+        nthreads=1,
+        grid_assignment_method=gam,
+        out_dtype=dtype,
+    )
     print()
 
     # Define the log and plot output paths
-    if doppler:
-        log_outpath = (
-            f"{out_dir}/{basename}_part_spectra_{gam}_"
-            f"totThreads{max_threads}_nstars{nstars}_doppler.log"
-        )
-        plot_outpath = (
-            f"{out_dir}/{basename}_part_spectra_{gam}_"
-            f"totThreads{max_threads}_nstars{nstars}_doppler.png"
-        )
-    else:
-        log_outpath = (
-            f"{out_dir}/{basename}_part_spectra_{gam}_"
-            f"totThreads{max_threads}_nstars{nstars}.log"
-        )
-        plot_outpath = (
-            f"{out_dir}/{basename}_part_spectra_{gam}_"
-            f"totThreads{max_threads}_nstars{nstars}.png"
-        )
+    precision_suffix = "" if dtype is None else f"_{dtype.name}"
+    log_outpath = (
+        f"{out_dir}/{basename}_part_spectra_{gam}_"
+        f"totThreads{max_threads}_nstars{nstars}{precision_suffix}.log"
+    )
+    plot_outpath = (
+        f"{out_dir}/{basename}_part_spectra_{gam}_"
+        f"totThreads{max_threads}_nstars{nstars}{precision_suffix}.png"
+    )
 
     # Run the scaling test
     run_scaling_test(
@@ -104,6 +101,7 @@ def part_spectra_strong_scaling(
         {
             "emission_model": model,
             "grid_assignment_method": gam,
+            "out_dtype": dtype,
         },
         total_msg="Generating spectra",
         low_thresh=low_thresh,
@@ -173,9 +171,18 @@ if __name__ == "__main__":
     )
 
     args.add_argument(
-        "--doppler",
-        action="store_true",
-        help="Whether to apply velocity shifts to the spectra calculation.",
+        "--out-dtype",
+        choices=("float32", "float64"),
+        default=None,
+        help="Requested output precision. Defaults to inherited precision.",
+    )
+
+    args.add_argument(
+        "--grid-precision",
+        choices=("float32", "float64"),
+        default="float64",
+        help="Precision to load the grid arrays at. float32 halves the grid "
+        "read traffic in the extraction kernels.",
     )
 
     args = args.parse_args()
@@ -197,6 +204,7 @@ if __name__ == "__main__":
         args.average_over,
         args.grid_assign,
         args.low_thresh,
-        args.doppler,
         args.paper_style,
+        args.grid_precision,
+        args.out_dtype,
     )

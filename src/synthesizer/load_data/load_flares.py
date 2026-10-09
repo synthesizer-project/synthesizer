@@ -96,22 +96,26 @@ def load_FLARES(
         )
         if read_abundances:
             galaxies[i].load_stars(
-                (imasses[b:e] * Msun).astype(dtype),
+                (imasses[b:e] * Msun).in_base("galactic").astype(dtype),
                 (ages[b:e] * yr).astype(dtype),
                 metallicities[b:e].astype(dtype),
                 s_oxygen=s_oxygen[b:e].astype(dtype),
                 s_hydrogen=s_hydrogen[b:e].astype(dtype),
                 coordinates=(coods[b:e, :] * Mpc).astype(dtype),
-                current_masses=(masses[b:e] * Msun).astype(dtype),
+                current_masses=(masses[b:e] * Msun)
+                .in_base("galactic")
+                .astype(dtype),
                 smoothing_lengths=(s_hsml[b:e] * Mpc).astype(dtype),
             )
         else:
             galaxies[i].load_stars(
-                (imasses[b:e] * Msun).astype(dtype),
+                (imasses[b:e] * Msun).in_base("galactic").astype(dtype),
                 (ages[b:e] * yr).astype(dtype),
                 metallicities[b:e].astype(dtype),
                 coordinates=(coods[b:e, :] * Mpc).astype(dtype),
-                current_masses=(masses[b:e] * Msun).astype(dtype),
+                current_masses=(masses[b:e] * Msun)
+                .in_base("galactic")
+                .astype(dtype),
                 smoothing_lengths=(s_hsml[b:e] * Mpc).astype(dtype),
             )
 
@@ -121,7 +125,9 @@ def load_FLARES(
     for i, (b, e) in enumerate(zip(begin, end)):
         # Use gas particle SFR for star forming mask
         sf_mask = g_sfr[b:e] > 0
-        galaxies[i].sf_gas_mass = np.sum(g_masses[b:e][sf_mask]) * Msun
+        galaxies[i].sf_gas_mass = (
+            np.sum(g_masses[b:e][sf_mask]) * Msun
+        ).in_base("galactic")
 
         galaxies[i].sf_gas_metallicity = (
             np.sum(g_masses[b:e][sf_mask] * g_metallicities[b:e][sf_mask])
@@ -130,7 +136,7 @@ def load_FLARES(
 
         galaxies[i].load_gas(
             coordinates=(g_coods[b:e] * Mpc).astype(dtype),
-            masses=(g_masses[b:e] * Msun).astype(dtype),
+            masses=(g_masses[b:e] * Msun).in_base("galactic").astype(dtype),
             metallicities=g_metallicities[b:e].astype(dtype),
             smoothing_lengths=(g_hsml[b:e] * Mpc).astype(dtype),
         )

@@ -4975,7 +4975,7 @@ class Pipeline:
         for spec_type, spec in self.lnu_spectra["BlackHole"].items():
             self.lnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
         for spec_type, spec in self.fnu_spectra["Galaxy"].items():
-            self.fnu_spectra[spec_type] = unyt_array(spec)
+            self.fnu_spectra["Galaxy"][spec_type] = unyt_array(spec)
         for spec_type, spec in self.fnu_spectra["Stars"].items():
             self.fnu_spectra["Stars"][spec_type] = unyt_array(spec)
         for spec_type, spec in self.fnu_spectra["BlackHole"].items():

@@ -510,6 +510,52 @@ PyObject *combine_spectra_2d(PyObject *self, PyObject *args) {
   return result;
 }
 
+/**
+ * @brief Check whether a floating-point array contains any +/-inf.
+ *
+ * This is the overflow check used when verifying reduced precision outputs.
+ * A NumPy np.isinf(arr).any() allocates a boolean array the size of the input
+ * and scans it on one thread, which for per-particle spectra costs a
+ * significant fraction of the time taken to compute them.
+ *
+ * Args:
+ *   values (np.ndarray):
+ *     A C-contiguous float32 or float64 array of any shape.
+ *   nthreads (int):
+ *     The number of threads to use.
+ *
+ * Returns:
+ *   bool:
+ *     True if any element is +/-inf.
+ */
+PyObject *any_inf(PyObject *self, PyObject *args) {
+  (void)self;
+
+  PyArrayObject *np_values;
+  int nthreads;
+  if (!PyArg_ParseTuple(args, "O!i", &PyArray_Type, &np_values, &nthreads)) {
+    return NULL;
+  }
+
+  PyArrayObject *float_arrays[] = {np_values};
+  const char *float_names[] = {"values"};
+  int typenum = -1;
+  if (!is_matching_float_dtypes(float_arrays, float_names, 1, &typenum)) {
+    return NULL;
+  }
+
+  tic("any_inf");
+  const bool found = dispatch_float(typenum, [&](auto value) -> bool {
+    using Real = decltype(value);
+    return contains_inf<Real>(data_ptr<const Real>(np_values),
+                              (size_t)PyArray_SIZE(np_values),
+                              nthreads > 1 ? nthreads : 1);
+  });
+  toc("any_inf");
+
+  return PyBool_FromLong(found);
+}
+
 template void reduce_spectra<float, float>(float *, const float *, int, int,
                                            int);
 template void reduce_spectra<float, double>(double *, const float *, int, int,
@@ -526,6 +572,8 @@ static PyMethodDef ReductionMethods[] = {
      "Reduce per-particle spectra to a single integrated spectrum."},
     {"combine_spectra_2d", (PyCFunction)combine_spectra_2d, METH_VARARGS,
      "Combine 2D per-particle spectra without temporary arrays."},
+    {"any_inf", (PyCFunction)any_inf, METH_VARARGS,
+     "Check whether a floating-point array contains any +/-inf."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */
