@@ -359,6 +359,7 @@ def _generate_ifu_parametric_smoothed(
     quantity,
     density_grid,
     morphology=None,
+    nthreads=1,
 ):
     """Generate a smoothed IFU for a parametric emitter.
 
@@ -378,6 +379,8 @@ def _generate_ifu_parametric_smoothed(
         morphology (PopulationMorphology):
             The morphology of each population, for an emitter whose
             populations have their own spatial distributions, or None.
+        nthreads (int):
+            The number of threads to use.
     """
     # Sample the spectra onto the wavelength grid if we need to
     sed = sed.get_resampled_sed(new_lam=ifu.lam)
@@ -409,7 +412,7 @@ def _generate_ifu_parametric_smoothed(
                 "spectra of each population (use a per_particle model)."
             )
         ifu.arr = morphology.get_weighted_density_grid(
-            ifu.resolution, ifu.npix, spectra
+            ifu.resolution, ifu.npix, spectra, nthreads=nthreads
         )
         return ifu
 
@@ -600,13 +603,14 @@ def _generate_ifu_generic(
                 quantity=quantity,
                 density_grid=None,
                 morphology=emitter.morphology,
+                nthreads=nthreads,
             )
         return _generate_ifu_parametric_smoothed(
             ifu,
             sed=sed,
             quantity=quantity,
             density_grid=emitter.morphology.get_density_grid(
-                ifu.resolution, ifu.npix
+                ifu.resolution, ifu.npix, nthreads=nthreads
             ),
         )
     else:

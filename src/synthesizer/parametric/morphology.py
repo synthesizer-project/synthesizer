@@ -34,307 +34,144 @@ from synthesizer.utils import TableFormatter
 # over each pixel (rather than sampling it at the pixel centre)
 DEFAULT_SUPERSAMPLE = 5
 
-# Within this many pixels of the centre of a radial profile that is
-# unresolved there (a cusp, e.g. a Sersic profile with n > 1, or a profile
-# narrower than this) the light is placed from the profile's enclosed
-# fraction in thin elliptical shells instead, so it is integrated
-# accurately. The shells taper off smoothly to three times this radius while
-# the pixel sampling takes over
-CENTRAL_PIXELS = 3
+# The relative tolerance each pixel of a parametric image is integrated to
+# (see synthesizer.imaging.extensions.parametric_image)
+IMAGE_TOLERANCE = 1e-4
 
-# The number of (log spaced) shells used within the central region
-CENTRAL_SHELLS = 400
-
-# The number of geometrically graded shells above each radius where the
-# shells become tangent to a pixel edge
-TANGENT_GRADING = 16
-
-# The most samples per pixel along each axis used for pixels in the taper of
-# an elongated profile (see _integrate_radial_profile)
-MAX_TAPER_SUPERSAMPLE = 64
-
-# The estimated relative error of a pixel's centre sample above which the
-# pixel is sampled within instead (see _integrate_radial_profile)
-SAMPLE_TOLERANCE = 1e-4
+# The outer radius the imaging extension treats as unbounded (it can't use
+# infinities, see parametric_image.cpp)
+_UNBOUNDED = 1e300
 
 
-def _integrate_radial_profile(profile, resolution, npix, radii, supersample):
-    """Get the fraction of a radial profile's light in each pixel and annulus.
-
-    Away from the centre the profile is integrated over each pixel by
-    sampling it within the pixel (where its curvature means the pixel
-    centre alone isn't accurate enough). Near the centre the light is placed in
-    thin elliptical shells whose mass comes from the profile's enclosed
-    fraction, each spread evenly around its ellipse, so the light of a cusp
-    lands in the right pixels exactly. The two are blended with a smooth
-    taper (the shells carry chi(r) of the light and the sampling 1 - chi(r),
-    with chi falling from 1 at CENTRAL_PIXELS to 0 at twice that), since a
-    hard cut between them would make the sampling's error first order.
-
-    NOTE: The profile must provide get_total, get_radius,
-    get_enclosed_fraction, _get_ellipse and _get_central_scale.
+def _make_images(rows, signals, resolution, npix, nthreads=1, tolerance=None):
+    """Make the images of populations with the parametric imaging extension.
 
     Args:
-        profile (MorphologyBase):
-            The radial profile.
+        rows (list of np.ndarray):
+            The profile parameters of each population (see
+            _get_image_rows), in the units of the resolution.
+        signals (np.ndarray):
+            The signal of each population, with shape (npop, nsignal).
         resolution (unyt_quantity):
             The resolution of the grid.
         npix (tuple, int):
             The number of pixels in each dimension.
-        radii (unyt_array):
-            The annulus edges (two edges, zero and infinity, for the whole
-            profile).
-        supersample (int):
-            The number of samples per pixel along each axis.
+        nthreads (int):
+            The number of threads to use.
+        tolerance (float):
+            The relative tolerance of each pixel's integral, defaults to
+            IMAGE_TOLERANCE.
 
     Returns:
         np.ndarray:
-            The fraction of the profile's total light in each pixel (in
-            row-major (y, x) order) and annulus, (npix[1] * npix[0],
-            len(radii) - 1).
+            The images, with shape (npix[1], npix[0], nsignal).
     """
-    units = resolution.units
-    res = resolution.value
-    nx, ny = npix
-    radii = radii.to(units).value
-    nann = radii.size - 1
-    r_in = CENTRAL_PIXELS * res
-    r_out = 3 * r_in
-
-    # Only an unresolved centre needs the shells, the pixel sampling is more
-    # accurate for a smooth, resolved profile
-    shells = profile._get_central_scale(units) < r_in
-
-    def taper(r):
-        """Get the fraction of the light at a radius carried by the shells."""
-        if not shells:
-            return np.zeros_like(r)
-        x = np.clip((r - r_in) / (r_out - r_in), 0.0, 1.0)
-        return 0.5 * (1.0 + np.cos(np.pi * x))
-
-    def sample(pixels, nsample):
-        """Sample the profile (less the shells' share) within pixels."""
-        out = np.zeros(nx * ny * nann)
-        offsets = MorphologyBase._get_subpixel_offsets(nsample)
-        for offset in offsets:
-            xx, yy = MorphologyBase._get_coordinate_grids(
-                resolution, npix, offset
-            )
-            # (kept 2D, as the profiles expect)
-            xx, yy = xx.ravel()[pixels][None], yy.ravel()[pixels][None]
-            values, _ = profile.compute_density_grid(xx, yy)
-            values = np.asarray(values).ravel()
-            radius = profile.get_radius(xx, yy).to(units).value.ravel()
-            label = np.searchsorted(radii, radius, side="right") - 1
-            keep = (label >= 0) & (label < nann)
-            if shells:
-                keep &= radius > r_in
-            out += np.bincount(
-                pixels[keep] * nann + label[keep],
-                weights=values[keep] * (1.0 - taper(radius[keep])),
-                minlength=out.size,
-            )
-        return out * res**2 / len(offsets) / profile.get_total(units)
-
-    # Sample the profile at each pixel centre, which is accurate enough
-    # wherever the profile is smooth on the scale of a pixel
-    x0, y0, angle, axis_ratio = profile._get_ellipse(units)
-    weights = sample(np.arange(nx * ny), 1)
-
-    # Find the pixels that need sampling within: where the error of the
-    # centre sample (estimated from the profile's curvature, the discrete
-    # Laplacian of the centre samples, as the midpoint rule's error is
-    # res^2 / 24 times the Laplacian) is too large, near an annulus edge
-    # (where a pixel is split between annuli) and near the central shells
-    xx, yy = MorphologyBase._get_coordinate_grids(resolution, npix)
-    centre = profile.get_radius(xx, yy).to(units).value
-    values = np.pad(np.asarray(profile.compute_density_grid(xx, yy)[0]), 1)
-    laplacian = (
-        values[:-2, 1:-1]
-        + values[2:, 1:-1]
-        + values[1:-1, :-2]
-        + values[1:-1, 2:]
-        - 4 * values[1:-1, 1:-1]
+    from synthesizer.imaging.extensions.parametric_image import (
+        make_parametric_images,
     )
-    error = np.abs(laplacian) / 24
-    total = profile.get_total(units) / res**2
-    reach = res / axis_ratio  # the furthest a pixel's radii can differ
-    edges = radii[np.isfinite(radii) & (radii > 0)]
-    refine = (error > SAMPLE_TOLERANCE * values[1:-1, 1:-1]) & (
-        error > SAMPLE_TOLERANCE * 1e-5 * total
-    )
-    if edges.size > 0:
-        refine |= np.min(np.abs(centre[..., None] - edges), axis=-1) < reach
-    if shells:
-        refine |= centre < r_out + reach
-    refine = np.flatnonzero(refine.ravel())
-    weights.reshape(nx * ny, nann)[refine] = 0.0
-    weights += sample(refine, supersample)
-    if not shells:
-        return weights.reshape(nx * ny, nann)
 
-    # The taper is a function of the elliptical radius, which changes
-    # 1 / axis_ratio times faster along the minor axis, so pixels in the
-    # taper of an elongated profile are sampled that much more finely
-    fine = min(int(np.ceil(supersample / axis_ratio)), MAX_TAPER_SUPERSAMPLE)
-    if fine > supersample:
-        tapered = np.flatnonzero(
-            ((centre > r_in - reach) & (centre < r_out + reach)).ravel()
+    signals = np.asarray(signals)
+    if signals.dtype not in (np.float32, np.float64):
+        signals = signals.astype(np.float64)
+    signals = signals.reshape(len(rows), -1)
+
+    # An image with no pixels (e.g. a field of view smaller than a pixel)
+    if npix[0] <= 0 or npix[1] <= 0:
+        return np.zeros(
+            (max(int(npix[1]), 0), max(int(npix[0]), 0), signals.shape[1]),
+            dtype=signals.dtype,
         )
-        weights.reshape(nx * ny, nann)[tapered] = 0.0
-        weights += sample(tapered, fine)
-
-    # The ellipse's geometry and the pixel edges
-    x_coeffs = (np.cos(angle), -axis_ratio * np.sin(angle))
-    y_coeffs = (np.sin(angle), axis_ratio * np.cos(angle))
-    xedges = res * (np.arange(nx + 1) - nx / 2)
-    yedges = res * (np.arange(ny + 1) - ny / 2)
-
-    # Place the central light in thin shells: log spaced to resolve a cusp,
-    # finer than the pixel sampling out to the end of the taper, and split
-    # at any annulus edges. Where a shell becomes tangent to a pixel edge the
-    # part of it in the pixel grows as the square root of the radius beyond
-    # the tangent point, so the shells are graded geometrically towards each
-    # tangent radius from above to integrate this accurately
-    tangent = np.concatenate(
-        (
-            np.abs(xedges - x0) / np.hypot(*x_coeffs),
-            np.abs(yedges - y0) / np.hypot(*y_coeffs),
-        )
+    return make_parametric_images(
+        np.ascontiguousarray(rows, dtype=np.float64),
+        np.ascontiguousarray(signals),
+        float(resolution.value),
+        int(npix[0]),
+        int(npix[1]),
+        IMAGE_TOLERANCE if tolerance is None else tolerance,
+        nthreads,
     )
-    tangent = tangent[(tangent > 0) & (tangent < r_out)]
-    grading = res / supersample * 2.0 ** -np.arange(TANGENT_GRADING)
-    tangent = (tangent[:, None] + np.append(0.0, grading)[None, :]).ravel()
-
-    # The part of a shell in a pixel also has a kink where the shell passes
-    # through one of the pixel's corners, so split the shells there too
-    xc, yc = np.meshgrid(xedges, yedges)
-    corners = profile.get_radius(xc * units, yc * units).to(units).value
-    corners = corners[corners < r_out].ravel()
-    edges = np.unique(
-        np.concatenate(
-            (
-                [0.0],
-                np.logspace(
-                    np.log10(r_in) - 8, np.log10(r_in), CENTRAL_SHELLS
-                ),
-                np.linspace(
-                    0.0,
-                    r_out,
-                    int(np.ceil(4 * CENTRAL_PIXELS * supersample)) + 1,
-                ),
-                radii[(radii > 0) & (radii < r_out)],
-                tangent[tangent < r_out],
-                corners,
-            )
-        )
-    )
-    lo, hi = edges[:-1], edges[1:]
-    r_mid = np.where(lo > 0, np.sqrt(lo * hi), 0.5 * hi)
-    mass = np.diff(profile.get_enclosed_fraction(edges * units)) * taper(r_mid)
-    label = np.searchsorted(radii, r_mid, side="right") - 1
-    # Spread each shell around its ellipse, giving each pixel the fraction
-    # of the ellipse (in its parametric angle, along which the light is
-    # uniform) inside it, computed exactly
-    fx = _get_arc_fractions(r_mid, x0, *x_coeffs, xedges)
-    fy = _get_arc_fractions(r_mid, y0, *y_coeffs, yedges)
-    cols = np.flatnonzero(np.any(fx[0] > 0, axis=(0, 2)))
-    rows = np.flatnonzero(np.any(fy[0] > 0, axis=(0, 2)))
-    starts_x, lengths_x = fx[1][:, cols], fx[0][:, cols]
-    starts_y, lengths_y = fy[1][:, rows], fy[0][:, rows]
-    frac = _get_arc_overlaps(
-        starts_x[:, None, :, :, None],
-        lengths_x[:, None, :, :, None],
-        starts_y[:, :, None, None, :],
-        lengths_y[:, :, None, None, :],
-    ).sum(axis=(3, 4)) / (2 * np.pi)
-    ok = (label >= 0) & (label < nann)
-    shell_light = frac[ok] * mass[ok, None, None]
-    index = (rows[:, None] * nx + cols[None, :])[None] * nann + label[ok][
-        :, None, None
-    ]
-    weights += np.bincount(
-        index.ravel(), weights=shell_light.ravel(), minlength=weights.size
-    )
-    return weights.reshape(nx * ny, nann)
 
 
-def _get_arc_fractions(r, centre, cos_coeff, sin_coeff, edges):
-    """Get the arcs of a set of ellipses inside each interval of a coordinate.
-
-    Along an ellipse of radius r the coordinate is
-    centre + r * (cos_coeff * cos(t) + sin_coeff * sin(t)), a sinusoid in
-    the parametric angle t, so the angles where it lies between two edges
-    are (at most) two arcs with closed form ends.
+def _get_image_rows(morphology, resolution):
+    """Get the imaging extension's profile parameters of a morphology.
 
     Args:
-        r (np.ndarray): The radii of the ellipses.
-        centre (float): The coordinate of the centre.
-        cos_coeff (float): The coefficient of r cos(t).
-        sin_coeff (float): The coefficient of r sin(t).
-        edges (np.ndarray): The increasing edges of the intervals.
+        morphology (MorphologyBase):
+            The morphology (a single profile, Annuli or PerPopulation).
+        resolution (unyt_quantity):
+            The resolution of the grid (whose units the parameters are in).
 
     Returns:
-        tuple: The lengths and the start angles of the two arcs in each
-            interval, each (len(r), len(edges) - 1, 2).
+        list of np.ndarray or None:
+            The parameters of each population, or None if the extension
+            can't image the morphology (e.g. a custom profile).
     """
-    amplitude = r * np.hypot(cos_coeff, sin_coeff)
-    phase = np.arctan2(sin_coeff, cos_coeff)
+    if isinstance(morphology, PerPopulation):
+        rows = []
+        for morph in morphology.morphologies:
+            morph_rows = _get_image_rows(morph, resolution)
+            if morph_rows is None:
+                return None
+            rows.extend(morph_rows)
+        return rows
+    if isinstance(morphology, Annuli):
+        profile_rows = _get_image_rows(morphology.profile, resolution)
+        if profile_rows is None or len(profile_rows) != 1:
+            return None
+        radii = np.minimum(
+            morphology.radii.to(resolution.units).value, _UNBOUNDED
+        )
+        rows = []
+        for lo, hi in zip(radii[:-1], radii[1:]):
+            row = profile_rows[0].copy()
+            row[_RLO], row[_RHI] = lo, hi
+            rows.append(row)
+        return rows
+    get_params = getattr(morphology, "_get_image_params", None)
+    if get_params is None:
+        return None
+    return [get_params(resolution)]
 
-    # The angle u = t - phase where the coordinate crosses each edge, with
-    # u in [0, pi] for the upper half of the circle
-    with np.errstate(divide="ignore", invalid="ignore"):
-        c = (edges[None, :] - centre) / amplitude[:, None]
-    u = np.arccos(np.clip(np.nan_to_num(c, nan=0.0), -1.0, 1.0))
-    u_hi, u_lo = u[:, :-1], u[:, 1:]  # cos is decreasing on [0, pi]
-    lengths = np.clip(u_hi - u_lo, 0.0, None)
 
-    # A point (zero radius) lies wholly in the interval containing it
-    point = amplitude[:, None] == 0
-    inside = (edges[None, :-1] <= centre) & (centre < edges[None, 1:])
-    lengths = np.where(point, np.where(inside, np.pi, 0.0), lengths)
-    u_lo = np.where(point, 0.0, u_lo)
+# The indices of the parameters in an imaging extension profile row (see
+# parametric_image.cpp)
+(
+    _TYPE,
+    _X0,
+    _Y0,
+    _COS,
+    _SIN,
+    _Q,
+    _SCALE,
+    _INDEX,
+    _BN,
+    _RLO,
+    _RHI,
+    _CUSP,
+    _NPARAMS,
+) = range(13)
 
-    # The arcs [u_lo, u_hi] and [-u_hi, -u_lo], in t
-    starts = np.stack((u_lo, -u_hi), axis=-1) + phase
-    lengths = np.stack((lengths, lengths), axis=-1)
-    return lengths, starts
 
-
-def _get_arc_overlaps(start1, length1, start2, length2):
-    """Get the overlap of two arcs on a circle (each at most half of it).
+def _new_image_row(profile_type, x0, y0, angle=0.0, axis_ratio=1.0):
+    """Start an imaging extension profile row.
 
     Args:
-        start1 (np.ndarray): The start angles of the first arcs.
-        length1 (np.ndarray): The lengths of the first arcs.
-        start2 (np.ndarray): The start angles of the second arcs.
-        length2 (np.ndarray): The lengths of the second arcs.
+        profile_type (int): 0 (Sersic), 1 (Gaussian) or 2 (point source).
+        x0 (float): The x coordinate of the centre.
+        y0 (float): The y coordinate of the centre.
+        angle (float): The angle of the major axis (radians).
+        axis_ratio (float): The minor to major axis ratio.
 
     Returns:
-        np.ndarray: The overlap lengths.
+        np.ndarray: The row, covering the whole profile (no annulus).
     """
-    # Measure the second arc's start from the first's, in [0, 2 pi)
-    d = np.mod(start2 - start1, 2 * np.pi)
-    overlap = np.clip(np.minimum(length1, d + length2) - d, 0.0, None)
-    overlap += np.clip(np.minimum(length1, d - 2 * np.pi + length2), 0.0, None)
-    return overlap
-
-
-def _is_radial(profile):
-    """Can a profile be integrated with _integrate_radial_profile?
-
-    Args:
-        profile (MorphologyBase): The profile.
-
-    Returns:
-        bool: Whether it has a known total, radius and enclosed fraction.
-    """
-    return (
-        hasattr(profile, "_get_ellipse")
-        and hasattr(profile, "_get_central_scale")
-        and hasattr(profile, "get_enclosed_fraction")
-        and profile.get_total(kpc) is not None
-    )
+    row = np.zeros(_NPARAMS)
+    row[_TYPE] = profile_type
+    row[_X0], row[_Y0] = x0, y0
+    row[_COS], row[_SIN] = np.cos(angle), np.sin(angle)
+    row[_Q] = axis_ratio
+    row[_RHI] = _UNBOUNDED
+    return row
 
 
 class MorphologyBase(ABC):
@@ -448,16 +285,20 @@ class MorphologyBase(ABC):
         return None
 
     @accepts(resolution=(kpc, mas))
-    def get_density_grid(self, resolution, npix, supersample=None, **kwargs):
+    def get_density_grid(
+        self, resolution, npix, supersample=None, nthreads=1, **kwargs
+    ):
         """Get the fraction of the light falling in each pixel.
 
-        The profile is integrated over each pixel by sampling it on a
-        supersample x supersample grid within the pixel (and exactly near
-        the centre of a radial profile, see _integrate_radial_profile), and
-        normalised by its total over the whole plane, so light outside the
-        field of view is lost rather than pushed back into it. A profile
-        without a known total is normalised to the light inside the field
-        of view.
+        The profile is integrated over each pixel and normalised by its total
+        over the whole plane, so light outside the field of view is lost
+        rather than pushed back into it. The profiles the parametric imaging
+        extension knows (Sersic2D, Gaussian2D and PointSource) are
+        integrated there to a relative tolerance of IMAGE_TOLERANCE (see
+        synthesizer.imaging.extensions.parametric_image). Any other profile
+        is sampled on a supersample x supersample grid within each pixel,
+        and normalised by its total if it has one, otherwise to the light
+        inside the field of view.
 
         Args:
             resolution (unyt_quantity):
@@ -465,8 +306,11 @@ class MorphologyBase(ABC):
             npix (tuple, int):
                 The number of pixels in each dimension.
             supersample (int):
-                The number of samples per pixel along each axis (defaults to
+                The number of samples per pixel along each axis for profiles
+                the imaging extension doesn't know (defaults to
                 DEFAULT_SUPERSAMPLE).
+            nthreads (int):
+                The number of threads to use.
             **kwargs:
                 Additional keyword arguments to pass to the
                 compute_density_grid method.
@@ -478,15 +322,15 @@ class MorphologyBase(ABC):
         if supersample is None:
             supersample = DEFAULT_SUPERSAMPLE
 
-        # A radial profile is integrated exactly near its centre
-        if not kwargs and _is_radial(self):
-            return _integrate_radial_profile(
-                self,
-                resolution,
-                npix,
-                unyt_array([0.0, np.inf], resolution.units),
-                supersample,
-            ).reshape(npix[1], npix[0])
+        # The profiles the imaging extension knows are integrated there (a
+        # population morphology needs a signal per population, see
+        # get_weighted_density_grid)
+        if not kwargs and not isinstance(self, PopulationMorphology):
+            rows = _get_image_rows(self, resolution)
+            if rows is not None:
+                return _make_images(
+                    rows, np.ones((1, 1)), resolution, npix, nthreads
+                )[..., 0]
 
         # Average the profile over samples within each pixel
         density_grid = 0.0
@@ -586,41 +430,26 @@ class PointSource(MorphologyBase):
             else:
                 self.offset_kpc = self.offset_mas * kpc_proper_per_mas
 
-    @accepts(resolution=(kpc, mas))
-    def get_density_grid(self, resolution, npix, supersample=None):
-        """Put all of a point source's light in the pixel containing it.
+    def _get_image_params(self, resolution):
+        """Get the imaging extension's parameters of the point source.
 
         Args:
-            resolution (unyt_quantity):
-                The resolution of the grid.
-            npix (tuple, int):
-                The number of pixels in each dimension.
-            supersample (int):
-                Unused, a point is not integrated over pixels.
+            resolution (unyt_quantity): The resolution of the grid.
 
         Returns:
-            np.ndarray:
-                The fraction of the light in each pixel (all zero if the point
-                is outside the field of view).
+            np.ndarray: The profile parameters (see _get_image_rows).
         """
+        units = resolution.units
         offset = (
-            self.offset_kpc
-            if resolution.units.dimensions == length
-            else self.offset_mas
+            self.offset_kpc if units.dimensions == length else self.offset_mas
         )
         if offset is None:
             raise exceptions.InconsistentArguments(
-                f"A {resolution.units} offset must be provided to the "
-                f"PointSource morphology for a {resolution.units} grid."
+                f"A {units} offset must be provided to the PointSource "
+                f"morphology for a {units} grid."
             )
-        image = np.zeros((npix[1], npix[0]))
-        pix = np.floor(
-            offset.to(resolution.units).value / resolution.value
-            + np.array(npix) / 2
-        ).astype(int)
-        if 0 <= pix[0] < npix[0] and 0 <= pix[1] < npix[1]:
-            image[pix[1], pix[0]] = 1.0
-        return image
+        offset = offset.to(units).value
+        return _new_image_row(2, offset[0], offset[1])
 
     @accepts(xx=(kpc, mas), yy=(kpc, mas))
     def compute_density_grid(self, xx, yy):
@@ -877,19 +706,26 @@ class Gaussian2D(MorphologyBase):
             np.sqrt(eigvals[0] / eigvals[1]),
         )
 
-    def _get_central_scale(self, units):
-        """Get the scale the profile varies on at its centre.
+    def _get_image_params(self, resolution):
+        """Get the imaging extension's parameters of the profile.
 
         Args:
-            units (unyt.Unit): The units of the coordinates.
+            resolution (unyt_quantity): The resolution of the grid.
 
         Returns:
-            float: The minor axis standard deviation.
+            np.ndarray: The profile parameters (see _get_image_rows).
         """
-        sigma_minor = np.sqrt(
-            np.min(np.linalg.eigvalsh(self._get_covariance()))
-        )
-        return (sigma_minor * self.stddev_x.units).to(units).value
+        units = resolution.units
+        x0, y0, angle, axis_ratio = self._get_ellipse(units)
+        eigvals = np.linalg.eigvalsh(self._get_covariance())
+        scale = (1 * self.stddev_x.units).to(units).value
+        row = _new_image_row(1, x0, y0, angle, axis_ratio)
+        row[_SCALE] = np.sqrt(eigvals[1]) * scale
+
+        # A profile narrower than a pixel is integrated in shells near its
+        # centre
+        row[_CUSP] = float(np.sqrt(eigvals[0]) * scale < resolution.value)
+        return row
 
     def get_enclosed_fraction(self, radius):
         """Get the fraction of the light within an (elliptical) radius.
@@ -988,7 +824,9 @@ class Gaussian2DAnnuli(Gaussian2D):
         # passed to get_density_grid (e.g. when imaging)
         self.annulus = annulus
 
-    @accepts(x=(kpc, mas), y=(kpc, mas))
+    # The imaging extension can't apply the annulus these mask by
+    _get_image_params = None
+
     def get_total(self, units):
         """Annuli are normalised over their own pixels.
 
@@ -1000,6 +838,7 @@ class Gaussian2DAnnuli(Gaussian2D):
         """
         return None
 
+    @accepts(x=(kpc, mas), y=(kpc, mas))
     def compute_density_grid(self, x, y, annulus=None):
         """Compute the Gaussian density grid with optional annulus masking.
 
@@ -1343,19 +1182,26 @@ class Sersic2D(MorphologyBase):
             1 - self.ellipticity,
         )
 
-    def _get_central_scale(self, units):
-        """Get the scale the profile varies on at its centre.
+    def _get_image_params(self, resolution):
+        """Get the imaging extension's parameters of the profile.
 
         Args:
-            units (unyt.Unit): The units of the coordinates.
+            resolution (unyt_quantity): The resolution of the grid.
 
         Returns:
-            float: Zero for a cusp (n > 1), otherwise the minor axis
-                effective radius.
+            np.ndarray: The profile parameters (see _get_image_rows).
         """
-        if self.sersic_index > 1:
-            return 0.0
-        return self._get_r_eff(units) * (1 - self.ellipticity)
+        units = resolution.units
+        x0, y0, angle, axis_ratio = self._get_ellipse(units)
+        row = _new_image_row(0, x0, y0, angle, axis_ratio)
+        row[_SCALE] = self._get_r_eff(units)
+        row[_INDEX] = self.sersic_index
+        row[_BN] = scipy.special.gammaincinv(2 * self.sersic_index, 0.5)
+
+        # The centre of a Sersic profile is a cusp (or, for n < 1, a peak
+        # much sharper than a Gaussian), so it is integrated in shells
+        row[_CUSP] = 1.0
+        return row
 
     def get_enclosed_fraction(self, radius):
         """Get the fraction of the light within an (elliptical) radius.
@@ -1458,7 +1304,9 @@ class Sersic2DAnnuli(Sersic2D):
         # passed to get_density_grid (e.g. when imaging)
         self.annulus = annulus
 
-    @accepts(x=(kpc, mas), y=(kpc, mas))
+    # The imaging extension can't apply the annulus these mask by
+    _get_image_params = None
+
     def get_total(self, units):
         """Annuli are normalised over their own pixels.
 
@@ -1470,6 +1318,7 @@ class Sersic2DAnnuli(Sersic2D):
         """
         return None
 
+    @accepts(x=(kpc, mas), y=(kpc, mas))
     def compute_density_grid(self, x, y, annulus=None):
         """Compute the density grid with optional annulus masking.
 
@@ -1558,7 +1407,7 @@ class PopulationMorphology(MorphologyBase):
         )
 
     @abstractmethod
-    def get_weighted_density_grid(self, resolution, npix, signals):
+    def get_weighted_density_grid(self, resolution, npix, signals, nthreads=1):
         """Get the sum of each population's density grid times its signal.
 
         Args:
@@ -1569,6 +1418,8 @@ class PopulationMorphology(MorphologyBase):
             signals (np.ndarray):
                 The signal of each population, with shape (npop, ...). Any
                 trailing axes (e.g. wavelength) are kept in the result.
+            nthreads (int):
+                The number of threads to use.
 
         Returns:
             np.ndarray:
@@ -1636,8 +1487,11 @@ class PerPopulation(PopulationMorphology):
             f"Population {index} doesn't exist ({self.npop} populations)."
         )
 
-    def get_weighted_density_grid(self, resolution, npix, signals):
+    def get_weighted_density_grid(self, resolution, npix, signals, nthreads=1):
         """Get the sum of each population's density grid times its signal.
+
+        When the imaging extension knows every population's profile all the
+        populations are imaged in a single call.
 
         Args:
             resolution (unyt_quantity):
@@ -1646,12 +1500,19 @@ class PerPopulation(PopulationMorphology):
                 The number of pixels in each dimension.
             signals (np.ndarray):
                 The signal of each population, with shape (npop, ...).
+            nthreads (int):
+                The number of threads to use.
 
         Returns:
             np.ndarray:
                 The weighted density grid with shape (npix[1], npix[0], ...).
         """
         signals = np.asarray(signals)
+        rows = _get_image_rows(self, resolution)
+        if rows is not None:
+            images = _make_images(rows, signals, resolution, npix, nthreads)
+            return images.reshape((npix[1], npix[0]) + signals.shape[1:])
+
         out = None
         start = 0
         for morphology, count in zip(self.morphologies, self._counts):
@@ -1659,10 +1520,12 @@ class PerPopulation(PopulationMorphology):
             start += count
             if isinstance(morphology, PopulationMorphology):
                 contribution = morphology.get_weighted_density_grid(
-                    resolution, npix, group
+                    resolution, npix, group, nthreads=nthreads
                 )
             else:
-                density = morphology.get_density_grid(resolution, npix)
+                density = morphology.get_density_grid(
+                    resolution, npix, nthreads=nthreads
+                )
                 contribution = (
                     density.reshape(density.shape + (1,) * (group.ndim - 1))
                     * group[0]
@@ -1674,11 +1537,10 @@ class PerPopulation(PopulationMorphology):
 class Annuli(PopulationMorphology):
     """A profile split into annuli, one population per annulus.
 
-    The profile and the radius of each pixel are evaluated once, each pixel
-    is labelled with its annulus, and each annulus is normalised over its own
-    pixels (an annulus population holds only the mass within that annulus).
-    An image is then a single gather of each pixel's annulus signal, however
-    many annuli there are.
+    Each annulus holds only the light of the profile within it (an annulus
+    population holds only the mass within that annulus), so each is
+    normalised by the profile's light within the annulus. Pixels straddling
+    an annulus edge are split between the annuli exactly.
 
     Attributes:
         profile (MorphologyBase): The underlying profile (e.g. Sersic2D),
@@ -1727,17 +1589,16 @@ class Annuli(PopulationMorphology):
         return Annuli(self.profile, self.radii[index : index + 2])
 
     def get_weighted_density_grid(
-        self, resolution, npix, signals, supersample=None
+        self, resolution, npix, signals, supersample=None, nthreads=1
     ):
         """Get the sum of each annulus' density grid times its signal.
 
-        The profile is integrated over each pixel (so a pixel straddling an
-        annulus edge is split between the annuli, see
-        _integrate_radial_profile), and each annulus is normalised by the
+        For profiles the imaging extension knows, every annulus is imaged in
+        a single call, with each pixel integrated (and split exactly between
+        the annuli it straddles) and each annulus normalised by the
         profile's light within it, so light outside the field of view is
-        lost. A profile without a known total or enclosed fraction is
-        sampled within each pixel and each annulus normalised over its own
-        pixels.
+        lost. Any other profile is sampled within each pixel and each
+        annulus normalised over its own pixels.
 
         Args:
             resolution (unyt_quantity):
@@ -1747,8 +1608,11 @@ class Annuli(PopulationMorphology):
             signals (np.ndarray):
                 The signal of each annulus, with shape (npop, ...).
             supersample (int):
-                The number of samples per pixel along each axis (defaults to
+                The number of samples per pixel along each axis for profiles
+                the imaging extension doesn't know (defaults to
                 DEFAULT_SUPERSAMPLE).
+            nthreads (int):
+                The number of threads to use.
 
         Returns:
             np.ndarray:
@@ -1759,29 +1623,10 @@ class Annuli(PopulationMorphology):
         signals = np.asarray(signals)
         npixels = npix[0] * npix[1]
 
-        # A radial profile is integrated exactly near its centre and each
-        # annulus is normalised by the profile's light within it
-        if _is_radial(self.profile):
-            # Include the light inside the first annulus as an extra one
-            radii = self.radii
-            if radii[0] > 0:
-                radii = np.concatenate(([0.0], radii.value)) * radii.units
-            weights = _integrate_radial_profile(
-                self.profile, resolution, npix, radii, supersample
-            )
-            norm = np.diff(self.profile.get_enclosed_fraction(radii))
-
-            # An annulus wholly inside the image loses no light, so it is
-            # normalised by its own (integrated) light, which cancels the
-            # error of assigning light to annuli at their edges. If they all
-            # are, an unbounded outer annulus holds the rest of the light
-            inside = self._get_annuli_inside(resolution, npix, radii)
-            norm[inside] = np.sum(weights, axis=0)[inside]
-            if np.all(inside[:-1]) and not inside[-1]:
-                norm[-1] = 1.0 - np.sum(norm[:-1])
-            if radii.size > self.radii.size:
-                weights, norm = weights[:, 1:], norm[1:]
-            return self._sum_annuli(weights, norm, signals, npix)
+        rows = _get_image_rows(self, resolution)
+        if rows is not None:
+            images = _make_images(rows, signals, resolution, npix, nthreads)
+            return images.reshape((npix[1], npix[0]) + signals.shape[1:])
 
         # Integrate the profile over the part of each pixel in each annulus
         weights = np.zeros(npixels * self.npop)
@@ -1805,30 +1650,6 @@ class Annuli(PopulationMorphology):
         # Normalise each annulus over its own pixels
         return self._sum_annuli(
             weights, np.sum(weights, axis=0), signals, npix
-        )
-
-    def _get_annuli_inside(self, resolution, npix, radii):
-        """Get which annuli lie wholly inside the image.
-
-        Args:
-            resolution (unyt_quantity):
-                The resolution of the grid.
-            npix (tuple, int):
-                The number of pixels in each dimension.
-            radii (unyt_array):
-                The annulus edges.
-
-        Returns:
-            np.ndarray of bool:
-                Whether each annulus' outer edge fits in the image.
-        """
-        units = resolution.units
-        x0, y0, angle, axis_ratio = self.profile._get_ellipse(units)
-        outer = radii[1:].to(units).value
-        half_x = outer * np.hypot(np.cos(angle), axis_ratio * np.sin(angle))
-        half_y = outer * np.hypot(np.sin(angle), axis_ratio * np.cos(angle))
-        return (np.abs(x0) + half_x <= 0.5 * npix[0] * resolution.value) & (
-            np.abs(y0) + half_y <= 0.5 * npix[1] * resolution.value
         )
 
     def _sum_annuli(self, weights, norm, signals, npix):

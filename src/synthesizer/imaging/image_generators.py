@@ -908,7 +908,9 @@ def _generate_images_parametric_smoothed(
 
 
 @timed("_generate_images_population_smoothed")
-def _generate_images_population_smoothed(imgs, morphology, signals):
+def _generate_images_population_smoothed(
+    imgs, morphology, signals, nthreads=1
+):
     """Generate smoothed images for a parametric emitter of many populations.
 
     Each population has its own spatial distribution (see
@@ -923,6 +925,8 @@ def _generate_images_population_smoothed(imgs, morphology, signals):
         signals (dict/PhotometryCollection):
             The signals to be sorted into pixels, each holding one value per
             population.
+        nthreads (int):
+            The number of threads to use.
 
     Returns:
         ImageCollection: An image collection containing the smoothed images.
@@ -937,6 +941,7 @@ def _generate_images_population_smoothed(imgs, morphology, signals):
         imgs.resolution,
         imgs.npix,
         np.stack([np.asarray(signals[key].value) for key in keys], axis=-1),
+        nthreads=nthreads,
     )
     for index, key in enumerate(keys):
         img = Image(imgs.resolution, imgs.fov)
@@ -1072,7 +1077,7 @@ def _generate_image_collection_generic(
 
     elif img_type == "smoothed" and _has_population_morphology(emitter):
         return _generate_images_population_smoothed(
-            imgs, emitter.morphology, photometry
+            imgs, emitter.morphology, photometry, nthreads=nthreads
         )
 
     elif img_type == "smoothed":
@@ -1081,7 +1086,7 @@ def _generate_image_collection_generic(
         return _generate_images_parametric_smoothed(
             imgs,
             density_grid=emitter.morphology.get_density_grid(
-                imgs.resolution, imgs.npix
+                imgs.resolution, imgs.npix, nthreads=nthreads
             ),
             signals=photometry,
         )
@@ -1241,7 +1246,7 @@ def _generate_line_map_collection_generic(
             line_id: signal[..., i] for i, line_id in enumerate(line_ids)
         }
         return _generate_images_population_smoothed(
-            imgs, emitter.morphology, signal_dict
+            imgs, emitter.morphology, signal_dict, nthreads=nthreads
         )
 
     elif img_type == "smoothed":
@@ -1251,7 +1256,7 @@ def _generate_line_map_collection_generic(
         return _generate_images_parametric_smoothed(
             imgs,
             density_grid=emitter.morphology.get_density_grid(
-                imgs.resolution, imgs.npix
+                imgs.resolution, imgs.npix, nthreads=nthreads
             ),
             signals=signal_dict,
         )

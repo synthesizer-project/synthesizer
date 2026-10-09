@@ -1188,7 +1188,7 @@ class TestPopulationMorphologies:
         )
         assert cube.shape == (200, 200, 3)
         np.testing.assert_allclose(
-            cube.sum(axis=(0, 1)), spectra.sum(axis=0), rtol=1e-6
+            cube.sum(axis=(0, 1)), spectra.sum(axis=0), rtol=1e-5
         )
 
     def test_annuli_need_a_radius(self):
@@ -1291,3 +1291,77 @@ class TestPixelIntegration:
         np.testing.assert_allclose(
             grid, whole, rtol=0, atol=1e-3 * whole.max()
         )
+
+
+class TestImagingExtension:
+    """Tests for the parametric imaging extension."""
+
+    @staticmethod
+    def _brute_force(profile, resolution, npix, nsample=201):
+        """Integrate a profile over each pixel by dense sampling."""
+        steps = (np.arange(nsample) + 0.5) / nsample - 0.5
+        total = 0.0
+        for dy in steps:
+            xx, yy = profile._get_coordinate_grids(
+                resolution, npix, offset=(0.0, dy)
+            )
+            row = 0.0
+            for dx in steps:
+                values, _ = profile.compute_density_grid(
+                    xx + dx * resolution, yy
+                )
+                row = row + np.asarray(values)
+            total = total + row
+        area = resolution.value**2
+        return total / nsample**2 * area / profile.get_total(resolution.units)
+
+    def test_narrow_elongated_gaussian(self):
+        """A Gaussian narrower than a pixel is integrated accurately."""
+        gauss = Gaussian2D(2 * kpc, -1 * kpc, 0.5 * kpc, 2 * kpc, rho=0.3)
+        grid = gauss.get_density_grid(1 * kpc, (30, 30))
+        expected = self._brute_force(gauss, 1 * kpc, (30, 30), nsample=101)
+        np.testing.assert_allclose(
+            grid, expected, rtol=0, atol=2e-4 * expected.max()
+        )
+
+    def test_sersic_away_from_the_centre(self):
+        """Sersic pixels away from the cusp match dense sampling."""
+        sersic = Sersic2D(
+            r_eff=1 * kpc,
+            sersic_index=3,
+            x_0=0.2 * kpc,
+            y_0=-0.1 * kpc,
+            ellipticity=0.4,
+            theta=0.5,
+        )
+        res, npix = 0.2 * kpc, (40, 40)
+        grid = sersic.get_density_grid(res, npix)
+        expected = self._brute_force(sersic, res, npix, nsample=51)
+        xx, yy = sersic._get_coordinate_grids(res, npix)
+        far = sersic.get_radius(xx, yy).to(kpc).value > 1.0
+        np.testing.assert_allclose(
+            grid[far], expected[far], rtol=0, atol=2e-4 * grid.max()
+        )
+
+    def test_threads_agree(self):
+        """The images don't depend on the number of threads."""
+        sersic = Sersic2D(r_eff=1 * kpc, sersic_index=4, ellipticity=0.3)
+        one = sersic.get_density_grid(0.05 * kpc, (120, 100))
+        many = sersic.get_density_grid(0.05 * kpc, (120, 100), nthreads=4)
+        np.testing.assert_array_equal(one, many)
+
+    def test_signal_precision_sets_image_precision(self):
+        """Float32 signals give float32 images."""
+        annuli = Annuli(
+            Gaussian2D(0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc),
+            unyt_array([0.0, 1.0, np.inf], kpc),
+        )
+        signals = np.ones((2, 3), dtype=np.float32)
+        cube = annuli.get_weighted_density_grid(RESOLUTION, NPIX, signals)
+        assert cube.dtype == np.float32
+        assert cube.shape == (NPIX[1], NPIX[0], 3)
+
+    def test_empty_image(self):
+        """An image with no pixels is empty."""
+        gauss = Gaussian2D(0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc)
+        assert gauss.get_density_grid(RESOLUTION, (0, 0)).size == 0
