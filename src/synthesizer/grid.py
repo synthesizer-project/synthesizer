@@ -42,7 +42,13 @@ from synthesizer.data.initialise import get_grids_dir
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.grid_interpolation import interpolate_grid_array
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, Units, accepts, get_quantity_unit
+from synthesizer.units import (
+    Quantity,
+    Units,
+    accepts,
+    deepcopy_with_shared_units,
+    get_quantity_unit,
+)
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import (
@@ -109,6 +115,9 @@ class Grid:
     # Define Quantities
     lam = Quantity("wavelength")
     line_lams = Quantity("wavelength")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(new_lam=angstrom)
     @timed("Grid.__init__")
@@ -1191,19 +1200,10 @@ class Grid:
             and hasattr(self, "line_lams")
             and self.line_lams is not None
         ):
-            # Ensure we have compatible units for comparison
-            lam_min = self.lam[0]
-            lam_max = self.lam[-1]
-
-            # Make sure both have the same units
-            if hasattr(self.line_lams, "units") and hasattr(lam_min, "units"):
-                # Convert line_lams to same units as lam if needed
-                line_lams = self.line_lams.to(lam_min.units)
-            else:
-                line_lams = self.line_lams
-
+            # Both are wavelength Quantities so share the internal units
+            line_lams = self._line_lams
             lines_to_keep = np.where(
-                (line_lams >= lam_min) & (line_lams <= lam_max)
+                (line_lams >= self._lam[0]) & (line_lams <= self._lam[-1])
             )[0]
 
             if len(lines_to_keep) < len(self.line_lams):
@@ -1373,8 +1373,8 @@ class Grid:
         # Resample the filter transmissions onto the grid wavelength array
         transmissions_resampled = [
             spectres(
-                grid.lam.value,
-                wavelengths.value,
+                grid._lam,
+                filters._lam,
                 t,
                 fill=0.0,
                 verbose=False,
@@ -1445,13 +1445,13 @@ class Grid:
         wavelengths = filters.lam
 
         # Convert filter wavelengths to rest frame
-        rest_wavelengths = wavelengths / (1 + redshift)
+        rest_wavelengths = filters._lam / (1 + redshift)
 
         # Resample the filter transmissions onto the grid wavelength array
         transmissions_resampled = [
             spectres(
-                grid.lam.value,
-                rest_wavelengths.value,
+                grid._lam,
+                rest_wavelengths,
                 t,
                 fill=0.0,
                 verbose=False,
@@ -2900,6 +2900,9 @@ class Template:
     # Define Quantities
     lam = Quantity("wavelength")
     lnu = Quantity("luminosity_density_frequency")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(lam=angstrom, lnu=erg / s / Hz)
     def __init__(

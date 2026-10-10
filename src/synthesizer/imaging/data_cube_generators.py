@@ -28,7 +28,7 @@ from synthesizer.imaging.image_generators import (
     _validate_centered_coordinates,
 )
 from synthesizer.kernel_functions import Kernel
-from synthesizer.units import unit_is_compatible
+from synthesizer.units import convert_in_place, unit_is_compatible
 from synthesizer.utils.operation_timers import timed, timer
 
 
@@ -171,7 +171,7 @@ def _generate_ifu_particle_hist(
 
         # Convert coordinates and smoothing lengths to the correct units and
         # strip them off
-        _coords = cent_coords.to(spatial_units).value
+        _coords = cent_coords.to(spatial_units).ndview
 
         # Ensure coordinates have been centred
         _validate_centered_coordinates(cent_coords, warn_only=True)
@@ -335,7 +335,9 @@ def _generate_ifu_particle_smoothed(
     # Generate the smoothed IFU from the prepared particle inputs
     ifu.arr = make_img(
         spectra,
-        np.ascontiguousarray(smoothing_lengths.to_value(spatial_units)),
+        np.ascontiguousarray(
+            convert_in_place(smoothing_lengths, spatial_units).ndview
+        ),
         np.ascontiguousarray(_coords),
         kernel_arr,
         res,

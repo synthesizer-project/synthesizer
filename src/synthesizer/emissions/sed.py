@@ -62,9 +62,10 @@ from synthesizer.units import (
     Quantity,
     Units,
     accepts,
+    convert_in_place,
+    deepcopy_with_shared_units,
     get_array_quantity_view,
     get_quantity_unit,
-    get_quantity_view,
 )
 from synthesizer.utils import TableFormatter, rebin_1d, wavelength_to_rgba
 from synthesizer.utils.integrate import integrate_last_axis, trapezoid
@@ -119,6 +120,9 @@ class Sed:
     obsnu = Quantity("frequency")
     obslam = Quantity("wavelength")
 
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
+
     # The speed of light in (wavelength unit) * (frequency unit), set on first
     # use, so frequencies can be computed from the raw wavelength array.
     _c_lam_nu = None
@@ -142,9 +146,8 @@ class Sed:
         self.description = description
 
         # Set the wavelength (the frequencies are computed from it when they
-        # are first needed, see _nu)
+        # are first needed, see __getattr__)
         self.lam = lam
-        self._nu_cache = None
 
         # If no lnu is provided create an empty array with the same shape as
         # lam.
@@ -168,45 +171,42 @@ class Sed:
         self.photo_lnu = None
         self.photo_fnu = None
 
-    @property
-    def _nu(self):
-        """The frequencies of the wavelength array, computed when first needed.
+    def __getattr__(self, name):
+        """Compute the frequencies the first time they are needed.
 
         Most Seds made while generating emission never use their frequencies,
-        so computing them lazily saves both the division and the array. The
-        cached array is stored with the wavelength array it was computed from,
-        so assigning a new wavelength array invalidates it.
-
-        Returns:
-            np.ndarray:
-                The frequencies, in the units of the nu Quantity, with the
-                same dtype as the wavelengths.
-        """
-        cache = getattr(self, "_nu_cache", None)
-        if cache is not None and cache[0] is self._lam:
-            return cache[1]
-
-        # Convert c once for the configured wavelength and frequency units
-        if Sed._c_lam_nu is None:
-            Sed._c_lam_nu = float(
-                c.to(Sed.__dict__["lam"].unit * Sed.__dict__["nu"].unit).value
-            )
-
-        # Divide in the wavelength dtype; unyt would promote to float64.
-        nu = np.empty_like(self._lam)
-        np.divide(Sed._c_lam_nu, self._lam, out=nu)
-        self._nu_cache = (self._lam, nu)
-        return nu
-
-    @_nu.setter
-    def _nu(self, value):
-        """Store frequencies alongside the wavelengths they belong to.
+        so they are not computed on initialisation. This is only called when
+        normal attribute lookup fails, i.e. when nu hasn't been stored yet.
 
         Args:
-            value (np.ndarray):
-                The frequencies, in the units of the nu Quantity.
+            name (str):
+                The name of the attribute being accessed.
+
+        Returns:
+            The value of the attribute.
+
+        Raises:
+            AttributeError:
+                If the attribute is anything other than an uncomputed nu.
         """
-        self._nu_cache = (self._lam, value)
+        if name in ("nu", "_nu") and "_lam" in self.__dict__:
+            # Convert c once for the configured wavelength and frequency units
+            if Sed._c_lam_nu is None:
+                Sed._c_lam_nu = float(
+                    c.to(
+                        Sed.__dict__["lam"].unit * Sed.__dict__["nu"].unit
+                    ).value
+                )
+
+            # Divide in the wavelength dtype; unyt would promote to float64.
+            nu = np.empty_like(self._lam)
+            np.divide(Sed._c_lam_nu, self._lam, out=nu)
+            self._nu = nu
+            return getattr(self, name)
+
+        raise AttributeError(
+            f"{type(self).__name__} object has no attribute '{name}'"
+        )
 
     @timed("Sed.sum")
     def sum(self, nthreads=1):
@@ -684,7 +684,9 @@ class Sed:
             flux (unyt_array):
                 The spectral flux density per Angstrom array.
         """
-        return (self.obsnu * self.fnu / self.obslam).to("erg/s/cm**2/angstrom")
+        return convert_in_place(
+            self.obsnu * self.fnu / self.obslam, "erg/s/cm**2/angstrom"
+        )
 
     @property
     def _flam(self):
@@ -984,7 +986,7 @@ class Sed:
             # Compute lnu
             lnu = lum / tran * get_quantity_unit(self, "lnu")
 
-        return lnu.to(get_quantity_unit(self, "lnu"))
+        return convert_in_place(lnu, get_quantity_unit(self, "lnu"))
 
     @accepts(blue=angstrom, red=angstrom)
     def measure_break(self, blue, red, nthreads=1, integration_method="trapz"):
@@ -1250,7 +1252,7 @@ class Sed:
         )
 
         # Return the fnu with units, without making a copy
-        return get_quantity_view(self, "_fnu")
+        return self.fnu
 
     @accepts(peculiar_velocity=km / s)
     @timed("Sed.get_fnu")
@@ -1366,13 +1368,7 @@ class Sed:
 
         # If we are applying an IGM model apply it
         if igm is not None:
-            # Bypass the Quantity descriptor here so IGM attenuation reuses the
-            # observer-frame wavelength buffer without allocating a new
-            # unit-bearing array wrapper via multiplication.
-            obslam = get_array_quantity_view(
-                self._obslam,
-                self.__class__.__dict__["obslam"].unit,
-            )
+            obslam = self.obslam
 
             # Support bot class references and instantiated objects
             if callable(igm):
@@ -1381,7 +1377,7 @@ class Sed:
                 self._fnu *= igm.get_transmission(z, obslam)
 
         # Return the fnu with units, without making a copy
-        return get_quantity_view(self, "_fnu")
+        return self.fnu
 
     @timed("Sed.get_photo_lnu")
     def get_photo_lnu(

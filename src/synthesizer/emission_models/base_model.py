@@ -57,7 +57,7 @@ from synthesizer.emission_models.operations import (
 from synthesizer.emission_models.parameters import VARIATION_TYPES
 from synthesizer.emission_models.transformers import DopplerBroadening
 from synthesizer.synth_warnings import deprecated, warn
-from synthesizer.units import Quantity
+from synthesizer.units import Quantity, deepcopy_with_shared_units
 from synthesizer.utils.operation_timers import timed, timer
 from synthesizer.utils.util_funcs import hdf5_attr_value
 
@@ -159,6 +159,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
     # Define quantities
     lam = Quantity("wavelength")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @timed("EmissionModel.__init__")
     def __init__(
