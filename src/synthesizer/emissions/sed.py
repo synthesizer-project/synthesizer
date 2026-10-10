@@ -123,6 +123,10 @@ class Sed:
     # Share units rather than deep copying unyt's whole unit registry
     __deepcopy__ = deepcopy_with_shared_units
 
+    # The speed of light in (wavelength unit) * (frequency unit), set on first
+    # use, so frequencies can be computed from the raw wavelength array.
+    _c_lam_nu = None
+
     @accepts(lam=angstrom, lnu=erg / s / Hz)
     @timed("Sed.__init__")
     def __init__(self, lam, lnu=None, description=None):
@@ -141,17 +145,9 @@ class Sed:
         # Set the description
         self.description = description
 
-        # Set the wavelength
+        # Set the wavelength (the frequencies are computed from it when they
+        # are first needed, see __getattr__)
         self.lam = lam
-
-        # Write directly into the target dtype; unyt otherwise promotes this
-        # division to float64.
-        self._nu = np.empty_like(self._lam)
-        np.divide(
-            c,
-            self.lam,
-            out=self.nu,
-        )
 
         # If no lnu is provided create an empty array with the same shape as
         # lam.
@@ -174,6 +170,43 @@ class Sed:
         # Broadband photometry
         self.photo_lnu = None
         self.photo_fnu = None
+
+    def __getattr__(self, name):
+        """Compute the frequencies the first time they are needed.
+
+        Most Seds made while generating emission never use their frequencies,
+        so they are not computed on initialisation. This is only called when
+        normal attribute lookup fails, i.e. when nu hasn't been stored yet.
+
+        Args:
+            name (str):
+                The name of the attribute being accessed.
+
+        Returns:
+            The value of the attribute.
+
+        Raises:
+            AttributeError:
+                If the attribute is anything other than an uncomputed nu.
+        """
+        if name in ("nu", "_nu") and "_lam" in self.__dict__:
+            # Convert c once for the configured wavelength and frequency units
+            if Sed._c_lam_nu is None:
+                Sed._c_lam_nu = float(
+                    c.to(
+                        Sed.__dict__["lam"].unit * Sed.__dict__["nu"].unit
+                    ).value
+                )
+
+            # Divide in the wavelength dtype; unyt would promote to float64.
+            nu = np.empty_like(self._lam)
+            np.divide(Sed._c_lam_nu, self._lam, out=nu)
+            self._nu = nu
+            return getattr(self, name)
+
+        raise AttributeError(
+            f"{type(self).__name__} object has no attribute '{name}'"
+        )
 
     @timed("Sed.sum")
     def sum(self, nthreads=1):
