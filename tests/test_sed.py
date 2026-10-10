@@ -189,6 +189,20 @@ def test_quantity_in_place_conversion_keeps_units_consistent():
     assert np.allclose(sed._lnu, 1.0)
 
 
+def test_private_read_keeps_public_value_aliased():
+    """A private read of a converted Quantity must keep the public alias."""
+    lam = np.linspace(1000, 2000, 8) * angstrom
+    sed = Sed(lam=lam, lnu=np.ones(8) * erg / s / Hz)
+
+    lnu = sed.lnu
+    lnu.convert_to_units("W/Hz")
+    sed._lnu
+
+    # The stored value was converted back in place rather than replaced
+    assert sed.lnu is lnu
+    assert lnu.units == erg / s / Hz
+
+
 def test_deepcopy_shares_units_and_copies_data():
     """Deep copies must copy Quantity data but share the unit objects."""
     lam = np.linspace(1000, 2000, 8) * angstrom

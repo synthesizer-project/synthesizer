@@ -195,7 +195,9 @@ class Extractor(ABC):
                 else:
                     # Convert in place: this value is the emitter's stored
                     # array, which records the conversion in its units.
-                    value = convert_in_place(value, units).ndview
+                    value = np.ascontiguousarray(
+                        convert_in_place(value, units).ndview
+                    )
 
             # We know that the extracted values must be arrays, this can not be
             # the case when we only have 1 value (i.e. a single particle, or

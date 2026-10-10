@@ -692,16 +692,18 @@ class _QuantityView:
         if value is None:
             return None
 
-        # Only copy if the stored value has been moved out of the internal
-        # unit system, in which case we store the converted value so we only
-        # pay for this once. The setter stores our unit object itself, so the
-        # identity check skips unyt's slow unit comparison on the hot path.
+        # If the stored value has been moved out of the internal unit system
+        # convert it back in place, so the public value stays the same object
+        # as the stored one. Only a read-only value is copied, in which case
+        # the copy replaces it. The setter stores our unit object itself, so
+        # the identity check skips unyt's slow unit comparison on the hot path.
         unit = self.quantity.unit
         if value.units is not unit:
-            if value.units != unit:
-                value = value.to(unit)
-            value = _attach_unit(value.ndview, unit)
-            obj.__dict__[name] = value
+            converted = convert_in_place(value, unit)
+            converted.units = unit
+            if converted is not value:
+                obj.__dict__[name] = converted
+            value = converted
 
         if value.ndim == 0:
             return value.value

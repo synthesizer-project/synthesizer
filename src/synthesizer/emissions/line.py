@@ -1612,8 +1612,7 @@ class LineCollection:
         # Collect luminosities and wavelengths
         line_ids = plot_lines.line_ids
         luminosities = plot_lines.luminosity
-        plot_lines.lam.convert_to_units("angstrom")
-        wavelengths = plot_lines.lam.ndview
+        wavelengths = plot_lines.lam.to_value("angstrom")
 
         # Remove 0s and nans
         mask = np.logical_and(luminosities > 0, ~np.isnan(luminosities))
