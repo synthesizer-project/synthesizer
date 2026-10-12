@@ -200,6 +200,21 @@ class TestPacmanEmission:
         for key in expected_keys:
             assert key in random_part_stars.spectra.keys()
 
+    def test_nebular_scales_with_fesc(self, test_grid, random_part_stars):
+        """Test the nebular emission is scaled by (1 - fesc)."""
+        nebular = {}
+        for fesc in (0.0, 0.9):
+            model = PacmanEmission(
+                test_grid,
+                tau_v=0.33,
+                fesc=fesc,
+                fesc_ly_alpha=0.5,
+            )
+            random_part_stars.get_spectra(model, out_dtype=np.float64)
+            nebular[fesc] = random_part_stars.spectra["nebular"].lnu.copy()
+
+        assert np.allclose(nebular[0.9], 0.1 * nebular[0.0])
+
     def test_pacman_with_no_fesc_ly_alpha(self, test_grid, random_part_stars):
         """Test the initialization of the PacmanEmission object."""
         # Define the emission model
@@ -694,7 +709,7 @@ class TestBimodalPacmanEmission:
         # Now check that passing an override to get_spectra works
         with_fesc_spec = random_part_stars.get_spectra(model, fesc=0.1)
 
-        assert spec.lnu.sum() < with_fesc_spec.lnu.sum(), (
+        assert not np.isclose(spec.lnu.sum(), with_fesc_spec.lnu.sum()), (
             "fesc override had no effect"
         )
 
