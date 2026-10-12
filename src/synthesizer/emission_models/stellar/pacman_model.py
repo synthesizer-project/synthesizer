@@ -393,6 +393,7 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             label="nebular",
             nebular_line=nebular_line,
             nebular_continuum=nebular_continuum,
+            fesc=fesc,
             **kwargs,
         )
         reprocessed = ReprocessedEmission(
@@ -528,6 +529,7 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             label="nebular",
             nebular_line=nebular_line,
             nebular_continuum=nebular_continuum,
+            fesc=fesc,
             **kwargs,
         )
         reprocessed = ReprocessedEmission(
@@ -1635,6 +1637,7 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             label="young_nebular",
             nebular_line=young_nebular_line,
             nebular_continuum=young_nebular_continuum,
+            fesc=fesc,
             **kwargs,
         )
         old_nebular = NebularEmission(
@@ -1642,6 +1645,7 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             label="old_nebular",
             nebular_line=old_nebular_line,
             nebular_continuum=old_nebular_continuum,
+            fesc=fesc,
             **kwargs,
         )
         nebular = StellarEmissionModel(
@@ -2016,6 +2020,7 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             label="young_nebular",
             nebular_line=young_nebular_line,
             nebular_continuum=young_nebular_continuum,
+            fesc=fesc,
             **kwargs,
         )
         old_nebular = NebularEmission(
@@ -2023,6 +2028,7 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             label="old_nebular",
             nebular_line=old_nebular_line,
             nebular_continuum=old_nebular_continuum,
+            fesc=fesc,
             **kwargs,
         )
         nebular = StellarEmissionModel(
