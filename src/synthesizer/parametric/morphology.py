@@ -56,7 +56,7 @@ class MorphologyBase(ABC):
             npix (int):
                 The number of pixels.
         """
-        bins = resolution * np.arange(-npix / 2, npix / 2)
+        bins = resolution * (np.arange(npix) - (npix - 1) / 2)
 
         xx, yy = np.meshgrid(bins, bins)
 
@@ -93,12 +93,13 @@ class MorphologyBase(ABC):
                 Additional keyword arguments to pass to the
                 compute_density_grid method.
         """
-        # Define 1D bin centres of each pixel
-        xbin_centres = resolution.value * np.linspace(
-            -npix[0] / 2, npix[0] / 2, npix[0]
+        # Define 1D bin centres of each pixel, spaced by the resolution and
+        # symmetric about the origin
+        xbin_centres = resolution.value * (
+            np.arange(npix[0]) - (npix[0] - 1) / 2
         )
-        ybin_centres = resolution.value * np.linspace(
-            -npix[1] / 2, npix[1] / 2, npix[1]
+        ybin_centres = resolution.value * (
+            np.arange(npix[1]) - (npix[1] - 1) / 2
         )
 
         # Convert the 1D grid into 2D grids coordinate grids

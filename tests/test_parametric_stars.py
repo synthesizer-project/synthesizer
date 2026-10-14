@@ -515,6 +515,20 @@ class TestCalculateSurvivingMassAtAge:
         assert result <= initial + 1e-30 * Msun
 
 
+class TestGetAtEarlierTime:
+    """Tests for getting a parametric Stars at an earlier time."""
+
+    def test_age_offset_is_required(self, instantaneous_stars):
+        """Test that omitting the age offset raises a clear TypeError."""
+        with pytest.raises(TypeError):
+            instantaneous_stars.get_at_earlier_time()
+
+    def test_earlier_time_removes_young_mass(self, instantaneous_stars):
+        """Test that shifting past a 10 Myr burst removes all its mass."""
+        earlier = instantaneous_stars.get_at_earlier_time(20 * Myr)
+        assert np.isclose(earlier.sfzh.sum(), 0.0)
+
+
 class TestAddition:
     """Tests for adding parametric Stars and Galaxies."""
 
