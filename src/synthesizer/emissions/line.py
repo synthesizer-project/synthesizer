@@ -80,6 +80,7 @@ from synthesizer.synth_warnings import warn
 from synthesizer.units import (
     Quantity,
     accepts,
+    deepcopy_with_shared_units,
     get_array_quantity_view,
     get_quantity_unit,
 )
@@ -140,6 +141,9 @@ class LineCollection:
     continuum_flux = Quantity("flux_density_frequency")
     obslam = Quantity("wavelength")
     vacuum_wavelength = Quantity("wavelength")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(lam=angstrom, lum=Lsun, cont=erg / s / Hz)
     @timed("LineCollection.__init__")
@@ -374,7 +378,9 @@ class LineCollection:
             nu (unyt_quantity):
                 The frequency of the line in Hz.
         """
-        return (c / self.lam).to(Hz)
+        nu = c / self.lam
+        nu.convert_to_units(Hz)
+        return nu
 
     @property
     def obsnu(self):
@@ -386,7 +392,9 @@ class LineCollection:
         """
         if self.obslam is None:
             return None
-        return (c / self.obslam).to(Hz)
+        obsnu = c / self.obslam
+        obsnu.convert_to_units(Hz)
+        return obsnu
 
     @property
     def energy(self):
@@ -1306,13 +1314,7 @@ class LineCollection:
         # luminosity units, continuum units, or is already unitless.
         scaling_lum, scaling_cont = normalise_line_scaling(
             scaling,
-            lambda: (
-                c
-                / get_array_quantity_view(
-                    self._lam,
-                    get_quantity_unit(self, "lam"),
-                )
-            ).to(Hz),
+            lambda: self.nu,
             lum_units,
             cont_units,
         )
@@ -1610,7 +1612,7 @@ class LineCollection:
         # Collect luminosities and wavelengths
         line_ids = plot_lines.line_ids
         luminosities = plot_lines.luminosity
-        wavelengths = plot_lines.lam.to("angstrom").value
+        wavelengths = plot_lines.lam.to_value("angstrom")
 
         # Remove 0s and nans
         mask = np.logical_and(luminosities > 0, ~np.isnan(luminosities))

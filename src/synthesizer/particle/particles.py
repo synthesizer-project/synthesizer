@@ -16,7 +16,13 @@ from synthesizer import exceptions
 from synthesizer.emission_models.utils import get_param
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts, get_quantity_unit
+from synthesizer.units import (
+    Quantity,
+    accepts,
+    convert_in_place,
+    deepcopy_with_shared_units,
+    get_quantity_unit,
+)
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.geometry import get_rotation_matrix
 from synthesizer.utils.operation_timers import timed, timer
@@ -66,6 +72,9 @@ class Particles:
     softening_lengths = Quantity("spatial")
     centre = Quantity("spatial")
     radii = Quantity("spatial")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(
         coordinates=Mpc,
@@ -254,9 +263,9 @@ class Particles:
                 )
 
         # Ensure the distances are in the right units
-        x = cent_coords[:, 0].value
-        y = cent_coords[:, 1].value
-        d = los_dists.to_value(cent_coords.units)
+        x = cent_coords[:, 0].ndview
+        y = cent_coords[:, 1].ndview
+        d = convert_in_place(los_dists, cent_coords.units).ndview
 
         # Get the angular coordinates and store them in a (N, 3) array
         coords = np.zeros((self.nparticles, 3), dtype=np.float64)
@@ -333,7 +342,7 @@ class Particles:
                 )
 
         # Ensure the distances are in the right units
-        d = los_dists.to_value(self.smoothing_lengths.units)
+        d = convert_in_place(los_dists, self.smoothing_lengths.units).ndview
 
         # Calculate and return the projected angular smoothing lengths
         projected_smoothing_lengths = np.ascontiguousarray(
@@ -877,9 +886,7 @@ class Particles:
         if frac == 0:
             return 0 * get_quantity_unit(self, "radii")
         elif frac == 1:
-            return np.max(self.radii.value) * get_quantity_unit(
-                self, "coordinates"
-            )
+            return np.max(self._radii) * get_quantity_unit(self, "coordinates")
         elif self.nparticles == 1:
             return (
                 self.radii[0].value

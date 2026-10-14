@@ -15,7 +15,12 @@ import numpy as np
 from unyt import arcsecond, degree, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
-from synthesizer.units import Quantity, accepts, unit_is_compatible
+from synthesizer.units import (
+    Quantity,
+    accepts,
+    deepcopy_with_shared_units,
+    unit_is_compatible,
+)
 
 # To catch overflows in the number of pixels we use the absolute maximum
 # representable by a 32-bit integer. This is not a reasonable number of
@@ -69,6 +74,9 @@ class ImagingBase(ABC):
     ang_resolution = Quantity("angular_resolution")
     cart_fov = Quantity("spatial")
     ang_fov = Quantity("angle")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(resolution=(kpc, arcsecond), fov=(kpc, degree))
     def __init__(

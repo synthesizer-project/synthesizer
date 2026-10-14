@@ -24,9 +24,10 @@ Example usage:
 
 """
 
+import copy
 import os
 import shutil
-from functools import wraps
+from functools import lru_cache, wraps
 from inspect import Parameter, signature
 
 import numpy
@@ -158,25 +159,6 @@ def get_quantity_unit(obj, attr_name):
     raise AttributeError(
         f"{type(obj).__name__} has no Quantity descriptor named {attr_name}."
     )
-
-
-def get_quantity_view(obj, attr_name):
-    """Wrap a raw ndarray attribute in units without copying data.
-
-    Args:
-        obj (object):
-            Object holding the raw ndarray attribute and the corresponding
-            Quantity descriptor on its class.
-        attr_name (str):
-            Private ndarray attribute name, e.g. ``"_fnu"``.
-
-    Returns:
-        unyt_array:
-            Unit-bearing view of the raw ndarray data.
-    """
-    values = getattr(obj, attr_name)
-    unit = obj.__class__.__dict__[attr_name[1:]].unit
-    return unyt_array(values, unit, bypass_validation=True)
 
 
 class DefaultUnits:
@@ -498,7 +480,9 @@ class Quantity:
         private_name (str):
             The name of the class variable with a leading underscore. Used the
             mostly internally for (or when the user wants) values without a
-            unit returned.
+            unit returned. A _QuantityView is installed on the class under
+            this name, and the value with units is stored in the instance
+            dict under this key.
     """
 
     def __init__(self, category):
@@ -533,16 +517,18 @@ class Quantity:
         if hasattr(Units(), name):
             self.unit = getattr(Units(), name)
 
+        # Install the unit-free view under the private name
+        setattr(owner, self.private_name, _QuantityView(self))
+
     def __get__(self, obj, type=None):
         """Return the value of the attribute with units.
 
         When referencing an attribute with its public_name this method is
-        called. It handles the returning of the values stored in the
-        private_name variable with units.
-
-        The value is stored under the private_name variable on the instance
-        of the class. If we instead used the private name directly we would
-        bypass the Quantity descriptor and return the value without units.
+        called. It returns the stored unyt_array/unyt_quantity itself (not a
+        copy), so in-place unit conversions of the returned value are
+        reflected on the object. The stored value may therefore not be in
+        the internal unit system, use the private_name (which goes through
+        _QuantityView) for unit-free values in the internal unit system.
 
         If the value is None then None is returned regardless.
 
@@ -550,28 +536,25 @@ class Quantity:
             unyt_array/unyt_quantity/None
                 The value with units attached or None if value is None.
         """
-        value = getattr(obj, self.private_name)
-
-        # If we have an uninitialised attribute avoid the multiplying NoneType
-        # error and just return None
-        if value is None:
-            return None
-
-        # Attach the unit as a view. `value * self.unit` would copy the whole
-        # buffer on every attribute read, which dominated the line pipeline.
-        # This is only safe because nothing converts units in place any more;
-        # if that changes, a conversion here would rewrite the stored array.
-        if isinstance(value, numpy.ndarray):
-            return get_array_quantity_view(value, self.unit)
-
-        return value * self.unit
+        # The stored value already carries its units, and may not be in the
+        # internal unit system if the user converted it in place. Hand back the
+        # stored object itself so any such conversion stays consistent.
+        try:
+            return obj.__dict__[self.private_name]
+        except KeyError:
+            raise AttributeError(
+                f"{obj.__class__.__name__} object has no attribute "
+                f"'{self.public_name}'"
+            ) from None
 
     def __set__(self, obj, value):
         """Set the value of the attribute with units.
 
         When setting a Quantity variable this method is called, firstly the
-        value is converted to the expected units. Once converted the value is
-        stored on the instance of the class under the private_name variable.
+        value is converted to the expected units, in place where possible so
+        the caller's array is not duplicated. Once converted the value is
+        stored with units attached in the instance dict under the private_name
+        key. Values without units are assumed to be in the expected units.
 
         Args:
             obj (Any):
@@ -583,16 +566,160 @@ class Quantity:
         # Do we need to perform a unit conversion? If not we assume value
         # is already in the default unit system
         if isinstance(value, (unyt_quantity, unyt_array)):
-            if value.units != self.unit and value.units != dimensionless:
-                # Convert out of place. The value being assigned is not ours:
-                # attribute reads hand back views onto the stored buffer, so
-                # `b.lnu = a.lnu` in mismatched units would rewrite a's data.
-                value = value.to(self.unit).ndview
-            else:
+            if value.units == dimensionless:
                 value = value.ndview
+            else:
+                # Convert in place rather than copying, a copy would double
+                # the memory for as long as the caller holds a reference
+                value = convert_in_place(value, self.unit)
 
-        # Set the attribute
-        setattr(obj, self.private_name, value)
+        # Attach our own unit object rather than keeping the caller's. An
+        # equivalent unit (e.g. 1.0*Msun) would otherwise be carried into
+        # arithmetic and promote float32 values to float64. The units are
+        # equal so we can rebind them on the caller's array directly, which
+        # keeps the stored value and the caller's array the same object.
+        if isinstance(value, (unyt_quantity, unyt_array)):
+            value.units = self.unit
+        elif value is not None:
+            value = _attach_unit(value, self.unit)
+
+        # Store the unit-bearing value under the private name in the instance
+        # dict. The _QuantityView descriptor on the class takes precedence
+        # over the instance dict so reading the private name still returns
+        # the unit-free values.
+        obj.__dict__[self.private_name] = value
+
+
+def _attach_unit(value, unit):
+    """Attach a unit to a raw value without copying where possible.
+
+    Args:
+        value (array-like/float/int):
+            The raw value assumed to be in ``unit``.
+        unit (unyt.Unit):
+            The unit to attach.
+
+    Returns:
+        unyt_array/unyt_quantity:
+            The value with units attached.
+    """
+    if isinstance(value, numpy.ndarray) and value.ndim > 0:
+        return unyt_array(value, unit, bypass_validation=True)
+    if numpy.ndim(value) == 0:
+        return unyt_quantity(value, unit)
+    return unyt_array(value, unit)
+
+
+def deepcopy_with_shared_units(self, memo):
+    """Deep copy an object while sharing the units of the unyt arrays it holds.
+
+    This is assigned as ``__deepcopy__`` on classes holding Quantities. unyt
+    deep copies a Unit by deep copying its entire unit registry (ignoring the
+    memo), which costs milliseconds and a full registry's worth of memory for
+    every array copied. Units are immutable in practice so sharing them is
+    safe, and it keeps each Quantity's own unit object so the identity check
+    in _QuantityView still applies to the copy. The array data and every
+    other attribute are deep copied as normal.
+
+    Args:
+        self (object):
+            The object to copy.
+        memo (dict):
+            The deepcopy memo.
+
+    Returns:
+        object:
+            The deep copy.
+    """
+    cls = type(self)
+    new = cls.__new__(cls)
+    memo[id(self)] = new
+    for key, value in self.__dict__.items():
+        # Only plain unyt types, subclasses (e.g. yt's) get their own copy
+        if (
+            type(value) in (unyt_array, unyt_quantity)
+            and id(value) not in memo
+        ):
+            copied = _attach_unit(value.ndview.copy(order="K"), value.units)
+            memo[id(value)] = copied
+            new.__dict__[key] = copied
+        else:
+            new.__dict__[key] = copy.deepcopy(value, memo)
+    return new
+
+
+class _QuantityView:
+    """A descriptor giving unit-free access to a Quantity's stored value.
+
+    This is installed on the class under the Quantity's private name (e.g.
+    ``_lnu``). Reading it returns the stored values in the internal unit
+    system without copying, converting the stored value first if it has been
+    moved into other units. Setting it routes through the Quantity so the
+    stored value always carries its units.
+
+    Attributes:
+        quantity (Quantity):
+            The Quantity this view belongs to.
+    """
+
+    def __init__(self, quantity):
+        """Initialise the view.
+
+        Args:
+            quantity (Quantity):
+                The Quantity this view belongs to.
+        """
+        self.quantity = quantity
+
+    def __get__(self, obj, type=None):
+        """Return the stored value without units in the internal unit system.
+
+        Returns:
+            np.ndarray/float/None:
+                The unit-free value or None if value is None.
+        """
+        if obj is None:
+            return self
+
+        name = self.quantity.private_name
+        try:
+            value = obj.__dict__[name]
+        except KeyError:
+            raise AttributeError(
+                f"{obj.__class__.__name__} object has no attribute '{name}'"
+            ) from None
+
+        if value is None:
+            return None
+
+        # If the stored value has been moved out of the internal unit system
+        # convert it back in place, so the public value stays the same object
+        # as the stored one. Only a read-only value is copied, in which case
+        # the copy replaces it. The setter stores our unit object itself, so
+        # the identity check skips unyt's slow unit comparison on the hot path.
+        unit = self.quantity.unit
+        if value.units is not unit:
+            converted = convert_in_place(value, unit)
+            converted.units = unit
+            if converted is not value:
+                obj.__dict__[name] = converted
+            value = converted
+
+        if value.ndim == 0:
+            return value.value
+        return value.ndview
+
+    def __set__(self, obj, value):
+        """Set the stored value, attaching the internal unit if needed.
+
+        Args:
+            obj (Any):
+                The object containing the Quantity.
+            value (array-like/float/int):
+                The value to store, assumed to be in the internal unit system
+                if it carries no units.
+        """
+        self.quantity.__set__(obj, value)
 
 
 def has_units(x):
@@ -615,33 +742,88 @@ def has_units(x):
     return False
 
 
+@lru_cache(maxsize=None)
+def _parse_unit(unit):
+    """Parse a unit string into a Unit, caching the result.
+
+    Parsing a unit string goes through sympy and is slow, while the set of
+    unit strings used in the code is small and fixed.
+
+    Args:
+        unit (str):
+            The unit string to parse.
+
+    Returns:
+        unyt.unit_object.Unit:
+            The parsed unit.
+    """
+    return Unit(unit)
+
+
+def convert_in_place(arr, unit):
+    """Convert a `unyt_array` or `unyt_quantity` to ``unit`` in place.
+
+    Converting in place avoids duplicating the array. The array carries a
+    record of the conversion in its units, so anything else holding a
+    reference to it stays consistent. Read-only arrays can't be converted in
+    place, so these (and only these) are copied.
+
+    Args:
+        arr (unyt_array/unyt_quantity):
+            The array to convert.
+        unit (unyt.unit_object.Unit/str):
+            The unit to convert to.
+
+    Returns:
+        unyt_array/unyt_quantity:
+            The converted array, which is ``arr`` itself unless ``arr`` is
+            read-only.
+
+    Raises:
+        UnitConversionError: If the unit is not compatible with the existing
+            unit.
+    """
+    # Coerce before comparing, a unyt Unit never compares equal to a str
+    if isinstance(unit, str):
+        unit = _parse_unit(unit)
+    elif not isinstance(unit, Unit):
+        unit = Unit(unit)
+
+    # Nothing to do if we are already in the right units
+    if arr.units == unit:
+        return arr
+
+    if not arr.flags.writeable:
+        return arr.to(unit)
+
+    arr.convert_to_units(unit)
+    return arr
+
+
 def unyt_to_ndview(arr, unit=None):
     """Return the raw buffer of a `unyt_array` or `unyt_quantity`.
 
     The point of this helper is to hand downstream NumPy code a plain ndarray
     so it does not pay unyt's ufunc dispatch on every operation, and to do so
-    without copying. Nothing is ever copied here: with no unit, or a unit the
-    array already carries, the buffer comes back untouched, and a unit that
-    differs is converted in place before the buffer is returned.
+    without copying. With no unit, or a unit the array already carries, the
+    buffer comes back untouched, and a unit that differs is converted in place
+    (see convert_in_place) before the buffer is returned.
 
-    THE CALLER MUST OWN ``arr``. Converting in place rewrites its values, so
-    passing an array that anything else holds a reference to will silently
-    change that other thing's data. In practice that means passing an array
-    you just computed, not one read back off an object: attribute reads return
-    views onto the stored buffer, so converting one corrupts the object it
-    came from. Callers holding an array they do not own should convert it
-    themselves with ``arr.to(unit)``, which copies, and take the ndview of the
-    result.
+    Converting in place rewrites ``arr``'s values and units, so anything else
+    holding ``arr`` sees the conversion recorded in its units. Any unit-free
+    view of ``arr`` already handed out (e.g. a Quantity's private name) is
+    rewritten without that record.
 
     Args:
         arr (unyt_array/unyt_quantity): The unyt_array or unyt_quantity to
-            extract the data from. Must be owned by the caller.
+            extract the data from.
         unit (unyt.unit_object.Unit): The unit to convert to. If None, the
             existing unit is used. If the unit is not compatible with the
             existing unit, an error will be raised.
 
     Returns:
-        np.ndarray: The underlying data as a numpy array, WITHOUT a copy.
+        np.ndarray: The underlying data as a numpy array, without a copy
+            unless ``arr`` is read-only and needs converting.
 
     Raises:
         UnitConversionError: If the unit is not compatible with the existing
@@ -651,21 +833,7 @@ def unyt_to_ndview(arr, unit=None):
     if unit is None:
         return arr.ndview
 
-    # Coerce before comparing: callers pass units as strings (grid axis units
-    # are stored that way) and a unyt Unit never compares equal to a str, so a
-    # raw comparison reports a difference even when there is none and we copy
-    # the buffer to convert something into the units it is already in.
-    if not isinstance(unit, Unit):
-        unit = Unit(unit)
-
-    # If the units are the same then just return the ndview
-    if arr.units == unit:
-        return arr.ndview
-
-    # A conversion is needed, and the caller owns arr, so do it in place and
-    # hand back the buffer without allocating anything.
-    arr.convert_to_units(unit)
-    return arr.ndview
+    return convert_in_place(arr, unit).ndview
 
 
 def _raise_or_convert(expected_unit, name, value):
@@ -686,13 +854,12 @@ def _raise_or_convert(expected_unit, name, value):
     """
     # Handle the unyt_array/unyt_quantity cases
     if isinstance(value, (unyt_array, unyt_quantity)):
-        # We know we have units but are they compatible? Convert out of place:
-        # this runs from the @accepts decorator, so converting in place would
-        # rewrite the array the caller passed in as a side effect of calling
-        # the function.
+        # We know we have units but are they compatible? Convert in place
+        # rather than copying, a copy would double the memory for as long as
+        # the caller holds a reference.
         if value.units != expected_unit:
             try:
-                return value.to(expected_unit)
+                return convert_in_place(value, expected_unit)
             except UnitConversionError:
                 raise exceptions.IncorrectUnits(
                     f"{name} passed with incompatible units. "

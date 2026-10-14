@@ -30,7 +30,7 @@ from synthesizer.extensions.particle_spectra import (
     compute_particle_seds,
 )
 from synthesizer.synth_warnings import warn
-from synthesizer.units import get_quantity_unit
+from synthesizer.units import convert_in_place, get_quantity_unit
 from synthesizer.utils.operation_timers import timed, timer
 from synthesizer.utils.precision import (
     resolve_out_dtype,
@@ -182,7 +182,7 @@ class Extractor(ABC):
             # Convert the units if necessary
             if isinstance(value, (unyt_array, unyt_quantity)):
                 if log or units == "dimensionless":
-                    value = value.value
+                    value = value.ndview
                 # Grid axis units are stored as strings, and a Unit never
                 # compares equal to a str, so coerce before comparing or every
                 # attribute looks mismatched and gets copied.
@@ -193,10 +193,11 @@ class Extractor(ABC):
                     # a strided view.
                     value = np.ascontiguousarray(value.ndview)
                 else:
-                    # Convert out of place: this value came off the emitter,
-                    # so it is a view onto the emitter's stored array and
-                    # converting it in place would rewrite the particle data.
-                    value = value.to(units).ndview
+                    # Convert in place: this value is the emitter's stored
+                    # array, which records the conversion in its units.
+                    value = np.ascontiguousarray(
+                        convert_in_place(value, units).ndview
+                    )
 
             # We know that the extracted values must be arrays, this can not be
             # the case when we only have 1 value (i.e. a single particle, or

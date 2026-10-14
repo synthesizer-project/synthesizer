@@ -20,7 +20,7 @@ from synthesizer.instruments.utils import (
     read_instrument_attribute,
     write_instrument_attribute,
 )
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, deepcopy_with_shared_units
 from synthesizer.utils.operation_timers import timed
 
 
@@ -56,6 +56,9 @@ class SpectroscopicInstrument(InstrumentBase):
     """
 
     lam = Quantity("wavelength")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(lam=angstrom)
     @timed("SpectroscopicInstrument.__init__")
@@ -248,7 +251,7 @@ class SpectroscopicInstrument(InstrumentBase):
             group.attrs["resolving_power"] = float(self.resolving_power)
 
         ds = group.create_dataset(
-            "Wavelength", data=self.lam.value, dtype=float
+            "Wavelength", data=self.lam.ndview, dtype=float
         )
         ds.attrs["units"] = str(self.lam.units)
 

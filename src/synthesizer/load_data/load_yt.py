@@ -35,6 +35,7 @@ from synthesizer.load_data.utils import (
     cast_component_dtype,
     lookup_age,
 )
+from synthesizer.units import convert_in_place
 
 try:
     import yt
@@ -622,7 +623,9 @@ def _to_unit(data, unit, reference=None):
                 and reference is not None
                 and hasattr(reference, "units")
             ):
-                return (np.asarray(data) * reference.units).to(unit)
+                return convert_in_place(
+                    np.asarray(data) * reference.units, unit
+                )
             raise
     return np.asarray(data) * unit
 
@@ -757,7 +760,7 @@ def _resolve_stellar_ages(ds, birth_quantity, mode):
         current_time = getattr(ds, "current_time", None)
         if current_time is not None:
             try:
-                return (current_time - birth_quantity).to("yr")
+                return convert_in_place(current_time - birth_quantity, "yr")
             except (UnitConversionError, UnitOperationError):
                 pass
 
@@ -1693,8 +1696,8 @@ def _infer_centre(stars, gas, black_holes):
             continue
 
         unit = coordinates.units
-        coords = coordinates.to_value(unit)
-        w = np.ravel(weights.to_value(weights.units))
+        coords = coordinates.ndview
+        w = np.ravel(weights.ndview)
         if w.shape[0] == coords.shape[0]:
             return unyt_array(np.average(coords, axis=0, weights=w), unit)
         return unyt_array(np.mean(coords, axis=0), unit)
@@ -1706,7 +1709,7 @@ def _infer_centre(stars, gas, black_holes):
         if coordinates is not None and coordinates.shape[0] > 0:
             unit = coordinates.units
             return unyt_array(
-                np.mean(coordinates.to_value(unit), axis=0),
+                np.mean(coordinates.ndview, axis=0),
                 unit,
             )
 
