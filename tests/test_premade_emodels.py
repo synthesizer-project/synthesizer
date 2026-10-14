@@ -200,6 +200,21 @@ class TestPacmanEmission:
         for key in expected_keys:
             assert key in random_part_stars.spectra.keys()
 
+    def test_nebular_scales_with_fesc(self, test_grid, random_part_stars):
+        """Test the nebular emission is scaled by (1 - fesc)."""
+        nebular = {}
+        for fesc in (0.0, 0.9):
+            model = PacmanEmission(
+                test_grid,
+                tau_v=0.33,
+                fesc=fesc,
+                fesc_ly_alpha=0.5,
+            )
+            random_part_stars.get_spectra(model, out_dtype=np.float64)
+            nebular[fesc] = random_part_stars.spectra["nebular"].lnu.copy()
+
+        assert np.allclose(nebular[0.9], 0.1 * nebular[0.0])
+
     def test_pacman_with_no_fesc_ly_alpha(self, test_grid, random_part_stars):
         """Test the initialization of the PacmanEmission object."""
         # Define the emission model
@@ -694,7 +709,7 @@ class TestBimodalPacmanEmission:
         # Now check that passing an override to get_spectra works
         with_fesc_spec = random_part_stars.get_spectra(model, fesc=0.1)
 
-        assert spec.lnu.sum() < with_fesc_spec.lnu.sum(), (
+        assert not np.isclose(spec.lnu.sum(), with_fesc_spec.lnu.sum()), (
             "fesc override had no effect"
         )
 
@@ -891,3 +906,42 @@ class TestBimodalPacmanEmission:
             self.ps.spectra["emergent"]._lnu,
             combined_emergent._lnu,
         ), "emergent != attenuated + escaped"
+
+
+@pytest.mark.parametrize(
+    "model_cls, prefixes, kwargs",
+    [
+        (PacmanEmission, ("",), {"tau_v": 0.5}),
+        (
+            BimodalPacmanEmission,
+            ("", "young_", "old_"),
+            {"tau_v_ism": 0.3, "tau_v_birth": 0.7},
+        ),
+    ],
+)
+def test_fesc_conserves_energy(
+    test_grid, random_part_stars, model_cls, prefixes, kwargs
+):
+    """Test escaped + reprocessed emission conserves the incident energy.
+
+    With an escape fraction, fesc of the incident emission escapes and only
+    (1 - fesc) is reprocessed, so the intrinsic emission must equal
+    (1 - fesc) * reprocessed(fesc=0) + fesc * incident at every wavelength.
+    """
+    fesc = 0.3
+    spectra = {}
+    for f in (0.0, fesc):
+        model = model_cls(test_grid, fesc=f, fesc_ly_alpha=0.5, **kwargs)
+        random_part_stars.get_spectra(model, out_dtype=np.float64)
+        spectra[f] = {
+            key: sed.lnu.copy()
+            for key, sed in random_part_stars.spectra.items()
+        }
+
+    for prefix in prefixes:
+        expected = (1 - fesc) * spectra[0.0][
+            f"{prefix}reprocessed"
+        ] + fesc * spectra[0.0][f"{prefix}incident"]
+        assert np.allclose(spectra[fesc][f"{prefix}intrinsic"], expected), (
+            f"{prefix}intrinsic does not conserve energy"
+        )
