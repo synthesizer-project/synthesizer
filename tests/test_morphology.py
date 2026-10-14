@@ -1085,7 +1085,7 @@ class TestAnnuliFixes:
             imgs["f1"].arr.sum(), stars.photo_lnu["int"]["f1"].value
         )
 
-        
+
 class TestPixelGrid:
     """Tests for the pixel grid the density grids are evaluated on."""
 
