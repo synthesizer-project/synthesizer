@@ -49,6 +49,7 @@ def mock_dust_grid():
     class MockGrid:
         def __init__(self):
             # Mock DL07 grid attributes
+            self._dtype = np.dtype(np.float32)
             self.qpah = np.array([0.01, 0.025, 0.05])
             self.umin = np.array([0.1, 1.0, 10.0, 100.0])
             self.alpha = np.array([1.5, 2.0, 2.5])
@@ -56,8 +57,8 @@ def mock_dust_grid():
             # Mock spectral data on a native wavelength grid (in Angstrom)
             self._lam = np.logspace(3, 7, 100)
             self.spectra = {
-                "diffuse": np.random.random((3, 4, 100)),
-                "pdr": np.random.random((3, 4, 3, 100)),
+                "diffuse": np.random.random((3, 4, 100)).astype(self._dtype),
+                "pdr": np.random.random((3, 4, 3, 100)).astype(self._dtype),
             }
 
     return MockGrid()
@@ -612,6 +613,8 @@ class TestDraineLi07Generator:
         assert isinstance(sed_pdr, Sed)
         assert len(sed_diffuse.lam) == len(dust_wavelengths)
         assert len(sed_pdr.lam) == len(dust_wavelengths)
+        assert sed_diffuse.lnu.dtype == mock_dust_grid._dtype
+        assert sed_pdr.lnu.dtype == mock_dust_grid._dtype
 
     def test_draineli07_leaves_grid_unchanged(
         self, mock_dust_grid, dust_wavelengths

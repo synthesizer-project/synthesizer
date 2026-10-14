@@ -433,14 +433,14 @@ class DraineLi07(DustEmission):
             self.grid.spectra["diffuse"][iqpah, iumin],
             fill=0,
             verbose=False,
-        )
+        ).astype(self.grid._dtype, copy=False)
         pdr_template = spectres(
             lams.value,
             self.grid._lam,
             self.grid.spectra["pdr"][iqpah, iumin, ialpha],
             fill=0,
             verbose=False,
-        )
+        ).astype(self.grid._dtype, copy=False)
 
         # Extract diffuse (old) component spectrum
         diffuse_luminosity = (
@@ -456,8 +456,16 @@ class DraineLi07(DustEmission):
             * (setup["hydrogen_mass_calculated"] / Msun).value
         )
 
-        diffuse_sed = Sed(lam=lams, lnu=diffuse_luminosity * (erg / s / Hz))
-        pdr_sed = Sed(lam=lams, lnu=pdr_luminosity * (erg / s / Hz))
+        diffuse_sed = Sed(
+            lam=lams,
+            lnu=diffuse_luminosity.astype(self.grid._dtype, copy=False)
+            * (erg / s / Hz),
+        )
+        pdr_sed = Sed(
+            lam=lams,
+            lnu=pdr_luminosity.astype(self.grid._dtype, copy=False)
+            * (erg / s / Hz),
+        )
 
         # Replace NaNs with zero for wavelength regimes with no values given
         diffuse_sed._lnu[np.isnan(diffuse_sed._lnu)] = 0.0
