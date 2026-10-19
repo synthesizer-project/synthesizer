@@ -10,7 +10,7 @@ from unyt import Myr, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, deepcopy_with_shared_units
 from synthesizer.utils import TableFormatter
 
 
@@ -34,6 +34,9 @@ class StarsComponent(Component):
 
     # Define quantities
     ages = Quantity("time")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(ages=Myr)
     def __init__(
@@ -73,7 +76,8 @@ class StarsComponent(Component):
         self.ages = ages
         self.metallicities = metallicities
         self.log10metallicities = np.log10(self.metallicities)
-        self.log10ages = np.log10(self.ages.to(yr))
+        self.ages.convert_to_units(yr)
+        self.log10ages = np.log10(self.ages)
 
         # The type of stars object (parametric or particle). This is useful for
         # determining the type of stars object without relying on isinstance

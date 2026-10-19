@@ -41,7 +41,11 @@ from synthesizer._version import __version__
 from synthesizer.data.initialise import get_svo_filter_cache_dir
 from synthesizer.extensions.photometry import compute_photometry
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import (
+    Quantity,
+    accepts,
+    deepcopy_with_shared_units,
+)
 from synthesizer.utils.ascii_table import TableFormatter
 from synthesizer.utils.integrate import (
     integrate_weighted_last_axis,
@@ -184,6 +188,9 @@ class FilterCollection:
     lam = Quantity("wavelength")
     mean_lams = Quantity("wavelength")
     pivot_lams = Quantity("wavelength")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     accepts(new_lam=angstrom)
 
@@ -1705,6 +1712,9 @@ class Filter:
     nu = Quantity("frequency")
     original_lam = Quantity("wavelength")
     original_nu = Quantity("frequency")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(
         lam_min=angstrom,

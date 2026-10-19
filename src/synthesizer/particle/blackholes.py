@@ -236,7 +236,8 @@ class BlackHoles(Particles, BlackholesComponent):
             np.random.uniform(low=0.0, high=np.pi / 2.0, size=self.nbh) * rad
         )
 
-        self.cosine_inclination = np.cos(self.inclination.to("rad").value)
+        self.inclination.convert_to_units("rad")
+        self.cosine_inclination = np.cos(self.inclination.ndview)
 
     def calculate_ionising_luminosity(self):
         """Calculates the ionising luminosity of the blackhole(s).

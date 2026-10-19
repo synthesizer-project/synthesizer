@@ -10,7 +10,12 @@ from unyt import G, Lsun, Msun, c, cm, deg, km, s, yr
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
-from synthesizer.units import Quantity, accepts, get_quantity_unit
+from synthesizer.units import (
+    Quantity,
+    accepts,
+    deepcopy_with_shared_units,
+    get_quantity_unit,
+)
 from synthesizer.utils import (
     TableFormatter,
     array_to_scalar,
@@ -98,6 +103,9 @@ class BlackholesComponent(Component):
     eddington_luminosity = Quantity("luminosity_solar")
     bb_temperature = Quantity("temperature")
     mass = Quantity("mass")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(
         mass=Msun.in_base("galactic"),
@@ -445,9 +453,8 @@ class BlackholesComponent(Component):
         # If inclination, calculate the cosine of the inclination, required by
         # some models (e.g. AGNSED).
         if self.inclination is not None:
-            self.cosine_inclination = np.cos(
-                self.inclination.to("radian").value
-            )
+            self.inclination.convert_to_units("radian")
+            self.cosine_inclination = np.cos(self.inclination.ndview)
 
     def calculate_accretion_rate(self):
         """Calculate the black hole accretion rate from the eddington ratio.
