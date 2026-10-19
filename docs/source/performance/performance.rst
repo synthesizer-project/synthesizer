@@ -157,6 +157,7 @@ Performance Benchmarks
 
    precision
    particle_wavelength_scaling
+   parametric_scaling
    pipeline_profiling
    thread_scaling
    mpi_scaling

@@ -10,7 +10,13 @@ from unyt import angstrom, arcsecond, kpc, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.imaging import SpectralCube
-from synthesizer.imaging.image_generators import _standardize_imaging_units
+from synthesizer.imaging.data_cube_generators import (
+    _generate_ifu_parametric_smoothed,
+)
+from synthesizer.imaging.image_generators import (
+    _has_population_morphology,
+    _standardize_imaging_units,
+)
 from synthesizer.instruments.instrument_base import _hashable_state
 from synthesizer.instruments.spectroscopic_instrument import (
     SpectroscopicInstrument,
@@ -365,6 +371,18 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             SpectralCube: Generated spectral data cube for the component.
         """
         cube = SpectralCube(resolution=self.resolution, fov=fov, lam=lam)
+
+        # Populations with their own morphologies are combined population by
+        # population
+        if _has_population_morphology(component):
+            return _generate_ifu_parametric_smoothed(
+                cube,
+                sed=sed,
+                quantity=quantity,
+                density_grid=None,
+                morphology=component.morphology,
+            )
+
         density_grid = component.morphology.get_density_grid(
             self.resolution, cube.npix
         )

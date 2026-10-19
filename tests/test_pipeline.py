@@ -1328,6 +1328,51 @@ class TestPipelineOperations:
             count_and_check_dict_recursive(pipeline_with_galaxies.sfhs) > 0
         ), "No SFH was calculated"
 
+    def test_write_pipeline_sfzh_and_sfh(
+        self,
+        test_grid,
+        pipeline_with_galaxies,
+        tmp_path,
+    ):
+        """Test the SFZHs and SFHs are written with their axes."""
+        pipeline_with_galaxies.get_sfzh(
+            log10ages=test_grid.log10ages,
+            metallicities=test_grid.metallicities,
+        )
+        pipeline_with_galaxies.get_sfh(log10ages=test_grid.log10ages)
+        output = tmp_path / "sfzh.hdf5"
+        pipeline_with_galaxies.write(str(output))
+
+        ngal = pipeline_with_galaxies.n_galaxies_local
+        with h5py.File(output) as hdf:
+            sfzh = hdf["Galaxies/Stars/SFZH"]
+            sfh = hdf["Galaxies/Stars/SFH"]
+            assert sfzh.shape == (
+                ngal,
+                test_grid.log10ages.size,
+                test_grid.metallicities.size,
+            )
+            assert sfh.shape == (ngal, test_grid.log10ages.size)
+            assert sfzh.attrs["Units"] == "Msun"
+            np.testing.assert_allclose(
+                hdf["Galaxies/Stars/SFZHAxes/Log10Ages"][:],
+                test_grid.log10ages,
+            )
+            np.testing.assert_allclose(
+                hdf["Galaxies/Stars/SFZHAxes/Metallicities"][:],
+                test_grid.metallicities,
+            )
+            np.testing.assert_allclose(
+                hdf["Galaxies/Stars/SFHAxes/Log10Ages"][:],
+                test_grid.log10ages,
+            )
+
+            # Each galaxy's SFZH and SFH hold the same mass
+            assert np.all(sfzh[:].sum(axis=(1, 2)) > 0)
+            np.testing.assert_allclose(
+                sfzh[:].sum(axis=(1, 2)), sfh[:].sum(axis=1), rtol=1e-6
+            )
+
 
 class TestPipelineNewFeatures:
     """Tests for new pipeline features."""
