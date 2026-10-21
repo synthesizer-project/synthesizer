@@ -364,6 +364,35 @@ class Extraction:
 
         return lines, particle_lines
 
+    def _get_line_lams(self, line_ids):
+        """Return the wavelengths of the lines this model will extract.
+
+        These match the wavelengths of the lines produced by
+        ``_extract_lines``, including any composite lines, without having to
+        extract them.
+
+        Args:
+            line_ids (list):
+                The line ids to extract.
+
+        Returns:
+            unyt_array:
+                The wavelengths of the extracted lines.
+        """
+        grid = self.grid
+        lines = LineCollection(
+            line_ids=grid.line_ids,
+            lam=grid.line_lams,
+            lum=np.zeros(grid.nlines) * erg / s,
+            cont=np.zeros(grid.nlines) * erg / s / Hz,
+        )
+
+        # Mirror the subsetting done after extraction
+        if len(line_ids) < lines.nlines:
+            lines = lines[line_ids]
+
+        return lines.lam
+
     def _extract_summary(self):
         """Return a summary of an extraction model."""
         # Create a list to hold the summary
