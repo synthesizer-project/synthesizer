@@ -2688,8 +2688,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
             # Flag spectra built from particle velocity shifts so a peculiar
             # velocity can't be applied on top of them (see Sed.get_fnu).
-            # NOTE: dependencies are finished and not yet deleted when this
-            # model runs, so they are safe to read from a model thread.
             if this_model.vel_shift or any(
                 spectra[dep].vel_shifted
                 for dep in queue.dependencies[label]

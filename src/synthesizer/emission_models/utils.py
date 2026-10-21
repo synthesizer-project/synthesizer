@@ -139,12 +139,6 @@ def cache_model_params(
         emitter (Stars/Gas/BlackHoles/Galaxy):
             The emitter object where the parameters will be cached.
     """
-    # TODO: every cache_param call accesses the emitter's model_param_cache,
-    # which is shared by every model generating emission for this emitter, so
-    # on free-threaded Python each call locks it. Collecting the parameters
-    # and storing them in one update per model would stop concurrently
-    # executing models (nr_model_threads > 1) queueing on that lock.
-
     # Cache the predefined parameters on the emitter based on the type of model
     if model._is_extracting:
         cache_param(
@@ -396,8 +390,6 @@ def get_param(
         )
         if value is not None:
             # Attach this to the emitter so we don't have to do this again
-            # NOTE: this can run on several model threads at once, which
-            # is safe since every thread attaches the same value.
             value = np.log10(value)
             setattr(emitter, param, value)
 
