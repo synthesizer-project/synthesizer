@@ -444,6 +444,7 @@ class NebularEmission(StellarEmissionModel):
         grid,
         label="nebular",
         fesc_ly_alpha="fesc_ly_alpha",
+        fesc=None,
         nebular_line=None,
         nebular_continuum=None,
         velocity_dispersion=None,
@@ -455,7 +456,10 @@ class NebularEmission(StellarEmissionModel):
             grid (synthesizer.grid.Grid): The grid object to extract from.
             label (str): The label for this emission model.
             fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
-            fesc (float): The escape fraction of the emission.
+            fesc (float): The escape fraction of the emission. The nebular
+                emission is scaled by (1 - fesc) since escaped ionising
+                photons are not reprocessed. If None or 0.0 no scaling is
+                applied.
             nebular_line (EmissionModel): The nebular line model to use, if
                 None then one will be created.
             nebular_continuum (EmissionModel): The nebular continuum model to
@@ -497,12 +501,28 @@ class NebularEmission(StellarEmissionModel):
                 **kwargs,
             )
 
+        # Only the processed fraction (1 - fesc) of the ionising photons
+        # are reprocessed into nebular emission
+        if fesc is None or fesc == 0.0:
+            nebular_kwargs = {"combine": (nebular_line, nebular_continuum)}
+        else:
+            nebular_kwargs = {
+                "apply_to": StellarEmissionModel(
+                    label=f"{label}_combined",
+                    combine=(nebular_line, nebular_continuum),
+                    save=False,
+                    **kwargs,
+                ),
+                "transformer": ProcessedFraction(),
+                "fesc": fesc,
+            }
+
         # Are we broadening the result?
         if velocity_dispersion is None:
             StellarEmissionModel.__init__(
                 self,
                 label=label,
-                combine=(nebular_line, nebular_continuum),
+                **nebular_kwargs,
                 **kwargs,
             )
         else:
@@ -510,7 +530,7 @@ class NebularEmission(StellarEmissionModel):
             # of any component-level broadening requested above.
             predispersion = StellarEmissionModel(
                 label=f"{label}_predispersion",
-                combine=(nebular_line, nebular_continuum),
+                **nebular_kwargs,
                 save=False,
                 **kwargs,
             )
@@ -577,6 +597,7 @@ class ReprocessedEmission(StellarEmissionModel):
                 grid=grid,
                 label="_" + label + "_nebular",
                 fesc_ly_alpha=fesc_ly_alpha,
+                fesc=fesc,
                 **kwargs,
             )
 
@@ -685,6 +706,7 @@ class IntrinsicEmission:
                 grid=grid,
                 nebular_line=nebular_line,
                 nebular_continuum=nebular_continuum,
+                fesc=fesc,
                 **kwargs,
             )
             incident = IncidentEmission(
@@ -798,6 +820,7 @@ class EmergentEmission(StellarEmissionModel):
                 grid=grid,
                 nebular_line=nebular_line,
                 nebular_continuum=nebular_continuum,
+                fesc=fesc,
                 **kwargs,
             )
             incident = IncidentEmission(
@@ -937,6 +960,7 @@ class TotalEmissionWithEscapedWithDust(StellarEmissionModel):
             grid=grid,
             nebular_line=nebular_line,
             nebular_continuum=nebular_continuum,
+            fesc=fesc,
             **kwargs,
         )
         transmitted = TransmittedEmission(
@@ -1188,6 +1212,7 @@ class TotalEmissionWithEscapedNoDust:
             grid=grid,
             nebular_line=nebular_line,
             nebular_continuum=nebular_continuum,
+            fesc=fesc,
             **kwargs,
         )
         transmitted = TransmittedEmission(
