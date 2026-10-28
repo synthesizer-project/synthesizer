@@ -177,11 +177,12 @@ class TestBlueBumpTemperature:
             accretion_rates=unyt_array([1.0, 1.0, 16.0], Msun / yr),
         )
 
-        np.testing.assert_allclose(
-            bhs.blue_bump_temperature.to("K").value,
-            7.4564e4 * np.array([10**0.5, 1.0, 10**-0.5 * 2]),
-            rtol=1e-4,
-        )
+        for name in ("blue_bump_temperature", "blue_bump_temperatures"):
+            np.testing.assert_allclose(
+                getattr(bhs, name).to("K").value,
+                7.4564e4 * np.array([10**0.5, 1.0, 10**-0.5 * 2]),
+                rtol=1e-4,
+            )
 
     def test_independent_of_input_units(self):
         """Test masses and accretion rates in other units give the same T."""
@@ -217,6 +218,22 @@ class TestBlueBumpTemperature:
         for name in ("blue_bump_temperature", "blue_bump_temperatures"):
             np.testing.assert_allclose(
                 getattr(bhs, name).to("K").value, [1e5, 2e5]
+            )
+
+    @pytest.mark.parametrize(
+        "kwarg", ["blue_bump_temperature", "blue_bump_temperatures"]
+    )
+    def test_none_is_calculated(self, kwarg):
+        """Test a temperature passed as None is replaced by the calculation."""
+        bhs = BlackHoles(
+            masses=unyt_array([1e8], Msun),
+            accretion_rates=unyt_array([1.0], Msun / yr),
+            **{kwarg: None},
+        )
+
+        for name in ("blue_bump_temperature", "blue_bump_temperatures"):
+            np.testing.assert_allclose(
+                getattr(bhs, name).to("K").value, [7.4564e4], rtol=1e-4
             )
 
     def test_not_calculated_without_accretion_rate(self):

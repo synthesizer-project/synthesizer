@@ -229,9 +229,9 @@ class BlackHoles(Particles, BlackholesComponent):
 
         # blue_bump_temperature is an optional kwarg, so link the singular
         # and plural versions to whichever was passed (or calculated)
-        if hasattr(self, "blue_bump_temperatures"):
+        if getattr(self, "blue_bump_temperatures", None) is not None:
             self.blue_bump_temperature = self.blue_bump_temperatures
-        elif hasattr(self, "blue_bump_temperature"):
+        elif getattr(self, "blue_bump_temperature", None) is not None:
             self.blue_bump_temperatures = self.blue_bump_temperature
 
         # Set the smoothing lengths
