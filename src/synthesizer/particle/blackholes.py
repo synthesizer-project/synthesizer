@@ -227,6 +227,13 @@ class BlackHoles(Particles, BlackholesComponent):
         ]:
             setattr(self, plural, getattr(self, singular))
 
+        # blue_bump_temperature is an optional kwarg, so link the singular
+        # and plural versions to whichever was passed (or calculated)
+        if hasattr(self, "blue_bump_temperatures"):
+            self.blue_bump_temperature = self.blue_bump_temperatures
+        elif hasattr(self, "blue_bump_temperature"):
+            self.blue_bump_temperatures = self.blue_bump_temperature
+
         # Set the smoothing lengths
         self.smoothing_lengths = smoothing_lengths
 
