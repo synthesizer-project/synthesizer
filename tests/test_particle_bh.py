@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
-from unyt import Msun, s, unyt_array
+from unyt import K, Msun, g, kg, s, unyt_array, yr
 
 from synthesizer import exceptions
 from synthesizer.particle.blackholes import BlackHoles
@@ -161,3 +161,129 @@ class TestBlackHolesInit:
                 covering_fraction_blr=blr,
                 covering_fraction_nlr=nlr,
             )
+
+
+class TestBlueBumpTemperature:
+    """Test suite for the blue bump temperature."""
+
+    def test_calculated_from_mass_and_accretion_rate(self):
+        """Test the thin disc temperature at 10 Schwarzschild radii.
+
+        T scales as Mdot^(1/4) M^(-1/2), with 7.456e4 K at M = 1e8 Msun and
+        Mdot = 1 Msun/yr.
+        """
+        bhs = BlackHoles(
+            masses=unyt_array([1e7, 1e8, 1e9], Msun),
+            accretion_rates=unyt_array([1.0, 1.0, 16.0], Msun / yr),
+        )
+
+        for name in ("blue_bump_temperature", "blue_bump_temperatures"):
+            np.testing.assert_allclose(
+                getattr(bhs, name).to("K").value,
+                7.4564e4 * np.array([10**0.5, 1.0, 10**-0.5 * 2]),
+                rtol=1e-4,
+            )
+
+    def test_independent_of_input_units(self):
+        """Test masses and accretion rates in other units give the same T."""
+        bhs_msun = BlackHoles(
+            masses=unyt_array([1e8], Msun),
+            accretion_rates=unyt_array([1.0], Msun / yr),
+        )
+        bhs_cgs = BlackHoles(
+            masses=unyt_array([1e8], Msun).to(kg),
+            accretion_rates=unyt_array([1.0], Msun / yr).to(g / s),
+        )
+
+        np.testing.assert_allclose(
+            bhs_cgs.blue_bump_temperature.to("K").value,
+            bhs_msun.blue_bump_temperature.to("K").value,
+        )
+
+    @pytest.mark.parametrize(
+        "kwarg", ["blue_bump_temperature", "blue_bump_temperatures"]
+    )
+    def test_user_value_is_kept(self, kwarg):
+        """Test a user set temperature is not replaced by the calculation.
+
+        The value can be passed with the singular or plural name, and is
+        then available under both.
+        """
+        bhs = BlackHoles(
+            masses=unyt_array([1e8, 1e9], Msun),
+            accretion_rates=unyt_array([1.0, 1.0], Msun / yr),
+            **{kwarg: unyt_array([1e5, 2e5], K)},
+        )
+
+        for name in ("blue_bump_temperature", "blue_bump_temperatures"):
+            np.testing.assert_allclose(
+                getattr(bhs, name).to("K").value, [1e5, 2e5]
+            )
+
+    @pytest.mark.parametrize(
+        "kwarg", ["blue_bump_temperature", "blue_bump_temperatures"]
+    )
+    def test_none_is_calculated(self, kwarg):
+        """Test a temperature passed as None is replaced by the calculation."""
+        bhs = BlackHoles(
+            masses=unyt_array([1e8], Msun),
+            accretion_rates=unyt_array([1.0], Msun / yr),
+            **{kwarg: None},
+        )
+
+        for name in ("blue_bump_temperature", "blue_bump_temperatures"):
+            np.testing.assert_allclose(
+                getattr(bhs, name).to("K").value, [7.4564e4], rtol=1e-4
+            )
+
+    def test_not_calculated_without_accretion_rate(self):
+        """Test no temperature is calculated without an accretion rate."""
+        bhs = BlackHoles(masses=unyt_array([1e8], Msun))
+
+        assert not hasattr(bhs, "blue_bump_temperature")
+        assert not hasattr(bhs, "blue_bump_temperatures")
+
+
+class TestBbTemperatureDeprecation:
+    """Test the old bb_temperature names still work, with a warning."""
+
+    def test_old_attribute_warns(self):
+        """Test bb_temperature warns and gives the new attribute."""
+        bhs = BlackHoles(
+            masses=unyt_array([1e8], Msun),
+            accretion_rates=unyt_array([1.0], Msun / yr),
+        )
+
+        with pytest.warns(FutureWarning, match="shakura_sunyaev"):
+            old = bhs.bb_temperature
+
+        np.testing.assert_allclose(
+            old.to("K").value,
+            bhs.shakura_sunyaev_temperature.to("K").value,
+        )
+
+    def test_old_attribute_set_warns(self):
+        """Test setting bb_temperature warns and sets the new attribute."""
+        bhs = BlackHoles(masses=unyt_array([1e8], Msun))
+
+        with pytest.warns(FutureWarning, match="shakura_sunyaev"):
+            bhs.bb_temperature = unyt_array([1e5], K)
+
+        np.testing.assert_allclose(
+            bhs.shakura_sunyaev_temperature.to("K").value, [1e5]
+        )
+
+    def test_old_method_warns(self):
+        """Test calculate_bb_temperature warns and gives the new value."""
+        bhs = BlackHoles(
+            masses=unyt_array([1e8], Msun),
+            accretion_rates=unyt_array([1.0], Msun / yr),
+        )
+
+        with pytest.warns(FutureWarning, match="shakura_sunyaev"):
+            old = bhs.calculate_bb_temperature()
+
+        np.testing.assert_allclose(
+            old.to("K").value,
+            bhs.calculate_shakura_sunyaev_temperature().to("K").value,
+        )

@@ -6,10 +6,12 @@ BlackholesComponent is a child class of Component.
 """
 
 import numpy as np
-from unyt import G, Lsun, Msun, c, cm, deg, km, s, yr
+from unyt import G, K, Lsun, Msun, c, cm, deg, km, s, yr
+from unyt.physical_constants import stefan_boltzmann_constant
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
+from synthesizer.synth_warnings import deprecated, deprecation
 from synthesizer.units import Quantity, accepts, get_quantity_unit
 from synthesizer.utils import (
     TableFormatter,
@@ -70,6 +72,11 @@ class BlackholesComponent(Component):
             narrow line region.
         velocity_dispersion_nlr (np.ndarray of float):
             The velocity dispersion of the narrow line region.
+        blue_bump_temperature (np.ndarray of float):
+            The temperature of the big blue bump, which sets where the bump
+            turns over at high energies. Used by the cloudy_agn incident
+            grids. Can be passed as a kwarg, otherwise it is calculated from
+            the mass and accretion rate (see calculate_blue_bump_temperature).
         theta_torus (np.ndarray of float):
             The angle of the torus.
         torus_fraction (np.ndarray of float):
@@ -96,7 +103,7 @@ class BlackholesComponent(Component):
     inclination = Quantity("angle")
     bolometric_luminosity = Quantity("luminosity")
     eddington_luminosity = Quantity("luminosity_solar")
-    bb_temperature = Quantity("temperature")
+    shakura_sunyaev_temperature = Quantity("temperature")
     mass = Quantity("mass")
 
     @accepts(
@@ -415,13 +422,24 @@ class BlackholesComponent(Component):
             self.calculate_bolometric_luminosity()
 
         # If mass, accretion_rate, and epsilon provided calculate the
-        # big bump temperature.
+        # Shakura-Sunyaev temperature.
         if (
             self.mass is not None
             and self.accretion_rate is not None
             and self.epsilon is not None
         ):
-            self.calculate_bb_temperature()
+            self.calculate_shakura_sunyaev_temperature()
+
+        # If mass and accretion_rate provided, and no blue_bump_temperature
+        # was passed as a kwarg (singular or plural), calculate the blue bump
+        # temperature.
+        if (
+            self.mass is not None
+            and self.accretion_rate is not None
+            and getattr(self, "blue_bump_temperature", None) is None
+            and getattr(self, "blue_bump_temperatures", None) is None
+        ):
+            self.calculate_blue_bump_temperature()
 
         # If mass, accretion_rate, and epsilon provided calculate the
         # Eddington ratio.
@@ -519,21 +537,107 @@ class BlackholesComponent(Component):
 
         return self.eddington_ratio
 
-    def calculate_bb_temperature(self):
-        """Calculate the black hole big bump temperature.
+    def calculate_shakura_sunyaev_temperature(self):
+        """Calculate the black hole Shakura-Sunyaev temperature.
 
-        This is used in the cloudy disc model.
+        This is the characteristic temperature of a Shakura and Sunyaev
+        (1973) thin accretion disc with its inner edge at 6 GM/c^2,
+        T* = [3 G M Mdot / (8 pi sigma r_in^3)]^(1/4).
 
         Returns:
             unyt_array:
-                The black hole big bump temperature
+                The black hole Shakura-Sunyaev temperature
         """
-        # Calculate the big bump temperature
-        self.bb_temperature = (
+        # Calculate the Shakura-Sunyaev temperature
+        self.shakura_sunyaev_temperature = (
             2.24e9 * self._accretion_rate ** (1 / 4) * self._mass**-0.5
         )
 
-        return self.bb_temperature
+        return self.shakura_sunyaev_temperature
+
+    @property
+    def bb_temperature(self):
+        """Get the Shakura-Sunyaev temperature.
+
+        Deprecated alias for shakura_sunyaev_temperature.
+
+        Returns:
+            unyt_array:
+                The black hole Shakura-Sunyaev temperature.
+        """
+        deprecation(
+            "`bb_temperature` is deprecated and will be removed in version "
+            "1.4.0. Use `shakura_sunyaev_temperature` instead."
+        )
+        return self.shakura_sunyaev_temperature
+
+    @bb_temperature.setter
+    def bb_temperature(self, value):
+        """Set the Shakura-Sunyaev temperature.
+
+        Deprecated alias for shakura_sunyaev_temperature.
+
+        Args:
+            value (unyt_array):
+                The black hole Shakura-Sunyaev temperature.
+        """
+        deprecation(
+            "`bb_temperature` is deprecated and will be removed in version "
+            "1.4.0. Use `shakura_sunyaev_temperature` instead."
+        )
+        self.shakura_sunyaev_temperature = value
+
+    @deprecated(
+        "is deprecated and will be removed in version 1.4.0. "
+        "Use calculate_shakura_sunyaev_temperature instead."
+    )
+    def calculate_bb_temperature(self):
+        """Calculate the Shakura-Sunyaev temperature.
+
+        Deprecated alias for calculate_shakura_sunyaev_temperature.
+
+        Returns:
+            unyt_array:
+                The black hole Shakura-Sunyaev temperature.
+        """
+        return self.calculate_shakura_sunyaev_temperature()
+
+    def calculate_blue_bump_temperature(self):
+        """Calculate the black hole blue bump temperature.
+
+        This is the temperature of the big blue bump in the AGN continuum,
+        f_nu ~ nu^alpha_uv exp(-h nu / k T), so it sets where the bump turns
+        over at high energies. It is the first parameter of cloudy's agn
+        command, and an axis of the cloudy_agn incident grids in syncretize.
+
+        The temperature is calculated following Inayoshi and Maiolino (2025)
+        (https://ui.adsabs.harvard.edu/abs/arXiv:2409.07805/abstract).
+
+        Returns:
+            unyt_array:
+                The black hole blue bump temperature.
+        """
+        # The radius and the inner edge of the disc
+        radius = 20 * G * self.mass / c**2
+        inner_radius = 6 * G * self.mass / c**2
+
+        # Calculate the temperature of the disc at this radius
+        temperature = (
+            3
+            * G
+            * self.mass
+            * self.accretion_rate
+            / (8 * np.pi * stefan_boltzmann_constant * radius**3)
+            * (1 - np.sqrt(inner_radius / radius))
+        ) ** (1 / 4)
+
+        # Derived properties keep the precision of the masses
+        self.blue_bump_temperature = convert_array_dtype(
+            temperature.to(K),
+            self.mass.dtype,
+        )
+
+        return self.blue_bump_temperature
 
     def calculate_accretion_rate_eddington(self):
         """Calculate the black hole accretion in units of the Eddington rate.
