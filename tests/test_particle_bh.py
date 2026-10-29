@@ -242,3 +242,48 @@ class TestBlueBumpTemperature:
 
         assert not hasattr(bhs, "blue_bump_temperature")
         assert not hasattr(bhs, "blue_bump_temperatures")
+
+
+class TestBbTemperatureDeprecation:
+    """Test the old bb_temperature names still work, with a warning."""
+
+    def test_old_attribute_warns(self):
+        """Test bb_temperature warns and gives the new attribute."""
+        bhs = BlackHoles(
+            masses=unyt_array([1e8], Msun),
+            accretion_rates=unyt_array([1.0], Msun / yr),
+        )
+
+        with pytest.warns(FutureWarning, match="shakura_sunyaev"):
+            old = bhs.bb_temperature
+
+        np.testing.assert_allclose(
+            old.to("K").value,
+            bhs.shakura_sunyaev_temperature.to("K").value,
+        )
+
+    def test_old_attribute_set_warns(self):
+        """Test setting bb_temperature warns and sets the new attribute."""
+        bhs = BlackHoles(masses=unyt_array([1e8], Msun))
+
+        with pytest.warns(FutureWarning, match="shakura_sunyaev"):
+            bhs.bb_temperature = unyt_array([1e5], K)
+
+        np.testing.assert_allclose(
+            bhs.shakura_sunyaev_temperature.to("K").value, [1e5]
+        )
+
+    def test_old_method_warns(self):
+        """Test calculate_bb_temperature warns and gives the new value."""
+        bhs = BlackHoles(
+            masses=unyt_array([1e8], Msun),
+            accretion_rates=unyt_array([1.0], Msun / yr),
+        )
+
+        with pytest.warns(FutureWarning, match="shakura_sunyaev"):
+            old = bhs.calculate_bb_temperature()
+
+        np.testing.assert_allclose(
+            old.to("K").value,
+            bhs.calculate_shakura_sunyaev_temperature().to("K").value,
+        )

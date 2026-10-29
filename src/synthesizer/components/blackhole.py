@@ -11,6 +11,7 @@ from unyt.physical_constants import stefan_boltzmann_constant
 
 from synthesizer import exceptions
 from synthesizer.components.component import Component
+from synthesizer.synth_warnings import deprecated, deprecation
 from synthesizer.units import Quantity, accepts, get_quantity_unit
 from synthesizer.utils import (
     TableFormatter,
@@ -553,6 +554,53 @@ class BlackholesComponent(Component):
         )
 
         return self.shakura_sunyaev_temperature
+
+    @property
+    def bb_temperature(self):
+        """Get the Shakura-Sunyaev temperature.
+
+        Deprecated alias for shakura_sunyaev_temperature.
+
+        Returns:
+            unyt_array:
+                The black hole Shakura-Sunyaev temperature.
+        """
+        deprecation(
+            "`bb_temperature` is deprecated and will be removed in version "
+            "1.4.0. Use `shakura_sunyaev_temperature` instead."
+        )
+        return self.shakura_sunyaev_temperature
+
+    @bb_temperature.setter
+    def bb_temperature(self, value):
+        """Set the Shakura-Sunyaev temperature.
+
+        Deprecated alias for shakura_sunyaev_temperature.
+
+        Args:
+            value (unyt_array):
+                The black hole Shakura-Sunyaev temperature.
+        """
+        deprecation(
+            "`bb_temperature` is deprecated and will be removed in version "
+            "1.4.0. Use `shakura_sunyaev_temperature` instead."
+        )
+        self.shakura_sunyaev_temperature = value
+
+    @deprecated(
+        "is deprecated and will be removed in version 1.4.0. "
+        "Use calculate_shakura_sunyaev_temperature instead."
+    )
+    def calculate_bb_temperature(self):
+        """Calculate the Shakura-Sunyaev temperature.
+
+        Deprecated alias for calculate_shakura_sunyaev_temperature.
+
+        Returns:
+            unyt_array:
+                The black hole Shakura-Sunyaev temperature.
+        """
+        return self.calculate_shakura_sunyaev_temperature()
 
     def calculate_blue_bump_temperature(self):
         """Calculate the black hole blue bump temperature.
