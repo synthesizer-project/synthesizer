@@ -19,8 +19,9 @@ from synthesizer.emission_models.extractors.extractor import (
     IntegratedParametricExtractor,
     IntegratedParticleExtractor,
     ParticleExtractor,
+    PopulationExtractor,
 )
-from synthesizer.emission_models.utils import cache_model_params
+from synthesizer.emission_models.utils import cache_model_params, get_param
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.extensions.reductions import (
     combine_spectra_2d,
@@ -140,6 +141,13 @@ class Extraction:
         with timer("Extraction._extract_spectra.get_extractor"):
             if this_model.per_particle and this_model.vel_shift:
                 extractor = DopplerShiftedParticleExtractor(
+                    this_model.grid,
+                    this_model.extract,
+                )
+            elif this_model.per_particle and (
+                emitter.is_parametric and not isinstance(emitter, BlackHole)
+            ):
+                extractor = PopulationExtractor(
                     this_model.grid,
                     this_model.extract,
                 )
@@ -280,6 +288,13 @@ class Extraction:
         # Get the appropriate extractor
         if this_model.per_particle and this_model.vel_shift:
             extractor = DopplerShiftedParticleExtractor(
+                this_model.grid,
+                this_model.extract,
+            )
+        elif this_model.per_particle and (
+            emitter.is_parametric and not isinstance(emitter, BlackHole)
+        ):
+            extractor = PopulationExtractor(
                 this_model.grid,
                 this_model.extract,
             )
@@ -801,6 +816,34 @@ class Transformation:
         else:
             # Otherwise we can just use the lam_mask as is
             lam_mask = this_model.lam_mask
+
+        # An integrated model can't apply a different value to each of a
+        # parametric emitter's populations, since their emission was summed
+        # when it was extracted
+        if not this_model.per_particle and getattr(emitter, "npop", 1) > 1:
+            for name in self.transformer._required_params:
+                try:
+                    value = get_param(
+                        name, this_model, None, emitter, obj=self.transformer
+                    )
+                except exceptions.MissingAttribute:
+                    continue  # the transformer will report this itself
+                if np.size(value) == emitter.npop:
+                    raise exceptions.InconsistentArguments(
+                        f"{name} has one value per population on this "
+                        f"parametric {emitter.__class__.__name__}, which an "
+                        f"integrated model ({this_model.label}) can't apply. "
+                        "Use a model with per_particle=True to get the "
+                        f"emission of each population with its own {name}."
+                    )
+
+        # A parametric mask acts on the bins when the emission is extracted,
+        # so a transformer only needs to know which populations it applies
+        # to (one row of the emission per population)
+        if this_model.per_particle and hasattr(
+            this_mask, "get_population_mask"
+        ):
+            this_mask = this_mask.get_population_mask(apply_to.shape[0])
 
         # Apply the transform to the emission
         emission = self.transformer._transform(

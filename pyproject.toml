@@ -93,6 +93,7 @@ dependencies = [
   "pathos",
   "pympler",
   "platformdirs",
+  "threadpoolctl",
 ]
 
 # Optional dependencies for specific use cases
