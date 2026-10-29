@@ -905,3 +905,28 @@ class TestImageCollectionResampling:
 
         assert np.array_equal(collection.npix, original_npix)
         assert collection.resolution == original_resolution
+
+
+class TestNoiseFromSNR:
+    """Tests for Image.apply_noise_from_snr."""
+
+    def test_aperture_depth_per_pixel_noise(self):
+        """The aperture noise is shared over its pixels in quadrature."""
+        resolution = 0.03 * arcsecond
+        aperture_radius = 0.1 * arcsecond
+        img = Image(
+            resolution=resolution,
+            fov=600 * resolution,
+            img=np.zeros((600, 600)),
+        )
+        noisy = img.apply_noise_from_snr(
+            snr=5,
+            depth=10.0,
+            aperture_radius=aperture_radius,
+        )
+
+        # The number of pixels in the aperture and the noise each needs
+        n_pix = np.pi * float(aperture_radius / resolution) ** 2
+        expected_std = (10.0 / 5) / np.sqrt(n_pix)
+
+        assert np.isclose(np.std(noisy.noise_arr), expected_std, rtol=0.01)
