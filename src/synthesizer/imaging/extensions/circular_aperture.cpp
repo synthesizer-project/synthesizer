@@ -431,6 +431,11 @@ PyMODINIT_FUNC PyInit_circular_aperture(void) {
   }
   PyObject *m = PyModule_Create(&circularoverlapmodule);
   if (m == NULL) return NULL;
+  /* Declare the module safe to use without the GIL so importing it doesn't
+   * re-enable the GIL on free-threaded builds of Python. */
+#ifdef Py_GIL_DISABLED
+  PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);
+#endif
 #ifdef ATOMIC_TIMING
   if (import_toc_capsule() < 0) {
     Py_DECREF(m);

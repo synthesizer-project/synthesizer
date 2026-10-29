@@ -2340,6 +2340,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         nthreads=1,
         grid_assignment_method="cic",
         out_dtype=None,
+        nr_model_threads=1,
         **fixed_parameters,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -2422,6 +2423,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted spectra arrays.
+            nr_model_threads (int):
+                The number of threads to execute independent models with
+                concurrently. Each model still uses nthreads OpenMP threads.
+                This requires a free-threaded (no-GIL) build of Python; with
+                the GIL enabled a warning is issued and the models are
+                executed serially.
             **fixed_parameters (dict):
                 A dictionary of fixed parameters to apply to the model. Each
                 of these will be applied to the model before generating the
@@ -2495,16 +2502,17 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             models=queue.models.values(),
         )
 
-        # Execute the full model closure by processing each ready model once.
-        while len(queue) > 0:
-            this_model = queue.pop()
-            label = this_model.label
+        # Generate the emission for a single model. This may run on a worker
+        # thread (see ModelQueue.execute), so it only writes this model's own
+        # entries in the emission dictionaries.
+        def process(this_model):
+            """Generate and store the spectra for a single model.
 
-            # Reused or externally supplied emissions still need to unlock the
-            # graph, but they do not need to be regenerated.
-            if label in spectra:
-                queue.done(this_model, spectra, particle_spectra)
-                continue
+            Args:
+                this_model (EmissionModel):
+                    The model to generate the spectra for.
+            """
+            label = this_model.label
 
             # Active queued models must always have a matching emitter.
             if this_model.emitter not in emitters:
@@ -2528,7 +2536,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # Dispatch to the appropriate operation for this model.
             if this_model._is_extracting:
                 try:
-                    spectra, particle_spectra = self._extract_spectra(
+                    self._extract_spectra(
                         this_model,
                         emitters,
                         spectra,
@@ -2548,7 +2556,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_combining:
                 try:
-                    spectra, particle_spectra = self._combine_spectra(
+                    self._combine_spectra(
                         emission_model,
                         spectra,
                         particle_spectra,
@@ -2566,7 +2574,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_transforming:
                 try:
-                    spectra, particle_spectra = this_model._transform_emission(
+                    this_model._transform_emission(
                         this_model,
                         spectra,
                         particle_spectra,
@@ -2585,7 +2593,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_generating:
                 try:
-                    spectra, particle_spectra = self._generate_spectra(
+                    self._generate_spectra(
                         this_model,
                         emission_model,
                         spectra,
@@ -2689,11 +2697,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 if label in particle_spectra:
                     particle_spectra[label].vel_shifted = True
 
-            # Unlock downstream models and delete expired unsaved emissions.
-            queue.done(this_model, spectra, particle_spectra)
-
-        # Ensure the dependency graph was fully traversed before returning.
-        queue.assert_finished()
+        # Execute the full model closure, processing each model once all of
+        # its dependencies are ready.
+        queue.execute(
+            process,
+            spectra,
+            particle_spectra,
+            nr_model_threads=nr_model_threads,
+            nthreads=nthreads,
+        )
 
         # Apply any post processing functions to the surviving emissions.
         for func in self._post_processing:
@@ -2719,6 +2731,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         nthreads=1,
         grid_assignment_method="cic",
         out_dtype=None,
+        nr_model_threads=1,
         **kwargs,
     ):
         """Generate stellar lines as described by the emission model.
@@ -2799,6 +2812,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted line arrays.
+            nr_model_threads (int):
+                The number of threads to execute independent models with
+                concurrently. Each model still uses nthreads OpenMP threads.
+                This requires a free-threaded (no-GIL) build of Python; with
+                the GIL enabled a warning is issued and the models are
+                executed serially.
             **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -2884,19 +2903,26 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         line_lams = None
         if len(lines) > 0:
             line_lams = lines[list(lines.keys())[0]].lam
+        else:
+            # Otherwise get them from an extraction, so they are known before
+            # any model runs (generators need them whether or not an
+            # extraction has already run)
+            for model in queue.models.values():
+                if model._is_extracting:
+                    line_lams = model._get_line_lams(line_ids)
+                    break
 
-        # Execute the full model closure by processing each ready model once.
-        while len(queue) > 0:
-            this_model = queue.pop()
+        # Generate the emission for a single model. This may run on a worker
+        # thread (see ModelQueue.execute), so it only writes this model's own
+        # entries in the emission dictionaries.
+        def process(this_model):
+            """Generate and store the lines for a single model.
+
+            Args:
+                this_model (EmissionModel):
+                    The model to generate the lines for.
+            """
             label = this_model.label
-
-            # Reused or externally supplied emissions still need to unlock the
-            # graph, but they do not need to be regenerated.
-            if label in lines:
-                if line_lams is None:
-                    line_lams = lines[label].lam
-                queue.done(this_model, lines, particle_lines)
-                continue
 
             # Active queued models must always have a matching emitter.
             if this_model.emitter not in emitters:
@@ -2920,7 +2946,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # Dispatch to the appropriate operation for this model.
             if this_model._is_extracting:
                 try:
-                    lines, particle_lines = self._extract_lines(
+                    self._extract_lines(
                         line_ids,
                         this_model,
                         emitters,
@@ -2931,8 +2957,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         grid_assignment_method=grid_assignment_method,
                         out_dtype=out_dtype,
                     )
-                    if line_lams is None and label in lines:
-                        line_lams = lines[label].lam
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {label}")
@@ -2943,7 +2967,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_combining:
                 try:
-                    lines, particle_lines = self._combine_lines(
+                    self._combine_lines(
                         emission_model,
                         lines,
                         particle_lines,
@@ -2951,8 +2975,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         emitter,
                         nthreads=nthreads,
                     )
-                    if line_lams is None and label in lines:
-                        line_lams = lines[label].lam
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -2963,7 +2985,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_transforming:
                 try:
-                    lines, particle_lines = this_model._transform_emission(
+                    this_model._transform_emission(
                         this_model,
                         lines,
                         particle_lines,
@@ -2971,8 +2993,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         this_mask,
                         self.lam,
                     )
-                    if line_lams is None and label in lines:
-                        line_lams = lines[label].lam
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -2983,7 +3003,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         ).with_traceback(e.__traceback__)
             elif this_model._is_generating:
                 try:
-                    lines, particle_lines = self._generate_lines(
+                    self._generate_lines(
                         this_model,
                         emission_model,
                         lines,
@@ -2996,8 +3016,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         out_dtype=out_dtype,
                         nthreads=nthreads,
                     )
-                    if line_lams is None and label in lines:
-                        line_lams = lines[label].lam
                 except Exception as e:
                     if sys.version_info >= (3, 11):
                         e.add_note(f"EmissionModel.label: {this_model.label}")
@@ -3032,11 +3050,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                             f"Can't scale lines by {scaler}."
                         )
 
-            # Unlock downstream models and delete expired unsaved emissions.
-            queue.done(this_model, lines, particle_lines)
-
-        # Ensure the dependency graph was fully traversed before returning.
-        queue.assert_finished()
+        # Execute the full model closure, processing each model once all of
+        # its dependencies are ready.
+        queue.execute(
+            process,
+            lines,
+            particle_lines,
+            nr_model_threads=nr_model_threads,
+            nthreads=nthreads,
+        )
 
         # Apply any post processing functions to the surviving emissions.
         with timer("EmissionModel._get_lines.post_processing"):
