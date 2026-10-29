@@ -43,15 +43,8 @@ class Greybody(DustEmission):
     Attributes:
         temperature (unyt_quantity):
             The temperature of the greybody.
-        temperature_z (unyt_quantity):
-            The temperature of the greybody at redshift z, accounting for
-            CMB heating. Stores the last used temperature (important when
-            used with emitter temperatures).
         emissivity (float):
             The emissivity of the dust (dimensionless).
-        cmb_factor (float):
-            The multiplicative factor to account for CMB heating at
-            high-redshift.
         optically_thin (bool):
             If dust is optically thin?
         lam_0 (unyt_quantity):
