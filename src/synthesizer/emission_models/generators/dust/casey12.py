@@ -114,6 +114,47 @@ class Casey12(DustEmission):
         self.n_bb = n_bb
         self.lam_0 = lam_0
 
+        # Calculate the power law turnover wavelength and normalisation for
+        # the instance's own parameters
+        self.lam_c, self.n_pl = self._power_law_params(
+            temperature, emissivity, alpha
+        )
+
+        DustEmission.__init__(
+            self,
+            intrinsic,
+            attenuated,
+            scaler,
+            do_cmb_heating,
+            required_params=("temperature", "emissivity", "alpha"),
+        )
+
+    def _power_law_params(
+        self,
+        temperature: unyt_quantity,
+        emissivity: float,
+        alpha: float,
+    ) -> tuple[unyt_quantity, unyt_quantity]:
+        """Compute the power-law turnover wavelength and normalisation.
+
+        Both depend on the temperature, emissivity and mid-infrared slope, so
+        they are recomputed whenever any of these differ from the instance's
+        own values (e.g. when they are read from the emitter, or after CMB
+        heating).
+
+        Args:
+            temperature (unyt_quantity):
+                The dust temperature.
+            emissivity (float):
+                The dust emissivity.
+            alpha (float):
+                The mid-infrared power-law slope.
+
+        Returns:
+            tuple:
+                The power-law turnover wavelength (lam_c) and the power-law
+                normalisation (n_pl).
+        """
         # Calculate the power law turnover wavelength
         b1 = 26.68
         b2 = 6.246
@@ -124,26 +165,19 @@ class Casey12(DustEmission):
             + (b3 + b4 * alpha) * temperature.to("K").value
         ) ** -1
 
-        self.lam_c = (3.0 / 4.0) * lum * um
+        lam_c = (3.0 / 4.0) * lum * um
 
         # Calculate normalisation of the power-law term
         # See Casey+2012, Table 1 for the expression
         # Missing factors of lam_c and c in some places
-        self.n_pl = (
+        n_pl = (
             self.n_bb
-            * (1 - np.exp(-((self.lam_0 / self.lam_c) ** emissivity)))
-            * (c / self.lam_c) ** 3
-            / (np.exp(h * c / (self.lam_c * kb * temperature)) - 1)
+            * (1 - np.exp(-((self.lam_0 / lam_c) ** emissivity)))
+            * (c / lam_c) ** 3
+            / (np.exp(h * c / (lam_c * kb * temperature)) - 1)
         )
 
-        DustEmission.__init__(
-            self,
-            intrinsic,
-            attenuated,
-            scaler,
-            do_cmb_heating,
-            required_params=("temperature",),
-        )
+        return lam_c, n_pl
 
     def __repr__(self):
         """Return a string representation of the Casey12 object."""
@@ -183,6 +217,8 @@ class Casey12(DustEmission):
         temperature: unyt_quantity,
         lam_c: Optional[unyt_quantity] = None,
         n_pl: Optional[unyt_quantity] = None,
+        emissivity: Optional[float] = None,
+        alpha: Optional[float] = None,
     ) -> unyt_array:
         """Generate unnormalised spectrum for given frequency (nu) grid.
 
@@ -205,6 +241,12 @@ class Casey12(DustEmission):
                 The power-law normalisation for this temperature. If None,
                 the value computed at initialisation for the instance's
                 temperature is used.
+            emissivity (float, optional):
+                The emissivity to use. If None, the instance's emissivity is
+                used.
+            alpha (float, optional):
+                The mid-infrared power-law slope to use. If None, the
+                instance's alpha is used.
 
         Returns:
             lnu (unyt_array):
@@ -215,6 +257,10 @@ class Casey12(DustEmission):
             lam_c = self.lam_c
         if n_pl is None:
             n_pl = self.n_pl
+        if emissivity is None:
+            emissivity = self.emissivity
+        if alpha is None:
+            alpha = self.alpha
 
         # Convert to wavelength
         lam = c / nu
@@ -230,7 +276,7 @@ class Casey12(DustEmission):
             return (
                 (
                     n_pl
-                    * ((lam / lam_c) ** self.alpha)
+                    * ((lam / lam_c) ** alpha)
                     * np.exp(-((lam / lam_c) ** 2))
                 ).value
                 * erg
@@ -248,7 +294,7 @@ class Casey12(DustEmission):
             return (
                 (
                     self.n_bb
-                    * (1 - np.exp(-((self.lam_0 / lam) ** self.emissivity)))
+                    * (1 - np.exp(-((self.lam_0 / lam) ** emissivity)))
                     * (c / lam) ** 3
                     / (np.exp((h * c) / (lam * kb * temperature)) - 1.0)
                 ).value
@@ -273,8 +319,8 @@ class Casey12(DustEmission):
     ) -> Sed:
         """Generate the dust emission spectra.
 
-        Note that the temperature here will be extracted using this priority
-        order:
+        Note that the temperature, emissivity and alpha here will be
+        extracted using this priority order:
             1. From the EmissionModels fixed parameters
             2. From the emitter object
             3. From the Casey12 object itself
@@ -304,8 +350,10 @@ class Casey12(DustEmission):
         # Get the required parameters
         params = self._extract_params(model, emitter)
 
-        # Unpack the temperature
+        # Unpack the parameters (any of which may vary per emitter)
         temperature = params["temperature"]
+        emissivity = params["emissivity"]
+        alpha = params["alpha"]
 
         # Define frequencies
         nu = (c / lams).to(Hz)
@@ -313,32 +361,16 @@ class Casey12(DustEmission):
         # Account for CMB heating
         cmb_factor, temperature = self.apply_cmb_heating(
             temperature=temperature,
-            emissivity=self.emissivity,
+            emissivity=emissivity,
             redshift=redshift,
         )
 
-        # Recompute the Casey12 parameters if temperature changed due to CMB
-        # heating
-        b1 = 26.68
-        b2 = 6.246
-        b3 = 0.0001905
-        b4 = 0.00007243
-        lum = (
-            (b1 + b2 * self.alpha) ** -2
-            + (b3 + b4 * self.alpha) * temperature.to("K").value
-        ) ** -1
-
-        lam_c = (3.0 / 4.0) * lum * um
-
-        n_pl = (
-            self.n_bb
-            * (1 - np.exp(-((self.lam_0 / lam_c) ** self.emissivity)))
-            * (c / lam_c) ** 3
-            / (np.exp(h * c / (lam_c * kb * temperature)) - 1)
-        )
+        # Compute the Casey12 power-law parameters for these parameters (and
+        # any CMB-heated temperature)
+        lam_c, n_pl = self._power_law_params(temperature, emissivity, alpha)
 
         # Compute the Casey12 function
-        lnu = self._lnu(nu, temperature, lam_c, n_pl)
+        lnu = self._lnu(nu, temperature, lam_c, n_pl, emissivity, alpha)
 
         # Create an SED object for convenience
         sed = Sed(lam=lams, lnu=lnu)
@@ -421,8 +453,10 @@ class Casey12(DustEmission):
         # Get the required parameters
         params = self._extract_params(model, emitter)
 
-        # Unpack the temperature
+        # Unpack the parameters (any of which may vary per emitter)
         temperature = params["temperature"]
+        emissivity = params["emissivity"]
+        alpha = params["alpha"]
 
         # Define frequencies
         nu = (c / line_lams).to(Hz)
@@ -431,33 +465,19 @@ class Casey12(DustEmission):
         # Account for CMB heating
         cmb_factor, temperature = self.apply_cmb_heating(
             temperature=temperature,
-            emissivity=self.emissivity,
+            emissivity=emissivity,
             redshift=redshift,
         )
 
-        # Recompute the Casey12 parameters if temperature changed due to CMB
-        # heating
-        b1 = 26.68
-        b2 = 6.246
-        b3 = 0.0001905
-        b4 = 0.00007243
-        lum = (
-            (b1 + b2 * self.alpha) ** -2
-            + (b3 + b4 * self.alpha) * temperature.to("K").value
-        ) ** -1
-
-        lam_c = (3.0 / 4.0) * lum * um
-
-        n_pl = (
-            self.n_bb
-            * (1 - np.exp(-((self.lam_0 / lam_c) ** self.emissivity)))
-            * (c / lam_c) ** 3
-            / (np.exp(h * c / (lam_c * kb * temperature)) - 1)
-        )
+        # Compute the Casey12 power-law parameters for these parameters (and
+        # any CMB-heated temperature)
+        lam_c, n_pl = self._power_law_params(temperature, emissivity, alpha)
 
         # Compute the Casey12 function
-        lnu = self._lnu(nu, temperature, lam_c, n_pl)
-        norm_lnu = self._lnu(sed_nu, temperature, lam_c, n_pl)
+        lnu = self._lnu(nu, temperature, lam_c, n_pl, emissivity, alpha)
+        norm_lnu = self._lnu(
+            sed_nu, temperature, lam_c, n_pl, emissivity, alpha
+        )
 
         # Create an SED object for convenience
         norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)

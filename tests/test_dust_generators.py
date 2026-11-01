@@ -456,6 +456,90 @@ class TestCasey12Generator:
         assert np.all(lnu >= 0)
         assert np.any(lnu > 0)
 
+    def test_casey12_required_params(self):
+        """Emissivity and alpha can be supplied by the emitter."""
+        c12 = Casey12(temperature=20 * K)
+        assert set(c12._required_params) >= {
+            "temperature",
+            "emissivity",
+            "alpha",
+        }
+
+    def test_casey12_per_emitter_emissivity_and_alpha(
+        self, dust_wavelengths, mock_model, mock_emissions
+    ):
+        """Emitter emissivity/alpha match an instance built with them."""
+
+        class Emitter:
+            def __init__(self, **kwargs):
+                self.model_param_cache = {}
+                self.__dict__.update(kwargs)
+
+        def generate(gen, emitter):
+            return gen._generate_spectra(
+                lams=dust_wavelengths,
+                emitter=emitter,
+                model=mock_model,
+                emissions=mock_emissions,
+                redshift=0.0,
+            ).lnu
+
+        # Values from the emitter take priority over the instance values
+        from_emitter = generate(
+            Casey12(temperature=30 * K, emissivity=1.5, alpha=2.0),
+            Emitter(temperature=45 * K, emissivity=2.1, alpha=1.3),
+        )
+        from_instance = generate(
+            Casey12(temperature=45 * K, emissivity=2.1, alpha=1.3),
+            Emitter(),
+        )
+        np.testing.assert_allclose(from_emitter, from_instance, rtol=1e-12)
+
+        # Without emitter values the instance values are used, and changing
+        # emissivity or alpha changes the spectrum
+        default = generate(
+            Casey12(temperature=45 * K, emissivity=1.5, alpha=2.0), Emitter()
+        )
+        assert not np.allclose(default, from_instance)
+        only_alpha = generate(
+            Casey12(temperature=45 * K, emissivity=1.5, alpha=2.0),
+            Emitter(alpha=1.3),
+        )
+        assert not np.allclose(only_alpha, default)
+
+    def test_casey12_lines_use_emitter_params(
+        self, mock_model, mock_emissions
+    ):
+        """Line generation uses the same per-emitter parameters."""
+
+        class Emitter:
+            def __init__(self, **kwargs):
+                self.model_param_cache = {}
+                self.__dict__.update(kwargs)
+
+        line_lams = np.array([1e5, 5e5]) * angstrom
+
+        def lines(gen, emitter):
+            return gen._generate_lines(
+                line_ids=["a", "b"],
+                line_lams=line_lams,
+                emitter=emitter,
+                model=mock_model,
+                emissions=mock_emissions,
+                spectra=mock_emissions,
+                redshift=0.0,
+            ).continuum
+
+        from_emitter = lines(
+            Casey12(temperature=30 * K, emissivity=1.5, alpha=2.0),
+            Emitter(temperature=45 * K, emissivity=2.1, alpha=1.3),
+        )
+        from_instance = lines(
+            Casey12(temperature=45 * K, emissivity=2.1, alpha=1.3),
+            Emitter(),
+        )
+        np.testing.assert_allclose(from_emitter, from_instance, rtol=1e-12)
+
 
 class TestDraineLi07Generator:
     """Tests for DraineLi07 emission generator."""
