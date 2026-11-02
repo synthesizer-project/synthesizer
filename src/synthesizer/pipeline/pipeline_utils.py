@@ -856,8 +856,11 @@ def clear_lists_recursive(data):
     The dictionary structure itself is left untouched.
 
     Args:
-        data (dict): The nested dictionary to clear.
+        data (dict/list): The nested dictionary (or a list) to clear.
     """
+    if isinstance(data, list):
+        data.clear()
+        return
     for value in data.values():
         if isinstance(value, dict):
             clear_lists_recursive(value)

@@ -1329,6 +1329,60 @@ class TestPipelineOperations:
             count_and_check_dict_recursive(pipeline_with_galaxies.sfhs) > 0
         ), "No SFH was calculated"
 
+    def test_write_sfzh_and_sfh_particle(
+        self,
+        test_grid,
+        pipeline_with_galaxies,
+        tmp_path,
+    ):
+        """Particle SFZHs and SFHs are written as per-galaxy mass grids."""
+        pipeline_with_galaxies.get_sfzh(
+            log10ages=test_grid.log10ages,
+            metallicities=test_grid.metallicities,
+        )
+        pipeline_with_galaxies.get_sfh(log10ages=test_grid.log10ages)
+        output = tmp_path / "sfzh.hdf5"
+        pipeline_with_galaxies.write(output)
+
+        nage, nmet = len(test_grid.log10ages), len(test_grid.metallicities)
+        with h5py.File(output) as hdf:
+            sfzh = hdf["Galaxies/Stars/SFZH"]
+            sfh = hdf["Galaxies/Stars/SFH"]
+            assert sfzh.shape == (3, nage, nmet)
+            assert sfh.shape == (3, nage)
+            assert sfzh.attrs["Units"] == "Msun"
+            assert sfh.attrs["Units"] == "Msun"
+            assert np.all(np.sum(sfzh[...], axis=(1, 2)) > 0)
+
+    def test_write_sfzh_and_sfh_parametric(
+        self,
+        nebular_emission_model,
+        single_star_parametric,
+        test_grid,
+        tmp_path,
+    ):
+        """Parametric galaxies write the SFZH and SFH of their stars."""
+        from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+
+        galaxy = ParametricGalaxy(stars=single_star_parametric, redshift=1.0)
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_galaxies([galaxy])
+        pipeline.get_sfzh(
+            log10ages=test_grid.log10ages,
+            metallicities=test_grid.metallicities,
+        )
+        pipeline.get_sfh(log10ages=test_grid.log10ages)
+        output = tmp_path / "sfzh.hdf5"
+        pipeline.write(output)
+
+        with h5py.File(output) as hdf:
+            np.testing.assert_allclose(
+                hdf["Galaxies/Stars/SFZH"][0], single_star_parametric.sfzh
+            )
+            np.testing.assert_allclose(
+                hdf["Galaxies/Stars/SFH"][0], single_star_parametric.sfh
+            )
+
 
 class TestPipelineNewFeatures:
     """Tests for new pipeline features."""
@@ -3098,6 +3152,11 @@ class TestPipelineFlushing:
                 **kwargs,
             )
             pipeline.add_galaxies(make_galaxies())
+            pipeline.get_sfzh(
+                log10ages=test_grid.log10ages,
+                metallicities=test_grid.metallicities,
+            )
+            pipeline.get_sfh(log10ages=test_grid.log10ages)
             pipeline.get_spectra()
             pipeline.get_photometry_luminosities(nircam_instrument_no_psf)
             pipeline.get_lines(line_ids=test_grid.available_lines)

@@ -149,6 +149,8 @@ class Pipeline:
     # The containers holding per-galaxy outputs (excluding the extra
     # analysis results) which are written to file when flushing
     _galaxy_output_attrs = (
+        "sfzhs",
+        "sfhs",
         "lnu_spectra",
         "fnu_spectra",
         "luminosities",
@@ -1657,6 +1659,11 @@ class Pipeline:
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfzh", None) is not None:
             return galaxy.sfzh
+        elif (
+            not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None
+        ):
+            galaxy.sfzh = galaxy.stars.sfzh
+            return galaxy.sfzh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfzh(
                 log10ages=op_kwargs["log10ages"],
@@ -1737,6 +1744,11 @@ class Pipeline:
         # Get the SFH, skip any without stars.
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfh", None) is not None:
+            return galaxy.sfh
+        elif (
+            not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None
+        ):
+            galaxy.sfh = galaxy.stars.sfh
             return galaxy.sfh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfh(
@@ -4415,19 +4427,21 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Do we need to unpack the SFZH?
+        # Do we need to unpack the SFZH? We take it from the stars where
+        # possible since that's where split galaxies accumulate it. Particle
+        # stars hold it as a parametric Stars object so we extract the grid.
         if self._write_sfzh:
-            if galaxy.stars is not None:
-                self.sfzhs.append(galaxy.stars.sfzh)
-            else:
-                self.sfzhs.append(galaxy.sfzh)
+            sfzh = getattr(galaxy, "sfzh", None)
+            if galaxy.stars is not None and galaxy.stars.sfzh is not None:
+                sfzh = galaxy.stars.sfzh
+            self.sfzhs.append(unyt_array(getattr(sfzh, "sfzh", sfzh), "Msun"))
 
         # Do we need to unpack the SFH?
         if self._write_sfh:
-            if galaxy.stars is not None:
-                self.sfhs.append(galaxy.stars.sfh)
-            else:
-                self.sfhs.append(galaxy.sfh)
+            sfh = getattr(galaxy, "sfh", None)
+            if galaxy.stars is not None and galaxy.stars.sfh is not None:
+                sfh = galaxy.stars.sfh
+            self.sfhs.append(unyt_array(sfh, "Msun"))
 
         # Do we need to unpack the lnu spectra?
         if self._write_lnu_spectra:
@@ -5746,6 +5760,20 @@ class Pipeline:
         calls (i.e. earlier flushes).
         """
         galaxy_indices = self._galaxy_indices
+
+        # Write the SFZHs and SFHs
+        if self._write_sfzh:
+            self.io_helper.write_data(
+                self.sfzhs,
+                "Galaxies/Stars/SFZH",
+                galaxy_indices,
+            )
+        if self._write_sfh:
+            self.io_helper.write_data(
+                self.sfhs,
+                "Galaxies/Stars/SFH",
+                galaxy_indices,
+            )
 
         # Write spectral luminosity densities
         if self._write_lnu_spectra:
