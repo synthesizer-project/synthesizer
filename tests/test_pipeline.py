@@ -3079,13 +3079,15 @@ def test_combine_rank_files_virtual_with_empty_rank(tmp_path):
     from synthesizer.pipeline.pipeline_io import PipelineIO
 
     # Rank 0 has no galaxies: an empty placeholder for one dataset and
-    # nothing at all for the other. Rank 1 holds all the rows.
+    # nothing at all for the other. Rank 1 holds all the rows. Neither rank
+    # has rows for the final dataset.
     obslams = np.arange(10.0).reshape(2, 5)
     fluxes = np.arange(6.0).reshape(2, 3)
     with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
         hdf.attrs["synthesizer_version"] = "test"
         dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", shape=(0,))
         dset.attrs["Units"] = "dimensionless"
+        hdf.create_dataset("Galaxies/Empty", shape=(0, 5))
     with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
         dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", data=fluxes)
         dset.attrs["Units"] = "erg/s/cm**2"
@@ -3093,6 +3095,7 @@ def test_combine_rank_files_virtual_with_empty_rank(tmp_path):
             "Galaxies/Lines/ObservedWavelengths", data=obslams
         )
         dset.attrs["Units"] = "Å"
+        hdf.create_dataset("Galaxies/Empty", shape=(0, 5))
 
     # Build the writer as rank 0 of 2 would have it after writing
     io = PipelineIO.__new__(PipelineIO)
@@ -3116,3 +3119,6 @@ def test_combine_rank_files_virtual_with_empty_rank(tmp_path):
         assert hdf["Galaxies/Lines/Flux/nebular"].attrs["Units"] == (
             "erg/s/cm**2"
         )
+
+        # A dataset without rows on any rank isn't written
+        assert "Galaxies/Empty" not in hdf

@@ -680,7 +680,9 @@ class PipelineIO:
                     final_shape = (self.num_galaxies,) + shape[1:]
                     layout = h5py.VirtualLayout(shape=final_shape, dtype=dtype)
 
-                    # Loop over each rank and map the data to the layout
+                    # Loop over each rank and map the data to the layout,
+                    # keeping track of whether any rank had rows to map
+                    mapped = False
                     for rank, (start_i, end_i) in enumerate(zip(starts, ends)):
                         src_file = temp_path.replace("<rank>", str(rank))
                         with h5py.File(src_file, "r") as rank_f:
@@ -734,6 +736,12 @@ class PipelineIO:
                                 f"shape {target_shape}, final virtual shape "
                                 f"{final_shape}. Original error: {exc}"
                             ) from exc
+                        mapped = True
+
+                    # Skip datasets without rows on any rank, otherwise we'd
+                    # make a dataset full of fill values
+                    if not mapped:
+                        continue
 
                     # Create the virtual dataset in the final file
                     vds = hdf.create_virtual_dataset(dpath, layout)
