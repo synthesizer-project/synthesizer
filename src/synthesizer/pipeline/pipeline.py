@@ -1251,6 +1251,11 @@ class Pipeline:
         else:
             self._analysis_results[result_key] = []
 
+        # Register the timing now so every rank has the same timing keys,
+        # even those without galaxies (otherwise the MPI reduction of the
+        # timings deadlocks)
+        self._op_timing[result_key] = 0.0
+
         self._print(f"Added analysis function: {result_key}")
 
     @timed("Pipeline.add_galaxies")
@@ -5631,21 +5636,24 @@ class Pipeline:
                 "Galaxies/BlackHoles/Lines/Flux",
                 galaxy_indices,
             )
-            self.io_helper.write_data(
-                self.line_cont_fluxes["Galaxy"],
-                "Galaxies/Lines/Continuum",
-                galaxy_indices,
-            )
-            self.io_helper.write_data(
-                self.line_cont_fluxes["Stars"],
-                "Galaxies/Stars/Lines/Continuum",
-                galaxy_indices,
-            )
-            self.io_helper.write_data(
-                self.line_cont_fluxes["BlackHole"],
-                "Galaxies/BlackHoles/Lines/Continuum",
-                galaxy_indices,
-            )
+            # The continuum shares its datasets with the luminosity lines so
+            # only write it here if they haven't already
+            if not self._write_lines:
+                self.io_helper.write_data(
+                    self.line_cont_fluxes["Galaxy"],
+                    "Galaxies/Lines/Continuum",
+                    galaxy_indices,
+                )
+                self.io_helper.write_data(
+                    self.line_cont_fluxes["Stars"],
+                    "Galaxies/Stars/Lines/Continuum",
+                    galaxy_indices,
+                )
+                self.io_helper.write_data(
+                    self.line_cont_fluxes["BlackHole"],
+                    "Galaxies/BlackHoles/Lines/Continuum",
+                    galaxy_indices,
+                )
             self.io_helper.write_data(
                 self.line_obs_lams,
                 "Galaxies/Lines/ObservedWavelengths",

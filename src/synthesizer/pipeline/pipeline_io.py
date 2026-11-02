@@ -288,6 +288,12 @@ class PipelineIO:
 
                 self._took(start, "Writing metadata")
 
+        # The other rank files only hold per-galaxy data but they still need
+        # to start empty rather than writing into a stale file
+        elif self.is_parallel and not self.is_collective:
+            with h5py.File(self.filepath, "w"):
+                pass
+
         if self.is_parallel:
             self.comm.Barrier()
 
@@ -471,6 +477,7 @@ class PipelineIO:
 
         except Exception as e:
             self._print(f"Failed to write {key} - {e}")
+            raise
 
     @timed("PipelineIO.combine_rank_files")
     def combine_rank_files(self):
