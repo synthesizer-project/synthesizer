@@ -3160,6 +3160,8 @@ class TestPipelineFlushing:
         """Return a function making a fresh list of distinct galaxies."""
 
         def _make():
+            # Start each run with fresh galaxies so our reference file and
+            # each flushed file see the same inputs in the same order.
             galaxies = []
             for i in range(self.NGAL):
                 gal = copy.deepcopy(random_particle_galaxy)
@@ -3182,6 +3184,8 @@ class TestPipelineFlushing:
         """Return a function running the pipeline and returning its file."""
 
         def _run(name, before_write=None, **kwargs):
+            # Exercise a mix of per-galaxy arrays, nested results and a
+            # global cosmic SED: flushes should only empty the former.
             model = copy.deepcopy(nebular_emission_model)
             model.set_per_particle(True)
             outpath = tmp_path / name
@@ -3344,6 +3348,15 @@ def test_combine_rank_files_virtual_with_empty_rank(tmp_path):
         hdf.attrs["synthesizer_version"] = "test"
         dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", shape=(0,))
         dset.attrs["Units"] = "dimensionless"
+        # These axes have three/four bins, not two galaxy rows. Rank 0
+        # writes them even though it has no galaxies of its own.
+        for name, values in (
+            ("SFZHAxes/Log10Ages", [6.0, 7.0, 8.0]),
+            ("SFZHAxes/Metallicities", [0.01, 0.02, 0.03, 0.04]),
+            ("SFHAxes/Log10Ages", [6.0, 7.0, 8.0]),
+        ):
+            dset = hdf.create_dataset(f"Galaxies/Stars/{name}", data=values)
+            dset.attrs["Units"] = "dimensionless"
     with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
         dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", data=fluxes)
         dset.attrs["Units"] = "erg/s/cm**2"
@@ -3373,3 +3386,67 @@ def test_combine_rank_files_virtual_with_empty_rank(tmp_path):
         assert hdf["Galaxies/Lines/Flux/nebular"].attrs["Units"] == (
             "erg/s/cm**2"
         )
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Stars/SFZHAxes/Metallicities"],
+            [0.01, 0.02, 0.03, 0.04],
+        )
+        for path in ("SFZHAxes/Log10Ages", "SFHAxes/Log10Ages"):
+            dset = hdf[f"Galaxies/Stars/{path}"]
+            np.testing.assert_array_equal(dset, [6.0, 7.0, 8.0])
+            assert dset.attrs["Units"] == "dimensionless"
+            assert not dset.is_virtual
+
+
+def test_combine_rank_files_with_empty_rank(tmp_path):
+    """Physical combination needs no placeholders for missing datasets."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Rank 0 has no galaxies; rank 1 has the only dataset. Neither file
+    # needs an empty placeholder for that missing dataset.
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.create_group("Galaxies")
+        for name, values in (
+            ("SFZHAxes/Log10Ages", [6.0, 7.0, 8.0]),
+            ("SFZHAxes/Metallicities", [0.01, 0.02, 0.03, 0.04]),
+            ("SFHAxes/Log10Ages", [6.0, 7.0, 8.0]),
+        ):
+            dset = hdf.create_dataset(f"Galaxies/Stars/{name}", data=values)
+            dset.attrs["Units"] = "dimensionless"
+    with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Mass", data=[1.0, 2.0])
+
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.is_root, io.num_galaxies = 2, True, 2
+    io.start, io.end = 0, 0
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 0], [0, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    io.combine_rank_files()
+
+    with h5py.File(tmp_path / "out.hdf5") as hdf:
+        np.testing.assert_array_equal(hdf["Galaxies/Mass"], [1.0, 2.0])
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Stars/SFZHAxes/Metallicities"],
+            [0.01, 0.02, 0.03, 0.04],
+        )
+        for path in ("SFZHAxes/Log10Ages", "SFHAxes/Log10Ages"):
+            dset = hdf[f"Galaxies/Stars/{path}"]
+            np.testing.assert_array_equal(dset, [6.0, 7.0, 8.0])
+            assert dset.attrs["Units"] == "dimensionless"
+
+
+def test_memory_flush_with_no_array_outputs(nebular_emission_model, tmp_path):
+    """A memory threshold must also work when outputs have no array bytes."""
+    pipeline = Pipeline(
+        emission_model=nebular_emission_model,
+        outpath=tmp_path / "out.hdf5",
+        flush_memory=1,
+        verbose=0,
+    )
+    pipeline._n_buffered = 1
+
+    # A cosmic-only run can reach this point with nothing in the per-galaxy
+    # buffer. There is no per-galaxy size to extrapolate from in that case.
+    assert pipeline._should_flush() is False

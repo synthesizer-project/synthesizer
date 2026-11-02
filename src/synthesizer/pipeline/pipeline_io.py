@@ -30,6 +30,13 @@ from synthesizer.pipeline.pipeline_utils import (
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.operation_timers import timed
 
+# These live under Galaxies alongside the outputs, but describe the whole
+# run rather than one row per galaxy. Rank 0 writes them once.
+_SHARED_AXIS_GROUPS = (
+    "/Galaxies/Stars/SFZHAxes",
+    "/Galaxies/Stars/SFHAxes",
+)
+
 
 class PipelineIO:
     """A class for writing data to an HDF5 file.
@@ -177,6 +184,8 @@ class PipelineIO:
     @contextmanager
     def silenced(self):
         """Silence the writer's reporting within a with block."""
+        # Flushing happens between progress rows, so suppress its per-dataset
+        # chatter and restore the requested verbosity even if writing fails.
         verbose = self.verbose
         self.verbose = 0
         try:
@@ -310,11 +319,12 @@ class PipelineIO:
 
                 self._took(start, "Writing metadata")
 
-        # The other rank files only hold per-galaxy data but they still need
-        # to start empty since datasets that already exist are appended to
+        # The other ranks only hold galaxy outputs. Start each file afresh
+        # here too, including the Galaxies group: a rank with no galaxies
+        # will never create it through write_data, but combine_files needs it.
         elif self.is_parallel and not self.is_collective:
-            with h5py.File(self.filepath, "w"):
-                pass
+            with h5py.File(self.filepath, "w") as hdf:
+                hdf.create_group("Galaxies")
 
         if self.is_parallel:
             self.comm.Barrier()
@@ -352,9 +362,10 @@ class PipelineIO:
 
         # Write the dataset with the appropriate units
         with h5py.File(self.filepath, "a") as hdf:
-            # Append to a dataset created by an earlier flush
+            # A previous flush may already have created this dataset. Empty
+            # batches have nothing to add; otherwise make sure their shape,
+            # dtype and units agree before extending the first axis.
             if key in hdf:
-                # Nothing to append (e.g. nothing new since the last flush)
                 if data.size == 0:
                     return
                 dset = hdf[key]
@@ -374,7 +385,8 @@ class PipelineIO:
                 dset[nexisting:, ...] = data
                 return
 
-            # Leave the first axis unlimited so later flushes can append
+            # The first batch creates the dataset. Leave its galaxy axis
+            # unlimited so future flushes can append without replacing it.
             maxshape = (None, *data.shape[1:]) if data.ndim > 0 else None
             dset = hdf.create_dataset(
                 key,
@@ -496,9 +508,10 @@ class PipelineIO:
         try:
             start = time.perf_counter()
             # In parallel land we need to make sure we're on the same page with
-            # the structure we are writing. Per-galaxy data (indexes given) is
-            # written independently on each rank (possibly at different times
-            # when flushing) so it is unified afterwards by unify_rank_files.
+            # the structure we are writing. Per-galaxy data (indexes given)
+            # can be flushed at different times on different ranks, so don't
+            # try to synchronise here. The file combiners handle missing
+            # datasets when all ranks have finished writing.
             if self.is_parallel and indexes is None:
                 data = unify_dict_structure_across_ranks(data, self.comm)
 
@@ -535,70 +548,6 @@ class PipelineIO:
             self._print(f"Failed to write {key} - {e}")
             raise
 
-    def finalise(self):
-        """Finalise the per-galaxy data once everything has been written.
-
-        This is a collective operation.
-        """
-        # Make sure all rank files have the same per-galaxy datasets
-        self.unify_rank_files()
-        self.finalised = True
-
-    @timed("PipelineIO.unify_rank_files")
-    def unify_rank_files(self, group="Galaxies"):
-        """Ensure every rank file contains the same datasets under a group.
-
-        Per-galaxy data is written independently on each rank, so a rank may
-        be missing a dataset another rank has (e.g. it has no galaxies, or
-        none of its galaxies have a component). Any missing dataset is
-        created empty, with the same trailing shape, dtype and units as on
-        the other ranks, so the rank files can be combined.
-
-        This is a collective operation.
-
-        Args:
-            group (str): The group to unify.
-        """
-        # Nothing to do without multiple rank files
-        if not self.is_parallel or self.is_collective:
-            return
-
-        # Collect the datasets in this rank's file
-        my_dsets = {}
-
-        def _collect(name, obj):
-            if isinstance(obj, h5py.Dataset):
-                my_dsets[f"{group}/{name}"] = (
-                    obj.shape[1:],
-                    obj.dtype,
-                    obj.attrs.get("Units", "dimensionless"),
-                )
-
-        with h5py.File(self.filepath, "r") as hdf:
-            if group in hdf:
-                hdf[group].visititems(_collect)
-
-        # Combine what everyone has
-        all_dsets = {}
-        for rank_dsets in self.comm.allgather(my_dsets):
-            for path, props in rank_dsets.items():
-                all_dsets.setdefault(path, props)
-
-        # Create anything we're missing
-        missing = [path for path in all_dsets if path not in my_dsets]
-        if len(missing) == 0:
-            return
-        with h5py.File(self.filepath, "a") as hdf:
-            for path in missing:
-                trailing, dtype, units = all_dsets[path]
-                dset = hdf.create_dataset(
-                    path,
-                    shape=(0, *trailing),
-                    maxshape=(None, *trailing),
-                    dtype=dtype,
-                )
-                dset.attrs["Units"] = units
-
     @timed("PipelineIO.combine_rank_files")
     def combine_rank_files(self):
         """Combine the rank files into a single file.
@@ -626,6 +575,13 @@ class PipelineIO:
                 # in the destination file if it doesn't exist. We also need to
                 # copy the attributes.
                 if isinstance(v, h5py.Group):
+                    # Bin axes have no galaxy dimension. Copy their group
+                    # once instead of slicing each dataset by rank.
+                    if v.name in _SHARED_AXIS_GROUPS:
+                        if k not in dest:
+                            src.file.copy(v, dest, name=k)
+                        continue
+
                     # Create the group if it doesn't exist
                     if k not in dest:
                         dest.create_group(k)
@@ -735,10 +691,10 @@ class PipelineIO:
         if os.path.exists(new_path):
             os.remove(new_path)
 
-        # Discover the structure from every rank file, a rank without
-        # galaxies may be missing datasets or hold empty placeholders. We
-        # take each dataset's properties from the first rank which actually
-        # has rows for it.
+        # We can't infer the output structure from rank 0 alone: it might
+        # have no galaxies, or no examples of a particular component. Walk
+        # every rank file, preferring the first non-empty example of each
+        # dataset when deciding its shape, dtype and attributes.
         datasets_info = {}
         groups_info = {}
 
@@ -746,6 +702,10 @@ class PipelineIO:
             for k, v in group.items():
                 current_path = f"{group_path}{k}"
                 if isinstance(v, h5py.Group):
+                    # Axes are shared metadata, not virtual galaxy rows.
+                    # We'll copy them directly from rank 0 below.
+                    if current_path in _SHARED_AXIS_GROUPS:
+                        continue
                     groups_info.setdefault(current_path, dict(v.attrs))
                     gather(v, current_path + "/")
                 elif current_path not in datasets_info or (
@@ -758,6 +718,8 @@ class PipelineIO:
                         dict(v.attrs),
                     )
 
+        # Collect the groups as well as the datasets so empty nested groups
+        # survive in the virtual file too.
         for rank in range(self.size):
             with h5py.File(temp_path.replace("<rank>", str(rank)), "r") as f:
                 if "Galaxies" in f:
@@ -784,6 +746,14 @@ class PipelineIO:
                     for attr_name, attr_val in gattrs.items():
                         grp.attrs[attr_name] = attr_val
 
+                # Preserve the axes at their usual paths without interpreting
+                # their lengths as a number of galaxies. Only rank 0 writes
+                # them, so it is also the source of truth here.
+                for path in _SHARED_AXIS_GROUPS:
+                    if path in f0:
+                        hdf.require_group("Galaxies/Stars")
+                        f0.copy(path, hdf, name=path)
+
                 # Construct the virtual datasets for each dataset
                 for dpath, (shape, dtype, dattrs) in datasets_info.items():
                     final_shape = (self.num_galaxies,) + shape[1:]
@@ -803,7 +773,9 @@ class PipelineIO:
                         if local_size == 0:
                             continue
 
-                        # Ensure the local size is as expected
+                        # Normally each rank contributes exactly its galaxy
+                        # count. If it has fewer rows for this product, map
+                        # only those rows instead of inventing missing data.
                         expected_size = end_i - start_i
                         if local_size != expected_size:
                             end_i = start_i + local_size
@@ -820,8 +792,7 @@ class PipelineIO:
                                 f"{src_file!r} "
                                 f"has shape {src_shape}, but other ranks "
                                 f"have shape {shape}. Non-leading dimensions "
-                                "must "
-                                "match across rank files."
+                                "must match across rank files."
                             )
 
                         # Create a virtual source for this rank

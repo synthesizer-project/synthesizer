@@ -858,6 +858,8 @@ def clear_lists_recursive(data):
     Args:
         data (dict/list): The nested dictionary (or a list) to clear.
     """
+    # Keep the dictionary keys we discovered while processing galaxies so
+    # the next batch can reuse them; only the lists of rows need clearing.
     if isinstance(data, list):
         data.clear()
         return
@@ -880,6 +882,8 @@ def get_buffered_nbytes(data):
     Returns:
         int: The number of bytes.
     """
+    # Count array payloads rather than the entire Pipeline footprint. This
+    # is a cheap approximation of what can actually be freed by a flush.
     if isinstance(data, dict):
         return sum(get_buffered_nbytes(value) for value in data.values())
     if isinstance(data, (list, tuple)):

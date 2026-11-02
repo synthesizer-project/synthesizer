@@ -535,6 +535,9 @@ class Pipeline:
             flush_memory (float):
                 The memory (in GB) at which to flush outputs to file.
         """
+        # Don't accept a zero or negative threshold: we'd otherwise flush
+        # immediately after every galaxy, which is a surprising way to ask
+        # for no buffering. A path is only mandatory if we flush during run.
         if flush_ngalaxies is not None and (
             not isinstance(flush_ngalaxies, int) or flush_ngalaxies < 1
         ):
@@ -5051,6 +5054,8 @@ class Pipeline:
         Returns:
             bool: True if either flush threshold has been reached.
         """
+        # A normal run still calls us after unpacking each galaxy, so leave
+        # its in-memory outputs alone unless flushing was requested.
         if not self._flushing:
             return False
 
@@ -5078,6 +5083,16 @@ class Pipeline:
         )
         if nbytes >= self._flush_nbytes:
             return True
+
+        # Some operations only produce global outputs, and scalar analyses
+        # have no array bytes to count. Keep checking on each galaxy until
+        # there is something from which to estimate a per-galaxy footprint.
+        if nbytes == 0:
+            return False
+
+        # Estimate when the buffer might reach its limit rather than walking
+        # all its arrays after every galaxy. We always check again at least
+        # once after this one, even if the estimate rounds down.
         self._next_memory_check = max(
             self._n_buffered + 1,
             int(self._flush_nbytes / (nbytes / self._n_buffered)),
@@ -5571,7 +5586,9 @@ class Pipeline:
                         spec_type
                     ][f] = unyt_array(img)
 
-        # Convert the lists of extra analysis results to unyt arrays
+        # Convert the lists of extra analysis results to unyt arrays. The
+        # same step also happens before each flush; here it handles any
+        # galaxies left in memory at the end of the run.
         self._combine_analysis_results()
 
         self._took(start, "Cleaning outputs")
@@ -5660,9 +5677,6 @@ class Pipeline:
         # Write the per-galaxy data
         self._write_galaxy_outputs()
 
-        # Finalise the per-galaxy data
-        self.io_helper.finalise()
-
         # Write cosmic spectral luminosity densities
         if self._write_cosmic_lnu:
             self.io_helper.write_data(
@@ -5729,6 +5743,10 @@ class Pipeline:
                 root=0,
             )
 
+        # We have now written both the galaxy outputs and the global data.
+        # A flushed file cannot be written again: its earlier galaxies no
+        # longer live on the Pipeline for a second pass.
+        self.io_helper.finalised = True
         self._took(write_start, "Writing data")
 
         # Totally done!
@@ -5767,6 +5785,9 @@ class Pipeline:
         On each call the data is appended to anything written by earlier
         calls (i.e. earlier flushes).
         """
+        # An index marks these as per-galaxy data to the writer. In MPI each
+        # rank writes its own file, so the index also avoids collective calls
+        # during a flush (ranks need not flush at the same galaxy).
         galaxy_indices = self.io_helper.galaxy_indices
 
         # Write the SFZHs and SFHs
