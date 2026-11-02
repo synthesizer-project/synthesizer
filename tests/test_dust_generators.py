@@ -439,12 +439,49 @@ class TestCasey12Generator:
 
     def test_casey12_parameter_calculation(self):
         """Test Casey12 power-law parameter calculations."""
+        from unyt import c, h, kb
+
         c12 = Casey12()
+        temperature, alpha = 25 * K, 2.0
 
         # lam_c and n_pl are derived on demand from the parameters
-        lam_c, n_pl = c12._power_law_params(25 * K, 2.0, 2.0)
+        lam_c, n_pl = c12._power_law_params(temperature, 2.0, alpha)
         assert lam_c > 0 * um
         assert n_pl > 0
+
+        # lam_c (Casey+12, Table 1) depends on temperature and alpha only
+        expected_lam_c = (
+            0.75
+            / (
+                (26.68 + 6.246 * alpha) ** -2
+                + (0.0001905 + 0.00007243 * alpha) * 25.0
+            )
+            * um
+        )
+        np.testing.assert_allclose(lam_c.to("um").value, expected_lam_c.value)
+
+        # n_pl depends on the emissivity through the optical depth at lam_c
+        def expected_n_pl(emissivity):
+            return (
+                c12.n_bb
+                * (1 - np.exp(-((c12.lam_0 / lam_c) ** emissivity)))
+                * (c / lam_c) ** 3
+                / (np.exp(h * c / (lam_c * kb * temperature)) - 1)
+            )
+
+        n_pls = []
+        for emissivity in (1.2, 2.0, 2.5):
+            lam_c_e, n_pl_e = c12._power_law_params(
+                temperature, emissivity, alpha
+            )
+            np.testing.assert_allclose(lam_c_e.value, lam_c.value)
+            np.testing.assert_allclose(
+                n_pl_e.value, expected_n_pl(emissivity).to(n_pl_e.units).value
+            )
+            n_pls.append(n_pl_e.value)
+
+        # ...and different emissivities give different normalisations
+        assert len(set(np.round(n_pls, 12))) == 3
 
     def test_casey12_component_methods(self, dust_wavelengths):
         """Test Casey12 component calculation methods."""
@@ -518,7 +555,7 @@ class TestCasey12Generator:
             Casey12(alpha=2.0),
             Emitter(temperature=45 * K, emissivity=2.1),
         )
-        assert not np.allclose(other_alpha, reference)
+        assert not np.allclose(other_alpha, reference, atol=0)
 
     def test_casey12_model_fixed_params_override_generator(
         self, dust_wavelengths, mock_model, mock_emissions
@@ -674,7 +711,7 @@ class TestCasey12Generator:
                 ),
                 Emitter(),
             )
-            assert not np.allclose(other, from_instance)
+            assert not np.allclose(other, from_instance, atol=0)
 
 
 class TestDraineLi07Generator:
@@ -1338,30 +1375,41 @@ class _ParamEmitter:
 
 
 # Generator classes using the generator > emitter priority, with a full set
-# of parameter values and an alternative set differing in every parameter
+# of parameter values, an alternative set differing in every parameter, and
+# any fixed (non-overridable) constructor arguments
 OVERRIDE_GENERATORS = [
     pytest.param(
         Blackbody,
         {"temperature": 45 * K},
         {"temperature": 30 * K},
+        {},
         id="Blackbody",
     ),
     pytest.param(
         Greybody,
         {"temperature": 45 * K, "emissivity": 2.1},
         {"temperature": 30 * K, "emissivity": 1.2},
+        {},
         id="Greybody",
+    ),
+    pytest.param(
+        Greybody,
+        {"temperature": 45 * K, "emissivity": 2.1},
+        {"temperature": 30 * K, "emissivity": 1.2},
+        {"optically_thin": False},
+        id="Greybody-optically-thick",
     ),
     pytest.param(
         Casey12,
         {"temperature": 45 * K, "emissivity": 2.1, "alpha": 1.3},
         {"temperature": 30 * K, "emissivity": 1.2, "alpha": 2.0},
+        {},
         id="Casey12",
     ),
 ]
 
 
-@pytest.mark.parametrize("gen_cls,params,other", OVERRIDE_GENERATORS)
+@pytest.mark.parametrize("gen_cls,params,other,fixed", OVERRIDE_GENERATORS)
 class TestGeneratorOverridesEmitter:
     """Generator values override the emitter (model fixed params win)."""
 
@@ -1387,13 +1435,13 @@ class TestGeneratorOverridesEmitter:
             redshift=redshift,
         ).continuum
 
-    def test_flag_set(self, gen_cls, params, other):
+    def test_flag_set(self, gen_cls, params, other, fixed):
         """The class opts in to the override priority order."""
         assert gen_cls._generator_overrides_emitter
 
-    def test_params_default_to_none(self, gen_cls, params, other):
+    def test_params_default_to_none(self, gen_cls, params, other, fixed):
         """Overridable parameters are None unless given."""
-        gen = gen_cls()
+        gen = gen_cls(**fixed)
         for param in params:
             assert getattr(gen, param) is None
 
@@ -1403,6 +1451,7 @@ class TestGeneratorOverridesEmitter:
         gen_cls,
         params,
         other,
+        fixed,
         dust_wavelengths,
         mock_model,
         mock_emissions,
@@ -1430,37 +1479,39 @@ class TestGeneratorOverridesEmitter:
                     gen, emitter, mock_model, mock_emissions, redshift
                 )
 
-            reference = run(gen_cls(**params, **kw), _ParamEmitter())
+            reference = run(gen_cls(**fixed, **params, **kw), _ParamEmitter())
 
             # All parameters read from the emitter
-            from_emitter = run(gen_cls(**kw), _ParamEmitter(**params))
+            from_emitter = run(gen_cls(**fixed, **kw), _ParamEmitter(**params))
             np.testing.assert_allclose(from_emitter, reference, rtol=1e-12)
 
             # All parameters set on the generator override the emitter
-            overridden = run(gen_cls(**params, **kw), _ParamEmitter(**other))
+            overridden = run(
+                gen_cls(**fixed, **params, **kw), _ParamEmitter(**other)
+            )
             np.testing.assert_allclose(overridden, reference, rtol=1e-12)
 
             # Each parameter individually: set on the generator, with the
             # emitter holding a different value for it and the rest
             for param in params:
                 mixed = run(
-                    gen_cls(**{param: params[param]}, **kw),
+                    gen_cls(**fixed, **{param: params[param]}, **kw),
                     _ParamEmitter(**{**params, param: other[param]}),
                 )
                 np.testing.assert_allclose(mixed, reference, rtol=1e-12)
 
                 # ...and the comparison is sensitive to that parameter
                 changed = run(
-                    gen_cls(**kw),
+                    gen_cls(**fixed, **kw),
                     _ParamEmitter(**{**params, param: other[param]}),
                 )
-                assert not np.allclose(changed, reference), param
+                assert not np.allclose(changed, reference, atol=0), param
 
     def test_model_fixed_params_beat_generator(
-        self, gen_cls, params, other, mock_model
+        self, gen_cls, params, other, fixed, mock_model
     ):
         """EmissionModel fixed parameters still beat generator values."""
-        gen = gen_cls(**other)
+        gen = gen_cls(**fixed, **other)
         for param in params:
             mock_model.fixed_parameters = {param: params[param]}
             extracted = gen._extract_params(mock_model, _ParamEmitter(**other))
@@ -1470,20 +1521,81 @@ class TestGeneratorOverridesEmitter:
                     assert extracted[p] == other[p]
         mock_model.fixed_parameters = {}
 
-    def test_missing_params_raise(self, gen_cls, params, other, mock_model):
+    def test_missing_params_raise(
+        self, gen_cls, params, other, fixed, mock_model
+    ):
         """Params unset on the generator, model and emitter raise."""
         for param in params:
             given = {p: v for p, v in params.items() if p != param}
             with pytest.raises(exceptions.MissingAttribute, match=param):
-                gen_cls(**given)._extract_params(mock_model, _ParamEmitter())
+                gen_cls(**fixed, **given)._extract_params(
+                    mock_model, _ParamEmitter()
+                )
 
     def test_get_spectra_requires_generator_params(
-        self, gen_cls, params, other, dust_wavelengths
+        self, gen_cls, params, other, fixed, dust_wavelengths
     ):
         """Standalone get_spectra has no emitter, so params must be set."""
-        assert np.any(gen_cls(**params).get_spectra(dust_wavelengths).lnu > 0)
+        assert np.any(
+            gen_cls(**fixed, **params).get_spectra(dust_wavelengths).lnu > 0
+        )
         with pytest.raises(exceptions.MissingAttribute):
-            gen_cls().get_spectra(dust_wavelengths)
+            gen_cls(**fixed).get_spectra(dust_wavelengths)
+
+    def test_cmb_heating_uses_resolved_emissivity(
+        self,
+        gen_cls,
+        params,
+        other,
+        fixed,
+        dust_wavelengths,
+        mock_model,
+        mock_emissions,
+    ):
+        """CMB heating gets the emissivity resolved for this emitter.
+
+        Comparing outputs can't isolate this, since the emissivity also
+        enters the spectral shape, so record what apply_cmb_heating receives.
+        Blackbody always heats with an emissivity of 1.
+        """
+        expected = params.get("emissivity", 1.0)
+        for gen, emitter in (
+            # Emissivity only on the emitter
+            (
+                gen_cls(**fixed, do_cmb_heating=True),
+                _ParamEmitter(**params),
+            ),
+            # Generator value overriding a different emitter value
+            (
+                gen_cls(**fixed, **params, do_cmb_heating=True),
+                _ParamEmitter(**other),
+            ),
+        ):
+            seen = []
+            real = gen.apply_cmb_heating
+
+            def spy(temperature, emissivity, redshift, real=real, seen=seen):
+                seen.append(emissivity)
+                return real(temperature, emissivity, redshift)
+
+            gen.apply_cmb_heating = spy
+            self._spectra(
+                gen,
+                emitter,
+                dust_wavelengths,
+                mock_model,
+                mock_emissions,
+                6.0,
+            )
+            self._lines(gen, emitter, mock_model, mock_emissions, 6.0)
+            assert seen == [expected, expected]
+
+        # The emissivity changes the heating, so the check above matters
+        factors = {
+            emissivity: get_cmb_heating_factor(45 * K, emissivity, 6.0)[0]
+            for emissivity in (1.0, 1.2, 2.1)
+        }
+        assert len(set(np.round(list(factors.values()), 12))) == 3
 
 
 def test_draineli07_keeps_emitter_over_generator(mock_dust_grid, mock_model):

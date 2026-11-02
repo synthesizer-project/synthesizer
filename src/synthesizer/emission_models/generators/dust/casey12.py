@@ -490,8 +490,9 @@ class Casey12(DustEmission):
         """Generate dust emission spectra for given wavelength grid.
 
         This will return the scaling free spectra for a given wavelength grid.
-        It will not consider any emitter or model, so the temperature must
-        have been provided directly to the class.
+        It will not consider any emitter or model, so the temperature,
+        emissivity and alpha must have been provided directly to the class
+        (otherwise a MissingAttribute exception is raised).
 
         Args:
             lams (unyt_array):
