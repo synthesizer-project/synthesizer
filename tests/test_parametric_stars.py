@@ -696,6 +696,9 @@ class TestSFHCDF:
                 peak_age=1e9 * yr, alpha=0.5, beta=0.5, max_age=5e9 * yr
             ),
             SFH.DoublePowerLaw(
+                peak_age=1e9 * yr, alpha=0.1, beta=1e3, max_age=1.3e10 * yr
+            ),
+            SFH.DoublePowerLaw(
                 peak_age=1e9 * yr,
                 alpha=2,
                 beta=3,

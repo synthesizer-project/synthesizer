@@ -1103,8 +1103,7 @@ class DoublePowerLaw(Common):
         )
 
         # The integral of 1 / (u^a + u^b) from 0 with u = age / peak_age
-        def integral(age):
-            u = age / self.peak_age
+        def below_peak(u):
             if a == b:
                 return self.peak_age * u ** (1 - a) / (2 * (1 - a))
             c = (1 - a) / (b - a)
@@ -1113,6 +1112,33 @@ class DoublePowerLaw(Common):
                 * u ** (1 - a)
                 / (1 - a)
                 * hyp2f1(1, c, 1 + c, -(u ** (b - a)))
+            )
+
+        # The integral of w^(b - 2) / (1 + w^(b - a)) from 0 with w = 1 / u,
+        # i.e. the same integrand above the peak written in terms of 1 / u
+        def above_peak(w):
+            c = (b - 1) / (b - a)
+            return (
+                self.peak_age
+                * w ** (b - 1)
+                / (b - 1)
+                * hyp2f1(1, c, 1 + c, -(w ** (b - a)))
+            )
+
+        def integral(age):
+            u = np.asarray(age, dtype=np.float64) / self.peak_age
+
+            # Above the peak u^(b - a) overflows for large b - a (making
+            # hyp2f1 return 0), so integrate in 1 / u there instead. This is
+            # only possible for b > 1, but b <= 1 can't overflow anyway.
+            if b <= 1 or a == b:
+                return below_peak(u)
+            return np.where(
+                u <= 1,
+                below_peak(np.minimum(u, 1)),
+                below_peak(1.0)
+                + above_peak(1.0)
+                - above_peak(1 / np.maximum(u, 1)),
             )
 
         return integral(ages) - integral(self.min_age)
