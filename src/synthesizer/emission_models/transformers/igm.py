@@ -920,12 +920,8 @@ class Asada25(IGMBase):
         lam_rest = lam_obs / (1 + redshift)
         nu_rest = 3e18 / lam_rest  # Convert Å to Hz
 
-        tau = np.zeros(len(lam_obs))
-
-        for i, nu in enumerate(nu_rest):
-            tau[i] = N_HI * sigma_a(nu)
-
-        return tau
+        # sigma_a is elementwise so we can evaluate every frequency at once
+        return N_HI * sigma_a(nu_rest)
 
     def get_transmission(self, redshift, lam_obs):
         """Compute the IGM+CGM transmission.
