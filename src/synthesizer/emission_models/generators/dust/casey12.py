@@ -24,7 +24,6 @@ from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
 )
-from synthesizer.emission_models.utils import get_params
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.units import accepts
 from synthesizer.utils.operation_timers import timed
@@ -66,6 +65,9 @@ class Casey12(DustEmission):
     wavelength (lam_c) and normalisation (n_pl) depend on these parameters,
     so they are derived when emission is generated and never stored.
     """
+
+    # Values set on the generator override those on the emitter
+    _generator_overrides_emitter = True
 
     temperature: Optional[unyt_quantity]
     emissivity: Optional[float]
@@ -179,60 +181,6 @@ class Casey12(DustEmission):
         )
 
         return lam_c, n_pl
-
-    def _extract_params(self, model, emitter):
-        """Extract the required parameters for the generation.
-
-        Values set on the generator are fixed overrides, so the priority is:
-            1. The EmissionModel's fixed parameters
-            2. The Casey12 object itself (if not None)
-            3. The emitter object
-
-        Args:
-            model (EmissionModel):
-                The emission model generating the emission.
-            emitter (Emitter):
-                The object emitting the emission.
-
-        Returns:
-            dict
-                A dictionary containing the required parameters.
-
-        Raises:
-            MissingAttribute
-                If a parameter is None on the generator and can't be found on
-                the EmissionModel or emitter.
-        """
-        # Parameters set on the generator override the emitter, but not the
-        # model's fixed parameters
-        model_fixed = model.fixed_parameters if model is not None else {}
-        fixed = {
-            param: getattr(self, param)
-            for param in self._required_params
-            if getattr(self, param) is not None and param not in model_fixed
-        }
-
-        # Look up everything else on the model and then the emitter (never
-        # falling back to the generator, where these are None)
-        params = get_params(
-            [p for p in self._required_params if p not in fixed],
-            model,
-            None,
-            emitter,
-            preserve_units=True,
-        )
-        params.update(fixed)
-
-        # Check if any of the required parameters are missing
-        missing = [f"'{p}'" for p, value in params.items() if value is None]
-        if missing:
-            raise exceptions.MissingAttribute(
-                f"{', '.join(missing)} can't be found on the EmissionModel, "
-                f"emitter or {self.__class__.__name__} generator "
-                f"(required by {self.__class__.__name__})"
-            )
-
-        return params
 
     def __repr__(self):
         """Return a string representation of the Casey12 object."""

@@ -35,7 +35,19 @@ class Generator(ABC):
             emitter in either "spectra", "particle_spectra", "lines",
             or "particle_lines" (which is dictated by the current method
             called). If they are missing an exception will be raised.
+        _generator_overrides_emitter (bool):
+            Class-level switch for the parameter priority order. If False
+            (the default) parameters are looked up on the EmissionModel's
+            fixed parameters, then the emitter, then the generator (so
+            generator values are fallbacks). If True, any parameter set (not
+            None) on the generator is a fixed override that takes priority
+            over the emitter; only the EmissionModel's fixed parameters take
+            priority over it. Parameters left as None on the generator are
+            then read from the emitter.
     """
+
+    # Generator values are fallbacks by default (see class docstring)
+    _generator_overrides_emitter = False
 
     def __init__(self, required_params=(), required_emissions=()):
         """Initialise the Generator.
@@ -65,9 +77,10 @@ class Generator(ABC):
 
         This method must look for the required parameters in
         model.fixed_parameters, on the emitter and on the generator itself (in
-        that order of importance). If any of the required parameters are
-        missing an exception will be raised. This can be achieved by using the
-        base class's _extract_params method.
+        that order of importance, or with the generator before the emitter if
+        _generator_overrides_emitter is True). If any of the required
+        parameters are missing an exception will be raised. This can be
+        achieved by using the base class's _extract_params method.
 
         For example, a generator that generates a blackbody spectrum based on
         component temperature would need to look for the temperature parameter
@@ -102,9 +115,10 @@ class Generator(ABC):
 
         This method must look for the required parameters in
         model.fixed_parameters, on the emitter and on the generator itself (in
-        that order of importance). If any of the required parameters are
-        missing an exception will be raised. This can be achieved by using the
-        base class's _extract_params method.
+        that order of importance, or with the generator before the emitter if
+        _generator_overrides_emitter is True). If any of the required
+        parameters are missing an exception will be raised. This can be
+        achieved by using the base class's _extract_params method.
 
         For example, a generator that generates emission lines based on
         component metallicity would need to look for the metallicity parameter
@@ -136,10 +150,17 @@ class Generator(ABC):
     def _extract_params(self, model, emitter):
         """Extract the required parameters for the generation.
 
-        This method should look for the required parameters in
-        model.fixed_parameters, on the emitter and on the generator itself (in
-        that order of importance). If any of the required parameters are
-        missing an exception will be raised.
+        The lookup order depends on _generator_overrides_emitter. By default
+        the priority is:
+            1. The EmissionModel's fixed parameters
+            2. The emitter object
+            3. The generator itself
+
+        If _generator_overrides_emitter is True, values set on the generator
+        are fixed overrides, so the priority is:
+            1. The EmissionModel's fixed parameters
+            2. The generator itself (if not None)
+            3. The emitter object
 
         Args:
             model (EmissionModel):
@@ -150,26 +171,56 @@ class Generator(ABC):
         Returns:
             dict
                 A dictionary containing the required parameters.
-        """
-        # Extract the parameters (Missing parameters will return None)
-        params = get_params(
-            self._required_params,
-            model,
-            None,
-            emitter,
-            obj=self,
-            preserve_units=True,
-        )
 
-        # Check if any of the required parameters are missing
+        Raises:
+            MissingAttribute
+                If any of the required parameters can't be found.
+        """
+        if self._generator_overrides_emitter:
+            # Parameters set on the generator override the emitter, but not
+            # the model's fixed parameters
+            model_fixed = model.fixed_parameters if model is not None else {}
+            overrides = {
+                param: getattr(self, param)
+                for param in self._required_params
+                if getattr(self, param, None) is not None
+                and param not in model_fixed
+            }
+
+            # Look up everything else on the model and then the emitter
+            # (never falling back to the generator, where these are None)
+            params = get_params(
+                [p for p in self._required_params if p not in overrides],
+                model,
+                None,
+                emitter,
+                preserve_units=True,
+            )
+            params.update(overrides)
+        else:
+            # Extract the parameters (Missing parameters will return None)
+            params = get_params(
+                self._required_params,
+                model,
+                None,
+                emitter,
+                obj=self,
+                preserve_units=True,
+            )
+
+        # Check if any of the required parameters are missing (iterating
+        # _required_params keeps the reported order stable)
         missing_params = [
-            param for param, value in params.items() if value is None
+            param
+            for param in self._required_params
+            if params.get(param) is None
         ]
         if len(missing_params) > 0:
             missing_strs = [f"'{s}'" for s in missing_params]
             raise exceptions.MissingAttribute(
                 f"{', '.join(missing_strs)} can't be "
-                "found on the EmissionModel or emitter "
+                "found on the EmissionModel, emitter or "
+                f"{self.__class__.__name__} generator "
                 f"(required by {self.__class__.__name__})"
             )
 

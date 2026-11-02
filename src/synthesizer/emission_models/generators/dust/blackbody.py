@@ -34,13 +34,21 @@ class Blackbody(DustEmission):
     Attributes:
         temperature (unyt_quantity):
             The temperature of the blackbody.
+
+    temperature is optional. A value set on the generator is a fixed override
+    that takes priority over any value on the emitter (only an
+    EmissionModel's fixed_parameters take priority over it). If left as None
+    it is read from the emitter.
     """
 
-    temperature: unyt_quantity
+    # Values set on the generator override those on the emitter
+    _generator_overrides_emitter = True
+
+    temperature: Optional[unyt_quantity]
 
     def __init__(
         self,
-        temperature: unyt_quantity,
+        temperature: Optional[unyt_quantity] = None,
         do_cmb_heating: bool = False,
         intrinsic: Optional[EmissionModel] = None,
         attenuated: Optional[EmissionModel] = None,
@@ -49,8 +57,10 @@ class Blackbody(DustEmission):
         """Initialise the blackbody base class.
 
         Args:
-            temperature (unyt_array):
-                The temperature of the blackbody.
+            temperature (unyt_quantity, optional):
+                The temperature of the blackbody. If given, this overrides
+                any temperature on the emitter. If None, it is read from the
+                emitter.
             do_cmb_heating (bool):
                 Should we apply cmb heating?
             intrinsic (EmissionModel):
@@ -111,8 +121,8 @@ class Blackbody(DustEmission):
         Note that the temperature here will be extracted using this priority
         order:
             1. From the EmissionModels fixed parameters
-            2. From the emitter object
-            3. From the Blackbody object itself
+            2. From the Blackbody object itself (if not None)
+            3. From the emitter object
 
         This is handle internally using the Generator's _extract_params method.
 
@@ -296,7 +306,8 @@ class Blackbody(DustEmission):
 
         This will return the scaling free spectra for a given wavelength grid.
         It will not consider any emitter or model, so the temperature must
-        have been provided directly to the class.
+        have been provided directly to the class (otherwise a
+        MissingAttribute exception is raised).
 
         Args:
             lams (unyt_array):

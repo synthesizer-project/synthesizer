@@ -260,30 +260,37 @@ class TestBlackbodyGenerator:
         self, dust_wavelengths, mock_model, mock_emissions
     ):
         """Test temperature extraction from different sources."""
-        # Test from generator itself
-        bb = Blackbody(temperature=30 * K)
 
-        # Mock emitter with different temperature
         class MockEmitterWithTemp:
-            def __init__(self):
-                self.temperature = 50 * K  # Different from generator
+            def __init__(self, **kwargs):
                 self.model_param_cache = {}
+                self.__dict__.update(kwargs)
 
-        emitter = MockEmitterWithTemp()
+        def generate(gen, emitter):
+            return gen._generate_spectra(
+                lams=dust_wavelengths,
+                emitter=emitter,
+                model=mock_model,
+                emissions=mock_emissions,
+                redshift=0.0,
+            ).lnu
 
-        # Should use emitter temperature (higher priority)
-        sed = bb._generate_spectra(
-            lams=dust_wavelengths,
-            emitter=emitter,
-            model=mock_model,
-            emissions=mock_emissions,
-            redshift=0.0,
+        reference = generate(
+            Blackbody(temperature=50 * K), MockEmitterWithTemp()
         )
 
-        # Can't directly test which temperature was used, but spectrum should
-        # be generated
-        assert isinstance(sed, Sed)
-        assert np.any(sed.lnu > 0)
+        # With no temperature on the generator, the emitter's is used
+        from_emitter = generate(
+            Blackbody(), MockEmitterWithTemp(temperature=50 * K)
+        )
+        np.testing.assert_allclose(from_emitter, reference, rtol=1e-12)
+
+        # A temperature set on the generator overrides the emitter's
+        overridden = generate(
+            Blackbody(temperature=50 * K),
+            MockEmitterWithTemp(temperature=30 * K),
+        )
+        np.testing.assert_allclose(overridden, reference, rtol=1e-12)
 
     def test_blackbody_base_properties(self):
         """Test base properties of Blackbody generator."""
@@ -1298,35 +1305,197 @@ class TestDustGeneratorErrorHandling:
     def test_parameter_priority(
         self, dust_wavelengths, mock_model, mock_emissions
     ):
-        """Test parameter extraction priority (model > emitter > generator)."""
-        bb = Blackbody(temperature=30 * K)  # Generator temperature
+        """Test parameter extraction priority (model > generator > emitter)."""
 
-        # Test with emitter temperature (should override generator)
         class MockEmitterWithTemp:
             temperature = 40 * K
 
             def __init__(self):
                 self.model_param_cache = {}
 
-        emitter_with_temp = MockEmitterWithTemp()
+        def temperature_used():
+            return Blackbody(temperature=30 * K)._extract_params(
+                mock_model, MockEmitterWithTemp()
+            )["temperature"]
 
-        # Test with model fixed parameter (should override both)
+        # The generator temperature overrides the emitter's
+        assert temperature_used() == 30 * K
+
+        # A model fixed parameter overrides both
         mock_model.fixed_parameters = {"temperature": 50 * K}
-
-        sed = bb._generate_spectra(
-            lams=dust_wavelengths,
-            emitter=emitter_with_temp,
-            model=mock_model,
-            emissions=mock_emissions,
-            redshift=0.0,
-        )
-
-        # Should work regardless of which temperature is used
-        assert isinstance(sed, Sed)
-        assert np.any(sed.lnu > 0)
+        assert temperature_used() == 50 * K
 
         # Reset mock_model for other tests
         mock_model.fixed_parameters = {}
+
+
+class _ParamEmitter:
+    """A minimal emitter carrying arbitrary parameters."""
+
+    def __init__(self, **kwargs):
+        self.model_param_cache = {}
+        self.__dict__.update(kwargs)
+
+
+# Generator classes using the generator > emitter priority, with a full set
+# of parameter values and an alternative set differing in every parameter
+OVERRIDE_GENERATORS = [
+    pytest.param(
+        Blackbody,
+        {"temperature": 45 * K},
+        {"temperature": 30 * K},
+        id="Blackbody",
+    ),
+    pytest.param(
+        Greybody,
+        {"temperature": 45 * K, "emissivity": 2.1},
+        {"temperature": 30 * K, "emissivity": 1.2},
+        id="Greybody",
+    ),
+    pytest.param(
+        Casey12,
+        {"temperature": 45 * K, "emissivity": 2.1, "alpha": 1.3},
+        {"temperature": 30 * K, "emissivity": 1.2, "alpha": 2.0},
+        id="Casey12",
+    ),
+]
+
+
+@pytest.mark.parametrize("gen_cls,params,other", OVERRIDE_GENERATORS)
+class TestGeneratorOverridesEmitter:
+    """Generator values override the emitter (model fixed params win)."""
+
+    @staticmethod
+    def _spectra(gen, emitter, lams, model, emissions, redshift=0.0):
+        return gen._generate_spectra(
+            lams=lams,
+            emitter=emitter,
+            model=model,
+            emissions=emissions,
+            redshift=redshift,
+        ).lnu
+
+    @staticmethod
+    def _lines(gen, emitter, model, emissions, redshift=0.0):
+        return gen._generate_lines(
+            line_ids=["a", "b"],
+            line_lams=np.array([1e5, 5e5]) * angstrom,
+            emitter=emitter,
+            model=model,
+            emissions=emissions,
+            spectra=emissions,
+            redshift=redshift,
+        ).continuum
+
+    def test_flag_set(self, gen_cls, params, other):
+        """The class opts in to the override priority order."""
+        assert gen_cls._generator_overrides_emitter
+
+    def test_params_default_to_none(self, gen_cls, params, other):
+        """Overridable parameters are None unless given."""
+        gen = gen_cls()
+        for param in params:
+            assert getattr(gen, param) is None
+
+    @pytest.mark.parametrize("redshift", [0.0, 6.0])
+    def test_emitter_and_generator_priority(
+        self,
+        gen_cls,
+        params,
+        other,
+        dust_wavelengths,
+        mock_model,
+        mock_emissions,
+        redshift,
+    ):
+        """Unset params come from the emitter; set ones override it.
+
+        At nonzero redshift with CMB heating this also checks that the
+        heating uses the resolved (e.g. emitter) emissivity.
+        """
+        kw = {"do_cmb_heating": redshift > 0}
+        for generate in ("spectra", "lines"):
+
+            def run(gen, emitter, generate=generate):
+                if generate == "spectra":
+                    return self._spectra(
+                        gen,
+                        emitter,
+                        dust_wavelengths,
+                        mock_model,
+                        mock_emissions,
+                        redshift,
+                    )
+                return self._lines(
+                    gen, emitter, mock_model, mock_emissions, redshift
+                )
+
+            reference = run(gen_cls(**params, **kw), _ParamEmitter())
+
+            # All parameters read from the emitter
+            from_emitter = run(gen_cls(**kw), _ParamEmitter(**params))
+            np.testing.assert_allclose(from_emitter, reference, rtol=1e-12)
+
+            # All parameters set on the generator override the emitter
+            overridden = run(gen_cls(**params, **kw), _ParamEmitter(**other))
+            np.testing.assert_allclose(overridden, reference, rtol=1e-12)
+
+            # Each parameter individually: set on the generator, with the
+            # emitter holding a different value for it and the rest
+            for param in params:
+                mixed = run(
+                    gen_cls(**{param: params[param]}, **kw),
+                    _ParamEmitter(**{**params, param: other[param]}),
+                )
+                np.testing.assert_allclose(mixed, reference, rtol=1e-12)
+
+                # ...and the comparison is sensitive to that parameter
+                changed = run(
+                    gen_cls(**kw),
+                    _ParamEmitter(**{**params, param: other[param]}),
+                )
+                assert not np.allclose(changed, reference), param
+
+    def test_model_fixed_params_beat_generator(
+        self, gen_cls, params, other, mock_model
+    ):
+        """EmissionModel fixed parameters still beat generator values."""
+        gen = gen_cls(**other)
+        for param in params:
+            mock_model.fixed_parameters = {param: params[param]}
+            extracted = gen._extract_params(mock_model, _ParamEmitter(**other))
+            assert extracted[param] == params[param]
+            for p in params:
+                if p != param:
+                    assert extracted[p] == other[p]
+        mock_model.fixed_parameters = {}
+
+    def test_missing_params_raise(self, gen_cls, params, other, mock_model):
+        """Params unset on the generator, model and emitter raise."""
+        for param in params:
+            given = {p: v for p, v in params.items() if p != param}
+            with pytest.raises(exceptions.MissingAttribute, match=param):
+                gen_cls(**given)._extract_params(mock_model, _ParamEmitter())
+
+    def test_get_spectra_requires_generator_params(
+        self, gen_cls, params, other, dust_wavelengths
+    ):
+        """Standalone get_spectra has no emitter, so params must be set."""
+        assert np.any(gen_cls(**params).get_spectra(dust_wavelengths).lnu > 0)
+        with pytest.raises(exceptions.MissingAttribute):
+            gen_cls().get_spectra(dust_wavelengths)
+
+
+def test_draineli07_keeps_emitter_over_generator(mock_dust_grid, mock_model):
+    """DraineLi07 has non-None defaults, so it keeps emitter > generator."""
+    assert not DraineLi07._generator_overrides_emitter
+    gen = DraineLi07(grid=mock_dust_grid, dust_mass=1e6 * Msun, qpah=0.025)
+    emitter = _ParamEmitter(
+        qpah=0.04, dust_to_gas_ratio=0.02, hydrogen_mass=1e8 * Msun
+    )
+    params = gen._extract_params(mock_model, emitter)
+    assert params["qpah"] == 0.04
+    assert params["dust_to_gas_ratio"] == 0.02
 
 
 class FakeEmissionModel:
