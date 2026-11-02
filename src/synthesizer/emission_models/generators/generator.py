@@ -64,10 +64,10 @@ class Generator(ABC):
         """Generate spectra based on the emitter and model.
 
         This method must look for the required parameters in
-        model.fixed_parameters, on the emitter and on the generator itself (in
-        that order of importance). If any of the required parameters are
-        missing an exception will be raised. This can be achieved by using the
-        base class's _extract_params method.
+        model.fixed_parameters, on the generator itself (if not None) and on
+        the emitter (in that order of importance). If any of the required
+        parameters are missing an exception will be raised. This can be
+        achieved by using the base class's _extract_params method.
 
         For example, a generator that generates a blackbody spectrum based on
         component temperature would need to look for the temperature parameter
@@ -101,10 +101,10 @@ class Generator(ABC):
         """Generate lines based on the emitter and model.
 
         This method must look for the required parameters in
-        model.fixed_parameters, on the emitter and on the generator itself (in
-        that order of importance). If any of the required parameters are
-        missing an exception will be raised. This can be achieved by using the
-        base class's _extract_params method.
+        model.fixed_parameters, on the generator itself (if not None) and on
+        the emitter (in that order of importance). If any of the required
+        parameters are missing an exception will be raised. This can be
+        achieved by using the base class's _extract_params method.
 
         For example, a generator that generates emission lines based on
         component metallicity would need to look for the metallicity parameter
@@ -136,10 +136,13 @@ class Generator(ABC):
     def _extract_params(self, model, emitter):
         """Extract the required parameters for the generation.
 
-        This method should look for the required parameters in
-        model.fixed_parameters, on the emitter and on the generator itself (in
-        that order of importance). If any of the required parameters are
-        missing an exception will be raised.
+        Values set on the generator are fixed overrides, so the priority is:
+            1. The EmissionModel's fixed parameters
+            2. The generator itself (if not None)
+            3. The emitter object
+
+        Note that this differs from Transformers, where values on the
+        transformer are the final fallback after the emitter.
 
         Args:
             model (EmissionModel):
@@ -150,26 +153,45 @@ class Generator(ABC):
         Returns:
             dict
                 A dictionary containing the required parameters.
+
+        Raises:
+            MissingAttribute
+                If any of the required parameters can't be found.
         """
-        # Extract the parameters (Missing parameters will return None)
+        # Parameters set on the generator override the emitter, but not the
+        # model's fixed parameters
+        model_fixed = model.fixed_parameters if model is not None else {}
+        overrides = {
+            param: getattr(self, param)
+            for param in self._required_params
+            if getattr(self, param, None) is not None
+            and param not in model_fixed
+        }
+
+        # Look up everything else on the model and then the emitter (never
+        # falling back to the generator, where these are None)
         params = get_params(
-            self._required_params,
+            [p for p in self._required_params if p not in overrides],
             model,
             None,
             emitter,
-            obj=self,
             preserve_units=True,
         )
+        params.update(overrides)
 
-        # Check if any of the required parameters are missing
+        # Check if any of the required parameters are missing (iterating
+        # _required_params keeps the reported order stable)
         missing_params = [
-            param for param, value in params.items() if value is None
+            param
+            for param in self._required_params
+            if params.get(param) is None
         ]
         if len(missing_params) > 0:
             missing_strs = [f"'{s}'" for s in missing_params]
             raise exceptions.MissingAttribute(
                 f"{', '.join(missing_strs)} can't be "
-                "found on the EmissionModel or emitter "
+                "found on the EmissionModel, emitter or "
+                f"{self.__class__.__name__} generator "
                 f"(required by {self.__class__.__name__})"
             )
 
