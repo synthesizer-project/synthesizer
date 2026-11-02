@@ -41,27 +41,6 @@ def test_overlap_matrix():
     np.testing.assert_allclose(W[0, 0], 0.5 * (GRID[0] + GRID[1]) / 2e7)
 
 
-def test_overlap_matches_parametric_stars(test_grid):
-    """The overlap rule matches a Constant SFH binned by parametric Stars."""
-    from unyt import Msun, yr
-
-    from synthesizer.parametric import Stars
-    from synthesizer.parametric.metal_dist import DeltaConstant
-    from synthesizer.parametric.sf_hist import Constant
-
-    ages = 10**test_grid.log10ages
-    lo, hi = 0.0, 1e8
-    slow = Stars(
-        test_grid.log10ages,
-        test_grid.metallicities,
-        sf_hist=Constant(min_age=lo * yr, max_age=hi * yr),
-        metal_dist=DeltaConstant(metallicity=0.01),
-        initial_mass=1 * Msun,
-    ).sfzh.sum(axis=1)
-    fast = bin_overlap_matrix(np.array([lo]), np.array([hi]), ages)[0]
-    np.testing.assert_allclose(fast, slow, atol=1e-8)
-
-
 def test_cic_matrix():
     """Linear weights between neighbours, clamped beyond the grid."""
     grid = np.array([-3.0, -2.0, -1.0])

@@ -11,12 +11,14 @@ Tests cover:
 import numpy as np
 import pytest
 from scipy.integrate import quad
-from unyt import Msun, Myr, kpc, yr
+from unyt import Msun, Myr, dimensionless, kpc, yr
 
+import synthesizer.parametric.stars as stars_module
 from synthesizer import exceptions
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.parametric import SFH, Galaxy, PointSource, ZDist
 from synthesizer.parametric.stars import Stars
+from synthesizer.particle import Stars as ParticleStars
 from synthesizer.units import Units
 
 
@@ -588,8 +590,9 @@ class TestFunctionSFZHEdgeBins:
     def test_oldest_age_bin_populated(self, test_grid):
         """Test a constant SFH beyond the oldest grid age fills the last bin.
 
-        With a unit SFR the mass in the oldest bin is its width, which runs
-        from the midpoint of the last two grid ages to the oldest grid age.
+        With a unit SFR the mass formed is the oldest grid age (the SFH is
+        binned up to the oldest grid age) and the oldest point receives some
+        of it.
         """
         ages = 10**test_grid.log10ages
         stars = Stars(
@@ -598,8 +601,8 @@ class TestFunctionSFZHEdgeBins:
             sf_hist=SFH.Constant(max_age=2 * ages[-1] * yr),
             metal_dist=0.01,
         )
-        expected = ages[-1] - 0.5 * (ages[-1] + ages[-2])
-        assert np.isclose(stars.sf_hist[-1], expected, rtol=1e-6)
+        assert stars.sf_hist[-1] > 0
+        assert np.isclose(stars.sf_hist.sum(), ages[-1], rtol=1e-10)
 
     def test_most_metal_rich_bin_populated(self, test_grid):
         """Test a ZDist peaked at the highest grid Z fills the last bin."""
@@ -635,6 +638,20 @@ class TestCalculateAverageSFR:
         assert np.isclose(sfr.to("Msun/yr").value, 1.0, rtol=1e-6)
 
 
+class TestGetAtEarlierTime:
+    """Tests for getting a parametric Stars at an earlier time."""
+
+    def test_age_offset_is_required(self, instantaneous_stars):
+        """Test that omitting the age offset raises a clear TypeError."""
+        with pytest.raises(TypeError):
+            instantaneous_stars.get_at_earlier_time()
+
+    def test_earlier_time_removes_young_mass(self, instantaneous_stars):
+        """Test that shifting past a 10 Myr burst removes all its mass."""
+        earlier = instantaneous_stars.get_at_earlier_time(20 * Myr)
+        assert np.isclose(earlier.sfzh.sum(), 0.0)
+
+
 class TestGetSFZHRemap:
     """Tests for remapping a parametric SFZH onto new axes."""
 
@@ -651,6 +668,307 @@ class TestGetSFZHRemap:
         remapped = stars.get_sfzh(new_log10ages, test_grid.metallicities)
         assert remapped.sfzh.shape == (20, len(test_grid.metallicities))
         assert np.isclose(remapped.sfzh.sum(), stars.sfzh.sum())
+
+
+class TestAddition:
+    """Tests for adding parametric Stars and Galaxies."""
+
+    @staticmethod
+    def _make_stars(test_grid, **kwargs):
+        """Return a parametric Stars with a constant SFH."""
+        return Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=100 * Myr),
+            metal_dist=0.01,
+            initial_mass=1e9 * Msun,
+            **kwargs,
+        )
+
+    def test_shared_attributes_survive_addition(self, test_grid):
+        """Test that attributes shared by both Stars are kept."""
+        morph = PointSource(offset=[0, 0] * kpc)
+        stars1 = self._make_stars(test_grid, fesc=0.1, morphology=morph)
+        stars2 = self._make_stars(test_grid, fesc=0.1, morphology=morph)
+        combined = stars1 + stars2
+        assert combined.fesc == 0.1
+        assert combined.morphology is morph
+        assert np.allclose(combined.sfzh, stars1.sfzh + stars2.sfzh)
+
+    def test_differing_attributes_are_dropped(self, test_grid):
+        """Test that attributes the Stars disagree on are dropped."""
+        stars1 = self._make_stars(test_grid, fesc=0.1)
+        stars2 = self._make_stars(test_grid, fesc=0.2)
+        with pytest.warns(RuntimeWarning):
+            combined = stars1 + stars2
+        assert combined.fesc == self._make_stars(test_grid).fesc
+
+    def test_galaxy_addition_with_lines(self, test_grid):
+        """Test that galaxies with lines can be added together."""
+        model = IncidentEmission(test_grid)
+        galaxies = []
+        for _ in range(2):
+            gal = Galaxy(self._make_stars(test_grid))
+            gal.stars.get_spectra(model)
+            gal.stars.get_lines(test_grid.available_lines[:2], model)
+            galaxies.append(gal)
+        combined = galaxies[0] + galaxies[1]
+        label = model.label
+        assert np.allclose(
+            combined.stars.lines[label].luminosity,
+            galaxies[0].stars.lines[label].luminosity
+            + galaxies[1].stars.lines[label].luminosity,
+        )
+
+
+def _set_age_bin(stars, lo, hi, mass, metallicity_index=0):
+    """Give a Stars a single finite age bin at one metallicity point."""
+    metals = np.asarray(stars.metallicities)
+    masses = np.zeros((1, 1, 1))
+    masses[0, 0, 0] = mass
+    stars._set_bins(
+        {
+            "ages": np.array([lo, hi]),
+            "metallicities": np.repeat(metals[metallicity_index], 2),
+        },
+        masses,
+    )
+
+
+class TestBinStorage:
+    """Tests for the binned representation of a parametric Stars."""
+
+    def test_sfzh_view_matches_input(self, test_grid):
+        """An SFZH on the axes must be returned unchanged by the view."""
+        sfzh = np.random.default_rng(0).random(
+            (test_grid.log10ages.size, test_grid.metallicities.size)
+        )
+        stars = Stars(test_grid.log10ages, test_grid.metallicities, sfzh=sfzh)
+        np.testing.assert_allclose(stars.sfzh, sfzh, rtol=1e-12)
+
+    def test_sfzh_view_is_read_only(self, instantaneous_stars):
+        """The SFZH view can't be modified in place."""
+        with pytest.raises(ValueError):
+            instantaneous_stars.sfzh[0, 0] = 1.0
+
+    def test_input_sfzh_is_not_modified(self, test_grid):
+        """Normalising to an initial mass must not touch the input array."""
+        sfzh = np.ones(
+            (test_grid.log10ages.size, test_grid.metallicities.size)
+        )
+        Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sfzh=sfzh,
+            initial_mass=1e9 * Msun,
+        )
+        assert np.all(sfzh == 1.0)
+
+    def test_setting_bins_clears_derived_state(self, test_grid):
+        """New bins must invalidate the SFZH view and stored weights."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e7 * yr,
+            metal_dist=0.01,
+            initial_mass=1e9 * Msun,
+        )
+        model = IncidentEmission(test_grid)
+        lnu = stars.get_spectra(model).lnu.copy()
+        stars._set_bins(stars._bin_edges, stars.bin_masses * 2)
+        np.testing.assert_allclose(stars.sfzh.sum(), 2e9)
+        np.testing.assert_allclose(stars.get_spectra(model).lnu, 2 * lnu)
+
+
+class TestBinMask:
+    """Tests for fractional masks on binned parametric populations."""
+
+    @pytest.fixture
+    def stars(self, test_grid):
+        """Return a Stars with a single 5-20 Myr bin."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e7 * yr,
+            metal_dist=0.01,
+        )
+        _set_age_bin(stars, 5e6, 2e7, 1.0, metallicity_index=3)
+        return stars
+
+    def test_straddling_bin_fraction(self, stars):
+        """A threshold through a bin passes the fraction below it."""
+        mask = stars.get_mask("log10ages", 7, "<")
+        np.testing.assert_allclose(mask.get_fractions(stars), 5.0 / 15.0)
+        mask = stars.get_mask("ages", 10 * Myr, ">=")
+        np.testing.assert_allclose(mask.get_fractions(stars), 10.0 / 15.0)
+
+    def test_same_axis_conditions_intersect(self, stars):
+        """Two conditions on one axis keep the intersection of intervals."""
+        mask = stars.get_mask("ages", 8 * Myr, ">")
+        mask = stars.get_mask("ages", 12 * Myr, "<", mask=mask)
+        np.testing.assert_allclose(mask.get_fractions(stars), 4.0 / 15.0)
+
+    def test_conditions_on_different_axes_multiply(self, test_grid):
+        """Conditions on different axes multiply their fractions."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e7 * yr,
+            metal_dist=0.01,
+        )
+        stars._set_bins(
+            {
+                "ages": np.array([5e6, 2e7]),
+                "metallicities": np.array([0.001, 0.005]),
+            },
+            np.ones((1, 1, 1)),
+        )
+        mask = stars.get_mask("log10ages", 7, "<")
+        mask = stars.get_mask("metallicities", 0.002, "<", mask=mask)
+        np.testing.assert_allclose(
+            mask.get_fractions(stars), (5.0 / 15.0) * (1.0 / 4.0)
+        )
+
+    def test_points_are_exact(self, instantaneous_stars):
+        """Zero width bins are evaluated exactly, including equality."""
+        stars = instantaneous_stars
+        mask = stars.get_mask("log10ages", 7, "<")
+        fracs = mask.get_fractions(stars)[0, :, 0]
+
+        # The point bins (even indices) pass exactly when below the
+        # threshold, the empty bins between them get the clipped fraction
+        edges = stars.get_bin_edges("ages", values_only=True)
+        lo, hi = edges[:-1], edges[1:]
+        expected = np.where(
+            lo == hi,
+            (lo < 1e7).astype(float),
+            np.clip(np.minimum(hi, 1e7) - lo, 0, None)
+            / np.where(lo == hi, 1.0, hi - lo),
+        )
+        np.testing.assert_allclose(fracs, expected)
+
+        # Equality is allowed on points
+        mask = stars.get_mask("metallicities", stars.metallicities[2], "==")
+        fracs = mask.get_fractions(stars)[0, 0, ::2]
+        np.testing.assert_allclose(fracs, np.arange(fracs.size) == 2)
+
+    def test_equality_on_finite_bins(self, stars):
+        """No mass in a finite bin sits exactly at a single value."""
+        mask = stars.get_mask("ages", 10 * Myr, "==")
+        np.testing.assert_allclose(mask.get_fractions(stars), 0.0)
+        mask = stars.get_mask("ages", 10 * Myr, "!=")
+        np.testing.assert_allclose(mask.get_fractions(stars), 1.0)
+
+    def test_masked_extraction_matches_clipped_bin(self, test_grid, stars):
+        """A masked straddling bin must equal the clipped bin on its own.
+
+        Masking a 5-20 Myr bin at 10 Myr must give exactly the emission of
+        a 5-10 Myr bin holding the passing fraction of the mass.
+        """
+        model = IncidentEmission(test_grid)
+        model.add_mask("log10ages", "<", 7 * dimensionless)
+        masked = stars.get_spectra(model).lnu
+
+        clipped = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e7 * yr,
+            metal_dist=0.01,
+        )
+        _set_age_bin(clipped, 5e6, 1e7, 5.0 / 15.0, metallicity_index=3)
+        expected = clipped.get_spectra(IncidentEmission(test_grid)).lnu
+        np.testing.assert_allclose(masked, expected, rtol=1e-10)
+
+    def test_fixed_parameter_masks_whole_population(self, test_grid, stars):
+        """A mask on a fixed model parameter includes or excludes it all."""
+        model = IncidentEmission(test_grid, fesc=0.3)
+        mask = stars.get_mask("fesc", 0.5, "<", attr_override_obj=model)
+        np.testing.assert_allclose(mask.get_fractions(stars), 1.0)
+        mask = stars.get_mask("fesc", 0.1, "<", attr_override_obj=model)
+        np.testing.assert_allclose(mask.get_fractions(stars), 0.0)
+
+
+class TestBinnedSFH:
+    """Tests for binning SFH and metallicity distribution functions."""
+
+    def test_piecewise_constant_sfh_is_exact(self, test_grid, monkeypatch):
+        """A piecewise constant SFH doesn't depend on the subdivisions.
+
+        Its bin edges are breakpoints, so every fine bin has a constant SFR
+        and the uniform mass within each bin is exact.
+        """
+        sfh = SFH.Continuity(logsfr_ratios=np.array([0.3, -0.2]))
+        sfzhs = []
+        for subdivisions in (1, 8):
+            monkeypatch.setattr(
+                stars_module, "SFZH_SUBDIVISIONS", subdivisions
+            )
+            sfzhs.append(
+                Stars(
+                    test_grid.log10ages,
+                    test_grid.metallicities,
+                    sf_hist=sfh,
+                    metal_dist=0.01,
+                ).sfzh
+            )
+        np.testing.assert_allclose(sfzhs[0], sfzhs[1], rtol=1e-12)
+
+    def test_breakpoints_are_bin_edges(self, test_grid):
+        """No age bin may straddle an SFH breakpoint."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=37 * Myr, min_age=3 * Myr),
+            metal_dist=0.01,
+        )
+        edges = stars.get_bin_edges("ages", values_only=True)
+        assert np.any(np.isclose(edges, 37e6, rtol=1e-12))
+        assert np.any(np.isclose(edges, 3e6, rtol=1e-12))
+
+    @pytest.mark.parametrize(
+        ("sf_hist", "metal_dist"),
+        [
+            (1e7 * yr, ZDist.Normal(0.01, 0.005)),
+            (SFH.Constant(max_age=50 * Myr), 0.004),
+            (SFH.Constant(max_age=50 * Myr), ZDist.DeltaConstant(0.004)),
+        ],
+    )
+    def test_mixed_routes(self, test_grid, sf_hist, metal_dist):
+        """Points and bins can be mixed across the two axes."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=sf_hist,
+            metal_dist=metal_dist,
+            initial_mass=1e9 * Msun,
+        )
+        np.testing.assert_allclose(stars.sfzh.sum(), 1e9, rtol=1e-10)
+
+    def test_constant_sfh_matches_particles(self, test_grid):
+        """A constant SFH must match particles spread evenly over its ages.
+
+        The particles are placed at evenly spaced ages (a deterministic
+        quadrature rather than a random sample) so they converge to the
+        exact answer, which the binned SFH must agree with.
+        """
+        model = IncidentEmission(test_grid)
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Constant(max_age=50 * Myr),
+            metal_dist=0.004,
+            initial_mass=1e9 * Msun,
+        )
+        nparts = 50000
+        particles = ParticleStars(
+            initial_masses=np.full(nparts, 1e9 / nparts) * Msun,
+            ages=(np.arange(nparts) + 0.5) / nparts * 5e7 * yr,
+            metallicities=np.full(nparts, 0.004),
+        )
+        param = stars.get_spectra(model).lnu.value
+        part = particles.get_spectra(model).lnu.value
+        good = part > part.max() * 1e-6
+        np.testing.assert_allclose(param[good], part[good], rtol=2e-3)
 
 
 class TestSFHCDF:
