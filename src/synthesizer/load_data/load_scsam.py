@@ -145,10 +145,10 @@ def load_SCSAM(fname, method, grid, verbose=False, dtype=np.float64):
             galaxy = ParticleGalaxy(stars=stars, redshift=redshift)
         else:
             if sfh.any():
-                stars = ParametricStars(
+                stars = ParametricStars.from_sfzh(
                     grid.log10ages,
                     grid.metallicities,
-                    sfzh=overlap.T @ sfh @ zw,
+                    overlap.T @ sfh @ zw,
                 )
             galaxy = ParametricGalaxy(stars=stars, redshift=redshift)
 
