@@ -974,6 +974,36 @@ class TestPipelineOperations:
             "Line wavelengths not calculated"
         )
 
+    def test_observed_line_wavelengths_per_galaxy(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_particle_galaxy,
+        tmp_path,
+    ):
+        """Observed line wavelengths are written for each galaxy."""
+        galaxies = []
+        for redshift in (1.0, 3.0):
+            gal = copy.deepcopy(random_particle_galaxy)
+            gal.redshift = redshift
+            for comp in (gal.stars, gal.gas, gal.black_holes):
+                comp.redshift = redshift
+            galaxies.append(gal)
+
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_galaxies(galaxies)
+        pipeline.get_observed_lines(
+            line_ids=test_grid.available_lines,
+            cosmo=cosmo,
+        )
+        output = tmp_path / "observed_lines.hdf5"
+        pipeline.write(output)
+
+        with h5py.File(output) as hdf:
+            obslams = hdf["Galaxies/Lines/ObservedWavelengths"][...]
+        assert obslams.shape == (2, len(test_grid.available_lines))
+        np.testing.assert_allclose(obslams[1] / obslams[0], 4.0 / 2.0)
+
     def test_run_pipeline_lines_luminosity_subset(
         self,
         test_grid,
