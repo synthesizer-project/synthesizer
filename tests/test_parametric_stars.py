@@ -733,6 +733,48 @@ class TestSFHCDF:
             atol=1e-8 * np.abs(expected).max(),
         )
 
+    def test_inverted_constant_forms_no_mass(self):
+        """A Constant SFH with min_age > max_age forms no mass."""
+        sfh = SFH.Constant(max_age=10 * yr, min_age=20 * yr)
+        np.testing.assert_array_equal(
+            sfh.get_cdf(np.array([0.0, 15.0, 30.0])), 0.0
+        )
+
+    def test_empty_combined_sfh_forms_no_mass(self):
+        """A CombinedSFH without components forms no mass."""
+        edges = np.array([0, 1e7, 1e9, 1e10])
+        np.testing.assert_array_equal(
+            SFH.CombinedSFH([]).get_bin_masses(edges), 0.0
+        )
+
+    @pytest.mark.parametrize(
+        ("sf_hist", "metal_dist"),
+        [
+            # A Gaussian SFH peaking far beyond the oldest age
+            (
+                SFH.Gaussian(
+                    peak_age=1e13 * yr, sigma=1e8 * yr, max_age=1e14 * yr
+                ),
+                0.01,
+            ),
+            # A Normal ZDist centred far above the highest metallicity
+            (
+                SFH.Constant(max_age=100 * Myr),
+                ZDist.Normal(mean=0.09, sigma=0.005),
+            ),
+        ],
+    )
+    def test_no_mass_on_the_axes_raises(self, test_grid, sf_hist, metal_dist):
+        """Normalising an SFZH with no mass must raise, not give NaN."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sf_hist=sf_hist,
+                metal_dist=metal_dist,
+                initial_mass=1e10 * Msun,
+            )
+
     def test_divergent_double_power_law_raises(self):
         """A DoublePowerLaw with infinite mass at age zero must raise."""
         with pytest.raises(exceptions.InconsistentArguments):

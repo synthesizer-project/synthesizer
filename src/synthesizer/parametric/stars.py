@@ -316,6 +316,18 @@ class Stars(StarsComponent):
                 "Please check the input parameters."
             )
 
+        # We can't normalise an SFZH with no mass on the grid (e.g. an SFH
+        # or ZDist peaking far outside the axes), doing so would silently
+        # make it NaN
+        if (
+            self.surviving_mass is not None or self.initial_mass is not None
+        ) and np.sum(self.sfzh) <= 0:
+            raise exceptions.InconsistentArguments(
+                "The SFH and metallicity distribution put no mass on the "
+                "age and metallicity axes, so the SFZH can't be normalised. "
+                "Please check the input parameters."
+            )
+
         # Normalise the SFZH grid if needs be, and calculate the initial mass
         # if we have been given a surviving mass. If we have been given an
         # initial mass we just need to rescale the SFZH grid to obey this

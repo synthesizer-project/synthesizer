@@ -504,7 +504,11 @@ class Constant(Common):
                 The mass formed up to each age.
         """
         ages = np.asarray(ages, dtype=np.float64)
-        return np.clip(ages, self.min_age, self.max_age) - self.min_age
+
+        # Clamp at zero so inverted bounds (min_age > max_age) form no mass
+        return np.maximum(
+            np.clip(ages, self.min_age, self.max_age) - self.min_age, 0.0
+        )
 
 
 class Gaussian(Common):
@@ -2395,6 +2399,10 @@ class CombinedSFH(Common):
             np.ndarray of float:
                 The mass formed up to each age.
         """
+        # Without any components no mass is formed
+        if len(self.sfhs) == 0:
+            return np.zeros_like(np.asarray(ages, dtype=np.float64))
+
         return np.sum(
             [
                 model.get_cdf(ages) * weight
