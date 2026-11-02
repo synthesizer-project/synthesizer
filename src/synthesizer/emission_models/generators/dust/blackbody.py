@@ -34,13 +34,6 @@ class Blackbody(DustEmission):
     Attributes:
         temperature (unyt_quantity):
             The temperature of the blackbody.
-        temperature_z (unyt_quantity):
-            The temperature of the blackbody at redshift z, accounting for
-            CMB heating. Stores the last used temperature (important when
-            used with emitter temperatures).
-        cmb_factor (float):
-            The multiplicative factor to account for CMB heating at
-            high-redshift.
     """
 
     temperature: unyt_quantity
