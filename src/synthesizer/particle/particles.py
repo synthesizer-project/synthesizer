@@ -342,7 +342,9 @@ class Particles:
                 )
 
         # Ensure the distances are in the right units
-        d = convert_in_place(los_dists, self.smoothing_lengths.units).ndview
+        d = convert_in_place(
+            los_dists, get_quantity_unit(self, "smoothing_lengths")
+        ).ndview
 
         # Calculate and return the projected angular smoothing lengths
         projected_smoothing_lengths = np.ascontiguousarray(

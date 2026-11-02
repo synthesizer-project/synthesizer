@@ -471,8 +471,9 @@ class BlackholesComponent(Component):
         # If inclination, calculate the cosine of the inclination, required by
         # some models (e.g. AGNSED).
         if self.inclination is not None:
-            self.inclination.convert_to_units("radian")
-            self.cosine_inclination = np.cos(self.inclination.ndview)
+            self.cosine_inclination = np.cos(
+                self.inclination.to_value("radian")
+            )
 
     def calculate_accretion_rate(self):
         """Calculate the black hole accretion rate from the eddington ratio.

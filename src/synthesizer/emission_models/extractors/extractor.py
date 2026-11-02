@@ -182,7 +182,7 @@ class Extractor(ABC):
             # Convert the units if necessary
             if isinstance(value, (unyt_array, unyt_quantity)):
                 if log or units == "dimensionless":
-                    value = value.ndview
+                    value = np.ascontiguousarray(value.ndview)
                 # Grid axis units are stored as strings, and a Unit never
                 # compares equal to a str, so coerce before comparing or every
                 # attribute looks mismatched and gets copied.

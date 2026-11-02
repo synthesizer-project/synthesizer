@@ -1228,8 +1228,8 @@ class Sed:
         )
 
         # Set the observed wavelength and frequency
-        self._obslam = self._lam
-        self._obsnu = self._nu
+        self.obslam = self.lam
+        self.obsnu = self.nu
 
         # Get the conversion factor from luminosity to flux at 10 pc
         conversion = get_attr_unit_conversion(
@@ -1332,9 +1332,19 @@ class Sed:
         # The observer frame arrays are at z_obs (e.g. for resampling)
         self.redshift = z_obs
 
-        if self._obslam is None or self._obslam.shape != self._lam.shape:
+        # NOTE: get_fnu0 shares the rest frame arrays, which compute_fnu
+        # would overwrite, so those need fresh buffers too.
+        if (
+            self._obslam is None
+            or self._obslam.shape != self._lam.shape
+            or np.shares_memory(self._obslam, self._lam)
+        ):
             self._obslam = np.empty_like(self._lam)
-        if self._obsnu is None or self._obsnu.shape != self._nu.shape:
+        if (
+            self._obsnu is None
+            or self._obsnu.shape != self._nu.shape
+            or np.shares_memory(self._obsnu, self._nu)
+        ):
             self._obsnu = np.empty_like(self._nu)
 
         # Calculate the observed wavelength and frequency

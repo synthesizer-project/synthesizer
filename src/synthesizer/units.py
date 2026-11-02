@@ -634,13 +634,32 @@ def deepcopy_with_shared_units(self, memo):
     cls = type(self)
     new = cls.__new__(cls)
     memo[id(self)] = new
+
+    # Copied buffers keyed by their layout, so attributes viewing the same
+    # buffer (e.g. PhotometryCollection's _photometry_data and photo_fnu)
+    # keep sharing one copy rather than being split in two
+    buffers = {}
+
     for key, value in self.__dict__.items():
         # Only plain unyt types, subclasses (e.g. yt's) get their own copy
         if (
-            type(value) in (unyt_array, unyt_quantity)
+            type(value) in (unyt_array, unyt_quantity, numpy.ndarray)
+            and value.dtype != object
             and id(value) not in memo
         ):
-            copied = _attach_unit(value.ndview.copy(order="K"), value.units)
+            data = value.view(numpy.ndarray)
+            layout = (
+                data.__array_interface__["data"][0],
+                data.shape,
+                data.strides,
+                data.dtype.str,
+            )
+            if layout not in buffers:
+                buffers[layout] = data.copy(order="K")
+            if type(value) is numpy.ndarray:
+                copied = buffers[layout]
+            else:
+                copied = _attach_unit(buffers[layout], value.units)
             memo[id(value)] = copied
             new.__dict__[key] = copied
         else:
