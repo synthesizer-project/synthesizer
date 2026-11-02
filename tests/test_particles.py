@@ -276,6 +276,9 @@ class TestParticlesProjection:
         sml = sp.get_projected_angular_smoothing_lengths(los_dists=los)
         assert sml.shape == (2,)
         assert sml.units == rad
+        expected = np.arctan2(np.array([0.5, 1.0]), np.array([10.0, 20.0]))
+        assert np.all(expected > 0)
+        np.testing.assert_allclose(sml.to_value(rad), expected)
 
     def test_get_projected_angular_imaging_props(self, simple_parts):
         """Combine coords and smoothing lengths."""

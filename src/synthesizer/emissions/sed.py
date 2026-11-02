@@ -171,6 +171,21 @@ class Sed:
         self.photo_lnu = None
         self.photo_fnu = None
 
+    def __setattr__(self, name, value):
+        """Set an attribute, dropping cached frequencies with the wavelengths.
+
+        Args:
+            name (str):
+                The name of the attribute.
+            value (Any):
+                The value to set.
+        """
+        # The frequencies are computed lazily from the wavelengths (see
+        # __getattr__), so new wavelengths make them stale
+        if name in ("lam", "_lam"):
+            self.__dict__.pop("_nu", None)
+        object.__setattr__(self, name, value)
+
     def __getattr__(self, name):
         """Compute the frequencies the first time they are needed.
 
@@ -198,8 +213,12 @@ class Sed:
                     ).value
                 )
 
-            # Divide in the wavelength dtype; unyt would promote to float64.
-            nu = np.empty_like(self._lam)
+            # Divide in the wavelength dtype (at least float32 for integer
+            # wavelengths); unyt would promote to float64.
+            nu = np.empty(
+                self._lam.shape,
+                dtype=np.result_type(self._lam.dtype, np.float32),
+            )
             np.divide(Sed._c_lam_nu, self._lam, out=nu)
             self._nu = nu
             return getattr(self, name)
