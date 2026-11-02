@@ -612,37 +612,51 @@ class PipelineIO:
         if os.path.exists(new_path):
             os.remove(new_path)
 
-        # Discover the structure from every rank file, a rank without
-        # galaxies may be missing datasets or hold empty placeholders. We
-        # take each dataset's properties from the first rank which actually
-        # has rows for it.
-        datasets_info = {}
-        groups_info = {}
-
-        def gather(group, group_path="/"):
-            for k, v in group.items():
-                current_path = f"{group_path}{k}"
-                if isinstance(v, h5py.Group):
-                    groups_info.setdefault(current_path, dict(v.attrs))
-                    gather(v, current_path + "/")
-                elif current_path not in datasets_info or (
-                    datasets_info[current_path][0][0] == 0 and v.shape[0] > 0
-                ):
-                    # Record dataset shape, dtype, and attributes
-                    datasets_info[current_path] = (
-                        v.shape,
-                        v.dtype,
-                        dict(v.attrs),
-                    )
-
-        for rank in range(self.size):
-            with h5py.File(temp_path.replace("<rank>", str(rank)), "r") as f:
-                if "Galaxies" in f:
-                    gather(f["Galaxies"], "/Galaxies/")
-
-        # Open the first rank file (rank 0 file) for the root metadata
+        # Open the first rank file (rank 0 file) to discover the structure
         first_file_path = temp_path.replace("<rank>", "0")
         with h5py.File(first_file_path, "r") as f0:
+            # Gather dataset information (for virtual datasets). A rank
+            # without galaxies may hold empty placeholders so we take each
+            # dataset's information from the first rank with rows for it
+            datasets_info = {}
+
+            def gather_datasets(group, group_path="/"):
+                for k, v in group.items():
+                    current_path = f"{group_path}{k}"
+                    if isinstance(v, h5py.Group):
+                        gather_datasets(v, current_path + "/")
+                    elif current_path not in datasets_info or (
+                        datasets_info[current_path][0][0] == 0
+                        and v.shape[0] > 0
+                    ):
+                        # Record dataset shape, dtype, and attributes
+                        datasets_info[current_path] = (
+                            v.shape,
+                            v.dtype,
+                            dict(v.attrs),
+                        )
+
+            # Gather group structure (to replicate in the virtual file)
+            groups_info = {}
+
+            def gather_groups(group, group_path="/"):
+                for k, v in group.items():
+                    current_path = f"{group_path}{k}"
+                    if isinstance(v, h5py.Group):
+                        groups_info.setdefault(current_path, dict(v.attrs))
+                        gather_groups(v, current_path + "/")
+
+            gather_datasets(f0["Galaxies"], "/Galaxies/")
+            gather_groups(f0["Galaxies"], "/Galaxies/")
+
+            # A rank without galaxies may be missing datasets entirely, so
+            # also gather the structure from the other rank files
+            for rank in range(1, self.size):
+                src_file = temp_path.replace("<rank>", str(rank))
+                with h5py.File(src_file, "r") as rank_f:
+                    gather_datasets(rank_f["Galaxies"], "/Galaxies/")
+                    gather_groups(rank_f["Galaxies"], "/Galaxies/")
+
             # Create the virtual file
             with h5py.File(new_path, "w") as hdf:
                 for attr in f0.attrs:
@@ -657,7 +671,7 @@ class PipelineIO:
 
                 # Create empty group structure
                 for gpath, gattrs in groups_info.items():
-                    grp = hdf.require_group(gpath)
+                    grp = hdf.create_group(gpath)
                     for attr_name, attr_val in gattrs.items():
                         grp.attrs[attr_name] = attr_val
 
@@ -670,13 +684,15 @@ class PipelineIO:
                     for rank, (start_i, end_i) in enumerate(zip(starts, ends)):
                         src_file = temp_path.replace("<rank>", str(rank))
                         with h5py.File(src_file, "r") as rank_f:
-                            # Nothing to map from a rank without this
-                            # dataset or without any rows for it
+                            # Nothing to map from a rank without this dataset
                             if dpath not in rank_f:
                                 continue
+
                             src_dset = rank_f[dpath]
                             src_shape = src_dset.shape
                             local_size = src_dset.shape[0]
+
+                        # Nothing to map from a rank without any rows
                         if local_size == 0:
                             continue
 
@@ -695,9 +711,8 @@ class PipelineIO:
                                 "Cannot create virtual dataset mapping for "
                                 f"{dpath!r}: rank {rank} dataset in "
                                 f"{src_file!r} "
-                                f"has shape {src_shape}, but other ranks "
-                                f"have shape {shape}. Non-leading dimensions "
-                                "must "
+                                f"has shape {src_shape}, but other ranks have "
+                                f"shape {shape}. Non-leading dimensions must "
                                 "match across rank files."
                             )
 

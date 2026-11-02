@@ -982,6 +982,7 @@ class TestPipelineOperations:
         tmp_path,
     ):
         """Observed line wavelengths are written for each galaxy."""
+        # Make two copies of the galaxy at different redshifts
         galaxies = []
         for redshift in (1.0, 3.0):
             gal = copy.deepcopy(random_particle_galaxy)
@@ -990,6 +991,7 @@ class TestPipelineOperations:
                 comp.redshift = redshift
             galaxies.append(gal)
 
+        # Compute and write their observed lines
         pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
         pipeline.add_galaxies(galaxies)
         pipeline.get_observed_lines(
@@ -999,6 +1001,7 @@ class TestPipelineOperations:
         output = tmp_path / "observed_lines.hdf5"
         pipeline.write(output)
 
+        # Each galaxy should have its own wavelengths, scaled by (1 + z)
         with h5py.File(output) as hdf:
             obslams = hdf["Galaxies/Lines/ObservedWavelengths"][...]
         assert obslams.shape == (2, len(test_grid.available_lines))
@@ -3102,6 +3105,7 @@ def test_combine_rank_files_virtual_with_empty_rank(tmp_path):
 
     io.combine_rank_files_virtual()
 
+    # Both datasets should come entirely from rank 1
     with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
         np.testing.assert_array_equal(
             hdf["Galaxies/Lines/ObservedWavelengths"][...], obslams
