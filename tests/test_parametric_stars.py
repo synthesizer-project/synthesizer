@@ -706,6 +706,24 @@ class TestSFHCDF:
                 max_age=5e9 * yr,
             ),
             SFH.Continuity(logsfr_ratios=np.array([0.3, -0.2])),
+            # tau much larger than the ages, where closed forms can cancel
+            SFH.Exponential(tau=1e20 * yr, max_age=1e10 * yr),
+            SFH.DelayedExponential(tau=1e15 * yr, max_age=1e10 * yr),
+            # A steep SFR down to a small min_age
+            SFH.DoublePowerLaw(
+                peak_age=1e9 * yr,
+                alpha=2,
+                beta=3,
+                min_age=1 * yr,
+                max_age=1e10 * yr,
+            ),
+            # beta close to 1
+            SFH.DoublePowerLaw(
+                peak_age=1e9 * yr,
+                alpha=0.5,
+                beta=1 + 1e-10,
+                max_age=1e10 * yr,
+            ),
         ],
     )
     def test_cdf_matches_quad(self, sfh):
@@ -713,17 +731,19 @@ class TestSFHCDF:
         edges = np.array([0, 5e6, 3e7, 2e8, 9e8, 1.5e9, 4e9, 6e9, 1e10])
         expected = []
         for lo, hi in zip(edges[:-1], edges[1:]):
+            # Split each bin at its breakpoints and into log spaced pieces
+            # from the youngest of them, so quad can follow steep SFRs (e.g.
+            # a power law down to a small min_age)
             points = [p for p in sfh._get_breakpoints() if lo < p < hi]
+            start = min([p for p in [lo, *points] if p > 0], default=hi * 1e-8)
+            pieces = np.unique([lo, hi, *points, *np.geomspace(start, hi, 50)])
             expected.append(
-                quad(
-                    sfh.get_sfr,
-                    lo,
-                    hi,
-                    limit=2000,
-                    points=points or None,
-                    epsabs=0,
-                    epsrel=1e-12,
-                )[0]
+                sum(
+                    quad(
+                        sfh.get_sfr, a, b, limit=2000, epsabs=0, epsrel=1e-12
+                    )[0]
+                    for a, b in zip(pieces[:-1], pieces[1:])
+                )
             )
         expected = np.array(expected)
         np.testing.assert_allclose(

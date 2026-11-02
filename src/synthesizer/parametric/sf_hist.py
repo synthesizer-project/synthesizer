@@ -242,13 +242,19 @@ class Common:
         if top <= 0.0:
             return np.zeros_like(ages)
 
+        # The log panels start 8 decades below the top, or at the smallest
+        # positive breakpoint if that's younger (e.g. a small min_age, where
+        # a steep SFR would otherwise sit inside a single panel)
+        positive = breakpoints[breakpoints > 0.0]
+        bottom = min(
+            np.log10(top) - 8, np.log10(np.min(positive, initial=top))
+        )
+
         # Build the panel edges
         edges = np.concatenate(
             (
                 [0.0],
-                np.logspace(
-                    np.log10(top) - 8, np.log10(top), NUMERICAL_CDF_PANELS
-                ),
+                np.logspace(bottom, np.log10(top), NUMERICAL_CDF_PANELS),
                 breakpoints,
                 ages.ravel(),
             )
@@ -706,11 +712,14 @@ class Exponential(Common):
             np.asarray(ages, dtype=np.float64), self.min_age, self.max_age
         )
 
-        # The integral of exp(-t / tau) with t = max_age - age
-        def integral(age):
-            return self.tau * np.exp(-(self.max_age - age) / self.tau)
-
-        return integral(ages) - integral(self.min_age)
+        # The integral of exp(-t / tau) with t = max_age - age, from min_age.
+        # This is written with expm1 so the difference of the two (nearly
+        # equal) terms doesn't cancel when tau is much larger than the ages.
+        return (
+            -self.tau
+            * np.exp(-(self.max_age - ages) / self.tau)
+            * np.expm1(-(ages - self.min_age) / self.tau)
+        )
 
 
 class TruncatedExponential(Exponential):
@@ -865,6 +874,12 @@ class DelayedExponential(Common):
             np.ndarray of float:
                 The mass formed up to each age.
         """
+        # NOTE: The closed form below subtracts two terms of order tau**2,
+        # which cancel catastrophically when tau is much larger than the
+        # ages. The SFR is smooth so the numerical CDF is accurate there.
+        if abs(self.tau) > self.max_age:
+            return Common.get_cdf(self, ages)
+
         ages = np.clip(
             np.asarray(ages, dtype=np.float64), self.min_age, self.max_age
         )
@@ -1101,6 +1116,12 @@ class DoublePowerLaw(Common):
         # min_age > 0 (see __init__), which the numerical CDF handles.
         if a >= 1:
             return Common.get_cdf(self, ages)
+
+        # NOTE: hyp2f1 loses accuracy as b approaches (but doesn't equal) 1,
+        # so snap b to 1 there. This changes the SFR by at most a fraction
+        # ~|b - 1| ln(u), far below the accuracy lost otherwise.
+        if abs(b - 1) < 1e-8:
+            b = 1.0
 
         ages = np.clip(
             np.asarray(ages, dtype=np.float64), self.min_age, self.max_age
