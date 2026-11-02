@@ -16,7 +16,6 @@ from copy import deepcopy
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy import integrate
 from unyt import (
     Hz,
     Msun,
@@ -513,27 +512,14 @@ class Stars(StarsComponent):
 
         # Calculate ZH from function if necessary
         if self.metal_dist_func is not None and metal_dist is None:
-            # Set up ZH array
-            metal_dist = np.zeros(self.metallicities.size)
-            # Loop over metallicity bins calculating the amount of mass in
-            # each bin, the most metal rich bin extends up to the highest
-            # grid metallicity
-            min_metal = 0
-            for imetal in range(self.metallicities.size):
-                if imetal < self.metallicities.size - 1:
-                    max_metal = np.mean(
-                        [
-                            self.metallicities[imetal + 1],
-                            self.metallicities[imetal],
-                        ]
-                    )
-                else:
-                    max_metal = self.metallicities[-1]
-                sf = integrate.quad(
-                    self.metal_dist_func.get_dist_weight, min_metal, max_metal
-                )[0]
-                metal_dist[imetal] = sf
-                min_metal = max_metal
+            # Get the mass in each metallicity bin from the ZDist's CDF, the
+            # bin edges are the midpoints between grid metallicities and the
+            # most metal rich bin extends up to the highest grid metallicity
+            metals = np.asarray(self.metallicities, dtype=np.float64)
+            metal_edges = np.concatenate(
+                ([0.0], 0.5 * (metals[1:] + metals[:-1]), [metals[-1]])
+            )
+            metal_dist = self.metal_dist_func.get_bin_weights(metal_edges)
 
         # Ensure that by this point we have an array for SFH and ZH
         if sf_hist is None or metal_dist is None:

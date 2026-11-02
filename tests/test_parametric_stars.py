@@ -714,3 +714,26 @@ class TestSFHCDF:
             rtol=0,
             atol=1e-8 * np.abs(expected).max(),
         )
+
+    def test_normal_zdist_cdf_matches_quad(self):
+        """Binned metallicity weights must match direct integration."""
+        zdist = ZDist.Normal(0.01, 0.005)
+        edges = np.array([0, 1e-3, 5e-3, 0.01, 0.02, 0.04])
+        expected = [
+            quad(zdist.get_dist_weight, lo, hi, epsabs=0, epsrel=1e-12)[0]
+            for lo, hi in zip(edges[:-1], edges[1:])
+        ]
+        np.testing.assert_allclose(
+            zdist.get_bin_weights(edges), expected, rtol=0, atol=1e-12
+        )
+
+    def test_numerical_zdist_cdf_matches_closed_form(self):
+        """The numerical ZDist CDF must match a closed form."""
+        zdist = ZDist.Normal(0.01, 0.005)
+        edges = np.array([0, 1e-3, 5e-3, 0.01, 0.02, 0.04])
+        np.testing.assert_allclose(
+            ZDist.Common.get_cdf(zdist, edges),
+            zdist.get_cdf(edges),
+            rtol=0,
+            atol=1e-12,
+        )
