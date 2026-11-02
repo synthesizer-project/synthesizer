@@ -21,10 +21,10 @@ from scipy.special import erf
 
 from synthesizer import exceptions
 
-# The number of linearly spaced panels the numerical CDF integrates the
-# distribution over and the order of the Gauss-Legendre quadrature within
-# each panel
-NUMERICAL_CDF_PANELS = 256
+# The number of log spaced panels the numerical CDF integrates the
+# distribution over (spanning 8 decades below the highest metallicity needed)
+# and the order of the Gauss-Legendre quadrature within each panel
+NUMERICAL_CDF_PANELS = 1024
 NUMERICAL_CDF_ORDER = 8
 
 # Define a list of the available parametrisations
@@ -103,8 +103,7 @@ class Common:
 
         Children with a closed form override this, the default integrates
         the distribution numerically with Gauss-Legendre quadrature over
-        linearly spaced panels whose edges include the requested
-        metallicities.
+        log spaced panels whose edges include the requested metallicities.
 
         Args:
             metals (np.ndarray of float):
@@ -121,7 +120,13 @@ class Common:
 
         # Build the panel edges
         edges = np.concatenate(
-            (np.linspace(0.0, top, NUMERICAL_CDF_PANELS + 1), metals.ravel())
+            (
+                [0.0],
+                np.logspace(
+                    np.log10(top) - 8, np.log10(top), NUMERICAL_CDF_PANELS
+                ),
+                metals.ravel(),
+            )
         )
         edges = np.unique(edges[edges >= 0.0])
 

@@ -22,7 +22,7 @@ import inspect
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import cumulative_trapezoid as cumtrapz
-from scipy.special import erf
+from scipy.special import erf, hyp2f1
 from unyt import Gyr, unyt_array, yr
 
 from synthesizer import exceptions
@@ -960,6 +960,34 @@ class LogNormal(Common):
 
         return sfrs
 
+    def get_cdf(self, ages):
+        """Get the mass formed between an age of zero and each age.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The mass formed up to each age.
+        """
+        ages = np.clip(
+            np.asarray(ages, dtype=np.float64), self.min_age, self.max_age
+        )
+
+        # The integral of exp(-(ln t - t_0)^2 / 2 tau^2) / t with
+        # t = max_age - age
+        def integral(age):
+            t = self.max_age - age
+            with np.errstate(divide="ignore"):
+                return (
+                    -self.tau
+                    * np.sqrt(np.pi / 2)
+                    * erf((np.log(t) - self.t_0) / (np.sqrt(2) * self.tau))
+                )
+
+        return integral(ages) - integral(self.min_age)
+
 
 class DoublePowerLaw(Common):
     """A double power law star formation history.
@@ -1012,6 +1040,15 @@ class DoublePowerLaw(Common):
         self.max_age = max_age.to("yr").value
         self.min_age = min_age.to("yr").value
 
+        # Below the peak the SFR goes as age^-min(alpha, beta), so the mass
+        # formed diverges at an age of zero unless min(alpha, beta) < 1
+        if min(self.alpha, self.beta) >= 1 and self.min_age <= 0:
+            raise exceptions.InconsistentArguments(
+                "The DoublePowerLaw SFR diverges at an age of zero when "
+                "min(alpha, beta) >= 1, so the mass formed is infinite. "
+                "Either use min(alpha, beta) < 1 or set min_age > 0."
+            )
+
     def _sfr(self, age):
         """Get the amount SFR weight in a single age bin.
 
@@ -1041,6 +1078,44 @@ class DoublePowerLaw(Common):
         sfrs[mask] = (term1 + term2) ** -1
 
         return sfrs
+
+    def get_cdf(self, ages):
+        """Get the mass formed between an age of zero and each age.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The mass formed up to each age.
+        """
+        a, b = sorted((self.alpha, self.beta))
+
+        # NOTE: The closed form below needs a < 1, otherwise hyp2f1 can be
+        # undefined (e.g. a = 2, b = 3). The SFR is then only finite with
+        # min_age > 0 (see __init__), which the numerical CDF handles.
+        if a >= 1:
+            return Common.get_cdf(self, ages)
+
+        ages = np.clip(
+            np.asarray(ages, dtype=np.float64), self.min_age, self.max_age
+        )
+
+        # The integral of 1 / (u^a + u^b) from 0 with u = age / peak_age
+        def integral(age):
+            u = age / self.peak_age
+            if a == b:
+                return self.peak_age * u ** (1 - a) / (2 * (1 - a))
+            c = (1 - a) / (b - a)
+            return (
+                self.peak_age
+                * u ** (1 - a)
+                / (1 - a)
+                * hyp2f1(1, c, 1 + c, -(u ** (b - a)))
+            )
+
+        return integral(ages) - integral(self.min_age)
 
 
 class DenseBasis(Common):

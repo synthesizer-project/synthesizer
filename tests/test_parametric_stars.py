@@ -13,6 +13,7 @@ import pytest
 from scipy.integrate import quad
 from unyt import Msun, Myr, kpc, yr
 
+from synthesizer import exceptions
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.parametric import SFH, Galaxy, PointSource, ZDist
 from synthesizer.parametric.stars import Stars
@@ -684,8 +685,22 @@ class TestSFHCDF:
                 tau=1e9 * yr, max_age=5e9 * yr, min_age=1e8 * yr
             ),
             SFH.LogNormal(tau=0.5, peak_age=1e9 * yr, max_age=5e9 * yr),
+            SFH.LogNormal(tau=0.1, peak_age=9.8e9 * yr, max_age=1e10 * yr),
             SFH.DoublePowerLaw(
                 peak_age=1e9 * yr, alpha=-5, beta=5, max_age=5e9 * yr
+            ),
+            SFH.DoublePowerLaw(
+                peak_age=1e9 * yr, alpha=0.9, beta=3, max_age=1.3e10 * yr
+            ),
+            SFH.DoublePowerLaw(
+                peak_age=1e9 * yr, alpha=0.5, beta=0.5, max_age=5e9 * yr
+            ),
+            SFH.DoublePowerLaw(
+                peak_age=1e9 * yr,
+                alpha=2,
+                beta=3,
+                min_age=1e6 * yr,
+                max_age=5e9 * yr,
             ),
             SFH.Continuity(logsfr_ratios=np.array([0.3, -0.2])),
         ],
@@ -715,6 +730,11 @@ class TestSFHCDF:
             atol=1e-8 * np.abs(expected).max(),
         )
 
+    def test_divergent_double_power_law_raises(self):
+        """A DoublePowerLaw with infinite mass at age zero must raise."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            SFH.DoublePowerLaw(peak_age=1e9 * yr, alpha=1.5, beta=3)
+
     def test_normal_zdist_cdf_matches_quad(self):
         """Binned metallicity weights must match direct integration."""
         zdist = ZDist.Normal(0.01, 0.005)
@@ -727,13 +747,17 @@ class TestSFHCDF:
             zdist.get_bin_weights(edges), expected, rtol=0, atol=1e-12
         )
 
-    def test_numerical_zdist_cdf_matches_closed_form(self):
+    @pytest.mark.parametrize(
+        "zdist",
+        [ZDist.Normal(0.01, 0.005), ZDist.Normal(1e-4, 2e-5)],
+    )
+    def test_numerical_zdist_cdf_matches_closed_form(self, zdist):
         """The numerical ZDist CDF must match a closed form."""
-        zdist = ZDist.Normal(0.01, 0.005)
         edges = np.array([0, 1e-3, 5e-3, 0.01, 0.02, 0.04])
+        expected = zdist.get_cdf(edges)
         np.testing.assert_allclose(
             ZDist.Common.get_cdf(zdist, edges),
-            zdist.get_cdf(edges),
+            expected,
             rtol=0,
-            atol=1e-12,
+            atol=1e-12 * expected.max(),
         )
