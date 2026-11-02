@@ -29,6 +29,7 @@ from synthesizer.pipeline.pipeline_utils import (
     discover_attr_paths_recursive,
     discover_dict_recursive,
     discover_dict_structure,
+    get_buffered_nbytes,
     get_dataset_properties,
     get_full_memory,
     unify_dict_structure_across_ranks,
@@ -3039,3 +3040,193 @@ class TestGoldenPipelineRegression:
             golden_reference["bolometric_luminosity"],
             rtol=1e-5,
         )
+
+
+def _read_hdf5_datasets(path):
+    """Return {path: (data, units)} for every dataset in an HDF5 file."""
+    out = {}
+
+    def _visit(name, obj):
+        if isinstance(obj, h5py.Dataset):
+            out[name] = (obj[...], obj.attrs.get("Units"))
+
+    with h5py.File(path, "r") as hdf:
+        hdf.visititems(_visit)
+    return out
+
+
+class TestPipelineFlushing:
+    """Flushing outputs to file while running should not change them."""
+
+    NGAL = 5
+
+    @pytest.fixture
+    def make_galaxies(self, random_particle_galaxy):
+        """Return a function making a fresh list of distinct galaxies."""
+
+        def _make():
+            galaxies = []
+            for i in range(self.NGAL):
+                gal = copy.deepcopy(random_particle_galaxy)
+                gal.stars.initial_masses = gal.stars.initial_masses * (i + 1)
+                galaxies.append(gal)
+            return galaxies
+
+        return _make
+
+    @pytest.fixture
+    def run_pipeline(
+        self,
+        make_galaxies,
+        nebular_emission_model,
+        nircam_instrument_no_psf,
+        kernel,
+        test_grid,
+        tmp_path,
+    ):
+        """Return a function running the pipeline and returning its file."""
+
+        def _run(name, before_write=None, **kwargs):
+            model = copy.deepcopy(nebular_emission_model)
+            model.set_per_particle(True)
+            outpath = tmp_path / name
+            pipeline = Pipeline(
+                emission_model=model,
+                nthreads=1,
+                verbose=0,
+                outpath=outpath,
+                **kwargs,
+            )
+            pipeline.add_galaxies(make_galaxies())
+            pipeline.get_spectra()
+            pipeline.get_photometry_luminosities(nircam_instrument_no_psf)
+            pipeline.get_lines(line_ids=test_grid.available_lines)
+            pipeline.get_observed_lines(
+                line_ids=test_grid.available_lines,
+                cosmo=cosmo,
+            )
+            pipeline.get_images_luminosity(
+                nircam_instrument_no_psf,
+                fov=100 * Mpc,
+                kernel=kernel,
+            )
+            pipeline.get_cosmic_sed(label="avg", average=True)
+            pipeline.add_analysis_func(
+                lambda gal: {"Mass": gal.stars.initial_masses.sum()},
+                "StellarMass",
+            )
+            pipeline.run()
+            if before_write is not None:
+                before_write(pipeline)
+            pipeline.write()
+            return outpath
+
+        return _run
+
+    def _assert_files_match(self, expected_path, path):
+        # NOTE: only compare the outputs, the EmissionModel metadata stores
+        # children from a set so their order varies between runs
+        outputs = ("Galaxies/", "CosmicSED/", "Lines/")
+        expected = {
+            key: value
+            for key, value in _read_hdf5_datasets(expected_path).items()
+            if key.startswith(outputs)
+        }
+        found = {
+            key: value
+            for key, value in _read_hdf5_datasets(path).items()
+            if key.startswith(outputs)
+        }
+        assert set(found) == set(expected)
+        for key, (data, units) in expected.items():
+            assert found[key][1] == units, key
+            np.testing.assert_array_equal(found[key][0], data, err_msg=key)
+
+    @pytest.mark.parametrize("flush_ngalaxies", [1, 2, 3])
+    def test_flush_ngalaxies_matches_unflushed(
+        self, run_pipeline, flush_ngalaxies
+    ):
+        """Flushing every N galaxies gives the same file as not flushing."""
+        expected = run_pipeline("expected.hdf5")
+        flushed = run_pipeline("flushed.hdf5", flush_ngalaxies=flush_ngalaxies)
+        self._assert_files_match(expected, flushed)
+
+        # Make sure we actually wrote every galaxy
+        with h5py.File(flushed, "r") as hdf:
+            assert hdf["Galaxies/StellarMass/Mass"].shape == (self.NGAL,)
+
+    def test_flush_memory_matches_unflushed(self, run_pipeline, monkeypatch):
+        """Flushing on a memory threshold flushes when it's reached."""
+        # Measure the outputs held per galaxy without flushing
+        nbytes = {}
+
+        def _measure(pipeline):
+            nbytes["per_gal"] = (
+                get_buffered_nbytes(
+                    [
+                        getattr(pipeline, attr)
+                        for attr in pipeline._galaxy_output_attrs
+                    ]
+                    + [pipeline._analysis_results]
+                )
+                / self.NGAL
+            )
+
+        expected = run_pipeline("expected.hdf5", before_write=_measure)
+
+        # Count the flushes made while running
+        nflushes = []
+        flush = Pipeline._flush_outputs
+
+        def _counting_flush(pipeline):
+            nflushes.append(pipeline._n_buffered)
+            flush(pipeline)
+
+        monkeypatch.setattr(Pipeline, "_flush_outputs", _counting_flush)
+
+        # A threshold of 2.5 galaxies worth of outputs should flush after
+        # the third galaxy
+        flushed = run_pipeline(
+            "flushed.hdf5",
+            flush_memory=2.5 * nbytes["per_gal"] / 1024**3,
+        )
+        assert nflushes == [3]
+        self._assert_files_match(expected, flushed)
+
+    def test_flushing_requires_outpath(self, nebular_emission_model):
+        """Flushing without somewhere to flush to is an error."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            Pipeline(emission_model=nebular_emission_model, flush_ngalaxies=1)
+        with pytest.raises(exceptions.InconsistentArguments):
+            Pipeline(emission_model=nebular_emission_model, flush_memory=1.0)
+
+    @pytest.mark.parametrize(
+        "kwargs", [{"flush_ngalaxies": 0}, {"flush_memory": -1.0}]
+    )
+    def test_invalid_flush_thresholds(
+        self, nebular_emission_model, tmp_path, kwargs
+    ):
+        """Non-positive flush thresholds are rejected."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            Pipeline(
+                emission_model=nebular_emission_model,
+                outpath=tmp_path / "out.hdf5",
+                **kwargs,
+            )
+
+    def test_write_to_different_outpath(self, run_pipeline, tmp_path):
+        """Writing somewhere other than the Pipeline's outpath is an error."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            run_pipeline(
+                "out.hdf5",
+                before_write=lambda p: p.write(tmp_path / "other.hdf5"),
+            )
+
+    def test_cannot_write_twice_when_flushing(self, run_pipeline):
+        """Flushed outputs can't be written a second time."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            run_pipeline(
+                "out.hdf5",
+                flush_ngalaxies=2,
+                before_write=lambda p: p.write(),
+            )

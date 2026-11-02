@@ -44,12 +44,14 @@ from synthesizer.pipeline.pipeline_utils import (
     OperationKwargsHandler,
     accumulate_pipeline_results_from_child,
     cast_products_recursive,
+    clear_lists_recursive,
     clear_pipeline_outputs,
     combine_atomic_timing_snapshots,
     combine_list_of_dicts,
     count_and_check_dict_recursive,
     divide_dicts_recursive,
     get_atomic_timing_snapshot,
+    get_buffered_nbytes,
     get_full_memory,
     plot_timing_analysis,
     sanitise_hdf5_key_part,
@@ -144,6 +146,31 @@ class Pipeline:
             A list of Galaxy objects that have been loaded.
     """
 
+    # The containers holding per-galaxy outputs (excluding the extra
+    # analysis results) which are written to file when flushing
+    _galaxy_output_attrs = (
+        "lnu_spectra",
+        "fnu_spectra",
+        "luminosities",
+        "fluxes",
+        "line_lums",
+        "line_cont_lums",
+        "line_fluxes",
+        "line_cont_fluxes",
+        "images_lum",
+        "images_lum_psf",
+        "images_lum_noise",
+        "images_flux",
+        "images_flux_psf",
+        "images_flux_noise",
+        "line_maps_lum",
+        "line_maps_lum_psf",
+        "line_maps_lum_noise",
+        "line_maps_flux",
+        "line_maps_flux_psf",
+        "line_maps_flux_noise",
+    )
+
     @timed("Pipeline.__init__")
     def __init__(
         self,
@@ -153,6 +180,9 @@ class Pipeline:
         verbose=1,
         report_memory=False,
         max_npart=None,
+        outpath=None,
+        flush_ngalaxies=None,
+        flush_memory=None,
     ):
         """Initialise the Pipeline object.
 
@@ -197,6 +227,21 @@ class Pipeline:
                 TODO: while gas particles don't carry spectra we only need to
                 consider stars and black holes in this threshold. If we have
                 gas spectra in the future we will need to amend this.
+            outpath (str): The path to the HDF5 file to write. This is
+                required if outputs are to be flushed to file while running
+                (see flush_ngalaxies and flush_memory). Otherwise the path
+                can be passed to write instead. Default is None.
+            flush_ngalaxies (int): Flush the outputs held in memory to file
+                after this many galaxies have been processed. Default is None
+                (no flushing based on the number of galaxies).
+            flush_memory (float): Flush the outputs held in memory to file
+                once they exceed this many GB (1024**3 bytes). Note that this
+                only counts the outputs held on the Pipeline, not the
+                galaxies themselves or any other memory in use. Default is
+                None (no flushing based on memory). If both flush_ngalaxies
+                and flush_memory are set, whichever is reached first
+                triggers a flush. Once outputs have been flushed they are
+                only available in the output file, not on the Pipeline.
         """
         # Attributes to track timing
         self._start_time = time.perf_counter()
@@ -222,6 +267,40 @@ class Pipeline:
         ):
             raise ValueError("max_npart must be an int >= 1")
         self._max_npart = max_npart
+
+        # Attach the output path and the thresholds for flushing outputs to
+        # file while running
+        if flush_ngalaxies is not None and (
+            not isinstance(flush_ngalaxies, int) or flush_ngalaxies < 1
+        ):
+            raise exceptions.InconsistentArguments(
+                "flush_ngalaxies must be an int >= 1"
+            )
+        if flush_memory is not None and flush_memory <= 0:
+            raise exceptions.InconsistentArguments("flush_memory must be > 0")
+        self._flushing = (
+            flush_ngalaxies is not None or flush_memory is not None
+        )
+        if self._flushing and outpath is None:
+            raise exceptions.InconsistentArguments(
+                "An outpath must be given to flush outputs to file while "
+                "running (flush_ngalaxies or flush_memory were set)."
+            )
+        self._outpath = outpath
+        self._flush_ngalaxies = flush_ngalaxies
+        self._flush_nbytes = (
+            flush_memory * 1024**3 if flush_memory is not None else None
+        )
+
+        # Counters for the galaxies held in memory since the last flush and
+        # the number of buffered galaxies at which we next measure their
+        # memory footprint (we only measure when we expect to be near the
+        # threshold since walking the outputs isn't free)
+        self._n_buffered = 0
+        self._next_memory_check = 1
+
+        # Flag for whether the final write has been done
+        self._write_complete = False
 
         # Define the container to hold the galaxies
         self.galaxies = []
@@ -4771,6 +4850,13 @@ class Pipeline:
         # Prewarm instruments before processing galaxies.
         self._prepare_instruments()
 
+        # If we are flushing outputs while running we need the output file
+        # up front. This must happen here, rather than at the first flush,
+        # since creating the file is collective and ranks flush at
+        # different times.
+        if self._flushing:
+            self._create_output_file(self._outpath, self.verbose)
+
         # Print the header for the pipeline run to the console
         with timer("Pipeline.run.print_progress_header"):
             self._print_progress_header()
@@ -4906,6 +4992,11 @@ class Pipeline:
 
             # Ok, we're done with this galaxy so we can unpack the results
             self._unpack_results(gal)
+
+            # Flush the outputs to file if we're holding too many
+            self._n_buffered += 1
+            if self._should_flush():
+                self._flush_outputs()
 
             # Output into the progress table
             self._add_progress_row(gal, igal, start_gal)
@@ -5395,6 +5486,12 @@ class Pipeline:
                     ][f] = unyt_array(img)
 
         # Convert the lists of extra analysis results to unyt arrays
+        self._combine_analysis_results()
+
+        self._took(start, "Cleaning outputs")
+
+    def _combine_analysis_results(self):
+        """Combine the lists of extra analysis results into unyt arrays."""
         # Unlike the previous data we need to do some checks here to ensure
         # that the data is in a consistent format. This is because the user
         # can return any type of data from their analysis functions.
@@ -5415,10 +5512,112 @@ class Pipeline:
             # Store the data
             self._analysis_results[key] = combined_data
 
-        self._took(start, "Cleaning outputs")
+    def _create_output_file(self, outpath, verbose):
+        """Create the output file (one per rank when using MPI).
+
+        This is a collective operation.
+
+        Args:
+            outpath (str):
+                The path to the HDF5 file to write.
+            verbose (int):
+                The verbosity of the writer.
+        """
+        # Get an instance of the HDF5 file writer
+        self.io_helper = PipelineIO(
+            str(outpath),
+            self.comm,
+            self.n_galaxies_local,
+            self._start_time,
+            verbose,
+        )
+
+        # Write out the metadata
+        self.io_helper.create_file_with_metadata(
+            self.instruments,
+            self.emission_model,
+            include_lines=self._write_lines or self._write_flux_lines,
+        )
+
+        # In MPI land the per-galaxy data needs the indices of this rank's
+        # galaxies in the full set of galaxies
+        if self.using_mpi:
+            self._galaxy_indices = np.arange(
+                self.io_helper.start, self.io_helper.end
+            )
+        else:
+            self._galaxy_indices = None
+
+    def _should_flush(self):
+        """Return whether the outputs held in memory should be flushed.
+
+        Returns:
+            bool: True if either flush threshold has been reached.
+        """
+        if not self._flushing:
+            return False
+
+        # Have we buffered enough galaxies?
+        if (
+            self._flush_ngalaxies is not None
+            and self._n_buffered >= self._flush_ngalaxies
+        ):
+            return True
+
+        # Nothing more to check if we aren't flushing based on memory, or
+        # we don't yet expect to be near the memory threshold
+        if (
+            self._flush_nbytes is None
+            or self._n_buffered < self._next_memory_check
+        ):
+            return False
+
+        # Measure the outputs we're holding and flush if we are over the
+        # threshold. Otherwise, use the memory per galaxy to predict when
+        # we will reach the threshold and check again then.
+        nbytes = get_buffered_nbytes(
+            [getattr(self, attr) for attr in self._galaxy_output_attrs]
+            + [self._analysis_results]
+        )
+        if nbytes >= self._flush_nbytes:
+            return True
+        self._next_memory_check = max(
+            self._n_buffered + 1,
+            int(self._flush_nbytes / (nbytes / self._n_buffered)),
+        )
+        return False
+
+    @timed("Pipeline._flush_outputs")
+    def _flush_outputs(self):
+        """Append the outputs held in memory to file and clear them."""
+        start = time.perf_counter()
+
+        # Combine the analysis results ready for writing
+        self._combine_analysis_results()
+
+        # Write the data, silencing the per dataset reporting since this
+        # would interrupt the progress table
+        verbose = self.io_helper.verbose
+        self.io_helper.verbose = 0
+        try:
+            self._write_galaxy_outputs()
+        finally:
+            self.io_helper.verbose = verbose
+
+        # Clear the data we just wrote (leaving the structure in place)
+        for attr in self._galaxy_output_attrs:
+            clear_lists_recursive(getattr(self, attr))
+        self._analysis_results = {key: [] for key in self._analysis_results}
+
+        self._took(start, f"Flushing {self._n_buffered} galaxies to file")
+
+        # Reset the counters, we'll measure the memory again after the first
+        # galaxy following the flush
+        self._n_buffered = 0
+        self._next_memory_check = 1
 
     @timed("Pipeline.write")
-    def write(self, outpath, verbose=None):
+    def write(self, outpath=None, verbose=None):
         """Write what we have produced to a HDF5 file.
 
         Any get_* methods that have been called will have their results written
@@ -5443,36 +5642,110 @@ class Pipeline:
             )
             self.run()
 
+        # Resolve where we are writing
+        if outpath is None:
+            outpath = self._outpath
+        elif self._outpath is not None and str(outpath) != str(self._outpath):
+            raise exceptions.InconsistentArguments(
+                f"Cannot write to {outpath}, the Pipeline was set up to write "
+                f"to {self._outpath}."
+            )
+        if outpath is None:
+            raise exceptions.InconsistentArguments(
+                "No outpath given to write to. Pass one to write or the "
+                "Pipeline."
+            )
+
         write_start = time.perf_counter()
 
-        # Get an instance of the HDF5 file writer
-        self.io_helper = PipelineIO(
-            outpath,
-            self.comm,
-            self.n_galaxies_local,
-            self._start_time,
-            verbose if verbose is not None else self.verbose,
-        )
-
-        # Write out the metadata
-        self.io_helper.create_file_with_metadata(
-            self.instruments,
-            self.emission_model,
-            include_lines=self._write_lines or self._write_flux_lines,
-        )
-
-        # In MPI land we need to collect together the galaxy counts on each
-        # rank to make the indices for each rank consistent
-        if self.using_mpi:
-            galaxy_counts = self.comm.allgather(self.n_galaxies_local)
-            galaxy_stars = np.cumsum(galaxy_counts) - galaxy_counts
-            galaxy_ends = np.cumsum(galaxy_counts) - 1
-            galaxy_indices = np.arange(
-                galaxy_stars[self.rank],
-                galaxy_ends[self.rank] + 1,
-            )
+        # If we flushed outputs while running the file already exists and
+        # holds the flushed galaxies, so we append the rest. Otherwise, we
+        # start a new file.
+        if self._flushing:
+            if self._write_complete:
+                raise exceptions.InconsistentArguments(
+                    "The outputs were flushed to file while running and have "
+                    "already been written, they cannot be written again."
+                )
+            if verbose is not None:
+                self.io_helper.verbose = verbose
         else:
-            galaxy_indices = None
+            self._create_output_file(
+                outpath,
+                verbose if verbose is not None else self.verbose,
+            )
+
+        # Write the per-galaxy data
+        self._write_galaxy_outputs()
+
+        # The observed line wavelengths are written once, not per flush
+        if self._write_flux_lines:
+            self.io_helper.write_data(
+                self.line_obs_lams,
+                "Galaxies/Lines/ObservedWavelengths",
+                self._galaxy_indices,
+            )
+
+        # Make sure all rank files have the same per-galaxy datasets
+        self.io_helper.unify_rank_files()
+
+        # Write cosmic spectral luminosity densities
+        if self._write_cosmic_lnu:
+            self.io_helper.write_data(
+                self.cosmic_lnus["Galaxy"],
+                "CosmicSED/Galaxy/SpectralLuminosityDensities",
+            )
+            self.io_helper.write_data(
+                self.cosmic_lnus["Stars"],
+                "CosmicSED/Stars/SpectralLuminosityDensities",
+            )
+            self.io_helper.write_data(
+                self.cosmic_lnus["BlackHole"],
+                "CosmicSED/BlackHoles/SpectralLuminosityDensities",
+            )
+
+        # Write cosmic spectral flux densities
+        if self._write_cosmic_fnu:
+            self.io_helper.write_data(
+                self.cosmic_fnus["Galaxy"],
+                "CosmicSED/Galaxy/SpectralFluxDensities",
+            )
+            self.io_helper.write_data(
+                self.cosmic_fnus["Stars"],
+                "CosmicSED/Stars/SpectralFluxDensities",
+            )
+            self.io_helper.write_data(
+                self.cosmic_fnus["BlackHole"],
+                "CosmicSED/BlackHoles/SpectralFluxDensities",
+            )
+
+        # Write the line metadata
+        if self._write_lines:
+            self.io_helper.write_data(
+                self.line_ids if self.rank == 0 else None,
+                "Lines/IDs",
+                root=0,
+            )
+            self.io_helper.write_data(
+                self.line_lams if self.rank == 0 else None,
+                "Lines/Wavelengths",
+                root=0,
+            )
+
+        self._write_complete = True
+
+        self._took(write_start, "Writing data")
+
+        # Totally done!
+        self._say_goodbye()
+
+    def _write_galaxy_outputs(self):
+        """Write the per-galaxy data held in memory to file.
+
+        On each call the data is appended to anything written by earlier
+        calls (i.e. earlier flushes).
+        """
+        galaxy_indices = self._galaxy_indices
 
         # Write spectral luminosity densities
         if self._write_lnu_spectra:
@@ -5508,36 +5781,6 @@ class Pipeline:
                 self.fnu_spectra["BlackHole"],
                 "Galaxies/BlackHoles/Photometry/SpectralFluxDensities",
                 galaxy_indices,
-            )
-
-        # Write cosmic spectral luminosity densities
-        if self._write_cosmic_lnu:
-            self.io_helper.write_data(
-                self.cosmic_lnus["Galaxy"],
-                "CosmicSED/Galaxy/SpectralLuminosityDensities",
-            )
-            self.io_helper.write_data(
-                self.cosmic_lnus["Stars"],
-                "CosmicSED/Stars/SpectralLuminosityDensities",
-            )
-            self.io_helper.write_data(
-                self.cosmic_lnus["BlackHole"],
-                "CosmicSED/BlackHoles/SpectralLuminosityDensities",
-            )
-
-        # Write cosmic spectral flux densities
-        if self._write_cosmic_fnu:
-            self.io_helper.write_data(
-                self.cosmic_fnus["Galaxy"],
-                "CosmicSED/Galaxy/SpectralFluxDensities",
-            )
-            self.io_helper.write_data(
-                self.cosmic_fnus["Stars"],
-                "CosmicSED/Stars/SpectralFluxDensities",
-            )
-            self.io_helper.write_data(
-                self.cosmic_fnus["BlackHole"],
-                "CosmicSED/BlackHoles/SpectralFluxDensities",
             )
 
         # Write photometric luminosities
@@ -5608,16 +5851,6 @@ class Pipeline:
                 "Galaxies/BlackHoles/Lines/Continuum",
                 galaxy_indices,
             )
-            self.io_helper.write_data(
-                self.line_ids if self.rank == 0 else None,
-                "Lines/IDs",
-                root=0,
-            )
-            self.io_helper.write_data(
-                self.line_lams if self.rank == 0 else None,
-                "Lines/Wavelengths",
-                root=0,
-            )
 
         # Write observed emission line fluxes
         if self._write_flux_lines:
@@ -5654,11 +5887,6 @@ class Pipeline:
                     "Galaxies/BlackHoles/Lines/Continuum",
                     galaxy_indices,
                 )
-            self.io_helper.write_data(
-                self.line_obs_lams,
-                "Galaxies/Lines/ObservedWavelengths",
-                galaxy_indices,
-            )
 
         # Write luminosity images
         if self._write_images_lum:
@@ -5883,11 +6111,6 @@ class Pipeline:
                 f"Galaxies/{key}",
                 galaxy_indices,
             )
-
-        self._took(write_start, "Writing data")
-
-        # Totally done!
-        self._say_goodbye()
 
     def combine_files(self):
         """Combine individual rank files into a single file.

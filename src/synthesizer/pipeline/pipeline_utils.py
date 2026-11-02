@@ -850,6 +850,40 @@ def divide_dicts_recursive(data, divisors):
     return data / divisors
 
 
+def clear_lists_recursive(data):
+    """Empty every list in a nested dictionary in place.
+
+    The dictionary structure itself is left untouched.
+
+    Args:
+        data (dict): The nested dictionary to clear.
+    """
+    for value in data.values():
+        if isinstance(value, dict):
+            clear_lists_recursive(value)
+        elif isinstance(value, list):
+            value.clear()
+
+
+def get_buffered_nbytes(data):
+    """Return the number of bytes held by the arrays in nested containers.
+
+    Anything without an nbytes attribute (e.g. a Python float) is not
+    counted.
+
+    Args:
+        data (dict/list/array): The (nested) data to measure.
+
+    Returns:
+        int: The number of bytes.
+    """
+    if isinstance(data, dict):
+        return sum(get_buffered_nbytes(value) for value in data.values())
+    if isinstance(data, (list, tuple)):
+        return sum(get_buffered_nbytes(value) for value in data)
+    return getattr(data, "nbytes", 0)
+
+
 def unify_dict_structure_across_ranks(data, comm, root=0):
     """Recursively unify the structure of a dictionary across all ranks.
 

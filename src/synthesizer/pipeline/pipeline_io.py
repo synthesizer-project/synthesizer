@@ -289,7 +289,7 @@ class PipelineIO:
                 self._took(start, "Writing metadata")
 
         # The other rank files only hold per-galaxy data but they still need
-        # to start empty rather than writing into a stale file
+        # to start empty since datasets that already exist are appended to
         elif self.is_parallel and not self.is_collective:
             with h5py.File(self.filepath, "w"):
                 pass
@@ -306,6 +306,9 @@ class PipelineIO:
           and write it with dimensionless units.
         - If the data is a numpy array, we write the data and set the units to
           "dimensionless".
+
+        If the dataset already exists (i.e. the Pipeline has flushed earlier
+        galaxies to this file) the data is appended along the first axis.
 
         Args:
             data (any): The data to write.
@@ -327,7 +330,36 @@ class PipelineIO:
 
         # Write the dataset with the appropriate units
         with h5py.File(self.filepath, "a") as hdf:
-            dset = hdf.create_dataset(key, data=data, compression="gzip")
+            # Append to a dataset created by an earlier flush
+            if key in hdf:
+                # Nothing to append (e.g. nothing new since the last flush)
+                if data.size == 0:
+                    return
+                dset = hdf[key]
+                if (
+                    dset.shape[1:] != data.shape[1:]
+                    or dset.dtype != data.dtype
+                    or dset.attrs["Units"] != units
+                ):
+                    raise ValueError(
+                        f"Cannot append to {key}: existing dataset has "
+                        f"shape {dset.shape}, dtype {dset.dtype} and units "
+                        f"{dset.attrs['Units']} but the new data has shape "
+                        f"{data.shape}, dtype {data.dtype} and units {units}."
+                    )
+                nexisting = dset.shape[0]
+                dset.resize(nexisting + data.shape[0], axis=0)
+                dset[nexisting:, ...] = data
+                return
+
+            # Leave the first axis unlimited so later flushes can append
+            maxshape = (None, *data.shape[1:]) if data.ndim > 0 else None
+            dset = hdf.create_dataset(
+                key,
+                data=data,
+                maxshape=maxshape,
+                compression="gzip",
+            )
             dset.attrs["Units"] = units
 
     def write_dataset_parallel(self, data, key):
@@ -442,8 +474,10 @@ class PipelineIO:
         try:
             start = time.perf_counter()
             # In parallel land we need to make sure we're on the same page with
-            # the structure we are writing
-            if self.is_parallel:
+            # the structure we are writing. Per-galaxy data (indexes given) is
+            # written independently on each rank (possibly at different times
+            # when flushing) so it is unified afterwards by unify_rank_files.
+            if self.is_parallel and indexes is None:
                 data = unify_dict_structure_across_ranks(data, self.comm)
 
             # Early exit if data is empty
@@ -478,6 +512,61 @@ class PipelineIO:
         except Exception as e:
             self._print(f"Failed to write {key} - {e}")
             raise
+
+    @timed("PipelineIO.unify_rank_files")
+    def unify_rank_files(self, group="Galaxies"):
+        """Ensure every rank file contains the same datasets under a group.
+
+        Per-galaxy data is written independently on each rank, so a rank may
+        be missing a dataset another rank has (e.g. it has no galaxies, or
+        none of its galaxies have a component). Any missing dataset is
+        created empty, with the same trailing shape, dtype and units as on
+        the other ranks, so the rank files can be combined.
+
+        This is a collective operation.
+
+        Args:
+            group (str): The group to unify.
+        """
+        # Nothing to do without multiple rank files
+        if not self.is_parallel or self.is_collective:
+            return
+
+        # Collect the datasets in this rank's file
+        my_dsets = {}
+
+        def _collect(name, obj):
+            if isinstance(obj, h5py.Dataset):
+                my_dsets[f"{group}/{name}"] = (
+                    obj.shape[1:],
+                    obj.dtype,
+                    obj.attrs.get("Units", "dimensionless"),
+                )
+
+        with h5py.File(self.filepath, "r") as hdf:
+            if group in hdf:
+                hdf[group].visititems(_collect)
+
+        # Combine what everyone has
+        all_dsets = {}
+        for rank_dsets in self.comm.allgather(my_dsets):
+            for path, props in rank_dsets.items():
+                all_dsets.setdefault(path, props)
+
+        # Create anything we're missing
+        missing = [path for path in all_dsets if path not in my_dsets]
+        if len(missing) == 0:
+            return
+        with h5py.File(self.filepath, "a") as hdf:
+            for path in missing:
+                trailing, dtype, units = all_dsets[path]
+                dset = hdf.create_dataset(
+                    path,
+                    shape=(0, *trailing),
+                    maxshape=(None, *trailing),
+                    dtype=dtype,
+                )
+                dset.attrs["Units"] = units
 
     @timed("PipelineIO.combine_rank_files")
     def combine_rank_files(self):
