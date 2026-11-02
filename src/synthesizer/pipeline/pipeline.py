@@ -5643,6 +5643,28 @@ class Pipeline:
                 "Galaxies/BlackHoles/Lines/Continuum",
                 galaxy_indices,
             )
+            # Ranks without galaxies have no wavelengths to infer the shape
+            # from, so take the trailing shape, dtype and units from a rank
+            # with galaxies and write an empty dataset to match
+            if self.using_mpi:
+                obs_props = [
+                    props
+                    for props in self.comm.allgather(
+                        (
+                            self.line_obs_lams.shape[1:],
+                            self.line_obs_lams.dtype,
+                            str(self.line_obs_lams.units),
+                        )
+                        if len(self.line_obs_lams) > 0
+                        else None
+                    )
+                    if props is not None
+                ]
+                if len(self.line_obs_lams) == 0 and len(obs_props) > 0:
+                    trailing, dtype, units = obs_props[0]
+                    self.line_obs_lams = unyt_array(
+                        np.zeros((0, *trailing), dtype=dtype), units
+                    )
             self.io_helper.write_data(
                 self.line_obs_lams,
                 "Galaxies/Lines/ObservedWavelengths",

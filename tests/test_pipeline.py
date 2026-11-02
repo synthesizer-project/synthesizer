@@ -3069,3 +3069,46 @@ class TestGoldenPipelineRegression:
             golden_reference["bolometric_luminosity"],
             rtol=1e-5,
         )
+
+
+def test_combine_rank_files_virtual_with_empty_rank(tmp_path):
+    """Ranks without rows (or datasets) must not break the virtual file."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Rank 0 has no galaxies: an empty placeholder for one dataset and
+    # nothing at all for the other. Rank 1 holds all the rows.
+    obslams = np.arange(10.0).reshape(2, 5)
+    fluxes = np.arange(6.0).reshape(2, 3)
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.attrs["synthesizer_version"] = "test"
+        dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", shape=(0,))
+        dset.attrs["Units"] = "dimensionless"
+    with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
+        dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", data=fluxes)
+        dset.attrs["Units"] = "erg/s/cm**2"
+        dset = hdf.create_dataset(
+            "Galaxies/Lines/ObservedWavelengths", data=obslams
+        )
+        dset.attrs["Units"] = "Å"
+
+    # Build the writer as rank 0 of 2 would have it after writing
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 2, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 0
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 0], [0, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    io.combine_rank_files_virtual()
+
+    with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lines/ObservedWavelengths"][...], obslams
+        )
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lines/Flux/nebular"][...], fluxes
+        )
+        assert hdf["Galaxies/Lines/Flux/nebular"].attrs["Units"] == (
+            "erg/s/cm**2"
+        )
