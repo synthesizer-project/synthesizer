@@ -692,6 +692,7 @@ class PipelineIO:
 
                             src_dset = rank_f[dpath]
                             src_shape = src_dset.shape
+                            src_units = src_dset.attrs.get("Units")
                             local_size = src_dset.shape[0]
 
                         # Nothing to map from a rank without any rows
@@ -716,6 +717,16 @@ class PipelineIO:
                                 f"has shape {src_shape}, but other ranks have "
                                 f"shape {shape}. Non-leading dimensions must "
                                 "match across rank files."
+                            )
+
+                        # The units must also match, we don't convert them
+                        if src_units != dattrs.get("Units"):
+                            raise ValueError(
+                                "Cannot create virtual dataset mapping for "
+                                f"{dpath!r}: rank {rank} dataset in "
+                                f"{src_file!r} has units {src_units!r}, but "
+                                f"other ranks have units "
+                                f"{dattrs.get('Units')!r}."
                             )
 
                         # Create a virtual source for this rank

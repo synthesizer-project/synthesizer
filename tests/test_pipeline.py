@@ -3122,3 +3122,26 @@ def test_combine_rank_files_virtual_with_empty_rank(tmp_path):
 
         # A dataset without rows on any rank isn't written
         assert "Galaxies/Empty" not in hdf
+
+
+def test_combine_rank_files_virtual_units_mismatch(tmp_path):
+    """Ranks with different units for a dataset must raise an error."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Both ranks hold a row but with different units
+    for rank, units in enumerate(("erg/s", "W")):
+        with h5py.File(tmp_path / f"out_{rank}.hdf5", "w") as hdf:
+            dset = hdf.create_dataset("Galaxies/Lum", data=np.ones((1, 3)))
+            dset.attrs["Units"] = units
+
+    # Build the writer as rank 0 of 2 would have it after writing
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 2, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 1
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 1], [1, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    with pytest.raises(ValueError, match="units"):
+        io.combine_rank_files_virtual()
