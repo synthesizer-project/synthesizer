@@ -1,5 +1,6 @@
 """Tests for dust attenuation transformers."""
 
+import copy
 from pathlib import Path
 
 import h5py
@@ -9,6 +10,7 @@ from unyt import Msun, angstrom, cm, g, pc
 
 from synthesizer import exceptions
 from synthesizer.emission_models.transformers.dust_attenuation import (
+    MWN18,
     DraineLiGrainCurves,
 )
 
@@ -397,3 +399,13 @@ class TestParameterApplicationIsIsolated:
             assert np.allclose(transmission, expected[slope])
 
         assert shared.slope == -1.0
+
+
+def test_mwn18_can_be_deep_copied():
+    """MWN18 must deep copy (e.g. inside an emission model)."""
+    curve = MWN18()
+    copied = copy.deepcopy(curve)
+
+    # The copy should give the same optical depths
+    lam = np.array([1000.0, 5500.0, 20000.0]) * angstrom
+    np.testing.assert_array_equal(copied.get_tau(lam), curve.get_tau(lam))
