@@ -181,7 +181,7 @@ def test_get_fnu_applies_igm_with_observer_frame_wavelengths():
             self.last_z = None
             self.last_lam_obs = None
 
-        def get_transmission(self, redshift, lam_obs):
+        def get_transmission(self, redshift, lam_obs, emitter=None):
             self.last_z = redshift
             self.last_lam_obs = lam_obs
             return np.full(lam_obs.shape, 0.5)
