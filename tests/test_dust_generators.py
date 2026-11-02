@@ -431,17 +431,13 @@ class TestCasey12Generator:
         assert np.any(sed.lnu > 0)
 
     def test_casey12_parameter_calculation(self):
-        """Test Casey12 parameter calculations."""
-        temperature = 25 * K
-        alpha = 2.0
+        """Test Casey12 power-law parameter calculations."""
+        c12 = Casey12()
 
-        c12 = Casey12(temperature=temperature, alpha=alpha)
-
-        # Check that lam_c and n_pl are calculated
-        assert hasattr(c12, "lam_c")
-        assert hasattr(c12, "n_pl")
-        assert c12.lam_c > 0 * um
-        assert c12.n_pl > 0
+        # lam_c and n_pl are derived on demand from the parameters
+        lam_c, n_pl = c12._power_law_params(25 * K, 2.0, 2.0)
+        assert lam_c > 0 * um
+        assert n_pl > 0
 
     def test_casey12_component_methods(self, dust_wavelengths):
         """Test Casey12 component calculation methods."""
@@ -451,7 +447,7 @@ class TestCasey12Generator:
         nu = (3e10 / (dust_wavelengths.to("cm").value)) * Hz  # c in cm/s
 
         # Test _lnu method
-        lnu = c12._lnu(nu, temperature)
+        lnu = c12._lnu(nu, temperature, 2.0, 2.0)
         assert len(lnu) == len(nu)
         assert np.all(lnu >= 0)
         assert np.any(lnu > 0)
@@ -468,7 +464,7 @@ class TestCasey12Generator:
     def test_casey12_per_emitter_emissivity_and_alpha(
         self, dust_wavelengths, mock_model, mock_emissions
     ):
-        """Emitter emissivity/alpha match an instance built with them."""
+        """Unset generator params come from the emitter; set ones override."""
 
         class Emitter:
             def __init__(self, **kwargs):
@@ -484,28 +480,99 @@ class TestCasey12Generator:
                 redshift=0.0,
             ).lnu
 
-        # Values from the emitter take priority over the instance values
-        from_emitter = generate(
-            Casey12(temperature=30 * K, emissivity=1.5, alpha=2.0),
-            Emitter(temperature=45 * K, emissivity=2.1, alpha=1.3),
-        )
-        from_instance = generate(
+        reference = generate(
             Casey12(temperature=45 * K, emissivity=2.1, alpha=1.3),
             Emitter(),
         )
-        np.testing.assert_allclose(from_emitter, from_instance, rtol=1e-12)
 
-        # Without emitter values the instance values are used, and changing
-        # emissivity or alpha changes the spectrum
-        default = generate(
-            Casey12(temperature=45 * K, emissivity=1.5, alpha=2.0), Emitter()
+        # Parameters left as None on the generator are read from the emitter
+        from_emitter = generate(
+            Casey12(),
+            Emitter(temperature=45 * K, emissivity=2.1, alpha=1.3),
         )
-        assert not np.allclose(default, from_instance)
-        only_alpha = generate(
-            Casey12(temperature=45 * K, emissivity=1.5, alpha=2.0),
-            Emitter(alpha=1.3),
+        np.testing.assert_allclose(from_emitter, reference, rtol=1e-12)
+
+        # Parameters set on the generator override those on the emitter
+        overridden = generate(
+            Casey12(temperature=45 * K, emissivity=2.1, alpha=1.3),
+            Emitter(temperature=30 * K, emissivity=1.5, alpha=2.0),
         )
-        assert not np.allclose(only_alpha, default)
+        np.testing.assert_allclose(overridden, reference, rtol=1e-12)
+
+        # A mix: alpha fixed on the generator, the rest from the emitter
+        mixed = generate(
+            Casey12(alpha=1.3),
+            Emitter(temperature=45 * K, emissivity=2.1, alpha=2.0),
+        )
+        np.testing.assert_allclose(mixed, reference, rtol=1e-12)
+
+        # Changing alpha changes the spectrum
+        other_alpha = generate(
+            Casey12(alpha=2.0),
+            Emitter(temperature=45 * K, emissivity=2.1),
+        )
+        assert not np.allclose(other_alpha, reference)
+
+    def test_casey12_model_fixed_params_override_generator(
+        self, dust_wavelengths, mock_model, mock_emissions
+    ):
+        """EmissionModel fixed parameters still beat generator values."""
+
+        class Emitter:
+            def __init__(self, **kwargs):
+                self.model_param_cache = {}
+                self.__dict__.update(kwargs)
+
+        reference = (
+            Casey12(temperature=45 * K, emissivity=2.1, alpha=1.3)
+            ._generate_spectra(
+                lams=dust_wavelengths,
+                emitter=Emitter(),
+                model=mock_model,
+                emissions=mock_emissions,
+                redshift=0.0,
+            )
+            .lnu
+        )
+
+        mock_model.fixed_parameters = {"alpha": 1.3}
+        overridden = (
+            Casey12(temperature=45 * K, emissivity=2.1, alpha=2.0)
+            ._generate_spectra(
+                lams=dust_wavelengths,
+                emitter=Emitter(alpha=2.0),
+                model=mock_model,
+                emissions=mock_emissions,
+                redshift=0.0,
+            )
+            .lnu
+        )
+        np.testing.assert_allclose(overridden, reference, rtol=1e-12)
+
+    def test_casey12_missing_params_raise(
+        self, dust_wavelengths, mock_model, mock_emissions
+    ):
+        """Params unset on both the generator and emitter raise."""
+
+        class Emitter:
+            def __init__(self, **kwargs):
+                self.model_param_cache = {}
+                self.__dict__.update(kwargs)
+
+        with pytest.raises(exceptions.MissingAttribute, match="alpha"):
+            Casey12(temperature=45 * K, emissivity=2.1)._generate_spectra(
+                lams=dust_wavelengths,
+                emitter=Emitter(),
+                model=mock_model,
+                emissions=mock_emissions,
+                redshift=0.0,
+            )
+
+    def test_casey12_no_stored_power_law_params(self):
+        """lam_c and n_pl are derived on demand, never stored."""
+        c12 = Casey12(temperature=45 * K, emissivity=2.1, alpha=1.3)
+        assert not hasattr(c12, "lam_c")
+        assert not hasattr(c12, "n_pl")
 
     def test_casey12_lines_use_emitter_params(
         self, mock_model, mock_emissions
@@ -531,7 +598,7 @@ class TestCasey12Generator:
             ).continuum
 
         from_emitter = lines(
-            Casey12(temperature=30 * K, emissivity=1.5, alpha=2.0),
+            Casey12(),
             Emitter(temperature=45 * K, emissivity=2.1, alpha=1.3),
         )
         from_instance = lines(
@@ -539,6 +606,68 @@ class TestCasey12Generator:
             Emitter(),
         )
         np.testing.assert_allclose(from_emitter, from_instance, rtol=1e-12)
+
+    def test_casey12_cmb_heating_uses_emitter_emissivity(
+        self, dust_wavelengths, mock_model, mock_emissions
+    ):
+        """CMB heating uses the emitter's emissivity in spectra and lines."""
+
+        class Emitter:
+            def __init__(self, **kwargs):
+                self.model_param_cache = {}
+                self.__dict__.update(kwargs)
+
+        redshift = 6.0
+        line_lams = np.array([1e5, 5e5]) * angstrom
+
+        def spectra(gen, emitter):
+            return gen._generate_spectra(
+                lams=dust_wavelengths,
+                emitter=emitter,
+                model=mock_model,
+                emissions=mock_emissions,
+                redshift=redshift,
+            ).lnu
+
+        def lines(gen, emitter):
+            return gen._generate_lines(
+                line_ids=["a", "b"],
+                line_lams=line_lams,
+                emitter=emitter,
+                model=mock_model,
+                emissions=mock_emissions,
+                spectra=mock_emissions,
+                redshift=redshift,
+            ).continuum
+
+        for generate in (spectra, lines):
+            from_instance = generate(
+                Casey12(
+                    temperature=30 * K,
+                    emissivity=1.2,
+                    alpha=2.0,
+                    do_cmb_heating=True,
+                ),
+                Emitter(),
+            )
+            from_emitter = generate(
+                Casey12(temperature=30 * K, alpha=2.0, do_cmb_heating=True),
+                Emitter(emissivity=1.2),
+            )
+            np.testing.assert_allclose(from_emitter, from_instance, rtol=1e-12)
+
+            # A different emissivity gives a different heated result, so
+            # the comparison above is sensitive to which value is used
+            other = generate(
+                Casey12(
+                    temperature=30 * K,
+                    emissivity=2.2,
+                    alpha=2.0,
+                    do_cmb_heating=True,
+                ),
+                Emitter(),
+            )
+            assert not np.allclose(other, from_instance)
 
 
 class TestDraineLi07Generator:
