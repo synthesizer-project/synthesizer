@@ -159,6 +159,7 @@ class Pipeline:
         "line_cont_lums",
         "line_fluxes",
         "line_cont_fluxes",
+        "line_obs_lams",
         "images_lum",
         "images_lum_psf",
         "images_lum_noise",
@@ -388,7 +389,7 @@ class Pipeline:
         self.line_ids = None
         self.line_fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.line_cont_fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_obs_lams = None
+        self.line_obs_lams = []
         self.images_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_lum_noise = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
@@ -2842,23 +2843,6 @@ class Pipeline:
             out_dtype=self._out_dtypes.get("observed_lines"),
         )
 
-        # Store the observed line wavelengths for writing, we only do this once
-        # since they are the same for all galaxies but we need to find them
-        # first (either on the galaxy, stars, or black holes)
-        if self.line_obs_lams is None:
-            # Get the line lams from the first line collection we can find
-            for lines in galaxy.lines.values():
-                self.line_obs_lams = lines.obslam
-                break
-            if self.line_obs_lams is None and galaxy.stars is not None:
-                for lines in galaxy.stars.lines.values():
-                    self.line_obs_lams = lines.obslam
-                    break
-            if self.line_obs_lams is None and galaxy.black_holes is not None:
-                for lines in galaxy.black_holes.lines.values():
-                    self.line_obs_lams = lines.obslam
-                    break
-
         # Count the number of observed emission lines we have generated
         self._op_counts["Emission Line Fluxes"] += (
             count_and_check_dict_recursive(galaxy.lines)
@@ -4579,6 +4563,17 @@ class Pipeline:
                         spec_type, []
                     ).append(lines.continuum)
 
+            # The observed wavelengths depend on the galaxy's redshift so we
+            # store them for every galaxy, taking them from the first line
+            # collection we can find (on the galaxy, stars, or black holes)
+            collections = [*galaxy.lines.values()]
+            if galaxy.stars is not None:
+                collections.extend(galaxy.stars.lines.values())
+            if galaxy.black_holes is not None:
+                collections.extend(galaxy.black_holes.lines.values())
+            if len(collections) > 0:
+                self.line_obs_lams.append(collections[0].obslam)
+
         # Do we need to unpack the luminosity images?
         if self._write_images_lum:
             for inst_label, d in galaxy.images_lnu.items():
@@ -5315,6 +5310,9 @@ class Pipeline:
         for spec_type, conts in self.line_cont_fluxes["BlackHole"].items():
             self.line_cont_fluxes["BlackHole"][spec_type] = unyt_array(conts)
 
+        # Convert the list of observed line wavelengths to a unyt array
+        self.line_obs_lams = unyt_array(self.line_obs_lams)
+
         # Convert the lists of luminosity images to unyt arrays
         for inst_label, inst_data in self.images_lum["Galaxy"].items():
             for spec_type, imgs in inst_data.items():
@@ -5662,14 +5660,6 @@ class Pipeline:
         # Write the per-galaxy data
         self._write_galaxy_outputs()
 
-        # The observed line wavelengths are written once, not per flush
-        if self._write_flux_lines:
-            self.io_helper.write_data(
-                self.line_obs_lams,
-                "Galaxies/Lines/ObservedWavelengths",
-                self.io_helper.galaxy_indices,
-            )
-
         # Finalise the per-galaxy data
         self.io_helper.finalise()
 
@@ -5890,6 +5880,11 @@ class Pipeline:
             self.io_helper.write_data(
                 self.line_fluxes["BlackHole"],
                 "Galaxies/BlackHoles/Lines/Flux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_obs_lams,
+                "Galaxies/Lines/ObservedWavelengths",
                 galaxy_indices,
             )
             # The continuum shares its datasets with the luminosity lines so
