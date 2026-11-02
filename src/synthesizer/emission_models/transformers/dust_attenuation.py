@@ -725,7 +725,7 @@ class MWN18(AttenuationLaw):
     """Milky Way attenuation curve used in Narayanan+2018.
 
     Attributes:
-        data (np.ndarray of float):
+        data (dict of np.ndarray of float):
             The data describing the dust curve, loaded from MW_N18.npz.
         tau_lam_v (float):
             The V band optical depth.
@@ -739,9 +739,12 @@ class MWN18(AttenuationLaw):
         """
         description = "MW extinction curve from Desika"
         AttenuationLaw.__init__(self, description)
-        self.data = np.load(f"{this_dir}/../../data/MW_N18.npz")
+        # Load the data eagerly, a lazy NpzFile keeps the file open which
+        # stops the curve being deep copied (e.g. inside an emission model)
+        with np.load(f"{this_dir}/../../data/MW_N18.npz") as data:
+            self.data = dict(data)
         self.tau_lam_v = np.interp(
-            5500.0, self.data.f.mw_df_lam[::-1], self.data.f.mw_df_chi[::-1]
+            5500.0, self.data["mw_df_lam"][::-1], self.data["mw_df_chi"][::-1]
         )
 
     def __repr__(self):
@@ -781,8 +784,8 @@ class MWN18(AttenuationLaw):
         # rebuilt on every call regardless.
         dtype = lam.dtype if lam.dtype.kind == "f" else np.dtype(np.float64)
         func = interpolate.interp1d(
-            np.asarray(self.data.f.mw_df_lam[::-1], dtype=dtype),
-            np.asarray(self.data.f.mw_df_chi[::-1], dtype=dtype),
+            np.asarray(self.data["mw_df_lam"][::-1], dtype=dtype),
+            np.asarray(self.data["mw_df_chi"][::-1], dtype=dtype),
             kind=interp,
             fill_value="extrapolate",
         )
@@ -814,8 +817,8 @@ class MWN18(AttenuationLaw):
                 The optical depth.
         """
         func = interpolate.interp1d(
-            self.data.f.mw_df_lam[::-1],
-            self.data.f.mw_df_chi[::-1],
+            self.data["mw_df_lam"][::-1],
+            self.data["mw_df_chi"][::-1],
             kind=interp,
             fill_value="extrapolate",
         )
