@@ -1383,6 +1383,17 @@ class TestPipelineOperations:
             assert sfzh.attrs["Units"] == "Msun"
             assert sfh.attrs["Units"] == "Msun"
             assert np.all(np.sum(sfzh[...], axis=(1, 2)) > 0)
+            axes = hdf["Galaxies/Stars/SFZHAxes"]
+            np.testing.assert_allclose(
+                axes["Log10Ages"][...], test_grid.log10ages
+            )
+            np.testing.assert_allclose(
+                axes["Metallicities"][...], test_grid.metallicities
+            )
+            np.testing.assert_allclose(
+                hdf["Galaxies/Stars/SFHAxes/Log10Ages"][...],
+                test_grid.log10ages,
+            )
 
     def test_write_sfzh_and_sfh_parametric(
         self,

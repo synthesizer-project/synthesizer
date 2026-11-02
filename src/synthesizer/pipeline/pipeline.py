@@ -5706,6 +5706,29 @@ class Pipeline:
                 root=0,
             )
 
+        # Write the axes the SFZHs and SFHs are binned on
+        if self._write_sfzh:
+            op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfzh")
+            self.io_helper.write_data(
+                np.asarray(op_kwargs["log10ages"]) if self.rank == 0 else None,
+                "Galaxies/Stars/SFZHAxes/Log10Ages",
+                root=0,
+            )
+            self.io_helper.write_data(
+                np.asarray(op_kwargs["metallicities"])
+                if self.rank == 0
+                else None,
+                "Galaxies/Stars/SFZHAxes/Metallicities",
+                root=0,
+            )
+        if self._write_sfh:
+            op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfh")
+            self.io_helper.write_data(
+                np.asarray(op_kwargs["log10ages"]) if self.rank == 0 else None,
+                "Galaxies/Stars/SFHAxes/Log10Ages",
+                root=0,
+            )
+
         self._took(write_start, "Writing data")
 
         # Totally done!
