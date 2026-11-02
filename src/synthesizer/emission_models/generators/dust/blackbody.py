@@ -41,9 +41,6 @@ class Blackbody(DustEmission):
     it is read from the emitter.
     """
 
-    # Values set on the generator override those on the emitter
-    _generator_overrides_emitter = True
-
     temperature: Optional[unyt_quantity]
 
     def __init__(

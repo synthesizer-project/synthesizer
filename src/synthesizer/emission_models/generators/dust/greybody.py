@@ -56,9 +56,6 @@ class Greybody(DustEmission):
     None they are read from the emitter.
     """
 
-    # Values set on the generator override those on the emitter
-    _generator_overrides_emitter = True
-
     temperature: Optional[unyt_quantity]
     emissivity: Optional[float]
     optically_thin: bool

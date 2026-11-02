@@ -66,9 +66,6 @@ class Casey12(DustEmission):
     so they are derived when emission is generated and never stored.
     """
 
-    # Values set on the generator override those on the emitter
-    _generator_overrides_emitter = True
-
     temperature: Optional[unyt_quantity]
     emissivity: Optional[float]
     alpha: Optional[float]

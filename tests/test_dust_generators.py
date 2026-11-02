@@ -1435,10 +1435,6 @@ class TestGeneratorOverridesEmitter:
             redshift=redshift,
         ).continuum
 
-    def test_flag_set(self, gen_cls, params, other, fixed):
-        """The class opts in to the override priority order."""
-        assert gen_cls._generator_overrides_emitter
-
     def test_params_default_to_none(self, gen_cls, params, other, fixed):
         """Overridable parameters are None unless given."""
         gen = gen_cls(**fixed)
@@ -1598,16 +1594,20 @@ class TestGeneratorOverridesEmitter:
         assert len(set(np.round(list(factors.values()), 12))) == 3
 
 
-def test_draineli07_keeps_emitter_over_generator(mock_dust_grid, mock_model):
-    """DraineLi07 has non-None defaults, so it keeps emitter > generator."""
-    assert not DraineLi07._generator_overrides_emitter
+def test_draineli07_generator_overrides_emitter(mock_dust_grid, mock_model):
+    """DraineLi07 values override the emitter, unset ones come from it."""
     gen = DraineLi07(grid=mock_dust_grid, dust_mass=1e6 * Msun, qpah=0.025)
     emitter = _ParamEmitter(
         qpah=0.04, dust_to_gas_ratio=0.02, hydrogen_mass=1e8 * Msun
     )
     params = gen._extract_params(mock_model, emitter)
-    assert params["qpah"] == 0.04
-    assert params["dust_to_gas_ratio"] == 0.02
+
+    # The generator's values (including its defaults) win
+    assert params["qpah"] == 0.025
+    assert params["dust_to_gas_ratio"] == 0.01
+
+    # The hydrogen mass isn't set on the generator so comes from the emitter
+    assert params["hydrogen_mass"] == 1e8 * Msun
 
 
 class FakeEmissionModel:
