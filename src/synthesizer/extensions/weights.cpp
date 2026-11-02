@@ -708,70 +708,16 @@ void weight_loop_bic(GridProps *grid_props, Populations *pops, int out_size,
   toc("weight_loop_bic");
 }
 
-/**
- * @brief This calculates the grid weights of each population separately
- *        using a bin in cell (BIC) approach.
- *
- * The output has one grid sized row per population. With OpenMP the
- * populations are split between threads, each writing only its own rows.
- *
- * @tparam PopReal The floating-point type of the population arrays.
- * @tparam GridReal The floating-point type of the grid axis arrays.
- * @tparam OutT The floating-point type stored in the output buffer.
- * @param grid_props: A struct containing the properties along each grid axis.
- * @param pops: A struct containing the population properties.
- * @param out: The (npop, grid size) output array.
- * @param nthreads: The number of threads to use.
- */
-template <typename PopReal, typename GridReal, typename OutT>
-void weight_loop_bic_per_population(GridProps *grid_props, Populations *pops,
-                                    OutT *out, const int nthreads) {
-
-  tic("weight_loop_bic_per_population");
-
-  /* Compute each axis' grid points and fractions once. */
-  std::array<BicAxisTable, MAX_GRID_NDIM> tables;
-  build_bic_tables<PopReal, GridReal>(grid_props, pops, tables);
-
-  const int grid_size = grid_props->size;
-
-#ifdef WITH_OPENMP
-#pragma omp parallel num_threads(nthreads) if (nthreads > 1)
-#endif
-  {
-    std::vector<double> accum(grid_size);
-#ifdef WITH_OPENMP
-#pragma omp for schedule(static)
-#endif
-    for (int ipop = 0; ipop < pops->npop; ipop++) {
-      std::fill(accum.begin(), accum.end(), 0.0);
-      spread_population_bic<PopReal>(tables, grid_props, pops, ipop, 0,
-                                     pops->ncells, accum.data());
-      OutT *row = out + static_cast<size_t>(ipop) * grid_size;
-      for (int i = 0; i < grid_size; i++) {
-        row[i] += static_cast<OutT>(accum[i]);
-      }
-    }
-  }
-#ifndef WITH_OPENMP
-  (void)nthreads;
-#endif
-
-  toc("weight_loop_bic_per_population");
-}
-
 /* Explicit instantiations to satisfy multi-extension linking. All
  * (PartReal, GridReal, OutT) combinations are required by the dtype
  * dispatchers in sfzh and integrated_spectra. */
-#define INSTANTIATE_WEIGHT_LOOPS(PartReal, GridReal, OutT)                \
-  template void weight_loop_cic<PartReal, GridReal, OutT>(                \
-      GridProps *, Particles *, int, OutT *, const int);                  \
-  template void weight_loop_ngp<PartReal, GridReal, OutT>(                \
-      GridProps *, Particles *, int, OutT *, const int);                  \
-  template void weight_loop_bic<PartReal, GridReal, OutT>(                \
-      GridProps *, Populations *, int, OutT *, const int);                \
-  template void weight_loop_bic_per_population<PartReal, GridReal, OutT>( \
-      GridProps *, Populations *, OutT *, const int);
+#define INSTANTIATE_WEIGHT_LOOPS(PartReal, GridReal, OutT) \
+  template void weight_loop_cic<PartReal, GridReal, OutT>( \
+      GridProps *, Particles *, int, OutT *, const int);   \
+  template void weight_loop_ngp<PartReal, GridReal, OutT>( \
+      GridProps *, Particles *, int, OutT *, const int);   \
+  template void weight_loop_bic<PartReal, GridReal, OutT>( \
+      GridProps *, Populations *, int, OutT *, const int);
 
 INSTANTIATE_WEIGHT_LOOPS(float, float, float)
 INSTANTIATE_WEIGHT_LOOPS(float, float, double)

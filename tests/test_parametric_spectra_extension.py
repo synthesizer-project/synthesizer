@@ -5,11 +5,7 @@ import pytest
 from synthesizer.extensions.integrated_spectra import compute_integrated_sed
 from synthesizer.extensions.parametric_spectra import (
     compute_integrated_parametric_sed,
-    compute_population_seds,
 )
-from threadpoolctl import threadpool_info
-
-from synthesizer.utils.blas import limit_blas_threads
 
 # An irregular 3D grid: a log10 age axis, a log10 metallicity axis and a
 # linear axis, with deliberately uneven spacing on each
@@ -168,31 +164,6 @@ def test_out_of_range_mass_is_clamped_to_edge_points():
     np.testing.assert_allclose(weights, expected)
 
 
-def test_population_seds_sum_to_integrated():
-    """Per population spectra must sum to the integrated spectrum."""
-    edges = _wide_edges()
-    masses = _random_masses(edges, npop=4)
-    spec, _ = _bic(edges, masses)
-    pop_specs = compute_population_seds(
-        _grid_spectra(),
-        GRID_AXES,
-        edges,
-        masses,
-        LOG_FLAGS,
-        1,
-        None,
-        None,
-        None,
-    )
-    assert pop_specs.shape == (4, NLAM)
-    np.testing.assert_allclose(pop_specs.sum(axis=0), spec)
-
-    # Each population on its own must match the integrated function
-    for ipop in range(masses.shape[0]):
-        single, _ = _bic(edges, masses[ipop : ipop + 1])
-        np.testing.assert_allclose(pop_specs[ipop], single)
-
-
 @pytest.mark.parametrize("nthreads", [2, 4])
 def test_threads_match_serial(nthreads):
     """Threaded results must match the serial results."""
@@ -202,11 +173,6 @@ def test_threads_match_serial(nthreads):
     spec_t, weights_t = _bic(edges, masses, nthreads=nthreads)
     np.testing.assert_allclose(weights_t, weights)
     np.testing.assert_allclose(spec_t, spec)
-    args = (_grid_spectra(), GRID_AXES, edges, masses, LOG_FLAGS)
-    np.testing.assert_allclose(
-        compute_population_seds(*args, nthreads, None, None, None),
-        compute_population_seds(*args, 1, None, None, None),
-    )
 
 
 def test_mask_excludes_bins():
@@ -229,18 +195,6 @@ def test_lam_mask_zeroes_masked_wavelengths():
     spec_masked, _ = _bic(edges, masses, lam_mask=lam_mask)
     np.testing.assert_allclose(spec_masked[lam_mask], spec[lam_mask])
     assert np.all(spec_masked[~lam_mask] == 0)
-    pop_specs = compute_population_seds(
-        _grid_spectra(),
-        GRID_AXES,
-        edges,
-        masses,
-        LOG_FLAGS,
-        1,
-        None,
-        lam_mask,
-        None,
-    )
-    assert np.all(pop_specs[:, ~lam_mask] == 0)
 
 
 def test_precomputed_weights_are_reused():
@@ -300,24 +254,3 @@ def test_invalid_inputs_raise(edges, masses, mask):
     """Invalid population inputs must raise rather than misbehave."""
     with pytest.raises((ValueError, TypeError)):
         _bic(edges, masses, mask=mask)
-
-
-@pytest.mark.parametrize("nthreads", [-1, 1, 2])
-def test_blas_thread_limit(nthreads):
-    """Limiting BLAS threads must apply the limit and not change results.
-
-    Where the BLAS can be limited (e.g. OpenBLAS on Linux) the limit must be
-    in place inside the block. Apple's Accelerate can't be limited, in which
-    case the limit is a no-op.
-    """
-    edges = _wide_edges()
-    masses = _random_masses(edges, npop=6)
-    args = (_grid_spectra(), GRID_AXES, edges, masses, LOG_FLAGS, 1)
-    expected = compute_population_seds(*args, None, None, None)
-    with limit_blas_threads(nthreads):
-        if nthreads > 0:
-            for info in threadpool_info():
-                if info["user_api"] == "blas":
-                    assert info["num_threads"] == nthreads
-        result = compute_population_seds(*args, None, None, None)
-    np.testing.assert_allclose(result, expected)
