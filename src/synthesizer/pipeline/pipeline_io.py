@@ -15,6 +15,7 @@ Example usage:
 
 import os
 import time
+from contextlib import contextmanager
 
 import h5py
 import numpy as np
@@ -161,6 +162,27 @@ class PipelineIO:
             self._ngalaxies_local = ngalaxies_local
             self.start = 0
             self.end = ngalaxies_local
+
+        # In MPI land the per-galaxy data needs the indices of this rank's
+        # galaxies in the full set of galaxies
+        if self.is_parallel:
+            self.galaxy_indices = np.arange(self.start, self.end)
+        else:
+            self.galaxy_indices = None
+
+        # Flag for whether the file has been finalised (no more per-galaxy
+        # data can be written)
+        self.finalised = False
+
+    @contextmanager
+    def silenced(self):
+        """Silence the writer's reporting within a with block."""
+        verbose = self.verbose
+        self.verbose = 0
+        try:
+            yield
+        finally:
+            self.verbose = verbose
 
     def _print(self, *args, **kwargs):
         """Print a message to the screen with extra information.
@@ -512,6 +534,15 @@ class PipelineIO:
         except Exception as e:
             self._print(f"Failed to write {key} - {e}")
             raise
+
+    def finalise(self):
+        """Finalise the per-galaxy data once everything has been written.
+
+        This is a collective operation.
+        """
+        # Make sure all rank files have the same per-galaxy datasets
+        self.unify_rank_files()
+        self.finalised = True
 
     @timed("PipelineIO.unify_rank_files")
     def unify_rank_files(self, group="Galaxies"):

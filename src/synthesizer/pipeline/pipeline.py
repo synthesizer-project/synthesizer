@@ -270,40 +270,6 @@ class Pipeline:
             raise ValueError("max_npart must be an int >= 1")
         self._max_npart = max_npart
 
-        # Attach the output path and the thresholds for flushing outputs to
-        # file while running
-        if flush_ngalaxies is not None and (
-            not isinstance(flush_ngalaxies, int) or flush_ngalaxies < 1
-        ):
-            raise exceptions.InconsistentArguments(
-                "flush_ngalaxies must be an int >= 1"
-            )
-        if flush_memory is not None and flush_memory <= 0:
-            raise exceptions.InconsistentArguments("flush_memory must be > 0")
-        self._flushing = (
-            flush_ngalaxies is not None or flush_memory is not None
-        )
-        if self._flushing and outpath is None:
-            raise exceptions.InconsistentArguments(
-                "An outpath must be given to flush outputs to file while "
-                "running (flush_ngalaxies or flush_memory were set)."
-            )
-        self._outpath = outpath
-        self._flush_ngalaxies = flush_ngalaxies
-        self._flush_nbytes = (
-            flush_memory * 1024**3 if flush_memory is not None else None
-        )
-
-        # Counters for the galaxies held in memory since the last flush and
-        # the number of buffered galaxies at which we next measure their
-        # memory footprint (we only measure when we expect to be near the
-        # threshold since walking the outputs isn't free)
-        self._n_buffered = 0
-        self._next_memory_check = 1
-
-        # Flag for whether the final write has been done
-        self._write_complete = False
-
         # Define the container to hold the galaxies
         self.galaxies = []
 
@@ -544,6 +510,10 @@ class Pipeline:
         # Attach the writer, we'll assign this later in the write method
         self.io_helper = None
 
+        # Attach the output path and the thresholds for flushing outputs to
+        # file while running
+        self._setup_output(outpath, flush_ngalaxies, flush_memory)
+
         # If we are using MPI we need to make sure everyone agrees on the
         # start time, take the minimum
         if self.using_mpi:
@@ -552,6 +522,46 @@ class Pipeline:
         # Hold back everyone in MPI land until we're all ready to go
         if self.using_mpi:
             comm.Barrier()
+
+    def _setup_output(self, outpath, flush_ngalaxies, flush_memory):
+        """Validate and attach the output path and flushing thresholds.
+
+        Args:
+            outpath (str):
+                The path to the HDF5 file to write.
+            flush_ngalaxies (int):
+                The number of galaxies at which to flush outputs to file.
+            flush_memory (float):
+                The memory (in GB) at which to flush outputs to file.
+        """
+        if flush_ngalaxies is not None and (
+            not isinstance(flush_ngalaxies, int) or flush_ngalaxies < 1
+        ):
+            raise exceptions.InconsistentArguments(
+                "flush_ngalaxies must be an int >= 1"
+            )
+        if flush_memory is not None and flush_memory <= 0:
+            raise exceptions.InconsistentArguments("flush_memory must be > 0")
+        self._flushing = (
+            flush_ngalaxies is not None or flush_memory is not None
+        )
+        if self._flushing and outpath is None:
+            raise exceptions.InconsistentArguments(
+                "An outpath must be given to flush outputs to file while "
+                "running (flush_ngalaxies or flush_memory were set)."
+            )
+        self._outpath = outpath
+        self._flush_ngalaxies = flush_ngalaxies
+        self._flush_nbytes = (
+            flush_memory * 1024**3 if flush_memory is not None else None
+        )
+
+        # Counters for the galaxies held in memory since the last flush and
+        # the number of buffered galaxies at which we next measure their
+        # memory footprint (we only measure when we expect to be near the
+        # threshold since walking the outputs isn't free)
+        self._n_buffered = 0
+        self._next_memory_check = 1
 
     def _say_hello(self):
         """Print a nice welcome."""
@@ -5040,6 +5050,70 @@ class Pipeline:
         # Flag that we have run the pipeline
         self._analysis_complete = True
 
+    def _should_flush(self):
+        """Return whether the outputs held in memory should be flushed.
+
+        Returns:
+            bool: True if either flush threshold has been reached.
+        """
+        if not self._flushing:
+            return False
+
+        # Have we buffered enough galaxies?
+        if (
+            self._flush_ngalaxies is not None
+            and self._n_buffered >= self._flush_ngalaxies
+        ):
+            return True
+
+        # Nothing more to check if we aren't flushing based on memory, or
+        # we don't yet expect to be near the memory threshold
+        if (
+            self._flush_nbytes is None
+            or self._n_buffered < self._next_memory_check
+        ):
+            return False
+
+        # Measure the outputs we're holding and flush if we are over the
+        # threshold. Otherwise, use the memory per galaxy to predict when
+        # we will reach the threshold and check again then.
+        nbytes = get_buffered_nbytes(
+            [getattr(self, attr) for attr in self._galaxy_output_attrs]
+            + [self._analysis_results]
+        )
+        if nbytes >= self._flush_nbytes:
+            return True
+        self._next_memory_check = max(
+            self._n_buffered + 1,
+            int(self._flush_nbytes / (nbytes / self._n_buffered)),
+        )
+        return False
+
+    @timed("Pipeline._flush_outputs")
+    def _flush_outputs(self):
+        """Append the outputs held in memory to file and clear them."""
+        start = time.perf_counter()
+
+        # Combine the analysis results ready for writing
+        self._combine_analysis_results()
+
+        # Write the data, silencing the per dataset reporting since this
+        # would interrupt the progress table
+        with self.io_helper.silenced():
+            self._write_galaxy_outputs()
+
+        # Clear the data we just wrote (leaving the structure in place)
+        for attr in self._galaxy_output_attrs:
+            clear_lists_recursive(getattr(self, attr))
+        self._analysis_results = {key: [] for key in self._analysis_results}
+
+        self._took(start, f"Flushing {self._n_buffered} galaxies to file")
+
+        # Reset the counters, we'll measure the memory again after the first
+        # galaxy following the flush
+        self._n_buffered = 0
+        self._next_memory_check = 1
+
     @timed("Pipeline._clean_outputs")
     def _clean_outputs(self):
         """Clean up the lists attached to the pipeline.
@@ -5526,110 +5600,6 @@ class Pipeline:
             # Store the data
             self._analysis_results[key] = combined_data
 
-    def _create_output_file(self, outpath, verbose):
-        """Create the output file (one per rank when using MPI).
-
-        This is a collective operation.
-
-        Args:
-            outpath (str):
-                The path to the HDF5 file to write.
-            verbose (int):
-                The verbosity of the writer.
-        """
-        # Get an instance of the HDF5 file writer
-        self.io_helper = PipelineIO(
-            str(outpath),
-            self.comm,
-            self.n_galaxies_local,
-            self._start_time,
-            verbose,
-        )
-
-        # Write out the metadata
-        self.io_helper.create_file_with_metadata(
-            self.instruments,
-            self.emission_model,
-            include_lines=self._write_lines or self._write_flux_lines,
-        )
-
-        # In MPI land the per-galaxy data needs the indices of this rank's
-        # galaxies in the full set of galaxies
-        if self.using_mpi:
-            self._galaxy_indices = np.arange(
-                self.io_helper.start, self.io_helper.end
-            )
-        else:
-            self._galaxy_indices = None
-
-    def _should_flush(self):
-        """Return whether the outputs held in memory should be flushed.
-
-        Returns:
-            bool: True if either flush threshold has been reached.
-        """
-        if not self._flushing:
-            return False
-
-        # Have we buffered enough galaxies?
-        if (
-            self._flush_ngalaxies is not None
-            and self._n_buffered >= self._flush_ngalaxies
-        ):
-            return True
-
-        # Nothing more to check if we aren't flushing based on memory, or
-        # we don't yet expect to be near the memory threshold
-        if (
-            self._flush_nbytes is None
-            or self._n_buffered < self._next_memory_check
-        ):
-            return False
-
-        # Measure the outputs we're holding and flush if we are over the
-        # threshold. Otherwise, use the memory per galaxy to predict when
-        # we will reach the threshold and check again then.
-        nbytes = get_buffered_nbytes(
-            [getattr(self, attr) for attr in self._galaxy_output_attrs]
-            + [self._analysis_results]
-        )
-        if nbytes >= self._flush_nbytes:
-            return True
-        self._next_memory_check = max(
-            self._n_buffered + 1,
-            int(self._flush_nbytes / (nbytes / self._n_buffered)),
-        )
-        return False
-
-    @timed("Pipeline._flush_outputs")
-    def _flush_outputs(self):
-        """Append the outputs held in memory to file and clear them."""
-        start = time.perf_counter()
-
-        # Combine the analysis results ready for writing
-        self._combine_analysis_results()
-
-        # Write the data, silencing the per dataset reporting since this
-        # would interrupt the progress table
-        verbose = self.io_helper.verbose
-        self.io_helper.verbose = 0
-        try:
-            self._write_galaxy_outputs()
-        finally:
-            self.io_helper.verbose = verbose
-
-        # Clear the data we just wrote (leaving the structure in place)
-        for attr in self._galaxy_output_attrs:
-            clear_lists_recursive(getattr(self, attr))
-        self._analysis_results = {key: [] for key in self._analysis_results}
-
-        self._took(start, f"Flushing {self._n_buffered} galaxies to file")
-
-        # Reset the counters, we'll measure the memory again after the first
-        # galaxy following the flush
-        self._n_buffered = 0
-        self._next_memory_check = 1
-
     @timed("Pipeline.write")
     def write(self, outpath=None, verbose=None):
         """Write what we have produced to a HDF5 file.
@@ -5676,7 +5646,7 @@ class Pipeline:
         # holds the flushed galaxies, so we append the rest. Otherwise, we
         # start a new file.
         if self._flushing:
-            if self._write_complete:
+            if self.io_helper.finalised:
                 raise exceptions.InconsistentArguments(
                     "The outputs were flushed to file while running and have "
                     "already been written, they cannot be written again."
@@ -5697,11 +5667,11 @@ class Pipeline:
             self.io_helper.write_data(
                 self.line_obs_lams,
                 "Galaxies/Lines/ObservedWavelengths",
-                self._galaxy_indices,
+                self.io_helper.galaxy_indices,
             )
 
-        # Make sure all rank files have the same per-galaxy datasets
-        self.io_helper.unify_rank_files()
+        # Finalise the per-galaxy data
+        self.io_helper.finalise()
 
         # Write cosmic spectral luminosity densities
         if self._write_cosmic_lnu:
@@ -5746,12 +5716,37 @@ class Pipeline:
                 root=0,
             )
 
-        self._write_complete = True
-
         self._took(write_start, "Writing data")
 
         # Totally done!
         self._say_goodbye()
+
+    def _create_output_file(self, outpath, verbose):
+        """Create the output file (one per rank when using MPI).
+
+        This is a collective operation.
+
+        Args:
+            outpath (str):
+                The path to the HDF5 file to write.
+            verbose (int):
+                The verbosity of the writer.
+        """
+        # Get an instance of the HDF5 file writer
+        self.io_helper = PipelineIO(
+            str(outpath),
+            self.comm,
+            self.n_galaxies_local,
+            self._start_time,
+            verbose,
+        )
+
+        # Write out the metadata
+        self.io_helper.create_file_with_metadata(
+            self.instruments,
+            self.emission_model,
+            include_lines=self._write_lines or self._write_flux_lines,
+        )
 
     def _write_galaxy_outputs(self):
         """Write the per-galaxy data held in memory to file.
@@ -5759,7 +5754,7 @@ class Pipeline:
         On each call the data is appended to anything written by earlier
         calls (i.e. earlier flushes).
         """
-        galaxy_indices = self._galaxy_indices
+        galaxy_indices = self.io_helper.galaxy_indices
 
         # Write the SFZHs and SFHs
         if self._write_sfzh:
