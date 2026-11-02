@@ -668,6 +668,26 @@ class TestPipelineNotReady:
 class TestPipelineOperations:
     """Tests for the pipeline operations."""
 
+    def test_pipeline_uses_a_single_igm(
+        self, test_grid, nebular_emission_model
+    ):
+        """A Pipeline only accepts one IGM for all observed emissions."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        line_ids = test_grid.available_lines[:2]
+        igm = MagicMock()
+
+        # The first IGM is used, and passing it again (or None) is fine
+        pipeline.get_observed_spectra(cosmo=cosmo, igm=igm)
+        pipeline.get_observed_lines(cosmo=cosmo, igm=None, line_ids=line_ids)
+        pipeline.get_observed_lines(cosmo=cosmo, igm=igm, line_ids=line_ids)
+        assert pipeline._igm is igm
+
+        # But a different IGM isn't
+        with pytest.raises(exceptions.InconsistentArguments):
+            pipeline.get_observed_lines(
+                cosmo=cosmo, igm=MagicMock(), line_ids=line_ids
+            )
+
     def test_base_galaxy_get_observed_spectra_passes_nthreads(self):
         """BaseGalaxy should forward nthreads to each Sed.get_fnu call."""
         igm = MagicMock()
