@@ -10,6 +10,7 @@ Tests cover:
 
 import numpy as np
 import pytest
+from scipy.integrate import quad
 from unyt import Msun, Myr, kpc, yr
 
 from synthesizer.emission_models import IncidentEmission
@@ -649,3 +650,67 @@ class TestGetSFZHRemap:
         remapped = stars.get_sfzh(new_log10ages, test_grid.metallicities)
         assert remapped.sfzh.shape == (20, len(test_grid.metallicities))
         assert np.isclose(remapped.sfzh.sum(), stars.sfzh.sum())
+
+
+class TestSFHCDF:
+    """Tests for binning SFH functions with their CDFs."""
+
+    def test_narrow_gaussian_is_resolved(self, test_grid):
+        """A burst far narrower than the age axis spacing keeps its mass."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Gaussian(peak_age=3e9 * yr, sigma=1e6 * yr),
+            metal_dist=0.01,
+        )
+        np.testing.assert_allclose(
+            stars.sfzh.sum(), np.sqrt(np.pi) * 1e6, rtol=1e-6
+        )
+
+    @pytest.mark.parametrize(
+        "sfh",
+        [
+            SFH.Constant(max_age=100 * Myr, min_age=10 * Myr),
+            SFH.Gaussian(
+                peak_age=1e9 * yr,
+                sigma=3e8 * yr,
+                max_age=3e9 * yr,
+                min_age=1e8 * yr,
+            ),
+            SFH.Exponential(tau=1e9 * yr, max_age=5e9 * yr, min_age=2e8 * yr),
+            SFH.Exponential(tau=-2e9 * yr, max_age=5e9 * yr),
+            SFH.DecliningExponential(tau=12 * Myr, max_age=2.9e9 * yr),
+            SFH.DelayedExponential(
+                tau=1e9 * yr, max_age=5e9 * yr, min_age=1e8 * yr
+            ),
+            SFH.LogNormal(tau=0.5, peak_age=1e9 * yr, max_age=5e9 * yr),
+            SFH.DoublePowerLaw(
+                peak_age=1e9 * yr, alpha=-5, beta=5, max_age=5e9 * yr
+            ),
+            SFH.Continuity(logsfr_ratios=np.array([0.3, -0.2])),
+        ],
+    )
+    def test_cdf_matches_quad(self, sfh):
+        """Binned masses must match direct integration of the SFR."""
+        edges = np.array([0, 5e6, 3e7, 2e8, 9e8, 1.5e9, 4e9, 6e9, 1e10])
+        expected = []
+        for lo, hi in zip(edges[:-1], edges[1:]):
+            points = [p for p in sfh._get_breakpoints() if lo < p < hi]
+            expected.append(
+                quad(
+                    sfh.get_sfr,
+                    lo,
+                    hi,
+                    limit=2000,
+                    points=points or None,
+                    epsabs=0,
+                    epsrel=1e-12,
+                )[0]
+            )
+        expected = np.array(expected)
+        np.testing.assert_allclose(
+            sfh.get_bin_masses(edges),
+            expected,
+            rtol=0,
+            atol=1e-8 * np.abs(expected).max(),
+        )

@@ -500,24 +500,16 @@ class Stars(StarsComponent):
 
         # Calculate SFH from function if necessary
         if self.sf_hist_func is not None and sf_hist is None:
-            # Set up SFH array
-            sf_hist = np.zeros(self.ages.size)
-
-            # Loop over age bins calculating the amount of mass in each bin,
-            # the oldest bin extends up to the oldest grid age
-            min_age = 0
-            for ia in range(self.ages.size):
-                if ia < self.ages.size - 1:
-                    max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
-                else:
-                    max_age = self.ages[-1].to("yr").value
-                sf = integrate.quad(
-                    self.sf_hist_func.get_sfr,
-                    min_age + age_offset.to("yr").value,
-                    max_age + age_offset.to("yr").value,
-                )[0]
-                sf_hist[ia] = sf
-                min_age = max_age
+            # Get the mass in each age bin from the SFH's CDF, the bin edges
+            # are the midpoints between grid ages and the oldest bin extends
+            # up to the oldest grid age
+            ages = self.ages.to("yr").value
+            age_edges = np.concatenate(
+                ([0.0], 0.5 * (ages[1:] + ages[:-1]), [ages[-1]])
+            )
+            sf_hist = self.sf_hist_func.get_bin_masses(
+                age_edges + age_offset.to("yr").value
+            )
 
         # Calculate ZH from function if necessary
         if self.metal_dist_func is not None and metal_dist is None:
