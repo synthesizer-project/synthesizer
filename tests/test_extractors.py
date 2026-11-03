@@ -576,3 +576,50 @@ def test_integrated_parametric_off_grid_axes(
         False,
     )
     np.testing.assert_allclose(param.lnu.ndview, part.lnu.ndview, rtol=1e-10)
+
+
+class TestGridCheck:
+    """Tests for the fraction of an emitter outside the grid axes."""
+
+    def test_particles_outside_grid(self, test_grid):
+        """The mass of particles older than the grid is reported."""
+        stars = ParticleStars(
+            initial_masses=np.array([1e6, 1e6, 2e6]) * Msun,
+            ages=np.array([1e7, 1e8, 1e12]) * yr,  # the last is too old
+            metallicities=np.full(3, 0.01),
+        )
+        assert np.isclose(stars.get_fraction_outside_grid(test_grid), 0.5)
+
+    def test_particles_inside_grid(self, test_grid):
+        """Particles inside the grid on every axis aren't reported."""
+        stars = ParticleStars(
+            initial_masses=np.full(2, 1e6) * Msun,
+            ages=np.array([1e7, 1e8]) * yr,
+            metallicities=np.full(2, 0.01),
+        )
+        assert stars.get_fraction_outside_grid(test_grid) == 0.0
+
+    def test_parametric_outside_grid(self, test_grid):
+        """Parametric mass younger than the grid is reported."""
+        stars = ParametricStars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=1e5 * yr,  # younger than the youngest grid age
+            metal_dist=0.01,
+            initial_mass=1e9 * Msun,
+        )
+        assert stars.get_fraction_outside_grid(test_grid) == 1.0
+
+    def test_galaxy_components(self, test_grid):
+        """A galaxy reports each component with the grid's axes."""
+        from synthesizer.particle import Galaxy
+
+        stars = ParticleStars(
+            initial_masses=np.array([1e6, 3e6]) * Msun,
+            ages=np.array([1e7, 1e12]) * yr,
+            metallicities=np.full(2, 0.01),
+        )
+        galaxy = Galaxy(stars=stars)
+        fractions = galaxy.get_fraction_outside_grid(test_grid)
+        assert set(fractions) == {"stars"}
+        assert np.isclose(fractions["stars"], 0.75)
