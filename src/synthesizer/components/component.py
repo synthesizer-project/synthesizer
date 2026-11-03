@@ -11,7 +11,8 @@ respectively.
 
 from abc import ABC, abstractmethod
 
-from unyt import arcsecond, kpc, pc
+import numpy as np
+from unyt import arcsecond, kpc, pc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.cosmology import (
@@ -26,6 +27,7 @@ from synthesizer.imaging.data_cube_generators import (
 )
 from synthesizer.imaging.image_generators import (
     _combine_image_collections,
+    _has_population_morphology,
     _prepare_component_image_labels,
 )
 from synthesizer.imaging.postprocess import (
@@ -382,6 +384,60 @@ class Component(ABC):
 
         return self.photo_fnu
 
+    def get_fraction_outside_grid(self, grid, model=None):
+        """Get the fraction of the component outside a grid's axes.
+
+        Attributes outside a grid's axes are clamped onto the grid's edges
+        when the emission is extracted, so their emission is only
+        approximate. This is the fraction of the component's weight (the
+        grid's weight variable, e.g. the initial masses) whose attributes lie
+        outside the grid along any axis, or of its particles if the grid has
+        no weight variable.
+
+        Args:
+            grid (Grid):
+                The grid to compare to.
+            model (EmissionModel):
+                The emission model, for attributes given as its fixed
+                parameters, or None.
+
+        Returns:
+            float:
+                The fraction of the component outside the grid's axes.
+        """
+        # Imported here to avoid a circular import
+        from synthesizer.emission_models.utils import get_param
+
+        # Is each element inside the grid along every axis?
+        inside = np.ones(1, dtype=bool)
+        for axis_name in grid._extract_axes:
+            log = axis_name.startswith("log10")
+            axis = axis_name[5:] if log else axis_name
+            value = get_param(axis, model, None, self, preserve_units=True)
+            if isinstance(value, (unyt_array, unyt_quantity)):
+                value = value.to(grid._axes_units[axis]).ndview
+            value = np.atleast_1d(np.asarray(value, dtype=np.float64))
+            if log:
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    value = np.log10(value)
+            values = grid._extract_axes_values[axis_name]
+            inside = inside & (value >= values.min()) & (value <= values.max())
+
+        # Weight each element by the grid's weight variable
+        if grid._weight_var in (None, "None"):
+            weight = np.ones(inside.shape)
+        else:
+            weight = get_param(grid._weight_var, model, None, self)
+            if isinstance(weight, (unyt_array, unyt_quantity)):
+                weight = weight.ndview
+            weight = np.broadcast_to(
+                np.asarray(weight, np.float64), inside.shape
+            )
+        total = np.sum(weight)
+        if total == 0:
+            return 0.0
+        return float(1.0 - np.sum(weight[inside]) / total)
+
     def get_spectra(
         self,
         emission_model,
@@ -694,10 +750,13 @@ class Component(ABC):
         # Define dictionary to hold the images we are generating
         out_images = {}
 
-        # Get the appropriate photometry
-        if is_param and phot_type == "lnu":
+        # Get the appropriate photometry. A parametric component whose
+        # populations each have their own morphology needs the photometry of
+        # each population, like a particle component.
+        per_population = is_param and _has_population_morphology(self)
+        if is_param and not per_population and phot_type == "lnu":
             photometry_dict = self.photo_lnu
-        elif is_param and phot_type == "fnu":
+        elif is_param and not per_population and phot_type == "fnu":
             photometry_dict = self.photo_fnu
         elif phot_type == "lnu":
             photometry_dict = self.particle_photo_lnu
@@ -1071,8 +1130,10 @@ class Component(ABC):
 
         out_maps = {}
 
-        # Get the appropriate lines dict
-        if is_param:
+        # Get the appropriate lines dict. A parametric component whose
+        # populations each have their own morphology needs the lines of each
+        # population, like a particle component.
+        if is_param and not _has_population_morphology(self):
             lines_dict = self.lines
         else:
             lines_dict = self.particle_lines

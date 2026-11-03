@@ -145,3 +145,41 @@ def test_dtype(shark_file, test_grid):
     for arr in (stars.initial_masses, stars.ages, stars.metallicities):
         assert arr.dtype == np.float32
     assert str(stars.initial_masses.units) == "Msun"
+
+
+def test_parametric_populations_are_exact(shark_file, test_grid):
+    """Components are named populations and the spectra are exact.
+
+    The reference is many particles spread uniformly through each bin,
+    which the binned populations should reproduce to round off.
+    """
+    from unyt import Msun, yr
+
+    from synthesizer.emission_models import IncidentEmission
+    from synthesizer.particle import Stars as ParticleStars
+
+    stars = load_SHARK(shark_file, test_grid, method="parametric")[0].stars
+    assert stars.population_names == list(SFR)
+
+    n = 10000
+    ages, masses, metals = [], [], []
+    for icomp, comp in enumerate(SFR):
+        for ibin, (lo, hi) in enumerate(BINS):
+            sfr = SFR[comp][0, ibin]
+            if sfr > 0:
+                ages.append(lo + (hi - lo) * (np.arange(n) + 0.5) / n)
+                masses.append(np.full(n, sfr * (hi - lo) * 1e9 / H / n))
+                metals.append(np.full(n, _zmet(icomp)[0, ibin]))
+    dense = ParticleStars(
+        initial_masses=np.concatenate(masses) * Msun,
+        ages=np.concatenate(ages) * 1e9 * yr,
+        metallicities=np.concatenate(metals),
+    )
+
+    model = IncidentEmission(test_grid)
+    lnus = []
+    for s in (dense, stars):
+        s.get_spectra(model)
+        lnus.append(s.spectra["incident"].lnu.value)
+    ok = lnus[0] > 1e-10 * lnus[0].max()
+    np.testing.assert_allclose(lnus[1][ok], lnus[0][ok], rtol=1e-6)
