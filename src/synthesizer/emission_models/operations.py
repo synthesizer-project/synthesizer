@@ -144,7 +144,7 @@ class Extraction:
                     this_model.grid,
                     this_model.extract,
                 )
-            elif this_model.per_particle and (
+            elif this_model.per_population and (
                 emitter.is_parametric and not isinstance(emitter, BlackHole)
             ):
                 extractor = PopulationExtractor(
@@ -291,7 +291,7 @@ class Extraction:
                 this_model.grid,
                 this_model.extract,
             )
-        elif this_model.per_particle and (
+        elif this_model.per_population and (
             emitter.is_parametric and not isinstance(emitter, BlackHole)
         ):
             extractor = PopulationExtractor(
@@ -820,7 +820,7 @@ class Transformation:
         # An integrated model can't apply a different value to each of a
         # parametric emitter's populations, since their emission was summed
         # when it was extracted
-        if not this_model.per_particle and getattr(emitter, "npop", 1) > 1:
+        if not this_model.per_population and getattr(emitter, "npop", 1) > 1:
             for name in self.transformer._required_params:
                 try:
                     value = get_param(
@@ -833,14 +833,14 @@ class Transformation:
                         f"{name} has one value per population on this "
                         f"parametric {emitter.__class__.__name__}, which an "
                         f"integrated model ({this_model.label}) can't apply. "
-                        "Use a model with per_particle=True to get the "
+                        "Use a model with per_population=True to get the "
                         f"emission of each population with its own {name}."
                     )
 
         # A parametric mask acts on the bins when the emission is extracted,
         # so a transformer only needs to know which populations it applies
         # to (one row of the emission per population)
-        if this_model.per_particle and hasattr(
+        if this_model.per_population and hasattr(
             this_mask, "get_population_mask"
         ):
             this_mask = this_mask.get_population_mask(apply_to.shape[0])

@@ -11,7 +11,7 @@ Tests cover:
 import numpy as np
 import pytest
 from scipy.integrate import quad
-from unyt import Msun, Myr, dimensionless, kpc, yr
+from unyt import Msun, Myr, angstrom, dimensionless, kpc, yr
 
 import synthesizer.parametric.stars as stars_module
 from synthesizer import exceptions
@@ -21,6 +21,7 @@ from synthesizer.emission_models import (
     PacmanEmission,
 )
 from synthesizer.emission_models.attenuation import Calzetti2000
+from synthesizer.instruments import FilterCollection
 from synthesizer.parametric import (
     SFH,
     Galaxy,
@@ -1369,7 +1370,9 @@ class TestPerPopulationEmission:
         """An integrated model can't apply a parameter per population."""
         model = PacmanEmission(test_grid, dust_curve=Calzetti2000())
         combined = Stars.from_populations(self._populations(test_grid))
-        with pytest.raises(exceptions.InconsistentArguments, match="per_part"):
+        with pytest.raises(
+            exceptions.InconsistentArguments, match="per_population=True"
+        ):
             combined.get_spectra(model)
 
         # A value shared by every population is fine
@@ -1390,6 +1393,43 @@ class TestPerPopulationEmission:
         )
         shared.get_spectra(model)
 
+    def test_per_population_aliases_per_particle(self, test_grid):
+        """per_population is an alias of per_particle."""
+        model = PacmanEmission(
+            test_grid, dust_curve=Calzetti2000(), per_population=True
+        )
+        assert model.per_population and model.per_particle
+        model.set_per_population(False)
+        assert not model.per_population and not model.per_particle
+        with pytest.raises(exceptions.InconsistentArguments):
+            IncidentEmission(
+                test_grid, per_particle=True, per_population=False
+            )
+
+    def test_population_photometry(self, test_grid):
+        """A Galaxy gets photometry for each of its Stars' populations."""
+        filters = FilterCollection(
+            tophat_dict={
+                "U": {"lam_eff": 3500 * angstrom, "lam_fwhm": 500 * angstrom},
+                "V": {"lam_eff": 5500 * angstrom, "lam_fwhm": 800 * angstrom},
+            },
+            new_lam=test_grid.lam,
+        )
+        combined = Stars.from_populations(self._populations(test_grid))
+        model = IncidentEmission(test_grid, per_population=True)
+        combined.get_spectra(model)
+        galaxy = Galaxy(stars=combined, redshift=0.0)
+        galaxy.get_photo_lnu(filters)
+
+        photo = combined.population_photo_lnu[model.label]
+        expected = combined.population_spectra[model.label].get_photo_lnu(
+            filters
+        )
+        np.testing.assert_allclose(
+            photo.photometry.value, expected.photometry.value
+        )
+        assert photo.photometry.shape == (2, 3)
+
     @pytest.mark.parametrize("bimodal", [False, True])
     def test_matches_separate_populations(self, test_grid, bimodal):
         """Per population parameters match each population on its own.
@@ -1400,7 +1440,7 @@ class TestPerPopulationEmission:
         own scalar parameters does.
         """
 
-        def make_model(per_particle):
+        def make_model(per_population):
             if bimodal:
                 return BimodalPacmanEmission(
                     test_grid,
@@ -1408,10 +1448,12 @@ class TestPerPopulationEmission:
                     tau_v_birth="tau_v",
                     dust_curve_ism=Calzetti2000(),
                     dust_curve_birth=Calzetti2000(),
-                    per_particle=per_particle,
+                    per_population=per_population,
                 )
             return PacmanEmission(
-                test_grid, dust_curve=Calzetti2000(), per_particle=per_particle
+                test_grid,
+                dust_curve=Calzetti2000(),
+                per_population=per_population,
             )
 
         expected = {}
@@ -1427,7 +1469,7 @@ class TestPerPopulationEmission:
             rows = np.array(rows)
             scale = np.abs(rows).max()
             np.testing.assert_allclose(
-                combined.particle_spectra[label].lnu.value,
+                combined.population_spectra[label].lnu.value,
                 rows,
                 rtol=0,
                 atol=1e-12 * scale,
@@ -1455,13 +1497,13 @@ class TestPerPopulationEmission:
         combined.get_lines(
             lines,
             PacmanEmission(
-                test_grid, dust_curve=Calzetti2000(), per_particle=True
+                test_grid, dust_curve=Calzetti2000(), per_population=True
             ),
         )
         for label, rows in expected.items():
             rows = np.array(rows)
             np.testing.assert_allclose(
-                combined.particle_lines[label].luminosity.value,
+                combined.population_lines[label].luminosity.value,
                 rows,
                 rtol=0,
                 atol=1e-12 * max(np.abs(rows).max(), 1.0),

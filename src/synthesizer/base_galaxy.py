@@ -646,10 +646,14 @@ class BaseGalaxy:
                 out_dtype=out_dtype,
             )
 
-            # If we have particle spectra do that too (not applicable to
-            # parametric Galaxy)
+            # If we have per particle (or per population) spectra do that too
             if hasattr(self.stars, "particle_spectra"):
-                self.stars.get_particle_photo_lnu(
+                get_per_element_photo = (
+                    self.stars.get_population_photo_lnu
+                    if self.stars.is_parametric
+                    else self.stars.get_particle_photo_lnu
+                )
+                get_per_element_photo(
                     filters,
                     verbose,
                     nthreads=nthreads,
@@ -763,10 +767,14 @@ class BaseGalaxy:
                 out_dtype=out_dtype,
             )
 
-            # If we have particle spectra do that too (not applicable to
-            # parametric Galaxy)
+            # If we have per particle (or per population) spectra do that too
             if hasattr(self.stars, "particle_spectra"):
-                self.stars.get_particle_photo_fnu(
+                get_per_element_photo = (
+                    self.stars.get_population_photo_fnu
+                    if self.stars.is_parametric
+                    else self.stars.get_particle_photo_fnu
+                )
+                get_per_element_photo(
                     filters,
                     verbose,
                     nthreads=nthreads,

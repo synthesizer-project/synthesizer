@@ -227,9 +227,11 @@ class Stars(StarsComponent):
         # The (optional) names of the populations
         self.population_names = None
 
-        # Containers for the emission of each population (stored like the
-        # per particle emission of particle components, one row per
-        # population)
+        # Containers for the emission of each population, one row per
+        # population. The emission models store per population emission
+        # under the same names as per particle emission, the
+        # population_spectra, population_lines and population_photo_*
+        # properties are the names to use
         self.particle_spectra = {}
         self.particle_lines = {}
         self.particle_photo_lnu = {}
@@ -860,25 +862,78 @@ class Stars(StarsComponent):
         new.initial_mass = np.sum(masses) * Msun
         return new
 
-    def get_particle_photo_lnu(self, *args, **kwargs):
+    def get_population_photo_lnu(self, *args, **kwargs):
         """Calculate the luminosity photometry of each population.
 
-        This shares the Particles implementation, with one row per population
-        in place of one per particle (see Particles.get_particle_photo_lnu).
+        This takes the same arguments as Particles.get_particle_photo_lnu,
+        with one row per population in place of one per particle.
+
+        Returns:
+            dict:
+                The PhotometryCollection of each population's spectra, keyed
+                by spectra label (also stored in population_photo_lnu).
         """
         from synthesizer.particle.particles import Particles
 
         return Particles.get_particle_photo_lnu(self, *args, **kwargs)
 
-    def get_particle_photo_fnu(self, *args, **kwargs):
+    def get_population_photo_fnu(self, *args, **kwargs):
         """Calculate the flux photometry of each population.
 
-        This shares the Particles implementation, with one row per population
-        in place of one per particle (see Particles.get_particle_photo_fnu).
+        This takes the same arguments as Particles.get_particle_photo_fnu,
+        with one row per population in place of one per particle.
+
+        Returns:
+            dict:
+                The PhotometryCollection of each population's spectra, keyed
+                by spectra label (also stored in population_photo_fnu).
         """
         from synthesizer.particle.particles import Particles
 
         return Particles.get_particle_photo_fnu(self, *args, **kwargs)
+
+    @property
+    def population_spectra(self):
+        """The spectra of each population, keyed by label.
+
+        Returns:
+            dict:
+                The Sed of each label, with one row per population.
+        """
+        return self.particle_spectra
+
+    @property
+    def population_lines(self):
+        """The lines of each population, keyed by label.
+
+        Returns:
+            dict:
+                The LineCollection of each label, with one row per
+                population.
+        """
+        return self.particle_lines
+
+    @property
+    def population_photo_lnu(self):
+        """The luminosity photometry of each population, keyed by label.
+
+        Returns:
+            dict:
+                The PhotometryCollection of each label, with one row per
+                population.
+        """
+        return self.particle_photo_lnu
+
+    @property
+    def population_photo_fnu(self):
+        """The flux photometry of each population, keyed by label.
+
+        Returns:
+            dict:
+                The PhotometryCollection of each label, with one row per
+                population.
+        """
+        return self.particle_photo_fnu
 
     @property
     def bin_axes(self):
