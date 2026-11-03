@@ -17,8 +17,15 @@ Example usage:
 """
 
 import numpy as np
+from scipy.special import erf
 
 from synthesizer import exceptions
+
+# The number of log spaced panels the numerical CDF integrates the
+# distribution over (spanning 8 decades below the highest metallicity needed)
+# and the order of the Gauss-Legendre quadrature within each panel
+NUMERICAL_CDF_PANELS = 1024
+NUMERICAL_CDF_ORDER = 8
 
 # Define a list of the available parametrisations
 parametrisations = (
@@ -90,6 +97,62 @@ class Common:
             return np.array([self._weight(z) for z in metal])
 
         return self._weight(metal)
+
+    def get_cdf(self, metals):
+        """Get the weight between a metallicity of zero and each metallicity.
+
+        Children with a closed form override this, the default integrates
+        the distribution numerically with Gauss-Legendre quadrature over
+        log spaced panels whose edges include the requested metallicities.
+
+        Args:
+            metals (np.ndarray of float):
+                The (linear) metallicities at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The integrated weight up to each metallicity.
+        """
+        metals = np.asarray(metals, dtype=np.float64)
+        top = np.max(metals, initial=0.0)
+        if top <= 0.0:
+            return np.zeros_like(metals)
+
+        # Build the panel edges
+        edges = np.concatenate(
+            (
+                [0.0],
+                np.logspace(
+                    np.log10(top) - 8, np.log10(top), NUMERICAL_CDF_PANELS
+                ),
+                metals.ravel(),
+            )
+        )
+        edges = np.unique(edges[edges >= 0.0])
+
+        # Integrate the distribution over each panel
+        nodes, weights = np.polynomial.legendre.leggauss(NUMERICAL_CDF_ORDER)
+        half = 0.5 * np.diff(edges)
+        mid = 0.5 * (edges[1:] + edges[:-1])
+        points = (mid[:, None] + half[:, None] * nodes).ravel()
+        dist = np.asarray(
+            self.get_dist_weight(points), dtype=np.float64
+        ).reshape(half.size, NUMERICAL_CDF_ORDER)
+        cdf = np.concatenate(([0.0], np.cumsum(half * (dist @ weights))))
+        return np.interp(metals, edges, cdf)
+
+    def get_bin_weights(self, edges):
+        """Get the weight of each metallicity bin.
+
+        Args:
+            edges (np.ndarray of float):
+                The (linear) metallicity bin edges.
+
+        Returns:
+            np.ndarray of float:
+                The integrated weight in each bin.
+        """
+        return np.diff(self.get_cdf(edges))
 
 
 class DeltaConstant(Common):
@@ -228,3 +291,19 @@ class Normal(Common):
         norm = 1 / (self.sigma * np.sqrt(2 * np.pi))
         exponent = ((metal - self.mean) / self.sigma) ** 2
         return norm * np.exp(-0.5 * exponent)
+
+    def get_cdf(self, metals):
+        """Get the weight between a metallicity of zero and each metallicity.
+
+        Args:
+            metals (np.ndarray of float):
+                The (linear) metallicities at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The integrated weight up to each metallicity.
+        """
+        metals = np.maximum(np.asarray(metals, dtype=np.float64), 0.0)
+        mean = float(self.mean)
+        scale = float(self.sigma) * np.sqrt(2.0)
+        return 0.5 * (erf((metals - mean) / scale) - erf(-mean / scale))
