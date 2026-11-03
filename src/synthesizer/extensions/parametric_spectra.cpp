@@ -6,15 +6,18 @@
  * using the bin in cell (BIC) approach (see weights.h) and the resulting
  * grid weights are contracted with the grid spectra.
  *
- * This is the parametric sibling of integrated_spectra.
+ * This is the parametric sibling of integrated_spectra (summed over all
+ * populations) and particle_spectra (one spectrum per population).
  *****************************************************************************/
 /* C includes */
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <new>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <type_traits>
 #include <vector>
 
 /* Python includes */
@@ -223,6 +226,156 @@ static int get_nlam(PyObject *spectra_obj) {
   PyArrayObject *np_spectra = reinterpret_cast<PyArrayObject *>(spectra_obj);
   return static_cast<int>(
       PyArray_DIM(np_spectra, PyArray_NDIM(np_spectra) - 1));
+}
+
+/* Fortran BLAS gemm signatures, as exported by scipy.linalg.cython_blas. */
+typedef void (*dgemm_t)(char *, char *, int *, int *, int *, double *,
+                        double *, int *, double *, int *, double *, double *,
+                        int *);
+typedef void (*sgemm_t)(char *, char *, int *, int *, int *, float *, float *,
+                        int *, float *, int *, float *, float *, int *);
+
+/* The BLAS routines, fetched from SciPy when the module is imported. */
+static dgemm_t blas_dgemm = NULL;
+static sgemm_t blas_sgemm = NULL;
+
+/**
+ * @brief Fetch a BLAS routine from scipy.linalg.cython_blas.
+ *
+ * SciPy exports C pointers to the BLAS it links against, so we can use an
+ * optimised BLAS without linking one ourselves at build time.
+ *
+ * @param capi: The cython_blas __pyx_capi__ dictionary.
+ * @param name: The routine name (e.g. "dgemm").
+ *
+ * @return The routine's address, or NULL (with a Python error set).
+ */
+static void *get_blas_routine(PyObject *capi, const char *name) {
+  PyObject *capsule = PyDict_GetItemString(capi, name);
+  if (capsule == NULL) {
+    PyErr_Format(PyExc_ImportError,
+                 "scipy.linalg.cython_blas does not export %s.", name);
+    return NULL;
+  }
+  return PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
+}
+
+/**
+ * @brief Load the BLAS gemm routines from SciPy.
+ *
+ * @return 0 on success, -1 (with a Python error set) otherwise.
+ */
+static int load_blas(void) {
+  PyObject *module = PyImport_ImportModule("scipy.linalg.cython_blas");
+  if (module == NULL) {
+    return -1;
+  }
+  PyObject *capi = PyObject_GetAttrString(module, "__pyx_capi__");
+  Py_DECREF(module);
+  if (capi == NULL) {
+    return -1;
+  }
+  blas_dgemm = reinterpret_cast<dgemm_t>(get_blas_routine(capi, "dgemm"));
+  blas_sgemm = reinterpret_cast<sgemm_t>(get_blas_routine(capi, "sgemm"));
+  Py_DECREF(capi);
+  return (blas_dgemm == NULL || blas_sgemm == NULL) ? -1 : 0;
+}
+
+/**
+ * @brief Call the BLAS gemm matching the precision of Real.
+ *
+ * Computes C = A B for column major A (m, k), B (k, n) and C (m, n).
+ */
+template <typename Real>
+static void gemm(int m, int n, int k, const Real *a, int lda, const Real *b,
+                 int ldb, Real *c, int ldc) {
+  char trans = 'N';
+  Real alpha = 1;
+  Real beta = 0;
+  if constexpr (std::is_same_v<Real, double>) {
+    blas_dgemm(&trans, &trans, &m, &n, &k, &alpha, const_cast<double *>(a),
+               &lda, const_cast<double *>(b), &ldb, &beta, c, &ldc);
+  } else {
+    blas_sgemm(&trans, &trans, &m, &n, &k, &alpha, const_cast<float *>(a),
+               &lda, const_cast<float *>(b), &ldb, &beta, c, &ldc);
+  }
+}
+
+/**
+ * @brief Contract each population's grid weights with the grid spectra.
+ *
+ * This is the dense product out (npop, nlam) = weights (npop, grid size) x
+ * spectra (grid size, nlam). Unlike particles, which each touch only 2^ndim
+ * grid points, a population can touch every grid point, so this is done with
+ * an optimised BLAS gemm.
+ *
+ * Read as column major, the row major arrays are the transposes, so we
+ * compute out^T = spectra^T weights^T. A wavelength mask is handled by
+ * calling gemm once per contiguous run of unmasked wavelengths, which the
+ * leading dimensions let us address without copying. Masked wavelengths are
+ * left untouched in the (zero initialised) output.
+ *
+ * The product is computed at the grid precision and cast to OutT if needed.
+ *
+ * NOTE: BLAS threading is controlled by the BLAS library, not nthreads. The
+ * Python callers limit it to the requested number of threads with
+ * threadpoolctl (see synthesizer.utils.blas). Apple's Accelerate can't be
+ * limited at runtime.
+ *
+ * @tparam GridReal The floating-point type of the grid spectra and weights.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
+ * @param grid_props: The grid properties.
+ * @param weights: The (npop, grid size) per population grid weights.
+ * @param npop: The number of populations.
+ * @param out: The zero initialised (npop, nlam) output array.
+ */
+template <typename GridReal, typename OutT>
+static void population_spectra_loop(GridProps *grid_props,
+                                    const GridReal *weights, const int npop,
+                                    OutT *out) {
+
+  tic("population_spectra_loop");
+
+  const GridReal *grid_spectra = grid_props->get_spectra<GridReal>();
+  const int nlam = grid_props->nlam;
+  const int grid_size = grid_props->size;
+
+  /* gemm writes at the grid precision, so stage the result if the output
+   * precision differs. */
+  std::vector<GridReal> staging;
+  GridReal *result;
+  if constexpr (std::is_same_v<GridReal, OutT>) {
+    result = out;
+  } else {
+    staging.assign(static_cast<size_t>(npop) * nlam, 0);
+    result = staging.data();
+  }
+
+  /* Call gemm on each contiguous run of unmasked wavelengths. */
+  int ilam = 0;
+  while (ilam < nlam) {
+    if (grid_props->lam_is_masked(ilam)) {
+      ilam++;
+      continue;
+    }
+    const int start = ilam;
+    while (ilam < nlam && !grid_props->lam_is_masked(ilam)) {
+      ilam++;
+    }
+    gemm<GridReal>(/*m*/ ilam - start, /*n*/ npop, /*k*/ grid_size,
+                   grid_spectra + start, /*lda*/ nlam, weights,
+                   /*ldb*/ grid_size, result + start, /*ldc*/ nlam);
+  }
+
+  /* Cast the staged result into the output. */
+  if constexpr (!std::is_same_v<GridReal, OutT>) {
+    for (size_t i = 0; i < staging.size(); i++) {
+      out[i] = static_cast<OutT>(staging[i]);
+    }
+  }
+
+  toc("population_spectra_loop");
 }
 
 /**
@@ -452,6 +605,162 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
 }
 
 /**
+ * @brief Computes the SED of each parametric population.
+ *
+ * Each population is spread onto the grid with the bin in cell (BIC)
+ * approach and its grid weights contracted with the grid spectra.
+ *
+ * @param np_grid_spectra: The SPS spectra array.
+ * @param grid_tuple: The tuple of grid axis arrays (log10 where flagged).
+ * @param edges_tuple: The tuple of bin edge arrays (linear units), in the
+ *                     same order as grid_tuple.
+ * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
+ * @param log_flags: One boolean per axis flagging log10 grid axes.
+ * @param nthreads: The number of threads to use.
+ * @param np_pop_weights: Precomputed (npop, *grid_shape) weights at the grid
+ *                        dtype, or None.
+ * @param mask: A boolean mask with the shape of the masses or None.
+ * @param np_lam_mask: A wavelength mask or None.
+ * @param out_dtype: Requested floating-point dtype for the returned spectra.
+ * @param prop_names: Optional names for the grid axes (for error messages).
+ *
+ * @return A tuple of the (npop, nlam) per population spectra and the
+ *         (npop, *grid_shape) per population grid weights.
+ */
+PyObject *compute_population_seds(PyObject *self, PyObject *args) {
+
+  tic("compute_population_seds");
+
+  /* We don't need the self argument but it has to be there. */
+  (void)self;
+
+  int nthreads;
+  PyObject *spectra_obj, *grid_tuple, *edges_tuple, *log_flags;
+  PyObject *weights_obj, *mask_obj, *lam_mask_obj, *out_dtype;
+  PyObject *prop_names = NULL;
+  PyArrayObject *np_masses;
+
+  if (!PyArg_ParseTuple(args, "OOOOOiOOOO|O", &spectra_obj, &grid_tuple,
+                        &edges_tuple, &np_masses, &log_flags, &nthreads,
+                        &weights_obj, &mask_obj, &lam_mask_obj, &out_dtype,
+                        &prop_names)) {
+    return NULL;
+  }
+
+  /* Get the number of wavelengths from the spectra. */
+  const int nlam = get_nlam(spectra_obj);
+  if (nlam < 0) {
+    return NULL;
+  }
+
+  /* Extract the grid struct. */
+  PyArrayObject *np_lam_mask =
+      lam_mask_obj == Py_None
+          ? NULL
+          : reinterpret_cast<PyArrayObject *>(lam_mask_obj);
+  auto grid_props = std::unique_ptr<GridProps>(
+      new GridProps(reinterpret_cast<PyArrayObject *>(spectra_obj), grid_tuple,
+                    /*np_lam*/ NULL, np_lam_mask, nlam,
+                    /*np_grid_weights*/ NULL, prop_names));
+  RETURN_IF_PYERR();
+
+  /* Extract the populations. */
+  Populations pops;
+  if (!build_populations(edges_tuple, np_masses, log_flags, mask_obj,
+                         grid_props.get(), pops)) {
+    return NULL;
+  }
+
+  /* Resolve the dtypes. */
+  int grid_typenum = grid_props->get_float_typenum();
+  if (grid_typenum == -1) {
+    grid_typenum = NPY_FLOAT64;
+  }
+  const int output_typenum = resolve_output_typenum(out_dtype, "out_dtype");
+  if (output_typenum < 0) {
+    return NULL;
+  }
+
+  /* Allocate the output. */
+  npy_intp np_dims[2] = {pops.npop, nlam};
+  PyArrayObject *np_pop_spectra =
+      (PyArrayObject *)PyArray_ZEROS(2, np_dims, output_typenum, 0);
+  if (np_pop_spectra == NULL) {
+    return NULL;
+  }
+
+  /* Get the per population weights (at the grid precision, since they feed
+   * gemm alongside the grid spectra), either the ones we were given or new
+   * ones we compute below. */
+  npy_intp np_weight_dims[MAX_GRID_NDIM + 1];
+  np_weight_dims[0] = pops.npop;
+  for (int idim = 0; idim < grid_props->ndim; idim++) {
+    np_weight_dims[idim + 1] = grid_props->dims[idim];
+  }
+  PyArrayObject *np_pop_weights;
+  const bool have_weights = weights_obj != Py_None;
+  if (have_weights) {
+    np_pop_weights = array_or_none(weights_obj, "pop_weights");
+    if (np_pop_weights == NULL) {
+      Py_DECREF(np_pop_spectra);
+      return NULL;
+    }
+    if (PyArray_TYPE(np_pop_weights) != grid_typenum ||
+        PyArray_NDIM(np_pop_weights) != grid_props->ndim + 1 ||
+        !PyArray_IS_C_CONTIGUOUS(np_pop_weights) ||
+        PyArray_SIZE(np_pop_weights) !=
+            static_cast<npy_intp>(pops.npop) * grid_props->size) {
+      Py_DECREF(np_pop_spectra);
+      PyErr_SetString(PyExc_ValueError,
+                      "pop_weights must be a contiguous (npop, *grid_shape) "
+                      "array with the grid's dtype.");
+      return NULL;
+    }
+    Py_INCREF(np_pop_weights);
+  } else {
+    np_pop_weights = (PyArrayObject *)PyArray_ZEROS(
+        grid_props->ndim + 1, np_weight_dims, grid_typenum, 0);
+    if (np_pop_weights == NULL) {
+      Py_DECREF(np_pop_spectra);
+      return NULL;
+    }
+  }
+
+  /* Spread the populations onto the grid (unless we were given the weights)
+   * and contract with the spectra. */
+  dispatch_float(pops.float_typenum, [&](auto p) {
+    dispatch_float(grid_typenum, [&](auto g) {
+      dispatch_float(output_typenum, [&](auto o) {
+        using PopReal = decltype(p);
+        using GridReal = decltype(g);
+        using OutT = decltype(o);
+        GridReal *weights =
+            static_cast<GridReal *>(PyArray_DATA(np_pop_weights));
+        if (!have_weights) {
+          weight_loop_bic_per_population<PopReal, GridReal, GridReal>(
+              grid_props.get(), &pops, weights, nthreads);
+          if (PyErr_Occurred()) {
+            return;
+          }
+        }
+        population_spectra_loop<GridReal, OutT>(
+            grid_props.get(), weights, pops.npop,
+            static_cast<OutT *>(PyArray_DATA(np_pop_spectra)));
+      });
+    });
+  });
+  if (PyErr_Occurred()) {
+    Py_DECREF(np_pop_spectra);
+    Py_DECREF(np_pop_weights);
+    return NULL;
+  }
+
+  toc("compute_population_seds");
+
+  return Py_BuildValue("NN", np_pop_spectra, np_pop_weights);
+}
+
+/**
  * @brief Computes the grid weights of a set of parametric populations.
  *
  * Every population is spread onto the grid with the bin in cell (BIC)
@@ -537,6 +846,9 @@ static PyMethodDef ParametricSedMethods[] = {
     {"compute_parametric_weights", (PyCFunction)compute_parametric_weights,
      METH_VARARGS,
      "Method for calculating the grid weights of parametric populations."},
+    {"compute_population_seds", (PyCFunction)compute_population_seds,
+     METH_VARARGS,
+     "Method for calculating the spectra of each parametric population."},
     {NULL, NULL, 0, NULL}};
 
 /* Make this importable. */
@@ -557,6 +869,10 @@ PyMODINIT_FUNC PyInit_parametric_spectra(void) {
   if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
+    Py_DECREF(m);
+    return NULL;
+  }
+  if (load_blas() < 0) {
     Py_DECREF(m);
     return NULL;
   }

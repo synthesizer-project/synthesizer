@@ -380,10 +380,15 @@ template <typename PartReal, typename GridReal, typename OutT>
 void weight_loop_ngp(GridProps *grid, Particles *parts, int out_size,
                      OutT *out, const int nthreads);
 
-/* Typed bin in cell (BIC) entry point for parametric populations, summing
- * every population into a single grid sized output. */
+/* Typed bin in cell (BIC) entry points for parametric populations. The
+ * integrated version sums every population into a single grid sized output,
+ * the per population version writes one grid sized row per population. */
 template <typename PopReal, typename GridReal, typename OutT>
 void weight_loop_bic(GridProps *grid, Populations *pops, int out_size,
                      OutT *out, const int nthreads);
+
+template <typename PopReal, typename GridReal, typename OutT>
+void weight_loop_bic_per_population(GridProps *grid, Populations *pops,
+                                    OutT *out, const int nthreads);
 
 #endif  // WEIGHTS_H_
