@@ -1409,12 +1409,15 @@ class IntegratedParametricExtractor(Extractor):
     reused, e.g. by the several extractions sharing a mask in a model.
     """
 
-    def _get_weights_key(self, mask):
+    def _get_weights_key(self, mask, axis_values):
         """Get the key the grid weights for a mask are stored under.
 
         Args:
             mask (BinMask):
                 The mask applied to the bins, or None.
+            axis_values (dict):
+                The values along the grid axes the emitter has no bins on
+                (which can differ between models).
 
         Returns:
             tuple:
@@ -1423,9 +1426,33 @@ class IntegratedParametricExtractor(Extractor):
         return (
             self._grid.grid_name,
             None if mask is None else mask.get_key(),
+            tuple(
+                (axis, tuple(value.tolist()))
+                for axis, value in sorted(axis_values.items())
+            ),
         )
 
-    def _get_population_inputs(self, emitter, mask):
+    def _check_bins_in_grid(self, emitter, model):
+        """Warn if any of a parametric emitter's mass is outside the grid.
+
+        Mass outside the grid axes is clamped onto the grid's edges, as it
+        is for particles, so its emission is only approximate.
+
+        Args:
+            emitter (Stars):
+                The parametric emitter.
+            model (EmissionModel):
+                The emission model, for values along axes with no bins.
+        """
+        frac_outside = emitter.get_fraction_outside_grid(self._grid, model)
+        if frac_outside > 0.0:
+            warn(
+                f"Found a {emitter.__class__.__name__} with "
+                f"{frac_outside * 100:.2f}% of its mass outside the grid "
+                "axes (clamped onto the grid's edges)."
+            )
+
+    def _get_population_inputs(self, emitter, mask, axis_values):
         """Get the bins of a parametric emitter in the grid's axes.
 
         Args:
@@ -1433,6 +1460,8 @@ class IntegratedParametricExtractor(Extractor):
                 The parametric emitter.
             mask (BinMask):
                 A mask to apply to the bins, or None.
+            axis_values (dict):
+                The values along the grid axes the emitter has no bins on.
 
         Returns:
             tuple:
@@ -1442,7 +1471,10 @@ class IntegratedParametricExtractor(Extractor):
         # The emission is integrated over the populations, which share their
         # edges, so we can sum them before spreading them onto the grid
         return emitter.get_bins_for_grid(
-            self._grid, mask=mask, combine_populations=True
+            self._grid,
+            mask=mask,
+            combine_populations=True,
+            axis_values=axis_values,
         )
 
     @timed("IntegratedParametricExtractor.generate_lnu")
@@ -1476,7 +1508,8 @@ class IntegratedParametricExtractor(Extractor):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Unused, mass outside the grid is clamped onto its edges.
+                Whether to warn about mass outside the grid, which is
+                clamped onto its edges. False by default.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned spectra arrays.
 
@@ -1485,14 +1518,19 @@ class IntegratedParametricExtractor(Extractor):
         """
         out_dtype = resolve_out_dtype(out_dtype)
 
-        # Reuse stored grid weights for this grid and mask if we have them
-        weights_key = self._get_weights_key(mask)
+        if do_grid_check:
+            self._check_bins_in_grid(emitter, model)
+
+        # Reuse stored grid weights for this grid, mask and values along
+        # any axes without bins if we have them
+        axis_values = emitter.get_grid_axis_values(self._grid, model)
+        weights_key = self._get_weights_key(mask, axis_values)
         grid_weights = emitter._grid_weights.get(weights_key)
 
         # Get the bins in the grid's axes (the mask is only needed if we
         # have to compute the weights)
         edges, masses, log_flags = self._get_population_inputs(
-            emitter, mask if grid_weights is None else None
+            emitter, mask if grid_weights is None else None, axis_values
         )
 
         # If nthreads is -1 then use all available threads
@@ -1553,20 +1591,26 @@ class IntegratedParametricExtractor(Extractor):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Unused, mass outside the grid is clamped onto its edges.
+                Whether to warn about mass outside the grid, which is
+                clamped onto its edges. False by default.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned line arrays.
         """
         out_dtype = resolve_out_dtype(out_dtype)
 
-        # Reuse stored grid weights for this grid and mask if we have them
-        weights_key = self._get_weights_key(mask)
+        if do_grid_check:
+            self._check_bins_in_grid(emitter, model)
+
+        # Reuse stored grid weights for this grid, mask and values along
+        # any axes without bins if we have them
+        axis_values = emitter.get_grid_axis_values(self._grid, model)
+        weights_key = self._get_weights_key(mask, axis_values)
         grid_weights = emitter._grid_weights.get(weights_key)
 
         # Get the bins in the grid's axes (the mask is only needed if we
         # have to compute the weights)
         edges, masses, log_flags = self._get_population_inputs(
-            emitter, mask if grid_weights is None else None
+            emitter, mask if grid_weights is None else None, axis_values
         )
 
         # If nthreads is -1 then use all available threads
@@ -1629,7 +1673,7 @@ class PopulationExtractor(IntegratedParametricExtractor):
     """
 
     def _get_population_spectra(
-        self, emitter, mask, grid, lam_mask, nthreads, out_dtype
+        self, emitter, model, mask, grid, lam_mask, nthreads, out_dtype
     ):
         """Get the emission of each population from a grid.
 
@@ -1639,6 +1683,8 @@ class PopulationExtractor(IntegratedParametricExtractor):
         Args:
             emitter (Stars):
                 The parametric emitter.
+            model (EmissionModel):
+                The emission model, for values along axes with no bins.
             mask (BinMask):
                 A mask to apply to the bins, or None.
             grid (np.ndarray):
@@ -1654,10 +1700,16 @@ class PopulationExtractor(IntegratedParametricExtractor):
             np.ndarray:
                 The (npop, nlam) emission of each population.
         """
-        weights_key = ("populations", *self._get_weights_key(mask))
+        axis_values = emitter.get_grid_axis_values(self._grid, model)
+        weights_key = (
+            "populations",
+            *self._get_weights_key(mask, axis_values),
+        )
         pop_weights = emitter._grid_weights.get(weights_key)
         edges, masses, log_flags = emitter.get_bins_for_grid(
-            self._grid, mask=mask if pop_weights is None else None
+            self._grid,
+            mask=mask if pop_weights is None else None,
+            axis_values=axis_values,
         )
         spec, pop_weights = compute_population_seds(
             grid,
@@ -1705,7 +1757,8 @@ class PopulationExtractor(IntegratedParametricExtractor):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Unused, mass outside the grid is clamped onto its edges.
+                Whether to warn about mass outside the grid, which is
+                clamped onto its edges. False by default.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned spectra arrays.
 
@@ -1736,10 +1789,19 @@ class PopulationExtractor(IntegratedParametricExtractor):
                 integrated_sed,
             )
 
+        if do_grid_check:
+            self._check_bins_in_grid(emitter, model)
+
         # Otherwise the integrated emission is the sum of the populations',
         # which is far cheaper than reading the grid again
         spec = self._get_population_spectra(
-            emitter, mask, self._spectra_grid, lam_mask, nthreads, out_dtype
+            emitter,
+            model,
+            mask,
+            self._spectra_grid,
+            lam_mask,
+            nthreads,
+            out_dtype,
         )
         return (
             Sed(
@@ -1784,7 +1846,8 @@ class PopulationExtractor(IntegratedParametricExtractor):
                 The number of threads to use in the extraction. If -1 then
                 all available threads will be used.
             do_grid_check (bool):
-                Unused, mass outside the grid is clamped onto its edges.
+                Whether to warn about mass outside the grid, which is
+                clamped onto its edges. False by default.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned line arrays.
 
@@ -1820,12 +1883,27 @@ class PopulationExtractor(IntegratedParametricExtractor):
                 integrated_lines,
             )
 
+        if do_grid_check:
+            self._check_bins_in_grid(emitter, model)
+
         # Otherwise the integrated lines are the sum of the populations'
         lum = self._get_population_spectra(
-            emitter, mask, self._line_lum_grid, lam_mask, nthreads, out_dtype
+            emitter,
+            model,
+            mask,
+            self._line_lum_grid,
+            lam_mask,
+            nthreads,
+            out_dtype,
         )
         cont = self._get_population_spectra(
-            emitter, mask, self._line_cont_grid, lam_mask, nthreads, out_dtype
+            emitter,
+            model,
+            mask,
+            self._line_cont_grid,
+            lam_mask,
+            nthreads,
+            out_dtype,
         )
         lum = lum * self._line_lum_grid.units
         cont = cont * self._line_cont_grid.units
