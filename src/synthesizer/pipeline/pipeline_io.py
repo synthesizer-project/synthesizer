@@ -182,6 +182,10 @@ class PipelineIO:
         self.finalised = False
         self.rows_written = 0
 
+        # Per-galaxy data goes to this file. It's the output file unless the
+        # Pipeline is checkpointing, in which case it's the open segment.
+        self.galaxy_filepath = self.filepath
+
     @contextmanager
     def silenced(self):
         """Silence the writer's reporting within a with block."""
@@ -368,7 +372,12 @@ class PipelineIO:
             data = np.array([d.encode("utf-8") for d in data])
 
         # Write the dataset with the appropriate units
-        with h5py.File(self.filepath, "a") as hdf:
+        filepath = (
+            self.galaxy_filepath
+            if getattr(self, "_writing_galaxy_data", False)
+            else self.filepath
+        )
+        with h5py.File(filepath, "a") as hdf:
             # A previous flush may already have created this dataset. Empty
             # batches have nothing to add; otherwise make sure their shape,
             # dtype and units agree before extending the first axis.

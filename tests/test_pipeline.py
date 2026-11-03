@@ -3455,6 +3455,93 @@ class TestPipelineFlushing:
 
         run_pipeline("out.hdf5", flush_ngalaxies=1, before_write=check)
 
+    @staticmethod
+    def _run_files(tmp_path, name):
+        """Return the segment and checkpoint files left by a run."""
+        stem = Path(name).stem
+        return sorted(
+            p.name
+            for p in tmp_path.iterdir()
+            if p.name.startswith(f"{stem}.seg") or ".ckpt" in p.name
+        )
+
+    @pytest.mark.parametrize("interval", [0, 3600])
+    def test_checkpointing_matches_unflushed(
+        self, run_pipeline, tmp_path, interval
+    ):
+        """Checkpointing gives the same file and cleans up after itself."""
+        expected = run_pipeline("expected.hdf5")
+        checkpointed = run_pipeline("ckpt.hdf5", checkpoint_interval=interval)
+        self._assert_files_match(expected, checkpointed)
+        assert self._run_files(tmp_path, "ckpt.hdf5") == []
+
+    def test_checkpoint_contents(self, run_pipeline, tmp_path):
+        """The final checkpoint records the complete run before writing."""
+
+        def check(pipeline):
+            with h5py.File(tmp_path / "ckpt.ckpt.hdf5") as hdf:
+                assert hdf.attrs["status"] == "complete"
+                assert hdf.attrs["n_done"] == self.NGAL
+                assert hdf.attrs["rng_seed"] == str(pipeline.rng_seed)
+                assert hdf["Segments/Rows"][...].sum() == self.NGAL
+                for name in hdf["Segments/Files"][...]:
+                    assert (tmp_path / name.decode()).exists()
+                assert set(hdf["Fingerprint"].attrs) == {"config", "galaxies"}
+                assert "avg" in hdf["CosmicSED/Lnu/Stars"]
+                assert sum(hdf["OpCounts"].attrs.values()) > 0
+            # The previous checkpoint is kept as a fallback
+            assert (tmp_path / "ckpt.ckpt.hdf5.prev").exists()
+
+        run_pipeline("ckpt.hdf5", checkpoint_interval=0, before_write=check)
+
+    def test_compaction_bounds_segments(
+        self, run_pipeline, tmp_path, monkeypatch
+    ):
+        """Merging closed segments keeps the number of files bounded."""
+        from synthesizer.pipeline import checkpoint
+
+        monkeypatch.setattr(checkpoint, "_MAX_SEGMENTS", 2)
+        nfiles = []
+        original = Pipeline._checkpoint
+
+        def _counting_checkpoint(pipeline, *args, **kwargs):
+            original(pipeline, *args, **kwargs)
+            nfiles.append(
+                len(
+                    [
+                        p
+                        for p in self._run_files(tmp_path, "ckpt.hdf5")
+                        if ".seg" in p
+                    ]
+                )
+            )
+
+        monkeypatch.setattr(Pipeline, "_checkpoint", _counting_checkpoint)
+        expected = run_pipeline("expected.hdf5")
+        checkpointed = run_pipeline("ckpt.hdf5", checkpoint_interval=0)
+        self._assert_files_match(expected, checkpointed)
+
+        # At most the closed segments, those merged away (kept until the
+        # next checkpoint) and the open segment (created on first write)
+        # (one checkpoint per galaxy, then the final one)
+        assert len(nfiles) == self.NGAL + 1
+        assert max(nfiles) <= 2 * checkpoint._MAX_SEGMENTS
+
+    def test_invalid_checkpoint_interval(
+        self, nebular_emission_model, tmp_path
+    ):
+        """A negative interval or a missing outpath is rejected."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            Pipeline(
+                emission_model=nebular_emission_model,
+                outpath=tmp_path / "out.hdf5",
+                checkpoint_interval=-1,
+            )
+        with pytest.raises(exceptions.InconsistentArguments):
+            Pipeline(
+                emission_model=nebular_emission_model, checkpoint_interval=0
+            )
+
 
 def test_parametric_sfh_rejects_mismatched_ages(
     nebular_emission_model, single_star_parametric
@@ -3699,6 +3786,7 @@ def test_late_product_backfills_flushed_rows(tmp_path):
 
     io = PipelineIO.__new__(PipelineIO)
     io.filepath = str(tmp_path / "late.hdf5")
+    io.galaxy_filepath = io.filepath
     io.is_parallel = io.is_collective = False
     io.verbose, io._start_time = 0, time.perf_counter()
     io.rows_written = 2

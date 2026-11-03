@@ -28,6 +28,7 @@ Example usage:
 ```
 """
 
+import os
 import time
 from pathlib import Path
 
@@ -35,9 +36,11 @@ import numpy as np
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import check_atomic_timing, check_openmp, exceptions
+from synthesizer._version import __version__
 from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.instruments import InstrumentCollection
 from synthesizer.particle import Galaxy as ParticleGalaxy
+from synthesizer.pipeline import checkpoint
 from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
     NO_MODEL_LABEL,
@@ -187,6 +190,7 @@ class Pipeline:
         flush_ngalaxies=None,
         flush_memory=None,
         rng_seed=None,
+        checkpoint_interval=None,
     ):
         """Initialise the Pipeline object.
 
@@ -255,6 +259,19 @@ class Pipeline:
                 in which case a seed is drawn at random. Either
                 way it is stored as the rng_seed attribute and
                 written to the output file.
+            checkpoint_interval (float): Checkpoint the run every
+                this many seconds of wall time, so it can be
+                resumed if killed. Checkpoints happen between
+                galaxies, so a galaxy taking longer than the
+                interval checkpoints as soon as it finishes. This
+                flushes the outputs at every checkpoint, so an
+                outpath is required. Until write is called the
+                outputs live in segment files next to the output
+                file (e.g. out.seg0.hdf5) and the checkpoint in
+                out.ckpt.hdf5 (with the previous one in
+                out.ckpt.hdf5.prev); write merges the segments
+                into the output file and removes them all.
+                Default is None (no checkpointing).
         """
         # Attributes to track timing
         self._start_time = time.perf_counter()
@@ -531,7 +548,9 @@ class Pipeline:
 
         # Attach the output path and the thresholds for flushing outputs to
         # file while running
-        self._setup_output(outpath, flush_ngalaxies, flush_memory)
+        self._setup_output(
+            outpath, flush_ngalaxies, flush_memory, checkpoint_interval
+        )
 
         # Attach the base seed for any noise
         self._setup_rng(rng_seed)
@@ -545,7 +564,9 @@ class Pipeline:
         if self.using_mpi:
             comm.Barrier()
 
-    def _setup_output(self, outpath, flush_ngalaxies, flush_memory):
+    def _setup_output(
+        self, outpath, flush_ngalaxies, flush_memory, checkpoint_interval
+    ):
         """Validate and attach the output path and flushing thresholds.
 
         Args:
@@ -555,6 +576,8 @@ class Pipeline:
                 The number of galaxies at which to flush outputs to file.
             flush_memory (float):
                 The memory (in GB) at which to flush outputs to file.
+            checkpoint_interval (float):
+                The wall time (in seconds) between checkpoints.
         """
         # Don't accept a zero or negative threshold: we'd otherwise flush
         # immediately after every galaxy, which is a surprising way to ask
@@ -567,13 +590,26 @@ class Pipeline:
             )
         if flush_memory is not None and not (0 < flush_memory < float("inf")):
             raise exceptions.InconsistentArguments("flush_memory must be > 0")
+        if checkpoint_interval is not None and not (
+            0 <= checkpoint_interval < float("inf")
+        ):
+            raise exceptions.InconsistentArguments(
+                "checkpoint_interval must be >= 0"
+            )
+        self._checkpointing = checkpoint_interval is not None
+
+        # A checkpoint flushes the outputs, so checkpointing implies
+        # flushing
         self._flushing = (
-            flush_ngalaxies is not None or flush_memory is not None
+            flush_ngalaxies is not None
+            or flush_memory is not None
+            or self._checkpointing
         )
         if self._flushing and outpath is None:
             raise exceptions.InconsistentArguments(
                 "An outpath must be given to flush outputs to file while "
-                "running (flush_ngalaxies or flush_memory were set)."
+                "running (flush_ngalaxies, flush_memory or "
+                "checkpoint_interval were set)."
             )
         self._outpath = outpath
         self._flush_ngalaxies = flush_ngalaxies
@@ -585,6 +621,18 @@ class Pipeline:
         self._n_buffered = 0
         self._buffered_nbytes = 0
         self._row_templates = {}
+
+        # Checkpointing state: the closed segments holding the
+        # galaxies done so far, those merged away at the last
+        # checkpoint (still referenced by the previous checkpoint
+        # until the next one), and the index of the next segment
+        self._checkpoint_interval = checkpoint_interval
+        self._segments = []
+        self._stale_segments = []
+        self._segment_index = 0
+        self._last_checkpoint = None
+        self._checkpoint_requested = False
+        self._fingerprints = None
 
     def _setup_rng(self, rng_seed):
         """Attach the base seed for the noise the Pipeline applies.
@@ -5043,6 +5091,13 @@ class Pipeline:
                 )
             self._create_output_file(self._outpath, self.verbose)
 
+        # If we are checkpointing, fingerprint the run before we start
+        # consuming galaxies and send their outputs to segments
+        if self._checkpointing:
+            self._fingerprints = self._get_fingerprints()
+            self._open_segment()
+            self._last_checkpoint = time.perf_counter()
+
         # Print the header for the pipeline run to the console
         with timer("Pipeline.run.print_progress_header"):
             self._print_progress_header()
@@ -5189,6 +5244,14 @@ class Pipeline:
             if self._should_flush():
                 self._flush_outputs()
 
+            # Checkpoint if it's time (or we've been asked to)
+            if self._checkpointing and (
+                self._checkpoint_requested
+                or time.perf_counter() - self._last_checkpoint
+                >= self._checkpoint_interval
+            ):
+                self._checkpoint(igal + 1)
+
             # Output into the progress table
             self._add_progress_row(gal, igal, start_gal)
             igal += 1
@@ -5196,6 +5259,12 @@ class Pipeline:
             # Now we can remove the galaxy to free up memory
             with timer("Pipeline.run.cleanup_galaxy"):
                 del gal
+
+        # Mark the run complete in a final checkpoint. This must come
+        # before the cosmic SEDs and operation counts are combined
+        # across ranks, since the checkpoint holds this rank's alone.
+        if self._checkpointing:
+            self._checkpoint(igal, status="complete")
 
         # print the footer for the pipeline run to the console
         with timer("Pipeline.run.print_progress_footer"):
@@ -5240,6 +5309,138 @@ class Pipeline:
 
         # Every galaxy may differ substantially in size.
         return self._buffered_nbytes >= self._flush_nbytes
+
+    def _get_fingerprints(self):
+        """Return hashes identifying the run's configuration and inputs.
+
+        A resumed run must match both, otherwise the galaxies already
+        done would not line up with those still to do.
+
+        Returns:
+            dict: The configuration and galaxies fingerprints.
+        """
+        ops = self._operation_kwargs
+        config = (
+            sorted(
+                (
+                    name,
+                    sorted(map(str, labels)),
+                    checkpoint.describe(kw.kwargs),
+                )
+                for name, entries in ops._func_map.items()
+                for kw, labels in entries.items()
+            ),
+            sorted(
+                (name, checkpoint.describe(kw.kwargs))
+                for name, kw in ops._unique_func_map.items()
+            ),
+            sorted(str(label) for label, _ in self.emission_model.items()),
+            sorted(inst.label for inst in self.instruments),
+            sorted(self._analysis_results_keys),
+        )
+        galaxies = [
+            (
+                gal.redshift,
+                getattr(gal.stars, "nstars", None),
+                getattr(gal.black_holes, "nbh", None),
+            )
+            for gal in self.galaxies
+        ]
+        return {
+            "config": checkpoint.fingerprint(config),
+            "galaxies": checkpoint.fingerprint(galaxies),
+        }
+
+    def _open_segment(self):
+        """Send the galaxy outputs to the next segment file."""
+        self.io_helper.galaxy_filepath = checkpoint.segment_path(
+            self.io_helper.filepath, self._segment_index
+        )
+        self.io_helper.rows_written = 0
+        self._segment_index += 1
+
+    @timed("Pipeline._checkpoint")
+    def _checkpoint(self, n_done, status="running"):
+        """Checkpoint the run so it can be resumed from here.
+
+        This flushes the outputs, closes the open segment (merging
+        the closed segments into one if there are too many), writes
+        the checkpoint and opens the next segment. Checkpoints are
+        local to each rank.
+
+        Args:
+            n_done (int):
+                The number of this rank's galaxies done so far.
+            status (str):
+                "running", or "complete" once every galaxy is done.
+        """
+        start = time.perf_counter()
+
+        # Flush and close the open segment
+        if self._n_buffered > 0:
+            self._flush_outputs()
+        if self.io_helper.rows_written > 0:
+            self._segments.append(
+                (self.io_helper.galaxy_filepath, self.io_helper.rows_written)
+            )
+
+        # Merge the closed segments if there are too many. The merged
+        # away files are still referenced by the previous checkpoint
+        # (our fallback) so they can only go once the next one is
+        # written.
+        # ponytail: full-merge compaction, tiered merging if long runs
+        # with frequent checkpoints make the rewrite cost bite
+        merged_away = []
+        if len(self._segments) >= checkpoint._MAX_SEGMENTS:
+            merged = checkpoint.segment_path(
+                self.io_helper.filepath, self._segment_index
+            )
+            self._segment_index += 1
+            checkpoint.merge_segments(self._segments, f"{merged}.tmp")
+            os.replace(f"{merged}.tmp", merged)
+            merged_away = [path for path, _ in self._segments]
+            self._segments = [
+                (merged, sum(nrows for _, nrows in self._segments))
+            ]
+
+        # Write the checkpoint
+        checkpoint.write_checkpoint(
+            checkpoint.checkpoint_path(self.io_helper.filepath),
+            attrs={
+                "synthesizer_version": __version__,
+                "nranks": self.size,
+                "rank": self.rank,
+                "n_galaxies_local": self.n_galaxies_local,
+                "n_galaxies_offset": self.n_galaxies_offset,
+                "n_done": n_done,
+                "rng_seed": str(self.rng_seed),
+                "timestamp": time.time(),
+                "outpath": str(self._outpath),
+                "status": status,
+            },
+            fingerprints=self._fingerprints,
+            segments=self._segments,
+            nested={
+                "CosmicSED/Lnu": self.cosmic_lnus,
+                "CosmicSED/Fnu": self.cosmic_fnus,
+                "CosmicSED/LnuCounts": self._cosmic_lnu_counts,
+                "CosmicSED/FnuCounts": self._cosmic_fnu_counts,
+            },
+            op_counts=self._op_counts,
+        )
+
+        # Nothing references the segments merged away last time now
+        for path in self._stale_segments:
+            if os.path.exists(path):
+                os.remove(path)
+        self._stale_segments = merged_away
+
+        if status == "running":
+            self._open_segment()
+        self._last_checkpoint = time.perf_counter()
+        self._checkpoint_requested = False
+
+        self._took(start, f"Checkpointing after {n_done} galaxies")
 
     @timed("Pipeline._flush_outputs")
     def _flush_outputs(self):
@@ -5835,8 +6036,12 @@ class Pipeline:
                 verbose if verbose is not None else self.verbose,
             )
 
-        # Write the per-galaxy data
-        self._write_galaxy_outputs()
+        # Write the per-galaxy data. A checkpointed run has already
+        # flushed every galaxy to its segments, so merge those instead.
+        if self._checkpointing:
+            checkpoint.merge_segments(self._segments, self.io_helper.filepath)
+        else:
+            self._write_galaxy_outputs()
 
         # Write cosmic spectral luminosity densities
         if self._write_cosmic_lnu:
@@ -5918,6 +6123,20 @@ class Pipeline:
         # A flushed file cannot be written again: its earlier galaxies no
         # longer live on the Pipeline for a second pass.
         self.io_helper.finalised = True
+
+        # The output file is complete, so the run no longer needs its
+        # segments or checkpoints
+        if self._checkpointing:
+            ckpt = checkpoint.checkpoint_path(self.io_helper.filepath)
+            for path in [
+                *(path for path, _ in self._segments),
+                *self._stale_segments,
+                ckpt,
+                f"{ckpt}.prev",
+            ]:
+                if os.path.exists(path):
+                    os.remove(path)
+
         self._took(write_start, "Writing data")
 
         # Totally done!
