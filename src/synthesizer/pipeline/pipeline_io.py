@@ -515,8 +515,12 @@ class PipelineIO:
             if self.is_parallel and indexes is None:
                 data = unify_dict_structure_across_ranks(data, self.comm)
 
-            # Early exit if data is empty
-            if data is None or len(data) == 0:
+            # Early exit if data is empty. Zero-row per-galaxy arrays are
+            # still written so empty ranks hold the dataset with the right
+            # trailing shape.
+            if data is None or (
+                len(data) == 0 and (isinstance(data, dict) or indexes is None)
+            ):
                 return
 
             # Root-level metadata should only be written once, even when using
@@ -759,7 +763,9 @@ class PipelineIO:
                     final_shape = (self.num_galaxies,) + shape[1:]
                     layout = h5py.VirtualLayout(shape=final_shape, dtype=dtype)
 
-                    # Loop over each rank and map the data to the layout
+                    # Loop over each rank and map the data to the layout,
+                    # keeping track of whether any rank had rows to map
+                    mapped = False
                     for rank, (start_i, end_i) in enumerate(zip(starts, ends)):
                         src_file = temp_path.replace("<rank>", str(rank))
                         with h5py.File(src_file, "r") as rank_f:
@@ -769,6 +775,7 @@ class PipelineIO:
                                 continue
                             src_dset = rank_f[dpath]
                             src_shape = src_dset.shape
+                            src_units = src_dset.attrs.get("Units")
                             local_size = src_dset.shape[0]
                         if local_size == 0:
                             continue
@@ -795,6 +802,16 @@ class PipelineIO:
                                 "must match across rank files."
                             )
 
+                        # The units must also match, we don't convert them
+                        if src_units != dattrs.get("Units"):
+                            raise ValueError(
+                                "Cannot create virtual dataset mapping for "
+                                f"{dpath!r}: rank {rank} dataset in "
+                                f"{src_file!r} has units {src_units!r}, but "
+                                f"other ranks have units "
+                                f"{dattrs.get('Units')!r}."
+                            )
+
                         # Create a virtual source for this rank
                         vsource = h5py.VirtualSource(
                             src_file, dpath, shape=(local_size,) + shape[1:]
@@ -813,6 +830,12 @@ class PipelineIO:
                                 f"shape {target_shape}, final virtual shape "
                                 f"{final_shape}. Original error: {exc}"
                             ) from exc
+                        mapped = True
+
+                    # Skip datasets without rows on any rank, otherwise we'd
+                    # make a dataset full of fill values
+                    if not mapped:
+                        continue
 
                     # Create the virtual dataset in the final file
                     vds = hdf.create_virtual_dataset(dpath, layout)
