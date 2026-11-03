@@ -13,7 +13,10 @@ from synthesizer.exceptions import (
     InconsistentArguments,
     UnrecognisedOption,
 )
-from synthesizer.photoionisation import calculate_Q_from_U
+from synthesizer.photoionisation import (
+    add_ionisation_edges,
+    calculate_Q_from_U,
+)
 from synthesizer.synth_warnings import warn
 
 
@@ -26,7 +29,13 @@ class ShapeCommands:
     shape commands for the AGN model and the SED model.
     """
 
-    def table_sed(model_name, lam, lnu, output_dir="./"):
+    def table_sed(
+        model_name,
+        lam,
+        lnu,
+        output_dir="./",
+        sharpen_ionisation_edges=True,
+    ):
         """Create a cloudy input file using a tabulated SED.
 
         TODO: allow the user to instead specify nu and to automatically convert
@@ -42,15 +51,33 @@ class ShapeCommands:
                 Spectral luminosity density
             output_dir (str):
                 Output directory path
+            sharpen_ionisation_edges (bool):
+                If True (default), insert points either side of the H I,
+                He I and He II ionisation edges (see
+                ``add_ionisation_edges``). Without them, cloudy's
+                interpolation of a coarsely sampled SED smears the edges,
+                inflating the ionising photon rate it sees; grids
+                normalised to Q then get the wrong stellar continuum.
 
         Returns:
             list
                 a list of strings with the cloudy input commands
         """
         # if lam is not a unyt_array assume it has units of angstrom and
-        # convert to a unyt_array
+        # convert to a unyt_array (without modifying the caller's array)
         if not isinstance(lam, unyt_array):
-            lam *= angstrom
+            lam = np.asarray(lam, dtype=float) * angstrom
+
+        # Work on a copy of the luminosities so the caller's array (often a
+        # slice of a whole grid) is not modified
+        lnu = np.array(getattr(lnu, "value", lnu), dtype=float)
+
+        # Keep ionisation edges sharp in cloudy's interpolation of the SED
+        if sharpen_ionisation_edges:
+            lam, lnu = add_ionisation_edges(lam, lnu)
+        else:
+            order = np.argsort(lam.to("angstrom").value)
+            lam, lnu = lam[order], lnu[order]
 
         # define frequency
         nu = c / lam
@@ -65,7 +92,7 @@ class ShapeCommands:
         # to make cloudy break
         lnu[lnu <= 0.0] = 1e-100
 
-        # save tabulated spectrum
+        # save tabulated spectrum (increasing energy)
         np.savetxt(
             f"{output_dir}/{model_name}.sed",
             np.array([E_Ryd[::-1], lnu[::-1]]).T,
