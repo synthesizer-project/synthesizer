@@ -3262,6 +3262,40 @@ class TestPipelineFlushing:
         with h5py.File(flushed, "r") as hdf:
             assert hdf["Galaxies/StellarMass/Mass"].shape == (self.NGAL,)
 
+    @pytest.mark.parametrize(
+        "changed",
+        [
+            {"outer": {"value": 2, "extra": 3}},
+            {"outer": {}},
+            {"outer": 2},
+        ],
+    )
+    def test_analysis_structure_must_match_across_flushes(
+        self, nebular_emission_model, changed
+    ):
+        """Reject changed nested result keys after the first flush."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline._analysis_results = {"result": [{"outer": {"value": 1}}]}
+        pipeline._combine_analysis_results()
+        pipeline._analysis_results = {"result": [changed]}
+
+        with pytest.raises(exceptions.BadResult, match="changed structure"):
+            pipeline._combine_analysis_results()
+
+    def test_analysis_structure_must_match_within_flush(
+        self, nebular_emission_model
+    ):
+        """Reject extra nested keys within one batch before merging."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline._analysis_results = {
+            "result": [
+                {"outer": {"value": 1}},
+                {"outer": {"value": 2, "extra": 3}},
+            ]
+        }
+        with pytest.raises(exceptions.BadResult, match="changed structure"):
+            pipeline._combine_analysis_results()
+
     def test_flush_memory_matches_unflushed(self, run_pipeline, monkeypatch):
         """Flushing on a memory threshold flushes when it's reached."""
         # Measure the outputs held per galaxy without flushing

@@ -5642,29 +5642,32 @@ class Pipeline:
                     f"of the same type. Got: {set(types)}"
                 )
 
-            # Combine the list of results into a dict of unyt arrays or a
-            # single unyt array. This will simply return a unyt array if we
-            # hand a list of values
-            combined_data = combine_list_of_dicts(res)
-
             # Each flush appends to the datasets the first one created, so
-            # a different structure would leave some datasets missing rows
+            # a different structure would leave some datasets missing rows.
+            # Check each result before merging: the merge ignores extra keys.
             def get_structure(d):
                 if not isinstance(d, dict):
                     return None
                 return {k: get_structure(v) for k, v in d.items()}
 
             if len(res) > 0:
-                structure = get_structure(combined_data)
-                expected = self._analysis_result_structures.setdefault(
-                    key, structure
+                expected = self._analysis_result_structures.get(
+                    key, get_structure(res[0])
                 )
-                if structure != expected:
-                    raise exceptions.BadResult(
-                        f"Extra analysis result {key} changed structure "
-                        f"between flushes. Expected {expected}, got "
-                        f"{structure}."
-                    )
+                for result in res:
+                    structure = get_structure(result)
+                    if structure != expected:
+                        raise exceptions.BadResult(
+                            f"Extra analysis result {key} changed structure. "
+                            f"Expected {expected}, got {structure}."
+                        )
+
+            # Combine the list of results into a dict of unyt arrays or a
+            # single unyt array. This will simply return a unyt array if we
+            # hand a list of values
+            combined_data = combine_list_of_dicts(res)
+            if len(res) > 0:
+                self._analysis_result_structures[key] = expected
 
             # Store the data
             self._analysis_results[key] = combined_data
