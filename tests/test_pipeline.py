@@ -3375,7 +3375,15 @@ class TestPipelineFlushing:
 
         def _counting_flush(pipeline):
             nflushes.append(pipeline._n_buffered)
+            assert pipeline._buffered_nbytes == get_buffered_nbytes(
+                [
+                    getattr(pipeline, attr)
+                    for attr in pipeline._galaxy_output_attrs
+                ]
+                + [pipeline._analysis_results]
+            )
             flush(pipeline)
+            assert pipeline._buffered_nbytes == 0
 
         monkeypatch.setattr(Pipeline, "_flush_outputs", _counting_flush)
 

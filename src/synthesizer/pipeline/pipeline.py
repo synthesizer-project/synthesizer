@@ -570,6 +570,7 @@ class Pipeline:
 
         # Number of galaxies held in memory since the last flush.
         self._n_buffered = 0
+        self._buffered_nbytes = 0
         self._row_templates = {}
 
     def _say_hello(self):
@@ -4877,6 +4878,8 @@ class Pipeline:
         if hasattr(galaxy, "_extra_analysis_results"):
             for key, res in galaxy._extra_analysis_results.items():
                 self._analysis_results[key].append(res)
+                if self._flush_nbytes is not None:
+                    self._buffered_nbytes += get_buffered_nbytes(res)
 
         for attr in self._galaxy_output_attrs:
             for path, rows in rows_in(getattr(self, attr)):
@@ -4898,6 +4901,10 @@ class Pipeline:
                         np.shape(rows[0]),
                         np.asarray(rows[0]).dtype,
                         getattr(rows[0], "units", None),
+                    )
+                if self._flush_nbytes is not None:
+                    self._buffered_nbytes += get_buffered_nbytes(
+                        rows[before.get(id(rows), 0) :]
                     )
 
         # Done!
@@ -5169,11 +5176,7 @@ class Pipeline:
             return False
 
         # Every galaxy may differ substantially in size.
-        nbytes = get_buffered_nbytes(
-            [getattr(self, attr) for attr in self._galaxy_output_attrs]
-            + [self._analysis_results]
-        )
-        return nbytes >= self._flush_nbytes
+        return self._buffered_nbytes >= self._flush_nbytes
 
     @timed("Pipeline._flush_outputs")
     def _flush_outputs(self):
@@ -5197,6 +5200,7 @@ class Pipeline:
 
         # Reset the counter for the next batch.
         self._n_buffered = 0
+        self._buffered_nbytes = 0
 
     @timed("Pipeline._clean_outputs")
     def _clean_outputs(self):
