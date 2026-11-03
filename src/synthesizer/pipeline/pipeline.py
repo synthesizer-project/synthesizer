@@ -325,6 +325,10 @@ class Pipeline:
             model_labels=emission_model.saved_labels,
         )
 
+        # The IGM used for all observed emissions (a Pipeline only ever uses
+        # one, see _set_igm)
+        self._igm = None
+
         # Define flags for what we will write out
         self._write_lnu_spectra = False
         self._write_fnu_spectra = False
@@ -1863,6 +1867,35 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Lnu Spectra"] += time.perf_counter() - start
 
+    def _set_igm(self, igm):
+        """Set the single IGM the Pipeline uses for all observed emissions.
+
+        Args:
+            igm (IGMBase):
+                The IGM model to use. None leaves the Pipeline's IGM as it
+                is.
+
+        Raises:
+            InconsistentArguments
+                If a different IGM has already been passed.
+        """
+        # Nothing to do without an IGM
+        if igm is None:
+            return
+
+        # The first IGM we're given is the one we use
+        if self._igm is None:
+            self._igm = igm
+            return
+
+        if igm != self._igm:
+            raise exceptions.InconsistentArguments(
+                "A Pipeline uses a single IGM for all observed emissions, "
+                f"but got {igm!r} after {self._igm!r}. Pass the same or an "
+                "equivalent IGM to every method (IGM parameters can vary "
+                "per galaxy by setting them on the galaxies)."
+            )
+
     def get_observed_spectra(
         self, cosmo, igm=None, write=True, out_dtype=None
     ):
@@ -1878,18 +1911,21 @@ class Pipeline:
             cosmo (astropy.cosmology.Cosmology):
                 The cosmology to use for the observed spectra.
             igm (IGMBase):
-                The IGM model to use for the attenuation of the spectra.
+                The IGM model to use for the attenuation of the spectra. A
+                Pipeline uses a single IGM for all observed emissions, so
+                this must match any IGM already passed (None uses the
+                Pipeline's IGM, if any).
             write (bool):
                 Whether to write out the observed spectra. Default is True.
             out_dtype (np.dtype):
                 Requested floating-point dtype for generated spectra arrays.
         """
-        # Store the cosmology for the operation
+        # Store the cosmology for the operation and the IGM for the Pipeline
         self._operation_kwargs.add_unique(
             "get_observed_spectra",
             cosmo=cosmo,
-            igm=igm,
         )
+        self._set_igm(igm)
 
         # Record the requested output dtype (first call wins)
         self._out_dtypes.setdefault("observed_spectra", out_dtype)
@@ -1926,7 +1962,7 @@ class Pipeline:
         # Get the observed spectra
         galaxy.get_observed_spectra(
             cosmo=op_kwargs["cosmo"],
-            igm=op_kwargs["igm"],
+            igm=self._igm,
             nthreads=self.nthreads,
             out_dtype=self._out_dtypes.get("observed_spectra"),
         )
@@ -2785,7 +2821,10 @@ class Pipeline:
             cosmo (astropy.cosmology.Cosmology):
                 The cosmology to use for the observed emission lines.
             igm (IGMBase):
-                The IGM model to use for the observed emission lines.
+                The IGM model to use for the observed emission lines. A
+                Pipeline uses a single IGM for all observed emissions, so
+                this must match any IGM already passed (None uses the
+                Pipeline's IGM, if any).
             line_ids (list):
                 If get_lines has not been called explicitly, then we will need
                 the line IDs to generate the emission lines. Default is None.
@@ -2795,12 +2834,12 @@ class Pipeline:
             out_dtype (np.dtype):
                 Requested floating-point dtype for prerequisite line arrays.
         """
-        # Store the kwargs for the operation
+        # Store the kwargs for the operation and the IGM for the Pipeline
         self._operation_kwargs.add_unique(
             "get_observed_lines",
             cosmo=cosmo,
-            igm=igm,
         )
+        self._set_igm(igm)
 
         # Record the requested output dtype (first call wins)
         self._out_dtypes.setdefault("observed_lines", out_dtype)
@@ -2851,7 +2890,7 @@ class Pipeline:
         # Get the observed emission lines
         galaxy.get_observed_lines(
             cosmo=op_kwargs["cosmo"],
-            igm=op_kwargs["igm"],
+            igm=self._igm,
             nthreads=self.nthreads,
             out_dtype=self._out_dtypes.get("observed_lines"),
         )
