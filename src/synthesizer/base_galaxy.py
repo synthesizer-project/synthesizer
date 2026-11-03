@@ -326,7 +326,10 @@ class BaseGalaxy:
             igm (igm):
                 The object describing the intergalactic medium (defaults to
                 Inoue14). Any IGM parameters set on the galaxy take
-                precedence over those the IGM was initialised with.
+                precedence over those the IGM was initialised with. The galaxy
+                is the emitter for all contained component and particle
+                spectra, so their IGM parameters are read from the galaxy,
+                not from the stars or black holes.
             nthreads (int):
                 The number of threads to use for observer-frame flux
                 conversion.
@@ -453,7 +456,10 @@ class BaseGalaxy:
             igm (igm):
                 The object describing the intergalactic medium (defaults to
                 Inoue14). Any IGM parameters set on the galaxy take
-                precedence over those the IGM was initialised with.
+                precedence over those the IGM was initialised with. The galaxy
+                is the emitter for all contained component and particle
+                lines, so their IGM parameters are read from the galaxy,
+                not from the stars or black holes.
             nthreads (int):
                 The number of threads to use when scaling the fluxes.
                 nthreads=-1 will use all available threads.
