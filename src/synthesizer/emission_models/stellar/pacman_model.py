@@ -419,7 +419,7 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
         # Finally make the emergent model, this is attenuated + escaped
         StellarEmissionModel.__init__(
             self,
-            label="emergent",
+            label="emergent" if label is None else label,
             grid=grid,
             combine=(attenuated, escaped),
             related_models=(intrinsic,),
