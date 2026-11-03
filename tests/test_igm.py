@@ -165,3 +165,22 @@ def test_igm_transform_parameter_precedence(lam):
             del sed.scale_tau
         elif expected == 4.0:
             del emitter.scale_tau
+
+
+def test_igm_equality():
+    """IGMs compare by type and transmission-defining parameters."""
+    from synthesizer.emission_models.attenuation import (
+        Asada25,
+        Inoue14,
+        Madau96,
+    )
+
+    assert Inoue14() == Inoue14()
+    assert Inoue14(scale_tau=2) != Inoue14()
+    assert Inoue14() != Asada25()
+    assert Asada25() == Asada25()
+    assert Asada25(sigmoid_params=(1, 2, 3)) != Asada25()
+    assert Madau96() == Madau96()
+    modified = Madau96()
+    modified.coefficients[0] *= 2
+    assert Madau96() != modified

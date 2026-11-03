@@ -52,6 +52,15 @@ class IGMBase(Transformer):
         """Return a string representation of the IGMBase object."""
         return f"{self.__class__.__name__}(name={self.name})"
 
+    def __eq__(self, other):
+        """Compare IGM type and transmission-defining configuration."""
+        if type(self) is not type(other):
+            return NotImplemented
+        return all(
+            np.array_equal(getattr(self, key), getattr(other, key))
+            for key in getattr(self, "_equality_params", self._required_params)
+        )
+
     def get_transmission(
         self, redshift, lam_obs, emitter=None, *, model=None, emission=None
     ):
@@ -521,6 +530,8 @@ class Madau96(IGMBase):
         coefficients (list): List of coefficients for the model.
         name (str): Name of the model.
     """
+
+    _equality_params = ("lams", "coefficients")
 
     def __init__(self):
         """Initialize the Madau96 class."""
