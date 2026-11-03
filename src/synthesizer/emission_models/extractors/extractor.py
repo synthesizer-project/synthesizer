@@ -35,7 +35,6 @@ from synthesizer.extensions.particle_spectra import (
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.units import get_quantity_unit
-from synthesizer.utils.blas import limit_blas_threads
 from synthesizer.utils.operation_timers import timed, timer
 from synthesizer.utils.precision import (
     resolve_out_dtype,
@@ -1624,8 +1623,8 @@ class PopulationExtractor(IntegratedParametricExtractor):
     each population's emission by the transformers, exactly as per particle
     parameters are for particles.
 
-    The emission of every population is computed at once as a single dense
-    product with the grid using BLAS (see
+    The emission of every population is computed at once, reading each grid
+    spectrum once for all the populations (see
     synthesizer.extensions.parametric_spectra).
     """
 
@@ -1660,20 +1659,19 @@ class PopulationExtractor(IntegratedParametricExtractor):
         edges, masses, log_flags = emitter.get_bins_for_grid(
             self._grid, mask=mask if pop_weights is None else None
         )
-        with limit_blas_threads(nthreads):
-            spec, pop_weights = compute_population_seds(
-                grid,
-                self._grid_axes,
-                edges,
-                masses,
-                log_flags,
-                nthreads,
-                pop_weights,
-                None,
-                lam_mask,
-                out_dtype,
-                self._emitter_attributes,
-            )
+        spec, pop_weights = compute_population_seds(
+            grid,
+            self._grid_axes,
+            edges,
+            masses,
+            log_flags,
+            nthreads,
+            pop_weights,
+            None,
+            lam_mask,
+            out_dtype,
+            self._emitter_attributes,
+        )
         emitter._grid_weights[weights_key] = pop_weights
         return spec
 

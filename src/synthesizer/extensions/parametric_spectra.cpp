@@ -13,11 +13,9 @@
 #include <algorithm>
 #include <array>
 #include <memory>
-#include <new>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <type_traits>
 #include <vector>
 
 /* Python includes */
@@ -228,99 +226,24 @@ static int get_nlam(PyObject *spectra_obj) {
       PyArray_DIM(np_spectra, PyArray_NDIM(np_spectra) - 1));
 }
 
-/* Fortran BLAS gemm signatures, as exported by scipy.linalg.cython_blas. */
-typedef void (*dgemm_t)(char *, char *, int *, int *, int *, double *,
-                        double *, int *, double *, int *, double *, double *,
-                        int *);
-typedef void (*sgemm_t)(char *, char *, int *, int *, int *, float *, float *,
-                        int *, float *, int *, float *, float *, int *);
-
-/* The BLAS routines, fetched from SciPy when the module is imported. */
-static dgemm_t blas_dgemm = NULL;
-static sgemm_t blas_sgemm = NULL;
-
-/**
- * @brief Fetch a BLAS routine from scipy.linalg.cython_blas.
- *
- * SciPy exports C pointers to the BLAS it links against, so we can use an
- * optimised BLAS without linking one ourselves at build time.
- *
- * @param capi: The cython_blas __pyx_capi__ dictionary.
- * @param name: The routine name (e.g. "dgemm").
- *
- * @return The routine's address, or NULL (with a Python error set).
- */
-static void *get_blas_routine(PyObject *capi, const char *name) {
-  PyObject *capsule = PyDict_GetItemString(capi, name);
-  if (capsule == NULL) {
-    PyErr_Format(PyExc_ImportError,
-                 "scipy.linalg.cython_blas does not export %s.", name);
-    return NULL;
-  }
-  return PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
-}
-
-/**
- * @brief Load the BLAS gemm routines from SciPy.
- *
- * @return 0 on success, -1 (with a Python error set) otherwise.
- */
-static int load_blas(void) {
-  PyObject *module = PyImport_ImportModule("scipy.linalg.cython_blas");
-  if (module == NULL) {
-    return -1;
-  }
-  PyObject *capi = PyObject_GetAttrString(module, "__pyx_capi__");
-  Py_DECREF(module);
-  if (capi == NULL) {
-    return -1;
-  }
-  blas_dgemm = reinterpret_cast<dgemm_t>(get_blas_routine(capi, "dgemm"));
-  blas_sgemm = reinterpret_cast<sgemm_t>(get_blas_routine(capi, "sgemm"));
-  Py_DECREF(capi);
-  return (blas_dgemm == NULL || blas_sgemm == NULL) ? -1 : 0;
-}
-
-/**
- * @brief Call the BLAS gemm matching the precision of Real.
- *
- * Computes C = A B for column major A (m, k), B (k, n) and C (m, n).
- */
-template <typename Real>
-static void gemm(int m, int n, int k, const Real *a, int lda, const Real *b,
-                 int ldb, Real *c, int ldc) {
-  char trans = 'N';
-  Real alpha = 1;
-  Real beta = 0;
-  if constexpr (std::is_same_v<Real, double>) {
-    blas_dgemm(&trans, &trans, &m, &n, &k, &alpha, const_cast<double *>(a),
-               &lda, const_cast<double *>(b), &ldb, &beta, c, &ldc);
-  } else {
-    blas_sgemm(&trans, &trans, &m, &n, &k, &alpha, const_cast<float *>(a),
-               &lda, const_cast<float *>(b), &ldb, &beta, c, &ldc);
-  }
-}
-
 /**
  * @brief Contract each population's grid weights with the grid spectra.
  *
- * This is the dense product out (npop, nlam) = weights (npop, grid size) x
- * spectra (grid size, nlam). Unlike particles, which each touch only 2^ndim
- * grid points, a population can touch every grid point, so this is done with
- * an optimised BLAS gemm.
+ * This is out (npop, nlam) = weights (npop, grid size) x spectra (grid size,
+ * nlam), done like integrated_spectra_loop: we walk the grid spectra row by
+ * row, skipping grid points no population touches, and add each row to the
+ * spectrum of every population with a non-zero weight there. Each row is
+ * read once for all the populations, which (for the few populations a
+ * parametric Stars typically holds) keeps the product memory bound, and many
+ * SFZHs only touch a small part of the grid.
  *
- * Read as column major, the row major arrays are the transposes, so we
- * compute out^T = spectra^T weights^T. A wavelength mask is handled by
- * calling gemm once per contiguous run of unmasked wavelengths, which the
- * leading dimensions let us address without copying. Masked wavelengths are
- * left untouched in the (zero initialised) output.
+ * The wavelengths are split into chunks small enough that a chunk of every
+ * population's spectrum stays in cache, and with OpenMP the chunks are
+ * shared between the threads.
  *
- * The product is computed at the grid precision and cast to OutT if needed.
- *
- * NOTE: BLAS threading is controlled by the BLAS library, not nthreads. The
- * Python callers limit it to the requested number of threads with
- * threadpoolctl (see synthesizer.utils.blas). Apple's Accelerate can't be
- * limited at runtime.
+ * Accumulation happens in double precision before being written to the
+ * output at OutT. Masked wavelengths are skipped and left untouched in the
+ * (zero initialised) output.
  *
  * @tparam GridReal The floating-point type of the grid spectra and weights.
  * @tparam OutT The floating-point type stored in the output buffer.
@@ -329,51 +252,123 @@ static void gemm(int m, int n, int k, const Real *a, int lda, const Real *b,
  * @param weights: The (npop, grid size) per population grid weights.
  * @param npop: The number of populations.
  * @param out: The zero initialised (npop, nlam) output array.
+ * @param nthreads: The number of threads to use.
  */
 template <typename GridReal, typename OutT>
 static void population_spectra_loop(GridProps *grid_props,
                                     const GridReal *weights, const int npop,
-                                    OutT *out) {
+                                    OutT *out, const int nthreads) {
 
   tic("population_spectra_loop");
 
-  const GridReal *grid_spectra = grid_props->get_spectra<GridReal>();
-  const int nlam = grid_props->nlam;
+  const GridReal *__restrict grid_spectra =
+      grid_props->get_spectra<GridReal>();
+  const size_t nlam = static_cast<size_t>(grid_props->nlam);
   const int grid_size = grid_props->size;
 
-  /* gemm writes at the grid precision, so stage the result if the output
-   * precision differs. */
-  std::vector<GridReal> staging;
-  GridReal *result;
-  if constexpr (std::is_same_v<GridReal, OutT>) {
-    result = out;
-  } else {
-    staging.assign(static_cast<size_t>(npop) * nlam, 0);
-    result = staging.data();
+  /* Collect the non-zero weights of each grid point (as compressed rows
+   * of population indices and weights) so the loop below only visits the
+   * grid points and populations that contribute. */
+  std::vector<int> row_start(grid_size + 1, 0);
+  std::vector<int> pop_inds;
+  std::vector<double> pop_weights;
+  for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
+    for (int ipop = 0; ipop < npop; ipop++) {
+      const double weight = static_cast<double>(
+          weights[static_cast<size_t>(ipop) * grid_size + grid_ind]);
+      if (weight > 0.0) {
+        pop_inds.push_back(ipop);
+        pop_weights.push_back(weight);
+      }
+    }
+    row_start[grid_ind + 1] = static_cast<int>(pop_inds.size());
   }
 
-  /* Call gemm on each contiguous run of unmasked wavelengths. */
-  int ilam = 0;
-  while (ilam < nlam) {
-    if (grid_props->lam_is_masked(ilam)) {
-      ilam++;
+  /* Collect the wavelengths we actually need to compute. */
+  std::vector<int> good_lams;
+  good_lams.reserve(nlam);
+  for (size_t ilam = 0; ilam < nlam; ilam++) {
+    if (!grid_props->lam_is_masked(static_cast<int>(ilam))) {
+      good_lams.push_back(static_cast<int>(ilam));
+    }
+  }
+  const bool has_lam_mask = good_lams.size() != nlam;
+  const int ngood = static_cast<int>(good_lams.size());
+
+  /* Split the wavelengths into chunks, at least one per thread and short
+   * enough that every population's accumulator for a chunk (~256 KB) stays
+   * in cache. */
+  const int max_len = std::max(64, 32768 / std::max(npop, 1));
+  const int nchunks = std::max(
+      {1, std::min(ngood, nthreads), (ngood + max_len - 1) / max_len});
+  const int chunk_len = (ngood + nchunks - 1) / nchunks;
+
+#ifdef WITH_OPENMP
+#pragma omp parallel for num_threads(nthreads) if (nthreads > 1) \
+    schedule(static)
+#endif
+  for (int ichunk = 0; ichunk < nchunks; ichunk++) {
+    const int start = ichunk * chunk_len;
+    const int len = std::min(ngood, start + chunk_len) - start;
+    if (len <= 0) {
       continue;
     }
-    const int start = ilam;
-    while (ilam < nlam && !grid_props->lam_is_masked(ilam)) {
-      ilam++;
-    }
-    gemm<GridReal>(/*m*/ ilam - start, /*n*/ npop, /*k*/ grid_size,
-                   grid_spectra + start, /*lda*/ nlam, weights,
-                   /*ldb*/ grid_size, result + start, /*ldc*/ nlam);
-  }
+    std::vector<double> accum(static_cast<size_t>(npop) * len, 0.0);
+    std::vector<double> seg_buf(has_lam_mask ? len : 0);
 
-  /* Cast the staged result into the output. */
-  if constexpr (!std::is_same_v<GridReal, OutT>) {
-    for (size_t i = 0; i < staging.size(); i++) {
-      out[i] = static_cast<OutT>(staging[i]);
+    /* Add each grid point's spectrum to every population weighting it. */
+    for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
+      const int first = row_start[grid_ind];
+      const int last = row_start[grid_ind + 1];
+      if (first == last) {
+        continue;
+      }
+      const GridReal *__restrict row =
+          grid_spectra + static_cast<size_t>(grid_ind) * nlam;
+
+      /* Gather this chunk of the row if wavelengths are masked. */
+      if (has_lam_mask) {
+        for (int j = 0; j < len; j++) {
+          seg_buf[j] = static_cast<double>(row[good_lams[start + j]]);
+        }
+      }
+
+      for (int k = first; k < last; k++) {
+        const double weight = pop_weights[k];
+        double *__restrict acc =
+            accum.data() + static_cast<size_t>(pop_inds[k]) * len;
+        if (has_lam_mask) {
+          const double *__restrict seg = seg_buf.data();
+#ifdef WITH_OPENMP
+#pragma omp simd
+#endif
+          for (int j = 0; j < len; j++) {
+            acc[j] += weight * seg[j];
+          }
+        } else {
+          const GridReal *__restrict seg = row + start;
+#ifdef WITH_OPENMP
+#pragma omp simd
+#endif
+          for (int j = 0; j < len; j++) {
+            acc[j] += weight * static_cast<double>(seg[j]);
+          }
+        }
+      }
+    }
+
+    /* Write this chunk of every population's spectrum. */
+    for (int ipop = 0; ipop < npop; ipop++) {
+      const double *acc = accum.data() + static_cast<size_t>(ipop) * len;
+      OutT *pop_out = out + static_cast<size_t>(ipop) * nlam;
+      for (int j = 0; j < len; j++) {
+        pop_out[good_lams[start + j]] = static_cast<OutT>(acc[j]);
+      }
     }
   }
+#ifndef WITH_OPENMP
+  (void)nthreads;
+#endif
 
   toc("population_spectra_loop");
 }
@@ -689,8 +684,8 @@ PyObject *compute_population_seds(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Get the per population weights (at the grid precision, since they feed
-   * gemm alongside the grid spectra), either the ones we were given or new
+  /* Get the per population weights (at the grid precision, like the grid
+   * spectra they are contracted with), either the ones we were given or new
    * ones we compute below. */
   npy_intp np_weight_dims[MAX_GRID_NDIM + 1];
   np_weight_dims[0] = pops.npop;
@@ -745,7 +740,7 @@ PyObject *compute_population_seds(PyObject *self, PyObject *args) {
         }
         population_spectra_loop<GridReal, OutT>(
             grid_props.get(), weights, pops.npop,
-            static_cast<OutT *>(PyArray_DATA(np_pop_spectra)));
+            static_cast<OutT *>(PyArray_DATA(np_pop_spectra)), nthreads);
       });
     });
   });
@@ -869,10 +864,6 @@ PyMODINIT_FUNC PyInit_parametric_spectra(void) {
   if (m == NULL) return NULL;
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
-    Py_DECREF(m);
-    return NULL;
-  }
-  if (load_blas() < 0) {
     Py_DECREF(m);
     return NULL;
   }

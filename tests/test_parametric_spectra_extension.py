@@ -7,9 +7,6 @@ from synthesizer.extensions.parametric_spectra import (
     compute_integrated_parametric_sed,
     compute_population_seds,
 )
-from threadpoolctl import threadpool_info
-
-from synthesizer.utils.blas import limit_blas_threads
 
 # An irregular 3D grid: a log10 age axis, a log10 metallicity axis and a
 # linear axis, with deliberately uneven spacing on each
@@ -319,24 +316,3 @@ def test_invalid_inputs_raise(edges, masses, mask):
     """Invalid population inputs must raise rather than misbehave."""
     with pytest.raises((ValueError, TypeError)):
         _bic(edges, masses, mask=mask)
-
-
-@pytest.mark.parametrize("nthreads", [-1, 1, 2])
-def test_blas_thread_limit(nthreads):
-    """Limiting BLAS threads must apply the limit and not change results.
-
-    Where the BLAS can be limited (e.g. OpenBLAS on Linux) the limit must be
-    in place inside the block. Apple's Accelerate can't be limited, in which
-    case the limit is a no-op.
-    """
-    edges = _wide_edges()
-    masses = _random_masses(edges, npop=6)
-    args = (_grid_spectra(), GRID_AXES, edges, masses, LOG_FLAGS, 1)
-    expected = compute_population_seds(*args, None, None, None, None)[0]
-    with limit_blas_threads(nthreads):
-        if nthreads > 0:
-            for info in threadpool_info():
-                if info["user_api"] == "blas":
-                    assert info["num_threads"] == nthreads
-        result = compute_population_seds(*args, None, None, None, None)[0]
-    np.testing.assert_allclose(result, expected)
