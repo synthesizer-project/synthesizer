@@ -38,11 +38,11 @@ After creating a grid, there is also the option of creating a grid of a reduced 
 
 where here the maximum age was set to :math:`10^7` years.
 
-To create the RELAGN (or AGNSED or QSOSED) grid, the `RELAGN` package and its dependencies need to be installed; details of how to do this can be found `here <https://github.com/scotthgn/RELAGN.git>`_. The axes parameters are fed through a configuration file, and example YAML files are kept in each model's folder in syncretize, e.g. `src/syncretize/incident/blackholes/relagn/relagn.yaml`. You can modify this to change the axes parameters, and the script will read in the new parameter file to create the grid. To create the grid,
+To create the RELAGN (or AGNSED or QSOSED) grid, the `RELAGN` package and its dependencies need to be installed; details of how to do this can be found `here <https://github.com/scotthgn/RELAGN.git>`_. The axes parameters are fed through a configuration file, and example YAML files are kept in each model's folder in syncretize, e.g. `src/syncretize/incident/blackholes/relagn/relagn.yaml`. You can modify this file to change the axes parameters. From the syncretize repository root, create the grid with:
 
 .. code-block:: bash
 
-   python install_relagn.py --input_dir /home/dir/data/synthesizer_data/input_files --grid_dir /home/dir/data/synthesizer_data/grids --config_file params/relagn.yaml
+   python src/syncretize/incident/blackholes/relagn/generate_incident_grid.py --grid-dir /home/dir/data/synthesizer_data/grids --config-file src/syncretize/incident/blackholes/relagn/relagn.yaml
 
 Running a grid through Cloudy
 -----------------------------
