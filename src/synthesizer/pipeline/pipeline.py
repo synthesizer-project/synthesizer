@@ -28,10 +28,14 @@ Example usage:
 ```
 """
 
+import glob
 import os
+import signal
+import threading
 import time
 from pathlib import Path
 
+import h5py
 import numpy as np
 from unyt import unyt_array, unyt_quantity
 
@@ -191,6 +195,8 @@ class Pipeline:
         flush_memory=None,
         rng_seed=None,
         checkpoint_interval=None,
+        resume=False,
+        checkpoint_signal=getattr(signal, "SIGUSR1", None),
     ):
         """Initialise the Pipeline object.
 
@@ -272,6 +278,22 @@ class Pipeline:
                 out.ckpt.hdf5.prev); write merges the segments
                 into the output file and removes them all.
                 Default is None (no checkpointing).
+            resume (bool): Pick up from the checkpoint left by a
+                previous run with the same outpath, if there is
+                one. The run must have the same number of ranks,
+                galaxies and signalled operations, and reuses the
+                previous run's rng_seed. With no checkpoint the run
+                starts from scratch, so the same script works for
+                the first launch and every restart. If False, any
+                checkpoint left behind is removed (with a warning).
+                Requires checkpoint_interval. Default is False.
+            checkpoint_signal (int): A signal that triggers a
+                checkpoint once the galaxy being processed is done
+                (e.g. sent by Slurm shortly before the walltime with
+                --signal=USR1@300). The run carries on afterwards.
+                Only used when checkpointing, and only installed
+                when run is called from the main thread. Default is
+                SIGUSR1, None disables it.
         """
         # Attributes to track timing
         self._start_time = time.perf_counter()
@@ -551,6 +573,12 @@ class Pipeline:
         self._setup_output(
             outpath, flush_ngalaxies, flush_memory, checkpoint_interval
         )
+        if resume and not self._checkpointing:
+            raise exceptions.InconsistentArguments(
+                "resume requires checkpoint_interval to be set."
+            )
+        self._resume = resume
+        self._checkpoint_signal = checkpoint_signal
 
         # Attach the base seed for any noise
         self._setup_rng(rng_seed)
@@ -5037,6 +5065,31 @@ class Pipeline:
             PipelineNotReady:
                 If the pipeline is not ready to a specific operation.
         """
+        # While checkpointing, the checkpoint signal requests a
+        # checkpoint at the next galaxy boundary
+        sig = self._checkpoint_signal
+        install = (
+            self._checkpointing
+            and sig is not None
+            and threading.current_thread() is threading.main_thread()
+        )
+        if install:
+            previous = signal.getsignal(sig)
+            signal.signal(sig, self._request_checkpoint)
+        try:
+            self._run()
+        finally:
+            if install:
+                signal.signal(
+                    sig, previous if previous is not None else signal.SIG_DFL
+                )
+
+    def _request_checkpoint(self, signum, frame):
+        """Handle the checkpoint signal by requesting a checkpoint."""
+        self._checkpoint_requested = True
+
+    def _run(self):
+        """Run the pipeline (see run)."""
         # Ensure we are ready
         if not self._loaded_galaxies:
             raise exceptions.PipelineNotReady(
@@ -5092,9 +5145,12 @@ class Pipeline:
             self._create_output_file(self._outpath, self.verbose)
 
         # If we are checkpointing, fingerprint the run before we start
-        # consuming galaxies and send their outputs to segments
+        # consuming galaxies, pick up from the last checkpoint (if
+        # resuming) and send the outputs to segments
+        igal = 0
         if self._checkpointing:
             self._fingerprints = self._get_fingerprints()
+            igal = self._load_checkpoint()
             self._open_segment()
             self._last_checkpoint = time.perf_counter()
 
@@ -5104,7 +5160,6 @@ class Pipeline:
 
         # Loop over galaxies and compute what has been requested using get_*
         # signalling methods
-        igal = 0
         _gal = None
         while len(self.galaxies) > 0:
             start_gal = time.perf_counter()
@@ -5343,6 +5398,14 @@ class Pipeline:
                 gal.redshift,
                 getattr(gal.stars, "nstars", None),
                 getattr(gal.black_holes, "nbh", None),
+                # Particle or parametric total initial mass
+                np.sum(
+                    getattr(
+                        gal.stars,
+                        "initial_masses",
+                        getattr(gal.stars, "initial_mass", 0),
+                    )
+                ),
             )
             for gal in self.galaxies
         ]
@@ -5358,6 +5421,148 @@ class Pipeline:
         )
         self.io_helper.rows_written = 0
         self._segment_index += 1
+
+    def _load_checkpoint(self):
+        """Pick up from the last checkpoint, if resuming.
+
+        Without a usable checkpoint (or when not resuming) this
+        clears out anything a previous run left behind instead.
+
+        Returns:
+            int: The number of this rank's galaxies already done.
+        """
+        # A failure on one rank must stop them all, rather than leave
+        # the others waiting on it at the next collective
+        error = None
+        try:
+            n_done = self._restore_checkpoint()
+        except Exception as e:
+            error = e
+        if self.using_mpi and any(self.comm.allgather(error is not None)):
+            raise error or RuntimeError(
+                "Resuming from a checkpoint failed on another rank."
+            )
+        if error is not None:
+            raise error
+        return n_done
+
+    def _restore_checkpoint(self):
+        """Load, validate and restore this rank's checkpoint.
+
+        Returns:
+            int: The number of this rank's galaxies already done.
+        """
+        filepath = self.io_helper.filepath
+        ckpt = checkpoint.checkpoint_path(filepath)
+        candidates = [p for p in (ckpt, f"{ckpt}.prev") if os.path.exists(p)]
+
+        # Load the newest checkpoint that is intact and matches this
+        # run, falling back to the previous one
+        state = None
+        if candidates and not self._resume:
+            warn(
+                f"Removing the checkpoint left by a previous run in "
+                f"{ckpt}. Pass resume=True to pick up from it instead."
+            )
+            for path in candidates:
+                os.remove(path)
+        elif candidates:
+            errors = []
+            for path in candidates:
+                try:
+                    state = checkpoint.read_checkpoint(path)
+                    self._validate_checkpoint(state)
+                    break
+                except Exception as e:
+                    errors.append(f"{path}: {e}")
+                    state = None
+            if state is None:
+                raise exceptions.InconsistentArguments(
+                    "Cannot resume from a checkpoint:\n" + "\n".join(errors)
+                )
+
+            # Make sure a broken checkpoint never becomes our fallback
+            if path != ckpt and os.path.exists(ckpt):
+                os.remove(ckpt)
+        elif self._resume:
+            self._print("No checkpoint found, starting from scratch.")
+
+        # Anything the checkpoint doesn't reference (the segment open
+        # when the run was killed, those merged away) is not needed
+        keep = (
+            {os.path.basename(p) for p, _ in state["segments"]}
+            if state is not None
+            else set()
+        )
+        stem, ext = os.path.splitext(filepath)
+        for path in glob.glob(f"{glob.escape(stem)}.seg*{ext}*"):
+            if os.path.basename(path) not in keep:
+                os.remove(path)
+        if state is None:
+            return 0
+
+        # Restore the running state and carry on numbering segments
+        # after those we keep
+        attrs = state["attrs"]
+        n_done = int(attrs["n_done"])
+        self.rng_seed = int(attrs["rng_seed"])
+        with h5py.File(filepath, "a") as hdf:
+            hdf.attrs["rng_seed"] = str(self.rng_seed)
+        cosmic = state["nested"]["CosmicSED"]
+        self.cosmic_lnus = cosmic["Lnu"]
+        self.cosmic_fnus = cosmic["Fnu"]
+        self._cosmic_lnu_counts = cosmic["LnuCounts"]
+        self._cosmic_fnu_counts = cosmic["FnuCounts"]
+        self._op_counts.update(
+            {key: int(value) for key, value in state["op_counts"].items()}
+        )
+        self._segments = state["segments"]
+        self._segment_index = 1 + max(
+            (checkpoint.segment_index(p) for p, _ in self._segments),
+            default=-1,
+        )
+        self.galaxies = self.galaxies[n_done:]
+        self._print(
+            f"Resuming from {path} after {n_done} galaxies "
+            f"({attrs['status']})."
+        )
+        return n_done
+
+    def _validate_checkpoint(self, state):
+        """Make sure a checkpoint belongs to this run.
+
+        Args:
+            state (dict): The checkpoint (see checkpoint.read_checkpoint).
+
+        Raises:
+            InconsistentArguments:
+                If the checkpoint was written by a different run.
+        """
+        attrs = state["attrs"]
+        expected = {
+            "nranks": self.size,
+            "n_galaxies_local": self.n_galaxies_local,
+            "n_galaxies_offset": self.n_galaxies_offset,
+        }
+        for key, value in expected.items():
+            if attrs[key] != value:
+                raise exceptions.InconsistentArguments(
+                    f"The checkpoint has {key}={attrs[key]} but this run "
+                    f"has {value}."
+                )
+        for key, value in self._fingerprints.items():
+            if state["fingerprints"][key] != value:
+                raise exceptions.InconsistentArguments(
+                    f"The checkpoint was written for different {key} "
+                    "(the signalled operations, emission model, "
+                    "instruments or the galaxies and their order must "
+                    "match)."
+                )
+        for path, _ in state["segments"]:
+            if not os.path.exists(path):
+                raise exceptions.InconsistentArguments(
+                    f"The checkpoint's segment {path} is missing."
+                )
 
     @timed("Pipeline._checkpoint")
     def _checkpoint(self, n_done, status="running"):

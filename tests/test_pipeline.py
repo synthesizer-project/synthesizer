@@ -1,6 +1,8 @@
 """Tests for the pipeline module."""
 
 import copy
+import os
+import signal
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -3240,7 +3242,9 @@ class TestPipelineFlushing:
     ):
         """Return a function running the pipeline and returning its file."""
 
-        def _run(name, before_write=None, **kwargs):
+        def _run(
+            name, before_write=None, before_run=None, galaxies=None, **kwargs
+        ):
             # Exercise a mix of per-galaxy arrays, nested results and a
             # global cosmic SED: flushes should only empty the former.
             model = copy.deepcopy(nebular_emission_model)
@@ -3253,7 +3257,9 @@ class TestPipelineFlushing:
                 outpath=outpath,
                 **kwargs,
             )
-            pipeline.add_galaxies(make_galaxies())
+            pipeline.add_galaxies(
+                make_galaxies() if galaxies is None else galaxies
+            )
             pipeline.get_sfzh(
                 log10ages=test_grid.log10ages,
                 metallicities=test_grid.metallicities,
@@ -3276,6 +3282,8 @@ class TestPipelineFlushing:
                 lambda gal: {"Mass": gal.stars.initial_masses.sum()},
                 "StellarMass",
             )
+            if before_run is not None:
+                before_run(pipeline)
             pipeline.run()
             if before_write is not None:
                 before_write(pipeline)
@@ -3541,6 +3549,139 @@ class TestPipelineFlushing:
             Pipeline(
                 emission_model=nebular_emission_model, checkpoint_interval=0
             )
+        with pytest.raises(exceptions.InconsistentArguments):
+            Pipeline(
+                emission_model=nebular_emission_model,
+                outpath=tmp_path / "out.hdf5",
+                resume=True,
+            )
+
+    NCRASH = 3
+
+    def _crash(self, run_pipeline, monkeypatch):
+        """Kill a checkpointed run while unpacking a galaxy."""
+        original = Pipeline._unpack_results
+        calls = []
+
+        def _crashing_unpack(pipeline, gal):
+            calls.append(gal)
+            if len(calls) > self.NCRASH:
+                raise RuntimeError("Simulated crash")
+            original(pipeline, gal)
+
+        with monkeypatch.context() as m:
+            m.setattr(Pipeline, "_unpack_results", _crashing_unpack)
+            with pytest.raises(RuntimeError, match="Simulated crash"):
+                run_pipeline("ckpt.hdf5", checkpoint_interval=0)
+
+    def _resume(self, run_pipeline, monkeypatch, **kwargs):
+        """Resume the run, returning its file and the galaxies redone."""
+        original = Pipeline._unpack_results
+        calls = []
+
+        def _counting_unpack(pipeline, gal):
+            calls.append(gal)
+            original(pipeline, gal)
+
+        with monkeypatch.context() as m:
+            m.setattr(Pipeline, "_unpack_results", _counting_unpack)
+            path = run_pipeline(
+                "ckpt.hdf5", checkpoint_interval=0, resume=True, **kwargs
+            )
+        return path, len(calls)
+
+    def test_resume_after_crash(self, run_pipeline, tmp_path, monkeypatch):
+        """A resumed run only redoes what is left and matches a clean run."""
+        expected = run_pipeline("expected.hdf5")
+        self._crash(run_pipeline, monkeypatch)
+        with h5py.File(tmp_path / "ckpt.ckpt.hdf5") as hdf:
+            seed = hdf.attrs["rng_seed"]
+
+        # The segment open at the crash may hold anything
+        (tmp_path / "ckpt.seg99.hdf5").write_bytes(b"garbage")
+
+        resumed, nredone = self._resume(run_pipeline, monkeypatch)
+        assert nredone == self.NGAL - self.NCRASH
+        self._assert_files_match(expected, resumed)
+        with h5py.File(resumed) as hdf:
+            assert hdf.attrs["rng_seed"] == seed
+        assert self._run_files(tmp_path, "ckpt.hdf5") == []
+
+    def test_resume_falls_back_to_prev(
+        self, run_pipeline, tmp_path, monkeypatch
+    ):
+        """A broken checkpoint falls back to the previous one."""
+        expected = run_pipeline("expected.hdf5")
+        self._crash(run_pipeline, monkeypatch)
+        (tmp_path / "ckpt.ckpt.hdf5").write_bytes(b"garbage")
+
+        resumed, nredone = self._resume(run_pipeline, monkeypatch)
+        assert nredone == self.NGAL - self.NCRASH + 1
+        self._assert_files_match(expected, resumed)
+
+    def test_resume_without_checkpoint(self, run_pipeline, tmp_path):
+        """Resuming with nothing to resume from starts from scratch."""
+        expected = run_pipeline("expected.hdf5")
+        resumed = run_pipeline("ckpt.hdf5", checkpoint_interval=0, resume=True)
+        self._assert_files_match(expected, resumed)
+
+    def test_no_resume_removes_checkpoint(
+        self, run_pipeline, tmp_path, monkeypatch
+    ):
+        """Not resuming starts again, removing the old checkpoint."""
+        expected = run_pipeline("expected.hdf5")
+        self._crash(run_pipeline, monkeypatch)
+        with pytest.warns(RuntimeWarning, match="resume=True"):
+            fresh = run_pipeline("ckpt.hdf5", checkpoint_interval=0)
+        self._assert_files_match(expected, fresh)
+        assert self._run_files(tmp_path, "ckpt.hdf5") == []
+
+    @pytest.mark.parametrize("change", ["order", "count", "operations"])
+    def test_resume_rejects_different_run(
+        self, run_pipeline, make_galaxies, monkeypatch, change
+    ):
+        """A checkpoint can't be resumed by a run with different inputs."""
+        self._crash(run_pipeline, monkeypatch)
+        kwargs = {}
+        if change == "order":
+            kwargs["galaxies"] = make_galaxies()[::-1]
+        elif change == "count":
+            kwargs["galaxies"] = make_galaxies()[:-1]
+        else:
+            kwargs["before_run"] = lambda pipeline: pipeline.add_analysis_func(
+                lambda gal: 1.0, "Extra"
+            )
+        with pytest.raises(
+            exceptions.InconsistentArguments, match="Cannot resume"
+        ):
+            run_pipeline(
+                "ckpt.hdf5", checkpoint_interval=0, resume=True, **kwargs
+            )
+
+    def test_signal_requests_checkpoint(self, run_pipeline, tmp_path):
+        """The checkpoint signal checkpoints after the current galaxy."""
+        calls = []
+
+        def _signal(gal):
+            calls.append(gal)
+            if len(calls) == 2:
+                os.kill(os.getpid(), signal.SIGUSR1)
+            return 1.0
+
+        def check(pipeline):
+            # The signalled checkpoint is the one before the final one
+            with h5py.File(tmp_path / "ckpt.ckpt.hdf5.prev") as hdf:
+                assert hdf.attrs["n_done"] == 2
+                assert hdf.attrs["status"] == "running"
+
+        previous = signal.getsignal(signal.SIGUSR1)
+        run_pipeline(
+            "ckpt.hdf5",
+            checkpoint_interval=3600,
+            before_run=lambda p: p.add_analysis_func(_signal, "Signal"),
+            before_write=check,
+        )
+        assert signal.getsignal(signal.SIGUSR1) is previous
 
 
 def test_parametric_sfh_rejects_mismatched_ages(

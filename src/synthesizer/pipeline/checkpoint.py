@@ -42,6 +42,18 @@ def segment_path(filepath, index):
     return f"{stem}.seg{index}{ext}"
 
 
+def segment_index(path):
+    """Return the index of a segment from its path.
+
+    Args:
+        path (str): The path of the segment.
+
+    Returns:
+        int: The index of the segment.
+    """
+    return int(os.path.basename(path).rsplit(".seg", 1)[1].split(".")[0])
+
+
 def checkpoint_path(filepath):
     """Return the path of the checkpoint of an output file.
 
@@ -184,6 +196,37 @@ def write_checkpoint(path, attrs, fingerprints, segments, nested, op_counts):
     if os.path.exists(path):
         os.replace(path, f"{path}.prev")
     os.replace(tmp, path)
+
+
+def read_checkpoint(path):
+    """Read a checkpoint written by write_checkpoint.
+
+    Args:
+        path (str): The path of the checkpoint.
+
+    Returns:
+        dict: The root attrs ("attrs"), "fingerprints", "segments" (the
+            (path, number of rows) of each), "nested" running state and
+            "op_counts".
+    """
+    with h5py.File(path, "r") as hdf:
+        dirname = os.path.dirname(path)
+        files = hdf["Segments/Files"][()]
+        rows = hdf["Segments/Rows"][()]
+        return {
+            "attrs": dict(hdf.attrs),
+            "fingerprints": dict(hdf["Fingerprint"].attrs),
+            "segments": [
+                (os.path.join(dirname, name.decode()), int(nrows))
+                for name, nrows in zip(files, rows)
+            ],
+            "nested": {
+                key: read_nested(group)
+                for key, group in hdf.items()
+                if key not in ("Fingerprint", "Segments", "OpCounts")
+            },
+            "op_counts": dict(hdf["OpCounts"].attrs),
+        }
 
 
 def merge_segments(segments, dest_path):
