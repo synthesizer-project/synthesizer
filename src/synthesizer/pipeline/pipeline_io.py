@@ -180,6 +180,7 @@ class PipelineIO:
         # Flag for whether the file has been finalised (no more per-galaxy
         # data can be written)
         self.finalised = False
+        self.rows_written = 0
 
     @contextmanager
     def silenced(self):
@@ -369,24 +370,40 @@ class PipelineIO:
                 if data.size == 0:
                     return
                 dset = hdf[key]
-                if (
-                    dset.shape[1:] != data.shape[1:]
-                    or dset.dtype != data.dtype
-                    or dset.attrs["Units"] != units
-                ):
-                    raise ValueError(
-                        f"Cannot append to {key}: existing dataset has "
-                        f"shape {dset.shape}, dtype {dset.dtype} and units "
-                        f"{dset.attrs['Units']} but the new data has shape "
-                        f"{data.shape}, dtype {data.dtype} and units {units}."
-                    )
-                nexisting = dset.shape[0]
-                dset.resize(nexisting + data.shape[0], axis=0)
-                dset[nexisting:, ...] = data
-                return
+                if dset.shape[0] == 0:
+                    del hdf[key]
+                else:
+                    if (
+                        dset.shape[1:] != data.shape[1:]
+                        or dset.dtype != data.dtype
+                        or dset.attrs["Units"] != units
+                    ):
+                        raise ValueError(
+                            f"Cannot append to {key}: existing dataset has "
+                            f"shape {dset.shape}, dtype {dset.dtype}, units "
+                            f"{dset.attrs['Units']}; new data has shape "
+                            f"{data.shape}, dtype {data.dtype}, units {units}."
+                        )
+                    nexisting = dset.shape[0]
+                    dset.resize(nexisting + data.shape[0], axis=0)
+                    dset[nexisting:, ...] = data
+                    return
 
             # The first batch creates the dataset. Leave its galaxy axis
             # unlimited so future flushes can append without replacing it.
+            if (
+                getattr(self, "_writing_galaxy_data", False)
+                and self.rows_written
+            ):
+                data = np.concatenate(
+                    (
+                        np.zeros(
+                            (self.rows_written, *data.shape[1:]),
+                            dtype=data.dtype,
+                        ),
+                        data,
+                    )
+                )
             maxshape = (None, *data.shape[1:]) if data.ndim > 0 else None
             dset = hdf.create_dataset(
                 key,
@@ -507,6 +524,7 @@ class PipelineIO:
         """
         try:
             start = time.perf_counter()
+            self._writing_galaxy_data = indexes is not None
             # In parallel land we need to make sure we're on the same page with
             # the structure we are writing. Per-galaxy data (indexes given)
             # can be flushed at different times on different ranks, so don't
@@ -606,6 +624,11 @@ class PipelineIO:
                         dset.attrs[attr] = v.attrs[attr]
 
                 else:
+                    if v.shape[0] != slice.stop - slice.start:
+                        raise ValueError(
+                            f"Cannot combine {v.name}: {v.shape[0]} rows "
+                            f"for {slice.stop - slice.start} galaxies"
+                        )
                     # If the dataset doesn't exist we need to create it
                     if k not in dest:
                         dset = dest.create_dataset(
@@ -780,12 +803,13 @@ class PipelineIO:
                         if local_size == 0:
                             continue
 
-                        # Normally each rank contributes exactly its galaxy
-                        # count. If it has fewer rows for this product, map
-                        # only those rows instead of inventing missing data.
                         expected_size = end_i - start_i
                         if local_size != expected_size:
-                            end_i = start_i + local_size
+                            raise ValueError(
+                                f"Cannot map {dpath}: rank {rank} has "
+                                f"{local_size} rows for {expected_size} "
+                                "galaxies"
+                            )
 
                         target_shape = (end_i - start_i,) + shape[1:]
 

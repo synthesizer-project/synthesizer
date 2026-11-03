@@ -3308,7 +3308,13 @@ class TestPipelineFlushing:
             Pipeline(emission_model=nebular_emission_model, flush_memory=1.0)
 
     @pytest.mark.parametrize(
-        "kwargs", [{"flush_ngalaxies": 0}, {"flush_memory": -1.0}]
+        "kwargs",
+        [
+            {"flush_ngalaxies": 0},
+            {"flush_memory": -1.0},
+            {"flush_memory": float("nan")},
+            {"flush_memory": float("inf")},
+        ],
     )
     def test_invalid_flush_thresholds(
         self, nebular_emission_model, tmp_path, kwargs
@@ -3337,6 +3343,46 @@ class TestPipelineFlushing:
                 flush_ngalaxies=2,
                 before_write=lambda p: p.write(),
             )
+
+    def test_cannot_rerun_after_flushing(self, run_pipeline):
+        """Rerunning cannot truncate a previously flushed output file."""
+
+        def check(pipeline):
+            with h5py.File(pipeline._outpath) as hdf:
+                expected = hdf["Galaxies/Stars/SFH"][...]
+            with pytest.raises(exceptions.InconsistentArguments):
+                pipeline.run()
+            with h5py.File(pipeline._outpath) as hdf:
+                np.testing.assert_array_equal(
+                    hdf["Galaxies/Stars/SFH"][...], expected
+                )
+
+        run_pipeline("out.hdf5", flush_ngalaxies=1, before_write=check)
+
+
+def test_parametric_sfh_rejects_mismatched_ages(
+    nebular_emission_model, single_star_parametric
+):
+    """Parametric histories cannot be saved under unrelated age axes."""
+    from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+
+    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    pipeline.get_sfh(log10ages=single_star_parametric.log10ages + 0.1)
+    with pytest.raises(ValueError, match="ages differ"):
+        pipeline._get_sfh(ParametricGalaxy(stars=single_star_parametric))
+
+
+def test_empty_placeholder_replaced_by_nonempty_batch(tmp_path):
+    """An empty dataset with unknown trailing shape can be replaced."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "placeholder.hdf5")
+    with h5py.File(io.filepath, "w") as hdf:
+        hdf.create_dataset("Galaxies/Product", shape=(0,))
+    io.write_dataset(np.ones((2, 3)), "Galaxies/Product")
+    with h5py.File(io.filepath) as hdf:
+        assert hdf["Galaxies/Product"].shape == (2, 3)
 
 
 def test_combine_rank_files_virtual_with_empty_rank(tmp_path):
@@ -3525,4 +3571,58 @@ def test_combine_rank_files_virtual_units_mismatch(tmp_path):
     io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
 
     with pytest.raises(ValueError, match="units"):
+        io.combine_rank_files_virtual()
+
+
+def test_sparse_product_rows_follow_galaxy_order(nebular_emission_model):
+    """A product first seen on a later galaxy keeps its original row."""
+    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    pipeline._write_lnu_spectra = True
+    for spectra in ({}, {"nebular": SimpleNamespace(lnu=np.array([2.0]))}, {}):
+        galaxy = SimpleNamespace(
+            spectra=spectra, stars=None, black_holes=None, lines={}
+        )
+        pipeline._unpack_results(galaxy)
+        pipeline._n_buffered += 1
+    np.testing.assert_array_equal(
+        pipeline.lnu_spectra["Galaxy"]["nebular"], [[0.0], [2.0], [0.0]]
+    )
+    pipeline.lnu_spectra["Galaxy"]["nebular"].clear()
+    pipeline._n_buffered = 0
+    pipeline._unpack_results(
+        SimpleNamespace(spectra={}, stars=None, black_holes=None, lines={})
+    )
+    np.testing.assert_array_equal(
+        pipeline.lnu_spectra["Galaxy"]["nebular"], [[0.0]]
+    )
+
+
+def test_late_product_backfills_flushed_rows(tmp_path):
+    """A product first written after a flush includes earlier galaxy rows."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "late.hdf5")
+    io.is_parallel = io.is_collective = False
+    io.verbose, io._start_time = 0, time.perf_counter()
+    io.rows_written = 2
+    io.write_data(np.array([[3.0]]), "Galaxies/Product", indexes=[2])
+    with h5py.File(io.filepath) as hdf:
+        np.testing.assert_array_equal(hdf["Galaxies/Product"], [[0], [0], [3]])
+
+
+def test_virtual_combine_rejects_sparse_rows(tmp_path):
+    """Sparse rank data must not silently shift into earlier galaxy rows."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Product", data=[1.0])
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 1, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 2
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0], [2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+    with pytest.raises(ValueError, match="rows for 2 galaxies"):
         io.combine_rank_files_virtual()

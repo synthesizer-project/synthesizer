@@ -544,7 +544,7 @@ class Pipeline:
             raise exceptions.InconsistentArguments(
                 "flush_ngalaxies must be an int >= 1"
             )
-        if flush_memory is not None and flush_memory <= 0:
+        if flush_memory is not None and not (0 < flush_memory < float("inf")):
             raise exceptions.InconsistentArguments("flush_memory must be > 0")
         self._flushing = (
             flush_ngalaxies is not None or flush_memory is not None
@@ -560,12 +560,9 @@ class Pipeline:
             flush_memory * 1024**3 if flush_memory is not None else None
         )
 
-        # Counters for the galaxies held in memory since the last flush and
-        # the number of buffered galaxies at which we next measure their
-        # memory footprint (we only measure when we expect to be near the
-        # threshold since walking the outputs isn't free)
+        # Number of galaxies held in memory since the last flush.
         self._n_buffered = 0
-        self._next_memory_check = 1
+        self._row_templates = {}
 
     def _say_hello(self):
         """Print a nice welcome."""
@@ -1676,7 +1673,11 @@ class Pipeline:
         elif (
             not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None
         ):
-            galaxy.sfzh = galaxy.stars.sfzh
+            galaxy.sfzh = galaxy.stars.get_sfzh(
+                op_kwargs["log10ages"],
+                op_kwargs["metallicities"],
+                nthreads=self.nthreads,
+            ).sfzh
             return galaxy.sfzh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfzh(
@@ -1762,6 +1763,12 @@ class Pipeline:
         elif (
             not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None
         ):
+            ages = galaxy.stars.log10ages
+            requested = op_kwargs["log10ages"]
+            if len(ages) != len(requested) or not np.allclose(ages, requested):
+                raise ValueError(
+                    "Parametric SFH ages differ from requested ages"
+                )
             galaxy.sfh = galaxy.stars.sfh
             return galaxy.sfh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
@@ -4424,12 +4431,36 @@ class Pipeline:
         """
         start = time.perf_counter()
 
+        # Track existing product rows before unpacking this galaxy. Missing
+        # products need a row so later values keep their galaxy index.
+        def rows_in(data, path=()):
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    yield from rows_in(value, (*path, key))
+            elif isinstance(data, list):
+                yield path, data
+
+        def empty_row(template):
+            shape, dtype, units = template
+            row = np.zeros(shape, dtype=dtype)
+            return row * units if units is not None else row
+
+        before = {
+            id(rows): len(rows)
+            for attr in self._galaxy_output_attrs
+            for _, rows in rows_in(getattr(self, attr))
+        }
+
         # Do we need to unpack the SFZH? We take it from the stars where
         # possible since that's where split galaxies accumulate it. Particle
         # stars hold it as a parametric Stars object so we extract the grid.
         if self._write_sfzh:
             sfzh = getattr(galaxy, "sfzh", None)
-            if galaxy.stars is not None and galaxy.stars.sfzh is not None:
+            if (
+                isinstance(galaxy, ParticleGalaxy)
+                and galaxy.stars is not None
+                and galaxy.stars.sfzh is not None
+            ):
                 sfzh = galaxy.stars.sfzh
             self.sfzhs.append(unyt_array(getattr(sfzh, "sfzh", sfzh), "Msun"))
 
@@ -4805,6 +4836,28 @@ class Pipeline:
             for key, res in galaxy._extra_analysis_results.items():
                 self._analysis_results[key].append(res)
 
+        for attr in self._galaxy_output_attrs:
+            for path, rows in rows_in(getattr(self, attr)):
+                key = (attr, *path)
+                if len(rows) == before.get(id(rows), 0):
+                    if key in self._row_templates:
+                        rows.append(empty_row(self._row_templates[key]))
+                elif before.get(id(rows), 0) == 0:
+                    template = (
+                        np.shape(rows[0]),
+                        np.asarray(rows[0]).dtype,
+                        getattr(rows[0], "units", None),
+                    )
+                    rows[:0] = [
+                        empty_row(template) for _ in range(self._n_buffered)
+                    ]
+                if rows:
+                    self._row_templates[key] = (
+                        np.shape(rows[0]),
+                        np.asarray(rows[0]).dtype,
+                        getattr(rows[0], "units", None),
+                    )
+
         # Done!
         self._op_timing["Unpacking results"] += time.perf_counter() - start
 
@@ -4877,6 +4930,10 @@ class Pipeline:
         # since creating the file is collective and ranks flush at
         # different times.
         if self._flushing:
+            if self._analysis_complete:
+                raise exceptions.InconsistentArguments(
+                    "A Pipeline with flushing enabled cannot run twice."
+                )
             self._create_output_file(self._outpath, self.verbose)
 
         # Print the header for the pipeline run to the console
@@ -5066,38 +5123,15 @@ class Pipeline:
         ):
             return True
 
-        # Nothing more to check if we aren't flushing based on memory, or
-        # we don't yet expect to be near the memory threshold
-        if (
-            self._flush_nbytes is None
-            or self._n_buffered < self._next_memory_check
-        ):
+        if self._flush_nbytes is None:
             return False
 
-        # Measure the outputs we're holding and flush if we are over the
-        # threshold. Otherwise, use the memory per galaxy to predict when
-        # we will reach the threshold and check again then.
+        # Every galaxy may differ substantially in size.
         nbytes = get_buffered_nbytes(
             [getattr(self, attr) for attr in self._galaxy_output_attrs]
             + [self._analysis_results]
         )
-        if nbytes >= self._flush_nbytes:
-            return True
-
-        # Some operations only produce global outputs, and scalar analyses
-        # have no array bytes to count. Keep checking on each galaxy until
-        # there is something from which to estimate a per-galaxy footprint.
-        if nbytes == 0:
-            return False
-
-        # Estimate when the buffer might reach its limit rather than walking
-        # all its arrays after every galaxy. We always check again at least
-        # once after this one, even if the estimate rounds down.
-        self._next_memory_check = max(
-            self._n_buffered + 1,
-            int(self._flush_nbytes / (nbytes / self._n_buffered)),
-        )
-        return False
+        return nbytes >= self._flush_nbytes
 
     @timed("Pipeline._flush_outputs")
     def _flush_outputs(self):
@@ -5119,10 +5153,8 @@ class Pipeline:
 
         self._took(start, f"Flushing {self._n_buffered} galaxies to file")
 
-        # Reset the counters, we'll measure the memory again after the first
-        # galaxy following the flush
+        # Reset the counter for the next batch.
         self._n_buffered = 0
-        self._next_memory_check = 1
 
     @timed("Pipeline._clean_outputs")
     def _clean_outputs(self):
@@ -5633,14 +5665,6 @@ class Pipeline:
             verbose (bool, optional):
                 If set, override the Pipeline verbose setting.
         """
-        # Ensure we have run the pipeline (this is mostly useful to help with
-        # running old pipelines that don't call run before write)
-        if not self._analysis_complete:
-            self._print(
-                "Pipeline has not been run. Running pipeline before writing."
-            )
-            self.run()
-
         # Resolve where we are writing
         if outpath is None:
             outpath = self._outpath
@@ -5654,6 +5678,12 @@ class Pipeline:
                 "No outpath given to write to. Pass one to write or the "
                 "Pipeline."
             )
+
+        if not self._analysis_complete:
+            self._print(
+                "Pipeline has not been run. Running pipeline before writing."
+            )
+            self.run()
 
         write_start = time.perf_counter()
 
@@ -5714,8 +5744,18 @@ class Pipeline:
                 "Lines/IDs",
                 root=0,
             )
+            line_lams = self.line_lams
+            if self.comm is not None:
+                line_lams = next(
+                    (
+                        lams
+                        for lams in self.comm.allgather(line_lams)
+                        if lams is not None
+                    ),
+                    None,
+                )
             self.io_helper.write_data(
-                self.line_lams if self.rank == 0 else None,
+                line_lams if self.rank == 0 else None,
                 "Lines/Wavelengths",
                 root=0,
             )
@@ -5789,6 +5829,8 @@ class Pipeline:
         # rank writes its own file, so the index also avoids collective calls
         # during a flush (ranks need not flush at the same galaxy).
         galaxy_indices = self.io_helper.galaxy_indices
+        if galaxy_indices is None:
+            galaxy_indices = range(self._n_buffered)
 
         # Write the SFZHs and SFHs
         if self._write_sfzh:
@@ -6173,6 +6215,7 @@ class Pipeline:
                 f"Galaxies/{key}",
                 galaxy_indices,
             )
+        self.io_helper.rows_written += self._n_buffered
 
     def combine_files(self):
         """Combine individual rank files into a single file.
@@ -6193,7 +6236,7 @@ class Pipeline:
             return
 
         # Ensure we have written the data
-        if self.io_helper is None:
+        if self.io_helper is None or not self.io_helper.finalised:
             raise exceptions.PipelineNotReady(
                 "Cannot combine files before writing data! Call write first."
             )
@@ -6225,7 +6268,7 @@ class Pipeline:
             return
 
         # Ensure we have written the data
-        if self.io_helper is None:
+        if self.io_helper is None or not self.io_helper.finalised:
             raise exceptions.PipelineNotReady(
                 "Cannot combine files before writing data! Call write first."
             )

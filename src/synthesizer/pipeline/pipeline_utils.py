@@ -873,8 +873,7 @@ def clear_lists_recursive(data):
 def get_buffered_nbytes(data):
     """Return the number of bytes held by the arrays in nested containers.
 
-    Anything without an nbytes attribute (e.g. a Python float) is not
-    counted.
+    Python numeric scalars are counted using their array payload size.
 
     Args:
         data (dict/list/array): The (nested) data to measure.
@@ -888,6 +887,8 @@ def get_buffered_nbytes(data):
         return sum(get_buffered_nbytes(value) for value in data.values())
     if isinstance(data, (list, tuple)):
         return sum(get_buffered_nbytes(value) for value in data)
+    if isinstance(data, (int, float, complex)):
+        return np.asarray(data).nbytes
     return getattr(data, "nbytes", 0)
 
 
