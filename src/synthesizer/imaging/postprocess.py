@@ -4,7 +4,40 @@ This module contains shared orchestration helpers for applying instrument
 effects to already-generated images and data cubes.
 """
 
+import hashlib
+
 from synthesizer import exceptions
+
+
+def _derive_noise_seed(rng_seed, owner, instrument, label):
+    """Derive the seed for one owner's noise on one image or map label.
+
+    Different products must not share a noise realisation, so the seed
+    combines the base seed with the instrument, the label (e.g. the emission
+    type) and the owner (the galaxy or one of its components). The filter or
+    line is hashed in later by the instrument's apply_noises.
+
+    Args:
+        rng_seed (int):
+            The base seed, or None for unseeded noise.
+        owner:
+            The galaxy or component the noise is applied to.
+        instrument (Instrument):
+            The instrument applying the noise.
+        label (str):
+            The label of the image or map collection.
+
+    Returns:
+        int:
+            The derived seed, or None if rng_seed is None.
+    """
+    if rng_seed is None:
+        return None
+    owner_type = getattr(owner, "component_type", "Galaxy")
+    seed_material = (
+        f"{rng_seed}:{instrument.label}:{label}:{owner_type}".encode("utf-8")
+    )
+    return int.from_bytes(hashlib.sha256(seed_material).digest()[:4], "big")
 
 
 def _get_image_postprocess_stores(owner, phot_type):
@@ -101,7 +134,13 @@ def _apply_image_psfs(final_images, psf_store, instrument):
     }
 
 
-def _apply_image_noise(final_images, noise_store, instrument):
+def _apply_image_noise(
+    final_images,
+    noise_store,
+    instrument,
+    owner=None,
+    rng_seed=None,
+):
     """Apply the instrument noise configuration to image collections.
 
     Args:
@@ -111,6 +150,11 @@ def _apply_image_noise(final_images, noise_store, instrument):
             Store for noise-processed images.
         instrument (Instrument):
             Instrument defining the noise application.
+        owner:
+            The galaxy or component the images belong to, used to give each
+            owner its own noise realisation.
+        rng_seed (int):
+            The base seed for the noise, or None for unseeded noise.
 
     Returns:
         dict:
@@ -128,6 +172,7 @@ def _apply_image_noise(final_images, noise_store, instrument):
         noise_store[instrument.label][label] = instrument.apply_noises(
             imgs,
             aperture_radius=instrument.depth_app_radius,
+            rng_seed=_derive_noise_seed(rng_seed, owner, instrument, label),
         )
 
     # Return the updated view of the just-written noisy images.
@@ -206,7 +251,13 @@ def _apply_line_map_psfs(final_maps, psf_store, instrument):
     return {label: psf_store[instrument.label][label] for label in final_maps}
 
 
-def _apply_line_map_noise(final_maps, noise_store, instrument):
+def _apply_line_map_noise(
+    final_maps,
+    noise_store,
+    instrument,
+    owner=None,
+    rng_seed=None,
+):
     """Apply the instrument noise configuration to line map collections.
 
     Args:
@@ -216,6 +267,11 @@ def _apply_line_map_noise(final_maps, noise_store, instrument):
             Store for noise-processed maps.
         instrument (Instrument):
             Instrument defining the noise application.
+        owner:
+            The galaxy or component the maps belong to, used to give each
+            owner its own noise realisation.
+        rng_seed (int):
+            The base seed for the noise, or None for unseeded noise.
 
     Returns:
         dict:
@@ -231,6 +287,7 @@ def _apply_line_map_noise(final_maps, noise_store, instrument):
         noise_store[instrument.label][label] = instrument.apply_noises(
             imgs,
             aperture_radius=instrument.depth_app_radius,
+            rng_seed=_derive_noise_seed(rng_seed, owner, instrument, label),
         )
 
     return {
@@ -243,6 +300,7 @@ def _postprocess_existing_line_maps(
     instrument,
     phot_type,
     limit_to=None,
+    rng_seed=None,
 ):
     """Apply the instrument-defined line mapping post-processing to maps.
 
@@ -256,6 +314,8 @@ def _postprocess_existing_line_maps(
             Either ``"lnu"`` or ``"fnu"``.
         limit_to (list, optional):
             Specific labels to post-process.
+        rng_seed (int, optional):
+            The base seed for any noise, or None for unseeded noise.
 
     Returns:
         dict:
@@ -273,7 +333,13 @@ def _postprocess_existing_line_maps(
 
     final_maps = _apply_line_map_psfs(final_maps, psf_store, instrument)
 
-    final_maps = _apply_line_map_noise(final_maps, noise_store, instrument)
+    final_maps = _apply_line_map_noise(
+        final_maps,
+        noise_store,
+        instrument,
+        owner=owner,
+        rng_seed=rng_seed,
+    )
 
     return final_maps
 
@@ -283,6 +349,7 @@ def _postprocess_existing_images(
     instrument,
     phot_type,
     limit_to=None,
+    rng_seed=None,
 ):
     """Apply the instrument-defined imaging post-processing to images.
 
@@ -296,6 +363,8 @@ def _postprocess_existing_images(
             Either ``"lnu"`` or ``"fnu"``.
         limit_to (list, optional):
             Specific labels to post-process.
+        rng_seed (int, optional):
+            The base seed for any noise, or None for unseeded noise.
 
     Returns:
         dict:
@@ -320,7 +389,13 @@ def _postprocess_existing_images(
     final_images = _apply_image_psfs(final_images, psf_store, instrument)
 
     # Apply the configured instrument noise to the latest image state.
-    final_images = _apply_image_noise(final_images, noise_store, instrument)
+    final_images = _apply_image_noise(
+        final_images,
+        noise_store,
+        instrument,
+        owner=owner,
+        rng_seed=rng_seed,
+    )
 
     return final_images
 

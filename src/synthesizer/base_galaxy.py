@@ -1463,6 +1463,7 @@ class BaseGalaxy:
         nthreads=1,
         cosmo=None,
         phot_type="lnu",
+        rng_seed=None,
     ):
         """Make an ImageCollection for a galaxy and attached components.
 
@@ -1511,6 +1512,9 @@ class BaseGalaxy:
             phot_type (str):
                 The type of photometry to use for the images. Either "lnu"
                 for luminosity per unit frequency images, or "fnu" for flux.
+            rng_seed (int):
+                The base seed for any noise the instrument applies, or None
+                for unseeded noise.
 
         Returns:
             ImageCollection/dict
@@ -1777,6 +1781,7 @@ class BaseGalaxy:
                     instrument=instrument,
                     phot_type=phot_type,
                     limit_to=emitter_labels,
+                    rng_seed=rng_seed,
                 )
             )
 
@@ -1789,6 +1794,7 @@ class BaseGalaxy:
                     instrument=instrument,
                     phot_type=phot_type,
                     limit_to=galaxy_combine_labels,
+                    rng_seed=rng_seed,
                 )
             )
 
@@ -1807,6 +1813,7 @@ class BaseGalaxy:
         kernel_threshold=1,
         nthreads=1,
         cosmo=None,
+        rng_seed=None,
     ):
         """Make an ImageCollection from luminosities.
 
@@ -1852,6 +1859,11 @@ class BaseGalaxy:
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            rng_seed (int):
+                The seed for any noise the instrument applies, so the noisy
+                observables are reproducible. Each label, owner (galaxy or
+                component) and filter or line gets its own realisation
+                derived from it. Default is None (unseeded noise).
 
         Returns:
             ImageCollection/dict
@@ -1869,6 +1881,7 @@ class BaseGalaxy:
             nthreads=nthreads,
             cosmo=cosmo,
             phot_type="lnu",
+            rng_seed=rng_seed,
         )
 
     def get_images_flux(
@@ -1881,6 +1894,7 @@ class BaseGalaxy:
         kernel_threshold=1,
         nthreads=1,
         cosmo=None,
+        rng_seed=None,
     ):
         """Make an ImageCollection from fluxes.
 
@@ -1926,6 +1940,11 @@ class BaseGalaxy:
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            rng_seed (int):
+                The seed for any noise the instrument applies, so the noisy
+                observables are reproducible. Each label, owner (galaxy or
+                component) and filter or line gets its own realisation
+                derived from it. Default is None (unseeded noise).
 
         Returns:
             ImageCollection/dict
@@ -1943,6 +1962,7 @@ class BaseGalaxy:
             nthreads=nthreads,
             cosmo=cosmo,
             phot_type="fnu",
+            rng_seed=rng_seed,
         )
 
     def _generate_line_maps(
@@ -1957,6 +1977,7 @@ class BaseGalaxy:
         nthreads=1,
         cosmo=None,
         phot_type="lnu",
+        rng_seed=None,
     ):
         """Make emission line map ImageCollections for a galaxy/components.
 
@@ -2010,6 +2031,9 @@ class BaseGalaxy:
             phot_type (str):
                 The type of line quantity to use for the maps, either
                 'lnu' for luminosity maps, or 'fnu' for flux.
+            rng_seed (int):
+                The base seed for any noise the instrument applies, or None
+                for unseeded noise.
 
         Returns:
             ImageCollection/dict
@@ -2232,6 +2256,7 @@ class BaseGalaxy:
                     instrument=instrument,
                     phot_type=phot_type,
                     limit_to=emitter_labels,
+                    rng_seed=rng_seed,
                 )
             )
 
@@ -2242,6 +2267,7 @@ class BaseGalaxy:
                     instrument=instrument,
                     phot_type=phot_type,
                     limit_to=galaxy_combine_labels,
+                    rng_seed=rng_seed,
                 )
             )
 
@@ -2260,6 +2286,7 @@ class BaseGalaxy:
         kernel_threshold=1,
         nthreads=1,
         cosmo=None,
+        rng_seed=None,
     ):
         """Make emission line maps (ImageCollections) from luminosities.
 
@@ -2304,6 +2331,11 @@ class BaseGalaxy:
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            rng_seed (int):
+                The seed for any noise the instrument applies, so the noisy
+                observables are reproducible. Each label, owner (galaxy or
+                component) and filter or line gets its own realisation
+                derived from it. Default is None (unseeded noise).
 
         Returns:
             ImageCollection/dict
@@ -2321,6 +2353,7 @@ class BaseGalaxy:
             nthreads=nthreads,
             cosmo=cosmo,
             phot_type="lnu",
+            rng_seed=rng_seed,
         )
 
     def get_line_maps_flux(
@@ -2334,6 +2367,7 @@ class BaseGalaxy:
         kernel_threshold=1,
         nthreads=1,
         cosmo=None,
+        rng_seed=None,
     ):
         """Make emission line maps (ImageCollections) from fluxes.
 
@@ -2378,6 +2412,11 @@ class BaseGalaxy:
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            rng_seed (int):
+                The seed for any noise the instrument applies, so the noisy
+                observables are reproducible. Each label, owner (galaxy or
+                component) and filter or line gets its own realisation
+                derived from it. Default is None (unseeded noise).
 
         Returns:
             ImageCollection/dict
@@ -2395,6 +2434,7 @@ class BaseGalaxy:
             nthreads=nthreads,
             cosmo=cosmo,
             phot_type="fnu",
+            rng_seed=rng_seed,
         )
 
     def _generate_data_cubes(

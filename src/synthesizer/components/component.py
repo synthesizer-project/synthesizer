@@ -590,6 +590,7 @@ class Component(ABC):
         cosmo=None,
         phot_type="lnu",
         postprocess=True,
+        rng_seed=None,
     ):
         """Make an ImageCollection from component luminosities or fluxes.
 
@@ -642,6 +643,9 @@ class Component(ABC):
             postprocess (bool):
                 If True, automatically apply the instrument-defined imaging
                 post-processing after raw image generation.
+            rng_seed (int):
+                The base seed for any noise the instrument applies, or None
+                for unseeded noise.
 
         Returns:
             ImageCollection/dict
@@ -780,6 +784,7 @@ class Component(ABC):
             instrument=instrument,
             phot_type=phot_type,
             limit_to=labels,
+            rng_seed=rng_seed,
         )
 
         # Return either the single image or the dict of images
@@ -797,6 +802,7 @@ class Component(ABC):
         kernel_threshold=1,
         nthreads=1,
         cosmo=None,
+        rng_seed=None,
     ):
         """Make an ImageCollection from component luminosities.
 
@@ -842,6 +848,11 @@ class Component(ABC):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            rng_seed (int):
+                The seed for any noise the instrument applies, so the noisy
+                observables are reproducible. Each label, owner (galaxy or
+                component) and filter or line gets its own realisation
+                derived from it. Default is None (unseeded noise).
 
         Returns:
             ImageCollection/dict
@@ -858,6 +869,7 @@ class Component(ABC):
             nthreads=nthreads,
             cosmo=cosmo,
             phot_type="lnu",
+            rng_seed=rng_seed,
         )
 
     def get_images_flux(
@@ -870,6 +882,7 @@ class Component(ABC):
         kernel_threshold=1,
         nthreads=1,
         cosmo=None,
+        rng_seed=None,
     ):
         """Make an ImageCollection from component fluxes.
 
@@ -915,6 +928,11 @@ class Component(ABC):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            rng_seed (int):
+                The seed for any noise the instrument applies, so the noisy
+                observables are reproducible. Each label, owner (galaxy or
+                component) and filter or line gets its own realisation
+                derived from it. Default is None (unseeded noise).
 
         Returns:
             ImageCollection/dict
@@ -931,6 +949,7 @@ class Component(ABC):
             nthreads=nthreads,
             cosmo=cosmo,
             phot_type="fnu",
+            rng_seed=rng_seed,
         )
 
     def _generate_line_maps(
@@ -946,6 +965,7 @@ class Component(ABC):
         cosmo=None,
         phot_type="lnu",
         postprocess=True,
+        rng_seed=None,
     ):
         """Make an ImageCollection of emission line maps per line id.
 
@@ -1003,6 +1023,9 @@ class Component(ABC):
             postprocess (bool):
                 If True, automatically apply the instrument-defined mapping
                 post-processing after raw map generation.
+            rng_seed (int):
+                The base seed for any noise the instrument applies, or None
+                for unseeded noise.
 
         Returns:
             dict
@@ -1150,6 +1173,7 @@ class Component(ABC):
             instrument=instrument,
             phot_type=phot_type,
             limit_to=labels,
+            rng_seed=rng_seed,
         )
 
         if len(labels) == 1:
@@ -1167,6 +1191,7 @@ class Component(ABC):
         kernel_threshold=1,
         nthreads=1,
         cosmo=None,
+        rng_seed=None,
     ):
         """Make an ImageCollection of emission line maps from luminosities.
 
@@ -1210,6 +1235,11 @@ class Component(ABC):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            rng_seed (int):
+                The seed for any noise the instrument applies, so the noisy
+                observables are reproducible. Each label, owner (galaxy or
+                component) and filter or line gets its own realisation
+                derived from it. Default is None (unseeded noise).
 
         Returns:
             dict
@@ -1227,6 +1257,7 @@ class Component(ABC):
             nthreads=nthreads,
             cosmo=cosmo,
             phot_type="lnu",
+            rng_seed=rng_seed,
         )
 
     def get_line_maps_flux(
@@ -1240,6 +1271,7 @@ class Component(ABC):
         kernel_threshold=1,
         nthreads=1,
         cosmo=None,
+        rng_seed=None,
     ):
         """Make an ImageCollection of emission line maps from fluxes.
 
@@ -1283,6 +1315,11 @@ class Component(ABC):
                 The cosmology to use for the calculation of the luminosity
                 distance. Only needed for internal conversions from cartesian
                 to angular coordinates when an angular resolution is used.
+            rng_seed (int):
+                The seed for any noise the instrument applies, so the noisy
+                observables are reproducible. Each label, owner (galaxy or
+                component) and filter or line gets its own realisation
+                derived from it. Default is None (unseeded noise).
 
         Returns:
             dict
@@ -1300,6 +1337,7 @@ class Component(ABC):
             nthreads=nthreads,
             cosmo=cosmo,
             phot_type="fnu",
+            rng_seed=rng_seed,
         )
 
     @deprecated(

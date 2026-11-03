@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from astropy.cosmology import Planck18 as cosmo
 from synthesizer.extensions.timers import reset_timings, tic, toc
-from unyt import Mpc, Myr, angstrom, kpc, unyt_array
+from unyt import Hz, Mpc, Myr, angstrom, erg, kpc, s, unyt_array
 
 from synthesizer import GRID_DIR, check_atomic_timing, exceptions
 from synthesizer.base_galaxy import BaseGalaxy
@@ -3722,3 +3722,97 @@ def test_virtual_combine_rejects_sparse_rows(tmp_path):
     io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
     with pytest.raises(ValueError, match="rows for 2 galaxies"):
         io.combine_rank_files_virtual()
+
+
+class TestPipelineSeededNoise:
+    """The Pipeline's noise is reproducible from its rng_seed."""
+
+    @pytest.fixture
+    def run_noisy_pipeline(
+        self,
+        random_particle_galaxy,
+        nebular_emission_model,
+        nircam_filters,
+        kernel,
+        tmp_path,
+    ):
+        """Return a function running a pipeline with noisy images."""
+        instrument = Instrument(
+            "NoisyJWST",
+            filters=nircam_filters,
+            resolution=1 * Mpc,
+            depth={
+                f: 1e27 * erg / s / Hz for f in nircam_filters.filter_codes
+            },
+            snrs={f: 5.0 for f in nircam_filters.filter_codes},
+        )
+
+        def _run(name, **kwargs):
+            model = copy.deepcopy(nebular_emission_model)
+            model.set_per_particle(True)
+            pipeline = Pipeline(
+                emission_model=model,
+                nthreads=1,
+                verbose=0,
+                outpath=tmp_path / name,
+                **kwargs,
+            )
+            pipeline.add_galaxies(
+                [copy.deepcopy(random_particle_galaxy) for _ in range(2)]
+            )
+            pipeline.get_spectra()
+            pipeline.get_photometry_luminosities(instrument)
+            pipeline.get_images_luminosity(
+                instrument, fov=100 * Mpc, kernel=kernel
+            )
+            pipeline.run()
+            pipeline.write()
+            return {
+                key: data
+                for key, (data, _) in _read_hdf5_datasets(
+                    tmp_path / name
+                ).items()
+                if "NoiseImages" in key
+            }, pipeline.rng_seed
+
+        return _run
+
+    def test_same_seed_same_noise(self, run_noisy_pipeline):
+        """Two runs with the same seed give identical noisy images."""
+        first, seed = run_noisy_pipeline("first.hdf5", rng_seed=42)
+        second, _ = run_noisy_pipeline("second.hdf5", rng_seed=42)
+        assert seed == 42
+        assert len(first) > 0
+        for key, data in first.items():
+            np.testing.assert_array_equal(second[key], data, err_msg=key)
+
+        # Each galaxy (row) gets its own realisation
+        data = next(iter(first.values()))
+        assert not np.array_equal(data[0], data[1])
+
+    def test_different_seed_different_noise(self, run_noisy_pipeline):
+        """A different seed gives different noise."""
+        first, _ = run_noisy_pipeline("first.hdf5", rng_seed=42)
+        second, _ = run_noisy_pipeline("second.hdf5", rng_seed=43)
+        for key, data in first.items():
+            assert not np.array_equal(second[key], data), key
+
+    def test_drawn_seed_is_written(self, run_noisy_pipeline, tmp_path):
+        """Without a seed one is drawn and written to the output file."""
+        _, seed = run_noisy_pipeline("out.hdf5")
+        with h5py.File(tmp_path / "out.hdf5") as hdf:
+            assert int(hdf.attrs["rng_seed"]) == seed
+
+    def test_owners_and_labels_get_their_own_seeds(self, nircam_instrument):
+        """Galaxy and component noise, and each label, are independent."""
+        from synthesizer.imaging.postprocess import _derive_noise_seed
+
+        stars = SimpleNamespace(component_type="Stars")
+        galaxy = SimpleNamespace()
+        seeds = {
+            _derive_noise_seed(42, owner, nircam_instrument, label)
+            for owner in (stars, galaxy)
+            for label in ("nebular", "transmitted")
+        }
+        assert len(seeds) == 4
+        assert _derive_noise_seed(None, stars, nircam_instrument, "a") is None

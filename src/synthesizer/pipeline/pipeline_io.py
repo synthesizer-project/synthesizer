@@ -268,6 +268,7 @@ class PipelineIO:
         instruments,
         emission_model,
         include_lines=False,
+        rng_seed=None,
     ):
         """Write metadata to the HDF5 file.
 
@@ -279,6 +280,9 @@ class PipelineIO:
             emission_model (dict): A dictionary of emission model objects.
             include_lines (bool): Whether to create the root-level line
                 metadata group.
+            rng_seed (int): The base seed of the Pipeline's noise, if
+                any. It's stored as a string since it may not fit in a
+                64 bit integer.
         """
         start = time.perf_counter()
 
@@ -296,6 +300,8 @@ class PipelineIO:
             with h5py.File(self.filepath, "w") as hdf:
                 # Write out some top level metadata
                 hdf.attrs["synthesizer_version"] = __version__
+                if rng_seed is not None:
+                    hdf.attrs["rng_seed"] = str(rng_seed)
 
                 # Create groups for the instruments, emission model, and
                 # galaxies.

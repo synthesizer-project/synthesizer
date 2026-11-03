@@ -186,6 +186,7 @@ class Pipeline:
         outpath=None,
         flush_ngalaxies=None,
         flush_memory=None,
+        rng_seed=None,
     ):
         """Initialise the Pipeline object.
 
@@ -245,6 +246,15 @@ class Pipeline:
                 and flush_memory are set, whichever is reached first
                 triggers a flush. Once outputs have been flushed they are
                 only available in the output file, not on the Pipeline.
+            rng_seed (int): The base seed for all the noise the
+                Pipeline applies (e.g. to images and line maps).
+                Each galaxy's noise is seeded from this and the
+                galaxy's position in the full set of galaxies, so
+                a run is reproducible regardless of how the
+                galaxies are split across ranks. Default is None,
+                in which case a seed is drawn at random. Either
+                way it is stored as the rng_seed attribute and
+                written to the output file.
         """
         # Attributes to track timing
         self._start_time = time.perf_counter()
@@ -523,6 +533,9 @@ class Pipeline:
         # file while running
         self._setup_output(outpath, flush_ngalaxies, flush_memory)
 
+        # Attach the base seed for any noise
+        self._setup_rng(rng_seed)
+
         # If we are using MPI we need to make sure everyone agrees on the
         # start time, take the minimum
         if self.using_mpi:
@@ -572,6 +585,47 @@ class Pipeline:
         self._n_buffered = 0
         self._buffered_nbytes = 0
         self._row_templates = {}
+
+    def _setup_rng(self, rng_seed):
+        """Attach the base seed for the noise the Pipeline applies.
+
+        Args:
+            rng_seed (int):
+                The base seed, or None to draw one at random.
+        """
+        # Every rank must use the same base seed, so rank 0 draws
+        # one if needed and shares it
+        if rng_seed is None:
+            rng_seed = np.random.SeedSequence().entropy
+            if self.using_mpi:
+                rng_seed = self.comm.bcast(rng_seed, root=0)
+        self.rng_seed = int(rng_seed)
+
+        # The seed of the galaxy (chunk) being processed, set in run
+        self._galaxy_rng_seed = None
+
+    def _get_galaxy_rng_seed(self, igal, ichunk):
+        """Return the noise seed for a galaxy (or one of its chunks).
+
+        The seed depends only on the base seed and the galaxy's
+        position in the full set of galaxies (and the chunk's position
+        if the galaxy was split), not on the rank or how far a
+        previous run got.
+
+        Args:
+            igal (int):
+                The index of the galaxy on this rank.
+            ichunk (int):
+                The index of the chunk within the galaxy.
+
+        Returns:
+            int: The seed.
+        """
+        return int(
+            np.random.SeedSequence(
+                [self.rng_seed, self.n_galaxies_offset + igal, ichunk]
+            ).generate_state(1)[0]
+        )
 
     def _say_hello(self):
         """Print a nice welcome."""
@@ -3073,6 +3127,7 @@ class Pipeline:
                     nthreads=self.nthreads,
                     instrument=inst,
                     cosmo=op_kwargs["cosmo"],
+                    rng_seed=self._galaxy_rng_seed,
                 )
 
         # Honour any requested output dtype for the stored images
@@ -3302,6 +3357,7 @@ class Pipeline:
                     cosmo=op_kwargs.get("cosmo", None),
                     nthreads=self.nthreads,
                     instrument=inst,
+                    rng_seed=self._galaxy_rng_seed,
                 )
 
         # Honour any requested output dtype for the stored images
@@ -3503,6 +3559,7 @@ class Pipeline:
                     nthreads=self.nthreads,
                     instrument=inst,
                     cosmo=op_kwargs["cosmo"],
+                    rng_seed=self._galaxy_rng_seed,
                 )
 
         img_dtype = self._out_dtypes.get("line_maps_luminosity")
@@ -3721,6 +3778,7 @@ class Pipeline:
                     cosmo=op_kwargs.get("cosmo", None),
                     nthreads=self.nthreads,
                     instrument=inst,
+                    rng_seed=self._galaxy_rng_seed,
                 )
 
         img_dtype = self._out_dtypes.get("line_maps_flux")
@@ -5028,10 +5086,15 @@ class Pipeline:
 
             # Loop over the split galaxies list (which may just be a list
             # containing the original gal above)
+            ichunk = 0
             while len(gals) > 0:
                 # Get the next galaxy
                 with timer("Pipeline.run.pop_chunk"):
                     _gal = gals.pop(0)
+
+                # Seed any noise for this chunk
+                self._galaxy_rng_seed = self._get_galaxy_rng_seed(igal, ichunk)
+                ichunk += 1
 
                 # Are we generating SFZHs?
                 if self._do_sfzh:
@@ -5885,6 +5948,7 @@ class Pipeline:
             self.instruments,
             self.emission_model,
             include_lines=self._write_lines or self._write_flux_lines,
+            rng_seed=self.rng_seed,
         )
 
     def _write_galaxy_outputs(self):

@@ -528,7 +528,10 @@ class LineImager(InstrumentBase):
                 else self.depth
             )
             return image.apply_noise_from_snr(
-                snr=snr, depth=depth, aperture_radius=aperture_radius
+                snr=snr,
+                depth=depth,
+                aperture_radius=aperture_radius,
+                rng_seed=rng_seed,
             )
 
         raise exceptions.MissingArgument(

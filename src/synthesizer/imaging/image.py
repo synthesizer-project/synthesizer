@@ -615,7 +615,7 @@ class Image(ImagingBase):
 
         return new_img
 
-    def apply_noise_from_std(self, noise_std):
+    def apply_noise_from_std(self, noise_std, rng_seed=None):
         """Apply noise derived from a standard deviation.
 
         This creates noise with a normal distribution centred on 0 with the
@@ -624,6 +624,10 @@ class Image(ImagingBase):
         Args:
             noise_std (float):
                 The standard deviation of the noise to add to the image.
+            rng_seed (int, optional):
+                Seed for the random number generator. Providing the same
+                seed reproduces an identical noise realisation. Default is
+                None (numpy's global random state).
 
         Returns:
             Image
@@ -639,7 +643,12 @@ class Image(ImagingBase):
             units = None
 
         # Get the noise array
-        noise_arr = np.random.normal(
+        # (without a seed we keep using the global random state so
+        # np.random.seed still controls it)
+        rng = (
+            np.random if rng_seed is None else np.random.default_rng(rng_seed)
+        )
+        noise_arr = rng.normal(
             loc=0,
             scale=noise_std,
             size=self.npix,
@@ -658,7 +667,9 @@ class Image(ImagingBase):
         return new_img
 
     @accepts(aperture_radius=(kpc, arcsecond))
-    def apply_noise_from_snr(self, snr, depth, aperture_radius=None):
+    def apply_noise_from_snr(
+        self, snr, depth, aperture_radius=None, rng_seed=None
+    ):
         """Apply noise derived from a SNR and depth.
 
         This can either be for a point source or an aperture if aperture_radius
@@ -675,6 +686,9 @@ class Image(ImagingBase):
             aperture_radius (unyt_quantity):
                 The radius of the aperture. If None then a point source is
                 assumed.
+            rng_seed (int, optional):
+                Seed for the random number generator (see
+                apply_noise_from_std).
 
         Returns:
             Image
@@ -733,7 +747,7 @@ class Image(ImagingBase):
         if units is not None:
             noise_std *= units
 
-        return self.apply_noise_from_std(noise_std)
+        return self.apply_noise_from_std(noise_std, rng_seed=rng_seed)
 
     def apply_correlated_noise(
         self,
