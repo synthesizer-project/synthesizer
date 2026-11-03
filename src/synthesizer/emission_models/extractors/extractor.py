@@ -28,12 +28,14 @@ from synthesizer.extensions.doppler_particle_spectra import (
 from synthesizer.extensions.integrated_spectra import compute_integrated_sed
 from synthesizer.extensions.parametric_spectra import (
     compute_integrated_parametric_sed,
+    compute_population_seds,
 )
 from synthesizer.extensions.particle_spectra import (
     compute_particle_seds,
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.units import get_quantity_unit
+from synthesizer.utils.blas import limit_blas_threads
 from synthesizer.utils.operation_timers import timed, timer
 from synthesizer.utils.precision import (
     resolve_out_dtype,
@@ -1404,9 +1406,25 @@ class IntegratedParametricExtractor(Extractor):
     bin in cell (BIC) approach before being combined with the grid spectra
     (see synthesizer.extensions.parametric_spectra).
 
-    If no mask is being used it will reuse any stored grid weights to reduce
-    the computation time.
+    The grid weights for each grid and mask are stored on the emitter and
+    reused, e.g. by the several extractions sharing a mask in a model.
     """
+
+    def _get_weights_key(self, mask):
+        """Get the key the grid weights for a mask are stored under.
+
+        Args:
+            mask (BinMask):
+                The mask applied to the bins, or None.
+
+        Returns:
+            tuple:
+                The key for the emitter's stored grid weights.
+        """
+        return (
+            self._grid.grid_name,
+            None if mask is None else mask.get_key(),
+        )
 
     def _get_population_inputs(self, emitter, mask):
         """Get the bins of a parametric emitter in the grid's axes.
@@ -1422,49 +1440,10 @@ class IntegratedParametricExtractor(Extractor):
                 The bin edges along each grid axis (in the grid's units), the
                 (masked) bin masses and the log10 flag for each grid axis.
         """
-        # Apply the mask, which clips the bins to the parts that pass and
-        # scales their masses to match
-        if mask is not None:
-            bin_edges, bin_masses = mask.get_masked_bins(emitter)
-        else:
-            bin_edges = {
-                axis: emitter.get_bin_edges(axis, values_only=True)
-                for axis in emitter.bin_axes
-            }
-            bin_masses = emitter.bin_masses
-
-        edges = []
-        for axis_name, units, log in zip(
-            self._emitter_attributes,
-            self._axes_units,
-            self._log_emitter_attr,
-        ):
-            # Each grid axis maps onto the emitter's bin axis of the same
-            # name (with any log10 prefix removed)
-            bin_axis = axis_name[5:] if log else axis_name
-            axis_edges = bin_edges[bin_axis]
-
-            # Convert to the grid's units if the edges have units
-            unit_edges = emitter.get_bin_edges(bin_axis)
-            if isinstance(unit_edges, unyt_array):
-                axis_edges = (
-                    unyt_array(axis_edges, unit_edges.units).to(units).ndview
-                )
-            edges.append(np.ascontiguousarray(axis_edges, dtype=np.float64))
-
-        # The bins must be ordered like the grid axes
-        bin_order = [
-            emitter.bin_axes.index(name[5:] if log else name)
-            for name, log in zip(
-                self._emitter_attributes, self._log_emitter_attr
-            )
-        ]
-        masses = np.transpose(bin_masses, [0] + [i + 1 for i in bin_order])
-
-        return (
-            tuple(edges),
-            np.ascontiguousarray(masses, dtype=np.float64),
-            tuple(self._log_emitter_attr),
+        # The emission is integrated over the populations, which share their
+        # edges, so we can sum them before spreading them onto the grid
+        return emitter.get_bins_for_grid(
+            self._grid, mask=mask, combine_populations=True
         )
 
     @timed("IntegratedParametricExtractor.generate_lnu")
@@ -1507,18 +1486,19 @@ class IntegratedParametricExtractor(Extractor):
         """
         out_dtype = resolve_out_dtype(out_dtype)
 
-        # Get the bins in the grid's axes
-        edges, masses, log_flags = self._get_population_inputs(emitter, mask)
+        # Reuse stored grid weights for this grid and mask if we have them
+        weights_key = self._get_weights_key(mask)
+        grid_weights = emitter._grid_weights.get(weights_key)
+
+        # Get the bins in the grid's axes (the mask is only needed if we
+        # have to compute the weights)
+        edges, masses, log_flags = self._get_population_inputs(
+            emitter, mask if grid_weights is None else None
+        )
 
         # If nthreads is -1 then use all available threads
         if nthreads == -1:
             nthreads = os.cpu_count()
-
-        # Reuse stored grid weights if we have them and don't have a mask
-        grid_name = self._grid.grid_name
-        grid_weights = (
-            emitter._grid_weights.get(grid_name) if mask is None else None
-        )
 
         # Compute the integrated lnu array
         spec, grid_weights = compute_integrated_parametric_sed(
@@ -1535,9 +1515,8 @@ class IntegratedParametricExtractor(Extractor):
             self._emitter_attributes,
         )
 
-        # Store the grid weights for reuse if we had no mask
-        if mask is None:
-            emitter._grid_weights[grid_name] = grid_weights
+        # Store the grid weights for reuse
+        emitter._grid_weights[weights_key] = grid_weights
 
         return Sed(
             model.lam,
@@ -1581,18 +1560,19 @@ class IntegratedParametricExtractor(Extractor):
         """
         out_dtype = resolve_out_dtype(out_dtype)
 
-        # Get the bins in the grid's axes
-        edges, masses, log_flags = self._get_population_inputs(emitter, mask)
+        # Reuse stored grid weights for this grid and mask if we have them
+        weights_key = self._get_weights_key(mask)
+        grid_weights = emitter._grid_weights.get(weights_key)
+
+        # Get the bins in the grid's axes (the mask is only needed if we
+        # have to compute the weights)
+        edges, masses, log_flags = self._get_population_inputs(
+            emitter, mask if grid_weights is None else None
+        )
 
         # If nthreads is -1 then use all available threads
         if nthreads == -1:
             nthreads = os.cpu_count()
-
-        # Reuse stored grid weights if we have them and don't have a mask
-        grid_name = self._grid.grid_name
-        grid_weights = (
-            emitter._grid_weights.get(grid_name) if mask is None else None
-        )
 
         # Compute the integrated line luminosities, then reuse the weights
         # for the continuum
@@ -1623,13 +1603,245 @@ class IntegratedParametricExtractor(Extractor):
             self._emitter_attributes,
         )
 
-        # Store the grid weights for reuse if we had no mask
-        if mask is None:
-            emitter._grid_weights[grid_name] = grid_weights
+        # Store the grid weights for reuse
+        emitter._grid_weights[weights_key] = grid_weights
 
         return LineCollection(
             line_ids=self._grid.line_ids,
             lam=self._grid.line_lams,
             lum=lum * self._line_lum_grid.units,
             cont=cont * self._line_cont_grid.units,
+        )
+
+
+class PopulationExtractor(IntegratedParametricExtractor):
+    """A class to extract the emission of each parametric population.
+
+    This is the parametric sibling of the ParticleExtractor: it produces the
+    emission of every population (stored as "per particle" emission, with one
+    row per population) alongside the integrated emission. Per population
+    parameters (e.g. a tau_v for each population) can then be applied to
+    each population's emission by the transformers, exactly as per particle
+    parameters are for particles.
+
+    The emission of every population is computed at once as a single dense
+    product with the grid using BLAS (see
+    synthesizer.extensions.parametric_spectra).
+    """
+
+    def _get_population_spectra(
+        self, emitter, mask, grid, lam_mask, nthreads, out_dtype
+    ):
+        """Get the emission of each population from a grid.
+
+        The per population grid weights are stored on the emitter (keyed by
+        grid and mask) and reused by later extractions.
+
+        Args:
+            emitter (Stars):
+                The parametric emitter.
+            mask (BinMask):
+                A mask to apply to the bins, or None.
+            grid (np.ndarray):
+                The grid to extract (spectra or line luminosities).
+            lam_mask (np.ndarray of bool):
+                A mask to apply to the grid's last axis.
+            nthreads (int):
+                The number of threads to use.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for the result.
+
+        Returns:
+            np.ndarray:
+                The (npop, nlam) emission of each population.
+        """
+        weights_key = ("populations", *self._get_weights_key(mask))
+        pop_weights = emitter._grid_weights.get(weights_key)
+        edges, masses, log_flags = emitter.get_bins_for_grid(
+            self._grid, mask=mask if pop_weights is None else None
+        )
+        with limit_blas_threads(nthreads):
+            spec, pop_weights = compute_population_seds(
+                grid,
+                self._grid_axes,
+                edges,
+                masses,
+                log_flags,
+                nthreads,
+                pop_weights,
+                None,
+                lam_mask,
+                out_dtype,
+                self._emitter_attributes,
+            )
+        emitter._grid_weights[weights_key] = pop_weights
+        return spec
+
+    @timed("PopulationExtractor.generate_lnu")
+    def generate_lnu(
+        self,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        grid_assignment_method,
+        nthreads,
+        do_grid_check,
+        out_dtype=None,
+    ):
+        """Extract the spectra of each population and the integrated spectra.
+
+        Args:
+            emitter (Stars):
+                The emitter object from which to extract the emission.
+            model (EmissionModel):
+                The emission model defining the emission to extract.
+            mask (BinMask):
+                A mask to apply to the bins.
+            lam_mask (np.ndarray of bool):
+                A mask to apply to the spectra's wavelength axis.
+            grid_assignment_method (str):
+                Unused, parametric populations are always spread onto the
+                grid with the bin in cell approach.
+            nthreads (int):
+                The number of threads to use in the extraction. If -1 then
+                all available threads will be used.
+            do_grid_check (bool):
+                Unused, mass outside the grid is clamped onto its edges.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned spectra arrays.
+
+        Returns:
+            tuple:
+                The Sed of each population and the integrated Sed.
+        """
+        out_dtype = resolve_out_dtype(out_dtype)
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        # A single population's emission is the integrated emission, which
+        # is cheaper to compute than a one row dense product
+        if emitter.npop == 1:
+            integrated_sed = IntegratedParametricExtractor.generate_lnu(
+                self,
+                emitter,
+                model,
+                mask,
+                lam_mask,
+                grid_assignment_method,
+                nthreads,
+                do_grid_check,
+                out_dtype=out_dtype,
+            )
+            return (
+                Sed(model.lam, integrated_sed.lnu[None, :]),
+                integrated_sed,
+            )
+
+        # Otherwise the integrated emission is the sum of the populations',
+        # which is far cheaper than reading the grid again
+        spec = self._get_population_spectra(
+            emitter, mask, self._spectra_grid, lam_mask, nthreads, out_dtype
+        )
+        return (
+            Sed(
+                model.lam,
+                unyt_array(spec, erg / s / Hz, bypass_validation=True),
+            ),
+            Sed(
+                model.lam,
+                unyt_array(
+                    spec.sum(axis=0), erg / s / Hz, bypass_validation=True
+                ),
+            ),
+        )
+
+    @timed("PopulationExtractor.generate_line")
+    def generate_line(
+        self,
+        emitter,
+        model,
+        mask,
+        lam_mask,
+        grid_assignment_method,
+        nthreads,
+        do_grid_check,
+        out_dtype=None,
+    ):
+        """Extract the lines of each population and the integrated lines.
+
+        Args:
+            emitter (Stars):
+                The emitter object from which to extract the emission.
+            model (EmissionModel):
+                The emission model defining the emission to extract.
+            mask (BinMask):
+                A mask to apply to the bins.
+            lam_mask (np.ndarray of bool):
+                A mask to apply to the lines.
+            grid_assignment_method (str):
+                Unused, parametric populations are always spread onto the
+                grid with the bin in cell approach.
+            nthreads (int):
+                The number of threads to use in the extraction. If -1 then
+                all available threads will be used.
+            do_grid_check (bool):
+                Unused, mass outside the grid is clamped onto its edges.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for returned line arrays.
+
+        Returns:
+            tuple:
+                The LineCollection of each population and the integrated
+                LineCollection.
+        """
+        out_dtype = resolve_out_dtype(out_dtype)
+        if nthreads == -1:
+            nthreads = os.cpu_count()
+
+        # A single population's lines are the integrated lines
+        if emitter.npop == 1:
+            integrated_lines = IntegratedParametricExtractor.generate_line(
+                self,
+                emitter,
+                model,
+                mask,
+                lam_mask,
+                grid_assignment_method,
+                nthreads,
+                do_grid_check,
+                out_dtype=out_dtype,
+            )
+            return (
+                LineCollection(
+                    line_ids=self._grid.line_ids,
+                    lam=self._grid.line_lams,
+                    lum=integrated_lines.luminosity[None, :],
+                    cont=integrated_lines.continuum[None, :],
+                ),
+                integrated_lines,
+            )
+
+        # Otherwise the integrated lines are the sum of the populations'
+        lum = self._get_population_spectra(
+            emitter, mask, self._line_lum_grid, lam_mask, nthreads, out_dtype
+        )
+        cont = self._get_population_spectra(
+            emitter, mask, self._line_cont_grid, lam_mask, nthreads, out_dtype
+        )
+        lum = lum * self._line_lum_grid.units
+        cont = cont * self._line_cont_grid.units
+        return (
+            LineCollection(
+                line_ids=self._grid.line_ids,
+                lam=self._grid.line_lams,
+                lum=lum,
+                cont=cont,
+            ),
+            LineCollection(
+                line_ids=self._grid.line_ids,
+                lam=self._grid.line_lams,
+                lum=lum.sum(axis=0),
+                cont=cont.sum(axis=0),
+            ),
         )

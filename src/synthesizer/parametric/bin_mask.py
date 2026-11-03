@@ -49,10 +49,11 @@ class BinMask:
             The conditions applied along each bin axis, as a list of
             (operator string, threshold) pairs keyed by axis name. Thresholds
             are in the same (linear) units as the bin edges.
-        include (bool):
-            Whether the population is included at all. This is set by
+        include (bool/np.ndarray of bool):
+            Whether each population is included at all. This is set by
             conditions on population level quantities (e.g. a fixed model
-            parameter) rather than on a bin axis.
+            parameter, or a per population parameter with one value per
+            population) rather than on a bin axis.
     """
 
     def __init__(self):
@@ -71,8 +72,45 @@ class BinMask:
         new.axis_conditions = {
             axis: list(conds) for axis, conds in self.axis_conditions.items()
         }
-        new.include = self.include
+        new.include = np.copy(self.include)
         return new
+
+    def get_key(self):
+        """Get a hashable key identifying this mask's conditions.
+
+        Two masks with the same key select exactly the same mass, so their
+        grid weights can be shared.
+
+        Returns:
+            tuple:
+                The key.
+        """
+        return (
+            tuple(np.atleast_1d(self.include).tolist()),
+            tuple(
+                (axis, tuple(sorted(conds)))
+                for axis, conds in sorted(self.axis_conditions.items())
+            ),
+        )
+
+    def get_population_mask(self, npop):
+        """Get which populations the mask includes.
+
+        Conditions on the bin axes act on the bins when the emission is
+        extracted, so they don't exclude whole populations.
+
+        Args:
+            npop (int):
+                The number of populations.
+
+        Returns:
+            np.ndarray of bool:
+                Whether each population is included, or None if they all are.
+        """
+        include = np.broadcast_to(self.include, (npop,))
+        if np.all(include):
+            return None
+        return np.array(include)
 
     def add_axis_condition(self, axis, op, thresh):
         """Add a condition along a bin axis.
@@ -96,8 +134,8 @@ class BinMask:
         """Add a condition on a population level quantity.
 
         Args:
-            value (float):
-                The population's value.
+            value (float/np.ndarray of float):
+                The population's value, or one value per population.
             op (str):
                 The comparison operator.
             thresh (float):
@@ -108,7 +146,9 @@ class BinMask:
                 "Masking operation must be '<', '>', '<=', '>=', '==', or "
                 f"'!=', not {op}"
             )
-        self.include = self.include and bool(OPERATORS[op](value, thresh))
+        self.include = np.logical_and(
+            self.include, OPERATORS[op](np.asarray(value), thresh)
+        )
 
     def _get_allowed_interval(self, axis):
         """Get the interval a finite bin's mass must lie in along an axis.
@@ -173,28 +213,38 @@ class BinMask:
         )
         return np.where(points, point_pass.astype(float), overlap / widths)
 
-    def get_fractions(self, stars):
+    def get_fractions(self, stars, edges=None, masses=None):
         """Get the fraction of each bin's mass passing the mask.
 
         Args:
             stars (parametric.Stars):
                 The binned population the mask applies to.
+            edges (dict):
+                The bin edges keyed by axis name, defaults to the
+                population's.
+            masses (np.ndarray):
+                The bin masses, defaults to the population's.
 
         Returns:
             np.ndarray:
-                The fractions, with the same shape as the population's masses.
+                The fractions, broadcastable to the shape of the masses.
         """
-        fractions = np.full(stars.bin_masses.shape, float(self.include))
+        if edges is None:
+            edges, masses = stars._bin_edges, stars.bin_masses
+
+        # The axis conditions are the same for every population so the
+        # fractions broadcast over the population axis, only the population
+        # level conditions can differ between populations
+        include = np.atleast_1d(self.include).astype(float)
+        fractions = include.reshape((include.size,) + (1,) * (masses.ndim - 1))
         for iaxis, axis in enumerate(stars.bin_axes):
-            axis_fracs = self._get_axis_fractions(
-                axis, stars.get_bin_edges(axis, values_only=True)
-            )
+            axis_fracs = self._get_axis_fractions(axis, edges[axis])
             shape = [1] * fractions.ndim
             shape[iaxis + 1] = axis_fracs.size
             fractions = fractions * axis_fracs.reshape(shape)
         return fractions
 
-    def get_masked_bins(self, stars):
+    def get_masked_bins(self, stars, edges=None, masses=None):
         """Get the bins of a population with this mask applied.
 
         Scaling each bin's mass by its passing fraction gets the passing mass
@@ -207,20 +257,27 @@ class BinMask:
         Args:
             stars (parametric.Stars):
                 The binned population the mask applies to.
+            edges (dict):
+                The bin edges keyed by axis name, defaults to the
+                population's.
+            masses (np.ndarray):
+                The bin masses, defaults to the population's.
 
         Returns:
             tuple:
                 The clipped bin edges keyed by axis name and the masked
-                masses (with the shape of the population's masses).
+                masses.
         """
-        edges = {}
+        if edges is None:
+            edges, masses = stars._bin_edges, stars.bin_masses
+        clipped = {}
         for axis in stars.bin_axes:
-            axis_edges = stars.get_bin_edges(axis, values_only=True)
+            axis_edges = edges[axis]
             allowed_lo, allowed_hi = self._get_allowed_interval(axis)
             if allowed_lo <= allowed_hi:
                 axis_edges = np.clip(axis_edges, allowed_lo, allowed_hi)
-            edges[axis] = axis_edges
-        return edges, stars.bin_masses * self.get_fractions(stars)
+            clipped[axis] = axis_edges
+        return clipped, masses * self.get_fractions(stars, edges, masses)
 
 
 def to_axis_threshold(thresh, attr, axis_units):
@@ -255,3 +312,86 @@ def to_axis_threshold(thresh, attr, axis_units):
             f"({thresh})."
         )
     return float(thresh)
+
+
+def union_edges(edges, other_edges):
+    """Get the union of two sets of bin edges.
+
+    A value repeated in either set (i.e. a zero width bin) is repeated in the
+    union as many times as in the set repeating it most, so every bin of
+    both sets can be rebuilt from bins of the union.
+
+    Args:
+        edges (np.ndarray of float):
+            The first (non-decreasing) bin edges.
+        other_edges (np.ndarray of float):
+            The second (non-decreasing) bin edges.
+
+    Returns:
+        np.ndarray of float:
+            The union of the edges.
+    """
+    values = np.union1d(edges, other_edges)
+
+    def count(arr):
+        return np.searchsorted(arr, values, "right") - np.searchsorted(
+            arr, values, "left"
+        )
+
+    return np.repeat(
+        values, np.maximum(np.maximum(count(edges), count(other_edges)), 1)
+    )
+
+
+def rebin_axis(masses, axis, edges, new_edges):
+    """Rebin masses along one axis onto finer edges.
+
+    The new edges must contain every one of the old edges (e.g. the union
+    of two sets of edges), so every new bin lies within a single old bin. A
+    finite bin's mass is uniform within it, so each new finite bin takes the
+    fraction of its old bin's mass given by their widths. A zero width bin's
+    mass moves to the zero width bin at the same value.
+
+    Args:
+        masses (np.ndarray):
+            The masses.
+        axis (int):
+            The axis of masses to rebin.
+        edges (np.ndarray of float):
+            The current bin edges along that axis.
+        new_edges (np.ndarray of float):
+            The new bin edges along that axis.
+
+    Returns:
+        np.ndarray:
+            The rebinned masses.
+    """
+    lo, hi = edges[:-1], edges[1:]
+    new_lo, new_hi = new_edges[:-1], new_edges[1:]
+    nbins = lo.size
+
+    # Find the old bin holding each new finite bin (searching to the right
+    # of any repeated edge lands in the finite bin after a zero width one)
+    source = np.searchsorted(edges, new_lo, side="right") - 1
+    inside = (source >= 0) & (source < nbins) & (new_hi > new_lo)
+    source = np.clip(source, 0, nbins - 1)
+    inside &= (hi[source] > lo[source]) & (new_hi <= hi[source])
+    fraction = np.where(
+        inside,
+        (new_hi - new_lo) / np.where(inside, hi[source] - lo[source], 1.0),
+        0.0,
+    )
+
+    # Zero width bins take the mass of the zero width bin at the same value
+    points = np.flatnonzero(lo == hi)
+    new_points = np.flatnonzero(new_lo == new_hi)
+    matches = np.searchsorted(lo[points], new_lo[new_points])
+    matches = np.clip(matches, 0, max(points.size - 1, 0))
+    if points.size > 0:
+        found = lo[points][matches] == new_lo[new_points]
+        source[new_points[found]] = points[matches[found]]
+        fraction[new_points[found]] = 1.0
+
+    shape = [1] * masses.ndim
+    shape[axis] = fraction.size
+    return np.take(masses, source, axis=axis) * fraction.reshape(shape)
