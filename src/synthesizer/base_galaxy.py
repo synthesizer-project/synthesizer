@@ -646,10 +646,14 @@ class BaseGalaxy:
                 out_dtype=out_dtype,
             )
 
-            # If we have particle spectra do that too (not applicable to
-            # parametric Galaxy)
+            # If we have per particle (or per population) spectra do that too
             if hasattr(self.stars, "particle_spectra"):
-                self.stars.get_particle_photo_lnu(
+                get_per_element_photo = (
+                    self.stars.get_population_photo_lnu
+                    if self.stars.is_parametric
+                    else self.stars.get_particle_photo_lnu
+                )
+                get_per_element_photo(
                     filters,
                     verbose,
                     nthreads=nthreads,
@@ -763,10 +767,14 @@ class BaseGalaxy:
                 out_dtype=out_dtype,
             )
 
-            # If we have particle spectra do that too (not applicable to
-            # parametric Galaxy)
+            # If we have per particle (or per population) spectra do that too
             if hasattr(self.stars, "particle_spectra"):
-                self.stars.get_particle_photo_fnu(
+                get_per_element_photo = (
+                    self.stars.get_population_photo_fnu
+                    if self.stars.is_parametric
+                    else self.stars.get_particle_photo_fnu
+                )
+                get_per_element_photo(
                     filters,
                     verbose,
                     nthreads=nthreads,
@@ -1156,6 +1164,38 @@ class BaseGalaxy:
             filters=filters,
             quantity_to_plot=quantity_to_plot,
         )
+
+    def get_fraction_outside_grid(self, grid, model=None):
+        """Get the fraction of each component outside a grid's axes.
+
+        See Component.get_fraction_outside_grid. Only components with values
+        along every axis of the grid (e.g. stars for a stellar grid) are
+        included.
+
+        Args:
+            grid (Grid):
+                The grid to compare to.
+            model (EmissionModel):
+                The emission model, for attributes given as its fixed
+                parameters, or None.
+
+        Returns:
+            dict:
+                The fraction of each component outside the grid's axes,
+                keyed by the component's attribute name (e.g. "stars").
+        """
+        fractions = {}
+        for name in ("stars", "gas", "black_holes"):
+            component = getattr(self, name, None)
+            if component is None:
+                continue
+            try:
+                fractions[name] = component.get_fraction_outside_grid(
+                    grid, model
+                )
+            except exceptions.MissingAttribute:
+                continue
+        return fractions
 
     def get_spectra(
         self,
@@ -3817,7 +3857,7 @@ class BaseGalaxy:
                 )
             sigma_sfr = sfr / (np.pi * radius**2)
         elif not hasattr(sigma_sfr, "units"):
-            sigma_sfr = sigma_sfr * Msun / yr / kpc**2
+            sigma_sfr = (sigma_sfr * Msun).in_base("galactic") / yr / kpc**2
 
         # Sample an inclination if a specific one was not provided
         if inclination is None:

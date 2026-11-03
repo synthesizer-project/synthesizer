@@ -151,6 +151,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             "per particle". If True, the spectra and lines will be stored per
             particle. Integrated spectra are made automatically by summing the
             per particle spectra. Default is False.
+        per_population (bool):
+            An alias of per_particle for parametric emitters, where the
+            emission is stored per population.
         vel_shift (bool):
             A flag for whether the emission produced by this model should take
             into account the velocity shift due to peculiar velocities.
@@ -183,6 +186,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         save=True,
         per_particle=False,
         vel_shift=False,
+        per_population=None,
         **fixed_parameters,
     ):
         """Initialise the emission model.
@@ -269,6 +273,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 A flag for whether the emission produced by this model should
                 take into account the velocity shift due to peculiar
                 velocities. Default is False.
+            per_population (bool):
+                An alias of per_particle for parametric emitters. If True,
+                the spectra and lines of a parametric emitter will be stored
+                per population. Setting it to the opposite of per_particle
+                will raise an exception.
             fixed_parameters (dict):
                 Any extra keyword arguments will be treated as fixed parameters
                 and stored in a dictionary. When the model looks to extract
@@ -313,8 +322,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # All good, as you were
             pass
 
-        # Are we making per particle emission?
-        self._per_particle = per_particle
+        # Are we making per particle (or per population) emission?
+        if per_population is not None and per_particle and not per_population:
+            raise exceptions.InconsistentArguments(
+                "per_particle and per_population are aliases, they can't be "
+                "set to different values."
+            )
+        self._per_particle = per_particle or bool(per_population)
 
         # Make sure we aren't trying to be a per particle galaxy model
         if self._per_particle and self._emitter == "galaxy":
@@ -1132,6 +1146,20 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
     def per_particle(self):
         """Get the per particle flag."""
         return self._per_particle
+
+    @property
+    def per_population(self):
+        """Get the per population flag (an alias of per_particle)."""
+        return self._per_particle
+
+    def set_per_population(self, per_population):
+        """Set the per population flag (an alias of set_per_particle).
+
+        Args:
+            per_population (bool):
+                Whether to set the per population flag.
+        """
+        self.set_per_particle(per_population)
 
     def set_per_particle(self, per_particle):
         """Set the per particle flag.
