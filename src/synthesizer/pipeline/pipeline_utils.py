@@ -889,6 +889,10 @@ def get_buffered_nbytes(data):
         return sum(get_buffered_nbytes(value) for value in data)
     if isinstance(data, (int, float, complex)):
         return np.asarray(data).nbytes
+    if isinstance(data, str):
+        return len(data.encode("utf-8"))
+    if isinstance(data, bytes):
+        return len(data)
     return getattr(data, "nbytes", 0)
 
 

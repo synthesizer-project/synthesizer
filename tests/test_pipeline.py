@@ -3385,7 +3385,7 @@ def test_empty_placeholder_replaced_by_nonempty_batch(tmp_path):
         assert hdf["Galaxies/Product"].shape == (2, 3)
 
 
-def test_combine_rank_files_virtual_with_empty_rank(tmp_path):
+def test_combine_rank_files_virtual_shared_axes_with_empty_rank(tmp_path):
     """Ranks without rows (or datasets) must not break the virtual file."""
     from synthesizer.pipeline.pipeline_io import PipelineIO
 

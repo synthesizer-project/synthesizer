@@ -367,7 +367,7 @@ class PipelineIO:
             # batches have nothing to add; otherwise make sure their shape,
             # dtype and units agree before extending the first axis.
             if key in hdf:
-                if data.size == 0:
+                if data.ndim > 0 and data.shape[0] == 0:
                     return
                 dset = hdf[key]
                 if dset.shape[0] == 0:
@@ -629,6 +629,10 @@ class PipelineIO:
                             f"Cannot combine {v.name}: {v.shape[0]} rows "
                             f"for {slice.stop - slice.start} galaxies"
                         )
+                    # Empty ranks only hold zero-row placeholders, which
+                    # must not decide the combined dataset's shape
+                    if v.shape[0] == 0:
+                        continue
                     # If the dataset doesn't exist we need to create it
                     if k not in dest:
                         dset = dest.create_dataset(

@@ -364,6 +364,10 @@ class Pipeline:
         self._analysis_results_keys = []
         self._analysis_results = {}
 
+        # The key structure of each analysis result from the first flush,
+        # later flushes must match it to append consistently
+        self._analysis_result_structures = {}
+
         # Initialise containers for all the data we can generate
         self.sfzhs = []
         self.sfhs = []
@@ -1678,7 +1682,6 @@ class Pipeline:
                 op_kwargs["metallicities"],
                 nthreads=self.nthreads,
             ).sfzh
-            return galaxy.sfzh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfzh(
                 log10ages=op_kwargs["log10ages"],
@@ -5644,6 +5647,25 @@ class Pipeline:
             # hand a list of values
             combined_data = combine_list_of_dicts(res)
 
+            # Each flush appends to the datasets the first one created, so
+            # a different structure would leave some datasets missing rows
+            def get_structure(d):
+                if not isinstance(d, dict):
+                    return None
+                return {k: get_structure(v) for k, v in d.items()}
+
+            if len(res) > 0:
+                structure = get_structure(combined_data)
+                expected = self._analysis_result_structures.setdefault(
+                    key, structure
+                )
+                if structure != expected:
+                    raise exceptions.BadResult(
+                        f"Extra analysis result {key} changed structure "
+                        f"between flushes. Expected {expected}, got "
+                        f"{structure}."
+                    )
+
             # Store the data
             self._analysis_results[key] = combined_data
 
@@ -5968,11 +5990,12 @@ class Pipeline:
                 "Galaxies/BlackHoles/Lines/Flux",
                 galaxy_indices,
             )
-            self.io_helper.write_data(
-                self.line_obs_lams,
-                "Galaxies/Lines/ObservedWavelengths",
-                galaxy_indices,
-            )
+            if len(self.line_obs_lams) > 0:
+                self.io_helper.write_data(
+                    self.line_obs_lams,
+                    "Galaxies/Lines/ObservedWavelengths",
+                    galaxy_indices,
+                )
             # The continuum shares its datasets with the luminosity lines so
             # only write it here if they haven't already
             if not self._write_lines:
