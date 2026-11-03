@@ -341,7 +341,7 @@ class Pipeline:
         self.line_ids = None
         self.line_fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.line_cont_fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_obs_lams = None
+        self.line_obs_lams = []
         self.images_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_lum_noise = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
@@ -2736,23 +2736,6 @@ class Pipeline:
             out_dtype=self._out_dtypes.get("observed_lines"),
         )
 
-        # Store the observed line wavelengths for writing, we only do this once
-        # since they are the same for all galaxies but we need to find them
-        # first (either on the galaxy, stars, or black holes)
-        if self.line_obs_lams is None:
-            # Get the line lams from the first line collection we can find
-            for lines in galaxy.lines.values():
-                self.line_obs_lams = lines.obslam
-                break
-            if self.line_obs_lams is None and galaxy.stars is not None:
-                for lines in galaxy.stars.lines.values():
-                    self.line_obs_lams = lines.obslam
-                    break
-            if self.line_obs_lams is None and galaxy.black_holes is not None:
-                for lines in galaxy.black_holes.lines.values():
-                    self.line_obs_lams = lines.obslam
-                    break
-
         # Count the number of observed emission lines we have generated
         self._op_counts["Emission Line Fluxes"] += (
             count_and_check_dict_recursive(galaxy.lines)
@@ -4471,6 +4454,17 @@ class Pipeline:
                         spec_type, []
                     ).append(lines.continuum)
 
+            # The observed wavelengths depend on the galaxy's redshift so we
+            # store them for every galaxy, taking them from the first line
+            # collection we can find (on the galaxy, stars, or black holes)
+            collections = [*galaxy.lines.values()]
+            if galaxy.stars is not None:
+                collections.extend(galaxy.stars.lines.values())
+            if galaxy.black_holes is not None:
+                collections.extend(galaxy.black_holes.lines.values())
+            if len(collections) > 0:
+                self.line_obs_lams.append(collections[0].obslam)
+
         # Do we need to unpack the luminosity images?
         if self._write_images_lum:
             for inst_label, d in galaxy.images_lnu.items():
@@ -5131,6 +5125,9 @@ class Pipeline:
         for spec_type, conts in self.line_cont_fluxes["BlackHole"].items():
             self.line_cont_fluxes["BlackHole"][spec_type] = unyt_array(conts)
 
+        # Convert the list of observed line wavelengths to a unyt array
+        self.line_obs_lams = unyt_array(self.line_obs_lams)
+
         # Convert the lists of luminosity images to unyt arrays
         for inst_label, inst_data in self.images_lum["Galaxy"].items():
             for spec_type, imgs in inst_data.items():
@@ -5646,6 +5643,34 @@ class Pipeline:
                 "Galaxies/BlackHoles/Lines/Continuum",
                 galaxy_indices,
             )
+
+            # Ranks without galaxies have no wavelengths to infer the shape
+            # from, so take the trailing shape, dtype and units from a rank
+            # with galaxies and write an empty dataset to match
+            if self.using_mpi:
+                # Share the properties of the wavelengths on each rank with
+                # galaxies
+                obs_props = None
+                if len(self.line_obs_lams) > 0:
+                    obs_props = (
+                        self.line_obs_lams.shape[1:],
+                        self.line_obs_lams.dtype,
+                        str(self.line_obs_lams.units),
+                    )
+                all_obs_props = [
+                    props
+                    for props in self.comm.allgather(obs_props)
+                    if props is not None
+                ]
+
+                # Replace our empty wavelengths with an empty array of the
+                # right shape
+                if len(self.line_obs_lams) == 0 and len(all_obs_props) > 0:
+                    trailing, dtype, units = all_obs_props[0]
+                    self.line_obs_lams = unyt_array(
+                        np.zeros((0, *trailing), dtype=dtype), units
+                    )
+
             self.io_helper.write_data(
                 self.line_obs_lams,
                 "Galaxies/Lines/ObservedWavelengths",
