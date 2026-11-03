@@ -23,8 +23,10 @@ from synthesizer.emission_models import IncidentEmission
 from synthesizer.instruments import FilterCollection, Instrument
 from synthesizer.parametric import Stars
 from synthesizer.parametric.morphology import (
+    Annuli,
     Gaussian2D,
     Gaussian2DAnnuli,
+    PerPopulation,
     PointSource,
     Sersic2D,
     Sersic2DAnnuli,
@@ -1115,3 +1117,56 @@ class TestPixelGrid:
         x = RESOLUTION.value * (np.arange(npix) - (npix - 1) / 2)
         var = np.sum(grid.sum(axis=0) * x**2) / grid.sum()
         assert np.isclose(var, 1.0, rtol=5e-3)
+
+
+class TestPopulationMorphologies:
+    """Tests for morphologies describing several populations."""
+
+    def test_annuli_are_normalised_separately(self):
+        """Each annulus holds exactly its own signal."""
+        annuli = Annuli(
+            Sersic2D(r_eff=2 * kpc), unyt_array([0.0, 1.0, 3.0, np.inf], kpc)
+        )
+        for index in range(annuli.npop):
+            signals = np.zeros(annuli.npop)
+            signals[index] = 5.0
+            grid = annuli.get_weighted_density_grid(RESOLUTION, NPIX, signals)
+            np.testing.assert_allclose(grid.sum(), 5.0)
+
+    def test_annuli_keep_trailing_axes(self):
+        """A spectrum per annulus gives a cube holding every spectrum."""
+        annuli = Annuli(
+            Gaussian2D(0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc),
+            unyt_array([0.0, 1.0, np.inf], kpc),
+        )
+        spectra = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        cube = annuli.get_weighted_density_grid(RESOLUTION, NPIX, spectra)
+        assert cube.shape == (NPIX[1], NPIX[0], 3)
+        np.testing.assert_allclose(cube.sum(axis=(0, 1)), spectra.sum(axis=0))
+
+    def test_annuli_need_a_radius(self):
+        """A profile without a radius can't be split into annuli."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            Annuli(
+                PointSource(offset=unyt_array([0.0, 0.0], kpc)),
+                unyt_array([0.0, 1.0], kpc),
+            )
+
+    def test_per_population_lookup_and_nesting(self):
+        """PerPopulation flattens nesting and finds each population."""
+        bulge = Sersic2D(r_eff=1 * kpc, sersic_index=4)
+        annuli = Annuli(
+            Sersic2D(r_eff=3 * kpc), unyt_array([0.0, 1.0, 2.0], kpc)
+        )
+        morph = PerPopulation([PerPopulation([bulge]), annuli])
+        assert morph.npop == 3
+        assert morph.get_population_morphology(0) is bulge
+        single = morph.get_population_morphology(2)
+        assert single.npop == 1
+        np.testing.assert_allclose(single.radii.value, [1.0, 2.0])
+
+    def test_population_morphology_needs_signals(self):
+        """A population morphology has no single density grid."""
+        morph = PerPopulation([Sersic2D(r_eff=1 * kpc)])
+        with pytest.raises(exceptions.InconsistentArguments):
+            morph.get_density_grid(RESOLUTION, NPIX)

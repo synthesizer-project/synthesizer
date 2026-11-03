@@ -36,6 +36,10 @@ from synthesizer.parametric.bin_mask import (
     union_edges,
 )
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
+from synthesizer.parametric.morphology import (
+    PerPopulation,
+    PopulationMorphology,
+)
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
@@ -1799,9 +1803,9 @@ class Stars(StarsComponent):
 
         Parameters describing the populations (fesc, fesc_ly_alpha and any
         other keyword argument given to their Stars, e.g. tau_v) become per
-        population parameters (one value per population) when they differ.
-        Populations must share a morphology to keep it, otherwise the
-        combined Stars has none.
+        population parameters (one value per population) when they differ,
+        and populations with different morphologies get a PerPopulation
+        morphology.
 
         This will only work for Stars objects with the same axes.
 
@@ -1905,16 +1909,28 @@ class Stars(StarsComponent):
         Returns:
             MorphologyBase:
                 The shared morphology if every population has the same one,
-                otherwise None.
+                otherwise a PerPopulation morphology (None if any population
+                has no morphology).
         """
         morphologies = [stars.morphology for stars in populations]
         if all(morph is morphologies[0] for morph in morphologies):
             return morphologies[0]
-        warn(
-            "The combined Stars have different morphologies, the combined "
-            "Stars will have no morphology."
-        )
-        return None
+        if any(morph is None for morph in morphologies):
+            warn(
+                "Some of the combined Stars have no morphology, the "
+                "combined Stars will have no morphology."
+            )
+            return None
+
+        # Each Stars covers its populations, a Stars with several
+        # populations sharing one morphology repeats it for each
+        entries = []
+        for stars, morph in zip(populations, morphologies):
+            if isinstance(morph, PopulationMorphology):
+                entries.append(morph)
+            else:
+                entries.extend([morph] * stars.npop)
+        return PerPopulation(entries)
 
     def __getitem__(self, key):
         """Get a single population as its own Stars.
@@ -1955,7 +1971,10 @@ class Stars(StarsComponent):
             params[name] = value
 
         # And its morphology
-        params["morphology"] = self.morphology
+        morphology = self.morphology
+        if isinstance(morphology, PopulationMorphology):
+            morphology = morphology.get_population_morphology(index)
+        params["morphology"] = morphology
 
         population = self._from_bins(
             {axis: edges.copy() for axis, edges in self._bin_edges.items()},

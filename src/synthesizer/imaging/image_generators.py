@@ -31,6 +31,24 @@ from synthesizer.utils.operation_timers import timed, timer
 _CENTERING_TOLERANCE = 1e-6
 
 
+def _has_population_morphology(emitter):
+    """Does a parametric emitter give each population its own morphology?
+
+    Args:
+        emitter (Component):
+            The emitter.
+
+    Returns:
+        bool:
+            Whether the emitter's morphology describes several populations.
+    """
+    from synthesizer.parametric.morphology import PopulationMorphology
+
+    return isinstance(
+        getattr(emitter, "morphology", None), PopulationMorphology
+    )
+
+
 def _standardize_sph_kernel(kernel):
     """Return an SPH kernel lookup array for smoothing backends.
 
@@ -889,6 +907,40 @@ def _generate_images_parametric_smoothed(
     return imgs
 
 
+@timed("_generate_images_population_smoothed")
+def _generate_images_population_smoothed(imgs, morphology, signals):
+    """Generate smoothed images for a parametric emitter of many populations.
+
+    Each population has its own spatial distribution (see
+    PopulationMorphology), so each image is the sum over populations of each
+    population's density grid weighted by its signal.
+
+    Args:
+        imgs (ImageCollection):
+            The image collection to populate with the images.
+        morphology (PopulationMorphology):
+            The morphology of the populations.
+        signals (dict/PhotometryCollection):
+            The signals to be sorted into pixels, each holding one value per
+            population.
+
+    Returns:
+        ImageCollection: An image collection containing the smoothed images.
+    """
+    # Avoid cyclic imports
+    from synthesizer.imaging import Image
+
+    for key, signal in signals.items():
+        img = Image(imgs.resolution, imgs.fov)
+        img.arr = morphology.get_weighted_density_grid(
+            imgs.resolution, imgs.npix, np.asarray(signal.value)
+        )
+        img.units = signal.units
+        imgs[key] = img
+
+    return imgs
+
+
 @timed("_generate_image_collection_generic")
 def _generate_image_collection_generic(
     instrument,
@@ -1010,6 +1062,11 @@ def _generate_image_collection_generic(
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
+        )
+
+    elif img_type == "smoothed" and _has_population_morphology(emitter):
+        return _generate_images_population_smoothed(
+            imgs, emitter.morphology, photometry
         )
 
     elif img_type == "smoothed":
@@ -1171,6 +1228,14 @@ def _generate_line_map_collection_generic(
             kernel=kernel,
             kernel_threshold=kernel_threshold,
             nthreads=nthreads,
+        )
+
+    elif img_type == "smoothed" and _has_population_morphology(emitter):
+        signal_dict = {
+            line_id: signal[..., i] for i, line_id in enumerate(line_ids)
+        }
+        return _generate_images_population_smoothed(
+            imgs, emitter.morphology, signal_dict
         )
 
     elif img_type == "smoothed":

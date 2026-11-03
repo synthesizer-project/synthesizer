@@ -26,7 +26,7 @@ from unyt import kpc, mas, unyt_array
 from unyt.dimensions import angle, length
 
 from synthesizer import exceptions
-from synthesizer.synth_warnings import warn
+from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import accepts, unit_is_compatible
 from synthesizer.utils import TableFormatter
 
@@ -80,6 +80,33 @@ class MorphologyBase(ABC):
         """
         pass
 
+    @staticmethod
+    def _get_coordinate_grids(resolution, npix):
+        """Get the coordinates of each pixel centre.
+
+        Args:
+            resolution (unyt_quantity):
+                The resolution of the grid.
+            npix (tuple, int):
+                The number of pixels in each dimension.
+
+        Returns:
+            tuple of unyt_array:
+                The x and y coordinate of each pixel centre.
+        """
+        # Define 1D bin centres of each pixel, spaced by the resolution and
+        # symmetric about the origin
+        xbin_centres = resolution.value * (
+            np.arange(npix[0]) - (npix[0] - 1) / 2
+        )
+        ybin_centres = resolution.value * (
+            np.arange(npix[1]) - (npix[1] - 1) / 2
+        )
+
+        # Convert the 1D grid into 2D grids coordinate grids
+        xx, yy = np.meshgrid(xbin_centres, ybin_centres) * resolution.units
+        return xx, yy
+
     @accepts(resolution=(kpc, mas))
     def get_density_grid(self, resolution, npix, **kwargs):
         """Get the density grid based on resolution and npix.
@@ -93,17 +120,7 @@ class MorphologyBase(ABC):
                 Additional keyword arguments to pass to the
                 compute_density_grid method.
         """
-        # Define 1D bin centres of each pixel, spaced by the resolution and
-        # symmetric about the origin
-        xbin_centres = resolution.value * (
-            np.arange(npix[0]) - (npix[0] - 1) / 2
-        )
-        ybin_centres = resolution.value * (
-            np.arange(npix[1]) - (npix[1] - 1) / 2
-        )
-
-        # Convert the 1D grid into 2D grids coordinate grids
-        xx, yy = np.meshgrid(xbin_centres, ybin_centres) * resolution.units
+        xx, yy = self._get_coordinate_grids(resolution, npix)
 
         # Extract the density grid from the morphology function
         density_grid, norm = self.compute_density_grid(xx, yy, **kwargs)
@@ -374,6 +391,18 @@ class Gaussian2D(MorphologyBase):
 
         return g_2d_mat.value, np.sum(g_2d_mat.value)
 
+    def get_radius(self, x, y):
+        """Get the (circular) distance of each point from the mean.
+
+        Args:
+            x (unyt_array): x values on a 2D grid.
+            y (unyt_array): y values on a 2D grid.
+
+        Returns:
+            unyt_array: The radius of each point.
+        """
+        return np.sqrt((x - self.x_mean) ** 2 + (y - self.y_mean) ** 2)
+
 
 class Gaussian2DAnnuli(Gaussian2D):
     """A subclass of Gaussian2D that supports masking of concentric annuli.
@@ -421,6 +450,11 @@ class Gaussian2DAnnuli(Gaussian2D):
             annulus (int): The index of the annulus this morphology
                 describes, used when imaging.
         """
+        deprecation(
+            "Gaussian2DAnnuli is deprecated, give a Stars one population "
+            "per annulus and use Annuli(Gaussian2D(...), radii) instead."
+        )
+
         # Initialise the parent class
         Gaussian2D.__init__(self, x_mean, y_mean, stddev_x, stddev_y, rho)
 
@@ -671,17 +705,8 @@ class Sersic2D(MorphologyBase):
                 f"y_0 units ({self.y_0.units})"
             )
 
-        # Compute coordinate offset from x, y axes
-        a = (x - self.x_0) * np.cos(self.theta) + (y - self.y_0) * np.sin(
-            self.theta
-        )
-
-        b = -(x - self.x_0) * np.sin(self.theta) + (y - self.y_0) * np.cos(
-            self.theta
-        )
-
-        # Compute radius from adjusted x, y coordinates
-        radius = np.sqrt(a**2 + (b / (1 - self.ellipticity)) ** 2)
+        # Compute the (elliptical) radius of each point
+        radius = self.get_radius(x, y)
 
         # Define coefficient of Sersic profile from Sersic index
         b_n = scipy.special.gammaincinv(2 * self.sersic_index, 0.5)
@@ -721,6 +746,27 @@ class Sersic2D(MorphologyBase):
             )
 
         return grid, np.sum(grid)
+
+    def get_radius(self, x, y):
+        """Get the (elliptical) radius of each point.
+
+        Args:
+            x (unyt_array): x values on a 2D grid.
+            y (unyt_array): y values on a 2D grid.
+
+        Returns:
+            unyt_array: The radius of each point.
+        """
+        # Compute coordinate offset from x, y axes
+        a = (x - self.x_0) * np.cos(self.theta) + (y - self.y_0) * np.sin(
+            self.theta
+        )
+        b = -(x - self.x_0) * np.sin(self.theta) + (y - self.y_0) * np.cos(
+            self.theta
+        )
+
+        # Compute radius from adjusted x, y coordinates
+        return np.sqrt(a**2 + (b / (1 - self.ellipticity)) ** 2)
 
 
 class Sersic2DAnnuli(Sersic2D):
@@ -776,6 +822,11 @@ class Sersic2DAnnuli(Sersic2D):
             annulus (int): The index of the annulus this morphology
                 describes, used when imaging.
         """
+        deprecation(
+            "Sersic2DAnnuli is deprecated, give a Stars one population "
+            "per annulus and use Annuli(Sersic2D(...), radii) instead."
+        )
+
         Sersic2D.__init__(
             self,
             r_eff,
@@ -865,3 +916,248 @@ class Sersic2DAnnuli(Sersic2D):
             norm = 1.0
 
         return density_grid, norm
+
+
+class PopulationMorphology(MorphologyBase):
+    """A base class for morphologies describing several populations at once.
+
+    A multi population parametric Stars can give each population its own
+    spatial distribution. An image is then the sum over populations of each
+    population's (normalised) density grid weighted by its signal (e.g. its
+    luminosity in a filter, or its spectrum for a data cube).
+
+    Attributes:
+        npop (int): The number of populations described.
+    """
+
+    def compute_density_grid(self, *args, **kwargs):
+        """Population morphologies need a signal for each population.
+
+        Raises:
+            InconsistentArguments:
+                Always, use get_weighted_density_grid instead.
+        """
+        raise exceptions.InconsistentArguments(
+            f"{self.__class__.__name__} describes {self.npop} populations, "
+            "so it needs a signal per population. Use "
+            "get_weighted_density_grid instead."
+        )
+
+    @abstractmethod
+    def get_weighted_density_grid(self, resolution, npix, signals):
+        """Get the sum of each population's density grid times its signal.
+
+        Args:
+            resolution (unyt_quantity):
+                The resolution of the grid.
+            npix (tuple, int):
+                The number of pixels in each dimension.
+            signals (np.ndarray):
+                The signal of each population, with shape (npop, ...). Any
+                trailing axes (e.g. wavelength) are kept in the result.
+
+        Returns:
+            np.ndarray:
+                The weighted density grid with shape (npix[1], npix[0], ...).
+        """
+        pass
+
+
+class PerPopulation(PopulationMorphology):
+    """A separate morphology for each population (or group of populations).
+
+    This is what a Stars combined from populations with different
+    morphologies (e.g. a bulge and a disk) uses. Each entry is either a
+    single morphology for one population or a population morphology (e.g.
+    Annuli) covering as many populations as it describes.
+
+    Attributes:
+        morphologies (list of MorphologyBase): The morphology of each
+            population (or group of populations).
+        npop (int): The number of populations.
+    """
+
+    def __init__(self, morphologies):
+        """Initialise the morphology.
+
+        Args:
+            morphologies (list of MorphologyBase):
+                The morphology of each population (or group of populations),
+                in population order. Nested PerPopulation morphologies are
+                flattened.
+        """
+        self.morphologies = []
+        for morphology in morphologies:
+            if isinstance(morphology, PerPopulation):
+                self.morphologies.extend(morphology.morphologies)
+            else:
+                self.morphologies.append(morphology)
+        self._counts = [
+            getattr(morph, "npop", 1)
+            if isinstance(morph, PopulationMorphology)
+            else 1
+            for morph in self.morphologies
+        ]
+        self.npop = int(np.sum(self._counts))
+
+    def get_population_morphology(self, index):
+        """Get the morphology of a single population.
+
+        Args:
+            index (int):
+                The population's index.
+
+        Returns:
+            MorphologyBase:
+                The population's morphology.
+        """
+        start = 0
+        for morphology, count in zip(self.morphologies, self._counts):
+            if index < start + count:
+                if isinstance(morphology, PopulationMorphology):
+                    return morphology.get_population_morphology(index - start)
+                return morphology
+            start += count
+        raise exceptions.InconsistentArguments(
+            f"Population {index} doesn't exist ({self.npop} populations)."
+        )
+
+    def get_weighted_density_grid(self, resolution, npix, signals):
+        """Get the sum of each population's density grid times its signal.
+
+        Args:
+            resolution (unyt_quantity):
+                The resolution of the grid.
+            npix (tuple, int):
+                The number of pixels in each dimension.
+            signals (np.ndarray):
+                The signal of each population, with shape (npop, ...).
+
+        Returns:
+            np.ndarray:
+                The weighted density grid with shape (npix[1], npix[0], ...).
+        """
+        signals = np.asarray(signals)
+        out = None
+        start = 0
+        for morphology, count in zip(self.morphologies, self._counts):
+            group = signals[start : start + count]
+            start += count
+            if isinstance(morphology, PopulationMorphology):
+                contribution = morphology.get_weighted_density_grid(
+                    resolution, npix, group
+                )
+            else:
+                density = morphology.get_density_grid(resolution, npix)
+                contribution = (
+                    density.reshape(density.shape + (1,) * (group.ndim - 1))
+                    * group[0]
+                )
+            out = contribution if out is None else out + contribution
+        return out
+
+
+class Annuli(PopulationMorphology):
+    """A profile split into annuli, one population per annulus.
+
+    The profile and the radius of each pixel are evaluated once, each pixel
+    is labelled with its annulus, and each annulus is normalised over its own
+    pixels (an annulus population holds only the mass within that annulus).
+    An image is then a single gather of each pixel's annulus signal, however
+    many annuli there are.
+
+    Attributes:
+        profile (MorphologyBase): The underlying profile (e.g. Sersic2D),
+            which must provide get_radius.
+        radii (unyt_array): The edges of the annuli (one more than the number
+            of annuli, the last may be infinite).
+        npop (int): The number of annuli (populations).
+    """
+
+    @accepts(radii=(kpc, mas))
+    def __init__(self, profile, radii):
+        """Initialise the morphology.
+
+        Args:
+            profile (MorphologyBase):
+                The underlying profile, which must provide get_radius (e.g.
+                Sersic2D or Gaussian2D).
+            radii (unyt_array):
+                The edges of the annuli, increasing, with one more edge than
+                there are annuli. The last may be infinite.
+        """
+        if not hasattr(profile, "get_radius"):
+            raise exceptions.InconsistentArguments(
+                f"{profile.__class__.__name__} doesn't define a radius, so "
+                "it can't be split into annuli."
+            )
+        if radii.size < 2 or np.any(np.diff(radii.value) <= 0):
+            raise exceptions.InconsistentArguments(
+                "radii must be at least two increasing annulus edges."
+            )
+        self.profile = profile
+        self.radii = radii
+        self.npop = radii.size - 1
+
+    def get_population_morphology(self, index):
+        """Get the morphology of a single annulus.
+
+        Args:
+            index (int):
+                The annulus' index.
+
+        Returns:
+            Annuli:
+                The single annulus.
+        """
+        return Annuli(self.profile, self.radii[index : index + 2])
+
+    def get_weighted_density_grid(self, resolution, npix, signals):
+        """Get the sum of each annulus' density grid times its signal.
+
+        Args:
+            resolution (unyt_quantity):
+                The resolution of the grid.
+            npix (tuple, int):
+                The number of pixels in each dimension.
+            signals (np.ndarray):
+                The signal of each annulus, with shape (npop, ...).
+
+        Returns:
+            np.ndarray:
+                The weighted density grid with shape (npix[1], npix[0], ...).
+        """
+        signals = np.asarray(signals)
+        xx, yy = self._get_coordinate_grids(resolution, npix)
+
+        # Evaluate the profile and label each pixel with its annulus
+        profile, _ = self.profile.compute_density_grid(xx, yy)
+        profile = np.asarray(profile)
+        radius = self.profile.get_radius(xx, yy).to(self.radii.units).value
+        label = np.searchsorted(self.radii.value, radius, side="right") - 1
+        inside = (label >= 0) & (label < self.npop)
+
+        # Normalise each annulus over its own pixels
+        norm = np.bincount(
+            label[inside], weights=profile[inside], minlength=self.npop
+        )
+        empty = norm == 0
+        if np.any(
+            empty & np.any(signals != 0, axis=tuple(range(1, signals.ndim)))
+        ):
+            warn(
+                f"{np.sum(empty)} annuli contain no pixel centres at this "
+                "resolution, their emission will be missing from the image."
+            )
+        scale = signals / np.where(empty, 1.0, norm).reshape(
+            (self.npop,) + (1,) * (signals.ndim - 1)
+        )
+        scale[empty] = 0.0
+
+        # Gather each pixel's annulus signal
+        out = np.zeros(profile.shape + signals.shape[1:])
+        out[inside] = (
+            profile[inside].reshape((-1,) + (1,) * (signals.ndim - 1))
+            * scale[label[inside]]
+        )
+        return out

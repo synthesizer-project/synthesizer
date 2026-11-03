@@ -21,16 +21,20 @@ from synthesizer.emission_models import (
     PacmanEmission,
 )
 from synthesizer.emission_models.attenuation import Calzetti2000
-from synthesizer.instruments import FilterCollection
+from synthesizer.instruments import FilterCollection, Instrument
 from synthesizer.parametric import (
     SFH,
+    Annuli,
     Galaxy,
+    PerPopulation,
     PointSource,
+    Sersic2D,
     ZDist,
 )
 from synthesizer.parametric.bin_mask import rebin_axis, union_edges
 from synthesizer.parametric.stars import Stars
 from synthesizer.particle import Stars as ParticleStars
+from synthesizer.pipeline import Pipeline
 from synthesizer.units import Units
 
 
@@ -1548,6 +1552,208 @@ class TestPerPopulationEmission:
                 rtol=0,
                 atol=1e-12 * max(np.abs(rows).max(), 1.0),
             )
+
+
+class TestPopulationAccessAndImaging:
+    """Tests for named populations and their morphologies."""
+
+    @staticmethod
+    def _filters(test_grid):
+        """Return two top hat filters on the grid's wavelengths."""
+        return FilterCollection(
+            tophat_dict={
+                "f1": {"lam_eff": 2000 * angstrom, "lam_fwhm": 400 * angstrom},
+                "f2": {"lam_eff": 6000 * angstrom, "lam_fwhm": 1e3 * angstrom},
+            },
+            new_lam=test_grid.lam,
+        )
+
+    @staticmethod
+    def _population(test_grid, sfh, tau_v, morphology=None):
+        """Return a single population with its own tau_v and morphology."""
+        return Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=sfh,
+            metal_dist=ZDist.Normal(0.01, 0.005),
+            initial_mass=1e9 * Msun,
+            tau_v=tau_v,
+            fesc=0.1,
+            fesc_ly_alpha=0.1,
+            morphology=morphology,
+        )
+
+    def _bulge_and_disk(self, test_grid):
+        """Return a bulge and a disk with different SFHs and morphologies."""
+        return [
+            self._population(
+                test_grid,
+                SFH.DelayedExponential(tau=5e8 * yr, max_age=8e9 * yr),
+                0.2,
+                Sersic2D(r_eff=1 * kpc, sersic_index=4),
+            ),
+            self._population(
+                test_grid,
+                SFH.Constant(max_age=1e9 * yr),
+                0.8,
+                Sersic2D(
+                    r_eff=4 * kpc, sersic_index=1, ellipticity=0.5, theta=0.3
+                ),
+            ),
+        ]
+
+    def test_named_access(self, test_grid):
+        """Populations can be looked up by name with their own parameters."""
+        stars = Stars.from_populations(
+            self._bulge_and_disk(test_grid), names=["bulge", "disk"]
+        )
+        np.testing.assert_allclose(stars.tau_v, [0.2, 0.8])
+        assert isinstance(stars.morphology, PerPopulation)
+        disk = stars["disk"]
+        assert disk.npop == 1
+        assert disk.tau_v == 0.8
+        assert disk.morphology.r_eff == 4 * kpc
+        np.testing.assert_allclose(disk.initial_mass, 1e9 * Msun)
+        np.testing.assert_allclose(stars[0].tau_v, 0.2)
+
+    def test_bulge_and_disk_images(self, test_grid):
+        """Images, cubes and line maps are the sum over the populations."""
+        filters = self._filters(test_grid)
+        imager = Instrument("img", filters=filters, resolution=0.2 * kpc)
+        ifu = Instrument(
+            "ifu",
+            resolution=0.5 * kpc,
+            lam=np.linspace(1500, 7000, 20) * angstrom,
+        )
+        lines = test_grid.available_lines[:3]
+        line_imager = Instrument("lines", line_ids=lines, resolution=0.2 * kpc)
+        model = PacmanEmission(test_grid, dust_curve=Calzetti2000())
+
+        expected = {"image": 0, "cube": 0, "map": 0}
+        for stars in self._bulge_and_disk(test_grid):
+            stars.get_spectra(model)
+            stars.get_lines(lines, model)
+            stars.get_photo_lnu(filters)
+            expected["image"] += stars.get_images_luminosity(
+                "emergent", fov=20 * kpc, instrument=imager
+            )["f1"].arr
+            expected["cube"] += stars.get_data_cube(
+                "emergent", fov=20 * kpc, instrument=ifu
+            ).arr
+            expected["map"] += stars.get_line_maps_luminosity(
+                "emergent",
+                line_ids=lines,
+                fov=20 * kpc,
+                instrument=line_imager,
+            )[lines[0]].arr
+
+        per_pop = PacmanEmission(
+            test_grid, dust_curve=Calzetti2000(), per_population=True
+        )
+        stars = Stars.from_populations(self._bulge_and_disk(test_grid))
+        stars.get_spectra(per_pop)
+        stars.get_lines(lines, per_pop)
+        stars.get_population_photo_lnu(filters)
+        image = stars.get_images_luminosity(
+            "emergent", fov=20 * kpc, instrument=imager
+        )["f1"].arr
+        cube = stars.get_data_cube(
+            "emergent", fov=20 * kpc, instrument=ifu
+        ).arr
+        line_map = stars.get_line_maps_luminosity(
+            "emergent", line_ids=lines, fov=20 * kpc, instrument=line_imager
+        )[lines[0]].arr
+        for name, result in (
+            ("image", image),
+            ("cube", cube),
+            ("map", line_map),
+        ):
+            np.testing.assert_allclose(
+                result,
+                expected[name],
+                rtol=0,
+                atol=1e-12 * expected[name].max(),
+            )
+
+    def test_annuli_images(self, test_grid):
+        """An Annuli image is the sum of each annulus imaged on its own."""
+        filters = self._filters(test_grid)
+        imager = Instrument("img", filters=filters, resolution=0.2 * kpc)
+        model = PacmanEmission(
+            test_grid, dust_curve=Calzetti2000(), per_population=True
+        )
+        annuli = Annuli(
+            Sersic2D(r_eff=3 * kpc, sersic_index=1),
+            np.array([0, 1, 2, 4, 7, np.inf]) * kpc,
+        )
+        populations = [
+            self._population(
+                test_grid,
+                SFH.Constant(max_age=(2 + 4 * i) * 1e8 * yr),
+                0.2 * i,
+            )
+            for i in range(5)
+        ]
+        stars = Stars.from_populations(populations)
+        stars.morphology = annuli
+        stars.get_spectra(model)
+        stars.get_population_photo_lnu(filters)
+        image = stars.get_images_luminosity(
+            "emergent", fov=30 * kpc, instrument=imager
+        )["f1"].arr
+
+        expected = 0
+        for i, population in enumerate(populations):
+            population.morphology = annuli.get_population_morphology(i)
+            population.get_spectra(model)
+            population.get_population_photo_lnu(filters)
+            expected += population.get_images_luminosity(
+                "emergent", fov=30 * kpc, instrument=imager
+            )["f1"].arr
+        np.testing.assert_allclose(
+            image, expected, rtol=0, atol=1e-12 * expected.max()
+        )
+
+        # Every annulus is normalised over its own pixels so the image holds
+        # all of the light
+        np.testing.assert_allclose(
+            image.sum(),
+            stars.population_photo_lnu["emergent"]["f1"].value.sum(),
+            rtol=1e-10,
+        )
+
+    def test_pipeline(self, test_grid):
+        """Multi population parametric galaxies run through a Pipeline."""
+        filters = self._filters(test_grid)
+        imager = Instrument("img", filters=filters, resolution=0.5 * kpc)
+        model = PacmanEmission(
+            test_grid, dust_curve=Calzetti2000(), per_population=True
+        )
+        galaxies = [
+            Galaxy(Stars.from_populations(self._bulge_and_disk(test_grid)))
+            for _ in range(3)
+        ]
+        pipeline = Pipeline(emission_model=model, nthreads=1, verbose=0)
+        pipeline.add_galaxies(list(galaxies))
+        pipeline.get_spectra()
+        pipeline.get_photometry_luminosities(imager)
+        pipeline.get_lines(test_grid.available_lines[:3])
+        pipeline.get_images_luminosity(imager, fov=20 * kpc)
+        pipeline.run()
+
+        # The Pipeline adapts its model to its instruments so compare with a
+        # fresh one
+        direct = Stars.from_populations(self._bulge_and_disk(test_grid))
+        direct.get_spectra(
+            PacmanEmission(
+                test_grid, dust_curve=Calzetti2000(), per_population=True
+            )
+        )
+        np.testing.assert_allclose(
+            np.asarray(pipeline.lnu_spectra["Stars"]["emergent"][0]),
+            direct.spectra["emergent"].lnu.value,
+            rtol=1e-10,
+        )
 
 
 class TestFromBinned:
