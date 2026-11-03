@@ -42,7 +42,7 @@ fi
 
 # Copy each group of plots that has been generated
 copied=0
-for group in pipeline problem_size thread_scaling mpi_weak mpi_strong; do
+for group in pipeline problem_size parametric thread_scaling mpi_weak mpi_strong; do
 	if compgen -G "$OUTPUT_ROOT/$group/*.png" >/dev/null; then
 		mkdir -p "$SYNVENTORY_DIR/profiling/$group"
 		cp "$OUTPUT_ROOT/$group"/*.png "$SYNVENTORY_DIR/profiling/$group/"
