@@ -16,7 +16,6 @@ from copy import deepcopy
 import cmasher as cmr
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy import integrate
 from unyt import (
     Hz,
     Msun,
@@ -317,6 +316,18 @@ class Stars(StarsComponent):
                 "Please check the input parameters."
             )
 
+        # We can't normalise an SFZH with no mass on the grid (e.g. an SFH
+        # or ZDist peaking far outside the axes), doing so would silently
+        # make it NaN
+        if (
+            self.surviving_mass is not None or self.initial_mass is not None
+        ) and np.sum(self.sfzh) <= 0:
+            raise exceptions.InconsistentArguments(
+                "The SFH and metallicity distribution put no mass on the "
+                "age and metallicity axes, so the SFZH can't be normalised. "
+                "Please check the input parameters."
+            )
+
         # Normalise the SFZH grid if needs be, and calculate the initial mass
         # if we have been given a surviving mass. If we have been given an
         # initial mass we just need to rescale the SFZH grid to obey this
@@ -500,48 +511,27 @@ class Stars(StarsComponent):
 
         # Calculate SFH from function if necessary
         if self.sf_hist_func is not None and sf_hist is None:
-            # Set up SFH array
-            sf_hist = np.zeros(self.ages.size)
-
-            # Loop over age bins calculating the amount of mass in each bin,
-            # the oldest bin extends up to the oldest grid age
-            min_age = 0
-            for ia in range(self.ages.size):
-                if ia < self.ages.size - 1:
-                    max_age = np.mean([self.ages[ia + 1], self.ages[ia]])
-                else:
-                    max_age = self.ages[-1].to("yr").value
-                sf = integrate.quad(
-                    self.sf_hist_func.get_sfr,
-                    min_age + age_offset.to("yr").value,
-                    max_age + age_offset.to("yr").value,
-                )[0]
-                sf_hist[ia] = sf
-                min_age = max_age
+            # Get the mass in each age bin from the SFH's CDF, the bin edges
+            # are the midpoints between grid ages and the oldest bin extends
+            # up to the oldest grid age
+            ages = self.ages.to("yr").value
+            age_edges = np.concatenate(
+                ([0.0], 0.5 * (ages[1:] + ages[:-1]), [ages[-1]])
+            )
+            sf_hist = self.sf_hist_func.get_bin_masses(
+                age_edges + age_offset.to("yr").value
+            )
 
         # Calculate ZH from function if necessary
         if self.metal_dist_func is not None and metal_dist is None:
-            # Set up ZH array
-            metal_dist = np.zeros(self.metallicities.size)
-            # Loop over metallicity bins calculating the amount of mass in
-            # each bin, the most metal rich bin extends up to the highest
-            # grid metallicity
-            min_metal = 0
-            for imetal in range(self.metallicities.size):
-                if imetal < self.metallicities.size - 1:
-                    max_metal = np.mean(
-                        [
-                            self.metallicities[imetal + 1],
-                            self.metallicities[imetal],
-                        ]
-                    )
-                else:
-                    max_metal = self.metallicities[-1]
-                sf = integrate.quad(
-                    self.metal_dist_func.get_dist_weight, min_metal, max_metal
-                )[0]
-                metal_dist[imetal] = sf
-                min_metal = max_metal
+            # Get the mass in each metallicity bin from the ZDist's CDF, the
+            # bin edges are the midpoints between grid metallicities and the
+            # most metal rich bin extends up to the highest grid metallicity
+            metals = np.asarray(self.metallicities, dtype=np.float64)
+            metal_edges = np.concatenate(
+                ([0.0], 0.5 * (metals[1:] + metals[:-1]), [metals[-1]])
+            )
+            metal_dist = self.metal_dist_func.get_bin_weights(metal_edges)
 
         # Ensure that by this point we have an array for SFH and ZH
         if sf_hist is None or metal_dist is None:
