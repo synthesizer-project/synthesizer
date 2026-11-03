@@ -52,7 +52,9 @@ class IGMBase(Transformer):
         """Return a string representation of the IGMBase object."""
         return f"{self.__class__.__name__}(name={self.name})"
 
-    def get_transmission(self, redshift, lam_obs, emitter=None):
+    def get_transmission(
+        self, redshift, lam_obs, emitter=None, *, model=None, emission=None
+    ):
         """Compute the IGM transmission.
 
         Args:
@@ -61,6 +63,10 @@ class IGMBase(Transformer):
             emitter (Galaxy/Stars/BlackHoles, optional): The emitter to look
                 for the model parameters on before falling back to the values
                 the model was initialised with.
+            model (EmissionModel, optional): Model with highest-priority fixed
+                parameters when applying the IGM as a transformer.
+            emission (Sed/LineCollection, optional): Emission to look up
+                parameters on after the model and before the emitter.
 
         Returns:
             array: IGM transmission.
@@ -69,18 +75,22 @@ class IGMBase(Transformer):
             "get_transmission() must be implemented in a subclass."
         )
 
-    def _get_igm_params(self, emitter):
-        """Get the model parameters, preferring those on the emitter.
+    def _get_igm_params(self, emitter, model=None, emission=None):
+        """Get the model parameters in model, emission, emitter order.
 
         Args:
             emitter (Galaxy/Stars/BlackHoles): The emitter to look for the
                 parameters on (can be None).
+            model (EmissionModel, optional): Model to look for parameters on
+                first.
+            emission (Sed/LineCollection, optional): Emission to look for
+                parameters on after the model.
 
         Returns:
             dict: The model parameters.
         """
         return self._extract_params(
-            None, None, emitter, obj=self, preserve_units=True
+            model, emission, emitter, obj=self, preserve_units=True
         )
 
     def plot_transmission(
@@ -152,8 +162,7 @@ class IGMBase(Transformer):
         Returns:
             Line/Sed: The transformed emission.
         """
-        # Extract the redshift and observed wavelengths (the model's own
-        # parameters are looked up on the emitter by get_transmission)
+        # Extract the redshift and observed wavelengths.
         params = get_params(
             ("redshift", "obslam"),
             model,
@@ -167,6 +176,8 @@ class IGMBase(Transformer):
             params["redshift"],
             params["obslam"],
             emitter,
+            model=model,
+            emission=emission,
         )
 
         # Masking is not supported for IGM absorption (it also doesn't really
@@ -473,7 +484,9 @@ class Inoue14(IGMBase):
 
         return scale_tau * (tau_lc + tau_ls + tau_clip)
 
-    def get_transmission(self, redshift, lam_obs, emitter=None):
+    def get_transmission(
+        self, redshift, lam_obs, emitter=None, *, model=None, emission=None
+    ):
         """Compute the IGM transmission.
 
         Args:
@@ -482,11 +495,14 @@ class Inoue14(IGMBase):
             emitter (Galaxy/Stars/BlackHoles, optional): The emitter to look
                 for scale_tau on before falling back to the value the model
                 was initialised with.
+            model (EmissionModel, optional): Model parameters take precedence.
+            emission (Sed/LineCollection, optional): Emission parameters take
+                precedence over emitter parameters.
 
         Returns:
             array: IGM transmission.
         """
-        params = self._get_igm_params(emitter)
+        params = self._get_igm_params(emitter, model, emission)
         tau = self.tau(redshift, lam_obs, scale_tau=params["scale_tau"])
         transmission = np.exp(-tau)
 
@@ -519,7 +535,9 @@ class Madau96(IGMBase):
         return "Madau96()"
 
     @accepts(lam_obs=angstrom)
-    def get_transmission(self, redshift, lam_obs, emitter=None):
+    def get_transmission(
+        self, redshift, lam_obs, emitter=None, *, model=None, emission=None
+    ):
         """Compute the IGM transmission.
 
         Args:
@@ -527,6 +545,8 @@ class Madau96(IGMBase):
             lam_obs (array): Observed-frame wavelengths in Angstroms.
             emitter (Galaxy/Stars/BlackHoles, optional): Unused, Madau96 has
                 no parameters to look up.
+            model (EmissionModel, optional): Unused.
+            emission (Sed/LineCollection, optional): Unused.
 
         Returns:
             array: IGM transmission.
@@ -983,7 +1003,9 @@ class Asada25(IGMBase):
         # sigma_a is elementwise so we can evaluate every frequency at once
         return N_HI * sigma_a(nu_rest)
 
-    def get_transmission(self, redshift, lam_obs, emitter=None):
+    def get_transmission(
+        self, redshift, lam_obs, emitter=None, *, model=None, emission=None
+    ):
         """Compute the IGM+CGM transmission.
 
         Args:
@@ -992,11 +1014,14 @@ class Asada25(IGMBase):
             emitter (Galaxy/Stars/BlackHoles, optional): The emitter to look
                 for sigmoid_params, scale_tau and add_cgm on before falling
                 back to the values the model was initialised with.
+            model (EmissionModel, optional): Model parameters take precedence.
+            emission (Sed/LineCollection, optional): Emission parameters take
+                precedence over emitter parameters.
 
         Returns:
             array: IGM+CGM transmission.
         """
-        params = self._get_igm_params(emitter)
+        params = self._get_igm_params(emitter, model, emission)
 
         # Compute IGM transmission
         tau_igm_val = self.tau_igm(

@@ -134,3 +134,34 @@ def test_igm_transform_uses_emitter_params(lam):
         out.lnu.value,
         Inoue14(scale_tau=2.0).get_transmission(3.0, sed.obslam),
     )
+
+
+def test_igm_transform_parameter_precedence(lam):
+    """Model and emission parameters override emitter and IGM defaults."""
+    from types import SimpleNamespace
+
+    from astropy.cosmology import Planck18
+    from unyt import Hz, erg, s
+
+    from synthesizer.emission_models.attenuation import Inoue14
+    from synthesizer.emissions import Sed
+
+    sed = Sed(lam=lam, lnu=np.ones(len(lam)) * erg / s / Hz)
+    sed.get_fnu(Planck18, 3.0)
+    sed.scale_tau = 3.0
+    emitter = SimpleNamespace(scale_tau=4.0, model_param_cache={})
+    model = SimpleNamespace(fixed_parameters={"scale_tau": 2.0}, label="igm")
+    igm = Inoue14(scale_tau=5.0)
+
+    for expected in (2.0, 3.0, 4.0, 5.0):
+        out = igm._transform(sed, emitter, model)
+        np.testing.assert_allclose(
+            out.lnu.value,
+            Inoue14(scale_tau=expected).get_transmission(3.0, sed.obslam),
+        )
+        if expected == 2.0:
+            model.fixed_parameters.clear()
+        elif expected == 3.0:
+            del sed.scale_tau
+        elif expected == 4.0:
+            del emitter.scale_tau

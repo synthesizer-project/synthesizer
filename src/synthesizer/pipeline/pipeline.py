@@ -35,6 +35,7 @@ import numpy as np
 from unyt import unyt_array, unyt_quantity
 
 from synthesizer import check_atomic_timing, check_openmp, exceptions
+from synthesizer.emission_models.attenuation import Asada25, Inoue14, Madau96
 from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.instruments import InstrumentCollection
 from synthesizer.particle import Galaxy as ParticleGalaxy
@@ -1768,13 +1769,28 @@ class Pipeline:
             self._igm = igm
             return
 
-        # Any later IGM must be the same one
+        # Equivalent built-in IGMs may be supplied as separate instances.
+        if type(igm) is type(self._igm) and type(igm) in (
+            Inoue14,
+            Madau96,
+            Asada25,
+        ):
+            params = igm._required_params
+            if isinstance(igm, Madau96):
+                params += ("lams", "coefficients")
+            if all(
+                np.array_equal(getattr(igm, key), getattr(self._igm, key))
+                for key in params
+            ):
+                return
+
+        # Other IGMs must be the same object.
         if igm is not self._igm:
             raise exceptions.InconsistentArguments(
                 "A Pipeline uses a single IGM for all observed emissions, "
-                f"but got {igm!r} after {self._igm!r}. Pass the same IGM "
-                "object to every method (IGM parameters can vary per galaxy "
-                "by setting them on the galaxies)."
+                f"but got {igm!r} after {self._igm!r}. Pass the same or an "
+                "equivalent IGM to every method (IGM parameters can vary "
+                "per galaxy by setting them on the galaxies)."
             )
 
     def get_observed_spectra(

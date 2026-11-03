@@ -688,6 +688,39 @@ class TestPipelineOperations:
                 cosmo=cosmo, igm=MagicMock(), line_ids=line_ids
             )
 
+    def test_pipeline_accepts_equivalent_igms(self, nebular_emission_model):
+        """Equivalent built-in instances may share a Pipeline."""
+        from synthesizer.emission_models.attenuation import (
+            Asada25,
+            Inoue14,
+            Madau96,
+        )
+
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        first = Inoue14(scale_tau=2.0)
+        pipeline.get_observed_spectra(cosmo=cosmo, igm=first)
+        pipeline.get_photometry_fluxes(
+            make_test_imager(), cosmo=cosmo, igm=Inoue14(scale_tau=2.0)
+        )
+        assert pipeline._igm is first
+
+        for different in (Inoue14(scale_tau=3.0), Asada25()):
+            with pytest.raises(exceptions.InconsistentArguments):
+                pipeline._set_igm(different)
+
+        for factory, difference in (
+            (Asada25, Asada25(sigmoid_params=(1, 2, 3))),
+            (Madau96, None),
+        ):
+            other = Pipeline(emission_model=nebular_emission_model, verbose=0)
+            other._set_igm(factory())
+            other._set_igm(factory())
+            if difference is None:
+                difference = Madau96()
+                difference.coefficients[0] *= 2
+            with pytest.raises(exceptions.InconsistentArguments):
+                other._set_igm(difference)
+
     def test_base_galaxy_get_observed_spectra_passes_nthreads(self):
         """BaseGalaxy should forward nthreads to each Sed.get_fnu call."""
         igm = MagicMock()
