@@ -38,7 +38,7 @@ After creating a grid, there is also the option of creating a grid of a reduced 
 
 where here the maximum age was set to :math:`10^7` years.
 
-To create the RELAGN (or AGNSED or QSOSED) grid, the `RELAGN` package and its dependencies need to be installed; details of how to do this can be found `here <https://github.com/scotthgn/RELAGN.git>`_. The axes parameters are fed through a configuration file, and example files can be found within  `synthesizer_grids/incident/blackholes/params`. You can modify this to change the axes parameters, and the script will read in the new parameter file to create the grid. To create the the grid,
+To create the RELAGN (or AGNSED or QSOSED) grid, the `RELAGN` package and its dependencies need to be installed; details of how to do this can be found `here <https://github.com/scotthgn/RELAGN.git>`_. The axes parameters are fed through a configuration file, and example YAML files are kept in each model's folder in syncretize, e.g. `src/syncretize/incident/blackholes/relagn/relagn.yaml`. You can modify this to change the axes parameters, and the script will read in the new parameter file to create the grid. To create the grid,
 
 .. code-block:: bash
 
@@ -49,7 +49,7 @@ Running a grid through Cloudy
 
 Here we will now show how to create input files for the photoionisation code Cloudy. Details on Cloudy, and how to install it, can be found on the `Cloudy website <https://gitlab.nublado.org/cloudy/cloudy/-/wikis/home>`_.
 
-Within `synthesizer_grids/cloudy/params` are a variety of parameter files that can be used to configure Cloudy, such as the ionisation parameter and hydrogen density. To use our standard approach, where we allow the ionisation parameter to vary with the input ionizing source, normalised to some reference value, the `c23.01-sps.yaml` parameter file is the most appropriate. Alternatively, `c23.01-sps-fixed.yaml` can be used for fixed ionisation parameters.
+Within `src/syncretize/cloudy/params` in the syncretize repo are a variety of parameter files that can be used to configure Cloudy, such as the ionisation parameter and hydrogen density. To use our standard approach, where we allow the ionisation parameter to vary with the input ionizing source, normalised to some reference value, the `c23.01-sps.yaml` parameter file is the most appropriate. Alternatively, `c23.01-sps-fixed.yaml` can be used for fixed ionisation parameters.
 
 To create input files with varying parameter values, we can do something like this: 
 
