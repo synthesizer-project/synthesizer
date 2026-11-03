@@ -1028,6 +1028,39 @@ class TestPipelineOperations:
             "Line wavelengths not calculated"
         )
 
+    def test_observed_line_wavelengths_per_galaxy(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_particle_galaxy,
+        tmp_path,
+    ):
+        """Observed line wavelengths are written for each galaxy."""
+        # Make two copies of the galaxy at different redshifts
+        galaxies = []
+        for redshift in (1.0, 3.0):
+            gal = copy.deepcopy(random_particle_galaxy)
+            gal.redshift = redshift
+            for comp in (gal.stars, gal.gas, gal.black_holes):
+                comp.redshift = redshift
+            galaxies.append(gal)
+
+        # Compute and write their observed lines
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_galaxies(galaxies)
+        pipeline.get_observed_lines(
+            line_ids=test_grid.available_lines,
+            cosmo=cosmo,
+        )
+        output = tmp_path / "observed_lines.hdf5"
+        pipeline.write(output)
+
+        # Each galaxy should have its own wavelengths, scaled by (1 + z)
+        with h5py.File(output) as hdf:
+            obslams = hdf["Galaxies/Lines/ObservedWavelengths"][...]
+        assert obslams.shape == (2, len(test_grid.available_lines))
+        np.testing.assert_allclose(obslams[1] / obslams[0], 4.0 / 2.0)
+
     def test_run_pipeline_lines_luminosity_subset(
         self,
         test_grid,
@@ -3093,3 +3126,76 @@ class TestGoldenPipelineRegression:
             golden_reference["bolometric_luminosity"],
             rtol=1e-5,
         )
+
+
+def test_combine_rank_files_virtual_with_empty_rank(tmp_path):
+    """Ranks without rows (or datasets) must not break the virtual file."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Rank 0 has no galaxies: an empty placeholder for one dataset and
+    # nothing at all for the other. Rank 1 holds all the rows. Neither rank
+    # has rows for the final dataset.
+    obslams = np.arange(10.0).reshape(2, 5)
+    fluxes = np.arange(6.0).reshape(2, 3)
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.attrs["synthesizer_version"] = "test"
+        dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", shape=(0,))
+        dset.attrs["Units"] = "dimensionless"
+        hdf.create_dataset("Galaxies/Empty", shape=(0, 5))
+    with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
+        dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", data=fluxes)
+        dset.attrs["Units"] = "erg/s/cm**2"
+        dset = hdf.create_dataset(
+            "Galaxies/Lines/ObservedWavelengths", data=obslams
+        )
+        dset.attrs["Units"] = "Å"
+        hdf.create_dataset("Galaxies/Empty", shape=(0, 5))
+
+    # Build the writer as rank 0 of 2 would have it after writing
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 2, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 0
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 0], [0, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    io.combine_rank_files_virtual()
+
+    # Both datasets should come entirely from rank 1
+    with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lines/ObservedWavelengths"][...], obslams
+        )
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lines/Flux/nebular"][...], fluxes
+        )
+        assert hdf["Galaxies/Lines/Flux/nebular"].attrs["Units"] == (
+            "erg/s/cm**2"
+        )
+
+        # A dataset without rows on any rank isn't written
+        assert "Galaxies/Empty" not in hdf
+
+
+def test_combine_rank_files_virtual_units_mismatch(tmp_path):
+    """Ranks with different units for a dataset must raise an error."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Both ranks hold a row but with different units
+    for rank, units in enumerate(("erg/s", "W")):
+        with h5py.File(tmp_path / f"out_{rank}.hdf5", "w") as hdf:
+            dset = hdf.create_dataset("Galaxies/Lum", data=np.ones((1, 3)))
+            dset.attrs["Units"] = units
+
+    # Build the writer as rank 0 of 2 would have it after writing
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 2, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 1
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 1], [1, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    with pytest.raises(ValueError, match="units"):
+        io.combine_rank_files_virtual()
