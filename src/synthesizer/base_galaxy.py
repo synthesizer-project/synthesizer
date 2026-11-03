@@ -325,7 +325,11 @@ class BaseGalaxy:
                 to calculate the luminosity distance.
             igm (igm):
                 The object describing the intergalactic medium (defaults to
-                Inoue14).
+                Inoue14). Any IGM parameters set on the galaxy take
+                precedence over those the IGM was initialised with. The galaxy
+                is the emitter for all contained component and particle
+                spectra, so their IGM parameters are read from the galaxy,
+                not from the stars or black holes.
             nthreads (int):
                 The number of threads to use for observer-frame flux
                 conversion.
@@ -363,6 +367,7 @@ class BaseGalaxy:
                 nthreads=nthreads,
                 out_dtype=out_dtype,
                 peculiar_velocity=peculiar_velocity,
+                emitter=self,
             )
 
         # Do we have stars?
@@ -377,6 +382,7 @@ class BaseGalaxy:
                     nthreads=nthreads,
                     out_dtype=out_dtype,
                     peculiar_velocity=peculiar_velocity,
+                    emitter=self,
                 )
 
             # Loop over all stellar particle spectra
@@ -390,6 +396,7 @@ class BaseGalaxy:
                         nthreads=nthreads,
                         out_dtype=out_dtype,
                         peculiar_velocity=peculiar_velocity,
+                        emitter=self,
                     )
 
         # Do we have black holes?
@@ -404,6 +411,7 @@ class BaseGalaxy:
                     nthreads=nthreads,
                     out_dtype=out_dtype,
                     peculiar_velocity=peculiar_velocity,
+                    emitter=self,
                 )
 
             # Loop over all black hole particle spectra
@@ -417,6 +425,7 @@ class BaseGalaxy:
                         nthreads=nthreads,
                         out_dtype=out_dtype,
                         peculiar_velocity=peculiar_velocity,
+                        emitter=self,
                     )
 
     def get_observed_lines(
@@ -446,7 +455,11 @@ class BaseGalaxy:
                 to calculate the luminosity distance.
             igm (igm):
                 The object describing the intergalactic medium (defaults to
-                Inoue14).
+                Inoue14). Any IGM parameters set on the galaxy take
+                precedence over those the IGM was initialised with. The galaxy
+                is the emitter for all contained component and particle
+                lines, so their IGM parameters are read from the galaxy,
+                not from the stars or black holes.
             nthreads (int):
                 The number of threads to use when scaling the fluxes.
                 nthreads=-1 will use all available threads.
@@ -474,6 +487,7 @@ class BaseGalaxy:
                 igm=igm,
                 nthreads=nthreads,
                 out_dtype=out_dtype,
+                emitter=self,
             )
 
         # Do we have stars?
@@ -487,6 +501,7 @@ class BaseGalaxy:
                     igm=igm,
                     nthreads=nthreads,
                     out_dtype=out_dtype,
+                    emitter=self,
                 )
 
             # Loop over all stellar particle lines
@@ -500,6 +515,7 @@ class BaseGalaxy:
                         igm=igm,
                         nthreads=nthreads,
                         out_dtype=out_dtype,
+                        emitter=self,
                     )
 
         # Do we have black holes?
@@ -513,6 +529,7 @@ class BaseGalaxy:
                     igm=igm,
                     nthreads=nthreads,
                     out_dtype=out_dtype,
+                    emitter=self,
                 )
 
             # Loop over all black hole particle lines
@@ -525,6 +542,7 @@ class BaseGalaxy:
                         igm=igm,
                         nthreads=nthreads,
                         out_dtype=out_dtype,
+                        emitter=self,
                     )
 
     def get_spectra_combined(self):

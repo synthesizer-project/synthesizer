@@ -1262,6 +1262,7 @@ class Sed:
         nthreads=1,
         out_dtype=None,
         peculiar_velocity=None,
+        emitter=None,
     ):
         """Calculate the observed frame spectral energy distribution.
 
@@ -1290,6 +1291,9 @@ class Sed:
                 Line-of-sight peculiar velocity (positive = receding). Shifts
                 the spectrum to z_obs with 1 + z_obs = (1 + z)(1 + v / c);
                 distance and IGM stay at z. Defaults to None (no shift).
+            emitter (Galaxy/Stars/BlackHoles, optional):
+                The emitter of the spectra. The IGM looks for its parameters
+                on this before falling back to its own. Defaults to None.
 
         Returns:
             fnu (ndarray)
@@ -1376,9 +1380,9 @@ class Sed:
 
             # Support bot class references and instantiated objects
             if callable(igm):
-                self._fnu *= igm().get_transmission(z, obslam)
+                self._fnu *= igm().get_transmission(z, obslam, emitter)
             else:
-                self._fnu *= igm.get_transmission(z, obslam)
+                self._fnu *= igm.get_transmission(z, obslam, emitter)
 
         # Return the fnu with units, without making a copy
         return get_quantity_view(self, "_fnu")
