@@ -59,10 +59,18 @@ class TestMorphologyBase:
         assert "Gaussian2D".upper() in str(gauss)
 
     def test_get_density_grid_normalization(self):
-        """get_density_grid should return a grid normalized to sum=1."""
+        """The grid holds the fraction of the light inside the image.
+
+        Light outside the field of view is lost rather than renormalised
+        into it, so a unit Gaussian on a 5 kpc wide image holds
+        erf(2.5 / sqrt(2))^2 of its light.
+        """
+        from scipy.special import erf
+
         gauss = Gaussian2D(0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc, rho=0)
         grid = gauss.get_density_grid(RESOLUTION, NPIX)
-        assert pytest.approx(1.0, rel=1e-6) == grid.sum()
+        expected = erf(2.5 / np.sqrt(2)) ** 2
+        assert pytest.approx(expected, rel=1e-5) == grid.sum()
 
 
 class TestPointSource:
@@ -121,16 +129,23 @@ class TestGaussian2DAnnuli:
         assert np.isclose(shell0.sum(), 1.0)
 
     def test_outside_annulus_zero(self):
-        """Regions outside the specified annulus should be zero."""
+        """Pixels wholly outside the specified annulus should be zero."""
         radii = unyt_array([0.5, 1.5], kpc)
         ga_ann = Gaussian2DAnnuli(
             0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc, radii=radii, rho=0
         )
-        ga = Gaussian2D(0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc, rho=0)
-        full = ga.get_density_grid(RESOLUTION, NPIX)
         shell1 = ga_ann.get_density_grid(RESOLUTION, NPIX, annulus=1)
-        diff = full - shell1
-        assert np.all(shell1[diff > 0] == 0)
+        half = RESOLUTION.value / 2
+        x = RESOLUTION.value * (np.arange(NPIX[0]) - (NPIX[0] - 1) / 2)
+        y = RESOLUTION.value * (np.arange(NPIX[1]) - (NPIX[1] - 1) / 2)
+        xx, yy = np.abs(np.meshgrid(x, y))
+        nearest = np.hypot(
+            np.clip(xx - half, 0, None), np.clip(yy - half, 0, None)
+        )
+        furthest = np.hypot(xx + half, yy + half)
+        # Annulus 1 is everything beyond 1.5 kpc
+        assert np.all(shell1[furthest <= 1.5] == 0)
+        assert np.all(shell1[nearest >= 1.5] > 0)
 
     def test_invalid_annulus_index_raises(self):
         """Requesting an out-of-range annulus index should raise ValueError."""
@@ -159,9 +174,12 @@ class TestSersic2D:
             redshift=REDSHIFT,
         )
         grid = s2.get_density_grid(RESOLUTION, NPIX)
-        print(grid)
         assert grid.shape == NPIX
-        assert pytest.approx(1.0, rel=1e-6) == grid.sum()
+        assert grid.sum() < 1.0
+
+        # An image much wider than the profile holds all of its light
+        wide = s2.get_density_grid(1 * kpc, NPIX)
+        assert pytest.approx(1.0, rel=1e-4) == wide.sum()
 
     def test_compute_density_grid_shape(self, grid_coords):
         """Ensure compute_density_grid returns correct shape."""
@@ -580,8 +598,9 @@ class TestNormalization:
             gauss = Gaussian2D(
                 x_mean * kpc, y_mean * kpc, sx * kpc, sy * kpc, rho=rho
             )
-            grid = gauss.get_density_grid(RESOLUTION, NPIX)
-            assert pytest.approx(1.0, rel=1e-6) == grid.sum()
+            # An image much wider than the profile holds all of its light
+            grid = gauss.get_density_grid(1 * kpc, NPIX)
+            assert pytest.approx(1.0, rel=1e-4) == grid.sum()
 
     def test_sersic_normalization_invariance(self):
         """Test that Sersic normalization is independent of parameters."""
@@ -600,8 +619,10 @@ class TestNormalization:
                 ellipticity=ellip,
                 theta=theta,
             )
-            grid = sersic.get_density_grid(RESOLUTION, NPIX)
-            assert pytest.approx(1.0, rel=1e-6) == grid.sum()
+            # An image much wider than the profile holds all of its light,
+            # however cuspy the profile is
+            grid = sersic.get_density_grid(5 * kpc, (400, 400))
+            assert pytest.approx(1.0, rel=1e-4) == grid.sum()
 
     def test_annuli_normalization_consistency(self):
         """Test that every annulus, including the last, is normalised."""
@@ -1123,15 +1144,37 @@ class TestPopulationMorphologies:
     """Tests for morphologies describing several populations."""
 
     def test_annuli_are_normalised_separately(self):
-        """Each annulus holds exactly its own signal."""
+        """Each annulus inside the image holds exactly its own signal."""
         annuli = Annuli(
             Sersic2D(r_eff=2 * kpc), unyt_array([0.0, 1.0, 3.0, np.inf], kpc)
         )
         for index in range(annuli.npop):
             signals = np.zeros(annuli.npop)
             signals[index] = 5.0
-            grid = annuli.get_weighted_density_grid(RESOLUTION, NPIX, signals)
-            np.testing.assert_allclose(grid.sum(), 5.0)
+            grid = annuli.get_weighted_density_grid(
+                0.5 * kpc, (100, 100), signals
+            )
+            # Exact for the annuli inside the image, the outer annulus takes
+            # the rest of the integrated light
+            np.testing.assert_allclose(grid.sum(), 5.0, rtol=1e-4)
+
+    def test_annuli_lose_light_outside_the_image(self):
+        """An annulus crossing the image edge loses the light beyond it."""
+        annuli = Annuli(
+            Gaussian2D(0 * kpc, 0 * kpc, 1 * kpc, 1 * kpc),
+            unyt_array([0.0, 1.0, np.inf], kpc),
+        )
+        grid = annuli.get_weighted_density_grid(
+            RESOLUTION, NPIX, np.array([0.0, 1.0])
+        )
+        # The outer annulus holds exp(-1/2) of the light, of which the part
+        # inside the 5 kpc wide image is erf(2.5 / sqrt(2))^2 - (1 - exp(-1/2))
+        from scipy.special import erf
+
+        inside = erf(2.5 / np.sqrt(2)) ** 2 - (1 - np.exp(-0.5))
+        np.testing.assert_allclose(
+            grid.sum(), inside / np.exp(-0.5), rtol=1e-3
+        )
 
     def test_annuli_keep_trailing_axes(self):
         """A spectrum per annulus gives a cube holding every spectrum."""
@@ -1140,9 +1183,13 @@ class TestPopulationMorphologies:
             unyt_array([0.0, 1.0, np.inf], kpc),
         )
         spectra = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
-        cube = annuli.get_weighted_density_grid(RESOLUTION, NPIX, spectra)
-        assert cube.shape == (NPIX[1], NPIX[0], 3)
-        np.testing.assert_allclose(cube.sum(axis=(0, 1)), spectra.sum(axis=0))
+        cube = annuli.get_weighted_density_grid(
+            RESOLUTION, (200, 200), spectra
+        )
+        assert cube.shape == (200, 200, 3)
+        np.testing.assert_allclose(
+            cube.sum(axis=(0, 1)), spectra.sum(axis=0), rtol=1e-8
+        )
 
     def test_annuli_need_a_radius(self):
         """A profile without a radius can't be split into annuli."""
@@ -1170,3 +1217,77 @@ class TestPopulationMorphologies:
         morph = PerPopulation([Sersic2D(r_eff=1 * kpc)])
         with pytest.raises(exceptions.InconsistentArguments):
             morph.get_density_grid(RESOLUTION, NPIX)
+
+
+class TestPixelIntegration:
+    """Tests for integrating profiles over pixels without renormalising."""
+
+    @staticmethod
+    def _exact_gaussian(sx, sy, x0, y0, res, npix):
+        """Return the exact pixel integrals of an axis aligned Gaussian."""
+        from scipy.special import erf
+
+        edges = res * (np.arange(npix + 1) - npix / 2)
+        px = np.diff(0.5 * (1 + erf((edges - x0) / (np.sqrt(2) * sx))))
+        py = np.diff(0.5 * (1 + erf((edges - y0) / (np.sqrt(2) * sy))))
+        return np.outer(py, px)
+
+    @pytest.mark.parametrize(
+        "sx, sy, x0, y0",
+        [
+            (1.0, 1.0, 0.0, 0.0),  # resolved
+            (0.5, 2.0, 0.33, -0.71),  # resolved, elliptical and offset
+            (0.2, 0.1, 0.05, 0.0),  # a few pixels across
+            (0.05, 0.05, 0.013, 0.021),  # unresolved
+        ],
+    )
+    def test_gaussian_pixel_integrals(self, sx, sy, x0, y0):
+        """Each pixel holds the Gaussian's integral over it."""
+        gauss = Gaussian2D(x0 * kpc, y0 * kpc, sx * kpc, sy * kpc)
+        grid = gauss.get_density_grid(RESOLUTION, (51, 51))
+        exact = self._exact_gaussian(sx, sy, x0, y0, RESOLUTION.value, 51)
+        np.testing.assert_allclose(
+            grid, exact, rtol=0, atol=5e-4 * exact.max()
+        )
+
+    def test_gaussian_radius_follows_contours(self):
+        """An elliptical Gaussian's radius is constant on its contours."""
+        gauss = Gaussian2D(
+            0.2 * kpc, -0.1 * kpc, 1.5 * kpc, 0.5 * kpc, rho=0.4
+        )
+        xx, yy = gauss._get_coordinate_grids(RESOLUTION, NPIX)
+        density, _ = gauss.compute_density_grid(xx, yy)
+        sigma_major = np.sqrt(
+            np.max(np.linalg.eigvalsh(gauss._get_covariance()))
+        )
+        radius = gauss.get_radius(xx, yy).to(kpc).value
+        peak = 1 / (
+            2 * np.pi * np.sqrt(np.linalg.det(gauss._get_covariance()))
+        )
+        np.testing.assert_allclose(
+            density / peak, np.exp(-0.5 * (radius / sigma_major) ** 2)
+        )
+
+    def test_point_source_pixel(self):
+        """A point source lands in the pixel containing it (x is columns)."""
+        point = PointSource(offset=np.array([1.04, -0.23]) * kpc)
+        grid = point.get_density_grid(RESOLUTION, NPIX)
+        assert grid.sum() == 1.0
+        assert grid[22, 35] == 1.0  # y = -0.23 is row 22, x = 1.04 col 35
+
+    def test_point_source_outside_image(self):
+        """A point source outside the image contributes no light."""
+        point = PointSource(offset=np.array([10.0, 0.0]) * kpc)
+        assert point.get_density_grid(RESOLUTION, NPIX).sum() == 0.0
+
+    def test_annuli_sum_to_profile(self):
+        """Annuli given their share of the light rebuild the profile."""
+        profile = Sersic2D(r_eff=1 * kpc, sersic_index=4, ellipticity=0.3)
+        radii = unyt_array([0.0, 0.25, 0.7, 1.5, np.inf], kpc)
+        annuli = Annuli(profile, radii)
+        shares = np.diff(profile.get_enclosed_fraction(radii))
+        grid = annuli.get_weighted_density_grid(RESOLUTION, NPIX, shares)
+        whole = profile.get_density_grid(RESOLUTION, NPIX)
+        np.testing.assert_allclose(
+            grid, whole, rtol=0, atol=1e-3 * whole.max()
+        )
