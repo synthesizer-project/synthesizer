@@ -3506,6 +3506,7 @@ def test_empty_placeholder_replaced_by_nonempty_batch(tmp_path):
 
     io = PipelineIO.__new__(PipelineIO)
     io.filepath = str(tmp_path / "placeholder.hdf5")
+    io._writing_galaxy_data = False
     with h5py.File(io.filepath, "w") as hdf:
         hdf.create_dataset("Galaxies/Product", shape=(0,))
     io.write_dataset(np.ones((2, 3)), "Galaxies/Product")

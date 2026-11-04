@@ -180,7 +180,13 @@ class PipelineIO:
         # Flag for whether the file has been finalised (no more per-galaxy
         # data can be written)
         self.finalised = False
+
+        # The number of galaxy rows already flushed to file, and whether
+        # we're writing per-galaxy data. A dataset first appearing after
+        # a flush is padded with rows_written empty rows so its rows line up
+        # with the galaxies.
         self.rows_written = 0
+        self._writing_galaxy_data = False
 
     @contextmanager
     def silenced(self):
@@ -391,10 +397,7 @@ class PipelineIO:
 
             # The first batch creates the dataset. Leave its galaxy axis
             # unlimited so future flushes can append without replacing it.
-            if (
-                getattr(self, "_writing_galaxy_data", False)
-                and self.rows_written
-            ):
+            if self._writing_galaxy_data and self.rows_written:
                 data = np.concatenate(
                     (
                         np.zeros(
@@ -524,7 +527,11 @@ class PipelineIO:
         """
         try:
             start = time.perf_counter()
+
+            # Only per-galaxy data (which has indexes) needs padding when a
+            # dataset first appears after a flush
             self._writing_galaxy_data = indexes is not None
+
             # In parallel land we need to make sure we're on the same page with
             # the structure we are writing. Per-galaxy data (indexes given)
             # can be flushed at different times on different ranks, so don't

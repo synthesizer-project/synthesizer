@@ -5160,9 +5160,7 @@ class Pipeline:
             self._unpack_results(gal)
 
             # Flush the outputs to file if we're holding too many
-            self._n_buffered += 1
-            if self._should_flush():
-                self._flush_outputs()
+            self._maybe_flush()
 
             # Output into the progress table
             self._add_progress_row(gal, igal, start_gal)
@@ -5191,6 +5189,16 @@ class Pipeline:
 
         # Flag that we have run the pipeline
         self._analysis_complete = True
+
+    def _maybe_flush(self):
+        """Count the latest galaxy and flush the outputs if we hold too many.
+
+        This is called after every galaxy is unpacked, flushing or not, so
+        _should_flush is responsible for doing nothing on a normal run.
+        """
+        self._n_buffered += 1
+        if self._should_flush():
+            self._flush_outputs()
 
     def _should_flush(self):
         """Return whether the outputs held in memory should be flushed.
