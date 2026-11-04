@@ -404,6 +404,7 @@ class MultiPacmanEmission(EmissionModel):
         # Otherwise add the dust emission, balanced against the energy the
         # ISM dust absorbs
         emitter = "stellar" if stellar_dust else "galaxy"
+        dust_emission = deepcopy(dust_emission)
         dust_emission.set_energy_balance(
             models["obscured"], models["attenuated"]
         )
@@ -529,6 +530,13 @@ class BimodalMultiPacmanEmission(EmissionModel):
                 "grid."
             )
 
+        # The young population always sees a birth cloud
+        if tau_v_birth is None:
+            raise ValueError(
+                "BimodalMultiPacmanEmission requires tau_v_birth. Use "
+                "MultiPacmanEmission for a model without a birth cloud."
+            )
+
         shared = dict(
             grid=grid,
             fesc=fesc,
@@ -586,6 +594,7 @@ class BimodalMultiPacmanEmission(EmissionModel):
         # Otherwise add the dust emission, each balanced against the energy
         # its dust absorbs
         emitter = "stellar" if stellar_dust else "galaxy"
+        dust_emission_birth = deepcopy(dust_emission_birth)
         dust_emission_birth.set_energy_balance(
             young["reprocessed"], young["attenuated_nebular"]
         )

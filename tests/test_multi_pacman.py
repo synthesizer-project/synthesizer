@@ -191,3 +191,23 @@ def test_velocity_dispersion(test_grid, stars, multi_cls, pacman_cls, kwargs):
         _lnu(stars, pacman, "emergent"),
         rtol=1e-10,
     )
+
+
+def test_dust_generators_not_modified(test_grid):
+    """The caller's dust generators are copied, not given energy balance."""
+    single, birth, ism = _greybody(), _greybody(), _greybody()
+    MultiPacmanEmission(test_grid, tau_v=0.5, dust_emission=single)
+    BimodalMultiPacmanEmission(
+        test_grid,
+        tau_v_ism=0.3,
+        tau_v_birth=0.6,
+        dust_emission_ism=ism,
+        dust_emission_birth=birth,
+    )
+    assert not any(g.is_energy_balance for g in (single, birth, ism))
+
+
+def test_bimodal_requires_tau_v_birth(test_grid):
+    """The bimodal model needs a birth cloud."""
+    with pytest.raises(ValueError):
+        BimodalMultiPacmanEmission(test_grid, tau_v_ism=0.3, tau_v_birth=None)
