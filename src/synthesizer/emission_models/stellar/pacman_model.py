@@ -339,7 +339,9 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             tau_v (float):
                 The V-band optical depth.
             fesc (float):
-                The escape fraction.
+                The escape fraction. This fraction of the incident emission
+                escapes both the photoionised region and the dust, so it
+                is neither reprocessed nor attenuated.
             fesc_ly_alpha (float):
                 The Lyman alpha escape fraction.
             label (str):
@@ -475,7 +477,9 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             dust_emission (synthesizer.dust.EmissionModel): The dust
                 emission.
             fesc (float):
-                The escape fraction.
+                The escape fraction. This fraction of the incident emission
+                escapes both the photoionised region and the dust, so it
+                is neither reprocessed nor attenuated.
             fesc_ly_alpha (float):
                 The Lyman alpha escape fraction.
             label (str):
@@ -632,7 +636,9 @@ class PacmanEmission:
             dust_emission (synthesizer.dust.EmissionModel): The dust
                 emission.
             fesc (float):
-                The escape fraction.
+                The escape fraction. This fraction of the incident emission
+                escapes both the photoionised region and the dust, so it
+                is neither reprocessed nor attenuated.
             fesc_ly_alpha (float):
                 The Lyman alpha escape fraction.
             label (str):
@@ -1513,7 +1519,9 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
                 The age pivot between young and old populations,
                 expressed in terms of log10(age/yr).
             fesc(float):
-                The escape fraction.
+                The escape fraction. This fraction of the incident emission
+                escapes both the photoionised region and the dust, so it
+                is neither reprocessed nor attenuated.
             fesc_ly_alpha(float):
                 The Lyman alpha escape fraction.
             label(str):
@@ -1893,7 +1901,9 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             dust_emission_birth(synthesizer.dust.EmissionModel):
                 The dust emission model for the nebular.
             fesc(float):
-                The escape fraction.
+                The escape fraction. This fraction of the incident emission
+                escapes both the photoionised region and the dust, so it
+                is neither reprocessed nor attenuated.
             fesc_ly_alpha(float):
                 The Lyman alpha escape fraction.
             label(str):
@@ -2352,7 +2362,9 @@ class BimodalPacmanEmission:
             dust_emission_birth(synthesizer.dust.EmissionModel):
                 The dust emission model for the nebular.
             fesc(float):
-                The escape fraction.
+                The escape fraction. This fraction of the incident emission
+                escapes both the photoionised region and the dust, so it
+                is neither reprocessed nor attenuated.
             fesc_ly_alpha(float):
                 The Lyman alpha escape fraction.
             label(str):
