@@ -1704,7 +1704,7 @@ class TestRequiredEmissions:
 
 
 class TestDraineLi07Interpolation:
-    """DraineLi07 handles any alpha and reads parameters from the emitter."""
+    """DraineLi07 interpolates its templates and handles any alpha."""
 
     @staticmethod
     def _setup(dl07, **params):
@@ -1717,6 +1717,39 @@ class TestDraineLi07Interpolation:
         )
         values.update(params)
         return dl07._setup_dl07_parameters(1e6 * Msun, 1e10 * Lsun, **values)
+
+    def test_grid_points_and_midpoints(self, mock_dust_grid):
+        """Grid points give the template; midpoints are linear in log10 U."""
+        dl07 = DraineLi07(grid=mock_dust_grid, dust_mass=1e6 * Msun)
+        diffuse = mock_dust_grid.spectra["diffuse"]
+        pdr = mock_dust_grid.spectra["pdr"]
+
+        got = dl07._interpolate_templates(self._setup(dl07))
+        np.testing.assert_allclose(got[0], diffuse[1, 1], rtol=1e-6)
+        np.testing.assert_allclose(got[1], pdr[1, 1, 1], rtol=1e-6)
+
+        # umin = sqrt(1 * 10) is half way between grid points in log10 U,
+        # and qpah and alpha are half way between grid points too
+        got = dl07._interpolate_templates(
+            self._setup(dl07, qpah=0.0375, umin=10**0.5, alpha=2.25)
+        )
+        np.testing.assert_allclose(
+            got[0], diffuse[1:3, 1:3].mean(axis=(0, 1)), rtol=1e-5
+        )
+        np.testing.assert_allclose(
+            got[1], pdr[1:3, 1:3, 1:3].mean(axis=(0, 1, 2)), rtol=1e-5
+        )
+
+    def test_out_of_range_clipped_with_warning(self, mock_dust_grid):
+        """Values outside the grid use its edge and warn."""
+        dl07 = DraineLi07(grid=mock_dust_grid, dust_mass=1e6 * Msun)
+        with pytest.warns(RuntimeWarning, match="umin=1000.0 is outside"):
+            setup = self._setup(dl07, umin=1e3)
+        np.testing.assert_allclose(
+            dl07._interpolate_templates(setup)[0],
+            mock_dust_grid.spectra["diffuse"][1, -1],
+            rtol=1e-6,
+        )
 
     def test_magdis_only_without_gamma_or_umin(self, mock_dust_grid):
         """Giving gamma and umin with alpha = 2 doesn't use Magdis+12."""

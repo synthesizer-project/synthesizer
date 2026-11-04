@@ -16,6 +16,7 @@ from synthesizer.emission_models.generators.dust.dust_emission_base import (
 )
 from synthesizer.emission_models.utils import get_param
 from synthesizer.emissions import LineCollection, Sed
+from synthesizer.extensions.grid_interpolation import interpolate_grid_array
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
@@ -137,6 +138,10 @@ class DraineLi07(DustEmission):
     It will then scale the spectrum based on the energy absorbed by dust,
     calculated as the difference between the intrinsic and attenuated
     emissions. The "energy balance" method.
+
+    The templates are linearly interpolated in qpah, log10(umin) and alpha,
+    so the spectrum varies smoothly with these parameters. Values outside the
+    grid are clipped to its edges (with a warning).
 
     dust_to_gas_ratio, hydrogen_mass, qpah, gamma, umin and alpha can be set
     on the generator, where they override the emitter, or read from the
@@ -348,7 +353,7 @@ class DraineLi07(DustEmission):
         umin: float = None,
         alpha: float = None,
     ) -> dict:
-        """Set up the DL07 model parameters and grid indices.
+        """Set up the DL07 model parameters.
 
         Nothing is stored on the generator, since one generator can be shared
         by several models and emitters. Use the returned values to inspect the
@@ -375,10 +380,10 @@ class DraineLi07(DustEmission):
 
         Returns:
             dict:
-                The grid indices (``qpah_indices``, ``umin_indices``,
-                ``alpha_indices``) and derived parameters
+                The parameters to interpolate the templates at (``qpah``,
+                ``umin_calculated``, ``alpha``) and derived parameters
                 (``gamma_calculated``, ``hydrogen_mass_calculated``,
-                ``radiation_field_average``, ``umin_calculated``).
+                ``radiation_field_average``).
         """
         if self.template != "DL07":
             raise exceptions.UnimplementedFunctionality(
@@ -459,43 +464,120 @@ class DraineLi07(DustEmission):
                 calculated_umin, umax, calculated_gamma, effective_alpha
             )
 
-        # Define the model parameters from grid
-        grid_qpahs = self.grid.qpah
-        grid_umin_values = self.grid.umin
-        grid_alpha_values = self.grid.alpha
-
-        # Find nearest grid indices
-        qpah_indices = (
-            grid_qpahs
-            == grid_qpahs[np.argmin(np.abs(grid_qpahs - effective_qpah))]
-        )
-        umin_indices = (
-            grid_umin_values
-            == grid_umin_values[
-                np.argmin(np.abs(grid_umin_values - calculated_umin))
-            ]
-        )
-        alpha_indices = (
-            grid_alpha_values
-            == grid_alpha_values[
-                np.argmin(np.abs(grid_alpha_values - effective_alpha))
-            ]
-        )
-
-        if np.sum(umin_indices) == 0:
-            raise exceptions.UnimplementedFunctionality(
-                "No valid model templates found for the given values"
-            )
+        # Values outside the grid are clipped to its edges by the
+        # interpolation, so say so
+        for name, value in (
+            ("qpah", effective_qpah),
+            ("umin", calculated_umin),
+            ("alpha", effective_alpha),
+        ):
+            axis = np.asarray(getattr(self.grid, name))
+            if np.any(value < axis.min()) or np.any(value > axis.max()):
+                warn(
+                    f"DL07 {name}={value} is outside the grid range "
+                    f"[{axis.min()}, {axis.max()}], using the grid edge."
+                )
 
         return {
-            "qpah_indices": qpah_indices,
-            "umin_indices": umin_indices,
-            "alpha_indices": alpha_indices,
+            "qpah": effective_qpah,
+            "umin_calculated": calculated_umin,
+            "alpha": effective_alpha,
             "gamma_calculated": calculated_gamma,
             "hydrogen_mass_calculated": calculated_hydrogen_mass,
             "radiation_field_average": calculated_u_avg,
-            "umin_calculated": calculated_umin,
         }
+
+    def _interpolate_templates(self, setup: dict) -> tuple:
+        """Interpolate the diffuse and PDR templates to the parameters.
+
+        The templates are linearly interpolated in qpah, log10(umin) and
+        (for the PDR template) alpha, on the grid's native wavelengths.
+        Values outside the grid are clipped to its edges.
+
+        Args:
+            setup (dict):
+                The parameters returned by ``_setup_dl07_parameters``.
+
+        Returns:
+            tuple:
+                The diffuse and PDR templates on the native wavelengths.
+        """
+        dtype = self.grid._dtype
+
+        def _as_axis(values):
+            return np.ascontiguousarray(
+                np.atleast_1d(np.asarray(values, dtype=float)), dtype=dtype
+            )
+
+        axes = (
+            _as_axis(self.grid.qpah),
+            _as_axis(np.log10(np.asarray(self.grid.umin, dtype=float))),
+            _as_axis(self.grid.alpha),
+        )
+        coords = (
+            _as_axis(setup["qpah"]),
+            _as_axis(np.log10(setup["umin_calculated"])),
+            _as_axis(setup["alpha"]),
+        )
+        nlam = len(self.grid._lam)
+
+        # The diffuse template doesn't depend on alpha
+        diffuse = interpolate_grid_array(
+            np.ascontiguousarray(self.grid.spectra["diffuse"], dtype=dtype),
+            axes[:2],
+            coords[:2],
+            2,
+            1,
+            nlam,
+            "cic",
+            1,
+            dtype,
+            ("qpah", "umin"),
+        )[0]
+        pdr = interpolate_grid_array(
+            np.ascontiguousarray(self.grid.spectra["pdr"], dtype=dtype),
+            axes,
+            coords,
+            3,
+            1,
+            nlam,
+            "cic",
+            1,
+            dtype,
+            ("qpah", "umin", "alpha"),
+        )[0]
+
+        return diffuse, pdr
+
+    def _native_lnu(self, setup: dict) -> tuple:
+        """Get the diffuse and PDR lnu on the grid's native wavelengths.
+
+        Args:
+            setup (dict):
+                The parameters returned by ``_setup_dl07_parameters``.
+
+        Returns:
+            tuple:
+                The diffuse and PDR lnu (erg/s/Hz, without units).
+        """
+        diffuse_template, pdr_template = self._interpolate_templates(setup)
+        hydrogen_mass = (setup["hydrogen_mass_calculated"] / Msun).value
+
+        # Extract diffuse (old) component spectrum
+        diffuse = (
+            (1.0 - setup["gamma_calculated"])
+            * diffuse_template
+            * hydrogen_mass
+        )
+
+        # Extract PDR (young) component spectrum
+        pdr = setup["gamma_calculated"] * pdr_template * hydrogen_mass
+
+        # Replace NaNs with zero for wavelength regimes with no values given
+        diffuse[np.isnan(diffuse)] = 0.0
+        pdr[np.isnan(pdr)] = 0.0
+
+        return diffuse, pdr
 
     @accepts(lams=angstrom)
     def _generate_dl07_spectra(
@@ -518,58 +600,20 @@ class DraineLi07(DustEmission):
             Sed or tuple[Sed, Sed]:
                 The generated dust emission SED(s).
         """
-        # Get the grid indices of the template spectra we need
-        iqpah = np.where(setup["qpah_indices"])[0][0]
-        iumin = np.where(setup["umin_indices"])[0][0]
-        ialpha = np.where(setup["alpha_indices"])[0][0]
-
-        # Resample just those templates onto the requested wavelengths. This
+        # Resample the native spectra onto the requested wavelengths. This
         # reads the grid without modifying it, so the grid always holds its
         # native wavelengths and can be shared between concurrently executing
         # models.
-        diffuse_template = spectres(
-            lams.value,
-            self.grid._lam,
-            self.grid.spectra["diffuse"][iqpah, iumin],
-            fill=0,
-            verbose=False,
-        ).astype(self.grid._dtype, copy=False)
-        pdr_template = spectres(
-            lams.value,
-            self.grid._lam,
-            self.grid.spectra["pdr"][iqpah, iumin, ialpha],
-            fill=0,
-            verbose=False,
-        ).astype(self.grid._dtype, copy=False)
-
-        # Extract diffuse (old) component spectrum
-        diffuse_luminosity = (
-            (1.0 - setup["gamma_calculated"])
-            * diffuse_template
-            * (setup["hydrogen_mass_calculated"] / Msun).value
+        diffuse_sed, pdr_sed = (
+            Sed(
+                lam=lams,
+                lnu=spectres(
+                    lams.value, self.grid._lam, lnu, fill=0, verbose=False
+                ).astype(self.grid._dtype, copy=False)
+                * (erg / s / Hz),
+            )
+            for lnu in self._native_lnu(setup)
         )
-
-        # Extract PDR (young) component spectrum
-        pdr_luminosity = (
-            setup["gamma_calculated"]
-            * pdr_template
-            * (setup["hydrogen_mass_calculated"] / Msun).value
-        )
-
-        diffuse_sed = Sed(
-            lam=lams,
-            lnu=diffuse_luminosity.astype(self.grid._dtype, copy=False)
-            * (erg / s / Hz),
-        )
-        pdr_sed = Sed(
-            lam=lams,
-            lnu=pdr_luminosity.astype(self.grid._dtype, copy=False)
-            * (erg / s / Hz),
-        )
-
-        # Replace NaNs with zero for wavelength regimes with no values given
-        diffuse_sed._lnu[np.isnan(diffuse_sed._lnu)] = 0.0
-        pdr_sed._lnu[np.isnan(pdr_sed._lnu)] = 0.0
 
         if dust_components:
             return diffuse_sed, pdr_sed
