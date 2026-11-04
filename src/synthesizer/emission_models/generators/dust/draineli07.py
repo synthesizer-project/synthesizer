@@ -40,6 +40,9 @@ _OPTIONAL_PARAMS = (
 # Values used when a parameter isn't set anywhere
 _DEFAULTS = {"dust_to_gas_ratio": 0.01, "qpah": 0.025, "alpha": 2.0}
 
+# The grid axes the DL07 templates are extracted over, in order
+_GRID_AXES = ("qpah", "umin", "alpha")
+
 
 def u_mean_magdis12(dust_mass: float, ldust: float, p0: float) -> float:
     """Calculate the mean radiation field heating the dust.
@@ -145,33 +148,41 @@ def solve_umin(
 
 
 class DraineLi07(DustEmission):
-    """A generator for DL07 emission spectrum based on energy balance.
+    """Draine and Li (2007) dust emission templates.
 
-    This class will generate a DL07 spectrum using templates from a dust grid.
-    It will then scale the spectrum based on the energy absorbed by dust,
-    calculated as the difference between the intrinsic and attenuated
-    emissions. The "energy balance" method.
-
-    As in DraineLiGrainCurves, the templates are linearly (CIC) interpolated
-    in qpah, umin and alpha, each in the space of the grid axis (linear or
-    log10), so the spectrum varies smoothly with these parameters. Values
-    outside the grid are clamped to its edges.
-
-    dust_to_gas_ratio, hydrogen_mass, qpah, gamma, umin and alpha can be set
-    on the generator, where they override the emitter, or read from the
-    emitter. Each can be a single value or an array with one value per
-    particle (for per-particle models); particles with non-finite values or
-    a non-positive umin produce no emission. If they are set on neither,
-    hydrogen_mass is derived from the dust mass and dust_to_gas_ratio, gamma
-    and umin are derived from the Magdis+12 stacking results, and
-    dust_to_gas_ratio, qpah and alpha fall back to 0.01, 0.025 and 2.0.
+    Draine and Li (2007) dust emission spectra obtained from pre-processing
+    the DL07 templates onto a grid of the PAH mass fraction (qpah), the
+    minimum radiation field (umin) and the slope of the power-law radiation
+    field distribution (alpha). The default grid can be downloaded with
+    ``synthesizer-download --dust-grid``. The templates are interpolated to
+    the parameters of each particle (or emitter) using the same grid
+    extraction machinery as the stellar spectra, and the resulting spectrum
+    is scaled by the energy absorbed by dust (the "energy balance" method),
+    or by a scaler emission. For more details see the base DustEmission
+    parent class.
 
     This is based on the work of Draine & Li (2007):
     https://ui.adsabs.harvard.edu/abs/2007ApJ...657..810D/abstract
 
+    dust_to_gas_ratio, hydrogen_mass, qpah, gamma, umin and alpha are
+    optional. A value set on the generator is a fixed override that takes
+    priority over any value on the emitter (only an EmissionModel's
+    fixed_parameters take priority over it). If left as None they are read
+    from the emitter, and each can be a single value or one value per
+    particle. Particles with a non-positive or non-finite dust mass, a
+    non-positive umin, or non-finite parameters produce no emission. If they
+    are set nowhere, hydrogen_mass is derived from the dust mass and
+    dust_to_gas_ratio, gamma and umin are derived from the Magdis+12
+    stacking results, and dust_to_gas_ratio, qpah and alpha fall back to
+    0.01, 0.025 and 2.0.
+
     Attributes:
+        grid_name (string):
+            Name of the dust emission grid (without hdf5 extension).
+        grid_dir (string):
+            Location of the grid.
         grid (Grid):
-            The dust grid to use for template spectra.
+            The dust emission grid containing the DL07 templates.
         dust_mass (unyt_quantity):
             The mass of dust in the galaxy.
         dust_to_gas_ratio (float):
@@ -196,6 +207,8 @@ class DraineLi07(DustEmission):
             Whether to print verbose output.
     """
 
+    grid_name: str
+    grid_dir: Optional[str]
     grid: Grid
     dust_mass: Optional[unyt_quantity]
     dust_to_gas_ratio: Optional[float]
@@ -209,9 +222,11 @@ class DraineLi07(DustEmission):
     verbose: bool
 
     @accepts(dust_mass=Msun.in_base("galactic"))
+    @timed("DraineLi07.__init__")
     def __init__(
         self,
-        grid: Grid,
+        grid_name: str,
+        grid_dir: Optional[str] = None,
         dust_mass: Optional[unyt_quantity] = None,
         dust_to_gas_ratio: Optional[float] = None,
         hydrogen_mass: Optional[unyt_quantity] = None,
@@ -222,18 +237,27 @@ class DraineLi07(DustEmission):
         alpha: Optional[float] = None,
         power_per_unit_mass: float = 125.0,
         verbose: bool = True,
+        lam: Optional[unyt_array] = None,
         intrinsic: Optional[EmissionModel] = None,
         attenuated: Optional[EmissionModel] = None,
         scaler: Optional[EmissionModel] = None,
     ) -> None:
-        """Generate a DL07 spectrum.
+        """Initialise the Draine and Li (2007) dust emission templates.
+
+        Draine and Li (2007) dust emission spectra obtained from
+        pre-processing the DL07 templates onto a grid of qpah, umin and
+        alpha. The default grid can be downloaded with
+        ``synthesizer-download --dust-grid``.
 
         Args:
-            grid (Grid):
-                The dust grid to use for template spectra.
+            grid_name (string):
+                Name of the dust emission grid (without hdf5 extension).
+            grid_dir (string):
+                Location of the grid. Defaults to the synthesizer grid
+                directory.
             dust_mass (unyt_quantity, optional):
-                The mass of dust in the galaxy. Will be extracted from
-                the component or model if not provided.
+                The mass of dust in the galaxy. Read from the emitter if not
+                provided.
             dust_to_gas_ratio (float, optional):
                 The dust-to-gas ratio of the galaxy. Read from the emitter
                 if not provided, falling back to 0.01.
@@ -263,6 +287,10 @@ class DraineLi07(DustEmission):
                 with U = 1.
             verbose (bool):
                 Whether to print verbose output.
+            lam (unyt_array, optional):
+                The target wavelength array for the dust emission. If
+                provided, the grid will be resampled to these wavelengths
+                once at init time for better performance.
             intrinsic (EmissionModel):
                 The name of the intrinsic emission defining the unattenuated
                 emission for energy balance.
@@ -272,6 +300,14 @@ class DraineLi07(DustEmission):
             scaler (EmissionModel):
                 The name of the emission to use to scale the dust emission by.
         """
+        # Attach information about the grid file
+        self.grid_name = grid_name
+        self.grid_dir = grid_dir
+
+        # Store the target wavelengths if provided
+        if lam is not None:
+            self.lam = lam.to("Angstrom")
+
         # Call the parent init with required parameters and emissions. CMB
         # heating (da Cunha+13) heats a dust temperature, which the DL07
         # templates don't have, so it is never applied
@@ -284,7 +320,6 @@ class DraineLi07(DustEmission):
             required_params=("dust_mass",),
         )
 
-        self.grid = grid
         self.dust_mass = dust_mass
         self.dust_to_gas_ratio = dust_to_gas_ratio
         self.hydrogen_mass = hydrogen_mass
@@ -296,66 +331,90 @@ class DraineLi07(DustEmission):
         self.power_per_unit_mass = power_per_unit_mass
         self.verbose = verbose
 
-        # Check the grid and prepare the arrays we interpolate over once
+        # Create and attach the grid object containing the DL07 templates
+        self._base_grid = Grid(
+            self.grid_name,
+            self.grid_dir,
+            ignore_lines=True,
+        )
+        # Use the base grid for initial validation
+        self.grid = self._base_grid
         self._validate_grid()
+
+        # Cache resampled grids keyed by wavelength tuple for quick lookup.
+        # The native wavelengths (used for the normalisation) map straight
+        # onto the base grid.
+        self._grid_cache = {
+            tuple(np.atleast_1d(self._base_grid.lam.ndview)): self._base_grid
+        }
+
+        # If lam was provided at init, pre-compute the resampled grid for that
+        # wavelength.
+        if hasattr(self, "lam"):
+            self._get_resampled_grid(self.lam)
 
     @timed("DraineLi07._validate_grid")
     def _validate_grid(self):
-        """Validate that the dust grid matches class expectations."""
-        # Ensure the grid holds both DL07 templates
-        missing = {"diffuse", "pdr"} - set(self.grid.spectra)
-        if missing:
+        """Validate that the dust emission grid matches class expectations."""
+        # Ensure the supplied dust emission grid actually contains spectra.
+        if not self.grid.available_spectra_emissions:
             raise exceptions.InconsistentArguments(
-                f"DraineLi07 requires a grid with {sorted(missing)} spectra."
+                "DraineLi07 requires a dust emission grid with spectra."
             )
 
-        # Ensure the grid's extraction axes are the DL07 parameters, recording
-        # whether each is linear or logarithmic
-        self._axis_names = []
-        self._axis_logged = []
-        for name in ("qpah", "umin", "alpha"):
-            if name in self.grid._extract_axes:
-                axis_name, logged = name, False
-            elif f"log10{name}" in self.grid._extract_axes:
-                axis_name, logged = f"log10{name}", True
-            else:
+        # Ensure the extraction machinery only has to deal with the qpah,
+        # umin and alpha axes.
+        if len(self.grid._extract_axes) != 3:
+            raise exceptions.UnimplementedFunctionality(
+                "DraineLi07 only supports dust emission grids with qpah, "
+                "umin and alpha axes."
+            )
+
+        # Record whether the grid uses linear or logarithmic axes.
+        self._axis_names = tuple(self.grid._extract_axes)
+        for axis_name, param in zip(self._axis_names, _GRID_AXES):
+            if axis_name not in (param, f"log10{param}"):
                 raise exceptions.UnimplementedFunctionality(
-                    f"DraineLi07 requires a grid with a {name} or "
-                    f"log10{name} extraction axis."
-                )
-            self._axis_names.append(axis_name)
-            self._axis_logged.append(logged)
-
-            # Ensure the axis values are numerically well behaved before we
-            # use them for interpolation
-            axis = self.grid._extract_axes_values[axis_name]
-            if not np.all(np.isfinite(axis)):
-                raise exceptions.InconsistentArguments(
-                    f"The DraineLi07 grid {axis_name} axis must contain only "
-                    "finite values."
-                )
-            if np.any(np.diff(axis) <= 0.0):
-                raise exceptions.InconsistentArguments(
-                    f"The DraineLi07 grid {axis_name} axis must be strictly "
-                    "increasing."
+                    "DraineLi07 only supports dust emission grids with qpah, "
+                    "umin and alpha (or log10) extraction axes, in that "
+                    "order."
                 )
 
-        # Ensure the templates have one entry per grid point (the diffuse
-        # template does not depend on alpha)
-        dims = tuple(
-            len(self.grid._extract_axes_values[name])
-            for name in self._axis_names
-        )
-        for key, shape in (("diffuse", dims[:2]), ("pdr", dims)):
-            if self.grid.spectra[key].shape[:-1] != shape:
+        # Cache the set of available spectra and make sure both DL07
+        # templates exist on the grid.
+        self._available_templates = set(self.grid.available_spectra_emissions)
+        missing_templates = {"diffuse", "pdr"} - self._available_templates
+        if missing_templates:
+            raise exceptions.InconsistentArguments(
+                "The provided dust emission grid is missing the following "
+                f"templates: {sorted(missing_templates)}"
+            )
+
+        # Ensure the axis values are numerically well behaved before we use
+        # them for particle validation and interpolation.
+        for axis_name in self._axis_names:
+            grid_axis = self.grid._extract_axes_values[axis_name]
+            if not np.all(np.isfinite(grid_axis)):
                 raise exceptions.InconsistentArguments(
-                    f"The DraineLi07 {key} spectra have shape "
-                    f"{self.grid.spectra[key].shape[:-1]} over the grid "
-                    f"axes, expected {shape}."
+                    f"The dust emission grid {axis_name} axis must contain "
+                    "only finite values."
+                )
+            if np.any(np.diff(grid_axis) <= 0.0):
+                raise exceptions.InconsistentArguments(
+                    f"The dust emission grid {axis_name} axis must be "
+                    "strictly increasing."
                 )
 
-        # Cache resampled grids keyed by wavelength tuple for quick lookup.
-        self._grid_cache = {}
+        # Cache the axis ranges once so the per-call work only needs the
+        # particle validation and extraction logic.
+        self._grid_axis_min = {
+            axis_name: np.min(self.grid._extract_axes_values[axis_name])
+            for axis_name in self._axis_names
+        }
+        self._grid_axis_max = {
+            axis_name: np.max(self.grid._extract_axes_values[axis_name])
+            for axis_name in self._axis_names
+        }
 
     def __repr__(self):
         """Return a string representation of the DraineLi07 object."""
@@ -372,6 +431,7 @@ class DraineLi07(DustEmission):
         # Add DraineLi07 specific parameters
         parts.extend(
             [
+                f"grid_name={self.grid_name}",
                 f"template={self.template}",
                 f"qpah={self.qpah}",
                 f"alpha={self.alpha}",
@@ -388,6 +448,7 @@ class DraineLi07(DustEmission):
 
         return f"DraineLi07({', '.join(parts)})"
 
+    @timed("DraineLi07._extract_optional_params")
     def _extract_optional_params(self, model, emitter) -> dict:
         """Extract the parameters that aren't required.
 
@@ -419,6 +480,7 @@ class DraineLi07(DustEmission):
             params[param] = value
         return params
 
+    @timed("DraineLi07._setup_dl07_parameters")
     def _setup_dl07_parameters(
         self,
         dust_mass: unyt_quantity,
@@ -485,27 +547,24 @@ class DraineLi07(DustEmission):
         calculated_umin = _resolve("umin", umin)
         effective_alpha = _resolve("alpha", alpha)
 
-        # Any parameter can be an array (e.g. one value per particle), as
-        # long as they all have the same length (or a single value)
-        sizes = {
-            np.size(value)
-            for value in (
-                dust_mass,
-                ldust,
-                effective_hydrogen_mass,
-                effective_qpah,
-                calculated_gamma,
-                calculated_umin,
-                effective_alpha,
-            )
-            if value is not None
-        }
-        nparticles = max(sizes)
-        if not sizes <= {1, nparticles}:
-            raise exceptions.InconsistentArguments(
-                f"DraineLi07 parameters have lengths {sorted(sizes)}, but "
-                f"expected 1 or {nparticles}."
-            )
+        # Any parameter can be an array (e.g. one value per particle). Like
+        # the hydrogen column in DraineLiGrainCurves, the dust mass sets the
+        # number of particles and every other parameter must match it (or be
+        # a single value).
+        nparticles = np.size(dust_mass)
+        for param_name, value in (
+            ("ldust", ldust),
+            ("hydrogen_mass", effective_hydrogen_mass),
+            ("qpah", effective_qpah),
+            ("gamma", calculated_gamma),
+            ("umin", calculated_umin),
+            ("alpha", effective_alpha),
+        ):
+            if value is not None and np.size(value) not in (1, nparticles):
+                raise exceptions.InconsistentArguments(
+                    f"{param_name} has length {np.size(value)}, but "
+                    f"expected 1 or {nparticles}."
+                )
 
         # Default maximum radiation field intensity
         umax: float = 1e7
@@ -573,15 +632,18 @@ class DraineLi07(DustEmission):
 
         # Broadcast everything to one value per particle, masking entries we
         # can't evaluate (they produce no emission)
+        dust_mass_arr = np.broadcast_to(
+            np.atleast_1d((dust_mass / Msun).value), (nparticles,)
+        )
         hydrogen_mass = np.broadcast_to(
             np.atleast_1d((calculated_hydrogen_mass / Msun).value),
             (nparticles,),
         )
         qpah_arr, umin_arr, alpha_arr, gamma_arr = (
             np.broadcast_to(
-                np.atleast_1d(np.asarray(v, dtype=float)), (nparticles,)
+                np.atleast_1d(np.asarray(value, dtype=float)), (nparticles,)
             )
-            for v in (
+            for value in (
                 effective_qpah,
                 calculated_umin,
                 effective_alpha,
@@ -589,12 +651,15 @@ class DraineLi07(DustEmission):
             )
         )
         valid = (
-            np.isfinite(qpah_arr)
+            np.isfinite(dust_mass_arr)
+            & (dust_mass_arr > 0.0)
+            & np.isfinite(hydrogen_mass)
+            & (hydrogen_mass > 0.0)
+            & np.isfinite(qpah_arr)
             & np.isfinite(umin_arr)
             & (umin_arr > 0.0)
             & np.isfinite(alpha_arr)
             & np.isfinite(gamma_arr)
-            & np.isfinite(hydrogen_mass)
         )
 
         return {
@@ -621,7 +686,10 @@ class DraineLi07(DustEmission):
         Returns:
             Grid: The resampled grid.
         """
-        lam_arr = np.atleast_1d(lam.to(angstrom).ndview)
+        # `lam` has already been normalised to Angstrom by `@accepts`, so we
+        # can use its raw view directly here and avoid another unit conversion
+        # in the hot path.
+        lam_arr = np.atleast_1d(lam.ndview)
         cache_key = tuple(lam_arr)
 
         # Check if we already have this configuration cached.
@@ -632,7 +700,8 @@ class DraineLi07(DustEmission):
         if lam_arr.size == 1:
             # For scalar wavelengths, make a copy to avoid mutating the base
             # grid.
-            grid = copy.deepcopy(self.grid)
+            grid = copy.deepcopy(self._base_grid)
+            # Pass the original lam with units to get_spectra_at_lam
             spectra_at_lam = grid.get_spectra_at_lam(lam)
             for spectra_id, spectra in spectra_at_lam.items():
                 grid.spectra[spectra_id] = spectra[..., np.newaxis]
@@ -640,64 +709,76 @@ class DraineLi07(DustEmission):
             grid._ensure_spectra_data_contiguous()
         else:
             # For arrays of wavelengths
-            grid = self.grid.reduce_rest_frame_lam(lam)
+            grid = self._base_grid.reduce_rest_frame_lam(lam)
 
         # Cache the resampled grid.
         self._grid_cache[cache_key] = grid
 
         return grid
 
-    @timed("DraineLi07._interpolate_templates")
-    def _interpolate_templates(self, grid, setup: dict) -> tuple:
-        """Interpolate the diffuse and PDR templates to the parameters.
-
-        The templates are linearly interpolated (CIC) in qpah, umin and (for
-        the PDR template) alpha, each in the space of the grid axis (linear
-        or log10). Values outside the grid are clamped to its edges and
-        masked entries are zero.
+    @accepts(lam=angstrom)
+    @timed("DraineLi07.get_templates_at_lam")
+    def get_templates_at_lam(self, lam: unyt_array, setup: dict) -> tuple:
+        """Calculate the diffuse and PDR templates at a wavelength.
 
         Args:
-            grid (Grid):
-                The grid to interpolate (the native or a resampled grid).
+            lam (unyt_array, float):
+                An array of wavelengths or a single wavelength at which to
+                calculate the templates (in AA, global unit).
             setup (dict):
                 The parameters returned by ``_setup_dl07_parameters``.
 
         Returns:
-            tuple:
-                The diffuse and PDR templates, each (nparticles, nlam).
+            templates (tuple of np.ndarray)
+                The diffuse and PDR templates at the given wavelengths
+                ((N_particles, N_lambda) if the parameters are array-like,
+                otherwise shape (N_lambda,)), per unit hydrogen mass.
         """
+        # Get or create the resampled grid for this wavelength.
+        grid = self._get_resampled_grid(lam)
+
+        # Unpack the per-particle validity mask from the parameter setup.
         valid = setup["valid"]
         nparticles = valid.size
-        dtype = grid._dtype
 
-        # Map the parameters onto the grid axes, replacing masked entries
-        # with a valid value so the axis transform stays finite
-        grid_axes = []
-        coords = []
-        for name, axis_name, logged in zip(
-            ("qpah", "umin_calculated", "alpha"),
-            self._axis_names,
-            self._axis_logged,
+        # Accumulate each template at the precision of the wavelengths we
+        # were given
+        template_dtype = np.result_type(np.asarray(lam).dtype, np.float32)
+        grid_axes = tuple(
+            grid._extract_axes_values[axis_name]
+            for axis_name in self._axis_names
+        )
+        grid_shape = np.array(grid.shape, dtype=np.int32)
+        grid_weights = np.ones(nparticles)
+
+        # Map the parameters onto the grid axes. Masked particles are given a
+        # placeholder value of 1 so the (possibly logged) axis value stays
+        # finite; they are skipped by the extraction.
+        grid_values = []
+        for param, axis_name in zip(
+            ("qpah", "umin_calculated", "alpha"), self._axis_names
         ):
-            axis = grid._extract_axes_values[axis_name]
-            values = np.where(valid, setup[name], 1.0)
-            grid_axes.append(np.ascontiguousarray(axis, dtype=dtype))
-            coords.append(
-                np.ascontiguousarray(
-                    np.log10(values) if logged else values, dtype=dtype
-                )
+            values = np.ones(nparticles, dtype=float)
+            values[valid] = setup[param][valid]
+
+            # Log the grid axis if we need to
+            grid_values.append(
+                np.log10(values) if axis_name.startswith("log10") else values
             )
 
-        weights = np.ones(nparticles)
+        # Extract each template, the diffuse template does not depend on
+        # alpha so it only uses the first two axes.
         templates = []
-        for key, ndim in (("diffuse", 2), ("pdr", 3)):
+        for template_key, ndim in (("diffuse", 2), ("pdr", 3)):
+            # Call the particle spectra extension directly for these
+            # extraction axes instead of going through generate_lnu.
             templates.append(
                 compute_particle_seds(
-                    np.ascontiguousarray(grid.spectra[key], dtype=dtype),
-                    tuple(grid_axes[:ndim]),
-                    tuple(coords[:ndim]),
-                    weights,
-                    np.array(grid.spectra[key].shape[:-1], dtype=np.int32),
+                    grid.spectra[template_key],
+                    grid_axes[:ndim],
+                    tuple(grid_values[:ndim]),
+                    grid_weights,
+                    grid_shape[:ndim],
                     ndim,
                     nparticles,
                     grid.nlam,
@@ -706,35 +787,41 @@ class DraineLi07(DustEmission):
                     valid,
                     None,
                     False,
-                    dtype,
-                    tuple(self._axis_names[:ndim]),
+                    template_dtype,
+                    self._axis_names[:ndim],
                 )
             )
 
-        return tuple(templates)
+        # Preserve the previous scalar-like return shape for single-particle
+        # inputs.
+        if nparticles == 1:
+            return templates[0][0], templates[1][0]
+        return templates[0], templates[1]
 
-    def _component_lnu(self, grid, setup: dict) -> tuple:
-        """Get the diffuse and PDR lnu on a grid's wavelengths.
+    @timed("DraineLi07._component_lnu")
+    def _component_lnu(self, lam: unyt_array, setup: dict) -> tuple:
+        """Get the diffuse and PDR lnu at a wavelength.
 
         Args:
-            grid (Grid):
-                The grid to evaluate on (the native or a resampled grid).
+            lam (unyt_array):
+                The wavelengths at which to calculate lnu.
             setup (dict):
                 The parameters returned by ``_setup_dl07_parameters``.
 
         Returns:
             tuple:
-                The diffuse and PDR lnu (erg/s/Hz, without units), each
-                (nparticles, nlam), or (nlam,) for a single set of
-                parameters.
+                The diffuse and PDR lnu (erg/s/Hz, without units), with the
+                same shape as the templates from ``get_templates_at_lam``.
         """
-        diffuse_template, pdr_template = self._interpolate_templates(
-            grid, setup
-        )
-        gamma = setup["gamma_calculated"][:, np.newaxis]
-        hydrogen_mass = (setup["hydrogen_mass_calculated"] / Msun).value[
-            :, np.newaxis
-        ]
+        diffuse_template, pdr_template = self.get_templates_at_lam(lam, setup)
+        gamma = setup["gamma_calculated"]
+        hydrogen_mass = (setup["hydrogen_mass_calculated"] / Msun).value
+        if diffuse_template.ndim > 1:
+            gamma = gamma[:, np.newaxis]
+            hydrogen_mass = hydrogen_mass[:, np.newaxis]
+        else:
+            gamma = gamma[0]
+            hydrogen_mass = hydrogen_mass[0]
 
         # Extract diffuse (old) component spectrum
         diffuse = (1.0 - gamma) * diffuse_template * hydrogen_mass
@@ -746,11 +833,9 @@ class DraineLi07(DustEmission):
         diffuse[np.isnan(diffuse)] = 0.0
         pdr[np.isnan(pdr)] = 0.0
 
-        # Preserve the previous single spectrum shape for scalar inputs
-        if diffuse.shape[0] == 1:
-            return diffuse[0], pdr[0]
         return diffuse, pdr
 
+    @timed("DraineLi07._bolometric_luminosity")
     def _bolometric_luminosity(self, setup: dict):
         """Integrate the spectrum over the template's native wavelengths.
 
@@ -767,17 +852,19 @@ class DraineLi07(DustEmission):
                 luminosity unit of Sed.bolometric_luminosity, with a trailing
                 axis to broadcast against lnu.
         """
-        diffuse, pdr = self._component_lnu(self.grid, setup)
+        diffuse, pdr = self._component_lnu(self._base_grid.lam, setup)
         bol_lum = Sed(
-            lam=self.grid.lam,
+            lam=self._base_grid.lam,
             lnu=(diffuse + pdr) * (erg / s / Hz),
         )._bolometric_luminosity
+
         # Masked particles have no emission, so avoid dividing zero by zero
         bol_lum = np.asarray(bol_lum)
         bol_lum = np.where(bol_lum > 0.0, bol_lum, 1.0)
         return bol_lum[..., np.newaxis]
 
     @accepts(lams=angstrom)
+    @timed("DraineLi07._generate_dl07_spectra")
     def _generate_dl07_spectra(
         self,
         lams: unyt_array,
@@ -799,13 +886,12 @@ class DraineLi07(DustEmission):
                 The generated dust emission SED(s).
         """
         # Evaluate on the grid resampled onto the requested wavelengths. The
-        # resampled grid is a copy, so the grid always holds its native
+        # resampled grid is a copy, so the base grid always holds its native
         # wavelengths and can be shared between concurrently executing
         # models.
-        grid = self._get_resampled_grid(lams)
         diffuse_sed, pdr_sed = (
             Sed(lam=lams, lnu=lnu * (erg / s / Hz))
-            for lnu in self._component_lnu(grid, setup)
+            for lnu in self._component_lnu(lams, setup)
         )
 
         if dust_components:
@@ -938,6 +1024,7 @@ class DraineLi07(DustEmission):
         return sed
 
     @accepts(line_lams=angstrom)
+    @timed("DraineLi07._generate_lines")
     @verify_out_precision()
     def _generate_lines(
         self,
