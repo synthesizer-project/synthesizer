@@ -579,6 +579,27 @@ class DraineLi07(DustEmission):
 
         return diffuse, pdr
 
+    def _bolometric_luminosity(self, setup: dict) -> float:
+        """Integrate the spectrum over the template's native wavelengths.
+
+        This normalises the spectrum independently of the wavelengths it is
+        evaluated on.
+
+        Args:
+            setup (dict):
+                The parameters returned by ``_setup_dl07_parameters``.
+
+        Returns:
+            float:
+                The bolometric luminosity in the luminosity unit of
+                Sed.bolometric_luminosity.
+        """
+        diffuse, pdr = self._native_lnu(setup)
+        return Sed(
+            lam=self.grid._lam * angstrom,
+            lnu=(diffuse + pdr) * (erg / s / Hz),
+        )._bolometric_luminosity
+
     @accepts(lams=angstrom)
     def _generate_dl07_spectra(
         self,
@@ -717,8 +738,8 @@ class DraineLi07(DustEmission):
         # Generate the base spectra
         sed = self._generate_dl07_spectra(lams, setup)
 
-        # Get the bolometric luminosity with proper units
-        bol_lum = sed._bolometric_luminosity
+        # Get the bolometric luminosity over the native wavelengths
+        bol_lum = self._bolometric_luminosity(setup)
 
         # Normalise the DL07 spectrum
         sed._lnu /= bol_lum
@@ -784,8 +805,6 @@ class DraineLi07(DustEmission):
                 "missing. Please generate spectra first or remove the "
                 "generation of lines."
             )
-        else:
-            sed = spectra[model.label]
 
         # Get the required and optional parameters
         params = self._extract_params(model, emitter)
@@ -800,13 +819,9 @@ class DraineLi07(DustEmission):
 
         # Generate the DL07 function
         lnu = self._generate_dl07_spectra(line_lams, setup).lnu
-        norm_lnu = self._generate_dl07_spectra(sed.lam, setup).lnu
 
-        # Create an SED object for convenience
-        norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)
-
-        # Get the bolometric luminosity with proper units
-        bol_lum = norm_sed._bolometric_luminosity
+        # Get the bolometric luminosity over the native wavelengths
+        bol_lum = self._bolometric_luminosity(setup)
 
         # Normalise the DL07 spectrum
         lnu /= bol_lum

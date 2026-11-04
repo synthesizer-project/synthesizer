@@ -1821,3 +1821,29 @@ class TestDraineLi07Interpolation:
             for qpah in (0.01, 0.03)
         ]
         assert not np.allclose(seds[0].lnu, seds[1].lnu)
+
+    def test_normalised_over_native_wavelengths(
+        self, mock_dust_grid, mock_model, mock_emissions
+    ):
+        """A truncated grid gives the same spectrum as a wider one."""
+        dl07 = DraineLi07(
+            grid=mock_dust_grid,
+            intrinsic="intrinsic",
+            attenuated="attenuated",
+        )
+        emitter = _ParamEmitter(
+            dust_mass=1e6 * Msun,
+            hydrogen_mass=1e8 * Msun,
+            qpah=0.025,
+            gamma=0.1,
+            umin=1.0,
+            alpha=2.0,
+        )
+        lam = mock_dust_grid._lam * angstrom
+        wide, truncated = (
+            dl07._generate_spectra(lams, emitter, mock_model, mock_emissions)
+            for lams in (lam[1:-1], lam[40:60])
+        )
+        np.testing.assert_allclose(
+            truncated.lnu[1:-1], wide.lnu[40:58], rtol=1e-5
+        )
