@@ -945,3 +945,22 @@ def test_fesc_conserves_energy(
         assert np.allclose(spectra[fesc][f"{prefix}intrinsic"], expected), (
             f"{prefix}intrinsic does not conserve energy"
         )
+
+
+@pytest.mark.parametrize("model_class", (TotalEmission, PacmanEmission))
+@pytest.mark.parametrize(
+    ("fesc", "default_label"), ((0.0, "attenuated"), (0.1, "emergent"))
+)
+def test_no_dust_emission_root_label(
+    test_grid, model_class, fesc, default_label
+):
+    """Without dust emission an explicit label names the root model."""
+    kwargs = {"dust_curve": PowerLaw(), "fesc": fesc, "tau_v": 0.33}
+
+    # By default the root keeps the name of the simpler model
+    assert model_class(test_grid, **kwargs).label == default_label
+
+    # But an explicit label is honoured
+    model = model_class(test_grid, label="total", **kwargs)
+    assert model.label == "total"
+    assert model["total"] is model

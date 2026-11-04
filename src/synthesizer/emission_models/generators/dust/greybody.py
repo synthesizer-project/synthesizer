@@ -49,17 +49,22 @@ class Greybody(DustEmission):
             If dust is optically thin?
         lam_0 (unyt_quantity):
             Wavelength (in um) where the dust optical depth is unity.
+
+    temperature and emissivity are optional. A value set on the generator is
+    a fixed override that takes priority over any value on the emitter (only
+    an EmissionModel's fixed_parameters take priority over it). If left as
+    None they are read from the emitter.
     """
 
-    temperature: unyt_quantity
-    emissivity: float
+    temperature: Optional[unyt_quantity]
+    emissivity: Optional[float]
     optically_thin: bool
     lam_0: unyt_quantity
 
     def __init__(
         self,
-        temperature: unyt_quantity,
-        emissivity: float = 1.5,
+        temperature: Optional[unyt_quantity] = None,
+        emissivity: Optional[float] = None,
         optically_thin: bool = True,
         lam_0: unyt_quantity = 100.0 * um,
         do_cmb_heating: bool = False,
@@ -70,10 +75,14 @@ class Greybody(DustEmission):
         """Initialise the greybody base class.
 
         Args:
-            temperature (unyt_array):
-                The temperature of the greybody.
-            emissivity (float):
-                The emissivity of the dust (dimensionless).
+            temperature (unyt_quantity, optional):
+                The temperature of the greybody. If given, this overrides
+                any temperature on the emitter. If None, it is read from the
+                emitter.
+            emissivity (float, optional):
+                The emissivity of the dust (dimensionless) [good value =
+                1.5]. If given, this overrides any emissivity on the emitter.
+                If None, it is read from the emitter.
             optically_thin (bool):
                 If dust is optically thin
             lam_0 (unyt_quantity):
@@ -132,8 +141,17 @@ class Greybody(DustEmission):
         return f"Greybody({', '.join(parts)})"
 
     @accepts(nu=Hz)
-    def _lnu(self, nu: unyt_array, temperature: unyt_quantity) -> unyt_array:
+    def _lnu(
+        self,
+        nu: unyt_array,
+        temperature: unyt_quantity,
+        emissivity: float,
+    ) -> unyt_array:
         """Generate unnormalised spectrum for given frequency (nu) grid.
+
+        All model parameters are passed in explicitly (they have already been
+        resolved from the model, generator and emitter by the caller), so the
+        generator holds no per-call state.
 
         Args:
             nu (unyt_array):
@@ -141,18 +159,18 @@ class Greybody(DustEmission):
                 density.
             temperature (unyt_quantity):
                 The temperature to use for the greybody.
+            emissivity (float):
+                The emissivity to use for the greybody.
 
         Returns:
             lnu (unyt_array):
                 The unnormalised spectral luminosity density.
         """
         if self.optically_thin:
-            return (nu / Hz) ** self.emissivity * planck(nu, temperature)
+            return (nu / Hz) ** emissivity * planck(nu, temperature)
         else:
             _nu_0 = c / self.lam_0
-            optically_thick_factor = 1 - np.exp(
-                -((nu / _nu_0) ** self.emissivity)
-            )
+            optically_thick_factor = 1 - np.exp(-((nu / _nu_0) ** emissivity))
             return optically_thick_factor * planck(nu, temperature)
 
     @accepts(lams=angstrom)
@@ -169,11 +187,11 @@ class Greybody(DustEmission):
     ) -> Sed:
         """Generate the dust emission spectra.
 
-        Note that the temperature here will be extracted using this priority
-        order:
+        Note that the temperature and emissivity here will be extracted using
+        this priority order:
             1. From the EmissionModels fixed parameters
-            2. From the emitter object
-            3. From the Greybody object itself
+            2. From the Greybody object itself (if not None)
+            3. From the emitter object
 
         This is handle internally using the Generator's _extract_params method.
 
@@ -200,8 +218,9 @@ class Greybody(DustEmission):
         # Get the required parameters
         params = self._extract_params(model, emitter)
 
-        # Unpack the temperature
+        # Unpack the parameters
         temperature = params["temperature"]
+        emissivity = params["emissivity"]
 
         # Define frequencies
         nu = (c / lams).to(Hz)
@@ -209,12 +228,12 @@ class Greybody(DustEmission):
         # Account for CMB heating
         cmb_factor, temperature = self.apply_cmb_heating(
             temperature=temperature,
-            emissivity=self.emissivity,
+            emissivity=emissivity,
             redshift=redshift,
         )
 
         # Compute the greybody function
-        lnu = self._lnu(nu, temperature)
+        lnu = self._lnu(nu, temperature, emissivity)
 
         # Create an SED object for convenience
         sed = Sed(lam=lams, lnu=lnu)
@@ -297,8 +316,9 @@ class Greybody(DustEmission):
         # Get the required parameters
         params = self._extract_params(model, emitter)
 
-        # Unpack the temperature
+        # Unpack the parameters
         temperature = params["temperature"]
+        emissivity = params["emissivity"]
 
         # Define frequencies
         nu = (c / line_lams).to(Hz)
@@ -307,13 +327,13 @@ class Greybody(DustEmission):
         # Account for CMB heating
         cmb_factor, temperature = self.apply_cmb_heating(
             temperature=temperature,
-            emissivity=self.emissivity,
+            emissivity=emissivity,
             redshift=redshift,
         )
 
         # Compute the greybody function
-        lnu = self._lnu(nu, temperature)
-        norm_lnu = self._lnu(sed_nu, temperature)
+        lnu = self._lnu(nu, temperature, emissivity)
+        norm_lnu = self._lnu(sed_nu, temperature, emissivity)
 
         # Create an SED object for convenience
         norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)
@@ -352,8 +372,9 @@ class Greybody(DustEmission):
         """Generate dust emission spectra for given wavelength grid.
 
         This will return the scaling free spectra for a given wavelength grid.
-        It will not consider any emitter or model, so the temperature must
-        have been provided directly to the class.
+        It will not consider any emitter or model, so the temperature and
+        emissivity must have been provided directly to the class (otherwise a
+        MissingAttribute exception is raised).
 
         Args:
             lams (unyt_array):

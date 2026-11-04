@@ -22,6 +22,7 @@ import inspect
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import cumulative_trapezoid as cumtrapz
+from scipy.special import erf, hyp2f1
 from unyt import Gyr, unyt_array, yr
 
 from synthesizer import exceptions
@@ -45,6 +46,13 @@ parametrisations = (
     "CombinedSFH",
     "Stochastic",
 )
+
+
+# The number of log spaced panels the numerical CDF integrates the SFR over
+# (spanning 8 decades below the oldest age needed) and the order of the
+# Gauss-Legendre quadrature within each panel
+NUMERICAL_CDF_PANELS = 1024
+NUMERICAL_CDF_ORDER = 8
 
 
 def _sample_multivariate_normal(cov, rng):
@@ -184,6 +192,98 @@ class Common:
                 return np.array([self._sfr(a) for a in age])
 
         return self._sfr(age)
+
+    def _get_breakpoints(self):
+        """Get the ages where the SFR changes abruptly.
+
+        These are discontinuities (e.g. truncation ages) or sharp features
+        (e.g. a peak). They are used both to resolve the SFR when integrating
+        it numerically and as bin edges when binning the SFH, so a bin never
+        straddles one.
+
+        Returns:
+            np.ndarray of float:
+                The breakpoint ages (in years).
+        """
+        points = [
+            getattr(self, name, None)
+            for name in ("min_age", "max_age", "peak_age")
+        ]
+        return np.array(
+            [p for p in points if p is not None and np.isfinite(p)],
+            dtype=np.float64,
+        )
+
+    def get_cdf(self, ages):
+        """Get the mass formed between an age of zero and each age.
+
+        This is the integral of the SFR from age 0 to each age, so the mass
+        formed between two ages is the difference of their CDFs. Children
+        with a closed form override this, the default integrates the SFR
+        numerically with Gauss-Legendre quadrature over log spaced panels
+        whose edges include every breakpoint (so a discontinuity is never
+        inside a panel) and the requested ages themselves.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The mass formed (in the SFR's units times years) up to each
+                age.
+        """
+        ages = np.asarray(ages, dtype=np.float64)
+        breakpoints = self._get_breakpoints()
+        top = max(
+            np.max(ages, initial=0.0),
+            np.max(breakpoints, initial=0.0),
+        )
+        if top <= 0.0:
+            return np.zeros_like(ages)
+
+        # The log panels start 8 decades below the top, or at the smallest
+        # positive breakpoint if that's younger (e.g. a small min_age, where
+        # a steep SFR would otherwise sit inside a single panel)
+        positive = breakpoints[breakpoints > 0.0]
+        bottom = min(
+            np.log10(top) - 8, np.log10(np.min(positive, initial=top))
+        )
+
+        # Build the panel edges
+        edges = np.concatenate(
+            (
+                [0.0],
+                np.logspace(bottom, np.log10(top), NUMERICAL_CDF_PANELS),
+                breakpoints,
+                ages.ravel(),
+            )
+        )
+        edges = np.unique(edges[(edges >= 0.0) & (edges <= top)])
+
+        # Integrate the SFR over each panel with one vectorised evaluation
+        nodes, weights = np.polynomial.legendre.leggauss(NUMERICAL_CDF_ORDER)
+        half = 0.5 * np.diff(edges)
+        mid = 0.5 * (edges[1:] + edges[:-1])
+        sfrs = np.asarray(
+            self.get_sfr((mid[:, None] + half[:, None] * nodes).ravel()),
+            dtype=np.float64,
+        ).reshape(half.size, NUMERICAL_CDF_ORDER)
+        cdf = np.concatenate(([0.0], np.cumsum(half * (sfrs @ weights))))
+        return np.interp(ages, edges, cdf)
+
+    def get_bin_masses(self, edges):
+        """Get the mass formed in each age bin.
+
+        Args:
+            edges (np.ndarray of float):
+                The bin edges (in years).
+
+        Returns:
+            np.ndarray of float:
+                The mass formed in each bin.
+        """
+        return np.diff(self.get_cdf(edges))
 
     def calculate_sfh(self, t_range=(0, 10**10), dt=10**6):
         """Calculate the star formation history over a specified time range.
@@ -398,6 +498,24 @@ class Constant(Common):
         sfrs[mask] = 1.0
         return sfrs
 
+    def get_cdf(self, ages):
+        """Get the mass formed between an age of zero and each age.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The mass formed up to each age.
+        """
+        ages = np.asarray(ages, dtype=np.float64)
+
+        # Clamp at zero so inverted bounds (min_age > max_age) form no mass
+        return np.maximum(
+            np.clip(ages, self.min_age, self.max_age) - self.min_age, 0.0
+        )
+
 
 class Gaussian(Common):
     """A Gaussian star formation history.
@@ -470,6 +588,32 @@ class Gaussian(Common):
             -np.power((ages[mask] - self.peak_age) / self.sigma, 2.0)
         )
         return sfrs
+
+    def get_cdf(self, ages):
+        """Get the mass formed between an age of zero and each age.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The mass formed up to each age.
+        """
+        ages = np.clip(
+            np.asarray(ages, dtype=np.float64), self.min_age, self.max_age
+        )
+
+        # The integral of exp(-((age - peak) / sigma)^2)
+        def integral(age):
+            return (
+                0.5
+                * np.sqrt(np.pi)
+                * self.sigma
+                * erf((age - self.peak_age) / self.sigma)
+            )
+
+        return integral(ages) - integral(self.min_age)
 
 
 class Exponential(Common):
@@ -552,6 +696,30 @@ class Exponential(Common):
         sfrs[mask] = np.exp(-t[mask] / self.tau)
 
         return sfrs
+
+    def get_cdf(self, ages):
+        """Get the mass formed between an age of zero and each age.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The mass formed up to each age.
+        """
+        ages = np.clip(
+            np.asarray(ages, dtype=np.float64), self.min_age, self.max_age
+        )
+
+        # The integral of exp(-t / tau) with t = max_age - age, from min_age.
+        # This is written with expm1 so the difference of the two (nearly
+        # equal) terms doesn't cancel when tau is much larger than the ages.
+        return (
+            -self.tau
+            * np.exp(-(self.max_age - ages) / self.tau)
+            * np.expm1(-(ages - self.min_age) / self.tau)
+        )
 
 
 class TruncatedExponential(Exponential):
@@ -695,6 +863,34 @@ class DelayedExponential(Common):
 
         return sfrs
 
+    def get_cdf(self, ages):
+        """Get the mass formed between an age of zero and each age.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The mass formed up to each age.
+        """
+        # NOTE: The closed form below subtracts two terms of order tau**2,
+        # which cancel catastrophically when tau is much larger than the
+        # ages. The SFR is smooth so the numerical CDF is accurate there.
+        if abs(self.tau) > self.max_age:
+            return Common.get_cdf(self, ages)
+
+        ages = np.clip(
+            np.asarray(ages, dtype=np.float64), self.min_age, self.max_age
+        )
+
+        # The integral of t exp(-t / tau) with t = max_age - age
+        def integral(age):
+            t = self.max_age - age
+            return self.tau * np.exp(-t / self.tau) * (t + self.tau)
+
+        return integral(ages) - integral(self.min_age)
+
 
 class LogNormal(Common):
     """A log-normal star formation history.
@@ -783,6 +979,34 @@ class LogNormal(Common):
 
         return sfrs
 
+    def get_cdf(self, ages):
+        """Get the mass formed between an age of zero and each age.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The mass formed up to each age.
+        """
+        ages = np.clip(
+            np.asarray(ages, dtype=np.float64), self.min_age, self.max_age
+        )
+
+        # The integral of exp(-(ln t - t_0)^2 / 2 tau^2) / t with
+        # t = max_age - age
+        def integral(age):
+            t = self.max_age - age
+            with np.errstate(divide="ignore"):
+                return (
+                    -self.tau
+                    * np.sqrt(np.pi / 2)
+                    * erf((np.log(t) - self.t_0) / (np.sqrt(2) * self.tau))
+                )
+
+        return integral(ages) - integral(self.min_age)
+
 
 class DoublePowerLaw(Common):
     """A double power law star formation history.
@@ -835,6 +1059,15 @@ class DoublePowerLaw(Common):
         self.max_age = max_age.to("yr").value
         self.min_age = min_age.to("yr").value
 
+        # Below the peak the SFR goes as age^-min(alpha, beta), so the mass
+        # formed diverges at an age of zero unless min(alpha, beta) < 1
+        if min(self.alpha, self.beta) >= 1 and self.min_age <= 0:
+            raise exceptions.InconsistentArguments(
+                "The DoublePowerLaw SFR diverges at an age of zero when "
+                "min(alpha, beta) >= 1, so the mass formed is infinite. "
+                "Either use min(alpha, beta) < 1 or set min_age > 0."
+            )
+
     def _sfr(self, age):
         """Get the amount SFR weight in a single age bin.
 
@@ -864,6 +1097,76 @@ class DoublePowerLaw(Common):
         sfrs[mask] = (term1 + term2) ** -1
 
         return sfrs
+
+    def get_cdf(self, ages):
+        """Get the mass formed between an age of zero and each age.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The mass formed up to each age.
+        """
+        a, b = sorted((self.alpha, self.beta))
+
+        # NOTE: The closed form below needs a < 1, otherwise hyp2f1 can be
+        # undefined (e.g. a = 2, b = 3). The SFR is then only finite with
+        # min_age > 0 (see __init__), which the numerical CDF handles.
+        if a >= 1:
+            return Common.get_cdf(self, ages)
+
+        # NOTE: hyp2f1 loses accuracy as b approaches (but doesn't equal) 1,
+        # so snap b to 1 there. This changes the SFR by at most a fraction
+        # ~|b - 1| ln(u), far below the accuracy lost otherwise.
+        if abs(b - 1) < 1e-8:
+            b = 1.0
+
+        ages = np.clip(
+            np.asarray(ages, dtype=np.float64), self.min_age, self.max_age
+        )
+
+        # The integral of 1 / (u^a + u^b) from 0 with u = age / peak_age
+        def below_peak(u):
+            if a == b:
+                return self.peak_age * u ** (1 - a) / (2 * (1 - a))
+            c = (1 - a) / (b - a)
+            return (
+                self.peak_age
+                * u ** (1 - a)
+                / (1 - a)
+                * hyp2f1(1, c, 1 + c, -(u ** (b - a)))
+            )
+
+        # The integral of w^(b - 2) / (1 + w^(b - a)) from 0 with w = 1 / u,
+        # i.e. the same integrand above the peak written in terms of 1 / u
+        def above_peak(w):
+            c = (b - 1) / (b - a)
+            return (
+                self.peak_age
+                * w ** (b - 1)
+                / (b - 1)
+                * hyp2f1(1, c, 1 + c, -(w ** (b - a)))
+            )
+
+        def integral(age):
+            u = np.asarray(age, dtype=np.float64) / self.peak_age
+
+            # Above the peak u^(b - a) overflows for large b - a (making
+            # hyp2f1 return 0), so integrate in 1 / u there instead. This is
+            # only possible for b > 1, but b <= 1 can't overflow anyway.
+            if b <= 1 or a == b:
+                return below_peak(u)
+            return np.where(
+                u <= 1,
+                below_peak(np.minimum(u, 1)),
+                below_peak(1.0)
+                + above_peak(1.0)
+                - above_peak(1 / np.maximum(u, 1)),
+            )
+
+        return integral(ages) - integral(self.min_age)
 
 
 class DenseBasis(Common):
@@ -1041,8 +1344,62 @@ class DenseBasis(Common):
     def _sfrs(self, ages):
         return self._sfr(ages)
 
+    def _get_breakpoints(self):
+        """Get the ages where the SFR changes, i.e. the fine grid points.
 
-class Continuity(Common):
+        The SFR is linearly interpolated between the fine grid points, so
+        integrating with these as breakpoints is exact.
+
+        Returns:
+            np.ndarray of float:
+                The breakpoint ages (in years).
+        """
+        return np.asarray(self.finegrid, dtype=np.float64)
+
+
+class PiecewiseConstantSFH:
+    """A mixin for SFHs with a constant SFR within each of a set of age bins.
+
+    Children must define bin_edges (in years), sfrs (one per bin), min_age
+    and max_age (both in years).
+    """
+
+    def _get_breakpoints(self):
+        """Get the ages where the SFR changes, i.e. the bin edges.
+
+        Returns:
+            np.ndarray of float:
+                The breakpoint ages (in years).
+        """
+        return np.concatenate(
+            (np.asarray(self.bin_edges, dtype=np.float64), [self.min_age])
+        )
+
+    def get_cdf(self, ages):
+        """Get the mass formed between an age of zero and each age.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The mass formed up to each age.
+        """
+        ages = np.asarray(ages, dtype=np.float64)
+        lo = np.maximum(self.bin_edges[:-1], self.min_age)
+        hi = np.minimum(self.bin_edges[1:], self.max_age)
+
+        # The part of each bin formed by each age, times that bin's SFR
+        formed = np.clip(
+            np.minimum(ages[..., None], hi) - lo,
+            0.0,
+            None,
+        )
+        return np.sum(formed * self.sfrs, axis=-1)
+
+
+class Continuity(PiecewiseConstantSFH, Common):
     """Non-parametric SFH model of mass in fixed bins with a smoothness prior.
 
     See Leja et al. 2019 for details on the model.
@@ -1117,6 +1474,11 @@ class Continuity(Common):
                 f"logsfr_ratios must have {nbins - 1} elements"
                 f" for {nbins} age bins"
             )
+        if np.any(np.abs(logsfr_ratios) > 10):
+            raise exceptions.InconsistentArguments(
+                "logsfr_ratios must be within [-10, 10] "
+                f"(got {logsfr_ratios})."
+            )
 
         # Initialize parent
 
@@ -1143,13 +1505,39 @@ class Continuity(Common):
 
     @classmethod
     def init_from_prior(
-        cls, agebins, df=2, scale=0.3, limits=(-10, 10), **kwargs
+        cls,
+        agebins,
+        df=2,
+        scale=0.3,
+        limits=(-10, 10),
+        random_seed=None,
+        **kwargs,
     ):
-        """Initialize Continuity SFH from a student t prior distribution."""
+        """Initialize Continuity SFH from a student t prior distribution.
+
+        Args:
+            agebins (unyt_array):
+                Array of shape (N, 2) with age bin edges in time units.
+            df (int):
+                Degrees of freedom for the student t prior.
+            scale (float):
+                Scale parameter for the student t prior.
+            limits (tuple):
+                Limits for the student t prior (log SFR ratio).
+            random_seed (int, optional):
+                Seed for the random number generator. If None, the draw is
+                not reproducible.
+            **kwargs:
+                Additional keyword arguments for the class constructor.
+
+        Returns:
+            Continuity: An instance of the Continuity class.
+        """
         from scipy.stats import t
 
         # generate uniform random variables between 0 and 1 of len(agebins)- 1
-        value = np.random.uniform(size=agebins.shape[0] - 1)
+        rng = np.random.default_rng(random_seed)
+        value = rng.uniform(size=agebins.shape[0] - 1)
 
         uniform_min = t.cdf(limits[0], df=df, scale=scale)
         uniform_max = t.cdf(limits[1], df=df, scale=scale)
@@ -1161,18 +1549,13 @@ class Continuity(Common):
 
     def _logsfr_ratios_to_masses(self):
         """Convert log SFR ratios to masses in each bin."""
-        nbins = self.agebins.shape[0]
-        sratios = np.float_power(10, np.clip(self.logsfr_ratios, -10, 10))
+        # SFR_{j+1} = SFR_j / 10**ratio_j, so the mass in each bin is
+        # proportional to dt_j * 10**(-sum of the preceding ratios)
         dt = 10 ** self.agebins[:, 1] - 10 ** self.agebins[:, 0]
-        coeffs = np.array(
-            [
-                (1.0 / np.prod(sratios[:i]))
-                * (np.prod(dt[1 : i + 1]) / np.prod(dt[:i]))
-                for i in range(nbins)
-            ]
+        coeffs = dt * np.float_power(
+            10, -np.concatenate(([0.0], np.cumsum(self.logsfr_ratios)))
         )
-        m1 = 1 / coeffs.sum()
-        return m1 * coeffs
+        return coeffs / coeffs.sum()
 
     def _setup_sfr_interpolation(self):
         """Setup arrays for SFR interpolation."""
@@ -1208,7 +1591,7 @@ class Continuity(Common):
         return self.sfrs[bin_idx]
 
 
-class ContinuityFlex(Common):
+class ContinuityFlex(PiecewiseConstantSFH, Common):
     """Continuity Flex SFH model.
 
     A non-parametric SFH model with fixed young and old bins, and flexible
@@ -1321,6 +1704,19 @@ class ContinuityFlex(Common):
                 fixed_old_bin = fixed_old_bin.to("yr").value
                 fixed_old_bin = np.log10(fixed_old_bin)
 
+        if np.any(
+            np.abs(
+                np.concatenate(
+                    ([logsfr_ratio_young, logsfr_ratio_old], logsfr_ratios)
+                )
+            )
+            > 10
+        ):
+            raise exceptions.InconsistentArguments(
+                "logsfr_ratio_young, logsfr_ratio_old and logsfr_ratios must "
+                "be within [-10, 10]."
+            )
+
         # Initialize parent
 
         Common.__init__(
@@ -1361,6 +1757,7 @@ class ContinuityFlex(Common):
         min_age=0 * yr,
         max_age=1e11 * yr,
         limits=(-10, 10),
+        random_seed=None,
     ):
         """Initialize Continuity Flex SFH from a student t prior distribution.
 
@@ -1383,6 +1780,9 @@ class ContinuityFlex(Common):
                 Maximum age for the SFH in years.
             limits (tuple):
                 Limits for the student t prior (SFR ratio).
+            random_seed (int, optional):
+                Seed for the random number generator. If None, the draw is
+                not reproducible.
 
         Returns:
             ContinuityFlex: An instance of the ContinuityFlex class.
@@ -1391,7 +1791,8 @@ class ContinuityFlex(Common):
 
         # generate uniform random variables between 0 and 1 of
         # length N_flex_bins
-        value = np.random.uniform(size=N_flex_bins + 2)
+        rng = np.random.default_rng(random_seed)
+        value = rng.uniform(size=N_flex_bins + 2)
         uniform_min = t.cdf(limits[0], df=df, scale=scale)
         uniform_max = t.cdf(limits[1], df=df, scale=scale)
         value = (uniform_max - uniform_min) * value + uniform_min
@@ -1410,7 +1811,7 @@ class ContinuityFlex(Common):
 
     def _logsfr_ratios_to_agebins(self):
         """Transform SFR ratios to age bins assuming constant mass per bin."""
-        logsfr_ratios = np.clip(self.logsfr_ratios, -10, 10)
+        logsfr_ratios = self.logsfr_ratios
         y0, y1 = 10 ** self.fixed_young_bin[0], 10 ** self.fixed_young_bin[1]
         o0, o1 = 10 ** self.fixed_old_bin[0], 10 ** self.fixed_old_bin[1]
         if y1 >= o0:
@@ -1444,8 +1845,8 @@ class ContinuityFlex(Common):
 
     def _logsfr_ratios_to_masses_flex(self):
         """Convert SFR ratios to masses for flexible bin model."""
-        logsfr_ratio_young = np.clip(self.logsfr_ratio_young, -10, 10)
-        logsfr_ratio_old = np.clip(self.logsfr_ratio_old, -10, 10)
+        logsfr_ratio_young = self.logsfr_ratio_young
+        logsfr_ratio_old = self.logsfr_ratio_old
 
         abins = self.agebins
         nbins = abins.shape[0] - 2  # Number of flexible bins
@@ -1484,7 +1885,7 @@ class ContinuityFlex(Common):
         return self.sfrs[bin_idx]
 
 
-class Dirichlet(Common):
+class Dirichlet(PiecewiseConstantSFH, Common):
     """A non-parametric SFH with Dirichlet prior on SFR fractions.
 
     See Leja et al. 2017, 2019 for details on the model.
@@ -1680,7 +2081,7 @@ class Dirichlet(Common):
         return self.masses / self.masses.sum()
 
 
-class ContinuityPSB(Common):
+class ContinuityPSB(PiecewiseConstantSFH, Common):
     """A non-parametric SFH model for post-starburst galaxies.
 
     This model, based on Suess et al. (2021), uses a combination of fixed-width
@@ -1815,6 +2216,7 @@ class ContinuityPSB(Common):
         student_t_df: float = 2.0,
         student_t_scale: float = 1.0,
         tlast_limits_gyr: tuple = (0.01, 1.5),
+        random_seed: int = None,
         **kwargs,
     ):
         """Initialize ContinuityPSB SFH by drawing parameters from priors.
@@ -1842,6 +2244,9 @@ class ContinuityPSB(Common):
             tlast_limits_gyr (tuple):
                 The (min, max) limits for the uniform prior on `tlast`, in Gyr.
                 Defaults to (0.01, 1.5).
+            random_seed (int, optional):
+                Seed for the random number generator. If None, the draw is
+                not reproducible.
             **kwargs:
                 Additional keyword arguments to pass to the constructor
                 (e.g., `min_age`).
@@ -1852,23 +2257,37 @@ class ContinuityPSB(Common):
         """
         from scipy.stats import t, uniform
 
+        rng = np.random.default_rng(random_seed)
+
         # Draw SFR ratios from a Student's t-distribution
-        logsfr_ratio_young = t.rvs(df=student_t_df, scale=student_t_scale)
+        logsfr_ratio_young = t.rvs(
+            df=student_t_df, scale=student_t_scale, random_state=rng
+        )
 
         n_flex_ratios = nflex - 1
         logsfr_ratios = (
-            t.rvs(df=student_t_df, scale=student_t_scale, size=n_flex_ratios)
+            t.rvs(
+                df=student_t_df,
+                scale=student_t_scale,
+                size=n_flex_ratios,
+                random_state=rng,
+            )
             if n_flex_ratios > 0
             else np.array([])
         )
 
         logsfr_ratio_old = t.rvs(
-            df=student_t_df, scale=student_t_scale, size=nfixed
+            df=student_t_df,
+            scale=student_t_scale,
+            size=nfixed,
+            random_state=rng,
         )
 
         # Draw tlast from a uniform (top-hat) distribution in Gyr
         tlast_min, tlast_max = tlast_limits_gyr
-        tlast_gyr = uniform.rvs(loc=tlast_min, scale=tlast_max - tlast_min)
+        tlast_gyr = uniform.rvs(
+            loc=tlast_min, scale=tlast_max - tlast_min, random_state=rng
+        )
         tlast = tlast_gyr * 1e9 * yr  # Convert to unyt_array in years
 
         # Instantiate the class with the drawn parameters
@@ -2036,6 +2455,40 @@ class CombinedSFH(Common):
         return np.sum(
             [
                 model.get_sfr(age) * weight
+                for model, weight in zip(self.sfhs, self.weights)
+            ],
+            axis=0,
+        )
+
+    def _get_breakpoints(self):
+        """Get the breakpoints of every combined model.
+
+        Returns:
+            np.ndarray of float:
+                The breakpoint ages (in years).
+        """
+        return np.concatenate(
+            [model._get_breakpoints() for model in self.sfhs]
+        )
+
+    def get_cdf(self, ages):
+        """Get the mass formed between an age of zero and each age.
+
+        Args:
+            ages (np.ndarray of float):
+                The ages (in years) at which to evaluate the CDF.
+
+        Returns:
+            np.ndarray of float:
+                The mass formed up to each age.
+        """
+        # Without any components no mass is formed
+        if len(self.sfhs) == 0:
+            return np.zeros_like(np.asarray(ages, dtype=np.float64))
+
+        return np.sum(
+            [
+                model.get_cdf(ages) * weight
                 for model, weight in zip(self.sfhs, self.weights)
             ],
             axis=0,
@@ -2278,3 +2731,15 @@ class Stochastic(Common):
                 The SFR at each age.
         """
         return self._sfr(ages)
+
+    def _get_breakpoints(self):
+        """Get the ages where the SFR changes, i.e. the fine grid points.
+
+        The SFR is linearly interpolated between the fine grid points, so
+        integrating with these as breakpoints is exact.
+
+        Returns:
+            np.ndarray of float:
+                The breakpoint ages (in years).
+        """
+        return np.asarray(self.finegrid, dtype=np.float64)

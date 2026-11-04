@@ -119,7 +119,7 @@ class TestTemplateGeneration:
         # Check that scaling was applied correctly
         assert np.isclose(
             scaled_sed.bolometric_luminosity.to_value("erg/s"),
-            bol_lum.value,
+            bol_lum.to_value("erg/s"),
         )
 
     def test_bh_template_model(
