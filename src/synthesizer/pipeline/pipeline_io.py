@@ -369,31 +369,10 @@ class PipelineIO:
 
         # Write the dataset with the appropriate units
         with h5py.File(self.filepath, "a") as hdf:
-            # A previous flush may already have created this dataset. Empty
-            # batches have nothing to add; otherwise make sure their shape,
-            # dtype and units agree before extending the first axis.
-            if key in hdf:
-                if data.ndim > 0 and data.shape[0] == 0:
-                    return
-                dset = hdf[key]
-                if dset.shape[0] == 0:
-                    del hdf[key]
-                else:
-                    if (
-                        dset.shape[1:] != data.shape[1:]
-                        or dset.dtype != data.dtype
-                        or dset.attrs["Units"] != units
-                    ):
-                        raise ValueError(
-                            f"Cannot append to {key}: existing dataset has "
-                            f"shape {dset.shape}, dtype {dset.dtype}, units "
-                            f"{dset.attrs['Units']}; new data has shape "
-                            f"{data.shape}, dtype {data.dtype}, units {units}."
-                        )
-                    nexisting = dset.shape[0]
-                    dset.resize(nexisting + data.shape[0], axis=0)
-                    dset[nexisting:, ...] = data
-                    return
+            # A previous flush may already have created this dataset, in
+            # which case we just add to it
+            if self._append_to_dataset(hdf, data, key, units):
+                return
 
             # The first batch creates the dataset. Leave its galaxy axis
             # unlimited so future flushes can append without replacing it.
@@ -415,6 +394,54 @@ class PipelineIO:
                 compression="gzip",
             )
             dset.attrs["Units"] = units
+
+    def _append_to_dataset(self, hdf, data, key, units):
+        """Append data to a dataset created by an earlier flush.
+
+        Args:
+            hdf (h5py.File): The open file to write to.
+            data (np.ndarray): The data to append (without units).
+            key (str): The key of the dataset.
+            units (str): The units of the data.
+
+        Returns:
+            bool:
+                True if we've handled the data, False if the dataset still
+                needs creating.
+        """
+        # Nothing to append to
+        if key not in hdf:
+            return False
+
+        # An empty batch has nothing to add
+        if data.ndim > 0 and data.shape[0] == 0:
+            return True
+
+        # An empty placeholder (written by a rank or batch without any
+        # galaxies) may not have the right trailing shape, so replace it
+        dset = hdf[key]
+        if dset.shape[0] == 0:
+            del hdf[key]
+            return False
+
+        # Every batch must agree on what a row looks like
+        if (
+            dset.shape[1:] != data.shape[1:]
+            or dset.dtype != data.dtype
+            or dset.attrs["Units"] != units
+        ):
+            raise ValueError(
+                f"Cannot append to {key}: existing dataset has "
+                f"shape {dset.shape}, dtype {dset.dtype}, units "
+                f"{dset.attrs['Units']}; new data has shape "
+                f"{data.shape}, dtype {data.dtype}, units {units}."
+            )
+
+        # Extend the galaxy axis and fill it
+        nexisting = dset.shape[0]
+        dset.resize(nexisting + data.shape[0], axis=0)
+        dset[nexisting:, ...] = data
+        return True
 
     def write_dataset_parallel(self, data, key):
         """Write a dataset to an HDF5 file in parallel.

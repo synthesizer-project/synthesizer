@@ -5780,19 +5780,10 @@ class Pipeline:
                 If set, override the Pipeline verbose setting.
         """
         # Resolve where we are writing
-        if outpath is None:
-            outpath = self._outpath
-        elif self._outpath is not None and str(outpath) != str(self._outpath):
-            raise exceptions.InconsistentArguments(
-                f"Cannot write to {outpath}, the Pipeline was set up to write "
-                f"to {self._outpath}."
-            )
-        if outpath is None:
-            raise exceptions.InconsistentArguments(
-                "No outpath given to write to. Pass one to write or the "
-                "Pipeline."
-            )
+        outpath = self._resolve_outpath(outpath)
 
+        # Ensure we have run the pipeline (this is mostly useful to help with
+        # running old pipelines that don't call run before write)
         if not self._analysis_complete:
             self._print(
                 "Pipeline has not been run. Running pipeline before writing."
@@ -5821,6 +5812,58 @@ class Pipeline:
         # Write the per-galaxy data
         self._write_galaxy_outputs()
 
+        # Write the data that isn't per galaxy
+        self._write_global_outputs()
+
+        # We have now written both the galaxy outputs and the global data.
+        # A flushed file cannot be written again: its earlier galaxies no
+        # longer live on the Pipeline for a second pass.
+        self.io_helper.finalised = True
+        self._took(write_start, "Writing data")
+
+        # Totally done!
+        self._say_goodbye()
+
+    def _resolve_outpath(self, outpath):
+        """Return the path to write to.
+
+        The path can be given to the Pipeline (required when flushing) or to
+        write, but if both are given they must agree.
+
+        Args:
+            outpath (str):
+                The path passed to write (or None).
+
+        Returns:
+            str:
+                The path to write to.
+        """
+        # Fall back on the Pipeline's path, but don't allow a different one
+        # since flushing may already have written to the Pipeline's path
+        if outpath is None:
+            outpath = self._outpath
+        elif self._outpath is not None and str(outpath) != str(self._outpath):
+            raise exceptions.InconsistentArguments(
+                f"Cannot write to {outpath}, the Pipeline was set up to write "
+                f"to {self._outpath}."
+            )
+
+        # We have to have a path from somewhere
+        if outpath is None:
+            raise exceptions.InconsistentArguments(
+                "No outpath given to write to. Pass one to write or the "
+                "Pipeline."
+            )
+
+        return outpath
+
+    def _write_global_outputs(self):
+        """Write the data that isn't per galaxy to file.
+
+        This is only written once, at the end of the run, since (unlike the
+        per-galaxy data) it isn't split into rows we can flush. These writes
+        are collective when using MPI.
+        """
         # Write cosmic spectral luminosity densities
         if self._write_cosmic_lnu:
             self.io_helper.write_data(
@@ -5896,15 +5939,6 @@ class Pipeline:
                 "Galaxies/Stars/SFHAxes/Log10Ages",
                 root=0,
             )
-
-        # We have now written both the galaxy outputs and the global data.
-        # A flushed file cannot be written again: its earlier galaxies no
-        # longer live on the Pipeline for a second pass.
-        self.io_helper.finalised = True
-        self._took(write_start, "Writing data")
-
-        # Totally done!
-        self._say_goodbye()
 
     def _create_output_file(self, outpath, verbose):
         """Create the output file (one per rank when using MPI).
