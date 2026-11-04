@@ -454,6 +454,14 @@ class TestPipelineInit:
         with pytest.raises(ValueError, match="max_npart must be an int >= 1"):
             Pipeline(emission_model=nebular_emission_model, max_npart=0)
 
+    def test_analysis_func_timing_registered(self, nebular_emission_model):
+        """Analysis timings exist before any galaxy is processed."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_analysis_func(lambda gal: 1.0, "Extra")
+
+        # A rank without galaxies must still reduce this timing
+        assert pipeline._op_timing["Extra"] == 0.0
+
 
 class TestPipelineTimingAnalysis:
     """Tests for Pipeline atomic timing analysis."""

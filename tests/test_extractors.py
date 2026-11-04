@@ -290,7 +290,7 @@ def test_doppler_shifted_generate_lnu(
     assert args[2] is extractor._grid_axes  # grid_axes
     assert args[3] == ("mock_extracted",)  # extracted
     assert args[4] == "mock_weight"  # weight
-    assert args[5] is random_part_stars._velocities  # velocities
+    assert np.shares_memory(args[5], random_part_stars._velocities)
 
     # Ensure the output sed is "per-particle" (has ndim == 2)
     assert result.lnu.ndim == 2, f"Expected 2D lnu, got {result.lnu.ndim}"
@@ -437,7 +437,7 @@ def test_integrated_doppler_shifted_generate_lnu(
     assert args[2] is extractor._grid_axes  # grid_axes
     assert args[3] == ("mock_extracted",)  # extracted
     assert args[4] == "mock_weight"  # weight
-    assert args[5] is random_part_stars._velocities  # velocities
+    assert np.shares_memory(args[5], random_part_stars._velocities)
 
     # Ensure the output sed is "integrated" (has ndim == 1)
     assert result.lnu.ndim == 1, f"Expected 1D lnu, got {result.lnu.ndim}"
