@@ -1577,6 +1577,16 @@ class Pipeline:
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfzh", None) is not None:
             return galaxy.sfzh
+        elif (
+            not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None
+        ):
+            # Parametric stars hold their own SFZH, rebin it onto the
+            # requested axes
+            galaxy.sfzh = galaxy.stars.get_sfzh(
+                op_kwargs["log10ages"],
+                op_kwargs["metallicities"],
+                nthreads=self.nthreads,
+            ).sfzh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfzh(
                 log10ages=op_kwargs["log10ages"],
@@ -1657,6 +1667,19 @@ class Pipeline:
         # Get the SFH, skip any without stars.
         # Parametric galaxies have this ready to go so we can skip them
         if getattr(galaxy, "sfh", None) is not None:
+            return galaxy.sfh
+        elif (
+            not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None
+        ):
+            # Parametric stars hold their own SFH, which must already be on
+            # the requested ages
+            ages = galaxy.stars.log10ages
+            requested = op_kwargs["log10ages"]
+            if len(ages) != len(requested) or not np.allclose(ages, requested):
+                raise ValueError(
+                    "Parametric SFH ages differ from requested ages"
+                )
+            galaxy.sfh = galaxy.stars.sfh
             return galaxy.sfh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfh(
@@ -4353,19 +4376,25 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Do we need to unpack the SFZH?
+        # Do we need to unpack the SFZH? We take it from the stars where
+        # possible since that's where split galaxies accumulate it. Particle
+        # stars hold it as a parametric Stars object so we extract the grid.
         if self._write_sfzh:
-            if galaxy.stars is not None:
-                self.sfzhs.append(galaxy.stars.sfzh)
-            else:
-                self.sfzhs.append(galaxy.sfzh)
+            sfzh = getattr(galaxy, "sfzh", None)
+            if (
+                isinstance(galaxy, ParticleGalaxy)
+                and galaxy.stars is not None
+                and galaxy.stars.sfzh is not None
+            ):
+                sfzh = galaxy.stars.sfzh
+            self.sfzhs.append(unyt_array(getattr(sfzh, "sfzh", sfzh), "Msun"))
 
         # Do we need to unpack the SFH?
         if self._write_sfh:
-            if galaxy.stars is not None:
-                self.sfhs.append(galaxy.stars.sfh)
-            else:
-                self.sfhs.append(galaxy.sfh)
+            sfh = getattr(galaxy, "sfh", None)
+            if galaxy.stars is not None and galaxy.stars.sfh is not None:
+                sfh = galaxy.stars.sfh
+            self.sfhs.append(unyt_array(sfh, "Msun"))
 
         # Do we need to unpack the lnu spectra?
         if self._write_lnu_spectra:
@@ -5505,6 +5534,20 @@ class Pipeline:
         else:
             galaxy_indices = None
 
+        # Write the SFZHs and SFHs
+        if self._write_sfzh:
+            self.io_helper.write_data(
+                self.sfzhs,
+                "Galaxies/Stars/SFZH",
+                galaxy_indices,
+            )
+        if self._write_sfh:
+            self.io_helper.write_data(
+                self.sfhs,
+                "Galaxies/Stars/SFH",
+                galaxy_indices,
+            )
+
         # Write spectral luminosity densities
         if self._write_lnu_spectra:
             self.io_helper.write_data(
@@ -5938,6 +5981,29 @@ class Pipeline:
                 res,
                 f"Galaxies/{key}",
                 galaxy_indices,
+            )
+
+        # Write the axes the SFZHs and SFHs are binned on
+        if self._write_sfzh:
+            op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfzh")
+            self.io_helper.write_data(
+                np.asarray(op_kwargs["log10ages"]) if self.rank == 0 else None,
+                "Galaxies/Stars/SFZHAxes/Log10Ages",
+                root=0,
+            )
+            self.io_helper.write_data(
+                np.asarray(op_kwargs["metallicities"])
+                if self.rank == 0
+                else None,
+                "Galaxies/Stars/SFZHAxes/Metallicities",
+                root=0,
+            )
+        if self._write_sfh:
+            op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfh")
+            self.io_helper.write_data(
+                np.asarray(op_kwargs["log10ages"]) if self.rank == 0 else None,
+                "Galaxies/Stars/SFHAxes/Log10Ages",
+                root=0,
             )
 
         self._took(write_start, "Writing data")
