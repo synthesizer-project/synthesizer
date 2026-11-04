@@ -226,10 +226,8 @@ class SpectralCube(ImagingBase):
             factor (float):
                 The factor by which to resample the cube, >1 increases
                 resolution, <1 decreases resolution.
-
         """
         # Spatially resample the cube.
-
         if self.arr is None:
             raise exceptions.MissingIFU(
                 "The cube array hasn't been generated yet. Please run "
@@ -245,7 +243,6 @@ class SpectralCube(ImagingBase):
         elif factor > 0 and np.isfinite(factor):
             # Resample the resolution, this will also update the npix and fov
             # (if necessary)
-
             int_factor = int(round(factor))
             inv_factor = int(round(1.0 / factor))
 
@@ -253,7 +250,6 @@ class SpectralCube(ImagingBase):
                 # Replace each pixel with an int_factor x int_factor
                 # block whose subpixels each contain 1 / int_factor**2
                 # of the original pixel value, preserving total flux.
-
                 self.arr = (
                     np.repeat(
                         np.repeat(self.arr, int_factor, axis=0),

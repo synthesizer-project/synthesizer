@@ -21,7 +21,7 @@ from synthesizer.instruments.utils import (
     read_instrument_attribute,
     write_instrument_attribute,
 )
-from synthesizer.units import accepts
+from synthesizer.units import accepts, unyt_to_ndview
 from synthesizer.utils.operation_timers import timed
 
 
@@ -443,12 +443,12 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             )
 
         if psf_type == "3D":
-            cube_lam = cube.lam.value
+            cube_lam = cube.lam.ndview
             min_channel_spacing = (
                 np.min(np.abs(np.diff(cube_lam))) if len(cube_lam) > 1 else 0.0
             )
             if len(self.lam) != len(cube.lam) or not np.allclose(
-                self.lam.to(cube.lam.units).value,
+                unyt_to_ndview(self.lam, cube.lam.units),
                 cube_lam,
                 rtol=0.0,
                 atol=min_channel_spacing * 1e-6,
@@ -463,9 +463,10 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                     "wavelength."
                 )
 
-        psf_resample_factor = (
-            cube.resolution / self.psf_pixel_scale
-        ).to_value("dimensionless")
+        psf_resample_factor = unyt_to_ndview(
+            cube.resolution / self.psf_pixel_scale,
+            "dimensionless",
+        )
 
         # Round to an integer if within 0.1%.
         nearest_int = round(psf_resample_factor)
@@ -506,7 +507,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
 
         # Perform the PSF convolution on the instrument side rather than on the
         # image container so the observation machinery stays instrument-owned
-        convolved_cube = np.empty_like(working_cube.arr, dtype=float)
+        convolved_cube = np.empty_like(working_cube.arr)
 
         if psf_type == "3D":
             for ii in np.arange(0, np.shape(working_cube.arr)[2]):
