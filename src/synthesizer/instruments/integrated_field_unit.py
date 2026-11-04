@@ -451,9 +451,15 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             cube.resolution / self.psf_pixel_scale
         ).to_value("dimensionless")
 
-        # Convert to integer if sufficiently close.
+        # Round to an integer if within 0.1%.
         nearest_int = round(psf_resample_factor)
-        if np.isclose(psf_resample_factor, nearest_int):
+
+        if np.isclose(
+            psf_resample_factor,
+            nearest_int,
+            rtol=1e-3,
+            atol=0,
+        ):
             psf_resample_factor = int(nearest_int)
 
         # Resampling factors smaller than one do not make sense for this PSF
