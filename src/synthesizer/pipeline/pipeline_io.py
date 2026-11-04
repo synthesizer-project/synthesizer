@@ -288,6 +288,13 @@ class PipelineIO:
 
                 self._took(start, "Writing metadata")
 
+        # The other ranks only hold galaxy outputs. Start each file afresh
+        # here too, including the Galaxies group: a rank with no galaxies
+        # will never create it through write_data, but combine_files needs it.
+        elif self.is_parallel and not self.is_collective:
+            with h5py.File(self.filepath, "w") as hdf:
+                hdf.create_group("Galaxies")
+
         if self.is_parallel:
             self.comm.Barrier()
 
@@ -474,7 +481,7 @@ class PipelineIO:
             self._took(start, f"Writing {key} (and subgroups)")
 
         except Exception as e:
-            self._print(f"Failed to write {key} - {e}")
+            raise OSError(f"Failed to write {key} - {e}") from e
 
     @timed("PipelineIO.combine_rank_files")
     def combine_rank_files(self):
