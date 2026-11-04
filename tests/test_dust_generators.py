@@ -11,6 +11,7 @@ This module contains tests for all dust generator functionality including:
 
 import warnings
 
+import h5py
 import numpy as np
 import pytest
 from unyt import Hz, K, Lsun, Msun, angstrom, erg, s, um
@@ -29,6 +30,7 @@ from synthesizer.emission_models.generators.dust.draineli07 import (
 )
 from synthesizer.emission_models.generators.dust.greybody import Greybody
 from synthesizer.emissions import Sed
+from synthesizer.grid import Grid
 
 
 # Test fixtures
@@ -45,25 +47,26 @@ def dust_temperatures():
 
 
 @pytest.fixture
-def mock_dust_grid():
-    """Mock dust grid for DraineLi07 testing."""
+def mock_dust_grid(tmp_path):
+    """A small DraineLi07 grid with random templates."""
+    rng = np.random.default_rng(1)
+    with h5py.File(tmp_path / "mock_dl07.hdf5", "w") as hdf:
+        hdf.attrs["axes"] = ["qpah", "umin", "alpha"]
+        for name, values in (
+            ("qpah", [0.01, 0.025, 0.05]),
+            ("umin", [0.1, 1.0, 10.0, 100.0]),
+            ("alpha", [1.5, 2.0, 2.5]),
+        ):
+            axis = hdf.create_dataset(f"axes/{name}", data=np.array(values))
+            axis.attrs["Units"] = "dimensionless"
+        lam = hdf.create_dataset(
+            "spectra/wavelength", data=np.logspace(3, 7, 100)
+        )
+        lam.attrs["Units"] = "Angstrom"
+        hdf.create_dataset("spectra/diffuse", data=rng.random((3, 4, 100)))
+        hdf.create_dataset("spectra/pdr", data=rng.random((3, 4, 3, 100)))
 
-    class MockGrid:
-        def __init__(self):
-            # Mock DL07 grid attributes
-            self._dtype = np.dtype(np.float32)
-            self.qpah = np.array([0.01, 0.025, 0.05])
-            self.umin = np.array([0.1, 1.0, 10.0, 100.0])
-            self.alpha = np.array([1.5, 2.0, 2.5])
-
-            # Mock spectral data on a native wavelength grid (in Angstrom)
-            self._lam = np.logspace(3, 7, 100)
-            self.spectra = {
-                "diffuse": np.random.random((3, 4, 100)).astype(self._dtype),
-                "pdr": np.random.random((3, 4, 3, 100)).astype(self._dtype),
-            }
-
-    return MockGrid()
+    return Grid("mock_dl07.hdf5", grid_dir=str(tmp_path))
 
 
 @pytest.fixture
@@ -1719,37 +1722,94 @@ class TestDraineLi07Interpolation:
         return dl07._setup_dl07_parameters(1e6 * Msun, 1e10 * Lsun, **values)
 
     def test_grid_points_and_midpoints(self, mock_dust_grid):
-        """Grid points give the template; midpoints are linear in log10 U."""
+        """Grid points give the template; midpoints are the linear mean."""
         dl07 = DraineLi07(grid=mock_dust_grid, dust_mass=1e6 * Msun)
         diffuse = mock_dust_grid.spectra["diffuse"]
         pdr = mock_dust_grid.spectra["pdr"]
 
-        got = dl07._interpolate_templates(self._setup(dl07))
-        np.testing.assert_allclose(got[0], diffuse[1, 1], rtol=1e-6)
-        np.testing.assert_allclose(got[1], pdr[1, 1, 1], rtol=1e-6)
+        got = dl07._interpolate_templates(mock_dust_grid, self._setup(dl07))
+        np.testing.assert_allclose(got[0][0], diffuse[1, 1], rtol=1e-6)
+        np.testing.assert_allclose(got[1][0], pdr[1, 1, 1], rtol=1e-6)
 
-        # umin = sqrt(1 * 10) is half way between grid points in log10 U,
-        # and qpah and alpha are half way between grid points too
+        # Half way between grid points on every (linear) axis
         got = dl07._interpolate_templates(
-            self._setup(dl07, qpah=0.0375, umin=10**0.5, alpha=2.25)
+            mock_dust_grid,
+            self._setup(dl07, qpah=0.0375, umin=5.5, alpha=2.25),
         )
         np.testing.assert_allclose(
-            got[0], diffuse[1:3, 1:3].mean(axis=(0, 1)), rtol=1e-5
+            got[0][0], diffuse[1:3, 1:3].mean(axis=(0, 1)), rtol=1e-5
         )
         np.testing.assert_allclose(
-            got[1], pdr[1:3, 1:3, 1:3].mean(axis=(0, 1, 2)), rtol=1e-5
+            got[1][0], pdr[1:3, 1:3, 1:3].mean(axis=(0, 1, 2)), rtol=1e-5
         )
 
-    def test_out_of_range_clipped_with_warning(self, mock_dust_grid):
-        """Values outside the grid use its edge and warn."""
+    def test_out_of_range_clamped(self, mock_dust_grid):
+        """Values outside the grid use its edge."""
         dl07 = DraineLi07(grid=mock_dust_grid, dust_mass=1e6 * Msun)
-        with pytest.warns(RuntimeWarning, match="umin=1000.0 is outside"):
-            setup = self._setup(dl07, umin=1e3)
-        np.testing.assert_allclose(
-            dl07._interpolate_templates(setup)[0],
-            mock_dust_grid.spectra["diffuse"][1, -1],
-            rtol=1e-6,
+        got = dl07._interpolate_templates(
+            mock_dust_grid, self._setup(dl07, umin=1e3)
         )
+        np.testing.assert_allclose(
+            got[0][0], mock_dust_grid.spectra["diffuse"][1, -1], rtol=1e-6
+        )
+
+    def test_per_particle_parameters(self, mock_dust_grid):
+        """Each particle gets its own template; invalid ones are masked."""
+        dl07 = DraineLi07(grid=mock_dust_grid, dust_mass=1e6 * Msun)
+        setup = self._setup(
+            dl07,
+            qpah=np.array([0.01, 0.05, 0.025]),
+            umin=np.array([1.0, 10.0, np.nan]),
+        )
+        np.testing.assert_array_equal(setup["valid"], [True, True, False])
+
+        diffuse, pdr = dl07._interpolate_templates(mock_dust_grid, setup)
+        grid = mock_dust_grid.spectra
+        np.testing.assert_allclose(diffuse[0], grid["diffuse"][0, 1])
+        np.testing.assert_allclose(diffuse[1], grid["diffuse"][2, 2])
+        np.testing.assert_allclose(pdr[1], grid["pdr"][2, 2, 1])
+        assert not np.any(diffuse[2]) and not np.any(pdr[2])
+
+    def test_mismatched_parameter_lengths_raise(self, mock_dust_grid):
+        """Parameter arrays must have one length (or a single value)."""
+        dl07 = DraineLi07(grid=mock_dust_grid, dust_mass=1e6 * Msun)
+        with pytest.raises(exceptions.InconsistentArguments):
+            self._setup(dl07, qpah=np.array([0.01, 0.05]), umin=np.ones(3))
+
+    def test_per_particle_parameters_need_per_particle_model(
+        self, mock_dust_grid, mock_model, mock_emissions, dust_wavelengths
+    ):
+        """Arrays of parameters can't make one integrated spectrum."""
+        dl07 = DraineLi07(
+            grid=mock_dust_grid,
+            intrinsic="intrinsic",
+            attenuated="attenuated",
+        )
+        emitter = _ParamEmitter(
+            dust_mass=1e6 * Msun,
+            hydrogen_mass=1e8 * Msun,
+            qpah=np.array([0.01, 0.05]),
+            gamma=0.1,
+            umin=1.0,
+            alpha=2.0,
+        )
+        with pytest.raises(exceptions.InconsistentArguments):
+            dl07._generate_spectra(
+                dust_wavelengths, emitter, mock_model, mock_emissions
+            )
+
+    def test_grid_validation(self, mock_dust_grid):
+        """Grids without the DL07 templates or with bad axes are rejected."""
+        del mock_dust_grid.spectra["pdr"]
+        with pytest.raises(exceptions.InconsistentArguments):
+            DraineLi07(grid=mock_dust_grid)
+
+    def test_resampled_grid_cached(self, mock_dust_grid, dust_wavelengths):
+        """The grid is resampled once per wavelength array."""
+        dl07 = DraineLi07(grid=mock_dust_grid)
+        first = dl07._get_resampled_grid(dust_wavelengths)
+        assert dl07._get_resampled_grid(dust_wavelengths) is first
+        assert mock_dust_grid.nlam == 100
 
     def test_magdis_only_without_gamma_or_umin(self, mock_dust_grid):
         """Giving gamma and umin with alpha = 2 doesn't use Magdis+12."""

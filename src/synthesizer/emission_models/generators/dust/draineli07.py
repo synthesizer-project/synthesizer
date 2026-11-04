@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import copy
 from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 from scipy.optimize import brentq
-from spectres import spectres
 from unyt import Hz, Lsun, Msun, angstrom, erg, s, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
@@ -16,7 +16,7 @@ from synthesizer.emission_models.generators.dust.dust_emission_base import (
 )
 from synthesizer.emission_models.utils import get_param
 from synthesizer.emissions import LineCollection, Sed
-from synthesizer.extensions.grid_interpolation import interpolate_grid_array
+from synthesizer.extensions.particle_spectra import compute_particle_seds
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
@@ -75,31 +75,44 @@ def u_mean(
     is heated by umin, and the rest by a power law dM/dU ~ U^-alpha between
     umin and umax.
 
+    Any of umin, gamma and alpha can be arrays (e.g. one value per
+    particle).
+
     Args:
-        umin (float):
+        umin (float/np.ndarray):
             Minimum radiation field.
         umax (float):
             Maximum radiation field.
-        gamma (float):
+        gamma (float/np.ndarray):
             Fraction of dust mass in power-law component.
-        alpha (float):
+        alpha (float/np.ndarray):
             The slope of the power-law component.
 
     Returns:
-        float:
+        float/np.ndarray:
             The mean radiation field.
     """
-    if np.isclose(alpha, 1.0):
-        u_power_law = (umax - umin) / np.log(umax / umin)
-    elif np.isclose(alpha, 2.0):
-        u_power_law = np.log(umax / umin) / (umin ** (-1) - umax ** (-1))
-    else:
-        u_power_law = (
+    umin = np.asarray(umin, dtype=float)
+    alpha = np.asarray(alpha, dtype=float)
+
+    # The general expression is singular at alpha = 1 and 2, where the
+    # limits are used instead
+    with np.errstate(divide="ignore", invalid="ignore"):
+        general = (
             (alpha - 1.0)
             / (alpha - 2.0)
             * (umin ** (2.0 - alpha) - umax ** (2.0 - alpha))
             / (umin ** (1.0 - alpha) - umax ** (1.0 - alpha))
         )
+    u_power_law = np.where(
+        np.isclose(alpha, 1.0),
+        (umax - umin) / np.log(umax / umin),
+        np.where(
+            np.isclose(alpha, 2.0),
+            np.log(umax / umin) / (umin ** (-1) - umax ** (-1)),
+            general,
+        ),
+    )
     return (1.0 - gamma) * umin + gamma * u_power_law
 
 
@@ -139,16 +152,19 @@ class DraineLi07(DustEmission):
     calculated as the difference between the intrinsic and attenuated
     emissions. The "energy balance" method.
 
-    The templates are linearly interpolated in qpah, log10(umin) and alpha,
-    so the spectrum varies smoothly with these parameters. Values outside the
-    grid are clipped to its edges (with a warning).
+    As in DraineLiGrainCurves, the templates are linearly (CIC) interpolated
+    in qpah, umin and alpha, each in the space of the grid axis (linear or
+    log10), so the spectrum varies smoothly with these parameters. Values
+    outside the grid are clamped to its edges.
 
     dust_to_gas_ratio, hydrogen_mass, qpah, gamma, umin and alpha can be set
     on the generator, where they override the emitter, or read from the
-    emitter. If they are set on neither, hydrogen_mass is derived from the
-    dust mass and dust_to_gas_ratio, gamma and umin are derived from the
-    Magdis+12 stacking results, and dust_to_gas_ratio, qpah and alpha fall
-    back to 0.01, 0.025 and 2.0.
+    emitter. Each can be a single value or an array with one value per
+    particle (for per-particle models); particles with non-finite values or
+    a non-positive umin produce no emission. If they are set on neither,
+    hydrogen_mass is derived from the dust mass and dust_to_gas_ratio, gamma
+    and umin are derived from the Magdis+12 stacking results, and
+    dust_to_gas_ratio, qpah and alpha fall back to 0.01, 0.025 and 2.0.
 
     This is based on the work of Draine & Li (2007):
     https://ui.adsabs.harvard.edu/abs/2007ApJ...657..810D/abstract
@@ -280,6 +296,67 @@ class DraineLi07(DustEmission):
         self.power_per_unit_mass = power_per_unit_mass
         self.verbose = verbose
 
+        # Check the grid and prepare the arrays we interpolate over once
+        self._validate_grid()
+
+    @timed("DraineLi07._validate_grid")
+    def _validate_grid(self):
+        """Validate that the dust grid matches class expectations."""
+        # Ensure the grid holds both DL07 templates
+        missing = {"diffuse", "pdr"} - set(self.grid.spectra)
+        if missing:
+            raise exceptions.InconsistentArguments(
+                f"DraineLi07 requires a grid with {sorted(missing)} spectra."
+            )
+
+        # Ensure the grid's extraction axes are the DL07 parameters, recording
+        # whether each is linear or logarithmic
+        self._axis_names = []
+        self._axis_logged = []
+        for name in ("qpah", "umin", "alpha"):
+            if name in self.grid._extract_axes:
+                axis_name, logged = name, False
+            elif f"log10{name}" in self.grid._extract_axes:
+                axis_name, logged = f"log10{name}", True
+            else:
+                raise exceptions.UnimplementedFunctionality(
+                    f"DraineLi07 requires a grid with a {name} or "
+                    f"log10{name} extraction axis."
+                )
+            self._axis_names.append(axis_name)
+            self._axis_logged.append(logged)
+
+            # Ensure the axis values are numerically well behaved before we
+            # use them for interpolation
+            axis = self.grid._extract_axes_values[axis_name]
+            if not np.all(np.isfinite(axis)):
+                raise exceptions.InconsistentArguments(
+                    f"The DraineLi07 grid {axis_name} axis must contain only "
+                    "finite values."
+                )
+            if np.any(np.diff(axis) <= 0.0):
+                raise exceptions.InconsistentArguments(
+                    f"The DraineLi07 grid {axis_name} axis must be strictly "
+                    "increasing."
+                )
+
+        # Ensure the templates have one entry per grid point (the diffuse
+        # template does not depend on alpha)
+        dims = tuple(
+            len(self.grid._extract_axes_values[name])
+            for name in self._axis_names
+        )
+        for key, shape in (("diffuse", dims[:2]), ("pdr", dims)):
+            if self.grid.spectra[key].shape[:-1] != shape:
+                raise exceptions.InconsistentArguments(
+                    f"The DraineLi07 {key} spectra have shape "
+                    f"{self.grid.spectra[key].shape[:-1]} over the grid "
+                    f"axes, expected {shape}."
+                )
+
+        # Cache resampled grids keyed by wavelength tuple for quick lookup.
+        self._grid_cache = {}
+
     def __repr__(self):
         """Return a string representation of the DraineLi07 object."""
         # Start with base class repr components
@@ -408,6 +485,28 @@ class DraineLi07(DustEmission):
         calculated_umin = _resolve("umin", umin)
         effective_alpha = _resolve("alpha", alpha)
 
+        # Any parameter can be an array (e.g. one value per particle), as
+        # long as they all have the same length (or a single value)
+        sizes = {
+            np.size(value)
+            for value in (
+                dust_mass,
+                ldust,
+                effective_hydrogen_mass,
+                effective_qpah,
+                calculated_gamma,
+                calculated_umin,
+                effective_alpha,
+            )
+            if value is not None
+        }
+        nparticles = max(sizes)
+        if not sizes <= {1, nparticles}:
+            raise exceptions.InconsistentArguments(
+                f"DraineLi07 parameters have lengths {sorted(sizes)}, but "
+                f"expected 1 or {nparticles}."
+            )
+
         # Default maximum radiation field intensity
         umax: float = 1e7
 
@@ -440,146 +539,219 @@ class DraineLi07(DustEmission):
                 calculated_gamma = 0.05
 
             # The mean radiation field increases monotonically with umin,
-            # so bracket the root rather than relying on a starting guess
+            # so bracket the root rather than relying on a starting guess.
+            # Entries without a usable <U> are left as NaN and masked out.
+            # ponytail: one brentq per value, vectorise if per-particle
+            # solves get slow
             if calculated_umin is None:
-                args = (
-                    umax,
-                    calculated_u_avg,
-                    calculated_gamma,
-                    effective_alpha,
+                u_avgs, gammas, alphas = np.broadcast_arrays(
+                    calculated_u_avg, calculated_gamma, effective_alpha
                 )
-                if solve_umin(1e-10, *args) > 0:
-                    raise exceptions.InconsistentArguments(
-                        "No umin gives the Magdis+12 mean radiation field "
-                        f"<U>={calculated_u_avg} with gamma="
-                        f"{calculated_gamma} and alpha={effective_alpha}, "
-                        "since the power-law component alone gives a "
-                        "higher <U>. Provide umin, or use a smaller gamma "
-                        "or larger alpha."
+                umins = np.full(u_avgs.shape, np.nan)
+                for i, (u_avg, g, a) in enumerate(
+                    zip(u_avgs.flat, gammas.flat, alphas.flat)
+                ):
+                    if not (np.isfinite(u_avg) and u_avg > 0):
+                        continue
+                    if solve_umin(1e-10, umax, u_avg, g, a) > 0:
+                        raise exceptions.InconsistentArguments(
+                            "No umin gives the Magdis+12 mean radiation "
+                            f"field <U>={u_avg} with gamma={g} and "
+                            f"alpha={a}, since the power-law component "
+                            "alone gives a higher <U>. Provide umin, or use "
+                            "a smaller gamma or larger alpha."
+                        )
+                    umins.flat[i] = brentq(
+                        solve_umin, 1e-10, 1e6, args=(umax, u_avg, g, a)
                     )
-                calculated_umin = brentq(solve_umin, 1e-10, 1e6, args=args)
+                calculated_umin = umins
 
         else:
             calculated_u_avg = u_mean(
                 calculated_umin, umax, calculated_gamma, effective_alpha
             )
 
-        # Values outside the grid are clipped to its edges by the
-        # interpolation, so say so
-        for name, value in (
-            ("qpah", effective_qpah),
-            ("umin", calculated_umin),
-            ("alpha", effective_alpha),
-        ):
-            axis = np.asarray(getattr(self.grid, name))
-            if np.any(value < axis.min()) or np.any(value > axis.max()):
-                warn(
-                    f"DL07 {name}={value} is outside the grid range "
-                    f"[{axis.min()}, {axis.max()}], using the grid edge."
-                )
+        # Broadcast everything to one value per particle, masking entries we
+        # can't evaluate (they produce no emission)
+        hydrogen_mass = np.broadcast_to(
+            np.atleast_1d((calculated_hydrogen_mass / Msun).value),
+            (nparticles,),
+        )
+        qpah_arr, umin_arr, alpha_arr, gamma_arr = (
+            np.broadcast_to(
+                np.atleast_1d(np.asarray(v, dtype=float)), (nparticles,)
+            )
+            for v in (
+                effective_qpah,
+                calculated_umin,
+                effective_alpha,
+                calculated_gamma,
+            )
+        )
+        valid = (
+            np.isfinite(qpah_arr)
+            & np.isfinite(umin_arr)
+            & (umin_arr > 0.0)
+            & np.isfinite(alpha_arr)
+            & np.isfinite(gamma_arr)
+            & np.isfinite(hydrogen_mass)
+        )
 
         return {
-            "qpah": effective_qpah,
-            "umin_calculated": calculated_umin,
-            "alpha": effective_alpha,
-            "gamma_calculated": calculated_gamma,
-            "hydrogen_mass_calculated": calculated_hydrogen_mass,
+            "qpah": qpah_arr,
+            "umin_calculated": umin_arr,
+            "alpha": alpha_arr,
+            "gamma_calculated": gamma_arr,
+            "hydrogen_mass_calculated": hydrogen_mass * Msun,
             "radiation_field_average": calculated_u_avg,
+            "valid": valid,
         }
 
-    def _interpolate_templates(self, setup: dict) -> tuple:
+    @timed("DraineLi07._get_resampled_grid")
+    def _get_resampled_grid(self, lam):
+        """Get or create a resampled grid for given wavelengths.
+
+        This method caches resampled grids for performance when the same
+        wavelengths are requested multiple times.
+
+        Args:
+            lam (unyt_array):
+                The target wavelength array.
+
+        Returns:
+            Grid: The resampled grid.
+        """
+        lam_arr = np.atleast_1d(lam.to(angstrom).ndview)
+        cache_key = tuple(lam_arr)
+
+        # Check if we already have this configuration cached.
+        if cache_key in self._grid_cache:
+            return self._grid_cache[cache_key]
+
+        # Resample the base grid to the requested wavelengths
+        if lam_arr.size == 1:
+            # For scalar wavelengths, make a copy to avoid mutating the base
+            # grid.
+            grid = copy.deepcopy(self.grid)
+            spectra_at_lam = grid.get_spectra_at_lam(lam)
+            for spectra_id, spectra in spectra_at_lam.items():
+                grid.spectra[spectra_id] = spectra[..., np.newaxis]
+            grid.lam = lam_arr
+            grid._ensure_spectra_data_contiguous()
+        else:
+            # For arrays of wavelengths
+            grid = self.grid.reduce_rest_frame_lam(lam)
+
+        # Cache the resampled grid.
+        self._grid_cache[cache_key] = grid
+
+        return grid
+
+    @timed("DraineLi07._interpolate_templates")
+    def _interpolate_templates(self, grid, setup: dict) -> tuple:
         """Interpolate the diffuse and PDR templates to the parameters.
 
-        The templates are linearly interpolated in qpah, log10(umin) and
-        (for the PDR template) alpha, on the grid's native wavelengths.
-        Values outside the grid are clipped to its edges.
+        The templates are linearly interpolated (CIC) in qpah, umin and (for
+        the PDR template) alpha, each in the space of the grid axis (linear
+        or log10). Values outside the grid are clamped to its edges and
+        masked entries are zero.
 
         Args:
+            grid (Grid):
+                The grid to interpolate (the native or a resampled grid).
             setup (dict):
                 The parameters returned by ``_setup_dl07_parameters``.
 
         Returns:
             tuple:
-                The diffuse and PDR templates on the native wavelengths.
+                The diffuse and PDR templates, each (nparticles, nlam).
         """
-        dtype = self.grid._dtype
+        valid = setup["valid"]
+        nparticles = valid.size
+        dtype = grid._dtype
 
-        def _as_axis(values):
-            return np.ascontiguousarray(
-                np.atleast_1d(np.asarray(values, dtype=float)), dtype=dtype
+        # Map the parameters onto the grid axes, replacing masked entries
+        # with a valid value so the axis transform stays finite
+        grid_axes = []
+        coords = []
+        for name, axis_name, logged in zip(
+            ("qpah", "umin_calculated", "alpha"),
+            self._axis_names,
+            self._axis_logged,
+        ):
+            axis = grid._extract_axes_values[axis_name]
+            values = np.where(valid, setup[name], 1.0)
+            grid_axes.append(np.ascontiguousarray(axis, dtype=dtype))
+            coords.append(
+                np.ascontiguousarray(
+                    np.log10(values) if logged else values, dtype=dtype
+                )
             )
 
-        axes = (
-            _as_axis(self.grid.qpah),
-            _as_axis(np.log10(np.asarray(self.grid.umin, dtype=float))),
-            _as_axis(self.grid.alpha),
-        )
-        coords = (
-            _as_axis(setup["qpah"]),
-            _as_axis(np.log10(setup["umin_calculated"])),
-            _as_axis(setup["alpha"]),
-        )
-        nlam = len(self.grid._lam)
+        weights = np.ones(nparticles)
+        templates = []
+        for key, ndim in (("diffuse", 2), ("pdr", 3)):
+            templates.append(
+                compute_particle_seds(
+                    np.ascontiguousarray(grid.spectra[key], dtype=dtype),
+                    tuple(grid_axes[:ndim]),
+                    tuple(coords[:ndim]),
+                    weights,
+                    np.array(grid.spectra[key].shape[:-1], dtype=np.int32),
+                    ndim,
+                    nparticles,
+                    grid.nlam,
+                    "cic",
+                    1,
+                    valid,
+                    None,
+                    False,
+                    dtype,
+                    tuple(self._axis_names[:ndim]),
+                )
+            )
 
-        # The diffuse template doesn't depend on alpha
-        diffuse = interpolate_grid_array(
-            np.ascontiguousarray(self.grid.spectra["diffuse"], dtype=dtype),
-            axes[:2],
-            coords[:2],
-            2,
-            1,
-            nlam,
-            "cic",
-            1,
-            dtype,
-            ("qpah", "umin"),
-        )[0]
-        pdr = interpolate_grid_array(
-            np.ascontiguousarray(self.grid.spectra["pdr"], dtype=dtype),
-            axes,
-            coords,
-            3,
-            1,
-            nlam,
-            "cic",
-            1,
-            dtype,
-            ("qpah", "umin", "alpha"),
-        )[0]
+        return tuple(templates)
 
-        return diffuse, pdr
-
-    def _native_lnu(self, setup: dict) -> tuple:
-        """Get the diffuse and PDR lnu on the grid's native wavelengths.
+    def _component_lnu(self, grid, setup: dict) -> tuple:
+        """Get the diffuse and PDR lnu on a grid's wavelengths.
 
         Args:
+            grid (Grid):
+                The grid to evaluate on (the native or a resampled grid).
             setup (dict):
                 The parameters returned by ``_setup_dl07_parameters``.
 
         Returns:
             tuple:
-                The diffuse and PDR lnu (erg/s/Hz, without units).
+                The diffuse and PDR lnu (erg/s/Hz, without units), each
+                (nparticles, nlam), or (nlam,) for a single set of
+                parameters.
         """
-        diffuse_template, pdr_template = self._interpolate_templates(setup)
-        hydrogen_mass = (setup["hydrogen_mass_calculated"] / Msun).value
+        diffuse_template, pdr_template = self._interpolate_templates(
+            grid, setup
+        )
+        gamma = setup["gamma_calculated"][:, np.newaxis]
+        hydrogen_mass = (setup["hydrogen_mass_calculated"] / Msun).value[
+            :, np.newaxis
+        ]
 
         # Extract diffuse (old) component spectrum
-        diffuse = (
-            (1.0 - setup["gamma_calculated"])
-            * diffuse_template
-            * hydrogen_mass
-        )
+        diffuse = (1.0 - gamma) * diffuse_template * hydrogen_mass
 
         # Extract PDR (young) component spectrum
-        pdr = setup["gamma_calculated"] * pdr_template * hydrogen_mass
+        pdr = gamma * pdr_template * hydrogen_mass
 
         # Replace NaNs with zero for wavelength regimes with no values given
         diffuse[np.isnan(diffuse)] = 0.0
         pdr[np.isnan(pdr)] = 0.0
 
+        # Preserve the previous single spectrum shape for scalar inputs
+        if diffuse.shape[0] == 1:
+            return diffuse[0], pdr[0]
         return diffuse, pdr
 
-    def _bolometric_luminosity(self, setup: dict) -> float:
+    def _bolometric_luminosity(self, setup: dict):
         """Integrate the spectrum over the template's native wavelengths.
 
         This normalises the spectrum independently of the wavelengths it is
@@ -590,15 +762,20 @@ class DraineLi07(DustEmission):
                 The parameters returned by ``_setup_dl07_parameters``.
 
         Returns:
-            float:
-                The bolometric luminosity in the luminosity unit of
-                Sed.bolometric_luminosity.
+            float/np.ndarray:
+                The bolometric luminosity (one per particle) in the
+                luminosity unit of Sed.bolometric_luminosity, with a trailing
+                axis to broadcast against lnu.
         """
-        diffuse, pdr = self._native_lnu(setup)
-        return Sed(
-            lam=self.grid._lam * angstrom,
+        diffuse, pdr = self._component_lnu(self.grid, setup)
+        bol_lum = Sed(
+            lam=self.grid.lam,
             lnu=(diffuse + pdr) * (erg / s / Hz),
         )._bolometric_luminosity
+        # Masked particles have no emission, so avoid dividing zero by zero
+        bol_lum = np.asarray(bol_lum)
+        bol_lum = np.where(bol_lum > 0.0, bol_lum, 1.0)
+        return bol_lum[..., np.newaxis]
 
     @accepts(lams=angstrom)
     def _generate_dl07_spectra(
@@ -621,19 +798,14 @@ class DraineLi07(DustEmission):
             Sed or tuple[Sed, Sed]:
                 The generated dust emission SED(s).
         """
-        # Resample the native spectra onto the requested wavelengths. This
-        # reads the grid without modifying it, so the grid always holds its
-        # native wavelengths and can be shared between concurrently executing
+        # Evaluate on the grid resampled onto the requested wavelengths. The
+        # resampled grid is a copy, so the grid always holds its native
+        # wavelengths and can be shared between concurrently executing
         # models.
+        grid = self._get_resampled_grid(lams)
         diffuse_sed, pdr_sed = (
-            Sed(
-                lam=lams,
-                lnu=spectres(
-                    lams.value, self.grid._lam, lnu, fill=0, verbose=False
-                ).astype(self.grid._dtype, copy=False)
-                * (erg / s / Hz),
-            )
-            for lnu in self._native_lnu(setup)
+            Sed(lam=lams, lnu=lnu * (erg / s / Hz))
+            for lnu in self._component_lnu(grid, setup)
         )
 
         if dust_components:
@@ -735,6 +907,15 @@ class DraineLi07(DustEmission):
         # Set up DL07 parameters using the extracted parameters
         setup = self._setup_dl07_parameters(dust_mass, ldust, **params)
 
+        # One spectrum per particle only makes sense for a per-particle model
+        if setup["valid"].size > 1 and not getattr(
+            model, "per_particle", False
+        ):
+            raise exceptions.InconsistentArguments(
+                "DraineLi07 parameters with one value per particle need a "
+                "per-particle model."
+            )
+
         # Generate the base spectra
         sed = self._generate_dl07_spectra(lams, setup)
 
@@ -816,6 +997,15 @@ class DraineLi07(DustEmission):
 
         # Set up DL07 parameters using the extracted parameters
         setup = self._setup_dl07_parameters(dust_mass, ldust, **params)
+
+        # One spectrum per particle only makes sense for a per-particle model
+        if setup["valid"].size > 1 and not getattr(
+            model, "per_particle", False
+        ):
+            raise exceptions.InconsistentArguments(
+                "DraineLi07 parameters with one value per particle need a "
+                "per-particle model."
+            )
 
         # Generate the DL07 function
         lnu = self._generate_dl07_spectra(line_lams, setup).lnu
