@@ -4306,10 +4306,6 @@ class Pipeline:
         if len(self._analysis_funcs) == 0:
             return
 
-        # Create a temporary attribute on the galaxy to store the results
-        # of the analysis functions
-        galaxy._extra_analysis_results = {}
-
         # Loop over the analysis functions and call them for this galaxy
         for func, args, kwargs, key in zip(
             self._analysis_funcs,
@@ -4338,8 +4334,8 @@ class Pipeline:
                     f"Error running extra analysis function {key}: {e}"
                 ).with_traceback(e.__traceback__)
 
-            # Store the result on the galaxy
-            galaxy._extra_analysis_results[key] = res
+            # Store the result for writing
+            self._analysis_results[key].append(res)
 
         # Record the time taken
         self._op_timing["Extra Analyses"] += time.perf_counter() - start
@@ -4732,11 +4728,6 @@ class Pipeline:
                                 line_id, []
                             ).append(image.arr * image.units)
 
-        # Do we need to unpack the extra analysis results?
-        if hasattr(galaxy, "_extra_analysis_results"):
-            for key, res in galaxy._extra_analysis_results.items():
-                self._analysis_results[key].append(res)
-
         # Done!
         self._op_timing["Unpacking results"] += time.perf_counter() - start
 
@@ -4934,11 +4925,14 @@ class Pipeline:
             if self._do_cosmic_fnu:
                 self._get_observed_cosmic_sed(gal)
 
+            # Ok, we're done with this galaxy so we can unpack the results.
+            # This must happen before the analysis functions run so any
+            # outputs they regenerate on the galaxy (e.g. by calling
+            # get_lines) don't replace the ones the Pipeline produced
+            self._unpack_results(gal)
+
             # Run any extra analysis functions
             self._run_extra_analysis(gal)
-
-            # Ok, we're done with this galaxy so we can unpack the results
-            self._unpack_results(gal)
 
             # Output into the progress table
             self._add_progress_row(gal, igal, start_gal)
