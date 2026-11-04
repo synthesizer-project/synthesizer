@@ -52,6 +52,7 @@ from synthesizer.pipeline.pipeline_utils import (
     divide_dicts_recursive,
     get_atomic_timing_snapshot,
     get_buffered_nbytes,
+    get_dict_structure,
     get_full_memory,
     get_row_template,
     iter_row_lists,
@@ -5731,35 +5732,47 @@ class Pipeline:
                     f"of the same type. Got: {set(types)}"
                 )
 
-            # Each flush appends to the datasets the first one created, so
-            # a different structure would leave some datasets missing rows.
-            # Check each result before merging: the merge ignores extra keys.
-            def get_structure(d):
-                if not isinstance(d, dict):
-                    return None
-                return {k: get_structure(v) for k, v in d.items()}
-
-            if len(res) > 0:
-                expected = self._analysis_result_structures.get(
-                    key, get_structure(res[0])
-                )
-                for result in res:
-                    structure = get_structure(result)
-                    if structure != expected:
-                        raise exceptions.BadResult(
-                            f"Extra analysis result {key} changed structure. "
-                            f"Expected {expected}, got {structure}."
-                        )
+            # Ensure all results have the same keys (the merge below would
+            # silently drop any extras)
+            self._check_analysis_structure(key, res)
 
             # Combine the list of results into a dict of unyt arrays or a
             # single unyt array. This will simply return a unyt array if we
             # hand a list of values
             combined_data = combine_list_of_dicts(res)
-            if len(res) > 0:
-                self._analysis_result_structures[key] = expected
 
             # Store the data
             self._analysis_results[key] = combined_data
+
+    def _check_analysis_structure(self, key, res):
+        """Ensure every result of an analysis function has the same keys.
+
+        The structure is remembered between calls since each flush appends
+        to the datasets the first flush created, so a result with a
+        different structure would leave some datasets missing rows.
+
+        Args:
+            key (str):
+                The key of the analysis function.
+            res (list):
+                The results of the analysis function for each galaxy.
+        """
+        # Nothing to check
+        if len(res) == 0:
+            return
+
+        # Compare against an earlier flush if there was one, otherwise
+        # against the first result
+        expected = self._analysis_result_structures.setdefault(
+            key, get_dict_structure(res[0])
+        )
+        for result in res:
+            structure = get_dict_structure(result)
+            if structure != expected:
+                raise exceptions.BadResult(
+                    f"Extra analysis result {key} changed structure. "
+                    f"Expected {expected}, got {structure}."
+                )
 
     @timed("Pipeline.write")
     def write(self, outpath=None, verbose=None):

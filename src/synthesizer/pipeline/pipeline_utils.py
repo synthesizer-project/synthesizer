@@ -910,6 +910,22 @@ def clear_lists_recursive(data):
         rows.clear()
 
 
+def get_dict_structure(data):
+    """Return the keys of a nested dictionary with the values stripped.
+
+    Args:
+        data (any): The (possibly nested) dictionary.
+
+    Returns:
+        dict/None:
+            The same nesting of keys with None at the leaves (or None if
+            data isn't a dictionary).
+    """
+    if not isinstance(data, dict):
+        return None
+    return {k: get_dict_structure(v) for k, v in data.items()}
+
+
 def get_buffered_nbytes(data):
     """Return the number of bytes held by the arrays in nested containers.
 
