@@ -1017,7 +1017,15 @@ class LineCollection:
         )
 
     @timed("LineCollection.get_flux")
-    def get_flux(self, cosmo, z, igm=None, out_dtype=None, nthreads=1):
+    def get_flux(
+        self,
+        cosmo,
+        z,
+        igm=None,
+        out_dtype=None,
+        nthreads=1,
+        emitter=None,
+    ):
         """Calculate the line flux given a redshift and cosmology.
 
         This will also populate the observed_wavelength attribute with the
@@ -1040,6 +1048,9 @@ class LineCollection:
                 the fluxes inherit the luminosity's dtype.
             nthreads (int):
                 The number of threads to scale the fluxes with.
+            emitter (Galaxy/Stars/BlackHoles, optional):
+                The emitter of the lines. The IGM looks for its parameters
+                on this before falling back to its own. Defaults to None.
 
         Returns:
             flux (unyt_quantity):
@@ -1089,9 +1100,13 @@ class LineCollection:
         if igm is not None:
             # Support both class references and instantiated objects
             if callable(igm):
-                igm_transmission = igm().get_transmission(z, self.obslam)
+                igm_transmission = igm().get_transmission(
+                    z, self.obslam, emitter
+                )
             else:
-                igm_transmission = igm.get_transmission(z, self.obslam)
+                igm_transmission = igm.get_transmission(
+                    z, self.obslam, emitter
+                )
             self.flux *= igm_transmission
             self.continuum_flux *= igm_transmission
 
