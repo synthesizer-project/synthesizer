@@ -1258,7 +1258,7 @@ class Pipeline:
         # Register the timing now so every rank has the same timing keys,
         # even those without galaxies (otherwise the MPI reduction of the
         # timings deadlocks)
-        self._op_timing[result_key] = 0.0
+        self._op_timing.setdefault(result_key, 0.0)
 
         self._print(f"Added analysis function: {result_key}")
 
