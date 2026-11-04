@@ -10,8 +10,10 @@ Tests cover:
 
 import numpy as np
 import pytest
+from scipy.integrate import quad
 from unyt import Msun, Myr, kpc, yr
 
+from synthesizer import exceptions
 from synthesizer.emission_models import IncidentEmission
 from synthesizer.parametric import SFH, Galaxy, PointSource, ZDist
 from synthesizer.parametric.stars import Stars
@@ -649,3 +651,178 @@ class TestGetSFZHRemap:
         remapped = stars.get_sfzh(new_log10ages, test_grid.metallicities)
         assert remapped.sfzh.shape == (20, len(test_grid.metallicities))
         assert np.isclose(remapped.sfzh.sum(), stars.sfzh.sum())
+
+
+class TestSFHCDF:
+    """Tests for binning SFH functions with their CDFs."""
+
+    def test_narrow_gaussian_is_resolved(self, test_grid):
+        """A burst far narrower than the age axis spacing keeps its mass."""
+        stars = Stars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sf_hist=SFH.Gaussian(peak_age=3e9 * yr, sigma=1e6 * yr),
+            metal_dist=0.01,
+        )
+        np.testing.assert_allclose(
+            stars.sfzh.sum(), np.sqrt(np.pi) * 1e6, rtol=1e-6
+        )
+
+    @pytest.mark.parametrize(
+        "sfh",
+        [
+            SFH.Constant(max_age=100 * Myr, min_age=10 * Myr),
+            SFH.Gaussian(
+                peak_age=1e9 * yr,
+                sigma=3e8 * yr,
+                max_age=3e9 * yr,
+                min_age=1e8 * yr,
+            ),
+            SFH.Exponential(tau=1e9 * yr, max_age=5e9 * yr, min_age=2e8 * yr),
+            SFH.Exponential(tau=-2e9 * yr, max_age=5e9 * yr),
+            SFH.DecliningExponential(tau=12 * Myr, max_age=2.9e9 * yr),
+            SFH.DelayedExponential(
+                tau=1e9 * yr, max_age=5e9 * yr, min_age=1e8 * yr
+            ),
+            SFH.LogNormal(tau=0.5, peak_age=1e9 * yr, max_age=5e9 * yr),
+            SFH.LogNormal(tau=0.1, peak_age=9.8e9 * yr, max_age=1e10 * yr),
+            SFH.DoublePowerLaw(
+                peak_age=1e9 * yr, alpha=-5, beta=5, max_age=5e9 * yr
+            ),
+            SFH.DoublePowerLaw(
+                peak_age=1e9 * yr, alpha=0.9, beta=3, max_age=1.3e10 * yr
+            ),
+            SFH.DoublePowerLaw(
+                peak_age=1e9 * yr, alpha=0.5, beta=0.5, max_age=5e9 * yr
+            ),
+            SFH.DoublePowerLaw(
+                peak_age=1e9 * yr, alpha=0.1, beta=1e3, max_age=1.3e10 * yr
+            ),
+            SFH.DoublePowerLaw(
+                peak_age=1e9 * yr,
+                alpha=2,
+                beta=3,
+                min_age=1e6 * yr,
+                max_age=5e9 * yr,
+            ),
+            SFH.Continuity(logsfr_ratios=np.array([0.3, -0.2])),
+            # tau much larger than the ages, where closed forms can cancel
+            SFH.Exponential(tau=1e20 * yr, max_age=1e10 * yr),
+            SFH.DelayedExponential(tau=1e15 * yr, max_age=1e10 * yr),
+            # A steep SFR down to a small min_age
+            SFH.DoublePowerLaw(
+                peak_age=1e9 * yr,
+                alpha=2,
+                beta=3,
+                min_age=1 * yr,
+                max_age=1e10 * yr,
+            ),
+            # beta close to 1
+            SFH.DoublePowerLaw(
+                peak_age=1e9 * yr,
+                alpha=0.5,
+                beta=1 + 1e-10,
+                max_age=1e10 * yr,
+            ),
+        ],
+    )
+    def test_cdf_matches_quad(self, sfh):
+        """Binned masses must match direct integration of the SFR."""
+        edges = np.array([0, 5e6, 3e7, 2e8, 9e8, 1.5e9, 4e9, 6e9, 1e10])
+        expected = []
+        for lo, hi in zip(edges[:-1], edges[1:]):
+            # Split each bin at its breakpoints and into log spaced pieces
+            # from the youngest of them, so quad can follow steep SFRs (e.g.
+            # a power law down to a small min_age)
+            points = [p for p in sfh._get_breakpoints() if lo < p < hi]
+            start = min([p for p in [lo, *points] if p > 0], default=hi * 1e-8)
+            pieces = np.unique([lo, hi, *points, *np.geomspace(start, hi, 50)])
+            expected.append(
+                sum(
+                    quad(
+                        sfh.get_sfr, a, b, limit=2000, epsabs=0, epsrel=1e-12
+                    )[0]
+                    for a, b in zip(pieces[:-1], pieces[1:])
+                )
+            )
+        expected = np.array(expected)
+        np.testing.assert_allclose(
+            sfh.get_bin_masses(edges),
+            expected,
+            rtol=0,
+            atol=1e-8 * np.abs(expected).max(),
+        )
+
+    def test_inverted_constant_forms_no_mass(self):
+        """A Constant SFH with min_age > max_age forms no mass."""
+        sfh = SFH.Constant(max_age=10 * yr, min_age=20 * yr)
+        np.testing.assert_array_equal(
+            sfh.get_cdf(np.array([0.0, 15.0, 30.0])), 0.0
+        )
+
+    def test_empty_combined_sfh_forms_no_mass(self):
+        """A CombinedSFH without components forms no mass."""
+        edges = np.array([0, 1e7, 1e9, 1e10])
+        np.testing.assert_array_equal(
+            SFH.CombinedSFH([]).get_bin_masses(edges), 0.0
+        )
+
+    @pytest.mark.parametrize(
+        ("sf_hist", "metal_dist"),
+        [
+            # A Gaussian SFH peaking far beyond the oldest age
+            (
+                SFH.Gaussian(
+                    peak_age=1e13 * yr, sigma=1e8 * yr, max_age=1e14 * yr
+                ),
+                0.01,
+            ),
+            # A Normal ZDist centred far above the highest metallicity
+            (
+                SFH.Constant(max_age=100 * Myr),
+                ZDist.Normal(mean=0.09, sigma=0.005),
+            ),
+        ],
+    )
+    def test_no_mass_on_the_axes_raises(self, test_grid, sf_hist, metal_dist):
+        """Normalising an SFZH with no mass must raise, not give NaN."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            Stars(
+                test_grid.log10ages,
+                test_grid.metallicities,
+                sf_hist=sf_hist,
+                metal_dist=metal_dist,
+                initial_mass=1e10 * Msun,
+            )
+
+    def test_divergent_double_power_law_raises(self):
+        """A DoublePowerLaw with infinite mass at age zero must raise."""
+        with pytest.raises(exceptions.InconsistentArguments):
+            SFH.DoublePowerLaw(peak_age=1e9 * yr, alpha=1.5, beta=3)
+
+    def test_normal_zdist_cdf_matches_quad(self):
+        """Binned metallicity weights must match direct integration."""
+        zdist = ZDist.Normal(0.01, 0.005)
+        edges = np.array([0, 1e-3, 5e-3, 0.01, 0.02, 0.04])
+        expected = [
+            quad(zdist.get_dist_weight, lo, hi, epsabs=0, epsrel=1e-12)[0]
+            for lo, hi in zip(edges[:-1], edges[1:])
+        ]
+        np.testing.assert_allclose(
+            zdist.get_bin_weights(edges), expected, rtol=0, atol=1e-12
+        )
+
+    @pytest.mark.parametrize(
+        "zdist",
+        [ZDist.Normal(0.01, 0.005), ZDist.Normal(1e-4, 2e-5)],
+    )
+    def test_numerical_zdist_cdf_matches_closed_form(self, zdist):
+        """The numerical ZDist CDF must match a closed form."""
+        edges = np.array([0, 1e-3, 5e-3, 0.01, 0.02, 0.04])
+        expected = zdist.get_cdf(edges)
+        np.testing.assert_allclose(
+            ZDist.Common.get_cdf(zdist, edges),
+            expected,
+            rtol=0,
+            atol=1e-12 * expected.max(),
+        )

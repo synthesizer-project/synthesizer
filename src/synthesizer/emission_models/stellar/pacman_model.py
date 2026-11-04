@@ -339,7 +339,10 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
             tau_v (float):
                 The V-band optical depth.
             fesc (float):
-                The escape fraction.
+                The fraction of the incident emission that escapes the
+                photoionised region without being reprocessed. This escaped
+                emission also leaves the galaxy without any dust
+                attenuation.
             fesc_ly_alpha (float):
                 The Lyman alpha escape fraction.
             label (str):
@@ -419,7 +422,7 @@ class PacmanEmissionWithEscapedNoDust(StellarEmissionModel):
         # Finally make the emergent model, this is attenuated + escaped
         StellarEmissionModel.__init__(
             self,
-            label="emergent",
+            label="emergent" if label is None else label,
             grid=grid,
             combine=(attenuated, escaped),
             related_models=(intrinsic,),
@@ -475,7 +478,10 @@ class PacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             dust_emission (synthesizer.dust.EmissionModel): The dust
                 emission.
             fesc (float):
-                The escape fraction.
+                The fraction of the incident emission that escapes the
+                photoionised region without being reprocessed. This escaped
+                emission also leaves the galaxy without any dust
+                attenuation.
             fesc_ly_alpha (float):
                 The Lyman alpha escape fraction.
             label (str):
@@ -632,7 +638,10 @@ class PacmanEmission:
             dust_emission (synthesizer.dust.EmissionModel): The dust
                 emission.
             fesc (float):
-                The escape fraction.
+                The fraction of the incident emission that escapes the
+                photoionised region without being reprocessed. This escaped
+                emission also leaves the galaxy without any dust
+                attenuation.
             fesc_ly_alpha (float):
                 The Lyman alpha escape fraction.
             label (str):
@@ -1513,7 +1522,10 @@ class BimodalPacmanEmissionWithEscapedNoDust(StellarEmissionModel):
                 The age pivot between young and old populations,
                 expressed in terms of log10(age/yr).
             fesc(float):
-                The escape fraction.
+                The fraction of the incident emission that escapes the
+                photoionised region without being reprocessed. This escaped
+                emission also leaves the galaxy without any dust
+                attenuation.
             fesc_ly_alpha(float):
                 The Lyman alpha escape fraction.
             label(str):
@@ -1893,7 +1905,10 @@ class BimodalPacmanEmissionWithEscapedWithDust(StellarEmissionModel):
             dust_emission_birth(synthesizer.dust.EmissionModel):
                 The dust emission model for the nebular.
             fesc(float):
-                The escape fraction.
+                The fraction of the incident emission that escapes the
+                photoionised region without being reprocessed. This escaped
+                emission also leaves the galaxy without any dust
+                attenuation.
             fesc_ly_alpha(float):
                 The Lyman alpha escape fraction.
             label(str):
@@ -2352,7 +2367,10 @@ class BimodalPacmanEmission:
             dust_emission_birth(synthesizer.dust.EmissionModel):
                 The dust emission model for the nebular.
             fesc(float):
-                The escape fraction.
+                The fraction of the incident emission that escapes the
+                photoionised region without being reprocessed. This escaped
+                emission also leaves the galaxy without any dust
+                attenuation.
             fesc_ly_alpha(float):
                 The Lyman alpha escape fraction.
             label(str):

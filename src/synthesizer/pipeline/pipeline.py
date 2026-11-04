@@ -277,6 +277,10 @@ class Pipeline:
             model_labels=emission_model.saved_labels,
         )
 
+        # The IGM used for all observed emissions (a Pipeline only ever uses
+        # one, see _set_igm)
+        self._igm = None
+
         # Define flags for what we will write out
         self._write_lnu_spectra = False
         self._write_fnu_spectra = False
@@ -341,7 +345,7 @@ class Pipeline:
         self.line_ids = None
         self.line_fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.line_cont_fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_obs_lams = None
+        self.line_obs_lams = []
         self.images_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.images_lum_noise = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
@@ -1251,6 +1255,11 @@ class Pipeline:
         else:
             self._analysis_results[result_key] = []
 
+        # Register the timing now so every rank has the same timing keys,
+        # even those without galaxies (otherwise the MPI reduction of the
+        # timings deadlocks)
+        self._op_timing.setdefault(result_key, 0.0)
+
         self._print(f"Added analysis function: {result_key}")
 
     @timed("Pipeline.add_galaxies")
@@ -1743,6 +1752,35 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Lnu Spectra"] += time.perf_counter() - start
 
+    def _set_igm(self, igm):
+        """Set the single IGM the Pipeline uses for all observed emissions.
+
+        Args:
+            igm (IGMBase):
+                The IGM model to use. None leaves the Pipeline's IGM as it
+                is.
+
+        Raises:
+            InconsistentArguments
+                If a different IGM has already been passed.
+        """
+        # Nothing to do without an IGM
+        if igm is None:
+            return
+
+        # The first IGM we're given is the one we use
+        if self._igm is None:
+            self._igm = igm
+            return
+
+        if igm != self._igm:
+            raise exceptions.InconsistentArguments(
+                "A Pipeline uses a single IGM for all observed emissions, "
+                f"but got {igm!r} after {self._igm!r}. Pass the same or an "
+                "equivalent IGM to every method (IGM parameters can vary "
+                "per galaxy by setting them on the galaxies)."
+            )
+
     def get_observed_spectra(
         self, cosmo, igm=None, write=True, out_dtype=None
     ):
@@ -1758,18 +1796,21 @@ class Pipeline:
             cosmo (astropy.cosmology.Cosmology):
                 The cosmology to use for the observed spectra.
             igm (IGMBase):
-                The IGM model to use for the attenuation of the spectra.
+                The IGM model to use for the attenuation of the spectra. A
+                Pipeline uses a single IGM for all observed emissions, so
+                this must match any IGM already passed (None uses the
+                Pipeline's IGM, if any).
             write (bool):
                 Whether to write out the observed spectra. Default is True.
             out_dtype (np.dtype):
                 Requested floating-point dtype for generated spectra arrays.
         """
-        # Store the cosmology for the operation
+        # Store the cosmology for the operation and the IGM for the Pipeline
         self._operation_kwargs.add_unique(
             "get_observed_spectra",
             cosmo=cosmo,
-            igm=igm,
         )
+        self._set_igm(igm)
 
         # Record the requested output dtype (first call wins)
         self._out_dtypes.setdefault("observed_spectra", out_dtype)
@@ -1806,7 +1847,7 @@ class Pipeline:
         # Get the observed spectra
         galaxy.get_observed_spectra(
             cosmo=op_kwargs["cosmo"],
-            igm=op_kwargs["igm"],
+            igm=self._igm,
             nthreads=self.nthreads,
             out_dtype=self._out_dtypes.get("observed_spectra"),
         )
@@ -2665,7 +2706,10 @@ class Pipeline:
             cosmo (astropy.cosmology.Cosmology):
                 The cosmology to use for the observed emission lines.
             igm (IGMBase):
-                The IGM model to use for the observed emission lines.
+                The IGM model to use for the observed emission lines. A
+                Pipeline uses a single IGM for all observed emissions, so
+                this must match any IGM already passed (None uses the
+                Pipeline's IGM, if any).
             line_ids (list):
                 If get_lines has not been called explicitly, then we will need
                 the line IDs to generate the emission lines. Default is None.
@@ -2675,12 +2719,12 @@ class Pipeline:
             out_dtype (np.dtype):
                 Requested floating-point dtype for prerequisite line arrays.
         """
-        # Store the kwargs for the operation
+        # Store the kwargs for the operation and the IGM for the Pipeline
         self._operation_kwargs.add_unique(
             "get_observed_lines",
             cosmo=cosmo,
-            igm=igm,
         )
+        self._set_igm(igm)
 
         # Record the requested output dtype (first call wins)
         self._out_dtypes.setdefault("observed_lines", out_dtype)
@@ -2731,27 +2775,10 @@ class Pipeline:
         # Get the observed emission lines
         galaxy.get_observed_lines(
             cosmo=op_kwargs["cosmo"],
-            igm=op_kwargs["igm"],
+            igm=self._igm,
             nthreads=self.nthreads,
             out_dtype=self._out_dtypes.get("observed_lines"),
         )
-
-        # Store the observed line wavelengths for writing, we only do this once
-        # since they are the same for all galaxies but we need to find them
-        # first (either on the galaxy, stars, or black holes)
-        if self.line_obs_lams is None:
-            # Get the line lams from the first line collection we can find
-            for lines in galaxy.lines.values():
-                self.line_obs_lams = lines.obslam
-                break
-            if self.line_obs_lams is None and galaxy.stars is not None:
-                for lines in galaxy.stars.lines.values():
-                    self.line_obs_lams = lines.obslam
-                    break
-            if self.line_obs_lams is None and galaxy.black_holes is not None:
-                for lines in galaxy.black_holes.lines.values():
-                    self.line_obs_lams = lines.obslam
-                    break
 
         # Count the number of observed emission lines we have generated
         self._op_counts["Emission Line Fluxes"] += (
@@ -4453,7 +4480,7 @@ class Pipeline:
                 )
                 self.line_cont_fluxes["Galaxy"].setdefault(
                     spec_type, []
-                ).append(lines.continuum)
+                ).append(lines.continuum_flux)
             if galaxy.stars is not None:
                 for spec_type, lines in galaxy.stars.lines.items():
                     self.line_fluxes["Stars"].setdefault(spec_type, []).append(
@@ -4461,7 +4488,7 @@ class Pipeline:
                     )
                     self.line_cont_fluxes["Stars"].setdefault(
                         spec_type, []
-                    ).append(lines.continuum)
+                    ).append(lines.continuum_flux)
             if galaxy.black_holes is not None:
                 for spec_type, lines in galaxy.black_holes.lines.items():
                     self.line_fluxes["BlackHole"].setdefault(
@@ -4469,7 +4496,18 @@ class Pipeline:
                     ).append(lines.flux)
                     self.line_cont_fluxes["BlackHole"].setdefault(
                         spec_type, []
-                    ).append(lines.continuum)
+                    ).append(lines.continuum_flux)
+
+            # The observed wavelengths depend on the galaxy's redshift so we
+            # store them for every galaxy, taking them from the first line
+            # collection we can find (on the galaxy, stars, or black holes)
+            collections = [*galaxy.lines.values()]
+            if galaxy.stars is not None:
+                collections.extend(galaxy.stars.lines.values())
+            if galaxy.black_holes is not None:
+                collections.extend(galaxy.black_holes.lines.values())
+            if len(collections) > 0:
+                self.line_obs_lams.append(collections[0].obslam)
 
         # Do we need to unpack the luminosity images?
         if self._write_images_lum:
@@ -5131,6 +5169,9 @@ class Pipeline:
         for spec_type, conts in self.line_cont_fluxes["BlackHole"].items():
             self.line_cont_fluxes["BlackHole"][spec_type] = unyt_array(conts)
 
+        # Convert the list of observed line wavelengths to a unyt array
+        self.line_obs_lams = unyt_array(self.line_obs_lams)
+
         # Convert the lists of luminosity images to unyt arrays
         for inst_label, inst_data in self.images_lum["Galaxy"].items():
             for spec_type, imgs in inst_data.items():
@@ -5633,19 +5674,47 @@ class Pipeline:
             )
             self.io_helper.write_data(
                 self.line_cont_fluxes["Galaxy"],
-                "Galaxies/Lines/Continuum",
+                "Galaxies/Lines/ContinuumFlux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
                 self.line_cont_fluxes["Stars"],
-                "Galaxies/Stars/Lines/Continuum",
+                "Galaxies/Stars/Lines/ContinuumFlux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
                 self.line_cont_fluxes["BlackHole"],
-                "Galaxies/BlackHoles/Lines/Continuum",
+                "Galaxies/BlackHoles/Lines/ContinuumFlux",
                 galaxy_indices,
             )
+
+            # Ranks without galaxies have no wavelengths to infer the shape
+            # from, so take the trailing shape, dtype and units from a rank
+            # with galaxies and write an empty dataset to match
+            if self.using_mpi:
+                # Share the properties of the wavelengths on each rank with
+                # galaxies
+                obs_props = None
+                if len(self.line_obs_lams) > 0:
+                    obs_props = (
+                        self.line_obs_lams.shape[1:],
+                        self.line_obs_lams.dtype,
+                        str(self.line_obs_lams.units),
+                    )
+                all_obs_props = [
+                    props
+                    for props in self.comm.allgather(obs_props)
+                    if props is not None
+                ]
+
+                # Replace our empty wavelengths with an empty array of the
+                # right shape
+                if len(self.line_obs_lams) == 0 and len(all_obs_props) > 0:
+                    trailing, dtype, units = all_obs_props[0]
+                    self.line_obs_lams = unyt_array(
+                        np.zeros((0, *trailing), dtype=dtype), units
+                    )
+
             self.io_helper.write_data(
                 self.line_obs_lams,
                 "Galaxies/Lines/ObservedWavelengths",

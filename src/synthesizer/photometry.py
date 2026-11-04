@@ -14,7 +14,12 @@ import numpy as np
 from unyt import Hz, cm, erg, s
 
 from synthesizer import exceptions
-from synthesizer.units import Quantity, accepts, unyt_to_ndview
+from synthesizer.units import (
+    Quantity,
+    accepts,
+    deepcopy_with_shared_units,
+    unyt_to_ndview,
+)
 from synthesizer.utils.operation_timers import timed
 
 
@@ -47,6 +52,9 @@ class PhotometryCollection:
     # Define quantities (there has to be one for rest and observer frame)
     photo_lnu = Quantity("luminosity_density_frequency")
     photo_fnu = Quantity("flux_density_frequency")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(
         photometry=(

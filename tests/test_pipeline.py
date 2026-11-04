@@ -454,6 +454,14 @@ class TestPipelineInit:
         with pytest.raises(ValueError, match="max_npart must be an int >= 1"):
             Pipeline(emission_model=nebular_emission_model, max_npart=0)
 
+    def test_analysis_func_timing_registered(self, nebular_emission_model):
+        """Analysis timings exist before any galaxy is processed."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_analysis_func(lambda gal: 1.0, "Extra")
+
+        # A rank without galaxies must still reduce this timing
+        assert pipeline._op_timing["Extra"] == 0.0
+
 
 class TestPipelineTimingAnalysis:
     """Tests for Pipeline atomic timing analysis."""
@@ -668,6 +676,59 @@ class TestPipelineNotReady:
 class TestPipelineOperations:
     """Tests for the pipeline operations."""
 
+    def test_pipeline_uses_a_single_igm(
+        self, test_grid, nebular_emission_model
+    ):
+        """A Pipeline only accepts one IGM for all observed emissions."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        line_ids = test_grid.available_lines[:2]
+        igm = MagicMock()
+
+        # The first IGM is used, and passing it again (or None) is fine
+        pipeline.get_observed_spectra(cosmo=cosmo, igm=igm)
+        pipeline.get_observed_lines(cosmo=cosmo, igm=None, line_ids=line_ids)
+        pipeline.get_observed_lines(cosmo=cosmo, igm=igm, line_ids=line_ids)
+        assert pipeline._igm is igm
+
+        # But a different IGM isn't
+        with pytest.raises(exceptions.InconsistentArguments):
+            pipeline.get_observed_lines(
+                cosmo=cosmo, igm=MagicMock(), line_ids=line_ids
+            )
+
+    def test_pipeline_accepts_equivalent_igms(self, nebular_emission_model):
+        """Equivalent built-in instances may share a Pipeline."""
+        from synthesizer.emission_models.attenuation import (
+            Asada25,
+            Inoue14,
+            Madau96,
+        )
+
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        first = Inoue14(scale_tau=2.0)
+        pipeline.get_observed_spectra(cosmo=cosmo, igm=first)
+        pipeline.get_photometry_fluxes(
+            make_test_imager(), cosmo=cosmo, igm=Inoue14(scale_tau=2.0)
+        )
+        assert pipeline._igm is first
+
+        for different in (Inoue14(scale_tau=3.0), Asada25()):
+            with pytest.raises(exceptions.InconsistentArguments):
+                pipeline._set_igm(different)
+
+        for factory, difference in (
+            (Asada25, Asada25(sigmoid_params=(1, 2, 3))),
+            (Madau96, None),
+        ):
+            other = Pipeline(emission_model=nebular_emission_model, verbose=0)
+            other._set_igm(factory())
+            other._set_igm(factory())
+            if difference is None:
+                difference = Madau96()
+                difference.coefficients[0] *= 2
+            with pytest.raises(exceptions.InconsistentArguments):
+                other._set_igm(difference)
+
     def test_base_galaxy_get_observed_spectra_passes_nthreads(self):
         """BaseGalaxy should forward nthreads to each Sed.get_fnu call."""
         igm = MagicMock()
@@ -705,6 +766,7 @@ class TestPipelineOperations:
                 nthreads=7,
                 out_dtype=None,
                 peculiar_velocity=None,
+                emitter=galaxy,
             )
 
     def test_pipeline_get_observed_spectra_passes_pipeline_nthreads(
@@ -973,6 +1035,39 @@ class TestPipelineOperations:
         assert pipeline_with_galaxies.line_obs_lams is not None, (
             "Line wavelengths not calculated"
         )
+
+    def test_observed_line_wavelengths_per_galaxy(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_particle_galaxy,
+        tmp_path,
+    ):
+        """Observed line wavelengths are written for each galaxy."""
+        # Make two copies of the galaxy at different redshifts
+        galaxies = []
+        for redshift in (1.0, 3.0):
+            gal = copy.deepcopy(random_particle_galaxy)
+            gal.redshift = redshift
+            for comp in (gal.stars, gal.gas, gal.black_holes):
+                comp.redshift = redshift
+            galaxies.append(gal)
+
+        # Compute and write their observed lines
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_galaxies(galaxies)
+        pipeline.get_observed_lines(
+            line_ids=test_grid.available_lines,
+            cosmo=cosmo,
+        )
+        output = tmp_path / "observed_lines.hdf5"
+        pipeline.write(output)
+
+        # Each galaxy should have its own wavelengths, scaled by (1 + z)
+        with h5py.File(output) as hdf:
+            obslams = hdf["Galaxies/Lines/ObservedWavelengths"][...]
+        assert obslams.shape == (2, len(test_grid.available_lines))
+        np.testing.assert_allclose(obslams[1] / obslams[0], 4.0 / 2.0)
 
     def test_run_pipeline_lines_luminosity_subset(
         self,
@@ -1327,6 +1422,30 @@ class TestPipelineOperations:
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.sfhs) > 0
         ), "No SFH was calculated"
+
+    def test_write_lines_and_observed_lines(
+        self, test_grid, pipeline_with_galaxies, tmp_path
+    ):
+        """Luminosity and flux lines can be written together."""
+        pipeline_with_galaxies.get_lines(line_ids=test_grid.available_lines)
+        pipeline_with_galaxies.get_observed_lines(
+            cosmo=cosmo, line_ids=test_grid.available_lines
+        )
+        output = tmp_path / "lines.hdf5"
+        pipeline_with_galaxies.write(output)
+
+        # Each gets its own continuum, in its own units
+        with h5py.File(output) as hdf:
+            lines = hdf["Galaxies/Stars/Lines"]
+            assert "Luminosity" in lines
+            assert "Flux" in lines
+            lum_cont = lines["Continuum"]
+            flux_cont = lines["ContinuumFlux"]
+            for spec_type in lum_cont:
+                assert (
+                    lum_cont[spec_type].attrs["Units"]
+                    != flux_cont[spec_type].attrs["Units"]
+                )
 
 
 class TestPipelineNewFeatures:
@@ -3039,3 +3158,76 @@ class TestGoldenPipelineRegression:
             golden_reference["bolometric_luminosity"],
             rtol=1e-5,
         )
+
+
+def test_combine_rank_files_virtual_with_empty_rank(tmp_path):
+    """Ranks without rows (or datasets) must not break the virtual file."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Rank 0 has no galaxies: an empty placeholder for one dataset and
+    # nothing at all for the other. Rank 1 holds all the rows. Neither rank
+    # has rows for the final dataset.
+    obslams = np.arange(10.0).reshape(2, 5)
+    fluxes = np.arange(6.0).reshape(2, 3)
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.attrs["synthesizer_version"] = "test"
+        dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", shape=(0,))
+        dset.attrs["Units"] = "dimensionless"
+        hdf.create_dataset("Galaxies/Empty", shape=(0, 5))
+    with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
+        dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", data=fluxes)
+        dset.attrs["Units"] = "erg/s/cm**2"
+        dset = hdf.create_dataset(
+            "Galaxies/Lines/ObservedWavelengths", data=obslams
+        )
+        dset.attrs["Units"] = "Å"
+        hdf.create_dataset("Galaxies/Empty", shape=(0, 5))
+
+    # Build the writer as rank 0 of 2 would have it after writing
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 2, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 0
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 0], [0, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    io.combine_rank_files_virtual()
+
+    # Both datasets should come entirely from rank 1
+    with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lines/ObservedWavelengths"][...], obslams
+        )
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lines/Flux/nebular"][...], fluxes
+        )
+        assert hdf["Galaxies/Lines/Flux/nebular"].attrs["Units"] == (
+            "erg/s/cm**2"
+        )
+
+        # A dataset without rows on any rank isn't written
+        assert "Galaxies/Empty" not in hdf
+
+
+def test_combine_rank_files_virtual_units_mismatch(tmp_path):
+    """Ranks with different units for a dataset must raise an error."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Both ranks hold a row but with different units
+    for rank, units in enumerate(("erg/s", "W")):
+        with h5py.File(tmp_path / f"out_{rank}.hdf5", "w") as hdf:
+            dset = hdf.create_dataset("Galaxies/Lum", data=np.ones((1, 3)))
+            dset.attrs["Units"] = units
+
+    # Build the writer as rank 0 of 2 would have it after writing
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 2, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 1
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 1], [1, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    with pytest.raises(ValueError, match="units"):
+        io.combine_rank_files_virtual()
