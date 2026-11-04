@@ -49,10 +49,17 @@ def u_mean_magdis12(dust_mass: float, ldust: float, p0: float) -> float:
     return ldust / (p0 * dust_mass)
 
 
-def u_mean(umin: float, umax: float, gamma: float) -> float:
+def u_mean(
+    umin: float,
+    umax: float,
+    gamma: float,
+    alpha: float = 2.0,
+) -> float:
     """Calculate the mean radiation field heating the dust.
 
-    For fixed alpha=2.0, get <U> for Draine and Li model
+    In the Draine & Li (2007) model a fraction (1 - gamma) of the dust mass
+    is heated by umin, and the rest by a power law dM/dU ~ U^-alpha between
+    umin and umax.
 
     Args:
         umin (float):
@@ -61,20 +68,35 @@ def u_mean(umin: float, umax: float, gamma: float) -> float:
             Maximum radiation field.
         gamma (float):
             Fraction of dust mass in power-law component.
+        alpha (float):
+            The slope of the power-law component.
 
     Returns:
         float:
             The mean radiation field.
     """
-    return (1.0 - gamma) * umin + gamma * np.log(umax / umin) / (
-        umin ** (-1) - umax ** (-1)
-    )
+    if np.isclose(alpha, 1.0):
+        u_power_law = (umax - umin) / np.log(umax / umin)
+    elif np.isclose(alpha, 2.0):
+        u_power_law = np.log(umax / umin) / (umin ** (-1) - umax ** (-1))
+    else:
+        u_power_law = (
+            (alpha - 1.0)
+            / (alpha - 2.0)
+            * (umin ** (2.0 - alpha) - umax ** (2.0 - alpha))
+            / (umin ** (1.0 - alpha) - umax ** (1.0 - alpha))
+        )
+    return (1.0 - gamma) * umin + gamma * u_power_law
 
 
-def solve_umin(umin: float, umax: float, u_avg: float, gamma: float) -> float:
+def solve_umin(
+    umin: float,
+    umax: float,
+    u_avg: float,
+    gamma: float,
+    alpha: float = 2.0,
+) -> float:
     """Solve for Umin in the Draine and Li model.
-
-    For fixed alpha=2.0, equation to solve to <U> in Draine and Li
 
     Args:
         umin (float):
@@ -85,12 +107,14 @@ def solve_umin(umin: float, umax: float, u_avg: float, gamma: float) -> float:
             Average radiation field.
         gamma (float):
             Fraction of dust mass in power-law component.
+        alpha (float):
+            The slope of the power-law component.
 
     Returns:
         float:
             The difference between calculated and target mean field.
     """
-    return u_mean(umin, umax, gamma) - u_avg
+    return u_mean(umin, umax, gamma, alpha) - u_avg
 
 
 class DraineLi07(DustEmission):

@@ -1696,3 +1696,22 @@ class TestRequiredEmissions:
         bb.set_scaler(FakeEmissionModel("scaler"))
         lscale = bb.get_scaling(None, None, mock_emissions)
         assert lscale == mock_emissions["scaler"].bolometric_luminosity
+
+
+class TestDraineLi07Interpolation:
+    """The DraineLi07 mean radiation field handles any alpha."""
+
+    @pytest.mark.parametrize("alpha", (1.0, 1.5, 2.0, 2.5))
+    def test_u_mean_any_alpha(self, alpha):
+        """The mean radiation field matches the integral for any alpha."""
+        umin, umax, gamma = 1.0, 1e7, 0.1
+        log_u = np.linspace(np.log(umin), np.log(umax), 200001)
+        u = np.exp(log_u)
+        dm_du = u ** (-alpha)
+        norm = np.trapezoid(dm_du * u, log_u)
+        u_power_law = np.trapezoid(dm_du * u * u, log_u) / norm
+        np.testing.assert_allclose(
+            u_mean(umin, umax, gamma, alpha),
+            (1 - gamma) * umin + gamma * u_power_law,
+            rtol=1e-6,
+        )
