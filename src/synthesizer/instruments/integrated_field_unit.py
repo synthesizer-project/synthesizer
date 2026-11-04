@@ -6,6 +6,8 @@ resolution, optional PSFs, and noise definitions.
 """
 
 import h5py
+import numpy as np
+from scipy import signal
 from unyt import angstrom, arcsecond, kpc, unyt_array
 
 from synthesizer import exceptions
@@ -165,7 +167,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
     @property
     def can_do_psf_spectroscopy(self):
         """Return whether this instrument supports PSF spectroscopy."""
-        return False
+        return self.psfs is not None
 
     @property
     def can_do_noisy_resolved_spectroscopy(self):
@@ -376,49 +378,137 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         return cube
 
     @timed("IntegratedFieldUnit.apply_psf_to_cube")
-    def apply_psf_to_cube(self, cube, **kwargs):
+    def apply_psf_to_cube(self, cube, inplace=False):
         """Apply the IFU PSF to a spectral cube.
-
-        This placeholder makes the intended IFU-owned PSF behaviour explicit
-        even though the underlying cube PSF machinery has not yet been
-        implemented.
 
         Args:
             cube (SpectralCube): Spectral cube to which the PSF should be
                 applied.
-            **kwargs: Future keyword arguments for IFU PSF application.
+            inplace (bool): If ``True`` update ``cube`` directly and return
+                it. Otherwise return a new cube.
+
+        Returns:
+            SpectralCube: New cube with the PSF applied.
 
         Raises:
-            UnimplementedFunctionality: Raised because IFU PSF application is
-                not yet implemented.
+            MissingArgument: If the instrument has no PSFs configured.
+            InconsistentArguments: If the PSF dimensions or wavelength
+                grid are incompatible with the cube.
         """
-        # The IFU should eventually own cube-side PSF application, but the
-        # required machinery has not yet been implemented.
-        raise exceptions.UnimplementedFunctionality(
-            "IntegratedFieldUnit.apply_psf_to_cube is not implemented yet."
-        )
+        # Ensure the spectral cube has been generated.
+        if cube.arr is None:
+            raise exceptions.MissingIFU(
+                "The spectral cube array hasn't been generated yet. Run "
+                "generate_data_cube_hist() or generate_data_cube_smoothed() "
+                "before applying the PSF."
+            )
+
+        # Ensure the instrument actually has PSFs to apply
+        if self.psfs is None:
+            raise exceptions.MissingArgument(
+                "No PSFs are set on this Instrument. Provide psfs when "
+                "constructing the Instrument."
+            )
+
+        if np.ndim(self.psfs) == 2:
+            psf_type = "2D"
+        elif np.ndim(self.psfs) == 3:
+            psf_type = "3D"
+        else:
+            raise exceptions.InconsistentArguments(
+                "The Instrument PSF must be 2 or 3 dimensional."
+            )
+
+        if psf_type == "3D":
+            if len(self.lam) != len(cube.lam) or not np.allclose(
+                self.lam.to(cube.lam.units).value,
+                cube.lam.value,
+            ):
+                raise exceptions.InconsistentArguments(
+                    "The Instrument and cube wavelength grids must match."
+                )
+            if np.shape(self.psfs)[2] != np.shape(cube.arr)[2]:
+                raise exceptions.InconsistentArguments(
+                    "The Instrument PSF is specified on a different wavelength"
+                    "grid to the data cube. The PSF must be specified at each"
+                    "wavelength."
+                )
+
+        psf_resample_factor = self.psf_resample_factor
+
+        # Resampling factors smaller than one do not make sense for this PSF
+        # application path because the image is optionally supersampled first
+        if psf_resample_factor < 1:
+            raise exceptions.InconsistentArguments(
+                "psf_resample_factor must be greater than or equal to 1."
+            )
+
+        # Work on the original image when requested, otherwise create a fresh
+        # container so the instrument owns the post-processing semantics
+        if inplace:
+            working_cube = cube
+        else:
+            working_cube = SpectralCube(
+                resolution=cube.resolution,
+                fov=cube.fov,
+                lam=cube.lam,
+            )
+            working_cube.arr = cube.arr.copy()
+            working_cube.units = cube.units
+            working_cube.sed = cube.sed
+            working_cube.quantity = cube.quantity
+
+        # If requested, temporarily supersample before the PSF convolution
+        if psf_resample_factor > 1:
+            working_cube.resample(psf_resample_factor)
+
+        # Perform the PSF convolution on the instrument side rather than on the
+        # image container so the observation machinery stays instrument-owned
+        convolved_cube = np.empty_like(working_cube.arr, dtype=float)
+
+        if psf_type == "3D":
+            for ii in np.arange(0, np.shape(working_cube.arr)[2]):
+                convolved_cube[:, :, ii] = signal.fftconvolve(
+                    working_cube.arr[:, :, ii],
+                    self.psfs[:, :, ii],
+                    mode="same",
+                )
+        elif psf_type == "2D":
+            for ii in np.arange(0, np.shape(working_cube.arr)[2]):
+                convolved_cube[:, :, ii] = signal.fftconvolve(
+                    working_cube.arr[:, :, ii],
+                    self.psfs,
+                    mode="same",
+                )
+
+        # Update the chosen cube container with the convolved pixels
+        working_cube.arr = convolved_cube
+
+        # Return to the original resolution if we temporarily supersampled
+        if psf_resample_factor > 1:
+            working_cube.downsample(1 / psf_resample_factor)
+
+        return working_cube
 
     @timed("IntegratedFieldUnit.apply_psf")
     def apply_psf(self, observable, **kwargs):
         """Apply the IFU PSF to an observable.
 
-        This placeholder makes the intended IFU-owned PSF behaviour explicit
-        even though the underlying resolved-spectroscopy PSF machinery has not
-        yet been implemented.
-
         Args:
             observable: Observable to which the IFU PSF should be applied.
-            **kwargs: Future keyword arguments for IFU PSF application.
+            **kwargs: Additional arguments passed to the PSF method.
+
+        Returns:
+            SpectralCube: Cube with the PSF applied.
 
         Raises:
-            UnimplementedFunctionality: Raised because IFU PSF application is
-                not yet implemented.
+            InconsistentArguments: If the observable is not a SpectralCube.
         """
-        # The IFU should eventually own resolved-spectroscopy PSF
-        # application, but the required machinery has not yet been
-        # implemented.
-        raise exceptions.UnimplementedFunctionality(
-            "IntegratedFieldUnit.apply_psf is not implemented yet."
+        if isinstance(observable, SpectralCube):
+            return self.apply_psf_to_cube(observable, **kwargs)
+
+        raise exceptions.InconsistentArguments(
+            "IntegratedFieldUnit.apply_psf only supports SpectralCube objects."
         )
 
     @timed("IntegratedFieldUnit.apply_noise_to_cube")
