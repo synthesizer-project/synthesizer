@@ -1355,7 +1355,7 @@ class Pipeline:
         # Register the timing now so every rank has the same timing keys,
         # even those without galaxies (otherwise the MPI reduction of the
         # timings deadlocks)
-        self._op_timing[result_key] = 0.0
+        self._op_timing.setdefault(result_key, 0.0)
 
         self._print(f"Added analysis function: {result_key}")
 
@@ -4622,7 +4622,7 @@ class Pipeline:
                 )
                 self.line_cont_fluxes["Galaxy"].setdefault(
                     spec_type, []
-                ).append(lines.continuum)
+                ).append(lines.continuum_flux)
             if galaxy.stars is not None:
                 for spec_type, lines in galaxy.stars.lines.items():
                     self.line_fluxes["Stars"].setdefault(spec_type, []).append(
@@ -4630,7 +4630,7 @@ class Pipeline:
                     )
                     self.line_cont_fluxes["Stars"].setdefault(
                         spec_type, []
-                    ).append(lines.continuum)
+                    ).append(lines.continuum_flux)
             if galaxy.black_holes is not None:
                 for spec_type, lines in galaxy.black_holes.lines.items():
                     self.line_fluxes["BlackHole"].setdefault(
@@ -4638,7 +4638,7 @@ class Pipeline:
                     ).append(lines.flux)
                     self.line_cont_fluxes["BlackHole"].setdefault(
                         spec_type, []
-                    ).append(lines.continuum)
+                    ).append(lines.continuum_flux)
 
             # The observed wavelengths depend on the galaxy's redshift so we
             # store them for every galaxy, taking them from the first line
@@ -6036,28 +6036,26 @@ class Pipeline:
                 "Galaxies/BlackHoles/Lines/Flux",
                 galaxy_indices,
             )
+            self.io_helper.write_data(
+                self.line_cont_fluxes["Galaxy"],
+                "Galaxies/Lines/ContinuumFlux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_cont_fluxes["Stars"],
+                "Galaxies/Stars/Lines/ContinuumFlux",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.line_cont_fluxes["BlackHole"],
+                "Galaxies/BlackHoles/Lines/ContinuumFlux",
+                galaxy_indices,
+            )
+
             if len(self.line_obs_lams) > 0:
                 self.io_helper.write_data(
                     self.line_obs_lams,
                     "Galaxies/Lines/ObservedWavelengths",
-                    galaxy_indices,
-                )
-            # The continuum shares its datasets with the luminosity lines so
-            # only write it here if they haven't already
-            if not self._write_lines:
-                self.io_helper.write_data(
-                    self.line_cont_fluxes["Galaxy"],
-                    "Galaxies/Lines/Continuum",
-                    galaxy_indices,
-                )
-                self.io_helper.write_data(
-                    self.line_cont_fluxes["Stars"],
-                    "Galaxies/Stars/Lines/Continuum",
-                    galaxy_indices,
-                )
-                self.io_helper.write_data(
-                    self.line_cont_fluxes["BlackHole"],
-                    "Galaxies/BlackHoles/Lines/Continuum",
                     galaxy_indices,
                 )
 

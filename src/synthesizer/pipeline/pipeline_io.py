@@ -567,8 +567,7 @@ class PipelineIO:
             self._took(start, f"Writing {key} (and subgroups)")
 
         except Exception as e:
-            self._print(f"Failed to write {key} - {e}")
-            raise
+            raise OSError(f"Failed to write {key} - {e}") from e
 
     @timed("PipelineIO.combine_rank_files")
     def combine_rank_files(self):

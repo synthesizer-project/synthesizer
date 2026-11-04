@@ -6,6 +6,7 @@ from unyt import Mpc, Msun, km, rad, s, unyt_array
 
 from synthesizer import exceptions
 from synthesizer.particle.particles import CoordinateGenerator, Particles
+from synthesizer.units import Quantity
 
 
 class TestParticlesInitialization:
@@ -219,6 +220,12 @@ class TestParticlesPhotometry:
         assert str(out["D"]["F"].units) == "erg/(Hz*cm**2*s)"
 
 
+class SmoothedParticles(Particles):
+    """A Particles child with smoothing lengths, as Stars/Gas/BlackHoles."""
+
+    smoothing_lengths = Quantity("spatial")
+
+
 class TestParticlesProjection:
     """Tests for projected angular coordinates and smoothing lengths."""
 
@@ -226,7 +233,7 @@ class TestParticlesProjection:
     def simple_parts(self):
         """Create a simple Particles instance with two particles."""
         coords = np.array([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0]]) * Mpc
-        sp = Particles(
+        sp = SmoothedParticles(
             coordinates=coords,
             velocities=np.zeros((2, 3)) * (km / s),
             masses=np.ones(2) * Msun,
@@ -236,8 +243,7 @@ class TestParticlesProjection:
             centre=np.zeros(3) * Mpc,
         )
         # set smoothing lengths for test
-        sp._smoothing_lengths = np.array([0.5, 1.0])
-        sp.smoothing_lengths = sp._smoothing_lengths * Mpc
+        sp.smoothing_lengths = np.array([0.5, 1.0]) * Mpc
 
         # mock luminosity distance
         def fake_ld(cosmo):
@@ -270,6 +276,9 @@ class TestParticlesProjection:
         sml = sp.get_projected_angular_smoothing_lengths(los_dists=los)
         assert sml.shape == (2,)
         assert sml.units == rad
+        expected = np.arctan2(np.array([0.5, 1.0]), np.array([10.0, 20.0]))
+        assert np.all(expected > 0)
+        np.testing.assert_allclose(sml.to_value(rad), expected)
 
     def test_get_projected_angular_imaging_props(self, simple_parts):
         """Combine coords and smoothing lengths."""
