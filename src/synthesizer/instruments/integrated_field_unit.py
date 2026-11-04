@@ -8,7 +8,7 @@ resolution, optional PSFs, and noise definitions.
 import h5py
 import numpy as np
 from scipy import signal
-from unyt import angstrom, arcsecond, kpc, unyt_array
+from unyt import angstrom, arcsecond, kpc, unyt_array, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.imaging import SpectralCube
@@ -43,6 +43,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
 
     @accepts(
         resolution=(kpc, arcsecond),
+        psf_pixel_scale=(kpc, arcsecond),
         lam=angstrom,
         depth_app_radius=(kpc, arcsecond),
     )
@@ -53,7 +54,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         lam,
         resolution,
         psfs=None,
-        psf_resample_factor=1,
+        psf_pixel_scale=None,
         depth=None,
         depth_app_radius=None,
         snrs=None,
@@ -74,8 +75,9 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 If a 2D array is supplied, every wavelength is assumed to have
                 the same PSF. If a 3D array is supplied, the last axis must be
                 the wavelength axis.
-            psf_resample_factor (int, optional): Instrument-owned PSF
-                supersampling factor reserved for future IFU PSF application.
+            psf_pixel_scale (unyt_quantity, optional): Spatial pixel scale of
+                the supplied PSF kernels. Must have units compatible with the
+                spectral cube resolution.
             depth (unyt_quantity, optional): The depth of the instrument, in
                 the same units as the image surface brightness.
             depth_app_radius (unyt_quantity, optional): The aperture radius for
@@ -109,7 +111,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         # Attach the IFU specific attributes
         self.resolution = resolution
         self.psfs = psfs
-        self.psf_resample_factor = psf_resample_factor
+        self.psf_pixel_scale = psf_pixel_scale
         self.noise_source_maps = noise_source_maps
 
         # Ensure we have been handed the correct information
@@ -132,10 +134,21 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 "IntegratedFieldUnit requires a resolution."
             )
 
-        if self.psf_resample_factor < 1:
-            raise exceptions.InconsistentArguments(
-                "psf_resample_factor must be greater than or equal to 1."
+        if self.psfs is not None and self.psf_pixel_scale is None:
+            raise exceptions.MissingArgument(
+                "A PSF pixel scale must be provided when PSFs are set."
             )
+
+        if self.psf_pixel_scale is not None:
+            if not np.all(np.isfinite(self.psf_pixel_scale.value)):
+                raise exceptions.InconsistentArguments(
+                    "psf_pixel_scale must be finite."
+                )
+
+            if np.any(self.psf_pixel_scale <= 0 * self.psf_pixel_scale.units):
+                raise exceptions.InconsistentArguments(
+                    "psf_pixel_scale must be greater than zero."
+                )
 
         # Correlated-noise source maps are an alternative future noise
         # definition to depth+SNR pairs.
@@ -184,7 +197,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         return super()._comparison_state() + (
             _hashable_state(self.resolution),
             _hashable_state(self.psfs),
-            _hashable_state(self.psf_resample_factor),
+            _hashable_state(self.psf_pixel_scale),
             _hashable_state(self.noise_source_maps),
         )
 
@@ -434,13 +447,20 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                     "wavelength."
                 )
 
-        psf_resample_factor = self.psf_resample_factor
+        psf_resample_factor = (
+            cube.resolution / self.psf_pixel_scale
+        ).to_value("dimensionless")
+
+        # Convert to integer if sufficiently close.
+        nearest_int = round(psf_resample_factor)
+        if np.isclose(psf_resample_factor, nearest_int):
+            psf_resample_factor = int(nearest_int)
 
         # Resampling factors smaller than one do not make sense for this PSF
         # application path because the image is optionally supersampled first
         if psf_resample_factor < 1:
             raise exceptions.InconsistentArguments(
-                "psf_resample_factor must be greater than or equal to 1."
+                "PSF pixel scale must be no larger than the cube pixel scale."
             )
 
         # Work on the original image when requested, otherwise create a fresh
@@ -576,12 +596,13 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             ds = group.create_dataset("PSFs", data=self.psfs, dtype=float)
             ds.attrs["units"] = "dimensionless"
 
-        ds = group.create_dataset(
-            "PSFResampleFactor",
-            data=self.psf_resample_factor,
-            dtype=int,
-        )
-        ds.attrs["units"] = "dimensionless"
+        if self.psf_pixel_scale is not None:
+            ds = group.create_dataset(
+                "PSFPixelScale",
+                data=self.psf_pixel_scale.value,
+                dtype=float,
+            )
+            ds.attrs["units"] = str(self.psf_pixel_scale.units)
 
         write_instrument_attribute(
             group, "NoiseSourceMaps", self.noise_source_maps
@@ -632,10 +653,13 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         else:
             psfs = None
 
-        if "PSFResampleFactor" in group:
-            psf_resample_factor = int(group["PSFResampleFactor"][...])
+        if "PSFPixelScale" in group:
+            psf_pixel_scale = unyt_quantity(
+                group["PSFPixelScale"][()],
+                group["PSFPixelScale"].attrs["units"],
+            )
         else:
-            psf_resample_factor = 1
+            psf_pixel_scale = None
 
         noise_maps = read_instrument_attribute(group, "NoiseMaps")
         noise_source_maps = read_instrument_attribute(group, "NoiseSourceMaps")
@@ -648,7 +672,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             "depth_app_radius": depth_app_radius,
             "snrs": snrs,
             "psfs": psfs,
-            "psf_resample_factor": psf_resample_factor,
+            "psf_pixel_scale": psf_pixel_scale,
             "noise_maps": noise_maps,
             "noise_source_maps": noise_source_maps,
             "resolving_power": group.attrs.get("resolving_power"),
@@ -663,7 +687,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             depth_app_radius=payload["depth_app_radius"],
             snrs=payload["snrs"],
             psfs=payload["psfs"],
-            psf_resample_factor=payload["psf_resample_factor"],
+            psf_pixel_scale=payload["psf_pixel_scale"],
             noise_maps=payload["noise_maps"],
             noise_source_maps=payload["noise_source_maps"],
             resolving_power=payload["resolving_power"],
