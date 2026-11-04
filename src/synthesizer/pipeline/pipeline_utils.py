@@ -850,6 +850,52 @@ def divide_dicts_recursive(data, divisors):
     return data / divisors
 
 
+def iter_row_lists(data, path=()):
+    """Yield every list of rows in a nested dictionary.
+
+    Args:
+        data (dict/list): The nested dictionary (or a list) to search.
+        path (tuple): The keys leading to data (used when recursing).
+
+    Yields:
+        tuple:
+            The keys leading to the list and the list itself.
+    """
+    if isinstance(data, dict):
+        for key, value in data.items():
+            yield from iter_row_lists(value, (*path, key))
+    elif isinstance(data, list):
+        yield path, data
+
+
+def get_row_template(row):
+    """Return what's needed to make an empty row like the one passed.
+
+    Args:
+        row (array-like): The row to describe.
+
+    Returns:
+        tuple:
+            The shape, dtype and units (None without units) of the row.
+    """
+    return np.shape(row), np.asarray(row).dtype, getattr(row, "units", None)
+
+
+def make_empty_row(template):
+    """Return a row of zeros matching a template from get_row_template.
+
+    Args:
+        template (tuple): The shape, dtype and units of the row.
+
+    Returns:
+        array-like:
+            The empty row (a unyt_array if the template has units).
+    """
+    shape, dtype, units = template
+    row = np.zeros(shape, dtype=dtype)
+    return row * units if units is not None else row
+
+
 def clear_lists_recursive(data):
     """Empty every list in a nested dictionary in place.
 
@@ -860,14 +906,8 @@ def clear_lists_recursive(data):
     """
     # Keep the dictionary keys we discovered while processing galaxies so
     # the next batch can reuse them; only the lists of rows need clearing.
-    if isinstance(data, list):
-        data.clear()
-        return
-    for value in data.values():
-        if isinstance(value, dict):
-            clear_lists_recursive(value)
-        elif isinstance(value, list):
-            value.clear()
+    for _, rows in iter_row_lists(data):
+        rows.clear()
 
 
 def get_buffered_nbytes(data):

@@ -53,6 +53,9 @@ from synthesizer.pipeline.pipeline_utils import (
     get_atomic_timing_snapshot,
     get_buffered_nbytes,
     get_full_memory,
+    get_row_template,
+    iter_row_lists,
+    make_empty_row,
     plot_timing_analysis,
     sanitise_hdf5_key_part,
     sum_dicts_recursive,
@@ -4474,25 +4477,9 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Track existing product rows before unpacking this galaxy. Missing
-        # products need a row so later values keep their galaxy index.
-        def rows_in(data, path=()):
-            if isinstance(data, dict):
-                for key, value in data.items():
-                    yield from rows_in(value, (*path, key))
-            elif isinstance(data, list):
-                yield path, data
-
-        def empty_row(template):
-            shape, dtype, units = template
-            row = np.zeros(shape, dtype=dtype)
-            return row * units if units is not None else row
-
-        before = {
-            id(rows): len(rows)
-            for attr in self._galaxy_output_attrs
-            for _, rows in rows_in(getattr(self, attr))
-        }
+        # Count the rows we already hold so we can spot the outputs this
+        # galaxy doesn't produce once it's unpacked
+        nrows_before = self._count_buffered_rows()
 
         # Do we need to unpack the SFZH? We take it from the stars where
         # possible since that's where split galaxies accumulate it. Particle
@@ -4881,34 +4868,85 @@ class Pipeline:
                 if self._flush_nbytes is not None:
                     self._buffered_nbytes += get_buffered_nbytes(res)
 
-        for attr in self._galaxy_output_attrs:
-            for path, rows in rows_in(getattr(self, attr)):
-                key = (attr, *path)
-                if len(rows) == before.get(id(rows), 0):
-                    if key in self._row_templates:
-                        rows.append(empty_row(self._row_templates[key]))
-                elif before.get(id(rows), 0) == 0:
-                    template = (
-                        np.shape(rows[0]),
-                        np.asarray(rows[0]).dtype,
-                        getattr(rows[0], "units", None),
-                    )
-                    rows[:0] = [
-                        empty_row(template) for _ in range(self._n_buffered)
-                    ]
-                if rows:
-                    self._row_templates[key] = (
-                        np.shape(rows[0]),
-                        np.asarray(rows[0]).dtype,
-                        getattr(rows[0], "units", None),
-                    )
-                if self._flush_nbytes is not None:
-                    self._buffered_nbytes += get_buffered_nbytes(
-                        rows[before.get(id(rows), 0) :]
-                    )
+        # Make sure every output has a row for this galaxy so later rows
+        # keep their galaxy index
+        self._backfill_missing_rows(nrows_before)
+
+        # Track how much memory we're holding if we flush on memory
+        if self._flush_nbytes is not None:
+            self._count_buffered_nbytes(nrows_before)
 
         # Done!
         self._op_timing["Unpacking results"] += time.perf_counter() - start
+
+    def _count_buffered_rows(self):
+        """Return the number of rows held in each galaxy output list.
+
+        Returns:
+            dict:
+                The number of rows in each list, keyed by the list's id. The
+                lists persist between galaxies (and flushes only empty them)
+                so their ids are stable.
+        """
+        return {
+            id(rows): len(rows)
+            for attr in self._galaxy_output_attrs
+            for _, rows in iter_row_lists(getattr(self, attr))
+        }
+
+    def _backfill_missing_rows(self, nrows_before):
+        """Pad the galaxy outputs the latest galaxy didn't produce.
+
+        Not every galaxy produces every output (e.g. a galaxy without black
+        holes has no black hole spectra). Without a row for these galaxies
+        every later row would be written against the wrong galaxy index, so
+        we pad them with empty rows shaped like the rows we already hold.
+
+        Args:
+            nrows_before (dict):
+                The number of rows in each output list before unpacking the
+                galaxy (from _count_buffered_rows).
+        """
+        for attr in self._galaxy_output_attrs:
+            for path, rows in iter_row_lists(getattr(self, attr)):
+                key = (attr, *path)
+                nbefore = nrows_before.get(id(rows), 0)
+
+                # The galaxy didn't produce this output, pad it if we know
+                # what a row looks like (if we don't, no galaxy has produced
+                # it yet and the list is still empty)
+                if len(rows) == nbefore:
+                    if key in self._row_templates:
+                        rows.append(make_empty_row(self._row_templates[key]))
+
+                # This output is new with this galaxy, pad a row for every
+                # galaxy we already hold. Galaxies already flushed are padded
+                # by the IO helper when it creates the dataset.
+                elif nbefore == 0:
+                    template = get_row_template(rows[0])
+                    rows[:0] = [
+                        make_empty_row(template)
+                        for _ in range(self._n_buffered)
+                    ]
+
+                # Remember what a row looks like. This outlives the rows
+                # themselves since flushing empties the lists.
+                if rows:
+                    self._row_templates[key] = get_row_template(rows[0])
+
+    def _count_buffered_nbytes(self, nrows_before):
+        """Add the bytes the latest galaxy's rows hold to the running total.
+
+        Args:
+            nrows_before (dict):
+                The number of rows in each output list before unpacking the
+                galaxy (from _count_buffered_rows).
+        """
+        for attr in self._galaxy_output_attrs:
+            for _, rows in iter_row_lists(getattr(self, attr)):
+                self._buffered_nbytes += get_buffered_nbytes(
+                    rows[nrows_before.get(id(rows), 0) :]
+                )
 
     @timed("Pipeline.run")
     def run(self):
