@@ -1368,7 +1368,6 @@ class Grid:
         # Unpack the transmission and wavelengths of the filters so we can
         # resample onto the grid wavelength array
         transmissions = [f.transmission for f in filters]
-        wavelengths = filters.lam
 
         # Resample the filter transmissions onto the grid wavelength array
         transmissions_resampled = [
@@ -1391,8 +1390,8 @@ class Grid:
         if not np.any(lam_mask):
             raise exceptions.InconsistentArguments(
                 "None of the provided filters overlap the wavelength range "
-                f"of the grid: filter_range {np.min(wavelengths)}, "
-                f"{np.max(wavelengths)}, "
+                f"of the grid: filter_range {np.min(filters.lam)}, "
+                f"{np.max(filters.lam)}, "
                 f"grid_range {(grid.lam[0], grid.lam[-1])}"
             )
 
