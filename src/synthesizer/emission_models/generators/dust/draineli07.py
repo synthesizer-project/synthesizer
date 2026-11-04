@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from functools import partial
 from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
-from numpy.typing import NDArray
-from scipy.optimize import fsolve
+from scipy.optimize import brentq
 from spectres import spectres
 from unyt import Hz, Lsun, Msun, angstrom, erg, s, unyt_array, unyt_quantity
 
@@ -16,6 +14,7 @@ from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
 )
+from synthesizer.emission_models.utils import get_param
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.grid import Grid
 from synthesizer.synth_warnings import warn
@@ -25,6 +24,20 @@ from synthesizer.utils.precision import verify_out_precision
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
+
+# Parameters that can be set on the model, generator or emitter, but that
+# aren't required (missing values are derived or fall back to a default)
+_OPTIONAL_PARAMS = (
+    "dust_to_gas_ratio",
+    "hydrogen_mass",
+    "qpah",
+    "gamma",
+    "umin",
+    "alpha",
+)
+
+# Values used when a parameter isn't set anywhere
+_DEFAULTS = {"dust_to_gas_ratio": 0.01, "qpah": 0.025, "alpha": 2.0}
 
 
 def u_mean_magdis12(dust_mass: float, ldust: float, p0: float) -> float:
@@ -125,6 +138,13 @@ class DraineLi07(DustEmission):
     calculated as the difference between the intrinsic and attenuated
     emissions. The "energy balance" method.
 
+    dust_to_gas_ratio, hydrogen_mass, qpah, gamma, umin and alpha can be set
+    on the generator, where they override the emitter, or read from the
+    emitter. If they are set on neither, hydrogen_mass is derived from the
+    dust mass and dust_to_gas_ratio, gamma and umin are derived from the
+    Magdis+12 stacking results, and dust_to_gas_ratio, qpah and alpha fall
+    back to 0.01, 0.025 and 2.0.
+
     This is based on the work of Draine & Li (2007):
     https://ui.adsabs.harvard.edu/abs/2007ApJ...657..810D/abstract
 
@@ -147,7 +167,8 @@ class DraineLi07(DustEmission):
         umin (float):
             Radiation field heating majority of the dust.
         alpha (float):
-            The power law normalisation.
+            The slope of the power-law part of the starlight intensity
+            distribution.
         power_per_unit_mass (float):
             Power absorbed per unit dust mass in a radiation field with U = 1.
         verbose (bool):
@@ -156,13 +177,13 @@ class DraineLi07(DustEmission):
 
     grid: Grid
     dust_mass: Optional[unyt_quantity]
-    dust_to_gas_ratio: float
+    dust_to_gas_ratio: Optional[float]
     hydrogen_mass: Optional[unyt_quantity]
     template: str
     gamma: Optional[float]
-    qpah: float
+    qpah: Optional[float]
     umin: Optional[float]
-    alpha: float
+    alpha: Optional[float]
     power_per_unit_mass: float
     verbose: bool
 
@@ -171,13 +192,13 @@ class DraineLi07(DustEmission):
         self,
         grid: Grid,
         dust_mass: Optional[unyt_quantity] = None,
-        dust_to_gas_ratio: float = 0.01,
+        dust_to_gas_ratio: Optional[float] = None,
         hydrogen_mass: Optional[unyt_quantity] = None,
         template: str = "DL07",
         gamma: Optional[float] = None,
-        qpah: float = 0.025,
+        qpah: Optional[float] = None,
         umin: Optional[float] = None,
-        alpha: float = 2.0,
+        alpha: Optional[float] = None,
         power_per_unit_mass: float = 125.0,
         verbose: bool = True,
         intrinsic: Optional[EmissionModel] = None,
@@ -192,24 +213,30 @@ class DraineLi07(DustEmission):
             dust_mass (unyt_quantity, optional):
                 The mass of dust in the galaxy. Will be extracted from
                 the component or model if not provided.
-            dust_to_gas_ratio (float):
-                The dust-to-gas ratio of the galaxy.
+            dust_to_gas_ratio (float, optional):
+                The dust-to-gas ratio of the galaxy. Read from the emitter
+                if not provided, falling back to 0.01.
             hydrogen_mass (unyt_quantity, optional):
-                The mass in hydrogen. Will be calculated from dust_mass
-                and dust_to_gas if not provided.
+                The mass in hydrogen. Read from the emitter if not
+                provided, otherwise calculated from dust_mass and
+                dust_to_gas_ratio.
             template (str):
                 The IR template model to be used.
             gamma (float, optional):
                 Fraction of the dust mass that is associated with the
                 power-law part of the starlight intensity distribution.
-                Will be calculated if not provided.
-            qpah (float):
-                Fraction of dust mass in the form of PAHs.
+                Read from the emitter if not provided, falling back to 0.05.
+            qpah (float, optional):
+                Fraction of dust mass in the form of PAHs. Read from the
+                emitter if not provided, falling back to 0.025.
             umin (float, optional):
-                Radiation field heating majority of the dust.
-                Will be calculated if not provided.
-            alpha (float):
-                The power law normalisation.
+                Radiation field heating majority of the dust. Read from the
+                emitter if not provided, otherwise calculated from the
+                Magdis+12 mean radiation field.
+            alpha (float, optional):
+                The slope of the power-law part of the starlight intensity
+                distribution. Read from the emitter if not provided,
+                falling back to 2.0.
             power_per_unit_mass (float):
                 Power absorbed per unit dust mass in a radiation field
                 with U = 1.
@@ -233,12 +260,7 @@ class DraineLi07(DustEmission):
             attenuated,
             scaler,
             do_cmb_heating=False,
-            required_params=(
-                "dust_mass",
-                "dust_to_gas_ratio",
-                "hydrogen_mass",
-                "qpah",
-            ),
+            required_params=("dust_mass",),
         )
 
         self.grid = grid
@@ -284,6 +306,37 @@ class DraineLi07(DustEmission):
 
         return f"DraineLi07({', '.join(parts)})"
 
+    def _extract_optional_params(self, model, emitter) -> dict:
+        """Extract the parameters that aren't required.
+
+        As in _extract_params, the priority is the model's fixed parameters,
+        then the generator (if not None), then the emitter. Parameters that
+        aren't found anywhere are None.
+
+        Args:
+            model (EmissionModel):
+                The emission model generating the emission.
+            emitter (Stars/Gas/BlackHole/Galaxy):
+                The object emitting the emission.
+
+        Returns:
+            dict:
+                The optional parameters.
+        """
+        model_fixed = model.fixed_parameters if model is not None else {}
+        params = {}
+        for param in _OPTIONAL_PARAMS:
+            value = getattr(self, param) if param not in model_fixed else None
+            if value is None:
+                try:
+                    value = get_param(
+                        param, model, None, emitter, preserve_units=True
+                    )
+                except exceptions.MissingAttribute:
+                    value = None
+            params[param] = value
+        return params
+
     def _setup_dl07_parameters(
         self,
         dust_mass: unyt_quantity,
@@ -291,6 +344,9 @@ class DraineLi07(DustEmission):
         dust_to_gas_ratio: float = None,
         hydrogen_mass: unyt_quantity = None,
         qpah: float = None,
+        gamma: float = None,
+        umin: float = None,
+        alpha: float = None,
     ) -> dict:
         """Set up the DL07 model parameters and grid indices.
 
@@ -309,6 +365,13 @@ class DraineLi07(DustEmission):
                 The hydrogen mass to use. If None, uses instance default.
             qpah (float, optional):
                 The PAH fraction to use. If None, uses instance default.
+            gamma (float, optional):
+                The power-law dust mass fraction. If None, uses instance
+                default.
+            umin (float, optional):
+                The minimum radiation field. If None, uses instance default.
+            alpha (float, optional):
+                The power-law slope. If None, uses instance default.
 
         Returns:
             dict:
@@ -322,21 +385,23 @@ class DraineLi07(DustEmission):
                 f"{self.template} not a valid model!"
             )
 
-        # Define the model parameters from grid
-        grid_qpahs: NDArray[np.float32] = self.grid.qpah
-        grid_umin_values: NDArray[np.float32] = self.grid.umin
-        grid_alpha_values: NDArray[np.float32] = self.grid.alpha
+        # Use the provided parameters, falling back to the instance values
+        # and then the defaults
+        def _resolve(name, value):
+            if value is None:
+                value = getattr(self, name)
+            if value is None:
+                value = _DEFAULTS.get(name)
+            return value
 
-        # Use provided parameters or fall back to instance defaults
-        effective_dust_to_gas_ratio = (
-            dust_to_gas_ratio
-            if dust_to_gas_ratio is not None
-            else self.dust_to_gas_ratio
+        effective_dust_to_gas_ratio = _resolve(
+            "dust_to_gas_ratio", dust_to_gas_ratio
         )
-        effective_hydrogen_mass = (
-            hydrogen_mass if hydrogen_mass is not None else self.hydrogen_mass
-        )
-        effective_qpah = qpah if qpah is not None else self.qpah
+        effective_hydrogen_mass = _resolve("hydrogen_mass", hydrogen_mass)
+        effective_qpah = _resolve("qpah", qpah)
+        calculated_gamma = _resolve("gamma", gamma)
+        calculated_umin = _resolve("umin", umin)
+        effective_alpha = _resolve("alpha", alpha)
 
         # Default maximum radiation field intensity
         umax: float = 1e7
@@ -353,13 +418,10 @@ class DraineLi07(DustEmission):
                 0.74 * dust_mass / effective_dust_to_gas_ratio
             )
 
-        if (self.gamma is None) or (self.umin is None) or (self.alpha == 2.0):
+        if calculated_gamma is None or calculated_umin is None:
             warn(
-                "Gamma, Umin or alpha for DL07 model not provided, "
-                "using default values"
-            )
-            warn(
-                "Computing required values using Magdis+2012 stacking results"
+                "Gamma or Umin for DL07 model not provided, computing the "
+                "mean radiation field from the Magdis+2012 stacking results"
             )
 
             calculated_u_avg = u_mean_magdis12(
@@ -368,25 +430,39 @@ class DraineLi07(DustEmission):
                 self.power_per_unit_mass,
             )
 
-            calculated_gamma = self.gamma
             if calculated_gamma is None:
                 warn("Gamma not provided, choosing default gamma value as 5%")
                 calculated_gamma = 0.05
 
-            calculated_umin = self.umin
+            # The mean radiation field increases monotonically with umin,
+            # so bracket the root rather than relying on a starting guess
             if calculated_umin is None:
-                optimization_function = partial(
-                    solve_umin,
-                    umax=umax,
-                    u_avg=calculated_u_avg,
-                    gamma=calculated_gamma,
+                args = (
+                    umax,
+                    calculated_u_avg,
+                    calculated_gamma,
+                    effective_alpha,
                 )
-                calculated_umin = fsolve(optimization_function, [1.0])[0]
+                if solve_umin(1e-10, *args) > 0:
+                    raise exceptions.InconsistentArguments(
+                        "No umin gives the Magdis+12 mean radiation field "
+                        f"<U>={calculated_u_avg} with gamma="
+                        f"{calculated_gamma} and alpha={effective_alpha}, "
+                        "since the power-law component alone gives a "
+                        "higher <U>. Provide umin, or use a smaller gamma "
+                        "or larger alpha."
+                    )
+                calculated_umin = brentq(solve_umin, 1e-10, 1e6, args=args)
 
         else:
-            calculated_gamma = self.gamma
-            calculated_umin = self.umin
-            calculated_u_avg = u_mean(calculated_umin, umax, calculated_gamma)
+            calculated_u_avg = u_mean(
+                calculated_umin, umax, calculated_gamma, effective_alpha
+            )
+
+        # Define the model parameters from grid
+        grid_qpahs = self.grid.qpah
+        grid_umin_values = self.grid.umin
+        grid_alpha_values = self.grid.alpha
 
         # Find nearest grid indices
         qpah_indices = (
@@ -402,7 +478,7 @@ class DraineLi07(DustEmission):
         alpha_indices = (
             grid_alpha_values
             == grid_alpha_values[
-                np.argmin(np.abs(grid_alpha_values - self.alpha))
+                np.argmin(np.abs(grid_alpha_values - effective_alpha))
             ]
         )
 
@@ -583,22 +659,16 @@ class DraineLi07(DustEmission):
             Sed:
                 The generated dust emission SED.
         """
-        # Get the required parameters
+        # Get the required and optional parameters
         params = self._extract_params(model, emitter)
-
-        # Unpack all dust parameters
-        dust_mass = params["dust_mass"]
-        dust_to_gas_ratio = params["dust_to_gas_ratio"]
-        hydrogen_mass = params["hydrogen_mass"]
-        qpah = params["qpah"]
+        params.update(self._extract_optional_params(model, emitter))
+        dust_mass = params.pop("dust_mass")
 
         # Calculate the dust luminosity for scaling
         ldust = self.get_scaling(emitter, model, emissions)
 
         # Set up DL07 parameters using the extracted parameters
-        setup = self._setup_dl07_parameters(
-            dust_mass, ldust, dust_to_gas_ratio, hydrogen_mass, qpah
-        )
+        setup = self._setup_dl07_parameters(dust_mass, ldust, **params)
 
         # Generate the base spectra
         sed = self._generate_dl07_spectra(lams, setup)
@@ -673,22 +743,16 @@ class DraineLi07(DustEmission):
         else:
             sed = spectra[model.label]
 
-        # Get the required parameters
+        # Get the required and optional parameters
         params = self._extract_params(model, emitter)
-
-        # Unpack all dust parameters
-        dust_mass = params["dust_mass"]
-        dust_to_gas_ratio = params["dust_to_gas_ratio"]
-        hydrogen_mass = params["hydrogen_mass"]
-        qpah = params["qpah"]
+        params.update(self._extract_optional_params(model, emitter))
+        dust_mass = params.pop("dust_mass")
 
         # Calculate the dust luminosity for scaling
         ldust = self.get_scaling(emitter, model, spectra)
 
         # Set up DL07 parameters using the extracted parameters
-        setup = self._setup_dl07_parameters(
-            dust_mass, ldust, dust_to_gas_ratio, hydrogen_mass, qpah
-        )
+        setup = self._setup_dl07_parameters(dust_mass, ldust, **params)
 
         # Generate the DL07 function
         lnu = self._generate_dl07_spectra(line_lams, setup).lnu

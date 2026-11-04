@@ -9,6 +9,8 @@ This module contains tests for all dust generator functionality including:
 - Integration and functionality tests
 """
 
+import warnings
+
 import numpy as np
 import pytest
 from unyt import Hz, K, Lsun, Msun, angstrom, erg, s, um
@@ -756,10 +758,7 @@ class TestDraineLi07Generator:
         assert dl07.dust_mass == dust_mass
         assert dl07.dust_to_gas_ratio == 0.01
         assert dl07.qpah == 0.025
-        assert "dust_mass" in dl07._required_params
-        assert "dust_to_gas_ratio" in dl07._required_params
-        assert "hydrogen_mass" in dl07._required_params
-        assert "qpah" in dl07._required_params
+        assert dl07._required_params == ("dust_mass",)
 
     def test_draineli07_variable_naming(self, mock_dust_grid):
         """Test DraineLi07 uses improved variable names."""
@@ -1600,14 +1599,20 @@ def test_draineli07_generator_overrides_emitter(mock_dust_grid, mock_model):
     emitter = _ParamEmitter(
         qpah=0.04, dust_to_gas_ratio=0.02, hydrogen_mass=1e8 * Msun
     )
-    params = gen._extract_params(mock_model, emitter)
+    params = gen._extract_optional_params(mock_model, emitter)
 
-    # The generator's values (including its defaults) win
+    # The generator's values win
     assert params["qpah"] == 0.025
-    assert params["dust_to_gas_ratio"] == 0.01
 
-    # The hydrogen mass isn't set on the generator so comes from the emitter
+    # Values not set on the generator come from the emitter, rather than
+    # being overridden by a generator default
+    assert params["dust_to_gas_ratio"] == 0.02
     assert params["hydrogen_mass"] == 1e8 * Msun
+
+    # Values set nowhere are left for the setup to derive or default
+    assert params["gamma"] is None
+    assert params["umin"] is None
+    assert params["alpha"] is None
 
 
 class FakeEmissionModel:
@@ -1699,7 +1704,48 @@ class TestRequiredEmissions:
 
 
 class TestDraineLi07Interpolation:
-    """The DraineLi07 mean radiation field handles any alpha."""
+    """DraineLi07 handles any alpha and reads parameters from the emitter."""
+
+    @staticmethod
+    def _setup(dl07, **params):
+        values = dict(
+            qpah=0.025,
+            gamma=0.1,
+            umin=1.0,
+            alpha=2.0,
+            hydrogen_mass=1e8 * Msun,
+        )
+        values.update(params)
+        return dl07._setup_dl07_parameters(1e6 * Msun, 1e10 * Lsun, **values)
+
+    def test_magdis_only_without_gamma_or_umin(self, mock_dust_grid):
+        """Giving gamma and umin with alpha = 2 doesn't use Magdis+12."""
+        dl07 = DraineLi07(grid=mock_dust_grid, dust_mass=1e6 * Msun)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            setup = self._setup(dl07)
+        assert not any("Magdis" in str(w.message) for w in caught)
+        assert setup["umin_calculated"] == 1.0
+        assert setup["gamma_calculated"] == 0.1
+
+    @pytest.mark.parametrize("alpha", (1.5, 2.0, 2.5))
+    def test_magdis_umin_uses_alpha(self, mock_dust_grid, alpha):
+        """The derived umin gives the Magdis+12 <U> for the given alpha."""
+        dl07 = DraineLi07(grid=mock_dust_grid, dust_mass=1e6 * Msun)
+        setup = self._setup(dl07, umin=None, alpha=alpha, gamma=0.05)
+        np.testing.assert_allclose(
+            u_mean(setup["umin_calculated"], 1e7, 0.05, alpha),
+            setup["radiation_field_average"],
+            rtol=1e-8,
+        )
+
+    def test_magdis_umin_without_solution_raises(self, mock_dust_grid):
+        """A power law alone above the target <U> can't be solved."""
+        dl07 = DraineLi07(grid=mock_dust_grid, dust_mass=1e6 * Msun)
+        with pytest.raises(exceptions.InconsistentArguments):
+            dl07._setup_dl07_parameters(
+                1e8 * Msun, 1e10 * Lsun, gamma=0.05, alpha=1.0
+            )
 
     @pytest.mark.parametrize("alpha", (1.0, 1.5, 2.0, 2.5))
     def test_u_mean_any_alpha(self, alpha):
@@ -1715,3 +1761,30 @@ class TestDraineLi07Interpolation:
             (1 - gamma) * umin + gamma * u_power_law,
             rtol=1e-6,
         )
+
+    def test_parameters_vary_per_emitter(
+        self, mock_dust_grid, mock_model, mock_emissions, dust_wavelengths
+    ):
+        """Each emitter's qpah, umin, gamma and alpha are used."""
+        dl07 = DraineLi07(
+            grid=mock_dust_grid,
+            intrinsic="intrinsic",
+            attenuated="attenuated",
+        )
+        params = dict(
+            dust_mass=1e6 * Msun,
+            hydrogen_mass=1e8 * Msun,
+            gamma=0.1,
+            umin=1.0,
+            alpha=2.0,
+        )
+        seds = [
+            dl07._generate_spectra(
+                dust_wavelengths,
+                _ParamEmitter(qpah=qpah, **params),
+                mock_model,
+                mock_emissions,
+            )
+            for qpah in (0.01, 0.03)
+        ]
+        assert not np.allclose(seds[0].lnu, seds[1].lnu)
