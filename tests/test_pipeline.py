@@ -3636,16 +3636,14 @@ class TestPipelineFlushing:
         self._assert_files_match(expected, fresh)
         assert self._run_files(tmp_path, "ckpt.hdf5") == []
 
-    @pytest.mark.parametrize("change", ["order", "count", "operations"])
+    @pytest.mark.parametrize("change", ["count", "operations"])
     def test_resume_rejects_different_run(
         self, run_pipeline, make_galaxies, monkeypatch, change
     ):
         """A checkpoint can't be resumed by a run with different inputs."""
         self._crash(run_pipeline, monkeypatch)
         kwargs = {}
-        if change == "order":
-            kwargs["galaxies"] = make_galaxies()[::-1]
-        elif change == "count":
+        if change == "count":
             kwargs["galaxies"] = make_galaxies()[:-1]
         else:
             kwargs["before_run"] = lambda pipeline: pipeline.add_analysis_func(

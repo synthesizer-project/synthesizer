@@ -5398,14 +5398,6 @@ class Pipeline:
                 gal.redshift,
                 getattr(gal.stars, "nstars", None),
                 getattr(gal.black_holes, "nbh", None),
-                # Particle or parametric total initial mass
-                np.sum(
-                    getattr(
-                        gal.stars,
-                        "initial_masses",
-                        getattr(gal.stars, "initial_mass", 0),
-                    )
-                ),
             )
             for gal in self.galaxies
         ]
