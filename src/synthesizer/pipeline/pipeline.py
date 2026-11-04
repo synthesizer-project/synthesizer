@@ -5644,8 +5644,20 @@ class Pipeline:
                 "Lines/IDs",
                 root=0,
             )
+            # Rank 0 may have no galaxies (and so no wavelengths), take them
+            # from any rank which has them
+            line_lams = self.line_lams
+            if self.comm is not None:
+                line_lams = next(
+                    (
+                        lams
+                        for lams in self.comm.allgather(line_lams)
+                        if lams is not None
+                    ),
+                    None,
+                )
             self.io_helper.write_data(
-                self.line_lams if self.rank == 0 else None,
+                line_lams if self.rank == 0 else None,
                 "Lines/Wavelengths",
                 root=0,
             )
