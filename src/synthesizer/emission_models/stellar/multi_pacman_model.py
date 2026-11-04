@@ -34,7 +34,7 @@ Example::
 
 from copy import deepcopy
 
-from unyt import dimensionless
+from unyt import dimensionless, km, s
 
 from synthesizer.emission_models.attenuation import Calzetti2000, PowerLaw
 from synthesizer.emission_models.base_model import (
@@ -54,9 +54,71 @@ from synthesizer.emission_models.stellar.models import (
     TransmittedEmissionWithEscaped,
 )
 from synthesizer.emission_models.transformers import (
+    DopplerBroadening,
     EscapedFraction,
     ProcessedFraction,
 )
+from synthesizer.units import accepts
+
+
+@accepts(velocity_dispersion=km / s)
+def _init_root(
+    model, grid, label, combine, related, emitter, velocity_dispersion, kwargs
+):
+    """Initialise a MultiPacman root, optionally Doppler broadened.
+
+    As in the Pacman models, broadening is applied to the final emission
+    only. The unbroadened emission is kept in the tree as
+    "<label>_predispersion" but is not saved.
+
+    Args:
+        model (EmissionModel):
+            The model being initialised.
+        grid (synthesizer.grid.Grid):
+            The grid object.
+        label (str):
+            The label for the root model.
+        combine (tuple):
+            The models combined to make the root emission.
+        related (tuple):
+            The related models.
+        emitter (str):
+            The emitter of the root model.
+        velocity_dispersion (unyt_quantity):
+            Optional scalar velocity dispersion. None disables broadening.
+        kwargs (dict):
+            Additional keyword arguments to pass to the models.
+    """
+    if velocity_dispersion is None:
+        EmissionModel.__init__(
+            model,
+            grid=grid,
+            label=label,
+            combine=combine,
+            related_models=related,
+            emitter=emitter,
+            **kwargs,
+        )
+        return
+
+    predispersion = EmissionModel(
+        grid=grid,
+        label=f"{label}_predispersion",
+        combine=combine,
+        related_models=related,
+        emitter=emitter,
+        **kwargs,
+    )
+    predispersion.set_save(False)
+    EmissionModel.__init__(
+        model,
+        label=label,
+        apply_to=predispersion,
+        transformer=DopplerBroadening(sigma_v_attr="velocity_dispersion"),
+        emitter=emitter,
+        velocity_dispersion=velocity_dispersion,
+        **kwargs,
+    )
 
 
 def _population_models(
@@ -266,6 +328,7 @@ class MultiPacmanEmission(EmissionModel):
         attenuate_incident_escaped=True,
         label=None,
         stellar_dust=True,
+        velocity_dispersion=None,
         **kwargs,
     ):
         """Initialise the MultiPacmanEmission model.
@@ -299,6 +362,9 @@ class MultiPacmanEmission(EmissionModel):
             stellar_dust (bool):
                 If True, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
+            velocity_dispersion (unyt_quantity):
+                Optional scalar velocity dispersion applied to the final
+                emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -323,14 +389,15 @@ class MultiPacmanEmission(EmissionModel):
         # Without dust emission the emergent emission is the root
         if dust_emission is None:
             emergent = models.pop("emergent")
-            EmissionModel.__init__(
+            _init_root(
                 self,
-                grid=grid,
-                label="emergent" if label is None else label,
-                combine=emergent.combine,
-                related_models=tuple(models.values()),
-                emitter="stellar",
-                **kwargs,
+                grid,
+                "emergent" if label is None else label,
+                emergent.combine,
+                tuple(models.values()),
+                "stellar",
+                velocity_dispersion,
+                kwargs,
             )
             return
 
@@ -346,14 +413,15 @@ class MultiPacmanEmission(EmissionModel):
             emitter=emitter,
             **kwargs,
         )
-        EmissionModel.__init__(
+        _init_root(
             self,
-            grid=grid,
-            label="total" if label is None else label,
-            combine=(models["emergent"], models["dust_emission"]),
-            related_models=tuple(models.values()),
-            emitter=emitter,
-            **kwargs,
+            grid,
+            "total" if label is None else label,
+            (models["emergent"], models["dust_emission"]),
+            tuple(models.values()),
+            emitter,
+            velocity_dispersion,
+            kwargs,
         )
 
 
@@ -403,6 +471,7 @@ class BimodalMultiPacmanEmission(EmissionModel):
         attenuate_incident_escaped=True,
         label=None,
         stellar_dust=True,
+        velocity_dispersion=None,
         **kwargs,
     ):
         """Initialise the BimodalMultiPacmanEmission model.
@@ -447,6 +516,9 @@ class BimodalMultiPacmanEmission(EmissionModel):
             stellar_dust (bool):
                 If True, the dust emission will be treated as stellar
                 emission, otherwise it will be treated as galaxy emission.
+            velocity_dispersion (unyt_quantity):
+                Optional scalar velocity dispersion applied to the final
+                emission.
             **kwargs:
                 Additional keyword arguments to pass to the models.
         """
@@ -499,14 +571,15 @@ class BimodalMultiPacmanEmission(EmissionModel):
         if dust_emission_ism is None or dust_emission_birth is None:
             emergent = combined["emergent"]
             related = tuple(m for m in related if m is not emergent)
-            EmissionModel.__init__(
+            _init_root(
                 self,
-                grid=grid,
-                label="emergent" if label is None else label,
-                combine=emergent.combine,
-                related_models=related,
-                emitter="stellar",
-                **kwargs,
+                grid,
+                "emergent" if label is None else label,
+                emergent.combine,
+                related,
+                "stellar",
+                velocity_dispersion,
+                kwargs,
             )
             return
 
@@ -566,12 +639,12 @@ class BimodalMultiPacmanEmission(EmissionModel):
             emitter=emitter,
             **kwargs,
         )
-        EmissionModel.__init__(
+        _init_root(
             self,
-            grid=grid,
-            label="total" if label is None else label,
-            combine=(young_total, old_total),
-            related_models=(
+            grid,
+            "total" if label is None else label,
+            (young_total, old_total),
+            (
                 *related,
                 young_dust_birth,
                 young_dust_ism,
@@ -579,6 +652,7 @@ class BimodalMultiPacmanEmission(EmissionModel):
                 old_dust,
                 dust,
             ),
-            emitter=emitter,
-            **kwargs,
+            emitter,
+            velocity_dispersion,
+            kwargs,
         )

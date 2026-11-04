@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from unyt import K, Msun, Myr
+from unyt import K, Msun, Myr, km, s
 
 from synthesizer.emission_models import (
     BimodalMultiPacmanEmission,
@@ -159,4 +159,35 @@ def test_bimodal_young_reaches_ism(
     np.testing.assert_allclose(
         spectra["emergent"],
         spectra["young_emergent"] + spectra["old_emergent"],
+    )
+
+
+@pytest.mark.parametrize(
+    "multi_cls, pacman_cls, kwargs",
+    (
+        (MultiPacmanEmission, PacmanEmission, dict(tau_v=0.5)),
+        (
+            BimodalMultiPacmanEmission,
+            BimodalPacmanEmission,
+            dict(tau_v_ism=0.3, tau_v_birth=0.6),
+        ),
+    ),
+)
+def test_velocity_dispersion(test_grid, stars, multi_cls, pacman_cls, kwargs):
+    """Broadening matches Pacman and only the final emission is saved."""
+    common = dict(
+        fesc=0.2, fesc_ly_alpha=0.5, velocity_dispersion=100 * km / s, **kwargs
+    )
+    multi = multi_cls(
+        test_grid, fesc_dust=0.0, attenuate_incident_escaped=False, **common
+    )
+    pacman = pacman_cls(test_grid, **common)
+
+    assert multi.label == "emergent"
+    assert multi.transformer.__class__.__name__ == "DopplerBroadening"
+    assert not multi["emergent_predispersion"].save
+    np.testing.assert_allclose(
+        _lnu(stars, multi, "emergent"),
+        _lnu(stars, pacman, "emergent"),
+        rtol=1e-10,
     )
