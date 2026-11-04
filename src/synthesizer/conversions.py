@@ -30,7 +30,7 @@ from unyt import (
 from synthesizer import exceptions
 from synthesizer.cosmology import get_luminosity_distance
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Units, accepts
+from synthesizer.units import Units, accepts, convert_in_place
 
 # When converting between spatial and angular distances at z=0, we adopt a
 # "local distance" convention of placing the object at 10 pc, this is also
@@ -123,7 +123,7 @@ def flux_to_luminosity(flux, cosmo, redshift):
     # And redshift
     lum /= 1 + redshift
 
-    return lum.to(erg / s)
+    return convert_in_place(lum, erg / s)
 
 
 @accepts(fnu=nJy)
@@ -162,7 +162,7 @@ def fnu_to_lnu(fnu, cosmo, redshift):
     # And redshift
     lnu /= 1 + redshift
 
-    return lnu.to(erg / s / Hz)
+    return convert_in_place(lnu, erg / s / Hz)
 
 
 @accepts(lnu=erg / s / Hz)
@@ -198,7 +198,7 @@ def lnu_to_fnu(lnu, cosmo, redshift):
     # Calculate the flux in interim units
     fnu = lnu * (1 + redshift) / 4 / np.pi / lum_dist**2
 
-    return fnu.to(nJy)
+    return convert_in_place(fnu, nJy)
 
 
 @accepts(fnu=nJy)
@@ -270,7 +270,7 @@ def llam_to_lnu(lam, llam):
         IncorrectUnits:
             If units are missing an error is raised.
     """
-    return (llam * lam**2 / c).to("erg / s / Hz")
+    return convert_in_place(llam * lam**2 / c, "erg / s / Hz")
 
 
 @accepts(lam=angstrom, lnu=erg / s / Hz)
@@ -299,7 +299,9 @@ def lnu_to_llam(lam, lnu):
         IncorrectUnits:
             If units are missing an error is raised.
     """
-    return ((lnu * c) / lam**2).to(Units().luminosity_density_wavelength)
+    return convert_in_place(
+        (lnu * c) / lam**2, Units().luminosity_density_wavelength
+    )
 
 
 @accepts(lam=angstrom, flam=erg / s / cm**2 / angstrom)
@@ -326,7 +328,7 @@ def flam_to_fnu(lam, flam):
         IncorrectUnits:
             If units are missing an error is raised.
     """
-    return (flam * lam**2 / c).to("nJy")
+    return convert_in_place(flam * lam**2 / c, "nJy")
 
 
 @accepts(lam=angstrom, fnu=nJy)
@@ -354,7 +356,7 @@ def fnu_to_flam(lam, fnu):
         IncorrectUnits:
             If units are missing an error is raised.
     """
-    return ((fnu * c) / lam**2).to("erg / s / angstrom / cm**2")
+    return convert_in_place((fnu * c) / lam**2, "erg / s / angstrom / cm**2")
 
 
 def absolute_mag_to_lnu(ab_mag):
