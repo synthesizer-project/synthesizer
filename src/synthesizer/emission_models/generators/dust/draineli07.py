@@ -154,12 +154,15 @@ class DraineLi07(DustEmission):
     the DL07 templates onto a grid of the PAH mass fraction (qpah), the
     minimum radiation field (umin) and the slope of the power-law radiation
     field distribution (alpha). The default grid can be downloaded with
-    ``synthesizer-download --dust-grid``. The templates are interpolated to
-    the parameters of each particle (or emitter) using the same grid
-    extraction machinery as the stellar spectra, and the resulting spectrum
-    is scaled by the energy absorbed by dust (the "energy balance" method),
-    or by a scaler emission. For more details see the base DustEmission
-    parent class.
+    ``synthesizer-download --dust-grid``. The templates are linearly (CIC)
+    interpolated to the parameters of each particle (or emitter) using the
+    same grid extraction machinery as the stellar spectra, in the space of
+    each grid axis (linear or log10), with values outside the grid clamped
+    to its edges. The spectrum is normalised over the templates' full
+    wavelength range (so it does not depend on the wavelengths it is
+    evaluated on) and then scaled by the energy absorbed by dust (the
+    "energy balance" method), or by a scaler emission. For more details see
+    the base DustEmission parent class.
 
     This is based on the work of Draine & Li (2007):
     https://ui.adsabs.harvard.edu/abs/2007ApJ...657..810D/abstract
@@ -169,12 +172,13 @@ class DraineLi07(DustEmission):
     priority over any value on the emitter (only an EmissionModel's
     fixed_parameters take priority over it). If left as None they are read
     from the emitter, and each can be a single value or one value per
-    particle. Particles with a non-positive or non-finite dust mass, a
-    non-positive umin, or non-finite parameters produce no emission. If they
-    are set nowhere, hydrogen_mass is derived from the dust mass and
-    dust_to_gas_ratio, gamma and umin are derived from the Magdis+12
-    stacking results, and dust_to_gas_ratio, qpah and alpha fall back to
-    0.01, 0.025 and 2.0.
+    particle (which requires a per-particle model). Particles with a
+    non-positive or non-finite dust mass, a non-positive umin, or non-finite
+    parameters produce no emission. If they are set nowhere, hydrogen_mass
+    is derived from the dust mass and dust_to_gas_ratio (as 0.74 dust_mass /
+    dust_to_gas_ratio), gamma falls back to 0.05, umin is derived from the
+    Magdis+12 mean radiation field (for the given alpha), and
+    dust_to_gas_ratio, qpah and alpha fall back to 0.01, 0.025 and 2.0.
 
     Attributes:
         grid_name (string):
@@ -717,8 +721,8 @@ class DraineLi07(DustEmission):
         return grid
 
     @accepts(lam=angstrom)
-    @timed("DraineLi07.get_templates_at_lam")
-    def get_templates_at_lam(self, lam: unyt_array, setup: dict) -> tuple:
+    @timed("DraineLi07._get_templates_at_lam")
+    def _get_templates_at_lam(self, lam: unyt_array, setup: dict) -> tuple:
         """Calculate the diffuse and PDR templates at a wavelength.
 
         Args:
@@ -741,9 +745,9 @@ class DraineLi07(DustEmission):
         valid = setup["valid"]
         nparticles = valid.size
 
-        # Accumulate each template at the precision of the wavelengths we
-        # were given
-        template_dtype = np.result_type(np.asarray(lam).dtype, np.float32)
+        # Extract each template at the precision of the grid (the output
+        # precision is set when the emission is scaled)
+        template_dtype = grid._dtype
         grid_axes = tuple(
             grid._extract_axes_values[axis_name]
             for axis_name in self._axis_names
@@ -792,8 +796,8 @@ class DraineLi07(DustEmission):
                 )
             )
 
-        # Preserve the previous scalar-like return shape for single-particle
-        # inputs.
+        # Return a single spectrum (rather than one per particle) for a
+        # single set of parameters.
         if nparticles == 1:
             return templates[0][0], templates[1][0]
         return templates[0], templates[1]
@@ -811,9 +815,9 @@ class DraineLi07(DustEmission):
         Returns:
             tuple:
                 The diffuse and PDR lnu (erg/s/Hz, without units), with the
-                same shape as the templates from ``get_templates_at_lam``.
+                same shape as the templates from ``_get_templates_at_lam``.
         """
-        diffuse_template, pdr_template = self.get_templates_at_lam(lam, setup)
+        diffuse_template, pdr_template = self._get_templates_at_lam(lam, setup)
         gamma = setup["gamma_calculated"]
         hydrogen_mass = (setup["hydrogen_mass_calculated"] / Msun).value
         if diffuse_template.ndim > 1:

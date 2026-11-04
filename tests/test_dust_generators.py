@@ -1797,7 +1797,7 @@ def test_draineli07_uses_grid_extraction(draineli07_grid):
         alpha=alpha,
     )
 
-    diffuse, pdr = dl07.get_templates_at_lam(dl07.grid.lam, setup)
+    diffuse, pdr = dl07._get_templates_at_lam(dl07.grid.lam, setup)
     expected_diffuse, expected_pdr = _expected_templates(qpah, umin, alpha)
 
     np.testing.assert_allclose(diffuse, expected_diffuse)
@@ -1817,7 +1817,7 @@ def test_draineli07_masks_zero_and_nan_inputs(draineli07_grid):
         qpah=np.array([0.025, 0.025, 0.025, np.nan]),
     )
 
-    diffuse, pdr = dl07.get_templates_at_lam(dl07.grid.lam, setup)
+    diffuse, pdr = dl07._get_templates_at_lam(dl07.grid.lam, setup)
     expected_diffuse, expected_pdr = _expected_templates(0.025, 1.0, 2.0)
 
     np.testing.assert_allclose(diffuse[0], expected_diffuse)
@@ -1837,7 +1837,7 @@ def test_draineli07_resamples_non_native_wavelengths(draineli07_grid):
     )
 
     setup = _draineli07_setup(dl07, dust_mass=np.full(2, 1e6) * Msun)
-    diffuse, pdr = dl07.get_templates_at_lam(lam, setup)
+    diffuse, pdr = dl07._get_templates_at_lam(lam, setup)
 
     resampled = dl07.grid.reduce_rest_frame_lam(lam)
     np.testing.assert_allclose(
@@ -1858,7 +1858,7 @@ def test_draineli07_resamples_scalar_wavelengths(draineli07_grid):
     )
 
     setup = _draineli07_setup(dl07, dust_mass=np.full(2, 1e6) * Msun)
-    diffuse, pdr = dl07.get_templates_at_lam(lam, setup)
+    diffuse, pdr = dl07._get_templates_at_lam(lam, setup)
 
     at_lam = dl07.grid.get_spectra_at_lam(lam)
     np.testing.assert_allclose(
@@ -1881,7 +1881,7 @@ def test_draineli07_supports_log10_umin_grids(draineli07_log_grid):
     setup = _draineli07_setup(
         dl07, dust_mass=np.full(3, 1e6) * Msun, umin=umin
     )
-    diffuse, _ = dl07.get_templates_at_lam(dl07.grid.lam, setup)
+    diffuse, _ = dl07._get_templates_at_lam(dl07.grid.lam, setup)
     expected, _ = _expected_templates(0.025, umin[:2], 2.0)
 
     np.testing.assert_allclose(diffuse[:2], expected)
@@ -1896,7 +1896,7 @@ def test_draineli07_ignores_negative_dust_masses(draineli07_grid):
     )
 
     setup = _draineli07_setup(dl07, dust_mass=np.array([-1e6, -1e6]) * Msun)
-    diffuse, pdr = dl07.get_templates_at_lam(dl07.grid.lam, setup)
+    diffuse, pdr = dl07._get_templates_at_lam(dl07.grid.lam, setup)
 
     np.testing.assert_allclose(diffuse, np.zeros((2, 100)))
     np.testing.assert_allclose(pdr, np.zeros((2, 100)))
@@ -1910,7 +1910,7 @@ def test_draineli07_clamps_out_of_range_parameters(draineli07_grid):
     )
 
     setup = _draineli07_setup(dl07, umin=1e3)
-    diffuse, _ = dl07.get_templates_at_lam(dl07.grid.lam, setup)
+    diffuse, _ = dl07._get_templates_at_lam(dl07.grid.lam, setup)
     expected, _ = _expected_templates(0.025, 100.0, 2.0)
 
     np.testing.assert_allclose(diffuse, expected)
