@@ -549,7 +549,7 @@ class Pipeline:
         """
         # Don't accept a zero or negative threshold: we'd otherwise flush
         # immediately after every galaxy, which is a surprising way to ask
-        # for no buffering. A path is only mandatory if we flush during run.
+        # for no buffering
         if flush_ngalaxies is not None and (
             not isinstance(flush_ngalaxies, int) or flush_ngalaxies < 1
         ):
@@ -558,23 +558,34 @@ class Pipeline:
             )
         if flush_memory is not None and not (0 < flush_memory < float("inf")):
             raise exceptions.InconsistentArguments("flush_memory must be > 0")
+
+        # Are we flushing at all?
         self._flushing = (
             flush_ngalaxies is not None or flush_memory is not None
         )
+
+        # A path is only mandatory if we flush during run, otherwise it can
+        # be passed to write instead
         if self._flushing and outpath is None:
             raise exceptions.InconsistentArguments(
                 "An outpath must be given to flush outputs to file while "
                 "running (flush_ngalaxies or flush_memory were set)."
             )
+        # Attach the path and thresholds (with the memory in bytes since
+        # that's what we count)
         self._outpath = outpath
         self._flush_ngalaxies = flush_ngalaxies
         self._flush_nbytes = (
             flush_memory * 1024**3 if flush_memory is not None else None
         )
 
-        # Number of galaxies held in memory since the last flush.
+        # The number of galaxies (and the bytes they hold) in memory since
+        # the last flush
         self._n_buffered = 0
         self._buffered_nbytes = 0
+
+        # The shape, dtype and units of a row of each output, so we can pad
+        # the outputs a galaxy doesn't produce (see _backfill_missing_rows)
         self._row_templates = {}
 
     def _say_hello(self):
@@ -4866,6 +4877,9 @@ class Pipeline:
         if hasattr(galaxy, "_extra_analysis_results"):
             for key, res in galaxy._extra_analysis_results.items():
                 self._analysis_results[key].append(res)
+
+                # Count the result towards the memory we're holding if we
+                # flush on memory
                 if self._flush_nbytes is not None:
                     self._buffered_nbytes += get_buffered_nbytes(res)
 
@@ -5018,6 +5032,8 @@ class Pipeline:
         # since creating the file is collective and ranks flush at
         # different times.
         if self._flushing:
+            # A second run would write over the galaxies we flushed during
+            # the first
             if self._analysis_complete:
                 raise exceptions.InconsistentArguments(
                     "A Pipeline with flushing enabled cannot run twice."
@@ -5197,7 +5213,10 @@ class Pipeline:
         This is called after every galaxy is unpacked, flushing or not, so
         _should_flush is responsible for doing nothing on a normal run.
         """
+        # Count the galaxy we just unpacked
         self._n_buffered += 1
+
+        # Write out what we hold if we've reached a threshold
         if self._should_flush():
             self._flush_outputs()
 
@@ -5219,10 +5238,10 @@ class Pipeline:
         ):
             return True
 
+        # Have we buffered enough memory? (Galaxies can differ substantially
+        # in size so this isn't necessarily a fixed number of galaxies.)
         if self._flush_nbytes is None:
             return False
-
-        # Every galaxy may differ substantially in size.
         return self._buffered_nbytes >= self._flush_nbytes
 
     @timed("Pipeline._flush_outputs")
@@ -5241,6 +5260,9 @@ class Pipeline:
         # Clear the data we just wrote (leaving the structure in place)
         for attr in self._galaxy_output_attrs:
             clear_lists_recursive(getattr(self, attr))
+
+        # The analysis results were combined into arrays above, so go back to
+        # an empty list for each analysis function
         self._analysis_results = {key: [] for key in self._analysis_results}
 
         self._took(start, f"Flushing {self._n_buffered} galaxies to file")
@@ -5809,11 +5831,15 @@ class Pipeline:
         # holds the flushed galaxies, so we append the rest. Otherwise, we
         # start a new file.
         if self._flushing:
+            # The flushed galaxies are no longer held on the Pipeline, so
+            # we can't write them a second time
             if self.io_helper.finalised:
                 raise exceptions.InconsistentArguments(
                     "The outputs were flushed to file while running and have "
                     "already been written, they cannot be written again."
                 )
+
+            # The writer was made in run so apply any verbosity override now
             if verbose is not None:
                 self.io_helper.verbose = verbose
         else:
@@ -5964,7 +5990,8 @@ class Pipeline:
             verbose (int):
                 The verbosity of the writer.
         """
-        # Get an instance of the HDF5 file writer
+        # Get an instance of the HDF5 file writer (it needs a string, but
+        # we may have been given a Path)
         self.io_helper = PipelineIO(
             str(outpath),
             self.comm,
@@ -6375,6 +6402,9 @@ class Pipeline:
                 f"Galaxies/{key}",
                 galaxy_indices,
             )
+
+        # Record the rows we've written so datasets first appearing in a
+        # later flush can be padded to line up with the galaxies
         self.io_helper.rows_written += self._n_buffered
 
     def combine_files(self):
@@ -6395,7 +6425,8 @@ class Pipeline:
             self._print("Not using MPI, nothing to combine.")
             return
 
-        # Ensure we have written the data
+        # Ensure we have written the data (when flushing the writer exists
+        # from the start of the run, so check write has finished with it)
         if self.io_helper is None or not self.io_helper.finalised:
             raise exceptions.PipelineNotReady(
                 "Cannot combine files before writing data! Call write first."
@@ -6427,7 +6458,8 @@ class Pipeline:
             self._print("Not using MPI, nothing to combine.")
             return
 
-        # Ensure we have written the data
+        # Ensure we have written the data (when flushing the writer exists
+        # from the start of the run, so check write has finished with it)
         if self.io_helper is None or not self.io_helper.finalised:
             raise exceptions.PipelineNotReady(
                 "Cannot combine files before writing data! Call write first."

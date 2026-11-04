@@ -374,8 +374,9 @@ class PipelineIO:
             if self._append_to_dataset(hdf, data, key, units):
                 return
 
-            # The first batch creates the dataset. Leave its galaxy axis
-            # unlimited so future flushes can append without replacing it.
+            # A per-galaxy dataset first appearing after a flush needs empty
+            # rows for the galaxies already flushed so its rows line up with
+            # the galaxies
             if self._writing_galaxy_data and self.rows_written:
                 data = np.concatenate(
                     (
@@ -386,6 +387,9 @@ class PipelineIO:
                         data,
                     )
                 )
+
+            # Create the dataset, leaving its galaxy axis unlimited so future
+            # flushes can append to it
             maxshape = (None, *data.shape[1:]) if data.ndim > 0 else None
             dset = hdf.create_dataset(
                 key,
