@@ -1474,6 +1474,11 @@ class Continuity(PiecewiseConstantSFH, Common):
                 f"logsfr_ratios must have {nbins - 1} elements"
                 f" for {nbins} age bins"
             )
+        if np.any(np.abs(logsfr_ratios) > 10):
+            raise exceptions.InconsistentArguments(
+                "logsfr_ratios must be within [-10, 10] "
+                f"(got {logsfr_ratios})."
+            )
 
         # Initialize parent
 
@@ -1500,13 +1505,39 @@ class Continuity(PiecewiseConstantSFH, Common):
 
     @classmethod
     def init_from_prior(
-        cls, agebins, df=2, scale=0.3, limits=(-10, 10), **kwargs
+        cls,
+        agebins,
+        df=2,
+        scale=0.3,
+        limits=(-10, 10),
+        random_seed=None,
+        **kwargs,
     ):
-        """Initialize Continuity SFH from a student t prior distribution."""
+        """Initialize Continuity SFH from a student t prior distribution.
+
+        Args:
+            agebins (unyt_array):
+                Array of shape (N, 2) with age bin edges in time units.
+            df (int):
+                Degrees of freedom for the student t prior.
+            scale (float):
+                Scale parameter for the student t prior.
+            limits (tuple):
+                Limits for the student t prior (log SFR ratio).
+            random_seed (int, optional):
+                Seed for the random number generator. If None, the draw is
+                not reproducible.
+            **kwargs:
+                Additional keyword arguments for the class constructor.
+
+        Returns:
+            Continuity: An instance of the Continuity class.
+        """
         from scipy.stats import t
 
         # generate uniform random variables between 0 and 1 of len(agebins)- 1
-        value = np.random.uniform(size=agebins.shape[0] - 1)
+        rng = np.random.default_rng(random_seed)
+        value = rng.uniform(size=agebins.shape[0] - 1)
 
         uniform_min = t.cdf(limits[0], df=df, scale=scale)
         uniform_max = t.cdf(limits[1], df=df, scale=scale)
@@ -1518,18 +1549,13 @@ class Continuity(PiecewiseConstantSFH, Common):
 
     def _logsfr_ratios_to_masses(self):
         """Convert log SFR ratios to masses in each bin."""
-        nbins = self.agebins.shape[0]
-        sratios = np.float_power(10, np.clip(self.logsfr_ratios, -10, 10))
+        # SFR_{j+1} = SFR_j / 10**ratio_j, so the mass in each bin is
+        # proportional to dt_j * 10**(-sum of the preceding ratios)
         dt = 10 ** self.agebins[:, 1] - 10 ** self.agebins[:, 0]
-        coeffs = np.array(
-            [
-                (1.0 / np.prod(sratios[:i]))
-                * (np.prod(dt[1 : i + 1]) / np.prod(dt[:i]))
-                for i in range(nbins)
-            ]
+        coeffs = dt * np.float_power(
+            10, -np.concatenate(([0.0], np.cumsum(self.logsfr_ratios)))
         )
-        m1 = 1 / coeffs.sum()
-        return m1 * coeffs
+        return coeffs / coeffs.sum()
 
     def _setup_sfr_interpolation(self):
         """Setup arrays for SFR interpolation."""
@@ -1678,6 +1704,19 @@ class ContinuityFlex(PiecewiseConstantSFH, Common):
                 fixed_old_bin = fixed_old_bin.to("yr").value
                 fixed_old_bin = np.log10(fixed_old_bin)
 
+        if np.any(
+            np.abs(
+                np.concatenate(
+                    ([logsfr_ratio_young, logsfr_ratio_old], logsfr_ratios)
+                )
+            )
+            > 10
+        ):
+            raise exceptions.InconsistentArguments(
+                "logsfr_ratio_young, logsfr_ratio_old and logsfr_ratios must "
+                "be within [-10, 10]."
+            )
+
         # Initialize parent
 
         Common.__init__(
@@ -1718,6 +1757,7 @@ class ContinuityFlex(PiecewiseConstantSFH, Common):
         min_age=0 * yr,
         max_age=1e11 * yr,
         limits=(-10, 10),
+        random_seed=None,
     ):
         """Initialize Continuity Flex SFH from a student t prior distribution.
 
@@ -1740,6 +1780,9 @@ class ContinuityFlex(PiecewiseConstantSFH, Common):
                 Maximum age for the SFH in years.
             limits (tuple):
                 Limits for the student t prior (SFR ratio).
+            random_seed (int, optional):
+                Seed for the random number generator. If None, the draw is
+                not reproducible.
 
         Returns:
             ContinuityFlex: An instance of the ContinuityFlex class.
@@ -1748,7 +1791,8 @@ class ContinuityFlex(PiecewiseConstantSFH, Common):
 
         # generate uniform random variables between 0 and 1 of
         # length N_flex_bins
-        value = np.random.uniform(size=N_flex_bins + 2)
+        rng = np.random.default_rng(random_seed)
+        value = rng.uniform(size=N_flex_bins + 2)
         uniform_min = t.cdf(limits[0], df=df, scale=scale)
         uniform_max = t.cdf(limits[1], df=df, scale=scale)
         value = (uniform_max - uniform_min) * value + uniform_min
@@ -1767,7 +1811,7 @@ class ContinuityFlex(PiecewiseConstantSFH, Common):
 
     def _logsfr_ratios_to_agebins(self):
         """Transform SFR ratios to age bins assuming constant mass per bin."""
-        logsfr_ratios = np.clip(self.logsfr_ratios, -10, 10)
+        logsfr_ratios = self.logsfr_ratios
         y0, y1 = 10 ** self.fixed_young_bin[0], 10 ** self.fixed_young_bin[1]
         o0, o1 = 10 ** self.fixed_old_bin[0], 10 ** self.fixed_old_bin[1]
         if y1 >= o0:
@@ -1801,8 +1845,8 @@ class ContinuityFlex(PiecewiseConstantSFH, Common):
 
     def _logsfr_ratios_to_masses_flex(self):
         """Convert SFR ratios to masses for flexible bin model."""
-        logsfr_ratio_young = np.clip(self.logsfr_ratio_young, -10, 10)
-        logsfr_ratio_old = np.clip(self.logsfr_ratio_old, -10, 10)
+        logsfr_ratio_young = self.logsfr_ratio_young
+        logsfr_ratio_old = self.logsfr_ratio_old
 
         abins = self.agebins
         nbins = abins.shape[0] - 2  # Number of flexible bins
@@ -2172,6 +2216,7 @@ class ContinuityPSB(PiecewiseConstantSFH, Common):
         student_t_df: float = 2.0,
         student_t_scale: float = 1.0,
         tlast_limits_gyr: tuple = (0.01, 1.5),
+        random_seed: int = None,
         **kwargs,
     ):
         """Initialize ContinuityPSB SFH by drawing parameters from priors.
@@ -2199,6 +2244,9 @@ class ContinuityPSB(PiecewiseConstantSFH, Common):
             tlast_limits_gyr (tuple):
                 The (min, max) limits for the uniform prior on `tlast`, in Gyr.
                 Defaults to (0.01, 1.5).
+            random_seed (int, optional):
+                Seed for the random number generator. If None, the draw is
+                not reproducible.
             **kwargs:
                 Additional keyword arguments to pass to the constructor
                 (e.g., `min_age`).
@@ -2209,23 +2257,37 @@ class ContinuityPSB(PiecewiseConstantSFH, Common):
         """
         from scipy.stats import t, uniform
 
+        rng = np.random.default_rng(random_seed)
+
         # Draw SFR ratios from a Student's t-distribution
-        logsfr_ratio_young = t.rvs(df=student_t_df, scale=student_t_scale)
+        logsfr_ratio_young = t.rvs(
+            df=student_t_df, scale=student_t_scale, random_state=rng
+        )
 
         n_flex_ratios = nflex - 1
         logsfr_ratios = (
-            t.rvs(df=student_t_df, scale=student_t_scale, size=n_flex_ratios)
+            t.rvs(
+                df=student_t_df,
+                scale=student_t_scale,
+                size=n_flex_ratios,
+                random_state=rng,
+            )
             if n_flex_ratios > 0
             else np.array([])
         )
 
         logsfr_ratio_old = t.rvs(
-            df=student_t_df, scale=student_t_scale, size=nfixed
+            df=student_t_df,
+            scale=student_t_scale,
+            size=nfixed,
+            random_state=rng,
         )
 
         # Draw tlast from a uniform (top-hat) distribution in Gyr
         tlast_min, tlast_max = tlast_limits_gyr
-        tlast_gyr = uniform.rvs(loc=tlast_min, scale=tlast_max - tlast_min)
+        tlast_gyr = uniform.rvs(
+            loc=tlast_min, scale=tlast_max - tlast_min, random_state=rng
+        )
         tlast = tlast_gyr * 1e9 * yr  # Convert to unyt_array in years
 
         # Instantiate the class with the drawn parameters
