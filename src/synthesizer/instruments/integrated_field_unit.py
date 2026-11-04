@@ -432,10 +432,26 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 "The Instrument PSF must be 2 or 3 dimensional."
             )
 
+        if np.shape(self.psfs)[0] == 0 or np.shape(self.psfs)[1] == 0:
+            raise exceptions.InconsistentArguments(
+                "The Instrument PSF must have non-empty spatial dimensions."
+            )
+
+        if not np.all(np.isfinite(self.psfs)):
+            raise exceptions.InconsistentArguments(
+                "The Instrument PSF must contain only finite values."
+            )
+
         if psf_type == "3D":
+            cube_lam = cube.lam.value
+            min_channel_spacing = (
+                np.min(np.abs(np.diff(cube_lam))) if len(cube_lam) > 1 else 0.0
+            )
             if len(self.lam) != len(cube.lam) or not np.allclose(
                 self.lam.to(cube.lam.units).value,
-                cube.lam.value,
+                cube_lam,
+                rtol=0.0,
+                atol=min_channel_spacing * 1e-6,
             ):
                 raise exceptions.InconsistentArguments(
                     "The Instrument and cube wavelength grids must match."
