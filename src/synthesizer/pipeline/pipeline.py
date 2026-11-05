@@ -4480,7 +4480,7 @@ class Pipeline:
                 )
                 self.line_cont_fluxes["Galaxy"].setdefault(
                     spec_type, []
-                ).append(lines.continuum)
+                ).append(lines.continuum_flux)
             if galaxy.stars is not None:
                 for spec_type, lines in galaxy.stars.lines.items():
                     self.line_fluxes["Stars"].setdefault(spec_type, []).append(
@@ -4488,7 +4488,7 @@ class Pipeline:
                     )
                     self.line_cont_fluxes["Stars"].setdefault(
                         spec_type, []
-                    ).append(lines.continuum)
+                    ).append(lines.continuum_flux)
             if galaxy.black_holes is not None:
                 for spec_type, lines in galaxy.black_holes.lines.items():
                     self.line_fluxes["BlackHole"].setdefault(
@@ -4496,7 +4496,7 @@ class Pipeline:
                     ).append(lines.flux)
                     self.line_cont_fluxes["BlackHole"].setdefault(
                         spec_type, []
-                    ).append(lines.continuum)
+                    ).append(lines.continuum_flux)
 
             # The observed wavelengths depend on the galaxy's redshift so we
             # store them for every galaxy, taking them from the first line
@@ -5713,17 +5713,17 @@ class Pipeline:
             )
             self.io_helper.write_data(
                 self.line_cont_fluxes["Galaxy"],
-                "Galaxies/Lines/Continuum",
+                "Galaxies/Lines/ContinuumFlux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
                 self.line_cont_fluxes["Stars"],
-                "Galaxies/Stars/Lines/Continuum",
+                "Galaxies/Stars/Lines/ContinuumFlux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
                 self.line_cont_fluxes["BlackHole"],
-                "Galaxies/BlackHoles/Lines/Continuum",
+                "Galaxies/BlackHoles/Lines/ContinuumFlux",
                 galaxy_indices,
             )
 
