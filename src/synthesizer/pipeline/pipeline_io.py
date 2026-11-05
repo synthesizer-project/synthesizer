@@ -661,6 +661,7 @@ class PipelineIO:
                         dset.attrs[attr] = v.attrs[attr]
 
                 else:
+                    # Each rank must hold exactly one row per galaxy
                     if v.shape[0] != slice.stop - slice.start:
                         raise ValueError(
                             f"Cannot combine {v.name}: {v.shape[0]} rows "

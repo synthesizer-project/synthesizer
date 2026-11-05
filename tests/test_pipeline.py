@@ -1067,8 +1067,49 @@ class TestPipelineOperations:
         # Each galaxy should have its own wavelengths, scaled by (1 + z)
         with h5py.File(output) as hdf:
             obslams = hdf["Galaxies/Lines/ObservedWavelengths"][...]
+
+            # The line IDs and rest frame wavelengths should also be written
+            # even though only observed lines were requested
+            nids = hdf["Lines/IDs"].shape[0]
+            nlams = hdf["Lines/Wavelengths"].shape[0]
         assert obslams.shape == (2, len(test_grid.available_lines))
         np.testing.assert_allclose(obslams[1] / obslams[0], 4.0 / 2.0)
+        assert nids == nlams == len(test_grid.available_lines)
+
+    @pytest.mark.parametrize("rank", [0, 1])
+    def test_first_from_any_rank_gathers_to_root(
+        self, nebular_emission_model, rank
+    ):
+        """Rank 0 gets a value held only by another rank."""
+        # Pretend to be one rank of two where only rank 1 has the value
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.using_mpi = True
+        pipeline.rank = rank
+        pipeline.comm = MagicMock()
+        pipeline.comm.gather.return_value = [None, "lams"]
+
+        # Only rank 0 receives the value, gathered rather than allgathered
+        result = pipeline._first_from_any_rank("lams" if rank else None)
+        assert result == ("lams" if rank == 0 else None)
+        pipeline.comm.gather.assert_called_once()
+        pipeline.comm.allgather.assert_not_called()
+
+    def test_first_from_any_rank_all_ranks(self, nebular_emission_model):
+        """Every rank gets the value with all_ranks=True."""
+        # Pretend to be a non-root rank without the value
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.using_mpi = True
+        pipeline.rank = 1
+        pipeline.comm = MagicMock()
+        pipeline.comm.allgather.return_value = [None, "props", "other"]
+
+        # The first value which isn't None is returned on this rank too
+        assert pipeline._first_from_any_rank(None, all_ranks=True) == "props"
+
+    def test_first_from_any_rank_without_mpi(self, nebular_emission_model):
+        """Without MPI the rank's own value is returned."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        assert pipeline._first_from_any_rank("lams") == "lams"
 
     def test_run_pipeline_lines_luminosity_subset(
         self,
@@ -3751,6 +3792,49 @@ def test_virtual_combine_rejects_sparse_rows(tmp_path):
     io.size, io.rank, io.is_root = 1, 0, True
     io.num_galaxies, io.start, io.end = 2, 0, 2
     io.verbose, io._start_time = 0, time.perf_counter()
+
+
+def test_combine_rank_files_with_empty_placeholder(tmp_path):
+    """A zero-row placeholder on an empty rank doesn't set the shape."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Rank 0 has no galaxies so only holds a placeholder
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Product", shape=(0,))
+    with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Product", data=np.ones((2, 3)))
+
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.is_root, io.num_galaxies = 2, True, 2
+    io.start, io.end = 0, 0
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 0], [0, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    io.combine_rank_files()
+
+    with h5py.File(tmp_path / "out.hdf5") as hdf:
+        np.testing.assert_array_equal(hdf["Galaxies/Product"], np.ones((2, 3)))
+
+
+def test_combine_rejects_sparse_rows(tmp_path):
+    """Sparse rank data must not silently shift into other galaxy rows."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Product", data=[1.0])
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 1, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 2
+    io.verbose, io._start_time = 0, time.perf_counter()
+
+    # Both the physical and virtual combinations must refuse
+    gathered = iter([[0], [2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+    with pytest.raises(ValueError, match="rows for 2 galaxies"):
+        io.combine_rank_files()
     gathered = iter([[0], [2]])
     io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
     with pytest.raises(ValueError, match="rows for 2 galaxies"):
