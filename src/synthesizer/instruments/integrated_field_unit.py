@@ -39,6 +39,10 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             a function of wavelength, in dimensionless units. If a 2D array is
             supplied, every wavelength is assumed to have the same PSF. If
             a 3D array is supplied, the last axis must be the wavelength axis.
+        lsfs (array, optional): Normalised line spread function kernels
+            with shape (nwave, nkernel), inherited from
+            SpectroscopicInstrument. Each row corresponds to a
+            wavelength in lam.
     """
 
     @accepts(
@@ -61,6 +65,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         noise_maps=None,
         noise_source_maps=None,
         resolving_power=None,
+        lsfs=None,
     ):
         """Initialise an integrated field unit instrument.
 
@@ -96,6 +101,9 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
                 power (R = lambda / delta_lambda) of the instrument. Only a
                 constant value is persisted when the instrument is saved to
                 HDF5.
+            lsfs (array, optional): Normalised line spread function
+                kernels with shape (nwave, nkernel), sampled on the
+                instrument wavelength grid.
         """
         # Initialise the shared spectroscopic instrument first
         super().__init__(
@@ -106,6 +114,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             snrs=snrs,
             noise_maps=noise_maps,
             resolving_power=resolving_power,
+            lsfs=lsfs,
         )
 
         # Attach the IFU specific attributes
@@ -684,6 +693,11 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         else:
             psf_pixel_scale = None
 
+        if "LSFs" in group:
+            lsfs = group["LSFs"][...]
+        else:
+            lsfs = None
+
         noise_maps = read_instrument_attribute(group, "NoiseMaps")
         noise_source_maps = read_instrument_attribute(group, "NoiseSourceMaps")
 
@@ -696,6 +710,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             "snrs": snrs,
             "psfs": psfs,
             "psf_pixel_scale": psf_pixel_scale,
+            "lsfs": lsfs,
             "noise_maps": noise_maps,
             "noise_source_maps": noise_source_maps,
             "resolving_power": group.attrs.get("resolving_power"),
@@ -711,6 +726,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
             snrs=payload["snrs"],
             psfs=payload["psfs"],
             psf_pixel_scale=payload["psf_pixel_scale"],
+            lsfs=payload["lsfs"],
             noise_maps=payload["noise_maps"],
             noise_source_maps=payload["noise_source_maps"],
             resolving_power=payload["resolving_power"],
