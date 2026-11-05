@@ -1708,8 +1708,25 @@ class Pipeline:
         elif (
             not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None
         ):
-            # Parametric stars hold their own SFH, write it as is
-            galaxy.sfh = galaxy.stars.sfh
+            # Parametric stars hold their own SFH, use it as is if it's
+            # already on the requested ages (the lengths must be checked
+            # first since allclose broadcasts)
+            ages = galaxy.stars.log10ages
+            requested = op_kwargs["log10ages"]
+            if len(ages) == len(requested) and np.allclose(ages, requested):
+                galaxy.sfh = galaxy.stars.sfh
+
+            # Otherwise rebin their SFZH onto the requested ages and sum
+            # over metallicity
+            else:
+                galaxy.sfh = np.sum(
+                    self._parametric_sfzh(
+                        galaxy.stars,
+                        requested,
+                        galaxy.stars.metallicities,
+                    ),
+                    axis=1,
+                )
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfh(
                 log10ages=op_kwargs["log10ages"],
