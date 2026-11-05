@@ -3450,3 +3450,50 @@ def test_combine_rank_files_with_empty_rank(tmp_path):
             dset = hdf[f"Galaxies/Stars/{path}"]
             np.testing.assert_array_equal(dset, [6.0, 7.0, 8.0])
             assert dset.attrs["Units"] == "dimensionless"
+
+
+def test_combine_rank_files_with_empty_placeholder(tmp_path):
+    """A zero-row placeholder on an empty rank doesn't set the shape."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Rank 0 has no galaxies so only holds a placeholder
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Product", shape=(0,))
+    with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Product", data=np.ones((2, 3)))
+
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.is_root, io.num_galaxies = 2, True, 2
+    io.start, io.end = 0, 0
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 0], [0, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    io.combine_rank_files()
+
+    with h5py.File(tmp_path / "out.hdf5") as hdf:
+        np.testing.assert_array_equal(hdf["Galaxies/Product"], np.ones((2, 3)))
+
+
+def test_combine_rejects_sparse_rows(tmp_path):
+    """Sparse rank data must not silently shift into other galaxy rows."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Product", data=[1.0])
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 1, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 2
+    io.verbose, io._start_time = 0, time.perf_counter()
+
+    # Both the physical and virtual combinations must refuse
+    gathered = iter([[0], [2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+    with pytest.raises(ValueError, match="rows for 2 galaxies"):
+        io.combine_rank_files()
+    gathered = iter([[0], [2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+    with pytest.raises(ValueError, match="rows for 2 galaxies"):
+        io.combine_rank_files_virtual()

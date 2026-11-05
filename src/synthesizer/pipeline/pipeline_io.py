@@ -544,6 +544,16 @@ class PipelineIO:
                         dset.attrs[attr] = v.attrs[attr]
 
                 else:
+                    # Each rank must hold exactly one row per galaxy
+                    if v.shape[0] != slice.stop - slice.start:
+                        raise ValueError(
+                            f"Cannot combine {v.name}: {v.shape[0]} rows "
+                            f"for {slice.stop - slice.start} galaxies"
+                        )
+                    # Empty ranks only hold zero-row placeholders, which
+                    # must not decide the combined dataset's shape
+                    if v.shape[0] == 0:
+                        continue
                     # If the dataset doesn't exist we need to create it
                     if k not in dest:
                         dset = dest.create_dataset(
@@ -737,7 +747,11 @@ class PipelineIO:
                         # Ensure the local size is as expected
                         expected_size = end_i - start_i
                         if local_size != expected_size:
-                            end_i = start_i + local_size
+                            raise ValueError(
+                                f"Cannot map {dpath}: rank {rank} has "
+                                f"{local_size} rows for {expected_size} "
+                                "galaxies"
+                            )
 
                         target_shape = (end_i - start_i,) + shape[1:]
 
