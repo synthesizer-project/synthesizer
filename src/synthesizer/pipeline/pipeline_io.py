@@ -49,14 +49,14 @@ def _hdf5_replaced_on_success(path):
     try:
         with h5py.File(temp_path, "w") as hdf:
             yield hdf
+
+        # Everything was written (and the file closed), so swap it in
+        os.replace(temp_path, path)
     except BaseException:
         # Clean up the incomplete file before re-raising
         if os.path.exists(temp_path):
             os.remove(temp_path)
         raise
-
-    # Everything was written (and the file closed), so swap it in
-    os.replace(temp_path, path)
 
 
 class PipelineIO:
@@ -644,6 +644,12 @@ class PipelineIO:
         path_no_ext = ".".join(self.filepath.split(".")[:-1])
         temp_path = "_".join(path_no_ext.split("_")[:-1]) + "_<rank>.hdf5"
         new_path = "_".join(path_no_ext.split("_")[:-1]) + f".{ext}"
+
+        # Remove any old virtual file. Unlike a copied file it can't be kept
+        # if this combine fails, since it points at the rank files this run
+        # has already overwritten
+        if os.path.exists(new_path):
+            os.remove(new_path)
 
         # Open the first rank file (rank 0 file) to discover the structure
         first_file_path = temp_path.replace("<rank>", "0")

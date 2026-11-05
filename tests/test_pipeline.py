@@ -3290,7 +3290,11 @@ def _rank0_writer(tmp_path, starts, ends):
 
 @pytest.mark.parametrize("virtual", [False, True])
 def test_failed_combine_keeps_existing_output(tmp_path, virtual):
-    """A failed combine must leave an existing combined file untouched."""
+    """A failed combine must not leave misleading output behind.
+
+    An existing copied file is kept untouched. An existing virtual file is
+    removed, since it points at the rank files this run has overwritten.
+    """
     # An existing, valid combined file from an earlier run
     with h5py.File(tmp_path / "out.hdf5", "w") as hdf:
         hdf.create_dataset("Galaxies/Lum", data=np.full((2, 3), 7.0))
@@ -3313,9 +3317,13 @@ def test_failed_combine_keeps_existing_output(tmp_path, virtual):
         else:
             io.combine_rank_files()
 
-    # The earlier output survives and no temporary file is left behind
-    with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
-        np.testing.assert_array_equal(hdf["Galaxies/Lum"][...], 7.0)
+    # The earlier copied output survives (an earlier virtual file is gone)
+    # and no temporary file is left behind
+    if virtual:
+        assert not (tmp_path / "out.hdf5").exists()
+    else:
+        with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+            np.testing.assert_array_equal(hdf["Galaxies/Lum"][...], 7.0)
     assert not (tmp_path / "out.hdf5.tmp").exists()
 
 
