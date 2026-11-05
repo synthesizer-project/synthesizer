@@ -120,3 +120,26 @@ For optimal performance on HPC systems, combine distributed (MPI) and shared mem
 
 This hybrid approach allows you to scale to thousands of cores on HPC systems while maintaining efficiency.
 
+
+Processing Galaxies on Threads (Free-Threaded Python)
+-----------------------------------------------------
+
+On a free-threaded (no-GIL) build of Python, such as ``python3.14t``, the ``Pipeline`` can also process several galaxies concurrently on threads within a single process.
+This is most useful when the work per galaxy is dominated by Python rather than the C++ extensions, for example parametric galaxies, where OpenMP threading within a galaxy has little to parallelise.
+
+.. code-block:: python
+
+    pipeline = Pipeline(emission_model=model, nthreads=1, nr_galaxy_threads=8)
+
+Each galaxy thread also uses ``nthreads`` OpenMP threads, so a warning is issued if ``nr_galaxy_threads * nthreads`` exceeds the available cores.
+Galaxy threads combine with MPI, with each rank processing its own galaxies on its own threads.
+
+The outputs are identical to processing the galaxies serially: galaxies are processed concurrently but their results are collected in order.
+At most two galaxies per thread are held in memory at once.
+
+A few things to be aware of:
+
+- On a build with the GIL enabled, ``nr_galaxy_threads > 1`` issues a warning and the galaxies are processed serially, since the threads could not run in parallel.
+- Some third party modules re-enable the GIL when imported on a free-threaded build (at the time of writing ``astropy.table``, imported via ``astropy.cosmology``, does this). Run with ``PYTHON_GIL=0`` (or ``python -Xgil=0``) to keep it disabled.
+- Analysis functions added with ``add_analysis_func`` run on the galaxy threads, so they must only modify the galaxy they are passed.
+- The per-operation timings reported at the end of a run are summed over the threads, so they are thread time rather than wall clock time.
