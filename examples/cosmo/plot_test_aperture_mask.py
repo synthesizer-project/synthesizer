@@ -25,9 +25,6 @@ gals = load_CAMELS_IllustrisTNG(
     group_dir=TEST_DATA_DIR,
 )
 
-# Define an emission model
-model = IncidentEmission(grid)
-
 # Select a single galaxy
 gal = gals[1]
 
@@ -45,10 +42,18 @@ print("Stars centre of mass: gal.stars.centre = ", gal.stars.centre)
 
 print("Galaxy centre unchanged: gal.centre = ", gal.centre)
 
+# Compute the radii of the star particles from this centre, these are what
+# the aperture masks below select on
+gal.stars.get_radii()
+
 fig, ax = plt.subplots(1, 1)
 
 for aperture_radius in np.array([30, 10, 5, 2, 1, 0.5]) * kpc:
-    spec = gal.stars.get_spectra(model, aperture=aperture_radius)
+    # Define an emission model only including stars within the aperture
+    model = IncidentEmission(grid, label=f"incident_{aperture_radius.value}")
+    model.add_mask(attr="radii", op="<", thresh=aperture_radius)
+
+    spec = gal.stars.get_spectra(model)
 
     ax.loglog(spec.lam, spec.lnu, label=f"Aperture: {aperture_radius.value}")
 
