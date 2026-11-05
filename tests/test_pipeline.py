@@ -454,6 +454,14 @@ class TestPipelineInit:
         with pytest.raises(ValueError, match="max_npart must be an int >= 1"):
             Pipeline(emission_model=nebular_emission_model, max_npart=0)
 
+    def test_analysis_func_timing_registered(self, nebular_emission_model):
+        """Analysis timings exist before any galaxy is processed."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_analysis_func(lambda gal: 1.0, "Extra")
+
+        # A rank without galaxies must still reduce this timing
+        assert pipeline._op_timing["Extra"] == 0.0
+
 
 class TestPipelineTimingAnalysis:
     """Tests for Pipeline atomic timing analysis."""
@@ -1414,6 +1422,30 @@ class TestPipelineOperations:
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.sfhs) > 0
         ), "No SFH was calculated"
+
+    def test_write_lines_and_observed_lines(
+        self, test_grid, pipeline_with_galaxies, tmp_path
+    ):
+        """Luminosity and flux lines can be written together."""
+        pipeline_with_galaxies.get_lines(line_ids=test_grid.available_lines)
+        pipeline_with_galaxies.get_observed_lines(
+            cosmo=cosmo, line_ids=test_grid.available_lines
+        )
+        output = tmp_path / "lines.hdf5"
+        pipeline_with_galaxies.write(output)
+
+        # Each gets its own continuum, in its own units
+        with h5py.File(output) as hdf:
+            lines = hdf["Galaxies/Stars/Lines"]
+            assert "Luminosity" in lines
+            assert "Flux" in lines
+            lum_cont = lines["Continuum"]
+            flux_cont = lines["ContinuumFlux"]
+            for spec_type in lum_cont:
+                assert (
+                    lum_cont[spec_type].attrs["Units"]
+                    != flux_cont[spec_type].attrs["Units"]
+                )
 
 
 class TestPipelineNewFeatures:
