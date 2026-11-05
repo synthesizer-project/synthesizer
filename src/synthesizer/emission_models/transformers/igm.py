@@ -7,6 +7,7 @@ These are used when observer frame fluxes are computed using Sed.get_fnu(...)
 and are not designed to be used directly by the user.
 """
 
+import copy
 import os
 
 import matplotlib.pyplot as plt
@@ -44,6 +45,11 @@ class IGMBase(Transformer):
                 attribute to use on the emitter).
         """
         self.name = name
+
+        # The most recent transmission and the inputs it was computed for.
+        # Every Sed of a galaxy shares the redshift, wavelengths and
+        # parameters, so this avoids recomputing it for each one.
+        self._transmission_cache = None
 
         # Initialize the base class
         Transformer.__init__(self, required_params=required_params)
@@ -101,6 +107,58 @@ class IGMBase(Transformer):
         return self._extract_params(
             model, emission, emitter, obj=self, preserve_units=True
         )
+
+    def _get_cached_transmission(self, redshift, lam_obs, params):
+        """Return the cached transmission if it matches these inputs.
+
+        Args:
+            redshift (float): Redshift to evaluate IGM absorption.
+            lam_obs (array): Observed-frame wavelengths.
+            params (dict): The resolved model parameters.
+
+        Returns:
+            array or None: The cached (read-only) transmission, or None if
+                it was computed for different inputs.
+        """
+        cache = self._transmission_cache
+        if cache is None:
+            return None
+        cached_redshift, cached_lam, cached_params, transmission = cache
+        if (
+            cached_redshift == redshift
+            and cached_params.keys() == params.keys()
+            and all(
+                np.array_equal(cached_params[key], params[key])
+                for key in params
+            )
+            and np.array_equal(cached_lam, lam_obs)
+        ):
+            return transmission
+        return None
+
+    def _cache_transmission(self, redshift, lam_obs, params, transmission):
+        """Cache a transmission with the inputs it was computed for.
+
+        The transmission is made read-only since it is returned to every
+        caller with matching inputs.
+
+        Args:
+            redshift (float): Redshift to evaluate IGM absorption.
+            lam_obs (array): Observed-frame wavelengths.
+            params (dict): The resolved model parameters.
+            transmission (array): The transmission to cache.
+
+        Returns:
+            array: The cached transmission.
+        """
+        transmission.setflags(write=False)
+        self._transmission_cache = (
+            redshift,
+            lam_obs.copy(),
+            copy.deepcopy(params),
+            transmission,
+        )
+        return transmission
 
     def plot_transmission(
         self,
@@ -512,6 +570,12 @@ class Inoue14(IGMBase):
             array: IGM transmission.
         """
         params = self._get_igm_params(emitter, model, emission)
+
+        # Reuse the transmission if it was just computed for these inputs
+        transmission = self._get_cached_transmission(redshift, lam_obs, params)
+        if transmission is not None:
+            return transmission
+
         tau = self.tau(redshift, lam_obs, scale_tau=params["scale_tau"])
         transmission = np.exp(-tau)
 
@@ -519,7 +583,9 @@ class Inoue14(IGMBase):
         transmission[transmission != transmission] = 0.0  # squash NaNs
         transmission[transmission > 1] = 1
 
-        return transmission
+        return self._cache_transmission(
+            redshift, lam_obs, params, transmission
+        )
 
 
 class Madau96(IGMBase):
@@ -562,6 +628,12 @@ class Madau96(IGMBase):
         Returns:
             array: IGM transmission.
         """
+        # Reuse the transmission if it was just computed for these inputs
+        transmission = self._get_cached_transmission(redshift, lam_obs, {})
+        if transmission is not None:
+            return transmission
+        lam_obs_in = lam_obs
+
         # Strip off units for the following calculations (we know the units
         # are Angstroms from the decorator)
         lam_obs = lam_obs.value
@@ -621,7 +693,7 @@ class Madau96(IGMBase):
                 )
                 continue
 
-        return exp_teff
+        return self._cache_transmission(redshift, lam_obs_in, {}, exp_teff)
 
 
 def sigma_a(nu_rest):
@@ -1034,6 +1106,11 @@ class Asada25(IGMBase):
         """
         params = self._get_igm_params(emitter, model, emission)
 
+        # Reuse the transmission if it was just computed for these inputs
+        transmission = self._get_cached_transmission(redshift, lam_obs, params)
+        if transmission is not None:
+            return transmission
+
         # Compute IGM transmission
         tau_igm_val = self.tau_igm(
             redshift, lam_obs, scale_tau=params["scale_tau"]
@@ -1062,4 +1139,6 @@ class Asada25(IGMBase):
         transmission[transmission != transmission] = 0.0  # squash NaNs
         transmission[transmission > 1] = 1
 
-        return transmission
+        return self._cache_transmission(
+            redshift, lam_obs, params, transmission
+        )
