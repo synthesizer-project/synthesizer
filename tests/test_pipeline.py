@@ -3359,6 +3359,53 @@ def test_parametric_sfh_rebinned_onto_requested_ages(
     assert pipeline._op_counts["SFH"] == 1
 
 
+def test_reused_galaxy_sfzh_and_sfh_follow_new_axes(
+    nebular_emission_model, single_star_parametric, test_grid
+):
+    """A galaxy reused from an earlier run is recomputed on the new axes."""
+    from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+
+    galaxy = ParametricGalaxy(stars=single_star_parametric)
+
+    # A first run on the stars' own axes caches a grid on the galaxy
+    first = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    first.get_sfzh(
+        log10ages=test_grid.log10ages, metallicities=test_grid.metallicities
+    )
+    first.get_sfh(log10ages=test_grid.log10ages)
+    first._get_sfzh(galaxy)
+    first._get_sfh(galaxy)
+
+    # A second run on other axes must not reuse those grids
+    ages = test_grid.log10ages[1:-1] + 0.05
+    metals = test_grid.metallicities[1:-1]
+    second = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    second.get_sfzh(log10ages=ages, metallicities=metals)
+    second.get_sfh(log10ages=ages)
+    assert second._get_sfzh(galaxy).shape == (len(ages), len(metals))
+    assert second._get_sfh(galaxy).shape == ages.shape
+
+
+def test_mass_grids_are_converted_to_msun(nebular_emission_model):
+    """Grids carrying mass units are converted, not just relabelled."""
+    from unyt import Msun
+
+    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+
+    # A grid in units of 1e6 Msun is converted
+    grid = pipeline._mass_grid_in_msun(
+        unyt_array([1.0, 2.0], 1e6 * Msun), "sfh"
+    )
+    assert str(grid.units) == "Msun"
+    np.testing.assert_allclose(grid.value, [1e6, 2e6])
+
+    # Plain arrays are already in Msun
+    np.testing.assert_allclose(
+        pipeline._mass_grid_in_msun(np.array([1.0, 2.0]), "sfh").value,
+        [1.0, 2.0],
+    )
+
+
 def test_parametric_sfzh_and_sfh_out_dtype(
     nebular_emission_model, single_star_parametric, test_grid, tmp_path
 ):

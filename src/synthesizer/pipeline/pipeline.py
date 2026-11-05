@@ -1610,13 +1610,10 @@ class Pipeline:
         # Get the operation kwargs for this operation
         op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfzh")
 
-        # Get the SFZH, skip any without stars.
-        # Parametric galaxies have this ready to go so we can skip them
-        if getattr(galaxy, "sfzh", None) is not None:
-            return galaxy.sfzh
-        elif (
-            not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None
-        ):
+        # Get the SFZH, skip any without stars. We always compute it on the
+        # requested axes, since a galaxy reused from an earlier run may hold
+        # one on other axes
+        if not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None:
             # Parametric stars hold their own SFZH, rebin it onto the
             # requested axes
             galaxy.sfzh = self._parametric_sfzh(
@@ -1701,13 +1698,10 @@ class Pipeline:
         # Get the operation kwargs for this operation
         op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfh")
 
-        # Get the SFH, skip any without stars.
-        # Parametric galaxies have this ready to go so we can skip them
-        if getattr(galaxy, "sfh", None) is not None:
-            return galaxy.sfh
-        elif (
-            not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None
-        ):
+        # Get the SFH, skip any without stars. We always compute it on the
+        # requested ages, since a galaxy reused from an earlier run may hold
+        # one on other ages
+        if not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None:
             # Parametric stars hold their own SFH, use it as is if it's
             # already on the requested ages (the lengths must be checked
             # first since allclose broadcasts)
@@ -4408,6 +4402,32 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Extra Analyses"] += time.perf_counter() - start
 
+    def _mass_grid_in_msun(self, grid, op):
+        """Return an SFZH or SFH grid in Msun with the requested dtype.
+
+        Args:
+            grid (np.ndarray/unyt_array):
+                The grid. Arrays without units (or dimensionless) are
+                already in Msun.
+            op (str):
+                The operation the grid is for ("sfzh" or "sfh"), used to
+                look up the requested output dtype.
+
+        Returns:
+            unyt_array:
+                The grid in Msun.
+        """
+        # Convert any grid carrying mass units, rather than relabelling it
+        if isinstance(grid, unyt_array) and not grid.units.is_dimensionless:
+            grid = grid.to("Msun")
+
+        return unyt_array(
+            np.asarray(
+                grid, dtype=resolve_out_dtype(self._out_dtypes.get(op))
+            ),
+            "Msun",
+        )
+
     @timed("Pipeline._unpack_results")
     def _unpack_results(self, galaxy):
         """Unpack the results from the galaxy into the pipeline.
@@ -4434,13 +4454,7 @@ class Pipeline:
             ):
                 sfzh = galaxy.stars.sfzh
             self.sfzhs.append(
-                unyt_array(
-                    np.asarray(
-                        getattr(sfzh, "sfzh", sfzh),
-                        dtype=resolve_out_dtype(self._out_dtypes.get("sfzh")),
-                    ),
-                    "Msun",
-                )
+                self._mass_grid_in_msun(getattr(sfzh, "sfzh", sfzh), "sfzh")
             )
 
         # Do we need to unpack the SFH? As above, particle stars hold it
@@ -4452,15 +4466,7 @@ class Pipeline:
                 and galaxy.stars.sfh is not None
             ):
                 sfh = galaxy.stars.sfh
-            self.sfhs.append(
-                unyt_array(
-                    np.asarray(
-                        sfh,
-                        dtype=resolve_out_dtype(self._out_dtypes.get("sfh")),
-                    ),
-                    "Msun",
-                )
-            )
+            self.sfhs.append(self._mass_grid_in_msun(sfh, "sfh"))
 
         # Do we need to unpack the lnu spectra?
         if self._write_lnu_spectra:
