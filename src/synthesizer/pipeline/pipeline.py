@@ -5453,7 +5453,6 @@ class Pipeline:
 
         self._took(start, "Cleaning outputs")
 
-    @timed("Pipeline.write")
     def _first_from_any_rank(self, value, all_ranks=False):
         """Return the first value which isn't None on any rank.
 
@@ -5486,6 +5485,7 @@ class Pipeline:
 
         return next((val for val in values if val is not None), None)
 
+    @timed("Pipeline.write")
     def write(self, outpath, verbose=None):
         """Write what we have produced to a HDF5 file.
 
