@@ -116,6 +116,7 @@ def test_escape_fraction(
     [
         {"dust_curves": None, "tau_v": 0.5},
         {"fesc": 0.1},
+        {"covering_fraction": 0.9},
         {"mask": {}},
         {"vel_shift": True},
     ],

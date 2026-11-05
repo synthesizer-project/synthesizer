@@ -395,6 +395,7 @@ class Component(ABC):
         nthreads=1,
         grid_assignment_method="cic",
         out_dtype=None,
+        covering_fraction=None,
         **kwargs,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -427,6 +428,9 @@ class Component(ABC):
                 are "cic" (cloud-in-cell) or "ngp" (nearest grid point)."
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted spectra arrays.
+            covering_fraction (dict):
+                No longer supported, passing it raises an error.
+                Modify the EmissionModel (or the emitter) instead.
             **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -443,6 +447,7 @@ class Component(ABC):
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=fesc,
+            covering_fraction=covering_fraction,
             mask=mask,
             vel_shift=vel_shift,
         )
@@ -481,6 +486,7 @@ class Component(ABC):
         mask=None,
         verbose=True,
         out_dtype=None,
+        covering_fraction=None,
         **kwargs,
     ):
         """Generate stellar lines as described by the emission model.
@@ -507,6 +513,9 @@ class Component(ABC):
                 Are we talking?
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted line arrays.
+            covering_fraction (dict):
+                No longer supported, passing it raises an error.
+                Modify the EmissionModel (or the emitter) instead.
             kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -522,6 +531,7 @@ class Component(ABC):
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=fesc,
+            covering_fraction=covering_fraction,
             mask=mask,
         )
 
