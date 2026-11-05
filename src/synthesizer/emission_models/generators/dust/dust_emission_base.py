@@ -23,7 +23,7 @@ from synthesizer.emission_models.generators.generator import Generator
 from synthesizer.emission_models.utils import get_emission_label
 from synthesizer.units import Units, accepts
 from synthesizer.utils.integrate import trapezoid
-from synthesizer.utils.precision import resolve_out_dtype
+from synthesizer.utils.precision import get_float_dtype, resolve_out_dtype
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
@@ -106,9 +106,16 @@ def optically_thin_luminosity(
     # NOTE: planck returns lnu for an assumed luminosity distance of 10 pc,
     # so the same (10 pc)^2 must appear here for the normalisation to match
     prefactor = (8 * np.pi * h * (10 * pc) ** 2 / c**2).to("erg * s**3")
-    nu_t = (kb * temperature / h).to(Hz).value
+    # NOTE: (k T / h)^(4 + beta) overflows float32 at typical dust
+    # temperatures, so compute it at float64 and only cast the luminosity
+    # back to the temperature's precision
+    nu_t = np.asarray((kb * temperature / h).to(Hz).value, dtype=np.float64)
     lum = prefactor.value * nu_t**power * gamma(power) * zeta(power)
-    return (lum * erg / s).to(Units().luminosity).value
+    return (
+        (lum * erg / s)
+        .to(Units().luminosity)
+        .value.astype(get_float_dtype(temperature.dtype), copy=False)
+    )
 
 
 @accepts(temperature=K)
