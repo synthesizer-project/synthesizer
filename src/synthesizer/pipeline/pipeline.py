@@ -28,7 +28,10 @@ Example usage:
 ```
 """
 
+import threading
 import time
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -59,6 +62,7 @@ from synthesizer.pipeline.pipeline_utils import (
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.art import Art
+from synthesizer.utils.free_threading import resolve_threads
 from synthesizer.utils.operation_timers import (
     build_timing_analysis_rows,
     print_timing_analysis_table,
@@ -153,6 +157,7 @@ class Pipeline:
         verbose=1,
         report_memory=False,
         max_npart=None,
+        nr_galaxy_threads=1,
     ):
         """Initialise the Pipeline object.
 
@@ -197,6 +202,11 @@ class Pipeline:
                 TODO: while gas particles don't carry spectra we only need to
                 consider stars and black holes in this threshold. If we have
                 gas spectra in the future we will need to amend this.
+            nr_galaxy_threads (int): The number of galaxies to process
+                concurrently on separate threads. This is only used on a
+                free-threaded (no-GIL) build of Python with the GIL disabled,
+                otherwise the galaxies are processed serially with a warning.
+                Each thread also uses nthreads OpenMP threads. Default is 1.
         """
         # Attributes to track timing
         self._start_time = time.perf_counter()
@@ -241,6 +251,12 @@ class Pipeline:
                 "Can't use multiple threads without OpenMP support. "
                 " Install with: `WITH_OPENMP=1 pip install .`"
             )
+
+        # How many galaxies are we processing concurrently? (This falls back
+        # to 1 with a warning when the GIL is enabled.)
+        self.nr_galaxy_threads = resolve_threads(
+            nr_galaxy_threads, "nr_galaxy_threads", nthreads
+        )
 
         # Define flags for what we will do
         self._do_los_optical_depths = False
@@ -374,6 +390,13 @@ class Pipeline:
         self.fnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.spectroscopy = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
 
+        # Threads processing galaxies record their timings and counts in their
+        # own containers (see _op_timing and _op_counts), which are summed
+        # into the main ones once all galaxies are done.
+        self._thread_counters = threading.local()
+        self._worker_counters = []
+        self._worker_counters_lock = threading.Lock()
+
         # We'll need to store the timing information to be reported at the
         # end of the pipeline (this will be stored with the operation
         # as the key and the value being the collected time taken).
@@ -475,6 +498,26 @@ class Pipeline:
         # Hold back everyone in MPI land until we're all ready to go
         if self.using_mpi:
             comm.Barrier()
+
+    @property
+    def _op_timing(self):
+        """Return the operation timings for the calling thread."""
+        return getattr(self._thread_counters, "timing", self._main_op_timing)
+
+    @_op_timing.setter
+    def _op_timing(self, value):
+        """Set the main operation timings."""
+        self._main_op_timing = value
+
+    @property
+    def _op_counts(self):
+        """Return the operation counts for the calling thread."""
+        return getattr(self._thread_counters, "counts", self._main_op_counts)
+
+    @_op_counts.setter
+    def _op_counts(self, value):
+        """Set the main operation counts."""
+        self._main_op_counts = value
 
     def _say_hello(self):
         """Print a nice welcome."""
@@ -4745,7 +4788,8 @@ class Pipeline:
         """Generate everything requested for a single galaxy.
 
         This is everything except the steps which write to the pipeline's
-        outputs (see _finish_galaxy).
+        outputs (see _finish_galaxy), so galaxies can be processed
+        concurrently on separate threads.
 
         Args:
             gal (Galaxy): The galaxy to process.
@@ -4901,6 +4945,75 @@ class Pipeline:
             with timer("Pipeline.run.cleanup_galaxy"):
                 del gal
 
+    def _process_galaxy_on_thread(self, gal):
+        """Process a galaxy on a worker thread.
+
+        Each worker thread records its timings and counts in its own
+        containers, which _run_per_thread_gal_queue sums into the main ones.
+
+        Args:
+            gal (Galaxy): The galaxy to process.
+
+        Returns:
+            float: The time taken to process the galaxy.
+        """
+        if not hasattr(self._thread_counters, "timing"):
+            timing = dict.fromkeys(self._main_op_timing, 0.0)
+            counts = dict.fromkeys(self._main_op_counts, 0)
+            self._thread_counters.timing = timing
+            self._thread_counters.counts = counts
+            with self._worker_counters_lock:
+                self._worker_counters.append((timing, counts))
+        return self._process_galaxy(gal)
+
+    def _run_per_thread_gal_queue(self):
+        """Process the galaxies concurrently on a pool of threads.
+
+        The main thread keeps up to two galaxies per thread in flight and
+        finishes them in order, so the outputs are the same as processing
+        them serially and only the galaxies in flight are held in memory.
+        """
+        max_in_flight = 2 * self.nr_galaxy_threads
+        in_flight = deque()
+        igal = 0
+        with ThreadPoolExecutor(self.nr_galaxy_threads) as executor:
+            try:
+                while len(self.galaxies) > 0 or len(in_flight) > 0:
+                    # Top up the galaxies in flight
+                    while len(self.galaxies) > 0 and (
+                        len(in_flight) < max_in_flight
+                    ):
+                        gal = self.galaxies.pop(0)
+                        in_flight.append(
+                            (
+                                gal,
+                                executor.submit(
+                                    self._process_galaxy_on_thread, gal
+                                ),
+                            )
+                        )
+
+                    # Finish the oldest galaxy once it's processed
+                    gal, future = in_flight.popleft()
+                    self._finish_galaxy(gal, igal, future.result())
+                    igal += 1
+                    del gal, future
+            except BaseException:
+                executor.shutdown(cancel_futures=True)
+                raise
+
+        # Sum the worker threads' timings and counts into the main ones
+        for timing, counts in self._worker_counters:
+            for key, value in timing.items():
+                self._main_op_timing[key] = (
+                    self._main_op_timing.get(key, 0.0) + value
+                )
+            for key, value in counts.items():
+                self._main_op_counts[key] = (
+                    self._main_op_counts.get(key, 0) + value
+                )
+        self._worker_counters.clear()
+
     def run(self):
         """Run the pipeline.
 
@@ -4968,8 +5081,12 @@ class Pipeline:
         with timer("Pipeline.run.print_progress_header"):
             self._print_progress_header()
 
-        # Process the galaxies
-        self._run_single_gal_queue()
+        # Process the galaxies, either one at a time or concurrently on
+        # threads
+        if self.nr_galaxy_threads > 1:
+            self._run_per_thread_gal_queue()
+        else:
+            self._run_single_gal_queue()
 
         # print the footer for the pipeline run to the console
         with timer("Pipeline.run.print_progress_footer"):
