@@ -9,6 +9,8 @@ This module contains tests for all dust generator functionality including:
 - Integration and functionality tests
 """
 
+import warnings
+
 import numpy as np
 import pytest
 from unyt import Hz, K, Lsun, Msun, angstrom, erg, s, um
@@ -1696,3 +1698,17 @@ class TestRequiredEmissions:
         bb.set_scaler(FakeEmissionModel("scaler"))
         lscale = bb.get_scaling(None, None, mock_emissions)
         assert lscale == mock_emissions["scaler"].bolometric_luminosity
+
+
+@pytest.mark.parametrize("alpha, warns", ((1.2, True), (2.0, False)))
+def test_casey12_warns_for_shallow_alpha(alpha, warns):
+    """Slopes below the calibrated range warn about near-IR emission."""
+    generator = Casey12(temperature=30 * K, emissivity=1.6, alpha=alpha)
+    lams = np.logspace(0, 3, 100) * um
+    if warns:
+        with pytest.warns(RuntimeWarning, match="near-infrared"):
+            generator.get_spectra(lams)
+    else:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            generator._power_law_params(30 * K, 1.6, alpha)
