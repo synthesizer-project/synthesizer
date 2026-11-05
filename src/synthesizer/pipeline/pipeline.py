@@ -1522,6 +1522,38 @@ class Pipeline:
         # Record the time taken
         self._op_timing["LOS optical depths"] += time.perf_counter() - start
 
+    def _parametric_sfzh(self, stars, log10ages, metallicities):
+        """Return the SFZH of parametric stars on the requested axes.
+
+        Args:
+            stars (parametric.Stars):
+                The parametric stars.
+            log10ages (array-like):
+                The requested log10 age axis.
+            metallicities (array-like):
+                The requested metallicity axis.
+
+        Returns:
+            np.ndarray:
+                The SFZH grid on the requested axes.
+        """
+        # Use the SFZH as is if it's already on the requested axes (the
+        # lengths must be checked first since allclose broadcasts)
+        if (
+            len(log10ages) == len(stars.log10ages)
+            and len(metallicities) == len(stars.metallicities)
+            and np.allclose(log10ages, stars.log10ages)
+            and np.allclose(metallicities, stars.metallicities)
+        ):
+            return stars.sfzh
+
+        # Otherwise rebin it onto the requested axes
+        return stars.get_sfzh(
+            log10ages,
+            metallicities,
+            nthreads=self.nthreads,
+        ).sfzh
+
     def get_sfzh(self, log10ages, metallicities, write=True, out_dtype=None):
         """Flag that the Pipeline should compute the SFZH grid.
 
@@ -1587,11 +1619,11 @@ class Pipeline:
         ):
             # Parametric stars hold their own SFZH, rebin it onto the
             # requested axes
-            galaxy.sfzh = galaxy.stars.get_sfzh(
+            galaxy.sfzh = self._parametric_sfzh(
+                galaxy.stars,
                 op_kwargs["log10ages"],
                 op_kwargs["metallicities"],
-                nthreads=self.nthreads,
-            ).sfzh
+            )
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfzh(
                 log10ages=op_kwargs["log10ages"],
@@ -1676,16 +1708,17 @@ class Pipeline:
         elif (
             not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None
         ):
-            # Parametric stars hold their own SFH, which must already be on
-            # the requested ages
-            ages = galaxy.stars.log10ages
-            requested = op_kwargs["log10ages"]
-            if len(ages) != len(requested) or not np.allclose(ages, requested):
-                raise ValueError(
-                    "Parametric SFH ages differ from requested ages"
-                )
-            galaxy.sfh = galaxy.stars.sfh
-            return galaxy.sfh
+            # Parametric stars hold their own SFZH, so sum it over
+            # metallicity once rebinned onto the requested ages (this also
+            # keeps it consistent with an SFZH rescaled after creation)
+            galaxy.sfh = np.sum(
+                self._parametric_sfzh(
+                    galaxy.stars,
+                    op_kwargs["log10ages"],
+                    galaxy.stars.metallicities,
+                ),
+                axis=1,
+            )
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfh(
                 log10ages=op_kwargs["log10ages"],
@@ -4392,14 +4425,36 @@ class Pipeline:
                 and galaxy.stars.sfzh is not None
             ):
                 sfzh = galaxy.stars.sfzh
-            self.sfzhs.append(unyt_array(getattr(sfzh, "sfzh", sfzh), "Msun"))
+            self.sfzhs.append(
+                unyt_array(
+                    np.asarray(
+                        getattr(sfzh, "sfzh", sfzh),
+                        dtype=resolve_out_dtype(self._out_dtypes.get("sfzh")),
+                    ),
+                    "Msun",
+                )
+            )
 
-        # Do we need to unpack the SFH?
+        # Do we need to unpack the SFH? As above, particle stars hold it
+        # (parametric stars' own SFH isn't rescaled with their SFZH, so we
+        # use the one summed from the SFZH in _get_sfh)
         if self._write_sfh:
             sfh = getattr(galaxy, "sfh", None)
-            if galaxy.stars is not None and galaxy.stars.sfh is not None:
+            if (
+                isinstance(galaxy, ParticleGalaxy)
+                and galaxy.stars is not None
+                and galaxy.stars.sfh is not None
+            ):
                 sfh = galaxy.stars.sfh
-            self.sfhs.append(unyt_array(sfh, "Msun"))
+            self.sfhs.append(
+                unyt_array(
+                    np.asarray(
+                        sfh,
+                        dtype=resolve_out_dtype(self._out_dtypes.get("sfh")),
+                    ),
+                    "Msun",
+                )
+            )
 
         # Do we need to unpack the lnu spectra?
         if self._write_lnu_spectra:

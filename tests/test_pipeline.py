@@ -1526,7 +1526,8 @@ class TestPipelineOperations:
                 hdf["Galaxies/Stars/SFZH"][0], single_star_parametric.sfzh
             )
             np.testing.assert_allclose(
-                hdf["Galaxies/Stars/SFH"][0], single_star_parametric.sfh
+                hdf["Galaxies/Stars/SFH"][0],
+                np.sum(single_star_parametric.sfzh, axis=1),
             )
 
     def test_write_lines_and_observed_lines(
@@ -3339,16 +3340,54 @@ def test_combine_rank_files_virtual_units_mismatch(tmp_path):
         io.combine_rank_files_virtual()
 
 
-def test_parametric_sfh_rejects_mismatched_ages(
+def test_parametric_sfh_rebinned_onto_requested_ages(
     nebular_emission_model, single_star_parametric
 ):
-    """Parametric histories cannot be saved under unrelated age axes."""
+    """A parametric SFH is rebinned onto other ages, like the SFZH."""
     from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
 
+    # Request ages offset from the stars' own
+    ages = single_star_parametric.log10ages[1:-1] + 0.05
     pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-    pipeline.get_sfh(log10ages=single_star_parametric.log10ages + 0.1)
-    with pytest.raises(ValueError, match="ages differ"):
-        pipeline._get_sfh(ParametricGalaxy(stars=single_star_parametric))
+    pipeline.get_sfh(log10ages=ages)
+    sfh = pipeline._get_sfh(ParametricGalaxy(stars=single_star_parametric))
+
+    # It's on the requested ages, conserves the mass and is counted
+    assert sfh.shape == ages.shape
+    np.testing.assert_allclose(
+        np.sum(sfh), np.sum(single_star_parametric.sfzh), rtol=1e-6
+    )
+    assert pipeline._op_counts["SFH"] == 1
+
+
+def test_parametric_sfh_follows_rescaled_sfzh(
+    nebular_emission_model, single_star_parametric, test_grid, tmp_path
+):
+    """The written SFH matches an SFZH rescaled after creation."""
+    from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+
+    # Rescale the SFZH as scale_mass_by_luminosity does (it doesn't
+    # rescale the stars' own SFH)
+    single_star_parametric.sfzh *= 10.0
+
+    # Write both, asking for single precision
+    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    pipeline.add_galaxies([ParametricGalaxy(stars=single_star_parametric)])
+    pipeline.get_sfzh(
+        log10ages=test_grid.log10ages,
+        metallicities=test_grid.metallicities,
+        out_dtype=np.float32,
+    )
+    pipeline.get_sfh(log10ages=test_grid.log10ages, out_dtype=np.float32)
+    output = tmp_path / "sfzh.hdf5"
+    pipeline.write(output)
+
+    # The SFH sums the rescaled SFZH and both are single precision
+    with h5py.File(output) as hdf:
+        sfzh = hdf["Galaxies/Stars/SFZH"][0]
+        sfh = hdf["Galaxies/Stars/SFH"][0]
+    np.testing.assert_allclose(sfh, np.sum(sfzh, axis=1), rtol=1e-6)
+    assert sfzh.dtype == sfh.dtype == np.float32
 
 
 def test_combine_rank_files_virtual_shared_axes_with_empty_rank(tmp_path):
