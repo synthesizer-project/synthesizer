@@ -17,6 +17,12 @@ high-level galaxy and component cube API used together with an
 
 These methods will return a ``SpectralCube``, which is the main data container for spectral data cubes in Synthesizer, and provides a consistent interface for working with cubes regardless of how they were generated.
 
+Spectral cubes can be spatially convolved with a PSF through an
+``IntegratedFieldUnit``. Both wavelength-independent 2D kernels and
+wavelength-dependent 3D kernels are supported, with optional temporary spatial
+supersampling during convolution. See the :doc:`PSF-convolution section of the
+particle spectral-cube example <particle_data_cube>` for how to use this.
+
 The documentation below starts with the high-level particle and parametric
 galaxy workflows, then shows how the returned cube can be analysed or how a
 ``SpectralCube`` can be created directly when needed.
