@@ -52,6 +52,10 @@ from synthesizer.emission_models.stellar.models import (
     TotalEmission,
     TransmittedEmission,
 )
+from synthesizer.emission_models.stellar.multi_pacman_model import (
+    BimodalMultiPacmanEmission,
+    MultiPacmanEmission,
+)
 from synthesizer.emission_models.stellar.pacman_model import (
     BimodalPacmanEmission,
     CharlotFall2000,
