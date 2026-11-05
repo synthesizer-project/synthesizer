@@ -25,6 +25,7 @@ from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
 )
 from synthesizer.emissions import LineCollection, Sed
+from synthesizer.synth_warnings import warn
 from synthesizer.units import accepts
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import verify_out_precision
@@ -45,6 +46,15 @@ class Casey12(DustEmission):
     a scaler EmissionModel or an intrinsic/attenuated EmissionModel pair to
     scale the Casey12 spectrum accordingly. For more details see the base
     DustEmission parent class.
+
+    The mid-infrared power law is a functional form for the shape of the
+    warm dust emission in the mid-infrared (above roughly 5-8 um). Casey
+    (2012) finds slopes of roughly alpha = 1.5-2.5 in their fits and
+    recommends alpha = 2.0, though other works find values outside this
+    range. The power law has no short-wavelength cut-off, so a shallower
+    slope puts an unphysical fraction of the dust luminosity into the
+    near-infrared and optical (alpha <= 1 gives infinite luminosity). A
+    warning is raised for alpha < 1.5.
 
     Attributes:
         temperature (unyt_quantity):
@@ -155,6 +165,17 @@ class Casey12(DustEmission):
                 The power-law turnover wavelength (lam_c) and the power-law
                 normalisation (n_pl).
         """
+        # Shallow slopes are below the range typically found in fits and
+        # put too much luminosity at short wavelengths
+        if np.any(np.asarray(alpha) < 1.5):
+            warn(
+                f"Casey12 alpha={alpha} is below the range typically found "
+                "in fits (~1.5-2.5). The mid-infrared power law has no "
+                "short-wavelength cut-off, so a shallow slope puts an "
+                "unphysical fraction of the dust luminosity into the "
+                "near-infrared and optical."
+            )
+
         # Calculate the power law turnover wavelength
         b1 = 26.68
         b2 = 6.246

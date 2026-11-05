@@ -12,6 +12,8 @@ STELLAR_MODELS = [
     "CharlotFall2000",
     "PacmanEmission",
     "BimodalPacmanEmission",
+    "MultiPacmanEmission",
+    "BimodalMultiPacmanEmission",
     "ScreenEmission",
     "LOSStellarEmission",
 ]
