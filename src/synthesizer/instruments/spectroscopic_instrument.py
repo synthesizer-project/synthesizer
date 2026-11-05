@@ -304,7 +304,7 @@ class SpectroscopicInstrument(InstrumentBase):
         ds.attrs["units"] = str(self.lam.units)
 
         if self.lsfs is not None:
-            ds = group.create_dataset("LSFs", data=self.lsfs, dtype=float)
+            ds = group.create_dataset("LSFs", data=self.lsfs)
             ds.attrs["units"] = "dimensionless"
 
         write_instrument_attribute(group, "Depth", self.depth)
