@@ -1734,3 +1734,9 @@ class TestAllFrequencyNormalisation:
         generator = Casey12(temperature=30 * K, emissivity=1.6, alpha=1.0)
         with pytest.raises(exceptions.InconsistentArguments):
             generator.get_spectra(np.logspace(0, 3, 100) * um)
+
+    def test_greybody_emissivity_at_most_minus_three_raises(self):
+        """The optically thin integral is infinite for emissivity <= -3."""
+        generator = Greybody(temperature=30 * K, emissivity=-3.0)
+        with pytest.raises(exceptions.InconsistentArguments):
+            generator.get_spectra(np.logspace(0, 3, 100) * um)

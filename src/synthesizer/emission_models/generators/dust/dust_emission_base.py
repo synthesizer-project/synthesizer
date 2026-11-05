@@ -93,7 +93,18 @@ def optically_thin_luminosity(
             The bolometric luminosity in the luminosity unit of
             Sed.bolometric_luminosity.
     """
+    # Gamma and zeta only give a finite integral for 4 + beta > 1
+    if np.any(np.asarray(emissivity) <= -3):
+        raise exceptions.InconsistentArguments(
+            "The optically thin luminosity requires emissivity > -3, "
+            "otherwise the integral over all frequencies is infinite "
+            f"(got emissivity={emissivity})."
+        )
+
     power = 4.0 + emissivity
+
+    # NOTE: planck returns lnu for an assumed luminosity distance of 10 pc,
+    # so the same (10 pc)^2 must appear here for the normalisation to match
     prefactor = (8 * np.pi * h * (10 * pc) ** 2 / c**2).to("erg * s**3")
     nu_t = (kb * temperature / h).to(Hz).value
     lum = prefactor.value * nu_t**power * gamma(power) * zeta(power)
