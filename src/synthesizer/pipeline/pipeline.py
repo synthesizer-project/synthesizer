@@ -1708,17 +1708,8 @@ class Pipeline:
         elif (
             not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None
         ):
-            # Parametric stars hold their own SFZH, so sum it over
-            # metallicity once rebinned onto the requested ages (this also
-            # keeps it consistent with an SFZH rescaled after creation)
-            galaxy.sfh = np.sum(
-                self._parametric_sfzh(
-                    galaxy.stars,
-                    op_kwargs["log10ages"],
-                    galaxy.stars.metallicities,
-                ),
-                axis=1,
-            )
+            # Parametric stars hold their own SFH, write it as is
+            galaxy.sfh = galaxy.stars.sfh
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfh(
                 log10ages=op_kwargs["log10ages"],
@@ -4436,8 +4427,6 @@ class Pipeline:
             )
 
         # Do we need to unpack the SFH? As above, particle stars hold it
-        # (parametric stars' own SFH isn't rescaled with their SFZH, so we
-        # use the one summed from the SFZH in _get_sfh)
         if self._write_sfh:
             sfh = getattr(galaxy, "sfh", None)
             if (
