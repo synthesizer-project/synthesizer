@@ -18,6 +18,7 @@ from synthesizer.cosmology import (
     get_angular_diameter_distance,
     get_luminosity_distance,
 )
+from synthesizer.emission_models.utils import check_removed_overrides
 from synthesizer.emissions import plot_spectra
 from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.imaging.data_cube_generators import (
@@ -402,40 +403,20 @@ class Component(ABC):
             emission_model (EmissionModel):
                 The emission model to use.
             dust_curves (dict):
-                An override to the emission model dust curves. Either:
-                    - None, indicating the dust_curves defined on the emission
-                      models should be used.
-                    - A single dust curve to apply to all emission models.
-                    - A dictionary of the form {<label>: <dust_curve instance>}
-                      to use a specific dust curve instance with particular
-                      properties.
+                No longer supported, passing it raises an error.
+                Modify the EmissionModel (or the emitter) instead.
             tau_v (dict):
-                An override to the dust model optical depth. Either:
-                    - None, indicating the tau_v defined on the emission model
-                      should be used.
-                    - A float to use as the optical depth for all models.
-                    - A dictionary of the form {<label>: float(<tau_v>)}
-                      to use a specific optical depth with a particular
-                      model or {<label>: str(<attribute>)} to use an attribute
-                      of the component as the optical depth.
+                No longer supported, passing it raises an error.
+                Modify the EmissionModel (or the emitter) instead.
             fesc (dict):
-                An override to the emission model escape fraction. Either:
-                    - None, indicating the fesc defined on the emission model
-                      should be used.
-                    - A float to use as the escape fraction for all models.
-                    - A dictionary of the form {<label>: float(<fesc>)}
-                      to use a specific escape fraction with a particular
-                      model or {<label>: str(<attribute>)} to use an
-                      attribute of the component as the escape fraction.
+                No longer supported, passing it raises an error.
+                Modify the EmissionModel (or the emitter) instead.
             mask (dict):
-                An override to the emission model mask. Either:
-                    - None, indicating the mask defined on the emission model
-                      should be used.
-                    - A dictionary of the form {<label>: {"attr": attr,
-                      "thresh": thresh, "op": op}} to add a specific mask to
-                      a particular model.
+                No longer supported, passing it raises an error.
+                Modify the EmissionModel (or the emitter) instead.
             vel_shift (bool):
-                Flags whether to apply doppler shift to the spectra.
+                No longer supported, passing it raises an error.
+                Modify the EmissionModel (or the emitter) instead.
             verbose (bool):
                 Are we talking?
             nthreads (int):
@@ -456,16 +437,21 @@ class Component(ABC):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
-        # Get the spectra
-        spectra, particle_spectra = emission_model._get_spectra(
-            emitters={"stellar": self}
-            if self.component_type == "Stars"
-            else {"blackhole": self},
+        # Passing overrides here is no longer supported, the model itself
+        # should be modified instead
+        check_removed_overrides(
             dust_curves=dust_curves,
             tau_v=tau_v,
             fesc=fesc,
             mask=mask,
             vel_shift=vel_shift,
+        )
+
+        # Get the spectra
+        spectra, particle_spectra = emission_model._get_spectra(
+            emitters={"stellar": self}
+            if self.component_type == "Stars"
+            else {"blackhole": self},
             verbose=verbose,
             nthreads=nthreads,
             grid_assignment_method=grid_assignment_method,
@@ -506,38 +492,17 @@ class Component(ABC):
             emission_model (EmissionModel):
                 The emission model to use.
             dust_curves (dict):
-                An override to the emission model dust curves. Either:
-                    - None, indicating the dust_curves defined on the emission
-                      models should be used.
-                    - A single dust curve to apply to all emission models.
-                    - A dictionary of the form {<label>: <dust_curve instance>}
-                      to use a specific dust curve instance with particular
-                      properties.
+                No longer supported, passing it raises an error.
+                Modify the EmissionModel (or the emitter) instead.
             tau_v (dict):
-                An override to the dust model optical depth. Either:
-                    - None, indicating the tau_v defined on the emission model
-                      should be used.
-                    - A float to use as the optical depth for all models.
-                    - A dictionary of the form {<label>: float(<tau_v>)}
-                      to use a specific optical depth with a particular
-                      model or {<label>: str(<attribute>)} to use an attribute
-                      of the component as the optical depth.
+                No longer supported, passing it raises an error.
+                Modify the EmissionModel (or the emitter) instead.
             fesc (dict):
-                An override to the emission model escape fraction. Either:
-                    - None, indicating the fesc defined on the emission model
-                      should be used.
-                    - A float to use as the escape fraction for all models.
-                    - A dictionary of the form {<label>: float(<fesc>)}
-                      to use a specific escape fraction with a particular
-                      model or {<label>: str(<attribute>)} to use an
-                      attribute of the component as the escape fraction.
+                No longer supported, passing it raises an error.
+                Modify the EmissionModel (or the emitter) instead.
             mask (dict):
-                An override to the emission model mask. Either:
-                    - None, indicating the mask defined on the emission model
-                      should be used.
-                    - A dictionary of the form {<label>: {"attr": attr,
-                      "thresh": thresh, "op": op}} to add a specific mask to
-                      a particular model.
+                No longer supported, passing it raises an error.
+                Modify the EmissionModel (or the emitter) instead.
             verbose (bool):
                 Are we talking?
             out_dtype (np.dtype):
@@ -551,16 +516,21 @@ class Component(ABC):
                 A LineCollection object containing the lines defined by the
                 root model.
         """
+        # Passing overrides here is no longer supported, the model itself
+        # should be modified instead
+        check_removed_overrides(
+            dust_curves=dust_curves,
+            tau_v=tau_v,
+            fesc=fesc,
+            mask=mask,
+        )
+
         # Get the lines
         lines, particle_lines = emission_model._get_lines(
             line_ids=line_ids,
             emitters={"stellar": self}
             if self.component_type == "Stars"
             else {"blackhole": self},
-            dust_curves=dust_curves,
-            tau_v=tau_v,
-            fesc=fesc,
-            mask=mask,
             verbose=verbose,
             out_dtype=out_dtype,
             **kwargs,

@@ -1,7 +1,9 @@
 """A suie of tests for testing emission models."""
 
 import numpy as np
+import pytest
 
+from synthesizer import exceptions
 from synthesizer.emission_models import (
     NebularEmission,
     TransmittedEmission,
@@ -59,25 +61,27 @@ def test_escape_fraction(
     transmitted_emission_model, particle_stars_A, test_grid
 ):
     """Test the escape fraction is applied correctly."""
-    # Get the spectra with the escape fraction set to 0.1
-    particle_stars_A.get_spectra(transmitted_emission_model, fesc=0.1)
+    # Get the spectra with the escape fraction set to 0.1 on the emitter
+    particle_stars_A.fesc = 0.1
+    particle_stars_A.get_spectra(transmitted_emission_model)
     spectra_with_escape = particle_stars_A.spectra["transmitted"]._lnu
 
     # Clear the spectra
     particle_stars_A.clear_all_emissions()
 
-    # Get the spectra with the escape fraction set to 0
-    particle_stars_A.get_spectra(transmitted_emission_model, fesc=0.0)
+    # Get the spectra with the escape fraction set to 0 on the emitter
+    particle_stars_A.fesc = 0.0
+    particle_stars_A.get_spectra(transmitted_emission_model)
     spectra_without_escape = particle_stars_A.spectra["transmitted"]._lnu
 
     # Ensure the escape fraction is applied correctly
     assert not np.allclose(spectra_with_escape, spectra_without_escape), (
         "The escape fraction is not being applied correctly when "
-        "set via a get_spectra call."
+        "set on the emitter."
     )
     assert np.sum(spectra_with_escape) < np.sum(spectra_without_escape), (
         "The escape fraction is not being applied correctly when "
-        "set via a get_spectra call."
+        "set on the emitter."
     )
 
     # Do the same check but for transmitted emission models with fesc set on
@@ -105,3 +109,44 @@ def test_escape_fraction(
         "The escape fraction is not being applied correctly when "
         "set on a EmissionModel."
     )
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"dust_curves": None, "tau_v": 0.5},
+        {"fesc": 0.1},
+        {"mask": {}},
+        {"vel_shift": True},
+    ],
+)
+def test_removed_spectra_overrides_raise(
+    override, nebular_emission_model, random_particle_galaxy
+):
+    """Test the removed get_spectra overrides raise a clear error."""
+    # Passing any of them to a component should raise
+    with pytest.raises(exceptions.InconsistentArguments, match="no longer"):
+        random_particle_galaxy.stars.get_spectra(
+            nebular_emission_model, **override
+        )
+
+    # As should passing them to a galaxy
+    with pytest.raises(exceptions.InconsistentArguments, match="no longer"):
+        random_particle_galaxy.get_spectra(nebular_emission_model, **override)
+
+
+def test_removed_lines_overrides_raise(
+    nebular_emission_model, random_particle_galaxy
+):
+    """Test the removed get_lines overrides raise a clear error."""
+    # Passing one to a component should raise
+    with pytest.raises(exceptions.InconsistentArguments, match="tau_v"):
+        random_particle_galaxy.stars.get_lines(
+            ["H 1 6562.80A"], nebular_emission_model, tau_v=0.5
+        )
+
+    # As should passing one to a galaxy
+    with pytest.raises(exceptions.InconsistentArguments, match="fesc"):
+        random_particle_galaxy.get_lines(
+            ["H 1 6562.80A"], nebular_emission_model, fesc=0.1
+        )
