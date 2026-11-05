@@ -40,6 +40,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import Normalize
+from scipy.ndimage import zoom
 from unyt import angstrom
 
 from synthesizer import exceptions
@@ -49,6 +50,7 @@ from synthesizer.imaging.data_cube_generators import (
     _generate_ifu_particle_hist,
     _generate_ifu_particle_smoothed,
 )
+from synthesizer.synth_warnings import warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils import TableFormatter
 from synthesizer.utils.operation_timers import timed
@@ -210,6 +212,108 @@ class SpectralCube(ImagingBase):
         if self.arr is None:
             return ()
         return self.arr.shape
+
+    def resample(self, factor):
+        """Resample the spatial dimensions of a cube by factor.
+
+        If factor, or 1/factor for downsampling, is an integer, use
+        flux-conserving integer resampling: downsampling is performed by
+        summing pixel blocks, and supersampling is performed by uniformly
+        splitting each pixel into subpixels. This preserves the total flux.
+        Otherwise, for non-integer factors use a spline interpolation.
+
+        Args:
+            factor (float):
+                The factor by which to resample the cube, >1 increases
+                resolution, <1 decreases resolution.
+        """
+        # Spatially resample the cube.
+        if self.arr is None:
+            raise exceptions.MissingIFU(
+                "The cube array hasn't been generated yet. Please run "
+                "generate_data_cube_hist() or generate_data_cube_smoothed() "
+                "before resampling."
+            )
+        elif factor == 1:
+            warn(
+                "Resampling is unnecessary for resampling factor = 1. "
+                "Ignoring resample request."
+            )
+            return
+        elif factor > 0 and np.isfinite(factor):
+            # Resample the resolution, this will also update the npix and fov
+            # (if necessary)
+            int_factor = int(round(factor))
+            inv_factor = int(round(1.0 / factor))
+
+            if np.isclose(factor, int_factor):
+                # Replace each pixel with an int_factor x int_factor
+                # block whose subpixels each contain 1 / int_factor**2
+                # of the original pixel value, preserving total flux.
+                self.arr = (
+                    np.repeat(
+                        np.repeat(self.arr, int_factor, axis=0),
+                        int_factor,
+                        axis=1,
+                    )
+                    / int_factor**2
+                )
+
+            elif np.isclose(1.0 / factor, inv_factor):
+                ny, nx, nlam = self.arr.shape
+
+                if ny % inv_factor != 0 or nx % inv_factor != 0:
+                    # Spatial shape is not divisible by downsampling factor,
+                    # so use spline interpolation
+                    self.arr = zoom(self.arr, (factor, factor, 1), order=3)
+
+                else:
+                    # Group spatial pixels into non-overlapping
+                    # inv_factor x inv_factor blocks and sum each block into
+                    # one pixel, preserving total flux.
+                    self.arr = self.arr.reshape(
+                        ny // inv_factor,
+                        inv_factor,
+                        nx // inv_factor,
+                        inv_factor,
+                        nlam,
+                    ).sum(axis=(1, 3))
+
+            else:
+                # Resample via spline interpolation
+                self.arr = zoom(self.arr, (factor, factor, 1), order=3)
+            new_shape = self.arr.shape
+        else:
+            raise ValueError(f"Factor {factor} is not positive finite.")
+
+        # Update pixel metadata
+        self._resample_resolution(factor)
+
+        # Handle the edge case where the conversion between resolutions has
+        # messed with the FOV.
+        if self.npix[0] != new_shape[0] or self.npix[1] != new_shape[1]:
+            self.set_npix(new_shape[:2])
+
+    def downsample(self, factor):
+        """Downsample the spatial dimensions of the cube by a factor.
+
+        Useful when returning from a temporarily supersampled cube.
+
+        Args:
+            factor (float):
+                The factor by which to resample the spatial dimensions.
+                Values smaller than 1 reduce the image resolution.
+
+        Raises:
+            ValueError: If ``factor`` is greater than 1.
+        """
+        # Keep the directional convenience API explicit so callers do not use
+        # the downsampling helper to accidentally supersample cubes.
+        if factor > 1:
+            raise ValueError("Using downsample method to supersample!")
+
+        # Delegate the actual cube resampling to the canonical helper.
+        self.resample(factor)
 
     def __str__(self):
         """Return a string representation of the SpectralCube object.
@@ -475,19 +579,6 @@ class SpectralCube(ImagingBase):
             density_grid=density_grid,
             quantity=quantity,
             nthreads=nthreads,
-        )
-
-    def apply_psf(self):
-        """Apply a PSF to the data cube.
-
-        This is not yet implemented. Feel free to implement and raise a
-        pull request.
-        """
-        raise exceptions.UnimplementedFunctionality(
-            "Not yet implemented! Feel free to implement and raise a "
-            "pull request. Guidance for contributing can be found at "
-            "https://github.com/synthesizer-project/synthesizer/blob/main/"
-            "docs/CONTRIBUTING.md"
         )
 
     def apply_noise_array(self):

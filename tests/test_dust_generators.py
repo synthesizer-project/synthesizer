@@ -2134,3 +2134,17 @@ def test_draineli07_normalised_over_native_wavelengths(
         for lams in (lam[1:-1], lam[40:60])
     )
     np.testing.assert_allclose(truncated.lnu[1:-1], wide.lnu[40:58], rtol=1e-5)
+
+
+@pytest.mark.parametrize("alpha, warns", ((1.2, True), (2.0, False)))
+def test_casey12_warns_for_shallow_alpha(alpha, warns):
+    """Slopes below the calibrated range warn about near-IR emission."""
+    generator = Casey12(temperature=30 * K, emissivity=1.6, alpha=alpha)
+    lams = np.logspace(0, 3, 100) * um
+    if warns:
+        with pytest.warns(RuntimeWarning, match="near-infrared"):
+            generator.get_spectra(lams)
+    else:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            generator._power_law_params(30 * K, 1.6, alpha)
