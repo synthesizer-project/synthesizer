@@ -202,14 +202,20 @@ def test_igm_transmission_cache(lam):
         assert igm.get_transmission(7.0, lam.copy()) is first
         assert not first.flags.writeable
 
+        # An equal IGM (e.g. passing the class to get_fnu) shares the cache
+        assert type(igm)().get_transmission(7.0, lam) is first
+
         # A different redshift or wavelength array is recomputed
+        params = igm._get_igm_params(None)
         other_z = igm.get_transmission(6.0, lam)
         assert other_z is not first
         np.testing.assert_array_equal(
-            other_z, type(igm)().get_transmission(6.0, lam)
+            other_z, igm._compute_transmission(6.0, lam, params)
         )
         other_lam = igm.get_transmission(6.0, lam[::2])
-        assert other_lam.shape == lam[::2].shape
+        np.testing.assert_array_equal(
+            other_lam, igm._compute_transmission(6.0, lam[::2], params)
+        )
 
     # A different parameter on the emitter is recomputed
     igm = Inoue14()
