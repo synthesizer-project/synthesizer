@@ -29,6 +29,13 @@ from synthesizer.pipeline.pipeline_utils import (
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.operation_timers import timed
 
+# These live under Galaxies alongside the outputs, but describe the whole
+# run rather than one row per galaxy. Rank 0 writes them once.
+_SHARED_AXIS_GROUPS = (
+    "/Galaxies/Stars/SFZHAxes",
+    "/Galaxies/Stars/SFHAxes",
+)
+
 
 class PipelineIO:
     """A class for writing data to an HDF5 file.
@@ -510,6 +517,13 @@ class PipelineIO:
                 # in the destination file if it doesn't exist. We also need to
                 # copy the attributes.
                 if isinstance(v, h5py.Group):
+                    # Bin axes have no galaxy dimension. Copy their group
+                    # once instead of slicing each dataset by rank.
+                    if v.name in _SHARED_AXIS_GROUPS:
+                        if k not in dest:
+                            src.file.copy(v, dest, name=k)
+                        continue
+
                     # Create the group if it doesn't exist
                     if k not in dest:
                         dest.create_group(k)
@@ -640,6 +654,10 @@ class PipelineIO:
             def gather_datasets(group, group_path="/"):
                 for k, v in group.items():
                     current_path = f"{group_path}{k}"
+                    # Axes are shared metadata, not virtual galaxy rows.
+                    # We'll copy them directly from rank 0 below.
+                    if current_path in _SHARED_AXIS_GROUPS:
+                        continue
                     if isinstance(v, h5py.Group):
                         gather_datasets(v, current_path + "/")
                     elif current_path not in datasets_info or (
@@ -659,6 +677,8 @@ class PipelineIO:
             def gather_groups(group, group_path="/"):
                 for k, v in group.items():
                     current_path = f"{group_path}{k}"
+                    if current_path in _SHARED_AXIS_GROUPS:
+                        continue
                     if isinstance(v, h5py.Group):
                         groups_info.setdefault(current_path, dict(v.attrs))
                         gather_groups(v, current_path + "/")
@@ -691,6 +711,14 @@ class PipelineIO:
                     grp = hdf.create_group(gpath)
                     for attr_name, attr_val in gattrs.items():
                         grp.attrs[attr_name] = attr_val
+
+                # Preserve the axes at their usual paths without interpreting
+                # their lengths as a number of galaxies. Only rank 0 writes
+                # them, so it is also the source of truth here.
+                for path in _SHARED_AXIS_GROUPS:
+                    if path in f0:
+                        hdf.require_group("Galaxies/Stars")
+                        f0.copy(path, hdf, name=path)
 
                 # Construct the virtual datasets for each dataset
                 for dpath, (shape, dtype, dattrs) in datasets_info.items():

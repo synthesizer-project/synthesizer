@@ -1464,6 +1464,71 @@ class TestPipelineOperations:
             count_and_check_dict_recursive(pipeline_with_galaxies.sfhs) > 0
         ), "No SFH was calculated"
 
+    def test_write_sfzh_and_sfh_particle(
+        self,
+        test_grid,
+        pipeline_with_galaxies,
+        tmp_path,
+    ):
+        """Particle SFZHs and SFHs are written as per-galaxy mass grids."""
+        pipeline_with_galaxies.get_sfzh(
+            log10ages=test_grid.log10ages,
+            metallicities=test_grid.metallicities,
+        )
+        pipeline_with_galaxies.get_sfh(log10ages=test_grid.log10ages)
+        output = tmp_path / "sfzh.hdf5"
+        pipeline_with_galaxies.write(output)
+
+        nage, nmet = len(test_grid.log10ages), len(test_grid.metallicities)
+        with h5py.File(output) as hdf:
+            sfzh = hdf["Galaxies/Stars/SFZH"]
+            sfh = hdf["Galaxies/Stars/SFH"]
+            assert sfzh.shape == (3, nage, nmet)
+            assert sfh.shape == (3, nage)
+            assert sfzh.attrs["Units"] == "Msun"
+            assert sfh.attrs["Units"] == "Msun"
+            assert np.all(np.sum(sfzh[...], axis=(1, 2)) > 0)
+            axes = hdf["Galaxies/Stars/SFZHAxes"]
+            np.testing.assert_allclose(
+                axes["Log10Ages"][...], test_grid.log10ages
+            )
+            np.testing.assert_allclose(
+                axes["Metallicities"][...], test_grid.metallicities
+            )
+            np.testing.assert_allclose(
+                hdf["Galaxies/Stars/SFHAxes/Log10Ages"][...],
+                test_grid.log10ages,
+            )
+
+    def test_write_sfzh_and_sfh_parametric(
+        self,
+        nebular_emission_model,
+        single_star_parametric,
+        test_grid,
+        tmp_path,
+    ):
+        """Parametric galaxies write the SFZH and SFH of their stars."""
+        from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+
+        galaxy = ParametricGalaxy(stars=single_star_parametric, redshift=1.0)
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_galaxies([galaxy])
+        pipeline.get_sfzh(
+            log10ages=test_grid.log10ages,
+            metallicities=test_grid.metallicities,
+        )
+        pipeline.get_sfh(log10ages=test_grid.log10ages)
+        output = tmp_path / "sfzh.hdf5"
+        pipeline.write(output)
+
+        with h5py.File(output) as hdf:
+            np.testing.assert_allclose(
+                hdf["Galaxies/Stars/SFZH"][0], single_star_parametric.sfzh
+            )
+            np.testing.assert_allclose(
+                hdf["Galaxies/Stars/SFH"][0], single_star_parametric.sfh
+            )
+
     def test_write_lines_and_observed_lines(
         self, test_grid, pipeline_with_galaxies, tmp_path
     ):
@@ -3272,6 +3337,200 @@ def test_combine_rank_files_virtual_units_mismatch(tmp_path):
 
     with pytest.raises(ValueError, match="units"):
         io.combine_rank_files_virtual()
+
+
+def test_parametric_sfh_rebinned_onto_requested_ages(
+    nebular_emission_model, single_star_parametric
+):
+    """A parametric SFH is rebinned onto other ages, like the SFZH."""
+    from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+
+    # Request ages offset from the stars' own
+    ages = single_star_parametric.log10ages[1:-1] + 0.05
+    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    pipeline.get_sfh(log10ages=ages)
+    sfh = pipeline._get_sfh(ParametricGalaxy(stars=single_star_parametric))
+
+    # It's on the requested ages, conserves the mass and is counted
+    assert sfh.shape == ages.shape
+    np.testing.assert_allclose(
+        np.sum(sfh), np.sum(single_star_parametric.sfzh), rtol=1e-6
+    )
+    assert pipeline._op_counts["SFH"] == 1
+
+
+def test_reused_galaxy_sfzh_and_sfh_follow_new_axes(
+    nebular_emission_model, single_star_parametric, test_grid
+):
+    """A galaxy reused from an earlier run is recomputed on the new axes."""
+    from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+
+    galaxy = ParametricGalaxy(stars=single_star_parametric)
+
+    # A first run on the stars' own axes caches a grid on the galaxy
+    first = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    first.get_sfzh(
+        log10ages=test_grid.log10ages, metallicities=test_grid.metallicities
+    )
+    first.get_sfh(log10ages=test_grid.log10ages)
+    first._get_sfzh(galaxy)
+    first._get_sfh(galaxy)
+
+    # A second run on other axes must not reuse those grids
+    ages = test_grid.log10ages[1:-1] + 0.05
+    metals = test_grid.metallicities[1:-1]
+    second = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    second.get_sfzh(log10ages=ages, metallicities=metals)
+    second.get_sfh(log10ages=ages)
+    assert second._get_sfzh(galaxy).shape == (len(ages), len(metals))
+    assert second._get_sfh(galaxy).shape == ages.shape
+
+
+def test_mass_grids_are_converted_to_msun(nebular_emission_model):
+    """Grids carrying mass units are converted, not just relabelled."""
+    from unyt import Msun
+
+    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+
+    # A grid in units of 1e6 Msun is converted
+    grid = pipeline._mass_grid_in_msun(
+        unyt_array([1.0, 2.0], 1e6 * Msun), "sfh"
+    )
+    assert str(grid.units) == "Msun"
+    np.testing.assert_allclose(grid.value, [1e6, 2e6])
+
+    # Plain arrays are already in Msun
+    np.testing.assert_allclose(
+        pipeline._mass_grid_in_msun(np.array([1.0, 2.0]), "sfh").value,
+        [1.0, 2.0],
+    )
+
+
+def test_parametric_sfzh_and_sfh_out_dtype(
+    nebular_emission_model, single_star_parametric, test_grid, tmp_path
+):
+    """The written SFZH and SFH honour the requested out_dtype."""
+    from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+
+    # Write both, asking for single precision
+    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    pipeline.add_galaxies([ParametricGalaxy(stars=single_star_parametric)])
+    pipeline.get_sfzh(
+        log10ages=test_grid.log10ages,
+        metallicities=test_grid.metallicities,
+        out_dtype=np.float32,
+    )
+    pipeline.get_sfh(log10ages=test_grid.log10ages, out_dtype=np.float32)
+    output = tmp_path / "sfzh.hdf5"
+    pipeline.write(output)
+
+    # The SFH matches the SFZH and both are single precision
+    with h5py.File(output) as hdf:
+        sfzh = hdf["Galaxies/Stars/SFZH"][0]
+        sfh = hdf["Galaxies/Stars/SFH"][0]
+    np.testing.assert_allclose(sfh, np.sum(sfzh, axis=1), rtol=1e-6)
+    assert sfzh.dtype == sfh.dtype == np.float32
+
+
+def test_combine_rank_files_virtual_shared_axes_with_empty_rank(tmp_path):
+    """Ranks without rows (or datasets) must not break the virtual file."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Rank 0 has no galaxies: an empty placeholder for one dataset and
+    # nothing at all for the other. Rank 1 holds all the rows.
+    obslams = np.arange(10.0).reshape(2, 5)
+    fluxes = np.arange(6.0).reshape(2, 3)
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.attrs["synthesizer_version"] = "test"
+        dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", shape=(0,))
+        dset.attrs["Units"] = "dimensionless"
+        # These axes have three/four bins, not two galaxy rows. Rank 0
+        # writes them even though it has no galaxies of its own.
+        for name, values in (
+            ("SFZHAxes/Log10Ages", [6.0, 7.0, 8.0]),
+            ("SFZHAxes/Metallicities", [0.01, 0.02, 0.03, 0.04]),
+            ("SFHAxes/Log10Ages", [6.0, 7.0, 8.0]),
+        ):
+            dset = hdf.create_dataset(f"Galaxies/Stars/{name}", data=values)
+            dset.attrs["Units"] = "dimensionless"
+    with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
+        dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", data=fluxes)
+        dset.attrs["Units"] = "erg/s/cm**2"
+        dset = hdf.create_dataset(
+            "Galaxies/Lines/ObservedWavelengths", data=obslams
+        )
+        dset.attrs["Units"] = "Å"
+
+    # Build the writer as rank 0 of 2 would have it after writing
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 2, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 0
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 0], [0, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    io.combine_rank_files_virtual()
+
+    with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lines/ObservedWavelengths"][...], obslams
+        )
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lines/Flux/nebular"][...], fluxes
+        )
+        assert hdf["Galaxies/Lines/Flux/nebular"].attrs["Units"] == (
+            "erg/s/cm**2"
+        )
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Stars/SFZHAxes/Metallicities"],
+            [0.01, 0.02, 0.03, 0.04],
+        )
+        for path in ("SFZHAxes/Log10Ages", "SFHAxes/Log10Ages"):
+            dset = hdf[f"Galaxies/Stars/{path}"]
+            np.testing.assert_array_equal(dset, [6.0, 7.0, 8.0])
+            assert dset.attrs["Units"] == "dimensionless"
+            assert not dset.is_virtual
+
+
+def test_combine_rank_files_with_empty_rank(tmp_path):
+    """Physical combination needs no placeholders for missing datasets."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Rank 0 has no galaxies; rank 1 has the only dataset. Neither file
+    # needs an empty placeholder for that missing dataset.
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.create_group("Galaxies")
+        for name, values in (
+            ("SFZHAxes/Log10Ages", [6.0, 7.0, 8.0]),
+            ("SFZHAxes/Metallicities", [0.01, 0.02, 0.03, 0.04]),
+            ("SFHAxes/Log10Ages", [6.0, 7.0, 8.0]),
+        ):
+            dset = hdf.create_dataset(f"Galaxies/Stars/{name}", data=values)
+            dset.attrs["Units"] = "dimensionless"
+    with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Mass", data=[1.0, 2.0])
+
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.is_root, io.num_galaxies = 2, True, 2
+    io.start, io.end = 0, 0
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 0], [0, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    io.combine_rank_files()
+
+    with h5py.File(tmp_path / "out.hdf5") as hdf:
+        np.testing.assert_array_equal(hdf["Galaxies/Mass"], [1.0, 2.0])
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Stars/SFZHAxes/Metallicities"],
+            [0.01, 0.02, 0.03, 0.04],
+        )
+        for path in ("SFZHAxes/Log10Ages", "SFHAxes/Log10Ages"):
+            dset = hdf[f"Galaxies/Stars/{path}"]
+            np.testing.assert_array_equal(dset, [6.0, 7.0, 8.0])
+            assert dset.attrs["Units"] == "dimensionless"
 
 
 def test_combine_rank_files_with_empty_placeholder(tmp_path):

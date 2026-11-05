@@ -826,3 +826,29 @@ class TestSFHCDF:
             rtol=0,
             atol=1e-12 * expected.max(),
         )
+
+
+def test_scale_mass_by_luminosity_rescales_sfh(test_grid, filters_UVJ):
+    """Rescaling the mass keeps the SFH and metal dist in step with SFZH."""
+    # Make some stars with spectra to scale
+    stars = Stars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sf_hist=SFH.Constant(max_age=100 * Myr),
+        metal_dist=ZDist.DeltaConstant(metallicity=0.01),
+        initial_mass=1e9 * Msun,
+    )
+    model = IncidentEmission(test_grid)
+    stars.get_spectra(model)
+
+    # Scale the mass to double the luminosity in the V band
+    vband = filters_UVJ["V"]
+    lum = stars.spectra[model.label].get_photo_lnu(filters_UVJ)["V"]
+    stars.scale_mass_by_luminosity(2 * lum, vband, model.label)
+
+    # The SFH and metal dist are the rescaled SFZH's projections, and the
+    # SFH carries the rescaled mass (roughly double, the filter integrals
+    # differ slightly)
+    np.testing.assert_allclose(stars.sfh, np.sum(stars.sfzh, axis=1))
+    np.testing.assert_allclose(stars.metal_dist, np.sum(stars.sfzh, axis=0))
+    np.testing.assert_allclose(np.sum(stars.sfh), 2e9, rtol=1e-3)
