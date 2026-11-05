@@ -1066,8 +1066,49 @@ class TestPipelineOperations:
         # Each galaxy should have its own wavelengths, scaled by (1 + z)
         with h5py.File(output) as hdf:
             obslams = hdf["Galaxies/Lines/ObservedWavelengths"][...]
+
+            # The line IDs and rest frame wavelengths should also be written
+            # even though only observed lines were requested
+            nids = hdf["Lines/IDs"].shape[0]
+            nlams = hdf["Lines/Wavelengths"].shape[0]
         assert obslams.shape == (2, len(test_grid.available_lines))
         np.testing.assert_allclose(obslams[1] / obslams[0], 4.0 / 2.0)
+        assert nids == nlams == len(test_grid.available_lines)
+
+    @pytest.mark.parametrize("rank", [0, 1])
+    def test_first_from_any_rank_gathers_to_root(
+        self, nebular_emission_model, rank
+    ):
+        """Rank 0 gets a value held only by another rank."""
+        # Pretend to be one rank of two where only rank 1 has the value
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.using_mpi = True
+        pipeline.rank = rank
+        pipeline.comm = MagicMock()
+        pipeline.comm.gather.return_value = [None, "lams"]
+
+        # Only rank 0 receives the value, gathered rather than allgathered
+        result = pipeline._first_from_any_rank("lams" if rank else None)
+        assert result == ("lams" if rank == 0 else None)
+        pipeline.comm.gather.assert_called_once()
+        pipeline.comm.allgather.assert_not_called()
+
+    def test_first_from_any_rank_all_ranks(self, nebular_emission_model):
+        """Every rank gets the value with all_ranks=True."""
+        # Pretend to be a non-root rank without the value
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.using_mpi = True
+        pipeline.rank = 1
+        pipeline.comm = MagicMock()
+        pipeline.comm.allgather.return_value = [None, "props", "other"]
+
+        # The first value which isn't None is returned on this rank too
+        assert pipeline._first_from_any_rank(None, all_ranks=True) == "props"
+
+    def test_first_from_any_rank_without_mpi(self, nebular_emission_model):
+        """Without MPI the rank's own value is returned."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        assert pipeline._first_from_any_rank("lams") == "lams"
 
     def test_analysis_get_lines_keeps_pipeline_lines(
         self,
