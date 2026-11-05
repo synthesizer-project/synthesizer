@@ -5454,6 +5454,38 @@ class Pipeline:
         self._took(start, "Cleaning outputs")
 
     @timed("Pipeline.write")
+    def _first_from_any_rank(self, value, all_ranks=False):
+        """Return the first value which isn't None on any rank.
+
+        This is used for values only known on ranks with galaxies (e.g. the
+        line wavelengths), which may not include rank 0.
+
+        Args:
+            value (object):
+                This rank's value (None if this rank doesn't have it).
+            all_ranks (bool):
+                If True, every rank gets the value, otherwise only rank 0
+                does (the other ranks get None).
+
+        Returns:
+            object:
+                The first value which isn't None, in rank order, or None if
+                no rank has one.
+        """
+        # Without MPI this rank's value is the only one
+        if not self.using_mpi:
+            return value
+
+        # Collect every rank's value where it's needed
+        if all_ranks:
+            values = self.comm.allgather(value)
+        else:
+            values = self.comm.gather(value, root=0)
+            if self.rank != 0:
+                return None
+
+        return next((val for val in values if val is not None), None)
+
     def write(self, outpath, verbose=None):
         """Write what we have produced to a HDF5 file.
 
@@ -5644,25 +5676,20 @@ class Pipeline:
                 "Galaxies/BlackHoles/Lines/Continuum",
                 galaxy_indices,
             )
+
+        # Write the line IDs and rest frame wavelengths shared by the line
+        # luminosities and fluxes
+        if self._write_lines or self._write_flux_lines:
             self.io_helper.write_data(
                 self.line_ids if self.rank == 0 else None,
                 "Lines/IDs",
                 root=0,
             )
-            # Rank 0 may have no galaxies (and so no wavelengths), take them
-            # from any rank which has them
-            line_lams = self.line_lams
-            if self.comm is not None:
-                line_lams = next(
-                    (
-                        lams
-                        for lams in self.comm.allgather(line_lams)
-                        if lams is not None
-                    ),
-                    None,
-                )
+
+            # Rank 0 may have no galaxies (and so no wavelengths), so take
+            # them from any rank which has them
             self.io_helper.write_data(
-                line_lams if self.rank == 0 else None,
+                self._first_from_any_rank(self.line_lams),
                 "Lines/Wavelengths",
                 root=0,
             )
@@ -5713,16 +5740,14 @@ class Pipeline:
                         self.line_obs_lams.dtype,
                         str(self.line_obs_lams.units),
                     )
-                all_obs_props = [
-                    props
-                    for props in self.comm.allgather(obs_props)
-                    if props is not None
-                ]
+                obs_props = self._first_from_any_rank(
+                    obs_props, all_ranks=True
+                )
 
                 # Replace our empty wavelengths with an empty array of the
                 # right shape
-                if len(self.line_obs_lams) == 0 and len(all_obs_props) > 0:
-                    trailing, dtype, units = all_obs_props[0]
+                if len(self.line_obs_lams) == 0 and obs_props is not None:
+                    trailing, dtype, units = obs_props
                     self.line_obs_lams = unyt_array(
                         np.zeros((0, *trailing), dtype=dtype), units
                     )
