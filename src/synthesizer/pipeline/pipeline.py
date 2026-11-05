@@ -4741,6 +4741,166 @@ class Pipeline:
         self._op_timing["Unpacking results"] += time.perf_counter() - start
 
     @timed("Pipeline.run")
+    def _process_galaxy(self, gal):
+        """Generate everything requested for a single galaxy.
+
+        This is everything except the steps which write to the pipeline's
+        outputs (see _finish_galaxy).
+
+        Args:
+            gal (Galaxy): The galaxy to process.
+
+        Returns:
+            float: The time taken to process the galaxy.
+        """
+        start = time.perf_counter()
+
+        # Are we generating LOS optical depths?
+        # Note that this can only be done on galaxies prior to any
+        # splitting done for memory optimisation
+        if self._do_los_optical_depths:
+            self._get_los_optical_depths(gal)
+
+        # If we have a particle galaxy, see if we need to split it
+        if isinstance(gal, ParticleGalaxy):
+            gals = gal.split(self._max_npart)
+        else:
+            gals = [gal]
+
+        # If chunking is active, clear any existing additive outputs on the
+        # parent before processing children and accumulating back onto it
+        # just to be sure, in case the galaxy has been used before
+        if len(gals) > 1:
+            clear_pipeline_outputs(gal)
+
+        # Loop over the split galaxies list (which may just be a list
+        # containing the original gal above)
+        while len(gals) > 0:
+            # Get the next galaxy
+            with timer("Pipeline.run.pop_chunk"):
+                _gal = gals.pop(0)
+
+            # Are we generating SFZHs?
+            if self._do_sfzh:
+                self._get_sfzh(_gal)
+
+            # Are we generating SFHs?
+            if self._do_sfh:
+                self._get_sfh(_gal)
+
+            # Are we generating lnu spectra?
+            if self._do_lnu_spectra:
+                self._get_spectra(_gal)
+
+            # Are we generating fnu spectra?
+            if self._do_fnu_spectra:
+                self._get_observed_spectra(_gal)
+
+            # Are we generating photometric luminosities?
+            if self._do_luminosities:
+                self._get_photometry_luminosities(_gal)
+
+            # Are we generating photometric fluxes?
+            if self._do_fluxes:
+                self._get_photometry_fluxes(_gal)
+
+            # Are we generating emission lines?
+            if self._do_lum_lines:
+                self._get_lines(_gal)
+
+            # Are we generating observed emission lines?
+            if self._do_flux_lines:
+                self._get_observed_lines(_gal)
+
+            # Are we generating luminosity images?
+            if self._do_images_lum:
+                self._get_images_luminosity(_gal)
+
+            # Are we generating flux images?
+            if self._do_images_flux:
+                self._get_images_flux(_gal)
+
+            # Are we generating luminosity line maps?
+            if self._do_line_maps_lum:
+                self._get_line_maps_luminosity(_gal)
+
+            # Are we generating flux line maps?
+            if self._do_line_maps_flux:
+                self._get_line_maps_flux(_gal)
+
+            # Are we generating luminosity data cubes?
+            if self._do_lnu_data_cubes:
+                self._get_data_cubes_lnu(_gal)
+
+            # Are we generating flux data cubes?
+            if self._do_fnu_data_cubes:
+                self._get_data_cubes_fnu(_gal)
+
+            # Are we generating luminosity spectroscopy?
+            if self._do_spectroscopy_lnu:
+                self._get_spectroscopy_lnu(_gal)
+
+            # Are we generating flux spectroscopy?
+            if self._do_spectroscopy_fnu:
+                self._get_spectroscopy_fnu(_gal)
+
+            # Child chunk outputs are accumulated back onto the original
+            # parent galaxy once this chunk has been processed.
+            # Combine back onto the original galaxy if necessary
+            if _gal is not gal:
+                with timer("Pipeline.run.accumulate_child"):
+                    accumulate_pipeline_results_from_child(gal, _gal)
+
+                with timer("Pipeline.run.cleanup_child"):
+                    del _gal
+
+        # Run any extra analysis functions
+        self._run_extra_analysis(gal)
+
+        return time.perf_counter() - start
+
+    def _finish_galaxy(self, gal, igal, elapsed):
+        """Collect the outputs of a processed galaxy into the pipeline.
+
+        This must be called for each galaxy in order on the main thread.
+
+        Args:
+            gal (Galaxy): The processed galaxy.
+            igal (int): The index of the galaxy.
+            elapsed (float): The time taken to process the galaxy.
+        """
+        start = time.perf_counter() - elapsed
+
+        # Cosmic SEDs must be measured on the fully accumulated parent
+        # galaxy so any split-galaxy filtering uses integrated properties.
+        if self._do_cosmic_lnu:
+            self._get_cosmic_sed(gal)
+
+        if self._do_cosmic_fnu:
+            self._get_observed_cosmic_sed(gal)
+
+        # Ok, we're done with this galaxy so we can unpack the results
+        self._unpack_results(gal)
+
+        # Output into the progress table
+        self._add_progress_row(gal, igal, start)
+
+    def _run_single_gal_queue(self):
+        """Process the galaxies one at a time."""
+        igal = 0
+        while len(self.galaxies) > 0:
+            # Pop the first galaxy from the list
+            with timer("Pipeline.run.pop_galaxy"):
+                gal = self.galaxies.pop(0)
+
+            elapsed = self._process_galaxy(gal)
+            self._finish_galaxy(gal, igal, elapsed)
+            igal += 1
+
+            # Now we can remove the galaxy to free up memory
+            with timer("Pipeline.run.cleanup_galaxy"):
+                del gal
+
     def run(self):
         """Run the pipeline.
 
@@ -4808,145 +4968,8 @@ class Pipeline:
         with timer("Pipeline.run.print_progress_header"):
             self._print_progress_header()
 
-        # Loop over galaxies and compute what has been requested using get_*
-        # signalling methods
-        igal = 0
-        _gal = None
-        while len(self.galaxies) > 0:
-            start_gal = time.perf_counter()
-
-            # Drop the reference the previous iteration left on its last chunk
-            # before the next galaxy is pulled in. The outer pop below rebinds
-            # gal, but until this reference goes too the previous galaxy stays
-            # resident, so its arrays were being freed later and the cost was
-            # landing on the next chunk pop rather than being named here.
-            with timer("Pipeline.run.release_prev_galaxy"):
-                _gal = None
-
-            # Pop the first galaxy from the list
-            with timer("Pipeline.run.pop_galaxy"):
-                gal = self.galaxies.pop(0)
-
-            # Are we generating LOS optical depths?
-            # Note that this can only be done on galaxies prior to any
-            # splitting done for memory optimisation
-            if self._do_los_optical_depths:
-                self._get_los_optical_depths(gal)
-
-            # If we have a particle galaxy, see if we need to split it
-            if isinstance(gal, ParticleGalaxy):
-                gals = gal.split(self._max_npart)
-            else:
-                gals = [gal]
-
-            # If chunking is active, clear any existing additive outputs on the
-            # parent before processing children and accumulating back onto it
-            # just to be sure, in case the galaxy has been used before
-            if len(gals) > 1:
-                clear_pipeline_outputs(gal)
-
-            # Loop over the split galaxies list (which may just be a list
-            # containing the original gal above)
-            while len(gals) > 0:
-                # Get the next galaxy
-                with timer("Pipeline.run.pop_chunk"):
-                    _gal = gals.pop(0)
-
-                # Are we generating SFZHs?
-                if self._do_sfzh:
-                    self._get_sfzh(_gal)
-
-                # Are we generating SFHs?
-                if self._do_sfh:
-                    self._get_sfh(_gal)
-
-                # Are we generating lnu spectra?
-                if self._do_lnu_spectra:
-                    self._get_spectra(_gal)
-
-                # Are we generating fnu spectra?
-                if self._do_fnu_spectra:
-                    self._get_observed_spectra(_gal)
-
-                # Are we generating photometric luminosities?
-                if self._do_luminosities:
-                    self._get_photometry_luminosities(_gal)
-
-                # Are we generating photometric fluxes?
-                if self._do_fluxes:
-                    self._get_photometry_fluxes(_gal)
-
-                # Are we generating emission lines?
-                if self._do_lum_lines:
-                    self._get_lines(_gal)
-
-                # Are we generating observed emission lines?
-                if self._do_flux_lines:
-                    self._get_observed_lines(_gal)
-
-                # Are we generating luminosity images?
-                if self._do_images_lum:
-                    self._get_images_luminosity(_gal)
-
-                # Are we generating flux images?
-                if self._do_images_flux:
-                    self._get_images_flux(_gal)
-
-                # Are we generating luminosity line maps?
-                if self._do_line_maps_lum:
-                    self._get_line_maps_luminosity(_gal)
-
-                # Are we generating flux line maps?
-                if self._do_line_maps_flux:
-                    self._get_line_maps_flux(_gal)
-
-                # Are we generating luminosity data cubes?
-                if self._do_lnu_data_cubes:
-                    self._get_data_cubes_lnu(_gal)
-
-                # Are we generating flux data cubes?
-                if self._do_fnu_data_cubes:
-                    self._get_data_cubes_fnu(_gal)
-
-                # Are we generating luminosity spectroscopy?
-                if self._do_spectroscopy_lnu:
-                    self._get_spectroscopy_lnu(_gal)
-
-                # Are we generating flux spectroscopy?
-                if self._do_spectroscopy_fnu:
-                    self._get_spectroscopy_fnu(_gal)
-
-                # Child chunk outputs are accumulated back onto the original
-                # parent galaxy once this chunk has been processed.
-                # Combine back onto the original galaxy if necessary
-                if _gal is not gal:
-                    with timer("Pipeline.run.accumulate_child"):
-                        accumulate_pipeline_results_from_child(gal, _gal)
-
-                    with timer("Pipeline.run.cleanup_child"):
-                        del _gal
-
-            # Cosmic SEDs must be measured on the fully accumulated parent
-            # galaxy so any split-galaxy filtering uses integrated properties.
-            if self._do_cosmic_lnu:
-                self._get_cosmic_sed(gal)
-
-            if self._do_cosmic_fnu:
-                self._get_observed_cosmic_sed(gal)
-
-            # Run any extra analysis functions
-            self._run_extra_analysis(gal)
-
-            # Ok, we're done with this galaxy so we can unpack the results
-            self._unpack_results(gal)
-
-            # Output into the progress table
-            self._add_progress_row(gal, igal, start_gal)
-            igal += 1
-
-            # Now we can remove the galaxy to free up memory
-            with timer("Pipeline.run.cleanup_galaxy"):
-                del gal
+        # Process the galaxies
+        self._run_single_gal_queue()
 
         # print the footer for the pipeline run to the console
         with timer("Pipeline.run.print_progress_footer"):
