@@ -466,7 +466,7 @@ class IntegratedFieldUnit(SpectroscopicInstrument):
         psf_resample_factor = unyt_to_ndview(
             cube.resolution / self.psf_pixel_scale,
             "dimensionless",
-        )
+        ).item()
 
         # Round to an integer if within 0.1%.
         nearest_int = round(psf_resample_factor)
