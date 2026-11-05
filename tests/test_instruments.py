@@ -10,6 +10,7 @@ from unyt import angstrom, arcsecond, kpc, nJy, unyt_quantity
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.components.component import Component
+from synthesizer.imaging import SpectralCube
 from synthesizer.imaging.postprocess import _postprocess_existing_data_cubes
 from synthesizer.instruments import (
     GALEX,
@@ -779,19 +780,310 @@ def test_data_cube_postprocess_keeps_raw_store_unchanged():
     assert result["stellar"] == "noise"
 
 
-def test_integrated_field_unit_cube_placeholders_raise():
-    """IFU cube post-processing placeholders should fail explicitly."""
+@pytest.fixture
+def spectral_cube_with_central_source():
+    """Return a small cube with a unit source centred in every slice."""
+    lam = np.linspace(1000, 3000, 3) * angstrom
+    cube = SpectralCube(
+        resolution=1 * arcsecond,
+        fov=9 * arcsecond,
+        lam=lam,
+    )
+    cube.arr = np.zeros((9, 9, len(lam)), dtype=float)
+    cube.arr[4, 4, :] = 1.0
+    cube.units = nJy
+    cube.quantity = "fnu"
+    return cube
+
+
+class TestIntegratedFieldUnitPsfApplication:
+    """Tests for instrument-owned PSF application on IFU cubes."""
+
+    @staticmethod
+    def _instrument(psfs, psf_pixel_scale=1 * arcsecond):
+        """Construct a minimal IFU for PSF-application tests."""
+        return IntegratedFieldUnit(
+            label="ifu",
+            lam=np.linspace(1000, 3000, 3) * angstrom,
+            resolution=1 * arcsecond,
+            psfs=psfs,
+            psf_pixel_scale=psf_pixel_scale,
+        )
+
+    def test_apply_psf_to_cube_with_2d_psf(
+        self, spectral_cube_with_central_source
+    ):
+        """A normalised 2D PSF should broaden every cube slice."""
+        psf = np.ones((3, 3), dtype=float)
+        psf /= psf.sum()
+        cube = spectral_cube_with_central_source
+        original_flux = cube.arr.sum(axis=(0, 1)).copy()
+
+        result = self._instrument(psf).apply_psf_to_cube(cube)
+
+        np.testing.assert_allclose(result.arr.sum(axis=(0, 1)), original_flux)
+        assert np.all(result.arr[4, 4, :] < cube.arr[4, 4, :])
+
+    def test_apply_psf_to_cube_uses_wavelength_specific_psfs(
+        self, spectral_cube_with_central_source
+    ):
+        """A 3D PSF should use the kernel matching each wavelength slice."""
+        psfs = np.zeros((3, 3, 3), dtype=float)
+        psfs[1, 1, 0] = 1.0
+        psfs[1, 0, 1] = 1.0
+        psfs[0, 1, 2] = 1.0
+
+        result = self._instrument(psfs).apply_psf_to_cube(
+            spectral_cube_with_central_source
+        )
+
+        peak_locations = [
+            np.unravel_index(
+                np.argmax(result.arr[:, :, index]), result.arr.shape[:2]
+            )
+            for index in range(result.arr.shape[2])
+        ]
+        assert peak_locations == [(4, 4), (4, 3), (3, 4)]
+
+    def test_apply_psf_to_cube_returns_new_cube_by_default(
+        self, spectral_cube_with_central_source
+    ):
+        """PSF application should preserve metadata in a fresh cube."""
+        psf = np.zeros((3, 3), dtype=float)
+        psf[1, 1] = 1.0
+        cube = spectral_cube_with_central_source
+        result = self._instrument(psf).apply_psf_to_cube(cube)
+
+        assert result is not cube
+        assert result.resolution == cube.resolution
+        np.testing.assert_allclose(result.fov, cube.fov)
+        np.testing.assert_array_equal(result.npix, cube.npix)
+        np.testing.assert_allclose(result.lam, cube.lam)
+        assert result.units == cube.units
+        assert result.quantity == cube.quantity
+
+    def test_apply_psf_to_cube_can_update_cube_inplace(
+        self, spectral_cube_with_central_source
+    ):
+        """PSF application should support explicit in-place updates."""
+        psf = np.ones((3, 3), dtype=float) / 9
+        result = self._instrument(psf).apply_psf_to_cube(
+            spectral_cube_with_central_source, inplace=True
+        )
+
+        assert result is spectral_cube_with_central_source
+        assert np.all(result.arr[4, 4, :] < 1.0)
+
+    def test_apply_psf_to_cube_requires_psfs(
+        self, spectral_cube_with_central_source
+    ):
+        """PSF application should fail explicitly without configured PSFs."""
+        instrument = IntegratedFieldUnit(
+            label="ifu",
+            lam=np.linspace(1000, 3000, 3) * angstrom,
+            resolution=1 * arcsecond,
+        )
+
+        with pytest.raises(exceptions.MissingArgument):
+            instrument.apply_psf_to_cube(spectral_cube_with_central_source)
+
+    def test_apply_psf_to_cube_requires_psf_pixel_scale(self):
+        """IFUs with PSFs should require their spatial pixel scale."""
+        psf = np.ones((3, 3), dtype=float) / 9
+
+        with pytest.raises(exceptions.MissingArgument):
+            IntegratedFieldUnit(
+                label="ifu",
+                lam=np.linspace(1000, 3000, 3) * angstrom,
+                resolution=1 * arcsecond,
+                psfs=psf,
+            )
+
+    @pytest.mark.parametrize(
+        "psf_pixel_scale",
+        [
+            0 * arcsecond,
+            -1 * arcsecond,
+            np.inf * arcsecond,
+            np.nan * arcsecond,
+        ],
+        ids=("zero", "negative", "infinite", "nan"),
+    )
+    def test_psf_pixel_scale_must_be_positive_and_finite(
+        self, psf_pixel_scale
+    ):
+        """IFU PSF pixel scales should be positive finite quantities."""
+        psf = np.ones((3, 3), dtype=float) / 9
+
+        with pytest.raises(exceptions.InconsistentArguments):
+            self._instrument(psf, psf_pixel_scale=psf_pixel_scale)
+
+    def test_apply_psf_to_cube_rejects_coarser_psf_pixel_scale(
+        self, spectral_cube_with_central_source
+    ):
+        """PSF sampling cannot be coarser than the cube sampling."""
+        psf = np.ones((3, 3), dtype=float) / 9
+        instrument = self._instrument(psf, psf_pixel_scale=2 * arcsecond)
+
+        with pytest.raises(exceptions.InconsistentArguments):
+            instrument.apply_psf_to_cube(spectral_cube_with_central_source)
+
+    def test_apply_psf_to_cube_rejects_mismatched_psf_wavelengths(
+        self, spectral_cube_with_central_source
+    ):
+        """A 3D PSF should use the same wavelength grid as its cube."""
+        psfs = np.zeros((3, 3, 3), dtype=float)
+        psfs[1, 1, :] = 1.0
+        instrument = IntegratedFieldUnit(
+            label="ifu",
+            lam=spectral_cube_with_central_source.lam + 1 * angstrom,
+            resolution=1 * arcsecond,
+            psfs=psfs,
+            psf_pixel_scale=1 * arcsecond,
+        )
+
+        with pytest.raises(exceptions.InconsistentArguments):
+            instrument.apply_psf_to_cube(spectral_cube_with_central_source)
+
+    def test_apply_psf_to_cube_rejects_mismatched_psf_wavelength_axis(
+        self, spectral_cube_with_central_source
+    ):
+        """A 3D PSF should have one plane for every cube wavelength."""
+        psfs = np.zeros((3, 3, 2), dtype=float)
+        psfs[1, 1, :] = 1.0
+
+        with pytest.raises(exceptions.InconsistentArguments):
+            self._instrument(psfs).apply_psf_to_cube(
+                spectral_cube_with_central_source
+            )
+
+    def test_apply_psf_to_cube_with_resampling_does_not_mutate_input(
+        self, spectral_cube_with_central_source
+    ):
+        """Default PSF supersampling should not mutate the input cube."""
+        cube = spectral_cube_with_central_source
+        original_arr = cube.arr.copy()
+        original_resolution = cube.resolution
+        original_npix = cube.npix.copy()
+        psf = np.ones((3, 3), dtype=float) / 9
+
+        result = self._instrument(
+            psf, psf_pixel_scale=0.5 * arcsecond
+        ).apply_psf_to_cube(cube)
+
+        assert result is not cube
+        assert cube.resolution == original_resolution
+        assert np.array_equal(cube.npix, original_npix)
+        assert np.array_equal(cube.arr, original_arr)
+
+    def test_nearly_integer_psf_pixel_scale_rounds_to_integer_factor(
+        self, spectral_cube_with_central_source
+    ):
+        """Near-integer PSF scale ratios should use the integer path."""
+        psf = np.ones((3, 3), dtype=float) / 9
+        cube = spectral_cube_with_central_source
+        exact = self._instrument(
+            psf, psf_pixel_scale=0.5 * arcsecond
+        ).apply_psf_to_cube(cube)
+        nearly_integer_scale = cube.resolution / (2.0 + 1.0e-10)
+        rounded = self._instrument(
+            psf, psf_pixel_scale=nearly_integer_scale
+        ).apply_psf_to_cube(cube)
+
+        np.testing.assert_allclose(rounded.arr, exact.arr)
+
+    def test_apply_psf_to_cube_supports_noninteger_resampling(
+        self, spectral_cube_with_central_source
+    ):
+        """Non-integer PSF scale ratios should use spatial interpolation."""
+        cube = spectral_cube_with_central_source
+        psf = np.ones((3, 3), dtype=float) / 9
+        result = self._instrument(
+            psf, psf_pixel_scale=cube.resolution / 1.5
+        ).apply_psf_to_cube(cube)
+
+        assert result.arr.shape == cube.arr.shape
+        assert result.resolution == cube.resolution
+
+    def test_apply_psf_to_cube_requires_generated_cube(self):
+        """PSF application should fail when the cube array is absent."""
+        empty_cube = SpectralCube(
+            resolution=1 * arcsecond,
+            fov=9 * arcsecond,
+            lam=np.linspace(1000, 3000, 3) * angstrom,
+        )
+        psf = np.ones((3, 3), dtype=float) / 9
+
+        with pytest.raises(exceptions.MissingIFU):
+            self._instrument(psf).apply_psf_to_cube(empty_cube)
+
+    def test_postprocess_with_ifu_psf_preserves_raw_cube(
+        self, spectral_cube_with_central_source
+    ):
+        """IFU PSF post-processing should retain the raw cube cache."""
+        psf = np.ones((3, 3), dtype=float) / 9
+        instrument = self._instrument(psf)
+        raw_cube = spectral_cube_with_central_source
+        owner = SimpleNamespace(
+            data_cubes_lnu={instrument.label: {"stellar": raw_cube}}
+        )
+
+        result = _postprocess_existing_data_cubes(
+            owner, instrument=instrument, quantity="lnu"
+        )
+
+        processed_cube = owner.processed_data_cubes_lnu[instrument.label][
+            "stellar"
+        ]
+        assert owner.data_cubes_lnu[instrument.label]["stellar"] is raw_cube
+        assert result["stellar"] is processed_cube
+        assert processed_cube is not raw_cube
+        assert not np.allclose(processed_cube.arr, raw_cube.arr)
+
+    @pytest.mark.parametrize(
+        ("psfs", "psf_pixel_scale"),
+        [
+            (None, None),
+            (np.ones((3, 3), dtype=float) / 9, 0.5 * arcsecond),
+        ],
+        ids=("without_psfs", "with_psfs"),
+    )
+    def test_hdf5_roundtrip_preserves_psf_pixel_scale(
+        self, tmp_path, psfs, psf_pixel_scale
+    ):
+        """IFU HDF5 serialisation should preserve PSF sampling metadata."""
+        instrument = IntegratedFieldUnit(
+            label="ifu",
+            lam=np.linspace(1000, 3000, 3) * angstrom,
+            resolution=1 * arcsecond,
+            psfs=psfs,
+            psf_pixel_scale=psf_pixel_scale,
+        )
+        filepath = tmp_path / "ifu.hdf5"
+
+        with h5py.File(filepath, "w") as hdf:
+            instrument.to_hdf5(hdf)
+        with h5py.File(filepath, "r") as hdf:
+            restored = IntegratedFieldUnit._from_hdf5(hdf)
+
+        if psf_pixel_scale is None:
+            assert restored.psf_pixel_scale is None
+            assert restored.psfs is None
+        else:
+            assert restored.psf_pixel_scale.units == psf_pixel_scale.units
+            np.testing.assert_allclose(
+                restored.psf_pixel_scale.value, psf_pixel_scale.value
+            )
+            np.testing.assert_allclose(restored.psfs, psfs)
+
+
+def test_integrated_field_unit_noise_placeholders_raise():
+    """IFU noise post-processing placeholders should fail explicitly."""
     instrument = IntegratedFieldUnit(
         label="ifu",
         lam=np.linspace(1000, 3000, 32) * angstrom,
         resolution=1 * arcsecond,
     )
-
-    with pytest.raises(exceptions.UnimplementedFunctionality):
-        instrument.apply_psf_to_cube(object())
-
-    with pytest.raises(exceptions.UnimplementedFunctionality):
-        instrument.apply_psf(object())
 
     with pytest.raises(exceptions.UnimplementedFunctionality):
         instrument.apply_noise_to_cube(object())
