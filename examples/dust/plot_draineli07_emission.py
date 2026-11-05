@@ -97,8 +97,10 @@ def main():
     # Generate the dust emission for every umin in one call, and normalise
     # each spectrum to its bolometric luminosity.
     sed = draine_li._generate_dl07_spectra(lam, setup)
+    # (atleast_2d/1d keep a single umin working, which has no particle axis)
     normalised = (
-        sed.luminosity.value / sed.bolometric_luminosity.value[:, None]
+        np.atleast_2d(sed.luminosity.value)
+        / np.atleast_1d(sed.bolometric_luminosity.value)[:, None]
     )
 
     # Prepare the figure and the colour map used for the umin sequence.

@@ -31,6 +31,7 @@ from synthesizer.emission_models.generators.dust.draineli07 import (
 )
 from synthesizer.emission_models.generators.dust.greybody import Greybody
 from synthesizer.emissions import Sed
+from synthesizer.utils.integrate import trapezoid
 
 
 # Test fixtures
@@ -2070,8 +2071,8 @@ def test_draineli07_u_mean_any_alpha(alpha):
     log_u = np.linspace(np.log(umin), np.log(umax), 200001)
     u = np.exp(log_u)
     dm_du = u ** (-alpha)
-    norm = np.trapezoid(dm_du * u, log_u)
-    u_power_law = np.trapezoid(dm_du * u * u, log_u) / norm
+    norm = trapezoid(dm_du * u, log_u)
+    u_power_law = trapezoid(dm_du * u * u, log_u) / norm
     np.testing.assert_allclose(
         u_mean(umin, umax, gamma, alpha),
         (1 - gamma) * umin + gamma * u_power_law,
@@ -2148,3 +2149,14 @@ def test_casey12_warns_for_shallow_alpha(alpha, warns):
         with warnings.catch_warnings():
             warnings.simplefilter("error", RuntimeWarning)
             generator._power_law_params(30 * K, 1.6, alpha)
+
+
+def test_draineli07_rejects_gamma_outside_unit_interval(draineli07_grid):
+    """Gamma is a mass fraction so values outside [0, 1] are rejected."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+    )
+
+    with pytest.raises(exceptions.InconsistentArguments, match="gamma"):
+        _draineli07_setup(dl07, gamma=1.5)

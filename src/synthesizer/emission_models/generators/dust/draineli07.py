@@ -96,6 +96,7 @@ def u_mean(
             The mean radiation field.
     """
     umin = np.asarray(umin, dtype=float)
+    gamma = np.asarray(gamma, dtype=float)
     alpha = np.asarray(alpha, dtype=float)
 
     # The general expression is singular at alpha = 1 and 2, where the
@@ -654,6 +655,14 @@ class DraineLi07(DustEmission):
                 calculated_gamma,
             )
         )
+        # gamma is the fraction of dust mass in the power law component, so
+        # anything outside [0, 1] would give a negative component
+        if np.any((gamma_arr < 0.0) | (gamma_arr > 1.0)):
+            raise exceptions.InconsistentArguments(
+                "gamma is the fraction of dust mass heated by the power law "
+                "and must be between 0 and 1."
+            )
+
         valid = (
             np.isfinite(dust_mass_arr)
             & (dust_mass_arr > 0.0)
