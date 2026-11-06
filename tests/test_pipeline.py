@@ -4084,6 +4084,28 @@ def test_sparse_product_rows_follow_galaxy_order():
     )
 
 
+def test_black_hole_fnu_spectra_written_beneath_spectra():
+    """Black hole flux densities are written with the other spectra."""
+    from synthesizer.pipeline.pipeline_io import PipelineIOBuffers
+
+    # Hold a galaxy with black hole flux densities
+    buffers = PipelineIOBuffers()
+    buffers.append_output(np.ones(2), "fnu_spectra", "BlackHole", "agn")
+    buffers.end_galaxy()
+
+    # Record where each output is written rather than writing a file
+    paths = []
+    io_helper = SimpleNamespace(
+        galaxy_indices=None,
+        rows_written=0,
+        write_data=lambda data, path, indexes: paths.append(path),
+    )
+    buffers.write(io_helper, {"fnu_spectra"})
+
+    assert "Galaxies/BlackHoles/Spectra/SpectralFluxDensities" in paths
+    assert not any("Photometry" in path for path in paths)
+
+
 def test_late_product_backfills_flushed_rows(tmp_path):
     """A product first written after a flush includes earlier galaxy rows."""
     from synthesizer.pipeline.pipeline_io import PipelineIO

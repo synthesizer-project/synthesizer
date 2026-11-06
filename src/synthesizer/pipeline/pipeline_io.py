@@ -193,15 +193,6 @@ class PipelineIOBuffers:
         "BlackHole": "Galaxies/BlackHoles",
     }
 
-    # NOTE: the black hole flux densities are written beneath Photometry
-    # rather than Spectra, unlike every other spectra. Fixing this changes
-    # the output files so it is left for a separate change.
-    PATH_OVERRIDES: ClassVar[dict] = {
-        ("fnu_spectra", "BlackHole"): (
-            "Galaxies/BlackHoles/Photometry/SpectralFluxDensities"
-        ),
-    }
-
     # The flushing thresholds
     flush_ngalaxies: int = None
     flush_memory: float = None
@@ -552,11 +543,7 @@ class PipelineIOBuffers:
                 continue
             for component, group in self.COMPONENT_GROUPS.items():
                 io_helper.write_data(
-                    data[component],
-                    self.PATH_OVERRIDES.get(
-                        (name, component), f"{group}/{path}"
-                    ),
-                    indexes,
+                    data[component], f"{group}/{path}", indexes
                 )
 
         # Write out the extra analysis results
