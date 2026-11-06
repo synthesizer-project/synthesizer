@@ -111,7 +111,7 @@ class SpectroscopicInstrument(InstrumentBase):
         self.snrs = snrs
         self.noise_maps = noise_maps
         self.resolving_power = resolving_power
-        self.lsfs = None if lsfs is None else np.asarray(lsfs)
+        self.lsfs = None if lsfs is None else np.asarray(lsfs).copy()
         SpectroscopicInstrument._validate(self)
 
     @timed("SpectroscopicInstrument._validate")
@@ -158,7 +158,7 @@ class SpectroscopicInstrument(InstrumentBase):
                     "resolving_power must be a positive number or callable."
                 )
 
-                # Validate the LSF kernels
+        # Validate the LSF kernels
         if self.lsfs is not None:
             if self.lsfs.ndim != 2:
                 raise exceptions.InconsistentArguments(
