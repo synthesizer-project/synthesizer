@@ -1550,6 +1550,10 @@ class Pipeline:
             metallicities=metallicities,
         )
 
+        # Hold the axes to write alongside the SFZHs
+        self.io_buffers.sfzh_log10ages = np.asarray(log10ages)
+        self.io_buffers.sfzh_metallicities = np.asarray(metallicities)
+
         # Record the requested output dtype (first call wins)
         self._out_dtypes.setdefault("sfzh", out_dtype)
 
@@ -1640,6 +1644,9 @@ class Pipeline:
             "get_sfh",
             log10ages=log10ages,
         )
+
+        # Hold the axis to write alongside the SFHs
+        self.io_buffers.sfh_log10ages = np.asarray(log10ages)
 
         # Record the requested output dtype (first call wins)
         self._out_dtypes.setdefault("sfh", out_dtype)
@@ -5316,32 +5323,6 @@ class Pipeline:
 
         self._took(start, "Cleaning outputs")
 
-    def _first_from_any_rank(self, value):
-        """Return the first value which isn't None on any rank.
-
-        This is used for values only known on ranks with galaxies (e.g. the
-        line wavelengths), which may not include rank 0.
-
-        Args:
-            value (object):
-                This rank's value (None if this rank doesn't have it).
-
-        Returns:
-            object:
-                On rank 0, the first value which isn't None, in rank order,
-                or None if no rank has one. The other ranks get None.
-        """
-        # Without MPI this rank's value is the only one
-        if not self.using_mpi:
-            return value
-
-        # Collect every rank's value on rank 0
-        values = self.comm.gather(value, root=0)
-        if self.rank != 0:
-            return None
-
-        return next((val for val in values if val is not None), None)
-
     @timed("Pipeline.write")
     def write(self, outpath=None, verbose=None):
         """Write what we have produced to a HDF5 file.
@@ -5431,79 +5412,17 @@ class Pipeline:
     def _write_global_outputs(self):
         """Write the data that isn't per galaxy to file.
 
-        This is only written once, at the end of the run, since (unlike the
-        per-galaxy data) it isn't split into rows we can flush. These writes
-        are collective when using MPI.
+        This is only written once, at the end of the run. These writes are
+        collective when using MPI.
         """
-        # Write cosmic spectral luminosity densities
-        if self._write_cosmic_lnu:
-            self.io_helper.write_data(
-                self.io_buffers.cosmic_lnus["Galaxy"],
-                "CosmicSED/Galaxy/SpectralLuminosityDensities",
-            )
-            self.io_helper.write_data(
-                self.io_buffers.cosmic_lnus["Stars"],
-                "CosmicSED/Stars/SpectralLuminosityDensities",
-            )
-            self.io_helper.write_data(
-                self.io_buffers.cosmic_lnus["BlackHole"],
-                "CosmicSED/BlackHoles/SpectralLuminosityDensities",
-            )
-
-        # Write cosmic spectral flux densities
-        if self._write_cosmic_fnu:
-            self.io_helper.write_data(
-                self.io_buffers.cosmic_fnus["Galaxy"],
-                "CosmicSED/Galaxy/SpectralFluxDensities",
-            )
-            self.io_helper.write_data(
-                self.io_buffers.cosmic_fnus["Stars"],
-                "CosmicSED/Stars/SpectralFluxDensities",
-            )
-            self.io_helper.write_data(
-                self.io_buffers.cosmic_fnus["BlackHole"],
-                "CosmicSED/BlackHoles/SpectralFluxDensities",
-            )
-
-        # Write the line IDs and rest frame wavelengths shared by the line
-        # luminosities and fluxes
-        if self._write_lines or self._write_flux_lines:
-            self.io_helper.write_data(
-                self.io_buffers.line_ids if self.rank == 0 else None,
-                "Lines/IDs",
-                root=0,
-            )
-
-            # Rank 0 may have no galaxies (and so no wavelengths), so take
-            # them from any rank which has them
-            self.io_helper.write_data(
-                self._first_from_any_rank(self.io_buffers.line_lams),
-                "Lines/Wavelengths",
-                root=0,
-            )
-
-        # Write the axes the SFZHs and SFHs are binned on
-        if self._write_sfzh:
-            op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfzh")
-            self.io_helper.write_data(
-                np.asarray(op_kwargs["log10ages"]) if self.rank == 0 else None,
-                "Galaxies/Stars/SFZHAxes/Log10Ages",
-                root=0,
-            )
-            self.io_helper.write_data(
-                np.asarray(op_kwargs["metallicities"])
-                if self.rank == 0
-                else None,
-                "Galaxies/Stars/SFZHAxes/Metallicities",
-                root=0,
-            )
-        if self._write_sfh:
-            op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfh")
-            self.io_helper.write_data(
-                np.asarray(op_kwargs["log10ages"]) if self.rank == 0 else None,
-                "Galaxies/Stars/SFHAxes/Log10Ages",
-                root=0,
-            )
+        # Only the outputs we were asked for are written (the flags
+        # requesting each output are stored on the Pipeline)
+        requested = {
+            name
+            for name, (flags, _) in self.io_buffers.GLOBAL_OUTPUTS.items()
+            if any(getattr(self, flag) for flag in flags)
+        }
+        self.io_helper.write_global_outputs(requested)
 
     def _create_output_file(self):
         """Create the output file (one per rank when using MPI).

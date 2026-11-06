@@ -1124,21 +1124,22 @@ class TestPipelineOperations:
         """Rank 0 gets a value held only by another rank."""
         # Pretend to be one rank of two where only rank 1 has the value
         pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-        pipeline.using_mpi = True
-        pipeline.rank = rank
-        pipeline.comm = MagicMock()
-        pipeline.comm.gather.return_value = [None, "lams"]
+        io_helper = pipeline.io_helper
+        io_helper.is_parallel = True
+        io_helper.rank = rank
+        io_helper.comm = MagicMock()
+        io_helper.comm.gather.return_value = [None, "lams"]
 
         # Only rank 0 receives the value, gathered rather than allgathered
-        result = pipeline._first_from_any_rank("lams" if rank else None)
+        result = io_helper._first_from_any_rank("lams" if rank else None)
         assert result == ("lams" if rank == 0 else None)
-        pipeline.comm.gather.assert_called_once()
-        pipeline.comm.allgather.assert_not_called()
+        io_helper.comm.gather.assert_called_once()
+        io_helper.comm.allgather.assert_not_called()
 
     def test_first_from_any_rank_without_mpi(self, nebular_emission_model):
         """Without MPI the rank's own value is returned."""
         pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-        assert pipeline._first_from_any_rank("lams") == "lams"
+        assert pipeline.io_helper._first_from_any_rank("lams") == "lams"
 
     def test_run_pipeline_lines_luminosity_subset(
         self,

@@ -125,6 +125,12 @@ class PipelineIOBuffers:
             all galaxies).
         line_ids (list):
             The IDs of the emission lines (shared by all galaxies).
+        sfzh_log10ages (np.ndarray):
+            The log10 age axis the SFZHs are binned on.
+        sfzh_metallicities (np.ndarray):
+            The metallicity axis the SFZHs are binned on.
+        sfh_log10ages (np.ndarray):
+            The log10 age axis the SFHs are binned on.
         ngalaxies (int):
             The number of galaxies held since the last flush.
         nbytes (int):
@@ -193,6 +199,42 @@ class PipelineIOBuffers:
         "BlackHole": "Galaxies/BlackHoles",
     }
 
+    # The outputs that aren't per galaxy, each with the Pipeline flags
+    # requesting it (any one is enough) and where it's written. The cosmic
+    # SEDs are held per component and written beneath each component's
+    # group (see COSMIC_SED_GROUPS), the others at the path given.
+    GLOBAL_OUTPUTS: ClassVar[dict] = {
+        "cosmic_lnus": (
+            ("_write_cosmic_lnu",),
+            "SpectralLuminosityDensities",
+        ),
+        "cosmic_fnus": (("_write_cosmic_fnu",), "SpectralFluxDensities"),
+        "line_ids": (("_write_lines", "_write_flux_lines"), "Lines/IDs"),
+        "line_lams": (
+            ("_write_lines", "_write_flux_lines"),
+            "Lines/Wavelengths",
+        ),
+        "sfzh_log10ages": (
+            ("_write_sfzh",),
+            "Galaxies/Stars/SFZHAxes/Log10Ages",
+        ),
+        "sfzh_metallicities": (
+            ("_write_sfzh",),
+            "Galaxies/Stars/SFZHAxes/Metallicities",
+        ),
+        "sfh_log10ages": (
+            ("_write_sfh",),
+            "Galaxies/Stars/SFHAxes/Log10Ages",
+        ),
+    }
+
+    # Where each component's cosmic SEDs are written
+    COSMIC_SED_GROUPS: ClassVar[dict] = {
+        "Galaxy": "CosmicSED/Galaxy",
+        "Stars": "CosmicSED/Stars",
+        "BlackHole": "CosmicSED/BlackHoles",
+    }
+
     # The flushing thresholds
     flush_ngalaxies: int = None
     flush_memory: float = None
@@ -238,6 +280,11 @@ class PipelineIOBuffers:
     lnu_data_cubes: dict = field(init=False, default_factory=_per_component)
     fnu_data_cubes: dict = field(init=False, default_factory=_per_component)
     spectroscopy: dict = field(init=False, default_factory=_per_component)
+
+    # The axes the SFZHs and SFHs are binned on (set when they're requested)
+    sfzh_log10ages: np.ndarray = field(init=False, default=None)
+    sfzh_metallicities: np.ndarray = field(init=False, default=None)
+    sfh_log10ages: np.ndarray = field(init=False, default=None)
 
     # The number of galaxies contributing to each cosmic SED, so they can
     # be averaged once every rank's contributions have been summed
@@ -1235,6 +1282,62 @@ class PipelineIO:
         # Record the rows we've written so datasets first appearing in a
         # later flush can be padded to line up with the galaxies
         self.rows_written += buffers.ngalaxies
+
+    def write_global_outputs(self, requested):
+        """Write the outputs held in the buffers that aren't per galaxy.
+
+        These are only written once, at the end of the run, since (unlike
+        the per-galaxy outputs) they aren't split into rows we can flush.
+        This is a collective operation when using MPI.
+
+        Args:
+            requested (set):
+                The names of the outputs the Pipeline was asked for. Only
+                these are written.
+        """
+        buffers = self.io_buffers
+        for name, (_, path) in buffers.GLOBAL_OUTPUTS.items():
+            if name not in requested:
+                continue
+            data = getattr(buffers, name)
+
+            # The cosmic SEDs are summed over every rank's galaxies (rank 0
+            # holds the totals) and written beneath each component's group
+            if isinstance(data, dict):
+                for component, group in buffers.COSMIC_SED_GROUPS.items():
+                    self.write_data(data[component], f"{group}/{path}")
+                continue
+
+            # The rest are the same on every rank so are written by rank 0.
+            # Rank 0 may have no galaxies (and so e.g. no line wavelengths),
+            # so take them from any rank which has them
+            self.write_data(self._first_from_any_rank(data), path, root=0)
+
+    def _first_from_any_rank(self, value):
+        """Return the first value which isn't None on any rank.
+
+        This is used for values only known on ranks with galaxies (e.g. the
+        line wavelengths), which may not include rank 0.
+
+        Args:
+            value (object):
+                This rank's value (None if this rank doesn't have it).
+
+        Returns:
+            object:
+                On rank 0, the first value which isn't None, in rank order,
+                or None if no rank has one. The other ranks get None.
+        """
+        # Without MPI this rank's value is the only one
+        if not self.is_parallel:
+            return value
+
+        # Collect every rank's value on rank 0
+        values = self.comm.gather(value, root=0)
+        if self.rank != 0:
+            return None
+
+        return next((val for val in values if val is not None), None)
 
     @timed("PipelineIO.combine_rank_files")
     def combine_rank_files(self):
