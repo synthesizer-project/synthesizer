@@ -1141,6 +1141,25 @@ class TestPipelineOperations:
         pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
         assert pipeline.io_helper._first_from_any_rank("lams") == "lams"
 
+    @pytest.mark.parametrize(
+        "flag",
+        [
+            "_write_lnu_data_cubes",
+            "_write_fnu_data_cubes",
+            "_write_spectroscopy_lnu",
+            "_write_spectroscopy_fnu",
+        ],
+    )
+    def test_unpack_unwritable_outputs_raises(
+        self, nebular_emission_model, flag
+    ):
+        """Outputs which can't be written yet raise rather than vanish."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        setattr(pipeline, flag, True)
+        galaxy = SimpleNamespace(stars=None, black_holes=None)
+        with pytest.raises(exceptions.UnimplementedFunctionality):
+            pipeline._unpack_results(galaxy)
+
     def test_run_pipeline_lines_luminosity_subset(
         self,
         test_grid,

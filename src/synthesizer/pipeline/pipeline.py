@@ -4421,6 +4421,46 @@ class Pipeline:
             "Msun",
         )
 
+    def _unpack_data_cubes(self, galaxy, quantity):
+        """Unpack the galaxy's data cubes into the IO buffers.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to unpack the data cubes from.
+            quantity (str):
+                Which data cubes to unpack, either "lnu" or "fnu".
+
+        Raises:
+            UnimplementedFunctionality:
+                Always, writing data cubes is not yet supported.
+        """
+        # TODO: append each component's data cubes to the
+        # io_buffers.<quantity>_data_cubes container and give them an
+        # entry in PipelineIOBuffers.GALAXY_OUTPUTS so they are written
+        raise exceptions.UnimplementedFunctionality(
+            f"Writing {quantity} data cubes is not yet supported. Pass "
+            f"write=False to get_data_cubes_{quantity}."
+        )
+
+    def _unpack_spectroscopy(self, galaxy):
+        """Unpack the galaxy's spectroscopy into the IO buffers.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to unpack the spectroscopy from.
+
+        Raises:
+            UnimplementedFunctionality:
+                Always, writing spectroscopy is not yet supported.
+        """
+        # TODO: append each component's spectroscopy to the
+        # io_buffers.spectroscopy container and give it an entry in
+        # PipelineIOBuffers.GALAXY_OUTPUTS so it is written
+        raise exceptions.UnimplementedFunctionality(
+            "Writing spectroscopy is not yet supported. Pass write=False "
+            "to get_spectroscopy_lnu and get_spectroscopy_fnu."
+        )
+
     @timed("Pipeline._unpack_results")
     def _unpack_results(self, galaxy):
         """Unpack the results from the galaxy into the pipeline.
@@ -4893,6 +4933,16 @@ class Pipeline:
                                 spec_type,
                                 line_id,
                             )
+
+        # Do we need to unpack the data cubes?
+        if self._write_lnu_data_cubes:
+            self._unpack_data_cubes(galaxy, "lnu")
+        if self._write_fnu_data_cubes:
+            self._unpack_data_cubes(galaxy, "fnu")
+
+        # Do we need to unpack the spectroscopy?
+        if self._write_spectroscopy_lnu or self._write_spectroscopy_fnu:
+            self._unpack_spectroscopy(galaxy)
 
         # Do we need to unpack the extra analysis results?
         if hasattr(galaxy, "_extra_analysis_results"):
