@@ -4504,9 +4504,17 @@ class Pipeline:
                 )
 
             except Exception as e:
-                raise type(e)(
-                    f"Error running extra analysis function {key}: {e}"
-                ).with_traceback(e.__traceback__)
+                # Rebuild the error with the analysis key in its message.
+                # Not every exception can be built from a single message
+                # (e.g. unyt's UnitConversionError needs the units), so if
+                # it can't we chain the original error to a RuntimeError
+                # naming the key instead
+                msg = f"Error running extra analysis function {key}: {e}"
+                try:
+                    err = type(e)(msg)
+                except Exception:
+                    raise RuntimeError(msg) from e
+                raise err.with_traceback(e.__traceback__)
 
             # Store the result on the galaxy
             galaxy._extra_analysis_results[key] = res
