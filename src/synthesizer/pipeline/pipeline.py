@@ -46,11 +46,9 @@ from synthesizer.pipeline.pipeline_utils import (
     cast_products_recursive,
     clear_pipeline_outputs,
     combine_atomic_timing_snapshots,
-    combine_list_of_dicts,
     count_and_check_dict_recursive,
     divide_dicts_recursive,
     get_atomic_timing_snapshot,
-    get_dict_structure,
     get_full_memory,
     plot_timing_analysis,
     sanitise_hdf5_key_part,
@@ -339,10 +337,6 @@ class Pipeline:
         self._analysis_args = []
         self._analysis_kwargs = []
         self._analysis_results_keys = []
-
-        # The key structure of each analysis result from the first flush,
-        # later flushes must match it to append consistently
-        self._analysis_result_structures = {}
 
         # The per-galaxy outputs are held in buffers until they're written
         # (and flushed to file while running if a threshold is given)
@@ -5117,7 +5111,7 @@ class Pipeline:
         start = time.perf_counter()
 
         # Combine the analysis results ready for writing
-        self._combine_analysis_results()
+        self.io_buffers.combine_analysis_results()
 
         # Write the data, silencing the per dataset reporting since a line
         # per dataset would swamp the progress table (we report the flush
@@ -5267,65 +5261,9 @@ class Pipeline:
         # Convert the lists of extra analysis results to unyt arrays. The
         # same step also happens before each flush; here it handles any
         # galaxies left in memory at the end of the run.
-        self._combine_analysis_results()
+        self.io_buffers.combine_analysis_results()
 
         self._took(start, "Cleaning outputs")
-
-    def _combine_analysis_results(self):
-        """Combine the lists of extra analysis results into unyt arrays."""
-        # Unlike the previous data we need to do some checks here to ensure
-        # that the data is in a consistent format. This is because the user
-        # can return any type of data from their analysis functions.
-        for key, res in self.io_buffers.analysis_results.items():
-            # Ensure the data of all results is in the same format.
-            types = set([type(r) for r in res])
-            if len(types) > 1:
-                raise exceptions.BadResult(
-                    "All results from extra analysis functions must be "
-                    f"of the same type. Got: {set(types)}"
-                )
-
-            # Ensure all results have the same keys (the merge below would
-            # silently drop any extras)
-            self._check_analysis_structure(key, res)
-
-            # Combine the list of results into a dict of unyt arrays or a
-            # single unyt array. This will simply return a unyt array if we
-            # hand a list of values
-            combined_data = combine_list_of_dicts(res)
-
-            # Store the data
-            self.io_buffers.analysis_results[key] = combined_data
-
-    def _check_analysis_structure(self, key, res):
-        """Ensure every result of an analysis function has the same keys.
-
-        The structure is remembered between calls since each flush appends
-        to the datasets the first flush created, so a result with a
-        different structure would leave some datasets missing rows.
-
-        Args:
-            key (str):
-                The key of the analysis function.
-            res (list):
-                The results of the analysis function for each galaxy.
-        """
-        # Nothing to check
-        if len(res) == 0:
-            return
-
-        # Compare against an earlier flush if there was one, otherwise
-        # against the first result
-        expected = self._analysis_result_structures.setdefault(
-            key, get_dict_structure(res[0])
-        )
-        for result in res:
-            structure = get_dict_structure(result)
-            if structure != expected:
-                raise exceptions.BadResult(
-                    f"Extra analysis result {key} changed structure. "
-                    f"Expected {expected}, got {structure}."
-                )
 
     def _first_from_any_rank(self, value):
         """Return the first value which isn't None on any rank.

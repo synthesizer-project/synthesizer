@@ -28,8 +28,10 @@ from synthesizer._version import __version__
 from synthesizer.instruments import InstrumentCollection
 from synthesizer.pipeline.pipeline_utils import (
     clear_lists_recursive,
+    combine_list_of_dicts,
     get_buffered_nbytes,
     get_dataset_properties,
+    get_dict_structure,
     get_row_template,
     iter_row_lists,
     make_empty_row,
@@ -230,6 +232,10 @@ class PipelineIOBuffers:
     # was unpacked (see start_galaxy)
     _nrows_before: dict = field(init=False, default_factory=dict)
 
+    # The key structure of each analysis result from the first flush,
+    # later flushes must match it to append consistently
+    _analysis_result_structures: dict = field(init=False, default_factory=dict)
+
     def __post_init__(self):
         """Validate the flushing thresholds."""
         # Don't accept a zero or negative threshold: we'd otherwise flush
@@ -364,6 +370,69 @@ class PipelineIOBuffers:
         """
         for name in self.GALAXY_OUTPUTS:
             setattr(self, name, rows_to_arrays(getattr(self, name)))
+
+    def combine_analysis_results(self):
+        """Combine the lists of extra analysis results into unyt arrays.
+
+        Raises:
+            BadResult:
+                If an analysis function's results differ in type or
+                structure between galaxies (or from an earlier flush).
+        """
+        # Unlike the other outputs we need to do some checks here to ensure
+        # that the data is in a consistent format. This is because the user
+        # can return any type of data from their analysis functions.
+        for key, res in self.analysis_results.items():
+            # Ensure the data of all results is in the same format.
+            types = set([type(r) for r in res])
+            if len(types) > 1:
+                raise exceptions.BadResult(
+                    "All results from extra analysis functions must be "
+                    f"of the same type. Got: {set(types)}"
+                )
+
+            # Ensure all results have the same keys (the merge below would
+            # silently drop any extras)
+            self._check_analysis_structure(key, res)
+
+            # Combine the list of results into a dict of unyt arrays or a
+            # single unyt array. This will simply return a unyt array if we
+            # hand a list of values
+            self.analysis_results[key] = combine_list_of_dicts(res)
+
+    def _check_analysis_structure(self, key, res):
+        """Ensure every result of an analysis function has the same keys.
+
+        The structure is remembered between calls since each flush appends
+        to the datasets the first flush created, so a result with a
+        different structure would leave some datasets missing rows.
+
+        Args:
+            key (str):
+                The key of the analysis function.
+            res (list):
+                The results of the analysis function for each galaxy.
+
+        Raises:
+            BadResult:
+                If a result's structure differs from the expected one.
+        """
+        # Nothing to check
+        if len(res) == 0:
+            return
+
+        # Compare against an earlier flush if there was one, otherwise
+        # against the first result
+        expected = self._analysis_result_structures.setdefault(
+            key, get_dict_structure(res[0])
+        )
+        for result in res:
+            structure = get_dict_structure(result)
+            if structure != expected:
+                raise exceptions.BadResult(
+                    f"Extra analysis result {key} changed structure. "
+                    f"Expected {expected}, got {structure}."
+                )
 
     def write(self, io_helper, requested):
         """Write the rows held to file.

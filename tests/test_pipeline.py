@@ -3888,11 +3888,11 @@ class TestPipelineFlushing:
         pipeline.io_buffers.analysis_results = {
             "result": [{"outer": {"value": 1}}]
         }
-        pipeline._combine_analysis_results()
+        pipeline.io_buffers.combine_analysis_results()
         pipeline.io_buffers.analysis_results = {"result": [changed]}
 
         with pytest.raises(exceptions.BadResult, match="changed structure"):
-            pipeline._combine_analysis_results()
+            pipeline.io_buffers.combine_analysis_results()
 
     def test_analysis_structure_must_match_within_flush(
         self, nebular_emission_model
@@ -3906,7 +3906,7 @@ class TestPipelineFlushing:
             ]
         }
         with pytest.raises(exceptions.BadResult, match="changed structure"):
-            pipeline._combine_analysis_results()
+            pipeline.io_buffers.combine_analysis_results()
 
     def test_flush_memory_matches_unflushed(self, run_pipeline, monkeypatch):
         """Flushing on a memory threshold flushes when it's reached."""
