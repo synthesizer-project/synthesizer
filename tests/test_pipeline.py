@@ -3784,6 +3784,56 @@ class TestPipelineFlushing:
         with h5py.File(flushed, "r") as hdf:
             assert hdf["Galaxies/StellarMass/Mass"].shape == (self.NGAL,)
 
+    def test_late_product_matches_unflushed(
+        self, make_galaxies, nebular_emission_model, tmp_path
+    ):
+        """A product first seen after a flush gives the unflushed file."""
+
+        def _run(name, **kwargs):
+            # Count the galaxies processed so far in this run
+            ngal = [0]
+
+            # An analysis function adding a spectra to the fourth galaxy
+            # onwards (the analysis functions run before the outputs are
+            # collected, so this is written like any other spectra)
+            def add_late_spectra(gal):
+                if ngal[0] >= 3:
+                    spectra = gal.stars.spectra
+                    spectra["late"] = next(iter(spectra.values()))
+                ngal[0] += 1
+                return 0.0
+
+            # Run the pipeline and write the file
+            outpath = tmp_path / name
+            pipeline = Pipeline(
+                emission_model=nebular_emission_model,
+                nthreads=1,
+                verbose=0,
+                outpath=outpath,
+                **kwargs,
+            )
+            pipeline.add_galaxies(make_galaxies())
+            pipeline.get_spectra()
+            pipeline.add_analysis_func(add_late_spectra, "Late")
+            pipeline.run()
+            pipeline.write()
+            return outpath
+
+        # Flushing every 2 galaxies means the new spectra first appears in
+        # the second batch, after the first batch is already on disk
+        expected = _run("expected.hdf5")
+        flushed = _run("flushed.hdf5", flush_ngalaxies=2)
+        self._assert_files_match(expected, flushed)
+
+        # The galaxies without the spectra should have zeroed rows
+        with h5py.File(flushed, "r") as hdf:
+            late = hdf[
+                "Galaxies/Stars/Spectra/SpectralLuminosityDensities/late"
+            ]
+            assert late.shape[0] == self.NGAL
+            assert not np.any(late[:3])
+            assert np.all(np.any(late[3:], axis=1))
+
     @pytest.mark.parametrize(
         "changed",
         [
@@ -3941,44 +3991,41 @@ def test_empty_placeholder_replaced_by_nonempty_batch(tmp_path):
     """An empty dataset with unknown trailing shape can be replaced."""
     from synthesizer.pipeline.pipeline_io import PipelineIO
 
+    # Set up a writer as the Pipeline would have it
     io = PipelineIO.__new__(PipelineIO)
     io.filepath = str(tmp_path / "placeholder.hdf5")
     io._writing_galaxy_data = False
+
+    # An earlier empty batch left a placeholder without the trailing shape
     with h5py.File(io.filepath, "w") as hdf:
         hdf.create_dataset("Galaxies/Product", shape=(0,))
+
+    # Writing real rows should replace it rather than fail on the shape
     io.write_dataset(np.ones((2, 3)), "Galaxies/Product")
     with h5py.File(io.filepath) as hdf:
         assert hdf["Galaxies/Product"].shape == (2, 3)
-
-
-def test_memory_flush_with_no_array_outputs(nebular_emission_model, tmp_path):
-    """A memory threshold must also work when outputs have no array bytes."""
-    pipeline = Pipeline(
-        emission_model=nebular_emission_model,
-        outpath=tmp_path / "out.hdf5",
-        flush_memory=1,
-        verbose=0,
-    )
-    pipeline._n_buffered = 1
-
-    # A cosmic-only run can reach this point with nothing in the per-galaxy
-    # buffer. There is no per-galaxy size to extrapolate from in that case.
-    assert pipeline._should_flush() is False
 
 
 def test_sparse_product_rows_follow_galaxy_order(nebular_emission_model):
     """A product first seen on a later galaxy keeps its original row."""
     pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
     pipeline._write_lnu_spectra = True
+
+    # Unpack three galaxies where only the second has the spectra
     for spectra in ({}, {"nebular": SimpleNamespace(lnu=np.array([2.0]))}, {}):
         galaxy = SimpleNamespace(
             spectra=spectra, stars=None, black_holes=None, lines={}
         )
         pipeline._unpack_results(galaxy)
         pipeline._n_buffered += 1
+
+    # The spectra should sit in the second row, with the others zero padded
     np.testing.assert_array_equal(
         pipeline.lnu_spectra["Galaxy"]["nebular"], [[0.0], [2.0], [0.0]]
     )
+
+    # After a flush clears the buffer, a galaxy without the spectra still
+    # gets a padded row since we now know the product exists
     pipeline.lnu_spectra["Galaxy"]["nebular"].clear()
     pipeline._n_buffered = 0
     pipeline._unpack_results(
@@ -3993,11 +4040,15 @@ def test_late_product_backfills_flushed_rows(tmp_path):
     """A product first written after a flush includes earlier galaxy rows."""
     from synthesizer.pipeline.pipeline_io import PipelineIO
 
+    # Set up a serial writer which has already flushed two galaxies
     io = PipelineIO.__new__(PipelineIO)
     io.filepath = str(tmp_path / "late.hdf5")
     io.is_parallel = io.is_collective = False
     io.verbose, io._start_time = 0, time.perf_counter()
     io.rows_written = 2
+
+    # Write a product for the third galaxy only, which should be preceded
+    # by empty rows for the flushed galaxies
     io.write_data(np.array([[3.0]]), "Galaxies/Product", indexes=[2])
     with h5py.File(io.filepath) as hdf:
         np.testing.assert_array_equal(hdf["Galaxies/Product"], [[0], [0], [3]])

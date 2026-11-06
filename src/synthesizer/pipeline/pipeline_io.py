@@ -582,7 +582,10 @@ class PipelineIO:
         Args:
             data (any): The data to write.
             key (str): The key to write the data to.
-            indexes (list, optional): The indexes to write the data to.
+            indexes (list, optional): The galaxy indexes of the data. These
+                only mark the data as per galaxy (appended to the rows
+                already written) rather than data written once by the root
+                rank, the values themselves aren't used.
             root (int, optional): The root rank for gathering and writing.
         """
         try:

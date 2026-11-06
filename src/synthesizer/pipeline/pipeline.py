@@ -5335,8 +5335,9 @@ class Pipeline:
         # Combine the analysis results ready for writing
         self._combine_analysis_results()
 
-        # Write the data, silencing the per dataset reporting since this
-        # would interrupt the progress table
+        # Write the data, silencing the per dataset reporting since a line
+        # per dataset would swamp the progress table (we report the flush
+        # as a whole below instead)
         with self.io_helper.silenced():
             self._write_galaxy_outputs()
 
@@ -5917,11 +5918,22 @@ class Pipeline:
         get_observed_spectra, which will have run get_spectra, but the results
         from get_spectra and get_observed_spectra will have been discarded.
 
+        If outputs were flushed to file while running, the remaining galaxies
+        are appended to that file and the data that isn't per galaxy is
+        written, completing it.
+
         Args:
-            outpath (str):
-                The path to the HDF5 file to write.
+            outpath (str, optional):
+                The path to the HDF5 file to write. Defaults to the outpath
+                given to the Pipeline. If both are given they must match.
             verbose (bool, optional):
                 If set, override the Pipeline verbose setting.
+
+        Raises:
+            InconsistentArguments:
+                If no path was given here or to the Pipeline, if the paths
+                given to both don't match, or if flushed outputs have
+                already been written.
         """
         # Resolve where we are writing
         outpath = self._resolve_outpath(outpath)
