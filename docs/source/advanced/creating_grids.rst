@@ -55,7 +55,7 @@ To create input files with varying parameter values, we can do something like th
 
 .. code-block:: bash
    
-   python create_cloudy_input_grid.py -grid_dir /home/dir/data/synthesizer_data/grids -cloudy_dir /home/dir/data/synthesizer_data/cloudy -incident_grid maraston11_kroupa -cloudy_params c23.01-sps -cloudy_params_addition test_suite/ionisation_parameter -machine sciama -verbose True 
+   python src/syncretize/cloudy/create_cloudy_input_grid.py --grid-dir /home/dir/data/synthesizer_data/grids --cloudy-output-dir /home/dir/data/synthesizer_data/cloudy --incident-grid maraston11_kroupa --cloudy-paramfile c23.01-sps --cloudy-paramfile-extra test_suite/ionisation_parameter --machine sciama --verbose
 
 
 Then, using the method of your choice, you can run the created input files through Cloudy. Within `syncretize` are example scripts showing how to run these using different HPC systems.
@@ -64,4 +64,4 @@ Once these have been run through Cloudy, we can use the outputs from Cloudy to c
 
 .. code-block:: bash
    
-   python create_synthesizer_grid.py -grid_dir /home/dir/data/synthesizer_data/grids -cloudy_dir /home/dir/data/synthesizer_data/cloudy -incident_grid maraston11 -cloudy_params c23.01-sps-fixed-hydrogen_density
+   python src/syncretize/cloudy/create_synthesizer_grid.py --grid-dir /home/dir/data/synthesizer_data/grids --cloudy-output-dir /home/dir/data/synthesizer_data/cloudy --incident-grid maraston11 --cloudy-paramfile c23.01-sps-fixed-hydrogen_density
