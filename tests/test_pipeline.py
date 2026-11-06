@@ -3339,6 +3339,80 @@ def test_combine_rank_files_virtual_units_mismatch(tmp_path):
         io.combine_rank_files_virtual()
 
 
+def _rank0_writer(tmp_path, starts, ends):
+    """Return a PipelineIO set up as rank 0 of 2 would be after writing."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 2, 0, True
+    io.num_galaxies, io.start, io.end = ends[-1], starts[0], ends[0]
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([starts, ends])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+    return io
+
+
+@pytest.mark.parametrize("virtual", [False, True])
+def test_failed_combine_keeps_existing_output(tmp_path, virtual):
+    """A failed combine must not leave misleading output behind.
+
+    An existing copied file is kept untouched. An existing virtual file is
+    removed, since it points at the rank files this run has overwritten.
+    """
+    # An existing, valid combined file from an earlier run
+    with h5py.File(tmp_path / "out.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Lum", data=np.full((2, 3), 7.0))
+
+    # Rank files which can't be combined (different units for the virtual
+    # file, rows which don't fit the dataset rank 0 created for the copy)
+    for rank, (units, ncols) in enumerate((("erg/s", 1), ("W", 3))):
+        with h5py.File(tmp_path / f"out_{rank}.hdf5", "w") as hdf:
+            dset = hdf.create_dataset(
+                "Galaxies/Lum",
+                data=np.ones((1, 3 if virtual else ncols)),
+            )
+            dset.attrs["Units"] = units if virtual else "erg/s"
+
+    # Combining should fail
+    io = _rank0_writer(tmp_path, [0, 1], [1, 2])
+    with pytest.raises((ValueError, TypeError)):
+        if virtual:
+            io.combine_rank_files_virtual()
+        else:
+            io.combine_rank_files()
+
+    # The earlier copied output survives (an earlier virtual file is gone)
+    # and no temporary file is left behind
+    if virtual:
+        assert not (tmp_path / "out.hdf5").exists()
+    else:
+        with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+            np.testing.assert_array_equal(hdf["Galaxies/Lum"][...], 7.0)
+    assert not (tmp_path / "out.hdf5.tmp").exists()
+
+
+def test_combine_replaces_existing_output(tmp_path):
+    """A successful combine replaces an existing combined file."""
+    # An existing combined file from an earlier run
+    with h5py.File(tmp_path / "out.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Lum", data=np.full((2, 3), 7.0))
+
+    # Rank files which combine cleanly
+    for rank in range(2):
+        with h5py.File(tmp_path / f"out_{rank}.hdf5", "w") as hdf:
+            hdf.create_dataset("Galaxies/Lum", data=np.full((1, 3), rank))
+
+    _rank0_writer(tmp_path, [0, 1], [1, 2]).combine_rank_files()
+
+    # The new rows replace the old file
+    with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lum"][...], [[0, 0, 0], [1, 1, 1]]
+        )
+    assert not (tmp_path / "out.hdf5.tmp").exists()
+
+
 def test_parametric_sfh_rebinned_onto_requested_ages(
     nebular_emission_model, single_star_parametric
 ):
