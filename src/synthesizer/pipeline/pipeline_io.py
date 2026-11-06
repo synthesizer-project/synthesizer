@@ -33,6 +33,7 @@ from synthesizer.pipeline.pipeline_utils import (
     get_row_template,
     iter_row_lists,
     make_empty_row,
+    rows_to_arrays,
     unify_dict_structure_across_ranks,
 )
 from synthesizer.synth_warnings import warn
@@ -354,6 +355,15 @@ class PipelineIOBuffers:
         if self.flush_memory is None:
             return False
         return self.nbytes >= self.flush_nbytes
+
+    def to_arrays(self):
+        """Convert each list of rows held into a single array.
+
+        This is done once the run is complete, so the outputs left in memory
+        are arrays (rather than lists of rows) when they are written.
+        """
+        for name in self.GALAXY_OUTPUTS:
+            setattr(self, name, rows_to_arrays(getattr(self, name)))
 
     def write(self, io_helper, requested):
         """Write the rows held to file.

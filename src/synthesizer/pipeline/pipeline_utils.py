@@ -868,6 +868,25 @@ def iter_row_lists(data, path=()):
         yield path, data
 
 
+def rows_to_arrays(data):
+    """Convert every list of rows in a nested dictionary into an array.
+
+    The dictionaries are updated in place, only the lists are replaced.
+
+    Args:
+        data (dict/list): The nested dictionary (or a list) to convert.
+
+    Returns:
+        dict/unyt_array:
+            The converted dictionary, or the array the list became.
+    """
+    if isinstance(data, dict):
+        for key, value in data.items():
+            data[key] = rows_to_arrays(value)
+        return data
+    return unyt_array(data)
+
+
 def get_row_template(row):
     """Return what's needed to make an empty row like the one passed.
 
