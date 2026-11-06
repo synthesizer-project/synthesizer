@@ -549,9 +549,11 @@ class Pipeline:
         """
         # Don't accept a zero or negative threshold: we'd otherwise flush
         # immediately after every galaxy, which is a surprising way to ask
-        # for no buffering
+        # for no buffering. Numpy integers are fine but booleans aren't
         if flush_ngalaxies is not None and (
-            not isinstance(flush_ngalaxies, int) or flush_ngalaxies < 1
+            not isinstance(flush_ngalaxies, (int, np.integer))
+            or isinstance(flush_ngalaxies, bool)
+            or flush_ngalaxies < 1
         ):
             raise exceptions.InconsistentArguments(
                 "flush_ngalaxies must be an int >= 1"
@@ -574,7 +576,9 @@ class Pipeline:
         # Attach the path and thresholds (with the memory in bytes since
         # that's what we count)
         self._outpath = outpath
-        self._flush_ngalaxies = flush_ngalaxies
+        self._flush_ngalaxies = (
+            int(flush_ngalaxies) if flush_ngalaxies is not None else None
+        )
         self._flush_nbytes = (
             flush_memory * 1024**3 if flush_memory is not None else None
         )

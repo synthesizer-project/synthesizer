@@ -3875,6 +3875,8 @@ class TestPipelineFlushing:
         "kwargs",
         [
             {"flush_ngalaxies": 0},
+            {"flush_ngalaxies": True},
+            {"flush_ngalaxies": 2.0},
             {"flush_memory": -1.0},
             {"flush_memory": float("nan")},
             {"flush_memory": float("inf")},
@@ -3883,13 +3885,24 @@ class TestPipelineFlushing:
     def test_invalid_flush_thresholds(
         self, nebular_emission_model, tmp_path, kwargs
     ):
-        """Non-positive flush thresholds are rejected."""
+        """Non-positive or non-integer flush thresholds are rejected."""
         with pytest.raises(exceptions.InconsistentArguments):
             Pipeline(
                 emission_model=nebular_emission_model,
                 outpath=tmp_path / "out.hdf5",
                 **kwargs,
             )
+
+    def test_numpy_integer_flush_ngalaxies(
+        self, nebular_emission_model, tmp_path
+    ):
+        """A numpy integer galaxy threshold is accepted."""
+        pipeline = Pipeline(
+            emission_model=nebular_emission_model,
+            outpath=tmp_path / "out.hdf5",
+            flush_ngalaxies=np.int64(2),
+        )
+        assert pipeline._flush_ngalaxies == 2
 
     def test_write_to_different_outpath(self, run_pipeline, tmp_path):
         """Writing somewhere other than the Pipeline's outpath is an error."""
