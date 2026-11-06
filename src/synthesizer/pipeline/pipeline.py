@@ -1593,6 +1593,38 @@ class Pipeline:
         # Record the time taken
         self._op_timing["LOS optical depths"] += time.perf_counter() - start
 
+    def _parametric_sfzh(self, stars, log10ages, metallicities):
+        """Return the SFZH of parametric stars on the requested axes.
+
+        Args:
+            stars (parametric.Stars):
+                The parametric stars.
+            log10ages (array-like):
+                The requested log10 age axis.
+            metallicities (array-like):
+                The requested metallicity axis.
+
+        Returns:
+            np.ndarray:
+                The SFZH grid on the requested axes.
+        """
+        # Use the SFZH as is if it's already on the requested axes (the
+        # lengths must be checked first since allclose broadcasts)
+        if (
+            len(log10ages) == len(stars.log10ages)
+            and len(metallicities) == len(stars.metallicities)
+            and np.allclose(log10ages, stars.log10ages)
+            and np.allclose(metallicities, stars.metallicities)
+        ):
+            return stars.sfzh
+
+        # Otherwise rebin it onto the requested axes
+        return stars.get_sfzh(
+            log10ages,
+            metallicities,
+            nthreads=self.nthreads,
+        ).sfzh
+
     def get_sfzh(self, log10ages, metallicities, write=True, out_dtype=None):
         """Flag that the Pipeline should compute the SFZH grid.
 
@@ -1649,10 +1681,17 @@ class Pipeline:
         # Get the operation kwargs for this operation
         op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfzh")
 
-        # Get the SFZH, skip any without stars.
-        # Parametric galaxies have this ready to go so we can skip them
-        if getattr(galaxy, "sfzh", None) is not None:
-            return galaxy.sfzh
+        # Get the SFZH, skip any without stars. We always compute it on the
+        # requested axes, since a galaxy reused from an earlier run may hold
+        # one on other axes
+        if not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None:
+            # Parametric stars hold their own SFZH, rebin it onto the
+            # requested axes
+            galaxy.sfzh = self._parametric_sfzh(
+                galaxy.stars,
+                op_kwargs["log10ages"],
+                op_kwargs["metallicities"],
+            )
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfzh(
                 log10ages=op_kwargs["log10ages"],
@@ -1730,10 +1769,29 @@ class Pipeline:
         # Get the operation kwargs for this operation
         op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfh")
 
-        # Get the SFH, skip any without stars.
-        # Parametric galaxies have this ready to go so we can skip them
-        if getattr(galaxy, "sfh", None) is not None:
-            return galaxy.sfh
+        # Get the SFH, skip any without stars. We always compute it on the
+        # requested ages, since a galaxy reused from an earlier run may hold
+        # one on other ages
+        if not isinstance(galaxy, ParticleGalaxy) and galaxy.stars is not None:
+            # Parametric stars hold their own SFH, use it as is if it's
+            # already on the requested ages (the lengths must be checked
+            # first since allclose broadcasts)
+            ages = galaxy.stars.log10ages
+            requested = op_kwargs["log10ages"]
+            if len(ages) == len(requested) and np.allclose(ages, requested):
+                galaxy.sfh = galaxy.stars.sfh
+
+            # Otherwise rebin their SFZH onto the requested ages and sum
+            # over metallicity
+            else:
+                galaxy.sfh = np.sum(
+                    self._parametric_sfzh(
+                        galaxy.stars,
+                        requested,
+                        galaxy.stars.metallicities,
+                    ),
+                    axis=1,
+                )
         elif galaxy.stars is not None and galaxy.stars.nstars > 0:
             galaxy.stars.get_sfh(
                 log10ages=op_kwargs["log10ages"],
@@ -4415,6 +4473,32 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Extra Analyses"] += time.perf_counter() - start
 
+    def _mass_grid_in_msun(self, grid, op):
+        """Return an SFZH or SFH grid in Msun with the requested dtype.
+
+        Args:
+            grid (np.ndarray/unyt_array):
+                The grid. Arrays without units (or dimensionless) are
+                already in Msun.
+            op (str):
+                The operation the grid is for ("sfzh" or "sfh"), used to
+                look up the requested output dtype.
+
+        Returns:
+            unyt_array:
+                The grid in Msun.
+        """
+        # Convert any grid carrying mass units, rather than relabelling it
+        if isinstance(grid, unyt_array) and not grid.units.is_dimensionless:
+            grid = grid.to("Msun")
+
+        return unyt_array(
+            np.asarray(
+                grid, dtype=resolve_out_dtype(self._out_dtypes.get(op))
+            ),
+            "Msun",
+        )
+
     @timed("Pipeline._unpack_results")
     def _unpack_results(self, galaxy):
         """Unpack the results from the galaxy into the pipeline.
@@ -4429,19 +4513,31 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Do we need to unpack the SFZH?
+        # Do we need to unpack the SFZH? We take it from the stars where
+        # possible since that's where split galaxies accumulate it. Particle
+        # stars hold it as a parametric Stars object so we extract the grid.
         if self._write_sfzh:
-            if galaxy.stars is not None:
-                self.sfzhs.append(galaxy.stars.sfzh)
-            else:
-                self.sfzhs.append(galaxy.sfzh)
+            sfzh = getattr(galaxy, "sfzh", None)
+            if (
+                isinstance(galaxy, ParticleGalaxy)
+                and galaxy.stars is not None
+                and galaxy.stars.sfzh is not None
+            ):
+                sfzh = galaxy.stars.sfzh
+            self.sfzhs.append(
+                self._mass_grid_in_msun(getattr(sfzh, "sfzh", sfzh), "sfzh")
+            )
 
-        # Do we need to unpack the SFH?
+        # Do we need to unpack the SFH? As above, particle stars hold it
         if self._write_sfh:
-            if galaxy.stars is not None:
-                self.sfhs.append(galaxy.stars.sfh)
-            else:
-                self.sfhs.append(galaxy.sfh)
+            sfh = getattr(galaxy, "sfh", None)
+            if (
+                isinstance(galaxy, ParticleGalaxy)
+                and galaxy.stars is not None
+                and galaxy.stars.sfh is not None
+            ):
+                sfh = galaxy.stars.sfh
+            self.sfhs.append(self._mass_grid_in_msun(sfh, "sfh"))
 
         # Do we need to unpack the lnu spectra?
         if self._write_lnu_spectra:
@@ -5685,6 +5781,38 @@ class Pipeline:
 
         self._took(start, "Cleaning outputs")
 
+    def _first_from_any_rank(self, value, all_ranks=False):
+        """Return the first value which isn't None on any rank.
+
+        This is used for values only known on ranks with galaxies (e.g. the
+        line wavelengths), which may not include rank 0.
+
+        Args:
+            value (object):
+                This rank's value (None if this rank doesn't have it).
+            all_ranks (bool):
+                If True, every rank gets the value, otherwise only rank 0
+                does (the other ranks get None).
+
+        Returns:
+            object:
+                The first value which isn't None, in rank order, or None if
+                no rank has one.
+        """
+        # Without MPI this rank's value is the only one
+        if not self.using_mpi:
+            return value
+
+        # Collect every rank's value where it's needed
+        if all_ranks:
+            values = self.comm.allgather(value)
+        else:
+            values = self.comm.gather(value, root=0)
+            if self.rank != 0:
+                return None
+
+        return next((val for val in values if val is not None), None)
+
     @timed("Pipeline.write")
     def write(self, outpath, verbose=None):
         """Write what we have produced to a HDF5 file.
@@ -5741,6 +5869,20 @@ class Pipeline:
             )
         else:
             galaxy_indices = None
+
+        # Write the SFZHs and SFHs
+        if self._write_sfzh:
+            self.io_helper.write_data(
+                self.sfzhs,
+                "Galaxies/Stars/SFZH",
+                galaxy_indices,
+            )
+        if self._write_sfh:
+            self.io_helper.write_data(
+                self.sfhs,
+                "Galaxies/Stars/SFH",
+                galaxy_indices,
+            )
 
         # Write spectral luminosity densities
         if self._write_lnu_spectra:
@@ -5876,13 +6018,20 @@ class Pipeline:
                 "Galaxies/BlackHoles/Lines/Continuum",
                 galaxy_indices,
             )
+
+        # Write the line IDs and rest frame wavelengths shared by the line
+        # luminosities and fluxes
+        if self._write_lines or self._write_flux_lines:
             self.io_helper.write_data(
                 self.line_ids if self.rank == 0 else None,
                 "Lines/IDs",
                 root=0,
             )
+
+            # Rank 0 may have no galaxies (and so no wavelengths), so take
+            # them from any rank which has them
             self.io_helper.write_data(
-                self.line_lams if self.rank == 0 else None,
+                self._first_from_any_rank(self.line_lams),
                 "Lines/Wavelengths",
                 root=0,
             )
@@ -5933,16 +6082,14 @@ class Pipeline:
                         self.line_obs_lams.dtype,
                         str(self.line_obs_lams.units),
                     )
-                all_obs_props = [
-                    props
-                    for props in self.comm.allgather(obs_props)
-                    if props is not None
-                ]
+                obs_props = self._first_from_any_rank(
+                    obs_props, all_ranks=True
+                )
 
                 # Replace our empty wavelengths with an empty array of the
                 # right shape
-                if len(self.line_obs_lams) == 0 and len(all_obs_props) > 0:
-                    trailing, dtype, units = all_obs_props[0]
+                if len(self.line_obs_lams) == 0 and obs_props is not None:
+                    trailing, dtype, units = obs_props
                     self.line_obs_lams = unyt_array(
                         np.zeros((0, *trailing), dtype=dtype), units
                     )
@@ -6175,6 +6322,29 @@ class Pipeline:
                 res,
                 f"Galaxies/{key}",
                 galaxy_indices,
+            )
+
+        # Write the axes the SFZHs and SFHs are binned on
+        if self._write_sfzh:
+            op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfzh")
+            self.io_helper.write_data(
+                np.asarray(op_kwargs["log10ages"]) if self.rank == 0 else None,
+                "Galaxies/Stars/SFZHAxes/Log10Ages",
+                root=0,
+            )
+            self.io_helper.write_data(
+                np.asarray(op_kwargs["metallicities"])
+                if self.rank == 0
+                else None,
+                "Galaxies/Stars/SFZHAxes/Metallicities",
+                root=0,
+            )
+        if self._write_sfh:
+            op_kwargs = self._operation_kwargs.get_unique_kwargs("get_sfh")
+            self.io_helper.write_data(
+                np.asarray(op_kwargs["log10ages"]) if self.rank == 0 else None,
+                "Galaxies/Stars/SFHAxes/Log10Ages",
+                root=0,
             )
 
         self._took(write_start, "Writing data")

@@ -1034,7 +1034,7 @@ class TestDustGeneratorIntegration:
             assert np.any(sed.lnu > 0)
 
     def test_energy_balance_conserves_absorbed_luminosity(
-        self, dust_wavelengths, mock_emitter, mock_model, mock_emissions
+        self, mock_emitter, mock_model, mock_emissions
     ):
         """Energy-balance dust emission must conserve absorbed energy.
 
@@ -1044,8 +1044,12 @@ class TestDustGeneratorIntegration:
         intrinsic.bolometric_luminosity - attenuated.bolometric_luminosity.
         The existing test_energy_balance_scaling only checks the result is
         a positive, non-empty Sed; it does not check this quantitatively.
+
+        The dust emission is normalised over all frequencies, so it is
+        evaluated on a grid wide enough to hold all of it.
         """
         temperature = 20 * K
+        lams = np.logspace(0, 10, 100001) * angstrom
         expected_ldust = (
             mock_emissions["intrinsic"].bolometric_luminosity
             - mock_emissions["attenuated"].bolometric_luminosity
@@ -1074,7 +1078,7 @@ class TestDustGeneratorIntegration:
 
         for gen in generators:
             sed = gen._generate_spectra(
-                lams=dust_wavelengths,
+                lams=lams,
                 emitter=mock_emitter,
                 model=mock_model,
                 emissions=mock_emissions,
@@ -1084,7 +1088,7 @@ class TestDustGeneratorIntegration:
             assert np.isclose(
                 sed.bolometric_luminosity.to("erg/s").value,
                 expected_ldust.to("erg/s").value,
-                rtol=1e-6,
+                rtol=1e-4,
             ), (
                 f"{gen.__class__.__name__} energy-balance dust emission "
                 f"({sed.bolometric_luminosity}) does not match the "
@@ -1698,6 +1702,46 @@ class TestRequiredEmissions:
         bb.set_scaler(FakeEmissionModel("scaler"))
         lscale = bb.get_scaling(None, None, mock_emissions)
         assert lscale == mock_emissions["scaler"].bolometric_luminosity
+
+
+class TestAllFrequencyNormalisation:
+    """Normalisation is over all frequencies, not the evaluation grid."""
+
+    @pytest.mark.parametrize(
+        "generator",
+        (
+            Blackbody(temperature=30 * K),
+            Greybody(temperature=30 * K, emissivity=1.6),
+            Greybody(temperature=30 * K, emissivity=1.6, optically_thin=False),
+            Casey12(temperature=30 * K, emissivity=1.6, alpha=2.0),
+        ),
+    )
+    def test_normalisation_independent_of_grid(self, generator):
+        """A wide grid holds unit luminosity; a truncated one agrees."""
+        wide = np.logspace(-3, 6, 200001) * um
+        sed = generator.get_spectra(wide)
+        np.testing.assert_allclose(
+            sed.bolometric_luminosity.value, 1.0, rtol=1e-3
+        )
+
+        truncated = wide[(wide > 50 * um) & (wide < 500 * um)]
+        np.testing.assert_allclose(
+            generator.get_spectra(truncated).lnu,
+            sed.lnu[(wide > 50 * um) & (wide < 500 * um)],
+            rtol=1e-10,
+        )
+
+    def test_casey12_alpha_at_most_one_raises(self):
+        """The power law has infinite luminosity for alpha <= 1."""
+        generator = Casey12(temperature=30 * K, emissivity=1.6, alpha=1.0)
+        with pytest.raises(exceptions.InconsistentArguments):
+            generator.get_spectra(np.logspace(0, 3, 100) * um)
+
+    def test_greybody_emissivity_at_most_minus_three_raises(self):
+        """The optically thin integral is infinite for emissivity <= -3."""
+        generator = Greybody(temperature=30 * K, emissivity=-3.0)
+        with pytest.raises(exceptions.InconsistentArguments):
+            generator.get_spectra(np.logspace(0, 3, 100) * um)
 
 
 @pytest.mark.parametrize("alpha, warns", ((1.2, True), (2.0, False)))
