@@ -342,25 +342,6 @@ class Pipeline:
         # (and flushed to file while running if a threshold is given)
         self.io_buffers = PipelineIOBuffers(flush_ngalaxies, flush_memory)
 
-        # Initialise containers for the data that isn't per galaxy
-        self.cosmic_lnus = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.cosmic_fnus = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self._cosmic_lnu_counts = {
-            "Galaxy": {},
-            "Stars": {},
-            "BlackHole": {},
-        }
-        self._cosmic_fnu_counts = {
-            "Galaxy": {},
-            "Stars": {},
-            "BlackHole": {},
-        }
-        self.line_lams = None
-        self.line_ids = None
-        self.lnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.fnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.spectroscopy = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-
         # We'll need to store the timing information to be reported at the
         # end of the pipeline (this will be stored with the operation
         # as the key and the value being the collected time taken).
@@ -763,8 +744,8 @@ class Pipeline:
             self.io_buffers.fluxes,
             self.io_buffers.line_lums,
             self.io_buffers.line_cont_lums,
-            self.line_lams,
-            self.line_ids,
+            self.io_buffers.line_lams,
+            self.io_buffers.line_ids,
             self.io_buffers.line_fluxes,
             self.io_buffers.line_cont_fluxes,
             self.io_buffers.line_obs_lams,
@@ -772,9 +753,9 @@ class Pipeline:
             self.io_buffers.images_lum_psf,
             self.io_buffers.images_flux,
             self.io_buffers.images_flux_psf,
-            self.lnu_data_cubes,
-            self.fnu_data_cubes,
-            self.spectroscopy,
+            self.io_buffers.lnu_data_cubes,
+            self.io_buffers.fnu_data_cubes,
+            self.io_buffers.spectroscopy,
         ]
 
         return get_full_memory(results) / (1024**2)
@@ -2124,10 +2105,12 @@ class Pipeline:
             # parallel count dictionary so the final mean can be computed after
             # all ranks have been combined.
             for model_label, sed in galaxy.spectra.items():
-                cosmic_sed = self.cosmic_lnus["Galaxy"].setdefault(label, {})
-                cosmic_counts = self._cosmic_lnu_counts["Galaxy"].setdefault(
+                cosmic_sed = self.io_buffers.cosmic_lnus["Galaxy"].setdefault(
                     label, {}
                 )
+                cosmic_counts = self.io_buffers.cosmic_lnu_counts[
+                    "Galaxy"
+                ].setdefault(label, {})
                 contribution = sed.lnu if volume is None else sed.lnu / volume
                 cosmic_sed.setdefault(model_label, 0 * contribution)
                 cosmic_counts.setdefault(model_label, 0)
@@ -2135,10 +2118,10 @@ class Pipeline:
                 cosmic_counts[model_label] += 1
             if galaxy.stars is not None:
                 for model_label, sed in galaxy.stars.spectra.items():
-                    cosmic_sed = self.cosmic_lnus["Stars"].setdefault(
-                        label, {}
-                    )
-                    cosmic_counts = self._cosmic_lnu_counts[
+                    cosmic_sed = self.io_buffers.cosmic_lnus[
+                        "Stars"
+                    ].setdefault(label, {})
+                    cosmic_counts = self.io_buffers.cosmic_lnu_counts[
                         "Stars"
                     ].setdefault(label, {})
                     contribution = (
@@ -2150,10 +2133,10 @@ class Pipeline:
                     cosmic_counts[model_label] += 1
             if galaxy.black_holes is not None:
                 for model_label, sed in galaxy.black_holes.spectra.items():
-                    cosmic_sed = self.cosmic_lnus["BlackHole"].setdefault(
-                        label, {}
-                    )
-                    cosmic_counts = self._cosmic_lnu_counts[
+                    cosmic_sed = self.io_buffers.cosmic_lnus[
+                        "BlackHole"
+                    ].setdefault(label, {})
+                    cosmic_counts = self.io_buffers.cosmic_lnu_counts[
                         "BlackHole"
                     ].setdefault(label, {})
                     contribution = (
@@ -2339,10 +2322,12 @@ class Pipeline:
             # contribution and, when needed, the number of contributors per
             # leaf so averages can be formed after MPI reduction.
             for model_label, sed in galaxy.spectra.items():
-                cosmic_sed = self.cosmic_fnus["Galaxy"].setdefault(label, {})
-                cosmic_counts = self._cosmic_fnu_counts["Galaxy"].setdefault(
+                cosmic_sed = self.io_buffers.cosmic_fnus["Galaxy"].setdefault(
                     label, {}
                 )
+                cosmic_counts = self.io_buffers.cosmic_fnu_counts[
+                    "Galaxy"
+                ].setdefault(label, {})
                 contribution = sed.fnu if volume is None else sed.fnu / volume
                 cosmic_sed.setdefault(model_label, 0 * contribution)
                 cosmic_counts.setdefault(model_label, 0)
@@ -2350,10 +2335,10 @@ class Pipeline:
                 cosmic_counts[model_label] += 1
             if galaxy.stars is not None:
                 for model_label, sed in galaxy.stars.spectra.items():
-                    cosmic_sed = self.cosmic_fnus["Stars"].setdefault(
-                        label, {}
-                    )
-                    cosmic_counts = self._cosmic_fnu_counts[
+                    cosmic_sed = self.io_buffers.cosmic_fnus[
+                        "Stars"
+                    ].setdefault(label, {})
+                    cosmic_counts = self.io_buffers.cosmic_fnu_counts[
                         "Stars"
                     ].setdefault(label, {})
                     contribution = (
@@ -2365,10 +2350,10 @@ class Pipeline:
                     cosmic_counts[model_label] += 1
             if galaxy.black_holes is not None:
                 for model_label, sed in galaxy.black_holes.spectra.items():
-                    cosmic_sed = self.cosmic_fnus["BlackHole"].setdefault(
-                        label, {}
-                    )
-                    cosmic_counts = self._cosmic_fnu_counts[
+                    cosmic_sed = self.io_buffers.cosmic_fnus[
+                        "BlackHole"
+                    ].setdefault(label, {})
+                    cosmic_counts = self.io_buffers.cosmic_fnu_counts[
                         "BlackHole"
                     ].setdefault(label, {})
                     contribution = (
@@ -2691,7 +2676,7 @@ class Pipeline:
         self._write_lines = write or self._write_lines
 
         # Store the line IDs actually computed, we'll write these once later
-        self.line_ids = op_kwargs["line_ids"]
+        self.io_buffers.line_ids = op_kwargs["line_ids"]
 
     @timed("Pipeline._get_lines")
     def _get_lines(self, galaxy):
@@ -2720,18 +2705,21 @@ class Pipeline:
         # Store the line wavelengths for writing, we only do this once since
         # they are the same for all galaxies but we need to find them first
         # (either on the galaxy, stars, or black holes)
-        if self.line_lams is None:
+        if self.io_buffers.line_lams is None:
             # Get the line lams from the first line collection we can find
             for lines in galaxy.lines.values():
-                self.line_lams = lines.lam
+                self.io_buffers.line_lams = lines.lam
                 break
-            if self.line_lams is None and galaxy.stars is not None:
+            if self.io_buffers.line_lams is None and galaxy.stars is not None:
                 for lines in galaxy.stars.lines.values():
-                    self.line_lams = lines.lam
+                    self.io_buffers.line_lams = lines.lam
                     break
-            if self.line_lams is None and galaxy.black_holes is not None:
+            if (
+                self.io_buffers.line_lams is None
+                and galaxy.black_holes is not None
+            ):
                 for lines in galaxy.black_holes.lines.values():
-                    self.line_lams = lines.lam
+                    self.io_buffers.line_lams = lines.lam
                     break
 
         # Count the number of emission lines we have generated
@@ -5142,21 +5130,21 @@ class Pipeline:
         # requested we do the same for the parallel contributor counts so the
         # final division is performed on the globally summed result.
         if self.using_mpi:
-            cosmic_lnus = self.comm.gather(self.cosmic_lnus, root=0)
-            cosmic_fnus = self.comm.gather(self.cosmic_fnus, root=0)
+            cosmic_lnus = self.comm.gather(self.io_buffers.cosmic_lnus, root=0)
+            cosmic_fnus = self.comm.gather(self.io_buffers.cosmic_fnus, root=0)
             cosmic_lnu_counts = self.comm.gather(
-                self._cosmic_lnu_counts, root=0
+                self.io_buffers.cosmic_lnu_counts, root=0
             )
             cosmic_fnu_counts = self.comm.gather(
-                self._cosmic_fnu_counts, root=0
+                self.io_buffers.cosmic_fnu_counts, root=0
             )
             if self.rank == 0:
-                self.cosmic_lnus = sum_dicts_recursive(cosmic_lnus)
-                self.cosmic_fnus = sum_dicts_recursive(cosmic_fnus)
-                self._cosmic_lnu_counts = sum_dicts_recursive(
+                self.io_buffers.cosmic_lnus = sum_dicts_recursive(cosmic_lnus)
+                self.io_buffers.cosmic_fnus = sum_dicts_recursive(cosmic_fnus)
+                self.io_buffers.cosmic_lnu_counts = sum_dicts_recursive(
                     cosmic_lnu_counts
                 )
-                self._cosmic_fnu_counts = sum_dicts_recursive(
+                self.io_buffers.cosmic_fnu_counts = sum_dicts_recursive(
                     cosmic_fnu_counts
                 )
 
@@ -5186,15 +5174,17 @@ class Pipeline:
                 else:
                     label = sanitise_hdf5_key_part(label)
 
-                for component in self.cosmic_lnus:
+                for component in self.io_buffers.cosmic_lnus:
                     if (
-                        label in self.cosmic_lnus[component]
+                        label in self.io_buffers.cosmic_lnus[component]
                         and (component, label) not in averaged
                     ):
-                        self.cosmic_lnus[component][label] = (
+                        self.io_buffers.cosmic_lnus[component][label] = (
                             divide_dicts_recursive(
-                                self.cosmic_lnus[component][label],
-                                self._cosmic_lnu_counts[component][label],
+                                self.io_buffers.cosmic_lnus[component][label],
+                                self.io_buffers.cosmic_lnu_counts[component][
+                                    label
+                                ],
                             )
                         )
                         averaged.add((component, label))
@@ -5225,15 +5215,17 @@ class Pipeline:
                 else:
                     label = sanitise_hdf5_key_part(label)
 
-                for component in self.cosmic_fnus:
+                for component in self.io_buffers.cosmic_fnus:
                     if (
-                        label in self.cosmic_fnus[component]
+                        label in self.io_buffers.cosmic_fnus[component]
                         and (component, label) not in averaged
                     ):
-                        self.cosmic_fnus[component][label] = (
+                        self.io_buffers.cosmic_fnus[component][label] = (
                             divide_dicts_recursive(
-                                self.cosmic_fnus[component][label],
-                                self._cosmic_fnu_counts[component][label],
+                                self.io_buffers.cosmic_fnus[component][label],
+                                self.io_buffers.cosmic_fnu_counts[component][
+                                    label
+                                ],
                             )
                         )
                         averaged.add((component, label))
@@ -5243,20 +5235,28 @@ class Pipeline:
         # contribution dtype for accuracy).
         cosmic_lnu_dtype = self._out_dtypes.get("cosmic_sed")
         cosmic_fnu_dtype = self._out_dtypes.get("observed_cosmic_sed")
-        for component in self.cosmic_lnus:
-            for label, spectra in self.cosmic_lnus[component].items():
+        for component in self.io_buffers.cosmic_lnus:
+            for label, spectra in self.io_buffers.cosmic_lnus[
+                component
+            ].items():
                 for spec_type, spec in spectra.items():
                     spec = unyt_array(spec)
                     if cosmic_lnu_dtype is not None:
                         spec = spec.astype(cosmic_lnu_dtype, copy=False)
-                    self.cosmic_lnus[component][label][spec_type] = spec
-        for component in self.cosmic_fnus:
-            for label, spectra in self.cosmic_fnus[component].items():
+                    self.io_buffers.cosmic_lnus[component][label][
+                        spec_type
+                    ] = spec
+        for component in self.io_buffers.cosmic_fnus:
+            for label, spectra in self.io_buffers.cosmic_fnus[
+                component
+            ].items():
                 for spec_type, spec in spectra.items():
                     spec = unyt_array(spec)
                     if cosmic_fnu_dtype is not None:
                         spec = spec.astype(cosmic_fnu_dtype, copy=False)
-                    self.cosmic_fnus[component][label][spec_type] = spec
+                    self.io_buffers.cosmic_fnus[component][label][
+                        spec_type
+                    ] = spec
 
         # Convert the lists of extra analysis results to unyt arrays. The
         # same step also happens before each flush; here it handles any
@@ -5412,30 +5412,30 @@ class Pipeline:
         # Write cosmic spectral luminosity densities
         if self._write_cosmic_lnu:
             self.io_helper.write_data(
-                self.cosmic_lnus["Galaxy"],
+                self.io_buffers.cosmic_lnus["Galaxy"],
                 "CosmicSED/Galaxy/SpectralLuminosityDensities",
             )
             self.io_helper.write_data(
-                self.cosmic_lnus["Stars"],
+                self.io_buffers.cosmic_lnus["Stars"],
                 "CosmicSED/Stars/SpectralLuminosityDensities",
             )
             self.io_helper.write_data(
-                self.cosmic_lnus["BlackHole"],
+                self.io_buffers.cosmic_lnus["BlackHole"],
                 "CosmicSED/BlackHoles/SpectralLuminosityDensities",
             )
 
         # Write cosmic spectral flux densities
         if self._write_cosmic_fnu:
             self.io_helper.write_data(
-                self.cosmic_fnus["Galaxy"],
+                self.io_buffers.cosmic_fnus["Galaxy"],
                 "CosmicSED/Galaxy/SpectralFluxDensities",
             )
             self.io_helper.write_data(
-                self.cosmic_fnus["Stars"],
+                self.io_buffers.cosmic_fnus["Stars"],
                 "CosmicSED/Stars/SpectralFluxDensities",
             )
             self.io_helper.write_data(
-                self.cosmic_fnus["BlackHole"],
+                self.io_buffers.cosmic_fnus["BlackHole"],
                 "CosmicSED/BlackHoles/SpectralFluxDensities",
             )
 
@@ -5443,7 +5443,7 @@ class Pipeline:
         # luminosities and fluxes
         if self._write_lines or self._write_flux_lines:
             self.io_helper.write_data(
-                self.line_ids if self.rank == 0 else None,
+                self.io_buffers.line_ids if self.rank == 0 else None,
                 "Lines/IDs",
                 root=0,
             )
@@ -5451,7 +5451,7 @@ class Pipeline:
             # Rank 0 may have no galaxies (and so no wavelengths), so take
             # them from any rank which has them
             self.io_helper.write_data(
-                self._first_from_any_rank(self.line_lams),
+                self._first_from_any_rank(self.io_buffers.line_lams),
                 "Lines/Wavelengths",
                 root=0,
             )

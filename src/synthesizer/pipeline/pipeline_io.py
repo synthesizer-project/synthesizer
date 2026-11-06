@@ -84,17 +84,21 @@ def _per_component():
 
 @dataclass(eq=False, repr=False)
 class PipelineIOBuffers:
-    """The per-galaxy outputs a Pipeline holds in memory until written.
+    """The outputs a Pipeline holds in memory until written.
 
-    Each output is a (nested) container of lists with a row per galaxy held.
-    The Pipeline appends a row for each galaxy it unpacks and the buffers
-    are emptied once their rows have been written, either at the end of the
-    run or, if flushing was requested, whenever a flush threshold is
-    reached.
+    Each per-galaxy output is a (nested) container of lists with a row per
+    galaxy held. The Pipeline appends a row for each galaxy it unpacks and
+    the buffers are emptied once their rows have been written, either at
+    the end of the run or, if flushing was requested, whenever a flush
+    threshold is reached.
 
     Not every galaxy produces every output (e.g. a galaxy without black
     holes has no black hole spectra), so the buffers also pad the outputs a
     galaxy didn't produce, keeping every row in line with its galaxy.
+
+    The outputs that aren't per galaxy (e.g. the cosmic SEDs) are also held
+    here but are accumulated over the whole run, so they are only written
+    once, at the end.
 
     Attributes:
         flush_ngalaxies (int):
@@ -106,6 +110,21 @@ class PipelineIOBuffers:
         analysis_results (dict):
             The results of each extra analysis function, keyed by the
             function's result key.
+        cosmic_lnus (dict):
+            The cosmic SEDs (spectral luminosity densities) for each
+            component, keyed by label and then emission model label.
+        cosmic_fnus (dict):
+            The observed cosmic SEDs (spectral flux densities) for each
+            component, keyed by label and then emission model label.
+        cosmic_lnu_counts (dict):
+            The number of galaxies contributing to each cosmic_lnus entry.
+        cosmic_fnu_counts (dict):
+            The number of galaxies contributing to each cosmic_fnus entry.
+        line_lams (unyt_array):
+            The rest frame wavelengths of the emission lines (shared by
+            all galaxies).
+        line_ids (list):
+            The IDs of the emission lines (shared by all galaxies).
         ngalaxies (int):
             The number of galaxies held since the last flush.
         nbytes (int):
@@ -218,6 +237,21 @@ class PipelineIOBuffers:
         init=False, default_factory=_per_component
     )
     analysis_results: dict = field(init=False, default_factory=dict)
+
+    # The outputs that aren't per galaxy. These are accumulated over the
+    # whole run (flushing leaves them alone) and written once at the end.
+    cosmic_lnus: dict = field(init=False, default_factory=_per_component)
+    cosmic_fnus: dict = field(init=False, default_factory=_per_component)
+    line_lams: unyt_array = field(init=False, default=None)
+    line_ids: list = field(init=False, default=None)
+    lnu_data_cubes: dict = field(init=False, default_factory=_per_component)
+    fnu_data_cubes: dict = field(init=False, default_factory=_per_component)
+    spectroscopy: dict = field(init=False, default_factory=_per_component)
+
+    # The number of galaxies contributing to each cosmic SED, so they can
+    # be averaged once every rank's contributions have been summed
+    cosmic_lnu_counts: dict = field(init=False, default_factory=_per_component)
+    cosmic_fnu_counts: dict = field(init=False, default_factory=_per_component)
 
     # What we hold since the last flush
     ngalaxies: int = field(init=False, default=0)

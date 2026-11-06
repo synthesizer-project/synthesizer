@@ -619,7 +619,7 @@ class TestPipelineNotReady:
         """Later get_lines calls must request a subset of the first call."""
         base_pipeline.get_lines(line_ids=["Ha"])
         base_pipeline.get_lines(line_ids=["H 1 6562.80A"], write=False)
-        assert base_pipeline.line_ids == ["Ha"]
+        assert base_pipeline.io_buffers.line_ids == ["Ha"]
         with pytest.raises(exceptions.InconsistentArguments):
             base_pipeline.get_lines(line_ids=["Hb"])
 
@@ -1035,10 +1035,10 @@ class TestPipelineOperations:
             )
             > 0
         ), "No line continua were calculated"
-        assert pipeline_with_galaxies.line_lams is not None, (
+        assert pipeline_with_galaxies.io_buffers.line_lams is not None, (
             "Line wavelengths not calculated"
         )
-        assert pipeline_with_galaxies.line_ids is not None, (
+        assert pipeline_with_galaxies.io_buffers.line_ids is not None, (
             "Line IDs not included"
         )
 
@@ -1169,14 +1169,15 @@ class TestPipelineOperations:
             )
             > 0
         ), "No line continua were calculated"
-        assert pipeline_with_galaxies.line_lams is not None, (
+        assert pipeline_with_galaxies.io_buffers.line_lams is not None, (
             "Line wavelengths not calculated"
         )
-        assert pipeline_with_galaxies.line_ids is not None, (
+        assert pipeline_with_galaxies.io_buffers.line_ids is not None, (
             "Line IDs not included"
         )
         assert np.all(
-            pipeline_with_galaxies.line_ids == test_grid.available_lines[:10]
+            pipeline_with_galaxies.io_buffers.line_ids
+            == test_grid.available_lines[:10]
         ), "Line IDs do not match requested subset"
 
     def test_run_pipeline_images_luminosity(
@@ -2922,17 +2923,19 @@ class TestGalaxySplitting:
             pipeline.get_sfh(log10ages=test_grid.log10ages)
             pipeline.run()
 
-        assert any(unsplit_pipeline.cosmic_lnus.values())
-        assert any(unsplit_pipeline.cosmic_fnus.values())
-        assert any(split_pipeline.cosmic_lnus.values())
-        assert any(split_pipeline.cosmic_fnus.values())
+        assert any(unsplit_pipeline.io_buffers.cosmic_lnus.values())
+        assert any(unsplit_pipeline.io_buffers.cosmic_fnus.values())
+        assert any(split_pipeline.io_buffers.cosmic_lnus.values())
+        assert any(split_pipeline.io_buffers.cosmic_fnus.values())
 
-        for attr in ("cosmic_lnus", "cosmic_fnus"):
-            _assert_nested_allclose(
-                getattr(unsplit_pipeline, attr),
-                getattr(split_pipeline, attr),
-            )
-        for attr in ("lnu_spectra", "fnu_spectra", "sfzhs", "sfhs"):
+        for attr in (
+            "lnu_spectra",
+            "fnu_spectra",
+            "cosmic_lnus",
+            "cosmic_fnus",
+            "sfzhs",
+            "sfhs",
+        ):
             _assert_nested_allclose(
                 getattr(unsplit_pipeline.io_buffers, attr),
                 getattr(split_pipeline.io_buffers, attr),
@@ -2979,34 +2982,38 @@ class TestGalaxySplitting:
         )
         avg_pipeline.run()
 
-        assert any(sum_pipeline.cosmic_lnus.values())
-        assert any(sum_pipeline.cosmic_fnus.values())
-        assert any(avg_pipeline.cosmic_lnus.values())
-        assert any(avg_pipeline.cosmic_fnus.values())
+        assert any(sum_pipeline.io_buffers.cosmic_lnus.values())
+        assert any(sum_pipeline.io_buffers.cosmic_fnus.values())
+        assert any(avg_pipeline.io_buffers.cosmic_lnus.values())
+        assert any(avg_pipeline.io_buffers.cosmic_fnus.values())
 
-        for component in sum_pipeline.cosmic_lnus:
-            if "sum" not in sum_pipeline.cosmic_lnus[component]:
+        for component in sum_pipeline.io_buffers.cosmic_lnus:
+            if "sum" not in sum_pipeline.io_buffers.cosmic_lnus[component]:
                 continue
-            assert "avg" in avg_pipeline.cosmic_lnus[component]
-            for model_label, spec in sum_pipeline.cosmic_lnus[component][
-                "sum"
-            ].items():
+            assert "avg" in avg_pipeline.io_buffers.cosmic_lnus[component]
+            for model_label, spec in sum_pipeline.io_buffers.cosmic_lnus[
+                component
+            ]["sum"].items():
                 expected = spec / n_contributors / volume
                 _assert_nested_allclose(
-                    avg_pipeline.cosmic_lnus[component]["avg"][model_label],
+                    avg_pipeline.io_buffers.cosmic_lnus[component]["avg"][
+                        model_label
+                    ],
                     expected,
                 )
 
-        for component in sum_pipeline.cosmic_fnus:
-            if "sum" not in sum_pipeline.cosmic_fnus[component]:
+        for component in sum_pipeline.io_buffers.cosmic_fnus:
+            if "sum" not in sum_pipeline.io_buffers.cosmic_fnus[component]:
                 continue
-            assert "avg" in avg_pipeline.cosmic_fnus[component]
-            for model_label, spec in sum_pipeline.cosmic_fnus[component][
-                "sum"
-            ].items():
+            assert "avg" in avg_pipeline.io_buffers.cosmic_fnus[component]
+            for model_label, spec in sum_pipeline.io_buffers.cosmic_fnus[
+                component
+            ]["sum"].items():
                 expected = spec / n_contributors / volume
                 _assert_nested_allclose(
-                    avg_pipeline.cosmic_fnus[component]["avg"][model_label],
+                    avg_pipeline.io_buffers.cosmic_fnus[component]["avg"][
+                        model_label
+                    ],
                     expected,
                 )
 
@@ -3051,29 +3058,33 @@ class TestGalaxySplitting:
         )
         avg_pipeline.run()
 
-        for component in sum_pipeline.cosmic_lnus:
-            if "sum" not in sum_pipeline.cosmic_lnus[component]:
+        for component in sum_pipeline.io_buffers.cosmic_lnus:
+            if "sum" not in sum_pipeline.io_buffers.cosmic_lnus[component]:
                 continue
-            assert "dup" in avg_pipeline.cosmic_lnus[component]
-            for model_label, spec in sum_pipeline.cosmic_lnus[component][
-                "sum"
-            ].items():
+            assert "dup" in avg_pipeline.io_buffers.cosmic_lnus[component]
+            for model_label, spec in sum_pipeline.io_buffers.cosmic_lnus[
+                component
+            ]["sum"].items():
                 expected = spec / n_contributors
                 _assert_nested_allclose(
-                    avg_pipeline.cosmic_lnus[component]["dup"][model_label],
+                    avg_pipeline.io_buffers.cosmic_lnus[component]["dup"][
+                        model_label
+                    ],
                     expected,
                 )
 
-        for component in sum_pipeline.cosmic_fnus:
-            if "sum" not in sum_pipeline.cosmic_fnus[component]:
+        for component in sum_pipeline.io_buffers.cosmic_fnus:
+            if "sum" not in sum_pipeline.io_buffers.cosmic_fnus[component]:
                 continue
-            assert "dup" in avg_pipeline.cosmic_fnus[component]
-            for model_label, spec in sum_pipeline.cosmic_fnus[component][
-                "sum"
-            ].items():
+            assert "dup" in avg_pipeline.io_buffers.cosmic_fnus[component]
+            for model_label, spec in sum_pipeline.io_buffers.cosmic_fnus[
+                component
+            ]["sum"].items():
                 expected = spec / n_contributors
                 _assert_nested_allclose(
-                    avg_pipeline.cosmic_fnus[component]["dup"][model_label],
+                    avg_pipeline.io_buffers.cosmic_fnus[component]["dup"][
+                        model_label
+                    ],
                     expected,
                 )
 
