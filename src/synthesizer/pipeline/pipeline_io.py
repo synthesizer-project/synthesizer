@@ -511,49 +511,6 @@ class PipelineIOBuffers:
                     f"Expected {expected}, got {structure}."
                 )
 
-    def write(self, io_helper, requested):
-        """Write the rows held to file.
-
-        On each call the rows are appended to anything written by earlier
-        calls (i.e. earlier flushes).
-
-        Args:
-            io_helper (PipelineIO):
-                The writer for the output file.
-            requested (set):
-                The names of the outputs the Pipeline was asked for. Only
-                these are written, the others were never collected.
-        """
-        # An index marks these as per-galaxy data to the writer. In MPI
-        # each rank writes its own file, so the index also avoids
-        # collective calls during a flush (ranks need not flush at the same
-        # galaxy).
-        indexes = io_helper.galaxy_indices
-        if indexes is None:
-            indexes = range(self.ngalaxies)
-
-        # Write each requested output, beneath each component's group if
-        # it's held per component
-        for name, (_, path) in self.GALAXY_OUTPUTS.items():
-            if name not in requested:
-                continue
-            data = getattr(self, name)
-            if not isinstance(data, dict):
-                io_helper.write_data(data, path, indexes)
-                continue
-            for component, group in self.COMPONENT_GROUPS.items():
-                io_helper.write_data(
-                    data[component], f"{group}/{path}", indexes
-                )
-
-        # Write out the extra analysis results
-        for key, res in self.analysis_results.items():
-            io_helper.write_data(res, f"Galaxies/{key}", indexes)
-
-        # Record the rows we've written so datasets first appearing in a
-        # later flush can be padded to line up with the galaxies
-        io_helper.rows_written += self.ngalaxies
-
     def clear(self):
         """Empty the buffers once their rows have been written.
 
@@ -1237,6 +1194,47 @@ class PipelineIO:
 
         except Exception as e:
             raise OSError(f"Failed to write {key} - {e}") from e
+
+    def write_galaxy_outputs(self, requested):
+        """Write the per-galaxy outputs held in the buffers to file.
+
+        On each call the rows are appended to anything written by earlier
+        calls (i.e. earlier flushes).
+
+        Args:
+            requested (set):
+                The names of the outputs the Pipeline was asked for. Only
+                these are written, the others were never collected.
+        """
+        buffers = self.io_buffers
+
+        # An index marks these as per-galaxy data to write_data. In MPI
+        # each rank writes its own file, so the index also avoids
+        # collective calls during a flush (ranks need not flush at the same
+        # galaxy).
+        indexes = self.galaxy_indices
+        if indexes is None:
+            indexes = range(buffers.ngalaxies)
+
+        # Write each requested output, beneath each component's group if
+        # it's held per component
+        for name, (_, path) in buffers.GALAXY_OUTPUTS.items():
+            if name not in requested:
+                continue
+            data = getattr(buffers, name)
+            if not isinstance(data, dict):
+                self.write_data(data, path, indexes)
+                continue
+            for component, group in buffers.COMPONENT_GROUPS.items():
+                self.write_data(data[component], f"{group}/{path}", indexes)
+
+        # Write out the extra analysis results
+        for key, res in buffers.analysis_results.items():
+            self.write_data(res, f"Galaxies/{key}", indexes)
+
+        # Record the rows we've written so datasets first appearing in a
+        # later flush can be padded to line up with the galaxies
+        self.rows_written += buffers.ngalaxies
 
     @timed("PipelineIO.combine_rank_files")
     def combine_rank_files(self):

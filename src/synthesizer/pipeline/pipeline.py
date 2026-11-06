@@ -5531,7 +5531,7 @@ class Pipeline:
             for name, (flag, _) in self.io_buffers.GALAXY_OUTPUTS.items()
             if getattr(self, flag)
         }
-        self.io_buffers.write(self.io_helper, requested)
+        self.io_helper.write_galaxy_outputs(requested)
 
     def combine_files(self):
         """Combine individual rank files into a single file.
