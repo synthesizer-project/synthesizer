@@ -110,32 +110,75 @@ class PipelineIOBuffers:
             counted when flushing based on memory).
     """
 
-    # The per-galaxy outputs (excluding the extra analysis results)
-    GALAXY_OUTPUTS: ClassVar[tuple] = (
-        "sfzhs",
-        "sfhs",
-        "lnu_spectra",
-        "fnu_spectra",
-        "luminosities",
-        "fluxes",
-        "line_lums",
-        "line_cont_lums",
-        "line_fluxes",
-        "line_cont_fluxes",
-        "line_obs_lams",
-        "images_lum",
-        "images_lum_psf",
-        "images_lum_noise",
-        "images_flux",
-        "images_flux_psf",
-        "images_flux_noise",
-        "line_maps_lum",
-        "line_maps_lum_psf",
-        "line_maps_lum_noise",
-        "line_maps_flux",
-        "line_maps_flux_psf",
-        "line_maps_flux_noise",
-    )
+    # The per-galaxy outputs (excluding the extra analysis results), each
+    # with the Pipeline flag requesting it and where it's written. Outputs
+    # held per component are written beneath each component's group (see
+    # COMPONENT_GROUPS), the others at the path given.
+    GALAXY_OUTPUTS: ClassVar[dict] = {
+        "sfzhs": ("_write_sfzh", "Galaxies/Stars/SFZH"),
+        "sfhs": ("_write_sfh", "Galaxies/Stars/SFH"),
+        "lnu_spectra": (
+            "_write_lnu_spectra",
+            "Spectra/SpectralLuminosityDensities",
+        ),
+        "fnu_spectra": (
+            "_write_fnu_spectra",
+            "Spectra/SpectralFluxDensities",
+        ),
+        "luminosities": ("_write_luminosities", "Photometry/Luminosities"),
+        "fluxes": ("_write_fluxes", "Photometry/Fluxes"),
+        "line_lums": ("_write_lines", "Lines/Luminosity"),
+        "line_cont_lums": ("_write_lines", "Lines/Continuum"),
+        "line_fluxes": ("_write_flux_lines", "Lines/Flux"),
+        "line_cont_fluxes": ("_write_flux_lines", "Lines/ContinuumFlux"),
+        "line_obs_lams": (
+            "_write_flux_lines",
+            "Galaxies/Lines/ObservedWavelengths",
+        ),
+        "images_lum": ("_write_images_lum", "Images/Luminosity"),
+        "images_lum_psf": ("_write_images_lum_psf", "PSFImages/Luminosity"),
+        "images_lum_noise": (
+            "_write_images_lum_noise",
+            "NoiseImages/Luminosity",
+        ),
+        "images_flux": ("_write_images_flux", "Images/Flux"),
+        "images_flux_psf": ("_write_images_flux_psf", "PSFImages/Flux"),
+        "images_flux_noise": ("_write_images_flux_noise", "NoiseImages/Flux"),
+        "line_maps_lum": ("_write_line_maps_lum", "LineMaps/Luminosity"),
+        "line_maps_lum_psf": (
+            "_write_line_maps_lum_psf",
+            "PSFLineMaps/Luminosity",
+        ),
+        "line_maps_lum_noise": (
+            "_write_line_maps_lum_noise",
+            "NoiseLineMaps/Luminosity",
+        ),
+        "line_maps_flux": ("_write_line_maps_flux", "LineMaps/Flux"),
+        "line_maps_flux_psf": (
+            "_write_line_maps_flux_psf",
+            "PSFLineMaps/Flux",
+        ),
+        "line_maps_flux_noise": (
+            "_write_line_maps_flux_noise",
+            "NoiseLineMaps/Flux",
+        ),
+    }
+
+    # The group each component's outputs are written beneath
+    COMPONENT_GROUPS: ClassVar[dict] = {
+        "Galaxy": "Galaxies",
+        "Stars": "Galaxies/Stars",
+        "BlackHole": "Galaxies/BlackHoles",
+    }
+
+    # NOTE: the black hole flux densities are written beneath Photometry
+    # rather than Spectra, unlike every other spectra. Fixing this changes
+    # the output files so it is left for a separate change.
+    PATH_OVERRIDES: ClassVar[dict] = {
+        ("fnu_spectra", "BlackHole"): (
+            "Galaxies/BlackHoles/Photometry/SpectralFluxDensities"
+        ),
+    }
 
     # The flushing thresholds
     flush_ngalaxies: int = None
@@ -311,6 +354,53 @@ class PipelineIOBuffers:
         if self.flush_memory is None:
             return False
         return self.nbytes >= self.flush_nbytes
+
+    def write(self, io_helper, requested):
+        """Write the rows held to file.
+
+        On each call the rows are appended to anything written by earlier
+        calls (i.e. earlier flushes).
+
+        Args:
+            io_helper (PipelineIO):
+                The writer for the output file.
+            requested (set):
+                The names of the outputs the Pipeline was asked for. Only
+                these are written, the others were never collected.
+        """
+        # An index marks these as per-galaxy data to the writer. In MPI
+        # each rank writes its own file, so the index also avoids
+        # collective calls during a flush (ranks need not flush at the same
+        # galaxy).
+        indexes = io_helper.galaxy_indices
+        if indexes is None:
+            indexes = range(self.ngalaxies)
+
+        # Write each requested output, beneath each component's group if
+        # it's held per component
+        for name, (_, path) in self.GALAXY_OUTPUTS.items():
+            if name not in requested:
+                continue
+            data = getattr(self, name)
+            if not isinstance(data, dict):
+                io_helper.write_data(data, path, indexes)
+                continue
+            for component, group in self.COMPONENT_GROUPS.items():
+                io_helper.write_data(
+                    data[component],
+                    self.PATH_OVERRIDES.get(
+                        (name, component), f"{group}/{path}"
+                    ),
+                    indexes,
+                )
+
+        # Write out the extra analysis results
+        for key, res in self.analysis_results.items():
+            io_helper.write_data(res, f"Galaxies/{key}", indexes)
+
+        # Record the rows we've written so datasets first appearing in a
+        # later flush can be padded to line up with the galaxies
+        io_helper.rows_written += self.ngalaxies
 
     def clear(self):
         """Empty the buffers once their rows have been written.
