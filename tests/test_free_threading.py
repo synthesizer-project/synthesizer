@@ -138,7 +138,11 @@ def test_extension_does_not_enable_gil(module):
 
     # NOTE: with ATOMIC_TIMING an extension imports the synthesizer package
     # (for the timer capsules) during its own initialisation, so a third
-    # party module can enable the GIL first. That is only inconclusive for
-    # this module, so it is only a failure if nothing else enabled it.
-    if not enabled_by:
-        assert result.stdout.strip() == "False"
+    # party module can enable the GIL first. Python then wouldn't report a
+    # missing declaration on this module, so we can't tell either way.
+    if enabled_by:
+        pytest.skip(
+            f"Inconclusive, the GIL was enabled first by: {enabled_by}"
+        )
+
+    assert result.stdout.strip() == "False"
