@@ -462,6 +462,25 @@ class TestPipelineInit:
         # A rank without galaxies must still reduce this timing
         assert pipeline._op_timing["Extra"] == 0.0
 
+    def test_analysis_func_error_names_key(self, nebular_emission_model):
+        """Analysis errors name the function, whatever their signature."""
+
+        # An error which can't be rebuilt from a single message
+        class TwoArgError(Exception):
+            def __init__(self, a, b):
+                super().__init__(f"{a} {b}")
+
+        def fail(gal):
+            raise TwoArgError("real", "cause")
+
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_analysis_func(fail, "Broken")
+
+        # The key and the original error should both reach the user
+        with pytest.raises(RuntimeError, match="Broken: real cause") as exc:
+            pipeline._run_extra_analysis(SimpleNamespace())
+        assert isinstance(exc.value.__cause__, TwoArgError)
+
 
 class TestPipelineTimingAnalysis:
     """Tests for Pipeline atomic timing analysis."""
