@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
+from scipy.special import gamma
 from unyt import (
     Hz,
     K,
@@ -23,10 +24,11 @@ from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
+    integrate_over_all_frequencies,
 )
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.synth_warnings import warn
-from synthesizer.units import accepts
+from synthesizer.units import Units, accepts
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import verify_out_precision
 
@@ -286,26 +288,87 @@ class Casey12(DustEmission):
                 / Hz
             )
 
-        def _blackbody(lam: unyt_array) -> unyt_array:
-            """Calculate the blackbody component.
+        return _power_law(lam) + self._blackbody(lam, temperature, emissivity)
 
-            Args:
-                lam (unyt_array):
-                    The wavelengths at which to calculate lnu.
-            """
-            return (
-                (
-                    self.n_bb
-                    * (1 - np.exp(-((self.lam_0 / lam) ** emissivity)))
-                    * (c / lam) ** 3
-                    / (np.exp((h * c) / (lam * kb * temperature)) - 1.0)
-                ).value
-                * erg
-                / s
-                / Hz
+    def _blackbody(
+        self,
+        lam: unyt_array,
+        temperature: unyt_quantity,
+        emissivity: float,
+    ) -> unyt_array:
+        """Calculate the blackbody component.
+
+        Args:
+            lam (unyt_array):
+                The wavelengths at which to calculate lnu.
+            temperature (unyt_quantity):
+                The temperature to use for the Casey12 model.
+            emissivity (float):
+                The emissivity to use.
+        """
+        return (
+            (
+                self.n_bb
+                * (1 - np.exp(-((self.lam_0 / lam) ** emissivity)))
+                * (c / lam) ** 3
+                / (np.exp((h * c) / (lam * kb * temperature)) - 1.0)
+            ).value
+            * erg
+            / s
+            / Hz
+        )
+
+    def _bolometric_luminosity(
+        self,
+        temperature: unyt_quantity,
+        emissivity: float,
+        alpha: float,
+    ) -> float:
+        """Return the integral of the unnormalised spectrum over all nu.
+
+        The power-law component integrates analytically to
+        n_pl (c / lam_c) Gamma((alpha - 1) / 2) / 2, which is only finite for
+        alpha > 1 because the power law has no blue cut-off. The blackbody
+        component has no closed form so is integrated numerically over all
+        frequencies.
+
+        Args:
+            temperature (unyt_quantity):
+                The temperature to use for the Casey12 model.
+            emissivity (float):
+                The emissivity to use.
+            alpha (float):
+                The mid-infrared power-law slope to use.
+
+        Returns:
+            float:
+                The bolometric luminosity in the luminosity unit of
+                Sed.bolometric_luminosity.
+        """
+        if np.any(np.asarray(alpha) <= 1):
+            raise exceptions.InconsistentArguments(
+                "Casey12 requires alpha > 1, otherwise the mid-infrared "
+                f"power law has infinite luminosity (got alpha={alpha})."
             )
 
-        return _power_law(lam) + _blackbody(lam)
+        lam_c, n_pl = self._power_law_params(temperature, emissivity, alpha)
+        power_law = (
+            (
+                n_pl.value
+                * (c / lam_c).to(Hz).value
+                * 0.5
+                * gamma((alpha - 1) / 2)
+                * erg
+                / s
+            )
+            .to(Units().luminosity)
+            .value
+        )
+        blackbody = integrate_over_all_frequencies(
+            lambda nu: self._blackbody(c / nu, temperature, emissivity),
+            temperature,
+        )
+        return power_law + blackbody
 
     @accepts(lams=angstrom)
     @timed("Casey12._generate_spectra")
@@ -373,8 +436,8 @@ class Casey12(DustEmission):
         # Create an SED object for convenience
         sed = Sed(lam=lams, lnu=lnu)
 
-        # Get the bolometric luminosity with proper units
-        bol_lum = sed._bolometric_luminosity
+        # Get the bolometric luminosity over all frequencies
+        bol_lum = self._bolometric_luminosity(temperature, emissivity, alpha)
 
         # Normalise the Casey12 spectrum
         sed._lnu /= bol_lum
@@ -445,8 +508,6 @@ class Casey12(DustEmission):
                 "missing. Please generate spectra first or remove the "
                 "generation of lines."
             )
-        else:
-            sed = spectra[model.label]
 
         # Get the required parameters
         params = self._extract_params(model, emitter)
@@ -458,7 +519,6 @@ class Casey12(DustEmission):
 
         # Define frequencies
         nu = (c / line_lams).to(Hz)
-        sed_nu = sed.nu
 
         # Account for CMB heating
         cmb_factor, temperature = self.apply_cmb_heating(
@@ -469,13 +529,9 @@ class Casey12(DustEmission):
 
         # Compute the Casey12 function
         lnu = self._lnu(nu, temperature, emissivity, alpha)
-        norm_lnu = self._lnu(sed_nu, temperature, emissivity, alpha)
 
-        # Create an SED object for convenience
-        norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)
-
-        # Get the bolometric luminosity with proper units
-        bol_lum = norm_sed._bolometric_luminosity
+        # Get the bolometric luminosity over all frequencies
+        bol_lum = self._bolometric_luminosity(temperature, emissivity, alpha)
 
         # Normalise the Casey12 spectrum
         lnu /= bol_lum
