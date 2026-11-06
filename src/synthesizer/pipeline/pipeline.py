@@ -432,38 +432,25 @@ class Pipeline:
             self._say_hello()
             self._report()
 
-        # Attach the writer, we'll assign this later in the write method
-        self.io_helper = None
-
-        # Attach the output path
-        self._setup_output(outpath)
-
         # If we are using MPI we need to make sure everyone agrees on the
         # start time, take the minimum
         if self.using_mpi:
             self._start_time = min(self.comm.allgather(self._start_time))
 
+        # Attach the writer for the outputs held in the buffers. The file
+        # itself is only created once we know how many galaxies we have (in
+        # run if flushing, otherwise in write)
+        self.io_helper = PipelineIO(
+            self.io_buffers,
+            outpath,
+            self.comm,
+            self._start_time,
+            self.verbose,
+        )
+
         # Hold back everyone in MPI land until we're all ready to go
         if self.using_mpi:
             comm.Barrier()
-
-    def _setup_output(self, outpath):
-        """Validate and attach the output path.
-
-        Args:
-            outpath (str):
-                The path to the HDF5 file to write.
-        """
-        # A path is only mandatory if we flush during run, otherwise it can
-        # be passed to write instead
-        if self.io_buffers.flushing and outpath is None:
-            raise exceptions.InconsistentArguments(
-                "An outpath must be given to flush outputs to file while "
-                "running (flush_ngalaxies or flush_memory were set)."
-            )
-
-        # Attach the path
-        self._outpath = outpath
 
     def _say_hello(self):
         """Print a nice welcome."""
@@ -4987,7 +4974,7 @@ class Pipeline:
                 raise exceptions.InconsistentArguments(
                     "A Pipeline with flushing enabled cannot run twice."
                 )
-            self._create_output_file(self._outpath, self.verbose)
+            self._create_output_file()
 
         # Print the header for the pipeline run to the console
         with timer("Pipeline.run.print_progress_header"):
@@ -5374,18 +5361,29 @@ class Pipeline:
         Args:
             outpath (str, optional):
                 The path to the HDF5 file to write. Defaults to the outpath
-                given to the Pipeline. If both are given they must match.
+                given to the Pipeline (or an earlier call to write). This
+                can't differ from the path outputs were flushed to.
             verbose (bool, optional):
                 If set, override the Pipeline verbose setting.
 
         Raises:
             InconsistentArguments:
-                If no path was given here or to the Pipeline, if the paths
-                given to both don't match, or if flushed outputs have
-                already been written.
+                If no path was given here or to the Pipeline, if the path
+                differs from the one outputs were flushed to, or if flushed
+                outputs have already been written.
         """
-        # Resolve where we are writing
-        outpath = self._resolve_outpath(outpath)
+        # Point the writer at the path if we were given one (this is an
+        # error if we've already flushed outputs to a different path)
+        if outpath is not None:
+            self.io_helper.outpath = outpath
+
+        # We have to have a path from somewhere (checked before running so
+        # we don't run only to fail)
+        if self.io_helper.outpath is None:
+            raise exceptions.InconsistentArguments(
+                "No outpath given to write to. Pass one to write or the "
+                "Pipeline."
+            )
 
         # Ensure we have run the pipeline (this is mostly useful to help with
         # running old pipelines that don't call run before write)
@@ -5396,6 +5394,9 @@ class Pipeline:
             self.run()
 
         write_start = time.perf_counter()
+
+        # Apply any verbosity override to the writer
+        self.io_helper.verbose = self.verbose if verbose is None else verbose
 
         # If we flushed outputs while running the file already exists and
         # holds the flushed galaxies, so we append the rest. Otherwise, we
@@ -5409,14 +5410,8 @@ class Pipeline:
                     "already been written, they cannot be written again."
                 )
 
-            # The writer was made in run so apply any verbosity override now
-            if verbose is not None:
-                self.io_helper.verbose = verbose
         else:
-            self._create_output_file(
-                outpath,
-                verbose if verbose is not None else self.verbose,
-            )
+            self._create_output_file()
 
         # Write the per-galaxy data
         self._write_galaxy_outputs()
@@ -5432,39 +5427,6 @@ class Pipeline:
 
         # Totally done!
         self._say_goodbye()
-
-    def _resolve_outpath(self, outpath):
-        """Return the path to write to.
-
-        The path can be given to the Pipeline (required when flushing) or to
-        write, but if both are given they must agree.
-
-        Args:
-            outpath (str):
-                The path passed to write (or None).
-
-        Returns:
-            str:
-                The path to write to.
-        """
-        # Fall back on the Pipeline's path, but don't allow a different one
-        # since flushing may already have written to the Pipeline's path
-        if outpath is None:
-            outpath = self._outpath
-        elif self._outpath is not None and str(outpath) != str(self._outpath):
-            raise exceptions.InconsistentArguments(
-                f"Cannot write to {outpath}, the Pipeline was set up to write "
-                f"to {self._outpath}."
-            )
-
-        # We have to have a path from somewhere
-        if outpath is None:
-            raise exceptions.InconsistentArguments(
-                "No outpath given to write to. Pass one to write or the "
-                "Pipeline."
-            )
-
-        return outpath
 
     def _write_global_outputs(self):
         """Write the data that isn't per galaxy to file.
@@ -5543,29 +5505,14 @@ class Pipeline:
                 root=0,
             )
 
-    def _create_output_file(self, outpath, verbose):
+    def _create_output_file(self):
         """Create the output file (one per rank when using MPI).
 
         This is a collective operation.
-
-        Args:
-            outpath (str):
-                The path to the HDF5 file to write.
-            verbose (int):
-                The verbosity of the writer.
         """
-        # Get an instance of the HDF5 file writer (it needs a string, but
-        # we may have been given a Path)
-        self.io_helper = PipelineIO(
-            str(outpath),
-            self.comm,
-            self.n_galaxies_local,
-            self._start_time,
-            verbose,
-        )
-
-        # Write out the metadata
+        # Create the file and write out the metadata
         self.io_helper.create_file_with_metadata(
+            self.n_galaxies_local,
             self.instruments,
             self.emission_model,
             include_lines=self._write_lines or self._write_flux_lines,
@@ -5604,9 +5551,8 @@ class Pipeline:
             self._print("Not using MPI, nothing to combine.")
             return
 
-        # Ensure we have written the data (when flushing the writer exists
-        # from the start of the run, so check write has finished with it)
-        if self.io_helper is None or not self.io_helper.finalised:
+        # Ensure we have written the data
+        if not self.io_helper.finalised:
             raise exceptions.PipelineNotReady(
                 "Cannot combine files before writing data! Call write first."
             )
@@ -5637,9 +5583,8 @@ class Pipeline:
             self._print("Not using MPI, nothing to combine.")
             return
 
-        # Ensure we have written the data (when flushing the writer exists
-        # from the start of the run, so check write has finished with it)
-        if self.io_helper is None or not self.io_helper.finalised:
+        # Ensure we have written the data
+        if not self.io_helper.finalised:
             raise exceptions.PipelineNotReady(
                 "Cannot combine files before writing data! Call write first."
             )

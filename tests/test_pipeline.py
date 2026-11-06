@@ -4006,12 +4006,21 @@ class TestPipelineFlushing:
         assert pipeline.io_buffers.flush_ngalaxies == 2
 
     def test_write_to_different_outpath(self, run_pipeline, tmp_path):
-        """Writing somewhere other than the Pipeline's outpath is an error."""
+        """Writing somewhere other than the flushed file is an error."""
         with pytest.raises(exceptions.InconsistentArguments):
             run_pipeline(
                 "out.hdf5",
+                flush_ngalaxies=2,
                 before_write=lambda p: p.write(tmp_path / "other.hdf5"),
             )
+
+    def test_change_outpath_without_flushing(self, run_pipeline, tmp_path):
+        """Without flushing, write can change the Pipeline's outpath."""
+        run_pipeline(
+            "out.hdf5",
+            before_write=lambda p: p.write(tmp_path / "other.hdf5"),
+        )
+        assert (tmp_path / "other.hdf5").exists()
 
     def test_cannot_write_twice_when_flushing(self, run_pipeline):
         """Flushed outputs can't be written a second time."""
@@ -4026,11 +4035,11 @@ class TestPipelineFlushing:
         """Rerunning cannot truncate a previously flushed output file."""
 
         def check(pipeline):
-            with h5py.File(pipeline._outpath) as hdf:
+            with h5py.File(pipeline.io_helper.outpath) as hdf:
                 expected = hdf["Galaxies/Stars/SFH"][...]
             with pytest.raises(exceptions.InconsistentArguments):
                 pipeline.run()
-            with h5py.File(pipeline._outpath) as hdf:
+            with h5py.File(pipeline.io_helper.outpath) as hdf:
                 np.testing.assert_array_equal(
                     hdf["Galaxies/Stars/SFH"][...], expected
                 )

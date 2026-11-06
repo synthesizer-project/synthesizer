@@ -581,6 +581,8 @@ class PipelineIO:
 
     Attributes:
         hdf (h5py.File): The HDF5 file to write to.
+        io_buffers (PipelineIOBuffers): The buffers holding the outputs to
+            write.
         comm (mpi.Comm): The MPI communicator.
         num_galaxies (int): The total number of galaxies.
         rank (int): The rank of the MPI process.
@@ -588,6 +590,9 @@ class PipelineIO:
         is_root (bool): Whether the writer is running on the root process.
         is_collective (bool): Whether the writer is running in collective mode.
         verbose (bool): Whether to print verbose output.
+        outpath (str): The path to write to (see the outpath property).
+        filepath (str): The path of the file this rank writes (the outpath
+            with the rank added when writing a file per rank).
         _start_time (float): The start time of the pipeline.
     """
 
@@ -600,9 +605,9 @@ class PipelineIO:
     @timed("PipelineIO.__init__")
     def __init__(
         self,
-        filepath,
+        io_buffers,
+        outpath=None,
         comm=None,
-        ngalaxies_local=None,
         start_time=None,
         verbose=1,
         parallel_io=False,
@@ -610,9 +615,13 @@ class PipelineIO:
         """Initialize the HDF5Writer class.
 
         Args:
-            filepath (str): The path to the HDF5 file to write to.
+            io_buffers (PipelineIOBuffers): The buffers holding the outputs
+                to write.
+            outpath (str, optional): The path to the HDF5 file to write to.
+                This can be set later (see outpath) but must be set before
+                the file is created. Required if the buffers are flushed to
+                file while running.
             comm (mpi.Comm, optional): The MPI communicator.
-            ngalaxies_local (int, optional): The local number of galaxies.
             start_time (float, optional): The start time of the pipeline, used
                 for timing information.
             verbose (int, optional): How verbose the output should be. 1 will
@@ -621,9 +630,22 @@ class PipelineIO:
             parallel_io (bool, optional): Whether to use parallel I/O. This
                 requires h5py to be built with parallel support. Defaults to
                 False.
+
+        Raises:
+            InconsistentArguments:
+                If the buffers are flushed to file while running but no
+                outpath was given.
         """
-        # Store the file path
-        self.filepath = filepath
+        # A path is only mandatory if we flush during run, otherwise it can
+        # be set later (e.g. by passing it to Pipeline.write)
+        if io_buffers.flushing and outpath is None:
+            raise exceptions.InconsistentArguments(
+                "An outpath must be given to flush outputs to file while "
+                "running (flush_ngalaxies or flush_memory were set)."
+            )
+
+        # Attach the buffers holding the outputs we'll write
+        self.io_buffers = io_buffers
 
         # Store the communicator and its properties
         self.comm = comm
@@ -661,55 +683,9 @@ class PipelineIO:
         # Are we talking?
         self.verbose = verbose
 
-        # Time how long we have to wait for everyone to get here
-        start = time.perf_counter()
-        if self.is_parallel:
-            self.comm.Barrier()
-            self._took(start, "Waiting for all ranks to get to I/O")
-
-            # If we are writing in parallel but not using collective I/O we
-            # need to write a file per rank. Modify the file path to include
-            # the rank.
-            if not self.is_collective:
-                ext = filepath.split(".")[-1]
-                self.filepath = filepath.replace(
-                    f".{ext}", f"_{self.rank}.{ext}"
-                )
-
-        # Report some useful information
-        if self.is_collective:
-            self._print(
-                f"Writing in parallel to {filepath} "
-                f"with {comm.Get_size()} ranks, and collective I/O."
-            )
-        elif self.is_parallel:
-            self._print(
-                f"Writing to {filepath} "
-                f"with {comm.Get_size()} ranks, and a file per rank."
-            )
-        else:
-            self._print(f"Writing to {filepath}.")
-
-        # For collective I/O we need the counts on each rank so we know where
-        # to write the data
-        if self.is_collective or self.is_parallel:
-            rank_gal_counts = self.comm.allgather(ngalaxies_local)
-            self._ngalaxies_local = ngalaxies_local
-            self.num_galaxies = sum(rank_gal_counts)
-            self.start = sum(rank_gal_counts[: self.rank])
-            self.end = self.start + ngalaxies_local
-        else:
-            self.num_galaxies = ngalaxies_local
-            self._ngalaxies_local = ngalaxies_local
-            self.start = 0
-            self.end = ngalaxies_local
-
-        # In MPI land the per-galaxy data needs the indices of this rank's
-        # galaxies in the full set of galaxies
-        if self.is_parallel:
-            self.galaxy_indices = np.arange(self.start, self.end)
-        else:
-            self.galaxy_indices = None
+        # Flag for whether the output file has been created (we can't
+        # change where we write once we've started writing)
+        self._file_created = False
 
         # Flag for whether the file has been finalised (no more per-galaxy
         # data can be written)
@@ -721,6 +697,11 @@ class PipelineIO:
         # with the galaxies.
         self.rows_written = 0
         self._writing_galaxy_data = False
+
+        # Attach the output path (if we have one yet)
+        self._outpath = None
+        self.filepath = None
+        self.outpath = outpath
 
     @contextmanager
     def silenced(self):
@@ -802,24 +783,136 @@ class PipelineIO:
         # Report how blazingly fast we are
         self._print(f"{message} took {elapsed:.3f} {units}.")
 
+    @property
+    def outpath(self):
+        """Return the path to write to (before any per rank suffix).
+
+        Returns:
+            str:
+                The path to the HDF5 file (None if not yet set).
+        """
+        return self._outpath
+
+    @outpath.setter
+    def outpath(self, outpath):
+        """Set the path to write to.
+
+        The path can be changed until we start writing to the file, and again
+        once we've finished. When writing a file per rank, the rank is
+        added to the path of the file this rank writes (filepath).
+
+        Args:
+            outpath (str):
+                The path to the HDF5 file to write to.
+
+        Raises:
+            InconsistentArguments:
+                If a different path is given while the file is being written
+                (e.g. after outputs were flushed to it).
+        """
+        # h5py needs a string, but we may have been given a Path
+        if outpath is not None:
+            outpath = str(outpath)
+
+        # Don't move the file part way through writing it
+        if (
+            self._file_created
+            and not self.finalised
+            and outpath != self._outpath
+        ):
+            raise exceptions.InconsistentArguments(
+                f"Cannot write to {outpath}, outputs have already been "
+                f"written to {self._outpath}."
+            )
+        self._outpath = outpath
+
+        # If we are writing in parallel but not using collective I/O we
+        # need to write a file per rank. Modify the file path to include
+        # the rank.
+        self.filepath = outpath
+        if outpath is not None and self.is_parallel and not self.is_collective:
+            ext = outpath.split(".")[-1]
+            self.filepath = outpath.replace(f".{ext}", f"_{self.rank}.{ext}")
+
     @timed("PipelineIO.create_file_with_metadata")
     def create_file_with_metadata(
         self,
+        ngalaxies_local,
         instruments,
         emission_model,
         include_lines=False,
     ):
-        """Write metadata to the HDF5 file.
+        """Create the HDF5 file and write metadata to it.
 
         This writes useful metadata to the root group of the HDF5 file and
         outputs the instruments and emission model to the appropriate groups.
+        Any earlier file at the path is replaced.
+
+        This is a collective operation.
 
         Args:
+            ngalaxies_local (int): The number of galaxies on this rank.
             instruments (dict): A dictionary of instrument objects.
             emission_model (dict): A dictionary of emission model objects.
             include_lines (bool): Whether to create the root-level line
                 metadata group.
+
+        Raises:
+            InconsistentArguments:
+                If no output path has been set.
         """
+        # We have to have somewhere to write
+        if self.outpath is None:
+            raise exceptions.InconsistentArguments(
+                "No outpath has been set to write to."
+            )
+
+        # Time how long we have to wait for everyone to get here
+        start = time.perf_counter()
+        if self.is_parallel:
+            self.comm.Barrier()
+            self._took(start, "Waiting for all ranks to get to I/O")
+
+        # Report some useful information
+        if self.is_collective:
+            self._print(
+                f"Writing in parallel to {self.outpath} "
+                f"with {self.size} ranks, and collective I/O."
+            )
+        elif self.is_parallel:
+            self._print(
+                f"Writing to {self.outpath} "
+                f"with {self.size} ranks, and a file per rank."
+            )
+        else:
+            self._print(f"Writing to {self.outpath}.")
+
+        # For collective I/O we need the counts on each rank so we know where
+        # to write the data
+        if self.is_collective or self.is_parallel:
+            rank_gal_counts = self.comm.allgather(ngalaxies_local)
+            self._ngalaxies_local = ngalaxies_local
+            self.num_galaxies = sum(rank_gal_counts)
+            self.start = sum(rank_gal_counts[: self.rank])
+            self.end = self.start + ngalaxies_local
+        else:
+            self.num_galaxies = ngalaxies_local
+            self._ngalaxies_local = ngalaxies_local
+            self.start = 0
+            self.end = ngalaxies_local
+
+        # In MPI land the per-galaxy data needs the indices of this rank's
+        # galaxies in the full set of galaxies
+        if self.is_parallel:
+            self.galaxy_indices = np.arange(self.start, self.end)
+        else:
+            self.galaxy_indices = None
+
+        # We're starting a new file, so nothing has been written to it yet
+        self._file_created = True
+        self.finalised = False
+        self.rows_written = 0
+
         start = time.perf_counter()
 
         # Unpack the instruments into a single instrument collection containing
