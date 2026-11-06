@@ -4171,3 +4171,33 @@ def test_flushed_strings_can_grow(tmp_path):
     # Every string should be stored in full
     with h5py.File(io.filepath) as hdf:
         assert list(hdf["Galaxies/Name"].asstr()) == ["ab", "cd", "abcde"]
+
+
+def test_buffer_outputs_cover_every_container():
+    """Every output container is counted towards the results memory."""
+    import dataclasses
+
+    from synthesizer.pipeline.pipeline_io import PipelineIOBuffers
+
+    # Everything held on the buffers other than the flushing state and
+    # the cosmic SED counts should be an output
+    bookkeeping = {
+        "flush_ngalaxies",
+        "flush_memory",
+        "ngalaxies",
+        "nbytes",
+        "cosmic_lnu_counts",
+        "cosmic_fnu_counts",
+    }
+    containers = {
+        f.name
+        for f in dataclasses.fields(PipelineIOBuffers)
+        if not f.name.startswith("_") and f.name not in bookkeeping
+    }
+    assert set(PipelineIOBuffers.OUTPUT_NAMES) == containers
+
+    # The property should return the current containers, even once
+    # they've been replaced
+    buffers = PipelineIOBuffers()
+    buffers.line_ids = ["H 1 4861.32A"]
+    assert buffers.line_ids in buffers.outputs

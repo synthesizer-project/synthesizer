@@ -235,6 +235,18 @@ class PipelineIOBuffers:
         "BlackHole": "CosmicSED/BlackHoles",
     }
 
+    # The names of every output container (see the outputs property). We
+    # cache the names rather than the containers since some containers are
+    # replaced (e.g. by to_arrays and clear)
+    OUTPUT_NAMES: ClassVar[tuple] = (
+        *GALAXY_OUTPUTS,
+        "analysis_results",
+        *GLOBAL_OUTPUTS,
+        "lnu_data_cubes",
+        "fnu_data_cubes",
+        "spectroscopy",
+    )
+
     # The flushing thresholds
     flush_ngalaxies: int = None
     flush_memory: float = None
@@ -341,6 +353,16 @@ class PipelineIOBuffers:
         if self.flush_memory is None:
             return None
         return self.flush_memory * 1024**3
+
+    @property
+    def outputs(self):
+        """Return every output container currently held.
+
+        Returns:
+            list:
+                The output containers, in the order of OUTPUT_NAMES.
+        """
+        return [getattr(self, name) for name in self.OUTPUT_NAMES]
 
     def _iter_row_lists(self):
         """Yield (key, rows) for every per-galaxy output list.

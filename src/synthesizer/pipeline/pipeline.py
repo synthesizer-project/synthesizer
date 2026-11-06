@@ -722,30 +722,7 @@ class Pipeline:
         Returns:
             float: The memory usage in Megabytes.
         """
-        results = [
-            self.io_buffers.sfzhs,
-            self.io_buffers.sfhs,
-            self.io_buffers.lnu_spectra,
-            self.io_buffers.fnu_spectra,
-            self.io_buffers.luminosities,
-            self.io_buffers.fluxes,
-            self.io_buffers.line_lums,
-            self.io_buffers.line_cont_lums,
-            self.io_buffers.line_lams,
-            self.io_buffers.line_ids,
-            self.io_buffers.line_fluxes,
-            self.io_buffers.line_cont_fluxes,
-            self.io_buffers.line_obs_lams,
-            self.io_buffers.images_lum,
-            self.io_buffers.images_lum_psf,
-            self.io_buffers.images_flux,
-            self.io_buffers.images_flux_psf,
-            self.io_buffers.lnu_data_cubes,
-            self.io_buffers.fnu_data_cubes,
-            self.io_buffers.spectroscopy,
-        ]
-
-        return get_full_memory(results) / (1024**2)
+        return get_full_memory(self.io_buffers.outputs) / (1024**2)
 
     @property
     def galaxies_memory_usage(self):
