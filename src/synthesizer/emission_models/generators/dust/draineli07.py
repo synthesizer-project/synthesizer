@@ -559,6 +559,7 @@ class DraineLi07(DustEmission):
         nparticles = np.size(dust_mass)
         for param_name, value in (
             ("ldust", ldust),
+            ("dust_to_gas_ratio", effective_dust_to_gas_ratio),
             ("hydrogen_mass", effective_hydrogen_mass),
             ("qpah", effective_qpah),
             ("gamma", calculated_gamma),
