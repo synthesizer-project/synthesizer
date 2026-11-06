@@ -848,6 +848,10 @@ class Stars(StarsComponent):
         # Apply correction to the SFZH
         self.sfzh *= conversion
 
+        # Ensure sf_hist and metal_dist reflect the rescaled sfzh
+        self.sf_hist = np.sum(self.sfzh, axis=1)
+        self.metal_dist = np.sum(self.sfzh, axis=0)
+
     @accepts(flux=nJy)
     def scale_mass_by_flux(self, flux, scale_filter, spectra_type):
         """Scale the stellar mass to match a flux in a specific filter.
@@ -905,6 +909,10 @@ class Stars(StarsComponent):
 
         # Apply correction to the SFZH
         self.sfzh *= conversion
+
+        # Ensure sf_hist and metal_dist reflect the rescaled sfzh
+        self.sf_hist = np.sum(self.sfzh, axis=1)
+        self.metal_dist = np.sum(self.sfzh, axis=0)
 
     @timed("ParametricStars.get_sfzh")
     def get_sfzh(
