@@ -849,7 +849,9 @@ class TestPipelineOperations:
             "Spectra not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.lnu_spectra)
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.lnu_spectra
+            )
             > 0
         ), "No spectra were calculated"
 
@@ -898,7 +900,9 @@ class TestPipelineOperations:
             "Spectra not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.fnu_spectra)
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.fnu_spectra
+            )
             > 0
         ), "No spectra were calculated"
 
@@ -909,13 +913,22 @@ class TestPipelineOperations:
         """Galaxy fluxes are stacked in place, not under a stray key."""
         pipeline = pipeline_with_galaxies
         spec = unyt_array([1.0, 2.0], "erg/s/cm**2/Hz")
-        pipeline.fnu_spectra["Galaxy"]["total"] = [spec, spec]
+        pipeline.io_buffers.fnu_spectra["Galaxy"]["total"] = [spec, spec]
 
         pipeline._clean_outputs()
 
-        assert set(pipeline.fnu_spectra) == {"Galaxy", "Stars", "BlackHole"}
-        assert isinstance(pipeline.fnu_spectra["Galaxy"]["total"], unyt_array)
-        assert pipeline.fnu_spectra["Galaxy"]["total"].shape == (2, 2)
+        assert set(pipeline.io_buffers.fnu_spectra) == {
+            "Galaxy",
+            "Stars",
+            "BlackHole",
+        }
+        assert isinstance(
+            pipeline.io_buffers.fnu_spectra["Galaxy"]["total"], unyt_array
+        )
+        assert pipeline.io_buffers.fnu_spectra["Galaxy"]["total"].shape == (
+            2,
+            2,
+        )
 
     def test_run_pipeline_photometry_lums(
         self,
@@ -935,7 +948,9 @@ class TestPipelineOperations:
             "Luminosities not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.luminosities)
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.luminosities
+            )
             > 0
         ), "No luminosities were calculated"
 
@@ -985,7 +1000,10 @@ class TestPipelineOperations:
             "Fluxes not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.fluxes) > 0
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.fluxes
+            )
+            > 0
         ), "No fluxes were calculated"
 
     def test_run_pipeline_lines(
@@ -1006,12 +1024,14 @@ class TestPipelineOperations:
             "Lines not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.line_lums)
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.line_lums
+            )
             > 0
         ), "No line luminosities were calculated"
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies.line_cont_lums
+                pipeline_with_galaxies.io_buffers.line_cont_lums
             )
             > 0
         ), "No line continua were calculated"
@@ -1043,16 +1063,18 @@ class TestPipelineOperations:
             "Lines not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.line_fluxes)
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.line_fluxes
+            )
             > 0
         ), "No line fluxes were calculated"
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies.line_cont_fluxes
+                pipeline_with_galaxies.io_buffers.line_cont_fluxes
             )
             > 0
         ), "No line continua were calculated"
-        assert pipeline_with_galaxies.line_obs_lams is not None, (
+        assert pipeline_with_galaxies.io_buffers.line_obs_lams is not None, (
             "Line wavelengths not calculated"
         )
 
@@ -1136,12 +1158,14 @@ class TestPipelineOperations:
             "Lines not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.line_lums)
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.line_lums
+            )
             > 0
         ), "No line luminosities were calculated"
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies.line_cont_lums
+                pipeline_with_galaxies.io_buffers.line_cont_lums
             )
             > 0
         ), "No line continua were calculated"
@@ -1179,7 +1203,7 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_lum
+                pipeline_with_galaxies_per_particle.io_buffers.images_lum
             )
             > 0
         ), "No images were calculated"
@@ -1210,7 +1234,7 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_flux
+                pipeline_with_galaxies_per_particle.io_buffers.images_flux
             )
             > 0
         ), "No images were calculated"
@@ -1239,13 +1263,13 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_lum_psf
+                pipeline_with_galaxies_per_particle.io_buffers.images_lum_psf
             )
             > 0
         ), "No images were calculated"
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_lum
+                pipeline_with_galaxies_per_particle.io_buffers.images_lum
             )
             > 0
         ), "Base images were removed"
@@ -1275,13 +1299,13 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_flux_psf
+                pipeline_with_galaxies_per_particle.io_buffers.images_flux_psf
             )
             > 0
         ), "No images were calculated"
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.images_flux
+                pipeline_with_galaxies_per_particle.io_buffers.images_flux
             )
             > 0
         ), "Base images were removed"
@@ -1319,13 +1343,15 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.line_maps_lum
+                pipeline_with_galaxies_per_particle.io_buffers.line_maps_lum
             )
             > 0
         ), "No line maps were calculated"
-        line_map = pipeline_with_galaxies_per_particle.line_maps_lum["Stars"][
-            "test_line_imager"
-        ]["nebular"][line_ids[0]]
+        line_map = (
+            pipeline_with_galaxies_per_particle.io_buffers.line_maps_lum[
+                "Stars"
+            ]["test_line_imager"]["nebular"][line_ids[0]]
+        )
         assert line_map.dtype == np.float32
 
         output = tmp_path / "line_maps_luminosity.hdf5"
@@ -1366,13 +1392,15 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.line_maps_lum
+                pipeline_with_galaxies_per_particle.io_buffers.line_maps_lum
             )
             > 0
         ), "No line maps were calculated"
-        line_map = pipeline_with_galaxies_per_particle.line_maps_lum["Stars"][
-            "test_line_imager"
-        ]["nebular"][", ".join(line_ids[0])]
+        line_map = (
+            pipeline_with_galaxies_per_particle.io_buffers.line_maps_lum[
+                "Stars"
+            ]["test_line_imager"]["nebular"][", ".join(line_ids[0])]
+        )
         assert line_map.dtype == np.float32
 
         output = tmp_path / "blended_line_maps.hdf5"
@@ -1415,13 +1443,15 @@ class TestPipelineOperations:
         )
         assert (
             count_and_check_dict_recursive(
-                pipeline_with_galaxies_per_particle.line_maps_flux
+                pipeline_with_galaxies_per_particle.io_buffers.line_maps_flux
             )
             > 0
         ), "No flux line maps were calculated"
-        line_map = pipeline_with_galaxies_per_particle.line_maps_flux["Stars"][
-            "test_line_imager_flux"
-        ]["nebular"][line_ids[0]]
+        line_map = (
+            pipeline_with_galaxies_per_particle.io_buffers.line_maps_flux[
+                "Stars"
+            ]["test_line_imager_flux"]["nebular"][line_ids[0]]
+        )
         assert line_map.dtype == np.float32
 
         output = tmp_path / "line_maps_flux.hdf5"
@@ -1450,7 +1480,10 @@ class TestPipelineOperations:
             "SFZH not flagged for writing"
         )
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.sfzhs) > 0
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.sfzhs
+            )
+            > 0
         ), "No SFZH was calculated"
 
     def test_run_pipeline_sfh(
@@ -1469,7 +1502,10 @@ class TestPipelineOperations:
         )
         assert pipeline_with_galaxies._write_sfh, "SFH not flagged for writing"
         assert (
-            count_and_check_dict_recursive(pipeline_with_galaxies.sfhs) > 0
+            count_and_check_dict_recursive(
+                pipeline_with_galaxies.io_buffers.sfhs
+            )
+            > 0
         ), "No SFH was calculated"
 
     def test_write_sfzh_and_sfh_particle(
@@ -2331,7 +2367,9 @@ class TestAngularCoordinates:
         assert pipeline_with_galaxies_per_particle._analysis_complete
 
         # Verify images were created
-        assert len(pipeline_with_galaxies_per_particle.images_lum) > 0
+        assert (
+            len(pipeline_with_galaxies_per_particle.io_buffers.images_lum) > 0
+        )
 
     def test_cartesian_resolution_without_cosmo(
         self,
@@ -2383,7 +2421,9 @@ class TestAngularCoordinates:
         assert pipeline_with_galaxies_per_particle._analysis_complete
 
         # Verify images were created
-        assert len(pipeline_with_galaxies_per_particle.images_lum) > 0
+        assert (
+            len(pipeline_with_galaxies_per_particle.io_buffers.images_lum) > 0
+        )
 
     def test_angular_resolution_missing_cosmo_raises_error(
         self,
@@ -2887,17 +2927,15 @@ class TestGalaxySplitting:
         assert any(split_pipeline.cosmic_lnus.values())
         assert any(split_pipeline.cosmic_fnus.values())
 
-        for attr in (
-            "lnu_spectra",
-            "fnu_spectra",
-            "cosmic_lnus",
-            "cosmic_fnus",
-            "sfzhs",
-            "sfhs",
-        ):
+        for attr in ("cosmic_lnus", "cosmic_fnus"):
             _assert_nested_allclose(
                 getattr(unsplit_pipeline, attr),
                 getattr(split_pipeline, attr),
+            )
+        for attr in ("lnu_spectra", "fnu_spectra", "sfzhs", "sfhs"):
+            _assert_nested_allclose(
+                getattr(unsplit_pipeline.io_buffers, attr),
+                getattr(split_pipeline.io_buffers, attr),
             )
 
     def test_cosmic_sed_average_and_volume(
@@ -3080,13 +3118,13 @@ class TestGalaxySplitting:
             pipeline.run()
 
         _assert_nested_allclose(
-            unsplit_pipeline.images_lum,
-            split_pipeline.images_lum,
+            unsplit_pipeline.io_buffers.images_lum,
+            split_pipeline.io_buffers.images_lum,
             rtol=3e-6,
         )
         _assert_nested_allclose(
-            unsplit_pipeline.images_flux,
-            split_pipeline.images_flux,
+            unsplit_pipeline.io_buffers.images_flux,
+            split_pipeline.io_buffers.images_flux,
             rtol=3e-6,
         )
 
@@ -3128,8 +3166,8 @@ class TestGalaxySplitting:
 
         for attr in ("lnu_spectra", "sfzhs", "sfhs"):
             _assert_nested_allclose(
-                getattr(unsplit_pipeline, attr),
-                getattr(split_pipeline, attr),
+                getattr(unsplit_pipeline.io_buffers, attr),
+                getattr(split_pipeline.io_buffers, attr),
             )
 
 
@@ -3847,9 +3885,11 @@ class TestPipelineFlushing:
     ):
         """Reject changed nested result keys after the first flush."""
         pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-        pipeline._analysis_results = {"result": [{"outer": {"value": 1}}]}
+        pipeline.io_buffers.analysis_results = {
+            "result": [{"outer": {"value": 1}}]
+        }
         pipeline._combine_analysis_results()
-        pipeline._analysis_results = {"result": [changed]}
+        pipeline.io_buffers.analysis_results = {"result": [changed]}
 
         with pytest.raises(exceptions.BadResult, match="changed structure"):
             pipeline._combine_analysis_results()
@@ -3859,7 +3899,7 @@ class TestPipelineFlushing:
     ):
         """Reject extra nested keys within one batch before merging."""
         pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-        pipeline._analysis_results = {
+        pipeline.io_buffers.analysis_results = {
             "result": [
                 {"outer": {"value": 1}},
                 {"outer": {"value": 2, "extra": 3}},
@@ -3877,10 +3917,10 @@ class TestPipelineFlushing:
             nbytes["per_gal"] = (
                 get_buffered_nbytes(
                     [
-                        getattr(pipeline, attr)
-                        for attr in pipeline._galaxy_output_attrs
+                        getattr(pipeline.io_buffers, attr)
+                        for attr in pipeline.io_buffers.GALAXY_OUTPUTS
                     ]
-                    + [pipeline._analysis_results]
+                    + [pipeline.io_buffers.analysis_results]
                 )
                 / self.NGAL
             )
@@ -3892,16 +3932,16 @@ class TestPipelineFlushing:
         flush = Pipeline._flush_outputs
 
         def _counting_flush(pipeline):
-            nflushes.append(pipeline._n_buffered)
-            assert pipeline._buffered_nbytes == get_buffered_nbytes(
+            nflushes.append(pipeline.io_buffers.ngalaxies)
+            assert pipeline.io_buffers.nbytes == get_buffered_nbytes(
                 [
-                    getattr(pipeline, attr)
-                    for attr in pipeline._galaxy_output_attrs
+                    getattr(pipeline.io_buffers, attr)
+                    for attr in pipeline.io_buffers.GALAXY_OUTPUTS
                 ]
-                + [pipeline._analysis_results]
+                + [pipeline.io_buffers.analysis_results]
             )
             flush(pipeline)
-            assert pipeline._buffered_nbytes == 0
+            assert pipeline.io_buffers.nbytes == 0
 
         monkeypatch.setattr(Pipeline, "_flush_outputs", _counting_flush)
 
@@ -3952,7 +3992,7 @@ class TestPipelineFlushing:
             outpath=tmp_path / "out.hdf5",
             flush_ngalaxies=np.int64(2),
         )
-        assert pipeline._flush_ngalaxies == 2
+        assert pipeline.io_buffers.flush_ngalaxies == 2
 
     def test_write_to_different_outpath(self, run_pipeline, tmp_path):
         """Writing somewhere other than the Pipeline's outpath is an error."""
@@ -4006,33 +4046,32 @@ def test_empty_placeholder_replaced_by_nonempty_batch(tmp_path):
         assert hdf["Galaxies/Product"].shape == (2, 3)
 
 
-def test_sparse_product_rows_follow_galaxy_order(nebular_emission_model):
+def test_sparse_product_rows_follow_galaxy_order():
     """A product first seen on a later galaxy keeps its original row."""
-    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-    pipeline._write_lnu_spectra = True
+    from synthesizer.pipeline.pipeline_io import PipelineIOBuffers
 
-    # Unpack three galaxies where only the second has the spectra
-    for spectra in ({}, {"nebular": SimpleNamespace(lnu=np.array([2.0]))}, {}):
-        galaxy = SimpleNamespace(
-            spectra=spectra, stars=None, black_holes=None, lines={}
-        )
-        pipeline._unpack_results(galaxy)
-        pipeline._n_buffered += 1
+    buffers = PipelineIOBuffers()
+
+    # Hold three galaxies where only the second produces the spectra
+    for lnu in (None, np.array([2.0]), None):
+        buffers.start_galaxy()
+        if lnu is not None:
+            buffers.lnu_spectra["Galaxy"].setdefault("nebular", []).append(lnu)
+        buffers.end_galaxy()
 
     # The spectra should sit in the second row, with the others zero padded
     np.testing.assert_array_equal(
-        pipeline.lnu_spectra["Galaxy"]["nebular"], [[0.0], [2.0], [0.0]]
+        buffers.lnu_spectra["Galaxy"]["nebular"], [[0.0], [2.0], [0.0]]
     )
+    assert buffers.ngalaxies == 3
 
-    # After a flush clears the buffer, a galaxy without the spectra still
+    # After a flush empties the buffers, a galaxy without the spectra still
     # gets a padded row since we now know the product exists
-    pipeline.lnu_spectra["Galaxy"]["nebular"].clear()
-    pipeline._n_buffered = 0
-    pipeline._unpack_results(
-        SimpleNamespace(spectra={}, stars=None, black_holes=None, lines={})
-    )
+    buffers.clear()
+    buffers.start_galaxy()
+    buffers.end_galaxy()
     np.testing.assert_array_equal(
-        pipeline.lnu_spectra["Galaxy"]["nebular"], [[0.0]]
+        buffers.lnu_spectra["Galaxy"]["nebular"], [[0.0]]
     )
 
 

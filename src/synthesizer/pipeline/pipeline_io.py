@@ -16,15 +16,23 @@ Example usage:
 import os
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import ClassVar
 
 import h5py
 import numpy as np
 from unyt import unyt_array
 
+from synthesizer import exceptions
 from synthesizer._version import __version__
 from synthesizer.instruments import InstrumentCollection
 from synthesizer.pipeline.pipeline_utils import (
+    clear_lists_recursive,
+    get_buffered_nbytes,
     get_dataset_properties,
+    get_row_template,
+    iter_row_lists,
+    make_empty_row,
     unify_dict_structure_across_ranks,
 )
 from synthesizer.synth_warnings import warn
@@ -64,6 +72,262 @@ def _hdf5_replaced_on_success(path):
         if os.path.exists(temp_path):
             os.remove(temp_path)
         raise
+
+
+def _per_component():
+    """Return an empty container for each component's outputs."""
+    return {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+
+
+@dataclass(eq=False, repr=False)
+class PipelineIOBuffers:
+    """The per-galaxy outputs a Pipeline holds in memory until written.
+
+    Each output is a (nested) container of lists with a row per galaxy held.
+    The Pipeline appends a row for each galaxy it unpacks and the buffers
+    are emptied once their rows have been written, either at the end of the
+    run or, if flushing was requested, whenever a flush threshold is
+    reached.
+
+    Not every galaxy produces every output (e.g. a galaxy without black
+    holes has no black hole spectra), so the buffers also pad the outputs a
+    galaxy didn't produce, keeping every row in line with its galaxy.
+
+    Attributes:
+        flush_ngalaxies (int):
+            The number of galaxies at which to flush to file (None for no
+            flushing based on the number of galaxies).
+        flush_memory (float):
+            The memory (in GB) at which to flush to file (None for no
+            flushing based on memory).
+        analysis_results (dict):
+            The results of each extra analysis function, keyed by the
+            function's result key.
+        ngalaxies (int):
+            The number of galaxies held since the last flush.
+        nbytes (int):
+            The bytes held by the outputs since the last flush (only
+            counted when flushing based on memory).
+    """
+
+    # The per-galaxy outputs (excluding the extra analysis results)
+    GALAXY_OUTPUTS: ClassVar[tuple] = (
+        "sfzhs",
+        "sfhs",
+        "lnu_spectra",
+        "fnu_spectra",
+        "luminosities",
+        "fluxes",
+        "line_lums",
+        "line_cont_lums",
+        "line_fluxes",
+        "line_cont_fluxes",
+        "line_obs_lams",
+        "images_lum",
+        "images_lum_psf",
+        "images_lum_noise",
+        "images_flux",
+        "images_flux_psf",
+        "images_flux_noise",
+        "line_maps_lum",
+        "line_maps_lum_psf",
+        "line_maps_lum_noise",
+        "line_maps_flux",
+        "line_maps_flux_psf",
+        "line_maps_flux_noise",
+    )
+
+    # The flushing thresholds
+    flush_ngalaxies: int = None
+    flush_memory: float = None
+
+    # The outputs themselves
+    sfzhs: list = field(init=False, default_factory=list)
+    sfhs: list = field(init=False, default_factory=list)
+    lnu_spectra: dict = field(init=False, default_factory=_per_component)
+    fnu_spectra: dict = field(init=False, default_factory=_per_component)
+    luminosities: dict = field(init=False, default_factory=_per_component)
+    fluxes: dict = field(init=False, default_factory=_per_component)
+    line_lums: dict = field(init=False, default_factory=_per_component)
+    line_cont_lums: dict = field(init=False, default_factory=_per_component)
+    line_fluxes: dict = field(init=False, default_factory=_per_component)
+    line_cont_fluxes: dict = field(init=False, default_factory=_per_component)
+    line_obs_lams: list = field(init=False, default_factory=list)
+    images_lum: dict = field(init=False, default_factory=_per_component)
+    images_lum_psf: dict = field(init=False, default_factory=_per_component)
+    images_lum_noise: dict = field(init=False, default_factory=_per_component)
+    images_flux: dict = field(init=False, default_factory=_per_component)
+    images_flux_psf: dict = field(init=False, default_factory=_per_component)
+    images_flux_noise: dict = field(init=False, default_factory=_per_component)
+    line_maps_lum: dict = field(init=False, default_factory=_per_component)
+    line_maps_lum_psf: dict = field(init=False, default_factory=_per_component)
+    line_maps_lum_noise: dict = field(
+        init=False, default_factory=_per_component
+    )
+    line_maps_flux: dict = field(init=False, default_factory=_per_component)
+    line_maps_flux_psf: dict = field(
+        init=False, default_factory=_per_component
+    )
+    line_maps_flux_noise: dict = field(
+        init=False, default_factory=_per_component
+    )
+    analysis_results: dict = field(init=False, default_factory=dict)
+
+    # What we hold since the last flush
+    ngalaxies: int = field(init=False, default=0)
+    nbytes: int = field(init=False, default=0)
+
+    # The shape, dtype and units of a row of each output, so we can pad
+    # the outputs a galaxy doesn't produce. This outlives the rows
+    # themselves since flushing empties the lists.
+    _row_templates: dict = field(init=False, default_factory=dict)
+
+    # The number of rows in each output list before the current galaxy
+    # was unpacked (see start_galaxy)
+    _nrows_before: dict = field(init=False, default_factory=dict)
+
+    def __post_init__(self):
+        """Validate the flushing thresholds."""
+        # Don't accept a zero or negative threshold: we'd otherwise flush
+        # immediately after every galaxy, which is a surprising way to ask
+        # for no buffering. Numpy integers are fine but booleans aren't
+        if self.flush_ngalaxies is not None:
+            if (
+                not isinstance(self.flush_ngalaxies, (int, np.integer))
+                or isinstance(self.flush_ngalaxies, bool)
+                or self.flush_ngalaxies < 1
+            ):
+                raise exceptions.InconsistentArguments(
+                    "flush_ngalaxies must be an int >= 1"
+                )
+            self.flush_ngalaxies = int(self.flush_ngalaxies)
+        if self.flush_memory is not None and not (
+            0 < self.flush_memory < float("inf")
+        ):
+            raise exceptions.InconsistentArguments("flush_memory must be > 0")
+
+    @property
+    def flushing(self):
+        """Return whether outputs are flushed to file while running."""
+        return (
+            self.flush_ngalaxies is not None or self.flush_memory is not None
+        )
+
+    @property
+    def flush_nbytes(self):
+        """Return the memory threshold in bytes (None if not set)."""
+        if self.flush_memory is None:
+            return None
+        return self.flush_memory * 1024**3
+
+    def _iter_row_lists(self):
+        """Yield (key, rows) for every per-galaxy output list.
+
+        Yields:
+            tuple:
+                The output's key (its name followed by its path through
+                the nested containers) and its list of rows.
+        """
+        for name in self.GALAXY_OUTPUTS:
+            for path, rows in iter_row_lists(getattr(self, name)):
+                yield (name, *path), rows
+
+    def start_galaxy(self):
+        """Record the rows held before a galaxy is unpacked.
+
+        This lets end_galaxy spot the outputs the galaxy didn't produce. The
+        lists persist between galaxies (flushes only empty them) so we can
+        key them by id.
+        """
+        self._nrows_before = {
+            id(rows): len(rows) for _, rows in self._iter_row_lists()
+        }
+        self._nrows_before.update(
+            {id(rows): len(rows) for rows in self.analysis_results.values()}
+        )
+
+    def end_galaxy(self):
+        """Pad the outputs a galaxy didn't produce and count the galaxy.
+
+        Without a row for every galaxy, every later row would be written
+        against the wrong galaxy index, so we pad the missing outputs with
+        empty rows shaped like the rows we already hold.
+        """
+        for key, rows in self._iter_row_lists():
+            nbefore = self._nrows_before.get(id(rows), 0)
+
+            # The galaxy didn't produce this output, pad it if we know what
+            # a row looks like (if we don't, no galaxy has produced it yet
+            # and the list is still empty)
+            if len(rows) == nbefore:
+                if key in self._row_templates:
+                    rows.append(make_empty_row(self._row_templates[key]))
+
+            # This output is new with this galaxy, pad a row for every
+            # galaxy we already hold. Galaxies already flushed are padded by
+            # the IO helper when it creates the dataset.
+            elif nbefore == 0:
+                template = get_row_template(rows[0])
+                rows[:0] = [
+                    make_empty_row(template) for _ in range(self.ngalaxies)
+                ]
+
+            # Remember what a row looks like
+            if rows:
+                self._row_templates[key] = get_row_template(rows[0])
+
+        # Track how much memory we're holding if we flush on memory
+        if self.flush_memory is not None:
+            for rows in [rows for _, rows in self._iter_row_lists()] + list(
+                self.analysis_results.values()
+            ):
+                self.nbytes += get_buffered_nbytes(
+                    rows[self._nrows_before.get(id(rows), 0) :]
+                )
+
+        # Count the galaxy
+        self.ngalaxies += 1
+
+    def should_flush(self):
+        """Return whether the outputs held should be flushed to file.
+
+        Returns:
+            bool: True if either flush threshold has been reached.
+        """
+        # A normal run still asks after each galaxy, so leave its in-memory
+        # outputs alone unless flushing was requested
+        if not self.flushing:
+            return False
+
+        # Have we held enough galaxies?
+        if (
+            self.flush_ngalaxies is not None
+            and self.ngalaxies >= self.flush_ngalaxies
+        ):
+            return True
+
+        # Have we held enough memory? (Galaxies can differ substantially in
+        # size so this isn't necessarily a fixed number of galaxies.)
+        if self.flush_memory is None:
+            return False
+        return self.nbytes >= self.flush_nbytes
+
+    def clear(self):
+        """Empty the buffers once their rows have been written.
+
+        The containers' structure is left in place so the lists (and their
+        ids) persist into the next batch.
+        """
+        for name in self.GALAXY_OUTPUTS:
+            clear_lists_recursive(getattr(self, name))
+
+        # The analysis results are combined into arrays before writing, so
+        # go back to an empty list for each analysis function
+        self.analysis_results = {key: [] for key in self.analysis_results}
+
+        # Reset the counters for the next batch
+        self.ngalaxies = 0
+        self.nbytes = 0
 
 
 class PipelineIO:

@@ -38,25 +38,20 @@ from synthesizer import check_atomic_timing, check_openmp, exceptions
 from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.instruments import InstrumentCollection
 from synthesizer.particle import Galaxy as ParticleGalaxy
-from synthesizer.pipeline.pipeline_io import PipelineIO
+from synthesizer.pipeline.pipeline_io import PipelineIO, PipelineIOBuffers
 from synthesizer.pipeline.pipeline_utils import (
     NO_MODEL_LABEL,
     OperationKwargsHandler,
     accumulate_pipeline_results_from_child,
     cast_products_recursive,
-    clear_lists_recursive,
     clear_pipeline_outputs,
     combine_atomic_timing_snapshots,
     combine_list_of_dicts,
     count_and_check_dict_recursive,
     divide_dicts_recursive,
     get_atomic_timing_snapshot,
-    get_buffered_nbytes,
     get_dict_structure,
     get_full_memory,
-    get_row_template,
-    iter_row_lists,
-    make_empty_row,
     plot_timing_analysis,
     sanitise_hdf5_key_part,
     sum_dicts_recursive,
@@ -148,35 +143,9 @@ class Pipeline:
             2: Outputs with timings on all ranks (when using MPI).
         galaxies (list):
             A list of Galaxy objects that have been loaded.
+        io_buffers (PipelineIOBuffers):
+            The per-galaxy outputs held in memory until they are written.
     """
-
-    # The containers holding per-galaxy outputs (excluding the extra
-    # analysis results) which are written to file when flushing
-    _galaxy_output_attrs = (
-        "sfzhs",
-        "sfhs",
-        "lnu_spectra",
-        "fnu_spectra",
-        "luminosities",
-        "fluxes",
-        "line_lums",
-        "line_cont_lums",
-        "line_fluxes",
-        "line_cont_fluxes",
-        "line_obs_lams",
-        "images_lum",
-        "images_lum_psf",
-        "images_lum_noise",
-        "images_flux",
-        "images_flux_psf",
-        "images_flux_noise",
-        "line_maps_lum",
-        "line_maps_lum_psf",
-        "line_maps_lum_noise",
-        "line_maps_flux",
-        "line_maps_flux_psf",
-        "line_maps_flux_noise",
-    )
 
     @timed("Pipeline.__init__")
     def __init__(
@@ -370,17 +339,16 @@ class Pipeline:
         self._analysis_args = []
         self._analysis_kwargs = []
         self._analysis_results_keys = []
-        self._analysis_results = {}
 
         # The key structure of each analysis result from the first flush,
         # later flushes must match it to append consistently
         self._analysis_result_structures = {}
 
-        # Initialise containers for all the data we can generate
-        self.sfzhs = []
-        self.sfhs = []
-        self.lnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.fnu_spectra = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        # The per-galaxy outputs are held in buffers until they're written
+        # (and flushed to file while running if a threshold is given)
+        self.io_buffers = PipelineIOBuffers(flush_ngalaxies, flush_memory)
+
+        # Initialise containers for the data that isn't per galaxy
         self.cosmic_lnus = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.cosmic_fnus = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self._cosmic_lnu_counts = {
@@ -393,39 +361,8 @@ class Pipeline:
             "Stars": {},
             "BlackHole": {},
         }
-        self.luminosities = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_lums = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_cont_lums = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.line_lams = None
         self.line_ids = None
-        self.line_fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_cont_fluxes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_obs_lams = []
-        self.images_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.images_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.images_lum_noise = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.images_flux = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.images_flux_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.images_flux_noise = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_maps_lum = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_maps_lum_psf = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_maps_lum_noise = {
-            "Galaxy": {},
-            "Stars": {},
-            "BlackHole": {},
-        }
-        self.line_maps_flux = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.line_maps_flux_psf = {
-            "Galaxy": {},
-            "Stars": {},
-            "BlackHole": {},
-        }
-        self.line_maps_flux_noise = {
-            "Galaxy": {},
-            "Stars": {},
-            "BlackHole": {},
-        }
         self.lnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.fnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.spectroscopy = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
@@ -523,9 +460,8 @@ class Pipeline:
         # Attach the writer, we'll assign this later in the write method
         self.io_helper = None
 
-        # Attach the output path and the thresholds for flushing outputs to
-        # file while running
-        self._setup_output(outpath, flush_ngalaxies, flush_memory)
+        # Attach the output path
+        self._setup_output(outpath)
 
         # If we are using MPI we need to make sure everyone agrees on the
         # start time, take the minimum
@@ -536,61 +472,23 @@ class Pipeline:
         if self.using_mpi:
             comm.Barrier()
 
-    def _setup_output(self, outpath, flush_ngalaxies, flush_memory):
-        """Validate and attach the output path and flushing thresholds.
+    def _setup_output(self, outpath):
+        """Validate and attach the output path.
 
         Args:
             outpath (str):
                 The path to the HDF5 file to write.
-            flush_ngalaxies (int):
-                The number of galaxies at which to flush outputs to file.
-            flush_memory (float):
-                The memory (in GB) at which to flush outputs to file.
         """
-        # Don't accept a zero or negative threshold: we'd otherwise flush
-        # immediately after every galaxy, which is a surprising way to ask
-        # for no buffering. Numpy integers are fine but booleans aren't
-        if flush_ngalaxies is not None and (
-            not isinstance(flush_ngalaxies, (int, np.integer))
-            or isinstance(flush_ngalaxies, bool)
-            or flush_ngalaxies < 1
-        ):
-            raise exceptions.InconsistentArguments(
-                "flush_ngalaxies must be an int >= 1"
-            )
-        if flush_memory is not None and not (0 < flush_memory < float("inf")):
-            raise exceptions.InconsistentArguments("flush_memory must be > 0")
-
-        # Are we flushing at all?
-        self._flushing = (
-            flush_ngalaxies is not None or flush_memory is not None
-        )
-
         # A path is only mandatory if we flush during run, otherwise it can
         # be passed to write instead
-        if self._flushing and outpath is None:
+        if self.io_buffers.flushing and outpath is None:
             raise exceptions.InconsistentArguments(
                 "An outpath must be given to flush outputs to file while "
                 "running (flush_ngalaxies or flush_memory were set)."
             )
-        # Attach the path and thresholds (with the memory in bytes since
-        # that's what we count)
+
+        # Attach the path
         self._outpath = outpath
-        self._flush_ngalaxies = (
-            int(flush_ngalaxies) if flush_ngalaxies is not None else None
-        )
-        self._flush_nbytes = (
-            flush_memory * 1024**3 if flush_memory is not None else None
-        )
-
-        # The number of galaxies (and the bytes they hold) in memory since
-        # the last flush
-        self._n_buffered = 0
-        self._buffered_nbytes = 0
-
-        # The shape, dtype and units of a row of each output, so we can pad
-        # the outputs a galaxy doesn't produce (see _backfill_missing_rows)
-        self._row_templates = {}
 
     def _say_hello(self):
         """Print a nice welcome."""
@@ -863,23 +761,23 @@ class Pipeline:
             float: The memory usage in Megabytes.
         """
         results = [
-            self.sfzhs,
-            self.sfhs,
-            self.lnu_spectra,
-            self.fnu_spectra,
-            self.luminosities,
-            self.fluxes,
-            self.line_lums,
-            self.line_cont_lums,
+            self.io_buffers.sfzhs,
+            self.io_buffers.sfhs,
+            self.io_buffers.lnu_spectra,
+            self.io_buffers.fnu_spectra,
+            self.io_buffers.luminosities,
+            self.io_buffers.fluxes,
+            self.io_buffers.line_lums,
+            self.io_buffers.line_cont_lums,
             self.line_lams,
             self.line_ids,
-            self.line_fluxes,
-            self.line_cont_fluxes,
-            self.line_obs_lams,
-            self.images_lum,
-            self.images_lum_psf,
-            self.images_flux,
-            self.images_flux_psf,
+            self.io_buffers.line_fluxes,
+            self.io_buffers.line_cont_fluxes,
+            self.io_buffers.line_obs_lams,
+            self.io_buffers.images_lum,
+            self.io_buffers.images_lum_psf,
+            self.io_buffers.images_flux,
+            self.io_buffers.images_flux_psf,
             self.lnu_data_cubes,
             self.fnu_data_cubes,
             self.spectroscopy,
@@ -1363,13 +1261,13 @@ class Pipeline:
         self._analysis_results_keys.append(result_key)
 
         # Warn the user if theres a name clash, we'll take the new one
-        if result_key in self._analysis_results:
+        if result_key in self.io_buffers.analysis_results:
             raise exceptions.InconsistentArguments(
                 f"{result_key} already exists in the analysis results. "
                 "Choose a different result_key"
             )
         else:
-            self._analysis_results[result_key] = []
+            self.io_buffers.analysis_results[result_key] = []
 
         # Register the timing now so every rank has the same timing keys,
         # even those without galaxies (otherwise the MPI reduction of the
@@ -4566,9 +4464,9 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Count the rows we already hold so we can spot the outputs this
+        # Record the rows we already hold so we can spot the outputs this
         # galaxy doesn't produce once it's unpacked
-        nrows_before = self._count_buffered_rows()
+        self.io_buffers.start_galaxy()
 
         # Do we need to unpack the SFZH? We take it from the stars where
         # possible since that's where split galaxies accumulate it. Particle
@@ -4581,7 +4479,7 @@ class Pipeline:
                 and galaxy.stars.sfzh is not None
             ):
                 sfzh = galaxy.stars.sfzh
-            self.sfzhs.append(
+            self.io_buffers.sfzhs.append(
                 self._mass_grid_in_msun(getattr(sfzh, "sfzh", sfzh), "sfzh")
             )
 
@@ -4594,39 +4492,39 @@ class Pipeline:
                 and galaxy.stars.sfh is not None
             ):
                 sfh = galaxy.stars.sfh
-            self.sfhs.append(self._mass_grid_in_msun(sfh, "sfh"))
+            self.io_buffers.sfhs.append(self._mass_grid_in_msun(sfh, "sfh"))
 
         # Do we need to unpack the lnu spectra?
         if self._write_lnu_spectra:
             for spec_type, spec in galaxy.spectra.items():
-                self.lnu_spectra["Galaxy"].setdefault(spec_type, []).append(
-                    spec.lnu
-                )
+                self.io_buffers.lnu_spectra["Galaxy"].setdefault(
+                    spec_type, []
+                ).append(spec.lnu)
             if galaxy.stars is not None:
                 for spec_type, spec in galaxy.stars.spectra.items():
-                    self.lnu_spectra["Stars"].setdefault(spec_type, []).append(
-                        spec.lnu
-                    )
+                    self.io_buffers.lnu_spectra["Stars"].setdefault(
+                        spec_type, []
+                    ).append(spec.lnu)
             if galaxy.black_holes is not None:
                 for spec_type, spec in galaxy.black_holes.spectra.items():
-                    self.lnu_spectra["BlackHole"].setdefault(
+                    self.io_buffers.lnu_spectra["BlackHole"].setdefault(
                         spec_type, []
                     ).append(spec.lnu)
 
         # Do we need to unpack the fnu spectra?
         if self._write_fnu_spectra:
             for spec_type, spec in galaxy.spectra.items():
-                self.fnu_spectra["Galaxy"].setdefault(spec_type, []).append(
-                    spec.fnu
-                )
+                self.io_buffers.fnu_spectra["Galaxy"].setdefault(
+                    spec_type, []
+                ).append(spec.fnu)
             if galaxy.stars is not None:
                 for spec_type, spec in galaxy.stars.spectra.items():
-                    self.fnu_spectra["Stars"].setdefault(spec_type, []).append(
-                        spec.fnu
-                    )
+                    self.io_buffers.fnu_spectra["Stars"].setdefault(
+                        spec_type, []
+                    ).append(spec.fnu)
             if galaxy.black_holes is not None:
                 for spec_type, spec in galaxy.black_holes.spectra.items():
-                    self.fnu_spectra["BlackHole"].setdefault(
+                    self.io_buffers.fnu_spectra["BlackHole"].setdefault(
                         spec_type, []
                     ).append(spec.fnu)
 
@@ -4634,19 +4532,19 @@ class Pipeline:
         if self._write_luminosities:
             for spec_type, phot in galaxy.photo_lnu.items():
                 for filt, lnu in phot.items():
-                    self.luminosities["Galaxy"].setdefault(
+                    self.io_buffers.luminosities["Galaxy"].setdefault(
                         spec_type, {}
                     ).setdefault(filt, []).append(lnu)
             if galaxy.stars is not None:
                 for spec_type, phot in galaxy.stars.photo_lnu.items():
                     for filt, lnu in phot.items():
-                        self.luminosities["Stars"].setdefault(
+                        self.io_buffers.luminosities["Stars"].setdefault(
                             spec_type, {}
                         ).setdefault(filt, []).append(lnu)
             if galaxy.black_holes is not None:
                 for spec_type, phot in galaxy.black_holes.photo_lnu.items():
                     for filt, lnu in phot.items():
-                        self.luminosities["BlackHole"].setdefault(
+                        self.io_buffers.luminosities["BlackHole"].setdefault(
                             spec_type, {}
                         ).setdefault(filt, []).append(lnu)
 
@@ -4654,71 +4552,71 @@ class Pipeline:
         if self._write_fluxes:
             for spec_type, phot in galaxy.photo_fnu.items():
                 for filt, fnu in phot.items():
-                    self.fluxes["Galaxy"].setdefault(spec_type, {}).setdefault(
-                        filt, []
-                    ).append(fnu)
+                    self.io_buffers.fluxes["Galaxy"].setdefault(
+                        spec_type, {}
+                    ).setdefault(filt, []).append(fnu)
             if galaxy.stars is not None:
                 for spec_type, phot in galaxy.stars.photo_fnu.items():
                     for filt, fnu in phot.items():
-                        self.fluxes["Stars"].setdefault(
+                        self.io_buffers.fluxes["Stars"].setdefault(
                             spec_type, {}
                         ).setdefault(filt, []).append(fnu)
             if galaxy.black_holes is not None:
                 for spec_type, phot in galaxy.black_holes.photo_fnu.items():
                     for filt, fnu in phot.items():
-                        self.fluxes["BlackHole"].setdefault(
+                        self.io_buffers.fluxes["BlackHole"].setdefault(
                             spec_type, {}
                         ).setdefault(filt, []).append(fnu)
 
         # Do we need to unpack the emission lines?
         if self._write_lines:
             for spec_type, lines in galaxy.lines.items():
-                self.line_lums["Galaxy"].setdefault(spec_type, []).append(
-                    lines.luminosity
-                )
-                self.line_cont_lums["Galaxy"].setdefault(spec_type, []).append(
-                    lines.continuum
-                )
+                self.io_buffers.line_lums["Galaxy"].setdefault(
+                    spec_type, []
+                ).append(lines.luminosity)
+                self.io_buffers.line_cont_lums["Galaxy"].setdefault(
+                    spec_type, []
+                ).append(lines.continuum)
             if galaxy.stars is not None:
                 for spec_type, lines in galaxy.stars.lines.items():
-                    self.line_lums["Stars"].setdefault(spec_type, []).append(
-                        lines.luminosity
-                    )
-                    self.line_cont_lums["Stars"].setdefault(
+                    self.io_buffers.line_lums["Stars"].setdefault(
+                        spec_type, []
+                    ).append(lines.luminosity)
+                    self.io_buffers.line_cont_lums["Stars"].setdefault(
                         spec_type, []
                     ).append(lines.continuum)
             if galaxy.black_holes is not None:
                 for spec_type, lines in galaxy.black_holes.lines.items():
-                    self.line_lums["BlackHole"].setdefault(
+                    self.io_buffers.line_lums["BlackHole"].setdefault(
                         spec_type, []
                     ).append(lines.luminosity)
-                    self.line_cont_lums["BlackHole"].setdefault(
+                    self.io_buffers.line_cont_lums["BlackHole"].setdefault(
                         spec_type, []
                     ).append(lines.continuum)
 
         # Do we need to unpack the observed emission lines?
         if self._write_flux_lines:
             for spec_type, lines in galaxy.lines.items():
-                self.line_fluxes["Galaxy"].setdefault(spec_type, []).append(
-                    lines.flux
-                )
-                self.line_cont_fluxes["Galaxy"].setdefault(
+                self.io_buffers.line_fluxes["Galaxy"].setdefault(
+                    spec_type, []
+                ).append(lines.flux)
+                self.io_buffers.line_cont_fluxes["Galaxy"].setdefault(
                     spec_type, []
                 ).append(lines.continuum_flux)
             if galaxy.stars is not None:
                 for spec_type, lines in galaxy.stars.lines.items():
-                    self.line_fluxes["Stars"].setdefault(spec_type, []).append(
-                        lines.flux
-                    )
-                    self.line_cont_fluxes["Stars"].setdefault(
+                    self.io_buffers.line_fluxes["Stars"].setdefault(
+                        spec_type, []
+                    ).append(lines.flux)
+                    self.io_buffers.line_cont_fluxes["Stars"].setdefault(
                         spec_type, []
                     ).append(lines.continuum_flux)
             if galaxy.black_holes is not None:
                 for spec_type, lines in galaxy.black_holes.lines.items():
-                    self.line_fluxes["BlackHole"].setdefault(
+                    self.io_buffers.line_fluxes["BlackHole"].setdefault(
                         spec_type, []
                     ).append(lines.flux)
-                    self.line_cont_fluxes["BlackHole"].setdefault(
+                    self.io_buffers.line_cont_fluxes["BlackHole"].setdefault(
                         spec_type, []
                     ).append(lines.continuum_flux)
 
@@ -4731,14 +4629,14 @@ class Pipeline:
             if galaxy.black_holes is not None:
                 collections.extend(galaxy.black_holes.lines.values())
             if len(collections) > 0:
-                self.line_obs_lams.append(collections[0].obslam)
+                self.io_buffers.line_obs_lams.append(collections[0].obslam)
 
         # Do we need to unpack the luminosity images?
         if self._write_images_lum:
             for inst_label, d in galaxy.images_lnu.items():
                 for spec_type, imgs in d.items():
                     for f, img in imgs.items():
-                        self.images_lum["Galaxy"].setdefault(
+                        self.io_buffers.images_lum["Galaxy"].setdefault(
                             inst_label, {}
                         ).setdefault(spec_type, {}).setdefault(f, []).append(
                             img.arr * img.units
@@ -4747,7 +4645,7 @@ class Pipeline:
                 for inst_label, d in galaxy.stars.images_lnu.items():
                     for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_lum["Stars"].setdefault(
+                            self.io_buffers.images_lum["Stars"].setdefault(
                                 inst_label, {}
                             ).setdefault(spec_type, {}).setdefault(
                                 f, []
@@ -4756,7 +4654,7 @@ class Pipeline:
                 for inst_label, d in galaxy.black_holes.images_lnu.items():
                     for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_lum["BlackHole"].setdefault(
+                            self.io_buffers.images_lum["BlackHole"].setdefault(
                                 inst_label, {}
                             ).setdefault(spec_type, {}).setdefault(
                                 f, []
@@ -4767,7 +4665,7 @@ class Pipeline:
             for inst_label, d in galaxy.images_fnu.items():
                 for spec_type, imgs in d.items():
                     for f, img in imgs.items():
-                        self.images_flux["Galaxy"].setdefault(
+                        self.io_buffers.images_flux["Galaxy"].setdefault(
                             inst_label, {}
                         ).setdefault(spec_type, {}).setdefault(f, []).append(
                             img.arr * img.units
@@ -4776,7 +4674,7 @@ class Pipeline:
                 for inst_label, d in galaxy.stars.images_fnu.items():
                     for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_flux["Stars"].setdefault(
+                            self.io_buffers.images_flux["Stars"].setdefault(
                                 inst_label, {}
                             ).setdefault(spec_type, {}).setdefault(
                                 f, []
@@ -4785,18 +4683,18 @@ class Pipeline:
                 for inst_label, d in galaxy.black_holes.images_fnu.items():
                     for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_flux["BlackHole"].setdefault(
-                                inst_label, {}
-                            ).setdefault(spec_type, {}).setdefault(
-                                f, []
-                            ).append(img.arr * img.units)
+                            self.io_buffers.images_flux[
+                                "BlackHole"
+                            ].setdefault(inst_label, {}).setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
 
         # Do we need to unpack the luminosity images With PSFs?
         if self._write_images_lum_psf:
             for inst_label, d in galaxy.images_psf_lnu.items():
                 for spec_type, imgs in d.items():
                     for f, img in imgs.items():
-                        self.images_lum_psf["Galaxy"].setdefault(
+                        self.io_buffers.images_lum_psf["Galaxy"].setdefault(
                             inst_label, {}
                         ).setdefault(spec_type, {}).setdefault(f, []).append(
                             img.arr * img.units
@@ -4805,7 +4703,7 @@ class Pipeline:
                 for inst_label, d in galaxy.stars.images_psf_lnu.items():
                     for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_lum_psf["Stars"].setdefault(
+                            self.io_buffers.images_lum_psf["Stars"].setdefault(
                                 inst_label, {}
                             ).setdefault(spec_type, {}).setdefault(
                                 f, []
@@ -4814,18 +4712,18 @@ class Pipeline:
                 for inst_label, d in galaxy.black_holes.images_psf_lnu.items():
                     for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_lum_psf["BlackHole"].setdefault(
-                                inst_label, {}
-                            ).setdefault(spec_type, {}).setdefault(
-                                f, []
-                            ).append(img.arr * img.units)
+                            self.io_buffers.images_lum_psf[
+                                "BlackHole"
+                            ].setdefault(inst_label, {}).setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
 
         # Do we need to unpack the flux images With PSFs?
         if self._write_images_flux_psf:
             for inst_label, d in galaxy.images_psf_fnu.items():
                 for spec_type, imgs in d.items():
                     for f, img in imgs.items():
-                        self.images_flux_psf["Galaxy"].setdefault(
+                        self.io_buffers.images_flux_psf["Galaxy"].setdefault(
                             inst_label, {}
                         ).setdefault(spec_type, {}).setdefault(f, []).append(
                             img.arr * img.units
@@ -4834,27 +4732,27 @@ class Pipeline:
                 for inst_label, d in galaxy.stars.images_psf_fnu.items():
                     for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_flux_psf["Stars"].setdefault(
-                                inst_label, {}
-                            ).setdefault(spec_type, {}).setdefault(
-                                f, []
-                            ).append(img.arr * img.units)
+                            self.io_buffers.images_flux_psf[
+                                "Stars"
+                            ].setdefault(inst_label, {}).setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
             if galaxy.black_holes is not None:
                 for inst_label, d in galaxy.black_holes.images_psf_fnu.items():
                     for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_flux_psf["BlackHole"].setdefault(
-                                inst_label, {}
-                            ).setdefault(spec_type, {}).setdefault(
-                                f, []
-                            ).append(img.arr * img.units)
+                            self.io_buffers.images_flux_psf[
+                                "BlackHole"
+                            ].setdefault(inst_label, {}).setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
 
         # Do we need to unpack the luminosity images With Noise?
         if self._write_images_lum_noise:
             for inst_label, d in galaxy.images_noise_lnu.items():
                 for spec_type, imgs in d.items():
                     for f, img in imgs.items():
-                        self.images_lum_noise["Galaxy"].setdefault(
+                        self.io_buffers.images_lum_noise["Galaxy"].setdefault(
                             inst_label, {}
                         ).setdefault(spec_type, {}).setdefault(f, []).append(
                             img.arr * img.units
@@ -4863,28 +4761,28 @@ class Pipeline:
                 for inst_label, d in galaxy.stars.images_noise_lnu.items():
                     for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_lum_noise["Stars"].setdefault(
-                                inst_label, {}
-                            ).setdefault(spec_type, {}).setdefault(
-                                f, []
-                            ).append(img.arr * img.units)
+                            self.io_buffers.images_lum_noise[
+                                "Stars"
+                            ].setdefault(inst_label, {}).setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
             if galaxy.black_holes is not None:
                 bhs = galaxy.black_holes
                 for inst_label, d in bhs.images_noise_lnu.items():
                     for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_lum_noise["BlackHole"].setdefault(
-                                inst_label, {}
-                            ).setdefault(spec_type, {}).setdefault(
-                                f, []
-                            ).append(img.arr * img.units)
+                            self.io_buffers.images_lum_noise[
+                                "BlackHole"
+                            ].setdefault(inst_label, {}).setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
 
         # Do we need to unpack the flux images With Noise?
         if self._write_images_flux_noise:
             for inst_label, d in galaxy.images_noise_fnu.items():
                 for spec_type, imgs in d.items():
                     for f, img in imgs.items():
-                        self.images_flux_noise["Galaxy"].setdefault(
+                        self.io_buffers.images_flux_noise["Galaxy"].setdefault(
                             inst_label, {}
                         ).setdefault(spec_type, {}).setdefault(f, []).append(
                             img.arr * img.units
@@ -4893,21 +4791,21 @@ class Pipeline:
                 for inst_label, d in galaxy.stars.images_noise_fnu.items():
                     for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_flux_noise["Stars"].setdefault(
-                                inst_label, {}
-                            ).setdefault(spec_type, {}).setdefault(
-                                f, []
-                            ).append(img.arr * img.units)
+                            self.io_buffers.images_flux_noise[
+                                "Stars"
+                            ].setdefault(inst_label, {}).setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
             if galaxy.black_holes is not None:
                 bhs = galaxy.black_holes
                 for inst_label, d in bhs.images_noise_fnu.items():
                     for spec_type, imgs in d.items():
                         for f, img in imgs.items():
-                            self.images_flux_noise["BlackHole"].setdefault(
-                                inst_label, {}
-                            ).setdefault(spec_type, {}).setdefault(
-                                f, []
-                            ).append(img.arr * img.units)
+                            self.io_buffers.images_flux_noise[
+                                "BlackHole"
+                            ].setdefault(inst_label, {}).setdefault(
+                                spec_type, {}
+                            ).setdefault(f, []).append(img.arr * img.units)
 
         # Unpack each requested line-map family using the same nested schema.
         line_map_stores = (
@@ -4942,7 +4840,7 @@ class Pipeline:
         for write_attr, source_attr, target_attr in line_map_stores:
             if not getattr(self, write_attr):
                 continue
-            target_store = getattr(self, target_attr)
+            target_store = getattr(self.io_buffers, target_attr)
             for component_name, component in components:
                 if component is None:
                     continue
@@ -4959,92 +4857,14 @@ class Pipeline:
         # Do we need to unpack the extra analysis results?
         if hasattr(galaxy, "_extra_analysis_results"):
             for key, res in galaxy._extra_analysis_results.items():
-                self._analysis_results[key].append(res)
-
-                # Count the result towards the memory we're holding if we
-                # flush on memory
-                if self._flush_nbytes is not None:
-                    self._buffered_nbytes += get_buffered_nbytes(res)
+                self.io_buffers.analysis_results[key].append(res)
 
         # Make sure every output has a row for this galaxy so later rows
-        # keep their galaxy index
-        self._backfill_missing_rows(nrows_before)
-
-        # Track how much memory we're holding if we flush on memory
-        if self._flush_nbytes is not None:
-            self._count_buffered_nbytes(nrows_before)
+        # keep their galaxy index (and count the galaxy and its memory)
+        self.io_buffers.end_galaxy()
 
         # Done!
         self._op_timing["Unpacking results"] += time.perf_counter() - start
-
-    def _count_buffered_rows(self):
-        """Return the number of rows held in each galaxy output list.
-
-        Returns:
-            dict:
-                The number of rows in each list, keyed by the list's id. The
-                lists persist between galaxies (and flushes only empty them)
-                so their ids are stable.
-        """
-        return {
-            id(rows): len(rows)
-            for attr in self._galaxy_output_attrs
-            for _, rows in iter_row_lists(getattr(self, attr))
-        }
-
-    def _backfill_missing_rows(self, nrows_before):
-        """Pad the galaxy outputs the latest galaxy didn't produce.
-
-        Not every galaxy produces every output (e.g. a galaxy without black
-        holes has no black hole spectra). Without a row for these galaxies
-        every later row would be written against the wrong galaxy index, so
-        we pad them with empty rows shaped like the rows we already hold.
-
-        Args:
-            nrows_before (dict):
-                The number of rows in each output list before unpacking the
-                galaxy (from _count_buffered_rows).
-        """
-        for attr in self._galaxy_output_attrs:
-            for path, rows in iter_row_lists(getattr(self, attr)):
-                key = (attr, *path)
-                nbefore = nrows_before.get(id(rows), 0)
-
-                # The galaxy didn't produce this output, pad it if we know
-                # what a row looks like (if we don't, no galaxy has produced
-                # it yet and the list is still empty)
-                if len(rows) == nbefore:
-                    if key in self._row_templates:
-                        rows.append(make_empty_row(self._row_templates[key]))
-
-                # This output is new with this galaxy, pad a row for every
-                # galaxy we already hold. Galaxies already flushed are padded
-                # by the IO helper when it creates the dataset.
-                elif nbefore == 0:
-                    template = get_row_template(rows[0])
-                    rows[:0] = [
-                        make_empty_row(template)
-                        for _ in range(self._n_buffered)
-                    ]
-
-                # Remember what a row looks like. This outlives the rows
-                # themselves since flushing empties the lists.
-                if rows:
-                    self._row_templates[key] = get_row_template(rows[0])
-
-    def _count_buffered_nbytes(self, nrows_before):
-        """Add the bytes the latest galaxy's rows hold to the running total.
-
-        Args:
-            nrows_before (dict):
-                The number of rows in each output list before unpacking the
-                galaxy (from _count_buffered_rows).
-        """
-        for attr in self._galaxy_output_attrs:
-            for _, rows in iter_row_lists(getattr(self, attr)):
-                self._buffered_nbytes += get_buffered_nbytes(
-                    rows[nrows_before.get(id(rows), 0) :]
-                )
 
     @timed("Pipeline.run")
     def run(self):
@@ -5114,7 +4934,7 @@ class Pipeline:
         # up front. This must happen here, rather than at the first flush,
         # since creating the file is collective and ranks flush at
         # different times.
-        if self._flushing:
+        if self.io_buffers.flushing:
             # A second run would write over the galaxies we flushed during
             # the first
             if self._analysis_complete:
@@ -5260,7 +5080,8 @@ class Pipeline:
             self._unpack_results(gal)
 
             # Flush the outputs to file if we're holding too many
-            self._maybe_flush()
+            if self.io_buffers.should_flush():
+                self._flush_outputs()
 
             # Output into the progress table
             self._add_progress_row(gal, igal, start_gal)
@@ -5290,43 +5111,6 @@ class Pipeline:
         # Flag that we have run the pipeline
         self._analysis_complete = True
 
-    def _maybe_flush(self):
-        """Count the latest galaxy and flush the outputs if we hold too many.
-
-        This is called after every galaxy is unpacked, flushing or not, so
-        _should_flush is responsible for doing nothing on a normal run.
-        """
-        # Count the galaxy we just unpacked
-        self._n_buffered += 1
-
-        # Write out what we hold if we've reached a threshold
-        if self._should_flush():
-            self._flush_outputs()
-
-    def _should_flush(self):
-        """Return whether the outputs held in memory should be flushed.
-
-        Returns:
-            bool: True if either flush threshold has been reached.
-        """
-        # A normal run still calls us after unpacking each galaxy, so leave
-        # its in-memory outputs alone unless flushing was requested.
-        if not self._flushing:
-            return False
-
-        # Have we buffered enough galaxies?
-        if (
-            self._flush_ngalaxies is not None
-            and self._n_buffered >= self._flush_ngalaxies
-        ):
-            return True
-
-        # Have we buffered enough memory? (Galaxies can differ substantially
-        # in size so this isn't necessarily a fixed number of galaxies.)
-        if self._flush_nbytes is None:
-            return False
-        return self._buffered_nbytes >= self._flush_nbytes
-
     @timed("Pipeline._flush_outputs")
     def _flush_outputs(self):
         """Append the outputs held in memory to file and clear them."""
@@ -5341,19 +5125,12 @@ class Pipeline:
         with self.io_helper.silenced():
             self._write_galaxy_outputs()
 
-        # Clear the data we just wrote (leaving the structure in place)
-        for attr in self._galaxy_output_attrs:
-            clear_lists_recursive(getattr(self, attr))
+        self._took(
+            start, f"Flushing {self.io_buffers.ngalaxies} galaxies to file"
+        )
 
-        # The analysis results were combined into arrays above, so go back to
-        # an empty list for each analysis function
-        self._analysis_results = {key: [] for key in self._analysis_results}
-
-        self._took(start, f"Flushing {self._n_buffered} galaxies to file")
-
-        # Reset the counter for the next batch.
-        self._n_buffered = 0
-        self._buffered_nbytes = 0
+        # Empty the buffers we just wrote, ready for the next batch
+        self.io_buffers.clear()
 
     @timed("Pipeline._clean_outputs")
     def _clean_outputs(self):
@@ -5364,24 +5141,32 @@ class Pipeline:
         start = time.perf_counter()
 
         # Convert the lists of SFZHs to unyt arrays
-        self.sfzhs = unyt_array(self.sfzhs)
+        self.io_buffers.sfzhs = unyt_array(self.io_buffers.sfzhs)
 
         # Convert the lists of SFHs to unyt arrays
-        self.sfhs = unyt_array(self.sfhs)
+        self.io_buffers.sfhs = unyt_array(self.io_buffers.sfhs)
 
         # Convert the lists of spectra to unyt arrays
-        for spec_type, spec in self.lnu_spectra["Galaxy"].items():
-            self.lnu_spectra["Galaxy"][spec_type] = unyt_array(spec)
-        for spec_type, spec in self.lnu_spectra["Stars"].items():
-            self.lnu_spectra["Stars"][spec_type] = unyt_array(spec)
-        for spec_type, spec in self.lnu_spectra["BlackHole"].items():
-            self.lnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
-        for spec_type, spec in self.fnu_spectra["Galaxy"].items():
-            self.fnu_spectra["Galaxy"][spec_type] = unyt_array(spec)
-        for spec_type, spec in self.fnu_spectra["Stars"].items():
-            self.fnu_spectra["Stars"][spec_type] = unyt_array(spec)
-        for spec_type, spec in self.fnu_spectra["BlackHole"].items():
-            self.fnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
+        for spec_type, spec in self.io_buffers.lnu_spectra["Galaxy"].items():
+            self.io_buffers.lnu_spectra["Galaxy"][spec_type] = unyt_array(spec)
+        for spec_type, spec in self.io_buffers.lnu_spectra["Stars"].items():
+            self.io_buffers.lnu_spectra["Stars"][spec_type] = unyt_array(spec)
+        for spec_type, spec in self.io_buffers.lnu_spectra[
+            "BlackHole"
+        ].items():
+            self.io_buffers.lnu_spectra["BlackHole"][spec_type] = unyt_array(
+                spec
+            )
+        for spec_type, spec in self.io_buffers.fnu_spectra["Galaxy"].items():
+            self.io_buffers.fnu_spectra["Galaxy"][spec_type] = unyt_array(spec)
+        for spec_type, spec in self.io_buffers.fnu_spectra["Stars"].items():
+            self.io_buffers.fnu_spectra["Stars"][spec_type] = unyt_array(spec)
+        for spec_type, spec in self.io_buffers.fnu_spectra[
+            "BlackHole"
+        ].items():
+            self.io_buffers.fnu_spectra["BlackHole"][spec_type] = unyt_array(
+                spec
+            )
 
         # Cosmic SEDs are global products rather than per-galaxy arrays, so in
         # MPI mode we first gather and sum them onto rank 0. If averaging was
@@ -5505,317 +5290,419 @@ class Pipeline:
                     self.cosmic_fnus[component][label][spec_type] = spec
 
         # Convert the lists of luminosities to unyt arrays
-        for spec_type, phot in self.luminosities["Galaxy"].items():
+        for spec_type, phot in self.io_buffers.luminosities["Galaxy"].items():
             for filt, lnu in phot.items():
-                self.luminosities["Galaxy"][spec_type][filt] = unyt_array(lnu)
-        for spec_type, phot in self.luminosities["Stars"].items():
+                self.io_buffers.luminosities["Galaxy"][spec_type][filt] = (
+                    unyt_array(lnu)
+                )
+        for spec_type, phot in self.io_buffers.luminosities["Stars"].items():
             for filt, lnu in phot.items():
-                self.luminosities["Stars"][spec_type][filt] = unyt_array(lnu)
-        for spec_type, phot in self.luminosities["BlackHole"].items():
+                self.io_buffers.luminosities["Stars"][spec_type][filt] = (
+                    unyt_array(lnu)
+                )
+        for spec_type, phot in self.io_buffers.luminosities[
+            "BlackHole"
+        ].items():
             for filt, lnu in phot.items():
-                self.luminosities["BlackHole"][spec_type][filt] = unyt_array(
-                    lnu
+                self.io_buffers.luminosities["BlackHole"][spec_type][filt] = (
+                    unyt_array(lnu)
                 )
 
         # Convert the lists of fluxes to unyt arrays
-        for spec_type, phot in self.fluxes["Galaxy"].items():
+        for spec_type, phot in self.io_buffers.fluxes["Galaxy"].items():
             for filt, fnu in phot.items():
-                self.fluxes["Galaxy"][spec_type][filt] = unyt_array(fnu)
-        for spec_type, phot in self.fluxes["Stars"].items():
+                self.io_buffers.fluxes["Galaxy"][spec_type][filt] = unyt_array(
+                    fnu
+                )
+        for spec_type, phot in self.io_buffers.fluxes["Stars"].items():
             for filt, fnu in phot.items():
-                self.fluxes["Stars"][spec_type][filt] = unyt_array(fnu)
-        for spec_type, phot in self.fluxes["BlackHole"].items():
+                self.io_buffers.fluxes["Stars"][spec_type][filt] = unyt_array(
+                    fnu
+                )
+        for spec_type, phot in self.io_buffers.fluxes["BlackHole"].items():
             for filt, fnu in phot.items():
-                self.fluxes["BlackHole"][spec_type][filt] = unyt_array(fnu)
+                self.io_buffers.fluxes["BlackHole"][spec_type][filt] = (
+                    unyt_array(fnu)
+                )
 
         # Convert the lists of line luminosities and continua to unyt arrays
-        for spec_type, lines in self.line_lums["Galaxy"].items():
-            self.line_lums["Galaxy"][spec_type] = unyt_array(lines)
-        for spec_type, conts in self.line_cont_lums["Galaxy"].items():
-            self.line_cont_lums["Galaxy"][spec_type] = unyt_array(conts)
-        for spec_type, lines in self.line_lums["Stars"].items():
-            self.line_lums["Stars"][spec_type] = unyt_array(lines)
-        for spec_type, conts in self.line_cont_lums["Stars"].items():
-            self.line_cont_lums["Stars"][spec_type] = unyt_array(conts)
-        for spec_type, lines in self.line_lums["BlackHole"].items():
-            self.line_lums["BlackHole"][spec_type] = unyt_array(lines)
-        for spec_type, conts in self.line_cont_lums["BlackHole"].items():
-            self.line_cont_lums["BlackHole"][spec_type] = unyt_array(conts)
+        for spec_type, lines in self.io_buffers.line_lums["Galaxy"].items():
+            self.io_buffers.line_lums["Galaxy"][spec_type] = unyt_array(lines)
+        for spec_type, conts in self.io_buffers.line_cont_lums[
+            "Galaxy"
+        ].items():
+            self.io_buffers.line_cont_lums["Galaxy"][spec_type] = unyt_array(
+                conts
+            )
+        for spec_type, lines in self.io_buffers.line_lums["Stars"].items():
+            self.io_buffers.line_lums["Stars"][spec_type] = unyt_array(lines)
+        for spec_type, conts in self.io_buffers.line_cont_lums[
+            "Stars"
+        ].items():
+            self.io_buffers.line_cont_lums["Stars"][spec_type] = unyt_array(
+                conts
+            )
+        for spec_type, lines in self.io_buffers.line_lums["BlackHole"].items():
+            self.io_buffers.line_lums["BlackHole"][spec_type] = unyt_array(
+                lines
+            )
+        for spec_type, conts in self.io_buffers.line_cont_lums[
+            "BlackHole"
+        ].items():
+            self.io_buffers.line_cont_lums["BlackHole"][spec_type] = (
+                unyt_array(conts)
+            )
 
         # Convert the lists of line fluxes and continua to unyt arrays
-        for spec_type, fluxes in self.line_fluxes["Galaxy"].items():
-            self.line_fluxes["Galaxy"][spec_type] = unyt_array(fluxes)
-        for spec_type, conts in self.line_cont_fluxes["Galaxy"].items():
-            self.line_cont_fluxes["Galaxy"][spec_type] = unyt_array(conts)
-        for spec_type, fluxes in self.line_fluxes["Stars"].items():
-            self.line_fluxes["Stars"][spec_type] = unyt_array(fluxes)
-        for spec_type, conts in self.line_cont_fluxes["Stars"].items():
-            self.line_cont_fluxes["Stars"][spec_type] = unyt_array(conts)
-        for spec_type, fluxes in self.line_fluxes["BlackHole"].items():
-            self.line_fluxes["BlackHole"][spec_type] = unyt_array(fluxes)
-        for spec_type, conts in self.line_cont_fluxes["BlackHole"].items():
-            self.line_cont_fluxes["BlackHole"][spec_type] = unyt_array(conts)
+        for spec_type, fluxes in self.io_buffers.line_fluxes["Galaxy"].items():
+            self.io_buffers.line_fluxes["Galaxy"][spec_type] = unyt_array(
+                fluxes
+            )
+        for spec_type, conts in self.io_buffers.line_cont_fluxes[
+            "Galaxy"
+        ].items():
+            self.io_buffers.line_cont_fluxes["Galaxy"][spec_type] = unyt_array(
+                conts
+            )
+        for spec_type, fluxes in self.io_buffers.line_fluxes["Stars"].items():
+            self.io_buffers.line_fluxes["Stars"][spec_type] = unyt_array(
+                fluxes
+            )
+        for spec_type, conts in self.io_buffers.line_cont_fluxes[
+            "Stars"
+        ].items():
+            self.io_buffers.line_cont_fluxes["Stars"][spec_type] = unyt_array(
+                conts
+            )
+        for spec_type, fluxes in self.io_buffers.line_fluxes[
+            "BlackHole"
+        ].items():
+            self.io_buffers.line_fluxes["BlackHole"][spec_type] = unyt_array(
+                fluxes
+            )
+        for spec_type, conts in self.io_buffers.line_cont_fluxes[
+            "BlackHole"
+        ].items():
+            self.io_buffers.line_cont_fluxes["BlackHole"][spec_type] = (
+                unyt_array(conts)
+            )
 
         # Convert the list of observed line wavelengths to a unyt array
-        self.line_obs_lams = unyt_array(self.line_obs_lams)
+        self.io_buffers.line_obs_lams = unyt_array(
+            self.io_buffers.line_obs_lams
+        )
 
         # Convert the lists of luminosity images to unyt arrays
-        for inst_label, inst_data in self.images_lum["Galaxy"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_lum["Galaxy"][inst_label][spec_type][f] = (
-                        unyt_array(img)
-                    )
-        for inst_label, inst_data in self.images_lum["Stars"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_lum["Stars"][inst_label][spec_type][f] = (
-                        unyt_array(img)
-                    )
-        for inst_label, inst_data in self.images_lum["BlackHole"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_lum["BlackHole"][inst_label][spec_type][f] = (
-                        unyt_array(img)
-                    )
-
-        # Convert the lists of flux images to unyt arrays
-        for inst_label, inst_data in self.images_flux["Galaxy"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_flux["Galaxy"][inst_label][spec_type][f] = (
-                        unyt_array(img)
-                    )
-        for inst_label, inst_data in self.images_flux["Stars"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_flux["Stars"][inst_label][spec_type][f] = (
-                        unyt_array(img)
-                    )
-        for inst_label, inst_data in self.images_flux["BlackHole"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_flux["BlackHole"][inst_label][spec_type][f] = (
-                        unyt_array(img)
-                    )
-
-        # Convert the lists of psf luminosity images to unyt arrays
-        for inst_label, inst_data in self.images_lum_psf["Galaxy"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_lum_psf["Galaxy"][inst_label][spec_type][f] = (
-                        unyt_array(img)
-                    )
-        for inst_label, inst_data in self.images_lum_psf["Stars"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_lum_psf["Stars"][inst_label][spec_type][f] = (
-                        unyt_array(img)
-                    )
-        for inst_label, inst_data in self.images_lum_psf["BlackHole"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_lum_psf["BlackHole"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-
-        # Convert the lists of psf flux images to unyt arrays
-        for inst_label, inst_data in self.images_flux_psf["Galaxy"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_flux_psf["Galaxy"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-        for inst_label, inst_data in self.images_flux_psf["Stars"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_flux_psf["Stars"][inst_label][spec_type][f] = (
-                        unyt_array(img)
-                    )
-        for inst_label, inst_data in self.images_flux_psf["BlackHole"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_flux_psf["BlackHole"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-
-        # Convert the lists of noise luminosity images to unyt arrays
-        for inst_label, inst_data in self.images_lum_noise["Galaxy"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_lum_noise["Galaxy"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-        for inst_label, inst_data in self.images_lum_noise["Stars"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_lum_noise["Stars"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-        for inst_label, inst_data in self.images_lum_noise[
-            "BlackHole"
-        ].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_lum_noise["BlackHole"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-
-        # Convert the lists of noise flux images to unyt arrays
-        for inst_label, inst_data in self.images_flux_noise["Galaxy"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_flux_noise["Galaxy"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-        for inst_label, inst_data in self.images_flux_noise["Stars"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_flux_noise["Stars"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-        for inst_label, inst_data in self.images_flux_noise[
-            "BlackHole"
-        ].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.images_flux_noise["BlackHole"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-
-        # Convert the lists of luminosity line maps to unyt arrays
-        for inst_label, inst_data in self.line_maps_lum["Galaxy"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_lum["Galaxy"][inst_label][spec_type][f] = (
-                        unyt_array(img)
-                    )
-        for inst_label, inst_data in self.line_maps_lum["Stars"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_lum["Stars"][inst_label][spec_type][f] = (
-                        unyt_array(img)
-                    )
-        for inst_label, inst_data in self.line_maps_lum["BlackHole"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_lum["BlackHole"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-
-        # Convert the lists of flux line maps to unyt arrays
-        for inst_label, inst_data in self.line_maps_flux["Galaxy"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_flux["Galaxy"][inst_label][spec_type][f] = (
-                        unyt_array(img)
-                    )
-        for inst_label, inst_data in self.line_maps_flux["Stars"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_flux["Stars"][inst_label][spec_type][f] = (
-                        unyt_array(img)
-                    )
-        for inst_label, inst_data in self.line_maps_flux["BlackHole"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_flux["BlackHole"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-
-        # Convert the lists of psf luminosity line maps to unyt arrays
-        for inst_label, inst_data in self.line_maps_lum_psf["Galaxy"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_lum_psf["Galaxy"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-        for inst_label, inst_data in self.line_maps_lum_psf["Stars"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_lum_psf["Stars"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-        for inst_label, inst_data in self.line_maps_lum_psf[
-            "BlackHole"
-        ].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_lum_psf["BlackHole"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-
-        # Convert the lists of psf flux line maps to unyt arrays
-        for inst_label, inst_data in self.line_maps_flux_psf["Galaxy"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_flux_psf["Galaxy"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-        for inst_label, inst_data in self.line_maps_flux_psf["Stars"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_flux_psf["Stars"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-        for inst_label, inst_data in self.line_maps_flux_psf[
-            "BlackHole"
-        ].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_flux_psf["BlackHole"][inst_label][
-                        spec_type
-                    ][f] = unyt_array(img)
-
-        # Convert the lists of noise luminosity line maps to unyt arrays
-        for inst_label, inst_data in self.line_maps_lum_noise[
+        for inst_label, inst_data in self.io_buffers.images_lum[
             "Galaxy"
         ].items():
             for spec_type, imgs in inst_data.items():
                 for f, img in imgs.items():
-                    self.line_maps_lum_noise["Galaxy"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-        for inst_label, inst_data in self.line_maps_lum_noise["Stars"].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_lum_noise["Stars"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-        for inst_label, inst_data in self.line_maps_lum_noise[
-            "BlackHole"
-        ].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_lum_noise["BlackHole"][inst_label][
+                    self.io_buffers.images_lum["Galaxy"][inst_label][
                         spec_type
                     ][f] = unyt_array(img)
-
-        # Convert the lists of noise flux line maps to unyt arrays
-        for inst_label, inst_data in self.line_maps_flux_noise[
-            "Galaxy"
-        ].items():
-            for spec_type, imgs in inst_data.items():
-                for f, img in imgs.items():
-                    self.line_maps_flux_noise["Galaxy"][inst_label][spec_type][
-                        f
-                    ] = unyt_array(img)
-        for inst_label, inst_data in self.line_maps_flux_noise[
+        for inst_label, inst_data in self.io_buffers.images_lum[
             "Stars"
         ].items():
             for spec_type, imgs in inst_data.items():
                 for f, img in imgs.items():
-                    self.line_maps_flux_noise["Stars"][inst_label][spec_type][
+                    self.io_buffers.images_lum["Stars"][inst_label][spec_type][
                         f
                     ] = unyt_array(img)
-        for inst_label, inst_data in self.line_maps_flux_noise[
+        for inst_label, inst_data in self.io_buffers.images_lum[
             "BlackHole"
         ].items():
             for spec_type, imgs in inst_data.items():
                 for f, img in imgs.items():
-                    self.line_maps_flux_noise["BlackHole"][inst_label][
+                    self.io_buffers.images_lum["BlackHole"][inst_label][
                         spec_type
                     ][f] = unyt_array(img)
+
+        # Convert the lists of flux images to unyt arrays
+        for inst_label, inst_data in self.io_buffers.images_flux[
+            "Galaxy"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_flux["Galaxy"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.images_flux[
+            "Stars"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_flux["Stars"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.images_flux[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_flux["BlackHole"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+
+        # Convert the lists of psf luminosity images to unyt arrays
+        for inst_label, inst_data in self.io_buffers.images_lum_psf[
+            "Galaxy"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_lum_psf["Galaxy"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.images_lum_psf[
+            "Stars"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_lum_psf["Stars"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.images_lum_psf[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_lum_psf["BlackHole"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+
+        # Convert the lists of psf flux images to unyt arrays
+        for inst_label, inst_data in self.io_buffers.images_flux_psf[
+            "Galaxy"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_flux_psf["Galaxy"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.images_flux_psf[
+            "Stars"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_flux_psf["Stars"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.images_flux_psf[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_flux_psf["BlackHole"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+
+        # Convert the lists of noise luminosity images to unyt arrays
+        for inst_label, inst_data in self.io_buffers.images_lum_noise[
+            "Galaxy"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_lum_noise["Galaxy"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.images_lum_noise[
+            "Stars"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_lum_noise["Stars"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.images_lum_noise[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_lum_noise["BlackHole"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+
+        # Convert the lists of noise flux images to unyt arrays
+        for inst_label, inst_data in self.io_buffers.images_flux_noise[
+            "Galaxy"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_flux_noise["Galaxy"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.images_flux_noise[
+            "Stars"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_flux_noise["Stars"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.images_flux_noise[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.images_flux_noise["BlackHole"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+
+        # Convert the lists of luminosity line maps to unyt arrays
+        for inst_label, inst_data in self.io_buffers.line_maps_lum[
+            "Galaxy"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_lum["Galaxy"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.line_maps_lum[
+            "Stars"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_lum["Stars"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.line_maps_lum[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_lum["BlackHole"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+
+        # Convert the lists of flux line maps to unyt arrays
+        for inst_label, inst_data in self.io_buffers.line_maps_flux[
+            "Galaxy"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_flux["Galaxy"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.line_maps_flux[
+            "Stars"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_flux["Stars"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.line_maps_flux[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_flux["BlackHole"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+
+        # Convert the lists of psf luminosity line maps to unyt arrays
+        for inst_label, inst_data in self.io_buffers.line_maps_lum_psf[
+            "Galaxy"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_lum_psf["Galaxy"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.line_maps_lum_psf[
+            "Stars"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_lum_psf["Stars"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.line_maps_lum_psf[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_lum_psf["BlackHole"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+
+        # Convert the lists of psf flux line maps to unyt arrays
+        for inst_label, inst_data in self.io_buffers.line_maps_flux_psf[
+            "Galaxy"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_flux_psf["Galaxy"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.line_maps_flux_psf[
+            "Stars"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_flux_psf["Stars"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.line_maps_flux_psf[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_flux_psf["BlackHole"][
+                        inst_label
+                    ][spec_type][f] = unyt_array(img)
+
+        # Convert the lists of noise luminosity line maps to unyt arrays
+        for inst_label, inst_data in self.io_buffers.line_maps_lum_noise[
+            "Galaxy"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_lum_noise["Galaxy"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.line_maps_lum_noise[
+            "Stars"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_lum_noise["Stars"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.line_maps_lum_noise[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_lum_noise["BlackHole"][
+                        inst_label
+                    ][spec_type][f] = unyt_array(img)
+
+        # Convert the lists of noise flux line maps to unyt arrays
+        for inst_label, inst_data in self.io_buffers.line_maps_flux_noise[
+            "Galaxy"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_flux_noise["Galaxy"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.line_maps_flux_noise[
+            "Stars"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_flux_noise["Stars"][inst_label][
+                        spec_type
+                    ][f] = unyt_array(img)
+        for inst_label, inst_data in self.io_buffers.line_maps_flux_noise[
+            "BlackHole"
+        ].items():
+            for spec_type, imgs in inst_data.items():
+                for f, img in imgs.items():
+                    self.io_buffers.line_maps_flux_noise["BlackHole"][
+                        inst_label
+                    ][spec_type][f] = unyt_array(img)
 
         # Convert the lists of extra analysis results to unyt arrays. The
         # same step also happens before each flush; here it handles any
@@ -5829,7 +5716,7 @@ class Pipeline:
         # Unlike the previous data we need to do some checks here to ensure
         # that the data is in a consistent format. This is because the user
         # can return any type of data from their analysis functions.
-        for key, res in self._analysis_results.items():
+        for key, res in self.io_buffers.analysis_results.items():
             # Ensure the data of all results is in the same format.
             types = set([type(r) for r in res])
             if len(types) > 1:
@@ -5848,7 +5735,7 @@ class Pipeline:
             combined_data = combine_list_of_dicts(res)
 
             # Store the data
-            self._analysis_results[key] = combined_data
+            self.io_buffers.analysis_results[key] = combined_data
 
     def _check_analysis_structure(self, key, res):
         """Ensure every result of an analysis function has the same keys.
@@ -5951,7 +5838,7 @@ class Pipeline:
         # If we flushed outputs while running the file already exists and
         # holds the flushed galaxies, so we append the rest. Otherwise, we
         # start a new file.
-        if self._flushing:
+        if self.io_buffers.flushing:
             # The flushed galaxies are no longer held on the Pipeline, so
             # we can't write them a second time
             if self.io_helper.finalised:
@@ -6133,18 +6020,18 @@ class Pipeline:
         # during a flush (ranks need not flush at the same galaxy).
         galaxy_indices = self.io_helper.galaxy_indices
         if galaxy_indices is None:
-            galaxy_indices = range(self._n_buffered)
+            galaxy_indices = range(self.io_buffers.ngalaxies)
 
         # Write the SFZHs and SFHs
         if self._write_sfzh:
             self.io_helper.write_data(
-                self.sfzhs,
+                self.io_buffers.sfzhs,
                 "Galaxies/Stars/SFZH",
                 galaxy_indices,
             )
         if self._write_sfh:
             self.io_helper.write_data(
-                self.sfhs,
+                self.io_buffers.sfhs,
                 "Galaxies/Stars/SFH",
                 galaxy_indices,
             )
@@ -6152,17 +6039,17 @@ class Pipeline:
         # Write spectral luminosity densities
         if self._write_lnu_spectra:
             self.io_helper.write_data(
-                self.lnu_spectra["Galaxy"],
+                self.io_buffers.lnu_spectra["Galaxy"],
                 "Galaxies/Spectra/SpectralLuminosityDensities",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.lnu_spectra["Stars"],
+                self.io_buffers.lnu_spectra["Stars"],
                 "Galaxies/Stars/Spectra/SpectralLuminosityDensities",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.lnu_spectra["BlackHole"],
+                self.io_buffers.lnu_spectra["BlackHole"],
                 "Galaxies/BlackHoles/Spectra/SpectralLuminosityDensities",
                 galaxy_indices,
             )
@@ -6170,17 +6057,17 @@ class Pipeline:
         # Write spectral flux densities
         if self._write_fnu_spectra:
             self.io_helper.write_data(
-                self.fnu_spectra["Galaxy"],
+                self.io_buffers.fnu_spectra["Galaxy"],
                 "Galaxies/Spectra/SpectralFluxDensities",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.fnu_spectra["Stars"],
+                self.io_buffers.fnu_spectra["Stars"],
                 "Galaxies/Stars/Spectra/SpectralFluxDensities",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.fnu_spectra["BlackHole"],
+                self.io_buffers.fnu_spectra["BlackHole"],
                 "Galaxies/BlackHoles/Photometry/SpectralFluxDensities",
                 galaxy_indices,
             )
@@ -6188,17 +6075,17 @@ class Pipeline:
         # Write photometric luminosities
         if self._write_luminosities:
             self.io_helper.write_data(
-                self.luminosities["Galaxy"],
+                self.io_buffers.luminosities["Galaxy"],
                 "Galaxies/Photometry/Luminosities",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.luminosities["Stars"],
+                self.io_buffers.luminosities["Stars"],
                 "Galaxies/Stars/Photometry/Luminosities",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.luminosities["BlackHole"],
+                self.io_buffers.luminosities["BlackHole"],
                 "Galaxies/BlackHoles/Photometry/Luminosities",
                 galaxy_indices,
             )
@@ -6206,17 +6093,17 @@ class Pipeline:
         # Write photometric fluxes
         if self._write_fluxes:
             self.io_helper.write_data(
-                self.fluxes["Galaxy"],
+                self.io_buffers.fluxes["Galaxy"],
                 "Galaxies/Photometry/Fluxes",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.fluxes["Stars"],
+                self.io_buffers.fluxes["Stars"],
                 "Galaxies/Stars/Photometry/Fluxes",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.fluxes["BlackHole"],
+                self.io_buffers.fluxes["BlackHole"],
                 "Galaxies/BlackHoles/Photometry/Fluxes",
                 galaxy_indices,
             )
@@ -6224,32 +6111,32 @@ class Pipeline:
         # Write emission line luminosities
         if self._write_lines:
             self.io_helper.write_data(
-                self.line_lums["Galaxy"],
+                self.io_buffers.line_lums["Galaxy"],
                 "Galaxies/Lines/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_lums["Stars"],
+                self.io_buffers.line_lums["Stars"],
                 "Galaxies/Stars/Lines/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_lums["BlackHole"],
+                self.io_buffers.line_lums["BlackHole"],
                 "Galaxies/BlackHoles/Lines/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_lums["Galaxy"],
+                self.io_buffers.line_cont_lums["Galaxy"],
                 "Galaxies/Lines/Continuum",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_lums["Stars"],
+                self.io_buffers.line_cont_lums["Stars"],
                 "Galaxies/Stars/Lines/Continuum",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_lums["BlackHole"],
+                self.io_buffers.line_cont_lums["BlackHole"],
                 "Galaxies/BlackHoles/Lines/Continuum",
                 galaxy_indices,
             )
@@ -6257,39 +6144,39 @@ class Pipeline:
         # Write observed emission line fluxes
         if self._write_flux_lines:
             self.io_helper.write_data(
-                self.line_fluxes["Galaxy"],
+                self.io_buffers.line_fluxes["Galaxy"],
                 "Galaxies/Lines/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_fluxes["Stars"],
+                self.io_buffers.line_fluxes["Stars"],
                 "Galaxies/Stars/Lines/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_fluxes["BlackHole"],
+                self.io_buffers.line_fluxes["BlackHole"],
                 "Galaxies/BlackHoles/Lines/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_fluxes["Galaxy"],
+                self.io_buffers.line_cont_fluxes["Galaxy"],
                 "Galaxies/Lines/ContinuumFlux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_fluxes["Stars"],
+                self.io_buffers.line_cont_fluxes["Stars"],
                 "Galaxies/Stars/Lines/ContinuumFlux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_cont_fluxes["BlackHole"],
+                self.io_buffers.line_cont_fluxes["BlackHole"],
                 "Galaxies/BlackHoles/Lines/ContinuumFlux",
                 galaxy_indices,
             )
 
-            if len(self.line_obs_lams) > 0:
+            if len(self.io_buffers.line_obs_lams) > 0:
                 self.io_helper.write_data(
-                    self.line_obs_lams,
+                    self.io_buffers.line_obs_lams,
                     "Galaxies/Lines/ObservedWavelengths",
                     galaxy_indices,
                 )
@@ -6297,17 +6184,17 @@ class Pipeline:
         # Write luminosity images
         if self._write_images_lum:
             self.io_helper.write_data(
-                self.images_lum["Galaxy"],
+                self.io_buffers.images_lum["Galaxy"],
                 "Galaxies/Images/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.images_lum["Stars"],
+                self.io_buffers.images_lum["Stars"],
                 "Galaxies/Stars/Images/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.images_lum["BlackHole"],
+                self.io_buffers.images_lum["BlackHole"],
                 "Galaxies/BlackHoles/Images/Luminosity",
                 galaxy_indices,
             )
@@ -6315,17 +6202,17 @@ class Pipeline:
         # Write PSF luminosity images
         if self._write_images_lum_psf:
             self.io_helper.write_data(
-                self.images_lum_psf["Galaxy"],
+                self.io_buffers.images_lum_psf["Galaxy"],
                 "Galaxies/PSFImages/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.images_lum_psf["Stars"],
+                self.io_buffers.images_lum_psf["Stars"],
                 "Galaxies/Stars/PSFImages/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.images_lum_psf["BlackHole"],
+                self.io_buffers.images_lum_psf["BlackHole"],
                 "Galaxies/BlackHoles/PSFImages/Luminosity",
                 galaxy_indices,
             )
@@ -6333,17 +6220,17 @@ class Pipeline:
         # Write noise luminosity images
         if self._write_images_lum_noise:
             self.io_helper.write_data(
-                self.images_lum_noise["Galaxy"],
+                self.io_buffers.images_lum_noise["Galaxy"],
                 "Galaxies/NoiseImages/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.images_lum_noise["Stars"],
+                self.io_buffers.images_lum_noise["Stars"],
                 "Galaxies/Stars/NoiseImages/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.images_lum_noise["BlackHole"],
+                self.io_buffers.images_lum_noise["BlackHole"],
                 "Galaxies/BlackHoles/NoiseImages/Luminosity",
                 galaxy_indices,
             )
@@ -6351,17 +6238,17 @@ class Pipeline:
         # Write flux images
         if self._write_images_flux:
             self.io_helper.write_data(
-                self.images_flux["Galaxy"],
+                self.io_buffers.images_flux["Galaxy"],
                 "Galaxies/Images/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.images_flux["Stars"],
+                self.io_buffers.images_flux["Stars"],
                 "Galaxies/Stars/Images/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.images_flux["BlackHole"],
+                self.io_buffers.images_flux["BlackHole"],
                 "Galaxies/BlackHoles/Images/Flux",
                 galaxy_indices,
             )
@@ -6369,17 +6256,17 @@ class Pipeline:
         # Write PSF flux images
         if self._write_images_flux_psf:
             self.io_helper.write_data(
-                self.images_flux_psf["Galaxy"],
+                self.io_buffers.images_flux_psf["Galaxy"],
                 "Galaxies/PSFImages/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.images_flux_psf["Stars"],
+                self.io_buffers.images_flux_psf["Stars"],
                 "Galaxies/Stars/PSFImages/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.images_flux_psf["BlackHole"],
+                self.io_buffers.images_flux_psf["BlackHole"],
                 "Galaxies/BlackHoles/PSFImages/Flux",
                 galaxy_indices,
             )
@@ -6387,17 +6274,17 @@ class Pipeline:
         # Write noise flux images
         if self._write_images_flux_noise:
             self.io_helper.write_data(
-                self.images_flux_noise["Galaxy"],
+                self.io_buffers.images_flux_noise["Galaxy"],
                 "Galaxies/NoiseImages/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.images_flux_noise["Stars"],
+                self.io_buffers.images_flux_noise["Stars"],
                 "Galaxies/Stars/NoiseImages/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.images_flux_noise["BlackHole"],
+                self.io_buffers.images_flux_noise["BlackHole"],
                 "Galaxies/BlackHoles/NoiseImages/Flux",
                 galaxy_indices,
             )
@@ -6405,17 +6292,17 @@ class Pipeline:
         # Write luminosity line maps
         if self._write_line_maps_lum:
             self.io_helper.write_data(
-                self.line_maps_lum["Galaxy"],
+                self.io_buffers.line_maps_lum["Galaxy"],
                 "Galaxies/LineMaps/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_maps_lum["Stars"],
+                self.io_buffers.line_maps_lum["Stars"],
                 "Galaxies/Stars/LineMaps/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_maps_lum["BlackHole"],
+                self.io_buffers.line_maps_lum["BlackHole"],
                 "Galaxies/BlackHoles/LineMaps/Luminosity",
                 galaxy_indices,
             )
@@ -6423,17 +6310,17 @@ class Pipeline:
         # Write PSF luminosity line maps
         if self._write_line_maps_lum_psf:
             self.io_helper.write_data(
-                self.line_maps_lum_psf["Galaxy"],
+                self.io_buffers.line_maps_lum_psf["Galaxy"],
                 "Galaxies/PSFLineMaps/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_maps_lum_psf["Stars"],
+                self.io_buffers.line_maps_lum_psf["Stars"],
                 "Galaxies/Stars/PSFLineMaps/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_maps_lum_psf["BlackHole"],
+                self.io_buffers.line_maps_lum_psf["BlackHole"],
                 "Galaxies/BlackHoles/PSFLineMaps/Luminosity",
                 galaxy_indices,
             )
@@ -6441,17 +6328,17 @@ class Pipeline:
         # Write noise luminosity line maps
         if self._write_line_maps_lum_noise:
             self.io_helper.write_data(
-                self.line_maps_lum_noise["Galaxy"],
+                self.io_buffers.line_maps_lum_noise["Galaxy"],
                 "Galaxies/NoiseLineMaps/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_maps_lum_noise["Stars"],
+                self.io_buffers.line_maps_lum_noise["Stars"],
                 "Galaxies/Stars/NoiseLineMaps/Luminosity",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_maps_lum_noise["BlackHole"],
+                self.io_buffers.line_maps_lum_noise["BlackHole"],
                 "Galaxies/BlackHoles/NoiseLineMaps/Luminosity",
                 galaxy_indices,
             )
@@ -6459,17 +6346,17 @@ class Pipeline:
         # Write flux line maps
         if self._write_line_maps_flux:
             self.io_helper.write_data(
-                self.line_maps_flux["Galaxy"],
+                self.io_buffers.line_maps_flux["Galaxy"],
                 "Galaxies/LineMaps/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_maps_flux["Stars"],
+                self.io_buffers.line_maps_flux["Stars"],
                 "Galaxies/Stars/LineMaps/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_maps_flux["BlackHole"],
+                self.io_buffers.line_maps_flux["BlackHole"],
                 "Galaxies/BlackHoles/LineMaps/Flux",
                 galaxy_indices,
             )
@@ -6477,17 +6364,17 @@ class Pipeline:
         # Write PSF flux line maps
         if self._write_line_maps_flux_psf:
             self.io_helper.write_data(
-                self.line_maps_flux_psf["Galaxy"],
+                self.io_buffers.line_maps_flux_psf["Galaxy"],
                 "Galaxies/PSFLineMaps/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_maps_flux_psf["Stars"],
+                self.io_buffers.line_maps_flux_psf["Stars"],
                 "Galaxies/Stars/PSFLineMaps/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_maps_flux_psf["BlackHole"],
+                self.io_buffers.line_maps_flux_psf["BlackHole"],
                 "Galaxies/BlackHoles/PSFLineMaps/Flux",
                 galaxy_indices,
             )
@@ -6495,23 +6382,23 @@ class Pipeline:
         # Write noise flux line maps
         if self._write_line_maps_flux_noise:
             self.io_helper.write_data(
-                self.line_maps_flux_noise["Galaxy"],
+                self.io_buffers.line_maps_flux_noise["Galaxy"],
                 "Galaxies/NoiseLineMaps/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_maps_flux_noise["Stars"],
+                self.io_buffers.line_maps_flux_noise["Stars"],
                 "Galaxies/Stars/NoiseLineMaps/Flux",
                 galaxy_indices,
             )
             self.io_helper.write_data(
-                self.line_maps_flux_noise["BlackHole"],
+                self.io_buffers.line_maps_flux_noise["BlackHole"],
                 "Galaxies/BlackHoles/NoiseLineMaps/Flux",
                 galaxy_indices,
             )
 
         # Write out the extra analysis results
-        for key, res in self._analysis_results.items():
+        for key, res in self.io_buffers.analysis_results.items():
             self.io_helper.write_data(
                 res,
                 f"Galaxies/{key}",
@@ -6520,7 +6407,7 @@ class Pipeline:
 
         # Record the rows we've written so datasets first appearing in a
         # later flush can be padded to line up with the galaxies
-        self.io_helper.rows_written += self._n_buffered
+        self.io_helper.rows_written += self.io_buffers.ngalaxies
 
     def combine_files(self):
         """Combine individual rank files into a single file.
