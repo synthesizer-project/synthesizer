@@ -391,9 +391,10 @@ class PipelineIO:
         else:
             units = "dimensionless"
 
-        # If we have an array of strings, convert to a h5py compatible string
+        # If we have an array of strings, convert to h5py's variable length
+        # strings (so later flushes can append longer strings)
         if data.dtype.kind == "U":
-            data = np.array([d.encode("utf-8") for d in data])
+            data = data.astype(h5py.string_dtype())
 
         # Write the dataset with the appropriate units
         with h5py.File(self.filepath, "a") as hdf:
@@ -404,27 +405,27 @@ class PipelineIO:
 
             # A per-galaxy dataset first appearing after a flush needs empty
             # rows for the galaxies already flushed so its rows line up with
-            # the galaxies
-            if self._writing_galaxy_data and self.rows_written:
-                data = np.concatenate(
-                    (
-                        np.zeros(
-                            (self.rows_written, *data.shape[1:]),
-                            dtype=data.dtype,
-                        ),
-                        data,
-                    )
-                )
+            # the galaxies. We leave those rows unwritten, HDF5 returns its
+            # fill value (zero) for them without us allocating them
+            nempty = (
+                self.rows_written
+                if self._writing_galaxy_data and data.ndim > 0
+                else 0
+            )
 
             # Create the dataset, leaving its galaxy axis unlimited so future
             # flushes can append to it
-            maxshape = (None, *data.shape[1:]) if data.ndim > 0 else None
-            dset = hdf.create_dataset(
-                key,
-                data=data,
-                maxshape=maxshape,
-                compression="gzip",
-            )
+            if data.ndim > 0:
+                dset = hdf.create_dataset(
+                    key,
+                    shape=(nempty + data.shape[0], *data.shape[1:]),
+                    dtype=data.dtype,
+                    maxshape=(None, *data.shape[1:]),
+                    compression="gzip",
+                )
+                dset[nempty:, ...] = data
+            else:
+                dset = hdf.create_dataset(key, data=data, compression="gzip")
             dset.attrs["Units"] = units
 
     def _append_to_dataset(self, hdf, data, key, units):

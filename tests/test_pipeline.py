@@ -3988,3 +3988,24 @@ def test_late_product_backfills_flushed_rows(tmp_path):
     io.write_data(np.array([[3.0]]), "Galaxies/Product", indexes=[2])
     with h5py.File(io.filepath) as hdf:
         np.testing.assert_array_equal(hdf["Galaxies/Product"], [[0], [0], [3]])
+
+
+def test_flushed_strings_can_grow(tmp_path):
+    """Later flushes may hold longer strings than earlier ones."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Set up a serial writer as the Pipeline would have it
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "strings.hdf5")
+    io.is_parallel = io.is_collective = False
+    io.verbose, io._start_time = 0, time.perf_counter()
+    io.rows_written = 0
+
+    # Write a first batch, then a second with a longer string
+    io.write_data(np.array(["ab", "cd"]), "Galaxies/Name", indexes=[0, 1])
+    io.rows_written = 2
+    io.write_data(np.array(["abcde"]), "Galaxies/Name", indexes=[2])
+
+    # Every string should be stored in full
+    with h5py.File(io.filepath) as hdf:
+        assert list(hdf["Galaxies/Name"].asstr()) == ["ab", "cd", "abcde"]
