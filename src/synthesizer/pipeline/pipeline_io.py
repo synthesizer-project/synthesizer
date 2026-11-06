@@ -791,43 +791,57 @@ class PipelineIO:
         if os.path.exists(new_path):
             os.remove(new_path)
 
-        # We can't infer the output structure from rank 0 alone: it might
-        # have no galaxies, or no examples of a particular component. Walk
-        # every rank file, preferring the first non-empty example of each
-        # dataset when deciding its shape, dtype and attributes.
-        datasets_info = {}
-        groups_info = {}
+        # Open the first rank file (rank 0 file) to discover the structure
+        first_file_path = temp_path.replace("<rank>", "0")
+        with h5py.File(first_file_path, "r") as f0:
+            # Gather dataset information (for virtual datasets). A rank
+            # without galaxies may hold empty placeholders so we take each
+            # dataset's information from the first rank with rows for it
+            datasets_info = {}
 
-        def gather(group, group_path="/"):
-            for k, v in group.items():
-                current_path = f"{group_path}{k}"
-                if isinstance(v, h5py.Group):
+            def gather_datasets(group, group_path="/"):
+                for k, v in group.items():
+                    current_path = f"{group_path}{k}"
                     # Axes are shared metadata, not virtual galaxy rows.
                     # We'll copy them directly from rank 0 below.
                     if current_path in _SHARED_AXIS_GROUPS:
                         continue
-                    groups_info.setdefault(current_path, dict(v.attrs))
-                    gather(v, current_path + "/")
-                elif current_path not in datasets_info or (
-                    datasets_info[current_path][0][0] == 0 and v.shape[0] > 0
-                ):
-                    # Record dataset shape, dtype, and attributes
-                    datasets_info[current_path] = (
-                        v.shape,
-                        v.dtype,
-                        dict(v.attrs),
-                    )
+                    if isinstance(v, h5py.Group):
+                        gather_datasets(v, current_path + "/")
+                    elif current_path not in datasets_info or (
+                        datasets_info[current_path][0][0] == 0
+                        and v.shape[0] > 0
+                    ):
+                        # Record dataset shape, dtype, and attributes
+                        datasets_info[current_path] = (
+                            v.shape,
+                            v.dtype,
+                            dict(v.attrs),
+                        )
 
-        # Collect the groups as well as the datasets so empty nested groups
-        # survive in the virtual file too.
-        for rank in range(self.size):
-            with h5py.File(temp_path.replace("<rank>", str(rank)), "r") as f:
-                if "Galaxies" in f:
-                    gather(f["Galaxies"], "/Galaxies/")
+            # Gather group structure (to replicate in the virtual file)
+            groups_info = {}
 
-        # Open the first rank file (rank 0 file) for the root metadata
-        first_file_path = temp_path.replace("<rank>", "0")
-        with h5py.File(first_file_path, "r") as f0:
+            def gather_groups(group, group_path="/"):
+                for k, v in group.items():
+                    current_path = f"{group_path}{k}"
+                    if current_path in _SHARED_AXIS_GROUPS:
+                        continue
+                    if isinstance(v, h5py.Group):
+                        groups_info.setdefault(current_path, dict(v.attrs))
+                        gather_groups(v, current_path + "/")
+
+            gather_datasets(f0["Galaxies"], "/Galaxies/")
+            gather_groups(f0["Galaxies"], "/Galaxies/")
+
+            # A rank without galaxies may be missing datasets entirely, so
+            # also gather the structure from the other rank files
+            for rank in range(1, self.size):
+                src_file = temp_path.replace("<rank>", str(rank))
+                with h5py.File(src_file, "r") as rank_f:
+                    gather_datasets(rank_f["Galaxies"], "/Galaxies/")
+                    gather_groups(rank_f["Galaxies"], "/Galaxies/")
+
             # Create the virtual file (any existing file is only replaced
             # once the new one is complete)
             with _hdf5_replaced_on_success(new_path) as hdf:
@@ -843,7 +857,7 @@ class PipelineIO:
 
                 # Create empty group structure
                 for gpath, gattrs in groups_info.items():
-                    grp = hdf.require_group(gpath)
+                    grp = hdf.create_group(gpath)
                     for attr_name, attr_val in gattrs.items():
                         grp.attrs[attr_name] = attr_val
 
@@ -866,17 +880,20 @@ class PipelineIO:
                     for rank, (start_i, end_i) in enumerate(zip(starts, ends)):
                         src_file = temp_path.replace("<rank>", str(rank))
                         with h5py.File(src_file, "r") as rank_f:
-                            # Nothing to map from a rank without this
-                            # dataset or without any rows for it
+                            # Nothing to map from a rank without this dataset
                             if dpath not in rank_f:
                                 continue
+
                             src_dset = rank_f[dpath]
                             src_shape = src_dset.shape
                             src_units = src_dset.attrs.get("Units")
                             local_size = src_dset.shape[0]
+
+                        # Nothing to map from a rank without any rows
                         if local_size == 0:
                             continue
 
+                        # Ensure the local size is as expected
                         expected_size = end_i - start_i
                         if local_size != expected_size:
                             raise ValueError(
@@ -895,9 +912,9 @@ class PipelineIO:
                                 "Cannot create virtual dataset mapping for "
                                 f"{dpath!r}: rank {rank} dataset in "
                                 f"{src_file!r} "
-                                f"has shape {src_shape}, but other ranks "
-                                f"have shape {shape}. Non-leading dimensions "
-                                "must match across rank files."
+                                f"has shape {src_shape}, but other ranks have "
+                                f"shape {shape}. Non-leading dimensions must "
+                                "match across rank files."
                             )
 
                         # The units must also match, we don't convert them

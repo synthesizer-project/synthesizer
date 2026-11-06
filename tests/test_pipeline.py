@@ -1113,18 +1113,6 @@ class TestPipelineOperations:
         pipeline.comm.gather.assert_called_once()
         pipeline.comm.allgather.assert_not_called()
 
-    def test_first_from_any_rank_all_ranks(self, nebular_emission_model):
-        """Every rank gets the value with all_ranks=True."""
-        # Pretend to be a non-root rank without the value
-        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-        pipeline.using_mpi = True
-        pipeline.rank = 1
-        pipeline.comm = MagicMock()
-        pipeline.comm.allgather.return_value = [None, "props", "other"]
-
-        # The first value which isn't None is returned on this rank too
-        assert pipeline._first_from_any_rank(None, all_ranks=True) == "props"
-
     def test_first_from_any_rank_without_mpi(self, nebular_emission_model):
         """Without MPI the rank's own value is returned."""
         pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)

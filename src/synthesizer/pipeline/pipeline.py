@@ -5875,7 +5875,7 @@ class Pipeline:
                     f"Expected {expected}, got {structure}."
                 )
 
-    def _first_from_any_rank(self, value, all_ranks=False):
+    def _first_from_any_rank(self, value):
         """Return the first value which isn't None on any rank.
 
         This is used for values only known on ranks with galaxies (e.g. the
@@ -5884,26 +5884,20 @@ class Pipeline:
         Args:
             value (object):
                 This rank's value (None if this rank doesn't have it).
-            all_ranks (bool):
-                If True, every rank gets the value, otherwise only rank 0
-                does (the other ranks get None).
 
         Returns:
             object:
-                The first value which isn't None, in rank order, or None if
-                no rank has one.
+                On rank 0, the first value which isn't None, in rank order,
+                or None if no rank has one. The other ranks get None.
         """
         # Without MPI this rank's value is the only one
         if not self.using_mpi:
             return value
 
-        # Collect every rank's value where it's needed
-        if all_ranks:
-            values = self.comm.allgather(value)
-        else:
-            values = self.comm.gather(value, root=0)
-            if self.rank != 0:
-                return None
+        # Collect every rank's value on rank 0
+        values = self.comm.gather(value, root=0)
+        if self.rank != 0:
+            return None
 
         return next((val for val in values if val is not None), None)
 
