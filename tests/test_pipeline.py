@@ -4065,9 +4065,8 @@ def test_sparse_product_rows_follow_galaxy_order():
 
     # Hold three galaxies where only the second produces the spectra
     for lnu in (None, np.array([2.0]), None):
-        buffers.start_galaxy()
         if lnu is not None:
-            buffers.lnu_spectra["Galaxy"].setdefault("nebular", []).append(lnu)
+            buffers.append_output(lnu, "lnu_spectra", "Galaxy", "nebular")
         buffers.end_galaxy()
 
     # The spectra should sit in the second row, with the others zero padded
@@ -4079,7 +4078,6 @@ def test_sparse_product_rows_follow_galaxy_order():
     # After a flush empties the buffers, a galaxy without the spectra still
     # gets a padded row since we now know the product exists
     buffers.clear()
-    buffers.start_galaxy()
     buffers.end_galaxy()
     np.testing.assert_array_equal(
         buffers.lnu_spectra["Galaxy"]["nebular"], [[0.0]]

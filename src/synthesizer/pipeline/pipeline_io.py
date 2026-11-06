@@ -262,9 +262,9 @@ class PipelineIOBuffers:
     # themselves since flushing empties the lists.
     _row_templates: dict = field(init=False, default_factory=dict)
 
-    # The number of rows in each output list before the current galaxy
-    # was unpacked (see start_galaxy)
-    _nrows_before: dict = field(init=False, default_factory=dict)
+    # The keys of the outputs the current galaxy has produced so far (see
+    # append_output)
+    _appended: set = field(init=False, default_factory=set)
 
     # The key structure of each analysis result from the first flush,
     # later flushes must match it to append consistently
@@ -316,19 +316,95 @@ class PipelineIOBuffers:
             for path, rows in iter_row_lists(getattr(self, name)):
                 yield (name, *path), rows
 
-    def start_galaxy(self):
-        """Record the rows held before a galaxy is unpacked.
+    def _hold(self, rows, new_rows):
+        """Add rows to an output's list, counting their memory if needed.
 
-        This lets end_galaxy spot the outputs the galaxy didn't produce. The
-        lists persist between galaxies (flushes only empty them) so we can
-        key them by id.
+        Args:
+            rows (list):
+                The output's list of rows.
+            new_rows (list):
+                The rows to add to the end of the list.
         """
-        self._nrows_before = {
-            id(rows): len(rows) for _, rows in self._iter_row_lists()
-        }
-        self._nrows_before.update(
-            {id(rows): len(rows) for rows in self.analysis_results.values()}
-        )
+        rows.extend(new_rows)
+
+        # Track how much memory we're holding if we flush on memory
+        if self.flush_memory is not None:
+            self.nbytes += get_buffered_nbytes(new_rows)
+
+    def append_output(self, value, name, *keys):
+        """Append the current galaxy's row to a per-galaxy output.
+
+        Any nested containers along the way are created on first use, so
+        an output is only held once a galaxy produces it.
+
+        Args:
+            value (array-like):
+                The galaxy's row.
+            name (str):
+                The name of the output (a key of GALAXY_OUTPUTS).
+            *keys (str):
+                The path to the row's list through the output's nested
+                containers (e.g. the component, then the emission model
+                label). Omitted for outputs which are a single list.
+        """
+        # Find the list for this row, creating it (and any containers above
+        # it) if this is the first time it's been produced
+        rows = getattr(self, name)
+        if keys:
+            for key in keys[:-1]:
+                rows = rows.setdefault(key, {})
+            rows = rows.setdefault(keys[-1], [])
+
+        # If no galaxy has produced this output before, pad a row for every
+        # galaxy we already hold. Galaxies already flushed are padded by the
+        # IO helper when it creates the dataset.
+        key = (name, *keys)
+        if key not in self._row_templates:
+            self._row_templates[key] = get_row_template(value)
+            self._hold(
+                rows,
+                [
+                    make_empty_row(self._row_templates[key])
+                    for _ in range(self.ngalaxies)
+                ],
+            )
+
+        # Store the galaxy's row and note the galaxy produced this output
+        self._hold(rows, [value])
+        self._appended.add(key)
+
+    def add_analysis_output(self, key):
+        """Add an output for the results of an extra analysis function.
+
+        There is no equivalent to this method for the other outputs because
+        their keys are known ahead of time, whereas the keys of analysis
+        outputs are entirely arbitrary (they're chosen by the user).
+
+        Args:
+            key (str):
+                The key of the analysis function's results.
+
+        Raises:
+            InconsistentArguments:
+                If an analysis output with this key already exists.
+        """
+        if key in self.analysis_results:
+            raise exceptions.InconsistentArguments(
+                f"{key} already exists in the analysis results. "
+                "Choose a different result_key"
+            )
+        self.analysis_results[key] = []
+
+    def append_analysis_output(self, key, result):
+        """Append the current galaxy's result of an extra analysis function.
+
+        Args:
+            key (str):
+                The key of the analysis function's results.
+            result (object):
+                The galaxy's result.
+        """
+        self._hold(self.analysis_results[key], [result])
 
     def end_galaxy(self):
         """Pad the outputs a galaxy didn't produce and count the galaxy.
@@ -337,39 +413,15 @@ class PipelineIOBuffers:
         against the wrong galaxy index, so we pad the missing outputs with
         empty rows shaped like the rows we already hold.
         """
+        # Pad any output this galaxy didn't append to. We can only do so if
+        # we know what a row looks like, if we don't then no galaxy has
+        # produced the output yet (e.g. the SFZH list exists from the start)
         for key, rows in self._iter_row_lists():
-            nbefore = self._nrows_before.get(id(rows), 0)
+            if key not in self._appended and key in self._row_templates:
+                self._hold(rows, [make_empty_row(self._row_templates[key])])
 
-            # The galaxy didn't produce this output, pad it if we know what
-            # a row looks like (if we don't, no galaxy has produced it yet
-            # and the list is still empty)
-            if len(rows) == nbefore:
-                if key in self._row_templates:
-                    rows.append(make_empty_row(self._row_templates[key]))
-
-            # This output is new with this galaxy, pad a row for every
-            # galaxy we already hold. Galaxies already flushed are padded by
-            # the IO helper when it creates the dataset.
-            elif nbefore == 0:
-                template = get_row_template(rows[0])
-                rows[:0] = [
-                    make_empty_row(template) for _ in range(self.ngalaxies)
-                ]
-
-            # Remember what a row looks like
-            if rows:
-                self._row_templates[key] = get_row_template(rows[0])
-
-        # Track how much memory we're holding if we flush on memory
-        if self.flush_memory is not None:
-            for rows in [rows for _, rows in self._iter_row_lists()] + list(
-                self.analysis_results.values()
-            ):
-                self.nbytes += get_buffered_nbytes(
-                    rows[self._nrows_before.get(id(rows), 0) :]
-                )
-
-        # Count the galaxy
+        # Count the galaxy and start afresh for the next one
+        self._appended.clear()
         self.ngalaxies += 1
 
     def should_flush(self):
