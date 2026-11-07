@@ -6,7 +6,7 @@ component.
 
 Example usage::
 
-    stars = Stars(log10ages, metallicities, sfzh=sfzh)
+    stars = Stars(log10ages, metallicities, sf_hist=sfh, metal_dist=zdist)
     stars.get_spectra(emission_model)
     stars.plot_spectra()
 """
@@ -31,13 +31,21 @@ from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
 from synthesizer.emission_models.utils import get_param
 from synthesizer.grid import Grid
+from synthesizer.parametric.bin_mask import BinMask, to_axis_threshold
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
-from synthesizer.synth_warnings import warn
+from synthesizer.synth_warnings import deprecation, warn
 from synthesizer.units import Quantity, accepts
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.stats import weighted_mean, weighted_median
+
+# The number of bins each interval between axis points is split into when
+# binning an SFH or metallicity distribution function. Mass is uniform within
+# each bin, so the error from this converges at second order: with 8 the
+# spectra are within 0.2% of the converged result for a narrow (sigma = 4 Myr)
+# young Gaussian SFH, and within 0.04% for typical SFHs.
+SFZH_SUBDIVISIONS = 8
 
 
 class Stars(StarsComponent):
@@ -70,8 +78,9 @@ class Stars(StarsComponent):
             stellar population's morphology. This can be any of the family
             of morphology classes from synthesizer.morphology.
         sfzh (np.ndarray of float):
-            An array describing the binned SFZH. If provided all following
-            arguments are ignored.
+            Deprecated, use Stars.from_sfzh. The mass formed at each (age,
+            metallicity) point. If provided all following arguments are
+            ignored.
         sf_hist (np.ndarray of float):
             An array describing the star formation history.
         metal_dist (np.ndarray of float):
@@ -131,7 +140,7 @@ class Stars(StarsComponent):
         """Initialise the parametric stellar population.
 
         Can either be instantiated by:
-        - Passing a SFZH grid explictly.
+        - Passing a SFZH grid explictly (deprecated, use Stars.from_sfzh).
         - Passing instant_sf and instant_metallicity to get an instantaneous
           SFZH.
         - Passing functions that describe the SFH and ZH.
@@ -160,8 +169,9 @@ class Stars(StarsComponent):
                 stellar population's morphology. This can be any of the family
                 of morphology classes from synthesizer.morphology.
             sfzh (np.ndarray of float):
-                An array describing the binned SFZH. If provided all following
-                arguments are ignored.
+                Deprecated, use Stars.from_sfzh. The mass formed at each
+                (age, metallicity) point. If provided all following arguments
+                are ignored.
             sf_hist (float/unyt_quantity/np.ndarray of float/SFH.*):
                 Either:
                     - An age at which to compute an instantaneous SFH, i.e. all
@@ -185,6 +195,15 @@ class Stars(StarsComponent):
                 Arbitrary keyword arguments to be set as attributes on the
                 Stars instance.
         """
+        # Passing an SFZH is deprecated in favour of from_sfzh (which passes
+        # it privately)
+        if sfzh is not None:
+            deprecation(
+                "Passing sfzh to Stars is deprecated, use "
+                "Stars.from_sfzh(log10ages, metallicities, sfzh) instead."
+            )
+        sfzh = kwargs.pop("_point_sfzh", sfzh)
+
         # Instantiate the parent
         StarsComponent.__init__(
             self,
@@ -297,60 +316,66 @@ class Stars(StarsComponent):
         if self.surviving_mass is not None and grid is not None:
             self.stellar_fraction = grid.stellar_fraction
 
-        # If we have been handed an explict SFZH grid we can ignore all the
-        # calculation methods
+        # Get the bins describing the population, either from an explicit
+        # SFZH (defined at the points of the axes, which we copy so
+        # normalising doesn't modify the caller's array) or from the SFH and
+        # metallicity distribution
         if sfzh is not None:
-            # Store the SFZH grid
-            self.sfzh = sfzh
+            edges, masses = self._get_point_bins(
+                np.array(sfzh, dtype=np.float64)
+            )
         else:
-            # Compute the SFZH grid
-            self.sfzh = self._get_sfzh()
+            edges, masses = self._get_bins()
 
-        # Check the SFZH grid doesn't contain any NaN or Inf values, this can
+        # Check the masses don't contain any NaN or Inf values, this can
         # happen if the SFH or ZH functions return NaN or Inf values for some
         # reason, and this will cause all kinds of problems downstream if we
         # don't catch it here.
-        if np.any(~np.isfinite(self.sfzh)):
+        if np.any(~np.isfinite(masses)):
             raise exceptions.InconsistentArguments(
                 "SFZH grid contains NaN or Inf values! "
                 "Please check the input parameters."
             )
 
-        # We can't normalise an SFZH with no mass on the grid (e.g. an SFH
-        # or ZDist peaking far outside the axes), doing so would silently
-        # make it NaN
+        # We can't normalise bins with no mass (e.g. an SFH or ZDist peaking
+        # far outside the axes), doing so would silently make them NaN
         if (
             self.surviving_mass is not None or self.initial_mass is not None
-        ) and np.sum(self.sfzh) <= 0:
+        ) and np.sum(masses) <= 0:
             raise exceptions.InconsistentArguments(
                 "The SFH and metallicity distribution put no mass on the "
                 "age and metallicity axes, so the SFZH can't be normalised. "
                 "Please check the input parameters."
             )
 
-        # Normalise the SFZH grid if needs be, and calculate the initial mass
+        # Normalise the masses if needs be, and calculate the initial mass
         # if we have been given a surviving mass. If we have been given an
-        # initial mass we just need to rescale the SFZH grid to obey this
+        # initial mass we just need to rescale the masses to obey this
         # constraint, and if we have been given neither then we can just sum
-        # the SFZH grid to get the total initial mass.
+        # the masses to get the total initial mass.
         if self.surviving_mass is not None:
-            current_surviving_mass = np.sum(self.sfzh * self.stellar_fraction)
+            current_surviving_mass = np.sum(
+                self._bins_to_axes(edges, masses) * self.stellar_fraction
+            )
             self.sfzh_normalisation = (
                 self._surviving_mass / current_surviving_mass
             )
-            self.sfzh *= self.sfzh_normalisation
+            masses = masses * self.sfzh_normalisation
 
             # now calculate the initial mass
-            self.initial_mass = np.sum(self.sfzh) * Msun
+            self.initial_mass = np.sum(masses) * Msun
 
         elif self.initial_mass is not None:
-            self.sfzh_normalisation = self._initial_mass / np.sum(self.sfzh)
-            self.sfzh *= self.sfzh_normalisation
+            self.sfzh_normalisation = self._initial_mass / np.sum(masses)
+            masses = masses * self.sfzh_normalisation
 
         else:
             # Otherwise calculate the total initial mass by just summing the
-            # SFZH grid
-            self.initial_mass = np.sum(self.sfzh) * Msun
+            # masses
+            self.initial_mass = np.sum(masses) * Msun
+
+        # Store the population's bins
+        self._set_bins(edges, masses)
 
         # Ensure sf_hist and metal_dist reflect the rescaled sfzh
         self.sf_hist = np.sum(self.sfzh, axis=1)
@@ -385,164 +410,208 @@ class Stars(StarsComponent):
 
     @timed("ParametricStars._create_sfzh")
     def _get_sfzh(self, age_offset=None):
-        """Compute the SFZH for all possible combinations of input.
-
-        If functions are passed for sf_hist_func and metal_dist_func then
-        the SFH and ZH arrays are computed first.
+        """Compute the SFZH on this object's axes from the SFH and ZH.
 
         Args:
             age_offset (unyt_quantity):
                 The offset to apply to the age grid when calculating the SFZH
-        """
-        # Hide imports to avoid cyclic imports
-        from synthesizer.particle import Stars as ParticleStars
 
+        Returns:
+            np.ndarray of float:
+                The mass at each (age, metallicity) point of the axes.
+        """
+        # Bin the SFH and ZH, then map the bins onto the axis points
+        edges, masses = self._get_bins(age_offset)
+        return self._bins_to_axes(edges, masses)
+
+    @staticmethod
+    def _get_fine_edges(nodes, breakpoints=()):
+        """Get fine bin edges spanning zero to the last of a set of nodes.
+
+        Each interval between nodes is split into SFZH_SUBDIVISIONS pieces
+        (log spaced when the nodes are positive), below the first node there
+        is a single bin from zero, and any breakpoints inside the range are
+        added as edges so no bin straddles one.
+
+        NOTE: Mass is spread uniformly within each bin, so the subdivisions
+        only need to resolve how the SFH (or metallicity distribution) varies
+        across each interval between nodes.
+
+        Args:
+            nodes (np.ndarray of float):
+                The (linear) axis points.
+            breakpoints (np.ndarray of float):
+                Values where the distribution changes abruptly.
+
+        Returns:
+            np.ndarray of float:
+                The bin edges.
+        """
+        # The fractional position of each subdivision within an interval
+        nodes = np.asarray(nodes, dtype=np.float64)
+        steps = np.arange(SFZH_SUBDIVISIONS) / SFZH_SUBDIVISIONS
+
+        # Subdivide each interval, in log space when every node is positive
+        # (the grids' axes are log spaced) and linearly otherwise
+        if nodes[0] > 0:
+            log_nodes = np.log10(nodes)
+            fine = 10 ** (
+                log_nodes[:-1, None] + np.diff(log_nodes)[:, None] * steps
+            )
+        else:
+            fine = nodes[:-1, None] + np.diff(nodes)[:, None] * steps
+
+        # Only breakpoints strictly inside (0, last node) add new edges
+        breakpoints = np.asarray(breakpoints, dtype=np.float64)
+        breakpoints = breakpoints[
+            (breakpoints > 0) & (breakpoints < nodes[-1])
+        ]
+
+        # Combine everything into sorted, unique edges starting at zero and
+        # ending at the last node
+        return np.unique(
+            np.concatenate(([0.0], fine.ravel(), [nodes[-1]], breakpoints))
+        )
+
+    @staticmethod
+    def _get_points_as_bins(nodes, values):
+        """Get zero width bins at a set of points.
+
+        Each point becomes a zero width bin, with (empty) finite bins
+        between them.
+
+        Args:
+            nodes (np.ndarray of float):
+                The (linear) points.
+            values (np.ndarray of float):
+                The mass at each point.
+
+        Returns:
+            tuple:
+                The bin edges and the mass in each bin.
+        """
+        # Repeating each node gives a zero width bin at every even index
+        # with an empty finite bin between each pair of nodes
+        masses = np.zeros(2 * len(nodes) - 1)
+        masses[::2] = values
+        return np.repeat(np.asarray(nodes, dtype=np.float64), 2), masses
+
+    def _get_age_bins(self, offset):
+        """Get the age bins and the mass formed in each.
+
+        Args:
+            offset (float):
+                The offset (in years) to apply to the ages.
+
+        Returns:
+            tuple:
+                The age bin edges (in years) and the mass in each bin.
+
+        Raises:
+            InconsistentArguments:
+                If no SFH has been defined.
+        """
+        # Work with the ages in years
+        ages = self.ages.to("yr").ndview
+
+        # An SFH function is integrated exactly over fine bins of the axis
+        if self.sf_hist_func is not None:
+            edges = self._get_fine_edges(
+                ages, self.sf_hist_func._get_breakpoints() - offset
+            )
+            return edges, self.sf_hist_func.get_bin_masses(edges + offset)
+
+        # An instantaneous SFH is a single point
+        if self._instant_sf is not None:
+            age = self._instant_sf.to("yr").value + offset
+            return np.array([age, age]), np.array([1.0])
+
+        # An array is defined at the points of the axis
+        if self.sf_hist is not None:
+            return self._get_points_as_bins(ages, self.sf_hist)
+
+        # Without any of the above we have no SFH
+        raise exceptions.InconsistentArguments(
+            "A method for defining both the SFH and ZH must be provided!\n"
+            "For each either an instantaneous"
+            " value, a SFH/ZH object, or an array must be passed"
+        )
+
+    def _get_metal_bins(self):
+        """Get the metallicity bins and the weight of each.
+
+        Returns:
+            tuple:
+                The metallicity bin edges and the weight in each bin.
+
+        Raises:
+            InconsistentArguments:
+                If no metallicity distribution has been defined.
+        """
+        # Work with the metallicities as a plain float array
+        metals = np.asarray(self.metallicities, dtype=np.float64)
+
+        # A delta function is a single point
+        if self.metal_dist_func is not None and (
+            self.metal_dist_func.name == "DeltaConstant"
+        ):
+            metal = float(self.metal_dist_func.get_metallicity())
+            return np.array([metal, metal]), np.array([1.0])
+
+        # A metallicity distribution is integrated exactly over fine bins of
+        # the axis
+        if self.metal_dist_func is not None:
+            edges = self._get_fine_edges(metals)
+            return edges, self.metal_dist_func.get_bin_weights(edges)
+
+        # An instantaneous metallicity is a single point
+        if self._instant_metallicity is not None:
+            metal = float(self._instant_metallicity)
+            return np.array([metal, metal]), np.array([1.0])
+
+        # An array is defined at the points of the axis
+        if self.metal_dist is not None:
+            return self._get_points_as_bins(metals, self.metal_dist)
+
+        # Without any of the above we have no metallicity distribution
+        raise exceptions.InconsistentArguments(
+            "A method for defining both the SFH and ZH must be provided!\n"
+            "For each either an instantaneous"
+            " value, a SFH/ZH object, or an array must be passed"
+        )
+
+    def _get_bins(self, age_offset=None):
+        """Get the bins describing the population from the SFH and ZH.
+
+        The SFH and metallicity distribution are binned separately and the
+        population is their product.
+
+        Args:
+            age_offset (unyt_quantity):
+                The offset to apply to the ages, e.g. to get the population
+                at an earlier time.
+
+        Returns:
+            tuple:
+                The bin edges keyed by axis name and the (1, n_age, n_Z) bin
+                masses.
+        """
         # If no units assume unit system
         if self._instant_sf is not None and not isinstance(
             self._instant_sf, unyt_quantity
         ):
-            self._instant_sf *= self.ages.units
+            self._instant_sf = self._instant_sf * self.ages.units
 
-        # If arrays are passed for the SFH and ZH we can just use those
-        if self.sf_hist is not None and self.metal_dist is not None:
-            sf_hist = self.sf_hist
-            metal_dist = self.metal_dist
-        else:
-            sf_hist = None
-            metal_dist = None
+        # Bin each axis separately, offsetting the ages if requested
+        offset = 0.0 if age_offset is None else age_offset.to("yr").value
+        age_edges, age_masses = self._get_age_bins(offset)
+        metal_edges, metal_weights = self._get_metal_bins()
 
-        # If we have been given an age offset then we need to reset the
-        # sf_hist and metal_dist to None so that they are recalculated
-        if age_offset is not None:
-            sf_hist = None
-            metal_dist = None
-        else:
-            age_offset = 0.0 * yr
-
-        # A delta function for metallicity is a special case
-        # equivalent to instant_metallicity = metal_dist_func.metallicity
-        if self.metal_dist_func is not None:
-            if self.metal_dist_func.name == "DeltaConstant":
-                self._instant_metallicity = (
-                    self.metal_dist_func.get_metallicity()
-                )
-
-        # If both are instantaneous then we can do the whole SFZH in one go
-        if (
-            self._instant_sf is not None
-            and self._instant_metallicity is not None
-        ):
-            inst_stars = ParticleStars(
-                # We can just use a single star with mass 1 Msun here, the
-                # normalisation will be applied later based on the initial
-                # mass or surviving mass if provided, or the total mass of
-                # the SFZH grid otherwise
-                initial_masses=np.array([1.0]) * Msun,
-                ages=np.array(
-                    [
-                        self._instant_sf.to("yr").value
-                        + age_offset.to("yr").value
-                    ]
-                )
-                * yr,
-                metallicities=np.array([self._instant_metallicity]),
-            )
-
-            # Compute the SFZH grid in one go, this will be a delta function
-            # in both age and metallicity so will just populate a single bin
-            # but this is the most straightforward way to do it
-            sfzh = inst_stars.get_sfzh(
-                self.log10ages,
-                self.metallicities,
-                grid_assignment_method="cic",
-            ).sfzh
-
-            # Project the SFZH to get the 1D SFH and ZH, this is a bit
-            # redundant but it means we can use the same code for all
-            # the different cases downstream
-            sf_hist = np.sum(sfzh, axis=1)
-            metal_dist = np.sum(sfzh, axis=0)
-
-            # Since we are not normalising the things here we can just
-            # return the SFZH, SFH and ZH at this point and skip the
-            # rest of the code which is really just for normalisation and
-            # checking consistency of the SFH and ZH arrays with the SFZH grid.
-            return sfzh
-
-        # Handle the instantaneous SFH case
-        elif (
-            self._instant_sf is not None and self._instant_metallicity is None
-        ):
-            inst_stars = ParticleStars(
-                # We can just use a single star with mass 1 Msun here, the
-                # normalisation will be applied later based on the initial
-                # mass or surviving mass if provided, or the total mass of
-                # the SFZH grid otherwise
-                initial_masses=np.array([1.0]) * Msun,
-                ages=np.array(
-                    [
-                        self._instant_sf.to("yr").value
-                        + age_offset.to("yr").value
-                    ]
-                )
-                * yr,
-                metallicities=np.array([0]),  # this is a dummy value
-            )
-
-            # Create SFH array
-            sf_hist = inst_stars.get_sfh(self.log10ages)
-
-        # Handle the instantaneous ZH case
-        elif (
-            self._instant_metallicity is not None and self._instant_sf is None
-        ):
-            inst_stars = ParticleStars(
-                # We can just use a single star with mass 1 Msun here, the
-                # normalisation will be applied later based on the initial
-                # mass or surviving mass if provided, or the total mass of
-                # the SFZH grid otherwise
-                initial_masses=np.array([1.0]) * Msun,
-                ages=np.array([0.0]) * yr,  # this is a dummy value
-                metallicities=np.array([self._instant_metallicity]),
-            )
-
-            # Create metal distribution array
-            metal_dist = inst_stars.get_metal_dist(self.metallicities)
-
-        # Calculate SFH from function if necessary
-        if self.sf_hist_func is not None and sf_hist is None:
-            # Get the mass in each age bin from the SFH's CDF, the bin edges
-            # are the midpoints between grid ages and the oldest bin extends
-            # up to the oldest grid age
-            ages = self.ages.to("yr").value
-            age_edges = np.concatenate(
-                ([0.0], 0.5 * (ages[1:] + ages[:-1]), [ages[-1]])
-            )
-            sf_hist = self.sf_hist_func.get_bin_masses(
-                age_edges + age_offset.to("yr").value
-            )
-
-        # Calculate ZH from function if necessary
-        if self.metal_dist_func is not None and metal_dist is None:
-            # Get the mass in each metallicity bin from the ZDist's CDF, the
-            # bin edges are the midpoints between grid metallicities and the
-            # most metal rich bin extends up to the highest grid metallicity
-            metals = np.asarray(self.metallicities, dtype=np.float64)
-            metal_edges = np.concatenate(
-                ([0.0], 0.5 * (metals[1:] + metals[:-1]), [metals[-1]])
-            )
-            metal_dist = self.metal_dist_func.get_bin_weights(metal_edges)
-
-        # Ensure that by this point we have an array for SFH and ZH
-        if sf_hist is None or metal_dist is None:
-            raise exceptions.InconsistentArguments(
-                "A method for defining both the SFH and ZH must be provided!\n"
-                "For each either an instantaneous"
-                " value, a SFH/ZH object, or an array must be passed"
-            )
-
-        # Finally, calculate the SFZH grid based on the above calculations
-        return sf_hist[:, np.newaxis] * metal_dist
+        # The population is the outer product of the two, with a leading
+        # axis for the single population
+        edges = {"ages": age_edges, "metallicities": metal_edges}
+        masses = (age_masses[:, None] * metal_weights[None, :])[None]
+        return edges, masses
 
     def _get_normalised_sfzh(self, age_offset):
         """Get the correctly mass-scaled SFZH grid at an earlier lookback time.
@@ -640,7 +709,167 @@ class Stars(StarsComponent):
         # to construct a new Stars object.
         sfzh = self._get_normalised_sfzh(age_offset)
 
-        return Stars(self.log10ages, self.metallicities, sfzh=sfzh)
+        return Stars.from_sfzh(self.log10ages, self.metallicities, sfzh)
+
+    def _set_bins(self, edges, masses):
+        """Set the bins describing this population.
+
+        Args:
+            edges (dict):
+                The bin edges along each axis in bin_axes, in linear units
+                (ages in yr), keyed by axis name.
+            masses (np.ndarray):
+                The mass in each bin (Msun) with shape (npop, nbins_0, ...,
+                nbins_N) in the order of bin_axes.
+        """
+        # Store the bins
+        self._bin_edges = edges
+        self._bin_masses = masses
+
+        # Anything derived from the bins is now stale
+        self._sfzh_view = None
+        self._grid_weights = {}
+
+    def _get_point_bins(self, sfzh):
+        """Get bins from a SFZH defined at the points of the axes.
+
+        Each point of the age and metallicity axes becomes a zero width bin,
+        with the (empty) finite bins between them. Mapping these onto any
+        grid is then exactly cloud in cell, and onto this object's own axes
+        it returns the SFZH unchanged.
+
+        Args:
+            sfzh (np.ndarray):
+                The mass (Msun) at each (age, metallicity) point.
+
+        Returns:
+            tuple:
+                The bin edges keyed by axis name and the bin masses.
+        """
+        # Get the point bin edges along each axis (the masses are filled
+        # in 2D below so the 1D masses are discarded)
+        age_edges, _ = self._get_points_as_bins(
+            self.ages.to("yr").ndview, np.zeros(self.ages.size)
+        )
+        metal_edges, _ = self._get_points_as_bins(
+            self.metallicities, np.zeros(self.metallicities.size)
+        )
+
+        # Put the SFZH in the zero width bins (even indices on both axes),
+        # leaving the finite bins between them empty
+        masses = np.zeros((1, age_edges.size - 1, metal_edges.size - 1))
+        masses[0, ::2, ::2] = sfzh
+        return {"ages": age_edges, "metallicities": metal_edges}, masses
+
+    def _bins_to_axes(self, edges, masses):
+        """Map bins onto this object's age and metallicity axes.
+
+        Args:
+            edges (dict):
+                The bin edges keyed by axis name.
+            masses (np.ndarray):
+                The bin masses.
+
+        Returns:
+            np.ndarray:
+                The mass (Msun) at each (age, metallicity) point.
+        """
+        # Imported here to avoid importing the extension at module load
+        from synthesizer.extensions.parametric_spectra import (
+            compute_parametric_weights,
+        )
+
+        # Use log10 metallicity axes like the grids unless a metallicity of
+        # zero makes that impossible
+        log_metals = bool(np.all(self.metallicities > 0))
+        metal_axis = (
+            self.log10metallicities if log_metals else self.metallicities
+        )
+
+        # Spread the bins onto the axis points (ages are always log10)
+        return compute_parametric_weights(
+            (
+                np.ascontiguousarray(self.log10ages, dtype=np.float64),
+                np.ascontiguousarray(metal_axis, dtype=np.float64),
+            ),
+            tuple(
+                np.ascontiguousarray(edges[axis], dtype=np.float64)
+                for axis in self.bin_axes
+            ),
+            np.ascontiguousarray(masses, dtype=np.float64),
+            (True, log_metals),
+            1,
+            None,
+        )
+
+    @property
+    def bin_axes(self):
+        """The names of the axes the population is binned along.
+
+        Returns:
+            tuple of str:
+                The bin axis names in the order of the bin_masses axes.
+        """
+        return ("ages", "metallicities")
+
+    @property
+    def bin_masses(self):
+        """The mass in each bin (Msun).
+
+        Returns:
+            np.ndarray:
+                The masses with shape (npop, nbins_0, ..., nbins_N).
+        """
+        return self._bin_masses
+
+    def get_bin_edges(self, axis, values_only=False):
+        """Get the bin edges along an axis.
+
+        Args:
+            axis (str):
+                The axis name (one of bin_axes).
+            values_only (bool):
+                Return the values without units.
+
+        Returns:
+            unyt_array/np.ndarray:
+                The bin edges in linear units.
+
+        Raises:
+            MissingAttribute:
+                If the population is not binned along the axis.
+        """
+        # Ensure we have bins along this axis
+        if axis not in self._bin_edges:
+            raise exceptions.MissingAttribute(
+                f"This parametric Stars has no bins along {axis} (it is "
+                f"binned along {self.bin_axes})."
+            )
+        # Only the ages carry units (stored in yr)
+        edges = self._bin_edges[axis]
+        if values_only or axis != "ages":
+            return edges
+        return edges * yr
+
+    @property
+    def sfzh(self):
+        """The SFZH on this object's age and metallicity axes.
+
+        This is a read-only view of the bins mapped onto the points of the
+        age and metallicity axes with the bin in cell approach (see
+        synthesizer.extensions.parametric_spectra).
+
+        Returns:
+            np.ndarray:
+                The mass (Msun) at each (age, metallicity) point.
+        """
+        # Compute the view lazily, caching it (read-only so the cache can't
+        # drift from the bins) until the bins change
+        if self._sfzh_view is None:
+            view = self._bins_to_axes(self._bin_edges, self._bin_masses)
+            view.setflags(write=False)
+            self._sfzh_view = view
+        return self._sfzh_view
 
     @timed("Stars.get_mask")
     def get_mask(
@@ -655,6 +884,12 @@ class Stars(StarsComponent):
 
         Will derive a mask of the form attr op thresh, e.g. age > 10 Myr.
 
+        A condition on a bin axis (ages or metallicities, or their log10)
+        can cut through a bin, so the mask records the allowed interval and
+        converts it into the fraction of each bin passing (see BinMask).
+        Conditions on a population level value (e.g. a fixed model parameter)
+        include or exclude the whole population.
+
         Args:
             attr (str):
                 The attribute to derive the mask from.
@@ -663,7 +898,7 @@ class Stars(StarsComponent):
             op (str):
                 The operation to apply. Can be '<', '>', '<=', '>=', "==",
                 or "!=".
-            mask (np.ndarray):
+            mask (BinMask):
                 Optionally, a mask to combine with the new mask.
             attr_override_obj (object):
                 An alternative object to check from the attribute. This
@@ -671,64 +906,60 @@ class Stars(StarsComponent):
                 fixed parameter override, but can be used more generally.
 
         Returns:
-            mask (np.ndarray):
-                The mask array.
+            mask (BinMask):
+                The combined mask.
+
+        Raises:
+            InconsistentArguments:
+                If the mask to combine with is not a BinMask, or the
+                attribute is neither a bin axis nor single valued.
         """
-        # Get the attribute
-        attr = get_param(attr, attr_override_obj, None, self)
+        # Start from a copy of the mask we're combining with
+        if mask is None:
+            new_mask = BinMask()
+        elif isinstance(mask, BinMask):
+            new_mask = mask.copy()
+        else:
+            raise exceptions.InconsistentArguments(
+                "Parametric Stars masks must be BinMask objects, "
+                f"got {type(mask)}."
+            )
 
         # Resolve a string threshold as an attribute alias on the emitter
         if isinstance(thresh, str):
-            thresh = get_param(thresh, attr_override_obj, None, self)
+            thresh = get_param(
+                thresh, attr_override_obj, None, self, preserve_units=True
+            )
 
-        # Apply the operator
-        if op == ">":
-            new_mask = attr > thresh
-        elif op == "<":
-            new_mask = attr < thresh
-        elif op == ">=":
-            new_mask = attr >= thresh
-        elif op == "<=":
-            new_mask = attr <= thresh
-        elif op == "==":
-            new_mask = attr == thresh
-        elif op == "!=":
-            new_mask = attr != thresh
-        else:
+        # A fixed model parameter applies to the whole population
+        override = None
+        if attr in getattr(attr_override_obj, "fixed_parameters", {}):
+            override = get_param(
+                attr, attr_override_obj, None, self, preserve_units=True
+            )
+
+        # Otherwise, is this a condition on a bin axis?
+        axis = attr[5:] if attr.startswith("log10") else attr
+        if override is None and axis in self.bin_axes:
+            axis_units = yr if axis == "ages" else None
+            new_mask.add_axis_condition(
+                axis, op, to_axis_threshold(thresh, attr, axis_units)
+            )
+            return new_mask
+
+        # Anything else must be a single population level value
+        value = (
+            override
+            if override is not None
+            else get_param(attr, None, None, self, preserve_units=True)
+        )
+        if np.size(value) != 1:
             raise exceptions.InconsistentArguments(
-                "Masking operation must be '<', '>', '<=', '>=', '==', or "
-                f"'!=', not {op}"
+                f"Can't mask a parametric Stars on {attr}: only the bin axes "
+                f"({self.bin_axes}) and single valued quantities can be "
+                "masked."
             )
-
-        # Broadcast the mask to get a mask for SFZH bins
-        if new_mask.size == self.sfzh.shape[0]:
-            new_mask = np.outer(
-                new_mask, np.ones(self.sfzh.shape[1], dtype=bool)
-            )
-        elif new_mask.size == self.sfzh.shape[1]:
-            new_mask = np.outer(
-                np.ones(self.sfzh.shape[0], dtype=bool), new_mask
-            )
-        elif new_mask.shape == self.sfzh.shape:
-            pass  # nothing to do here
-        else:
-            raise exceptions.InconsistentArguments(
-                "Masking array must be the same shape as the SFZH grid "
-                f"or an axis (mask.shape={new_mask.shape}, "
-                f"sfzh.shape={self.sfzh.shape})"
-            )
-
-        # Combine with the existing mask
-        if mask is not None:
-            if mask.shape == new_mask.shape:
-                new_mask = np.logical_and(new_mask, mask)
-            else:
-                raise exceptions.InconsistentArguments(
-                    "Masking array must be the same shape as the SFZH grid "
-                    f"or an axis (mask.shape={new_mask.shape}, "
-                    f"sfzh.shape={self.sfzh.shape})"
-                )
-
+        new_mask.add_population_condition(value, op, thresh)
         return new_mask
 
     def calculate_median_age(self):
@@ -742,6 +973,33 @@ class Stars(StarsComponent):
     def calculate_mean_metallicity(self):
         """Calculate the mean metallicity of the stellar population."""
         return weighted_mean(self.metallicities, self.metal_dist)
+
+    @classmethod
+    def from_sfzh(cls, log10ages, metallicities, sfzh, **kwargs):
+        """Create a Stars from the mass formed at each axis point.
+
+        Each (age, metallicity) point of the axes holds the mass formed at
+        exactly that age and metallicity (a zero width bin), e.g. the SFZH
+        of a particle Stars binned onto a grid's axes.
+
+        Args:
+            log10ages (np.ndarray of float):
+                The log10 age axis.
+            metallicities (np.ndarray of float):
+                The metallicity axis.
+            sfzh (np.ndarray of float):
+                The mass (in Msun) formed at each (age, metallicity) point,
+                with shape (len(log10ages), len(metallicities)).
+            **kwargs (dict):
+                Any other arguments for the Stars, e.g. initial_mass to
+                normalise the SFZH, or fesc.
+
+        Returns:
+            Stars:
+                The population.
+        """
+        # Pass the SFZH privately so the deprecated sfzh argument isn't hit
+        return cls(log10ages, metallicities, _point_sfzh=sfzh, **kwargs)
 
     def __add__(self, other_stars):
         """Add two Stars instances together.
@@ -778,10 +1036,10 @@ class Stars(StarsComponent):
                     f"the combined Stars will use the default {name}."
                 )
 
-        return Stars(
+        return Stars.from_sfzh(
             self.log10ages,
             self.metallicities,
-            sfzh=new_sfzh,
+            new_sfzh,
             **shared,
         )
 
@@ -846,7 +1104,9 @@ class Stars(StarsComponent):
                 self.spectra[key]._fnu *= conversion
 
         # Apply correction to the SFZH
-        self.sfzh *= conversion
+        self._set_bins(
+            self._bin_edges, self._bin_masses * np.asarray(conversion)
+        )
 
         # Ensure sf_hist and metal_dist reflect the rescaled sfzh
         self.sf_hist = np.sum(self.sfzh, axis=1)
@@ -908,7 +1168,9 @@ class Stars(StarsComponent):
                 self.spectra[key]._fnu *= conversion
 
         # Apply correction to the SFZH
-        self.sfzh *= conversion
+        self._set_bins(
+            self._bin_edges, self._bin_masses * np.asarray(conversion)
+        )
 
         # Ensure sf_hist and metal_dist reflect the rescaled sfzh
         self.sf_hist = np.sum(self.sfzh, axis=1)
