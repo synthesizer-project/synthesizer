@@ -33,6 +33,7 @@ from synthesizer.pipeline.pipeline_utils import (
     get_dataset_properties,
     get_dict_structure,
     get_row_template,
+    iter_products,
     iter_row_lists,
     make_empty_row,
     rows_to_arrays,
@@ -214,6 +215,53 @@ class PipelineIOBuffers:
             "_write_spectroscopy_fnu",
             "Spectroscopy/SpectralFluxDensities",
         ),
+    }
+
+    # Where each per-galaxy output comes from (see unpack): the attribute
+    # holding its products, how many levels of keys (e.g. instrument,
+    # emission model label, filter) lead to each product, and the
+    # product's attribute holding the value we store (None to store the
+    # product itself). Outputs held per component are taken from each
+    # component (the galaxy, its stars and its black holes), the others
+    # from the galaxy itself. The observed line wavelengths are the only
+    # per-galaxy output not described here (see unpack).
+    GALAXY_SOURCES: ClassVar[dict] = {
+        "sfzhs": ("sfzh", 0, None),
+        "sfhs": ("sfh", 0, None),
+        "lnu_spectra": ("spectra", 1, "lnu"),
+        "fnu_spectra": ("spectra", 1, "fnu"),
+        "luminosities": ("photo_lnu", 2, None),
+        "fluxes": ("photo_fnu", 2, None),
+        "line_lums": ("lines", 1, "luminosity"),
+        "line_cont_lums": ("lines", 1, "continuum"),
+        "line_fluxes": ("lines", 1, "flux"),
+        "line_cont_fluxes": ("lines", 1, "continuum_flux"),
+        "images_lum": ("images_lnu", 3, "img"),
+        "images_lum_psf": ("images_psf_lnu", 3, "img"),
+        "images_lum_noise": ("images_noise_lnu", 3, "img"),
+        "images_flux": ("images_fnu", 3, "img"),
+        "images_flux_psf": ("images_psf_fnu", 3, "img"),
+        "images_flux_noise": ("images_noise_fnu", 3, "img"),
+        "line_maps_lum": ("line_maps_lnu", 3, "img"),
+        "line_maps_lum_psf": ("line_maps_psf_lnu", 3, "img"),
+        "line_maps_lum_noise": ("line_maps_noise_lnu", 3, "img"),
+        "line_maps_flux": ("line_maps_fnu", 3, "img"),
+        "line_maps_flux_psf": ("line_maps_psf_fnu", 3, "img"),
+        "line_maps_flux_noise": ("line_maps_noise_fnu", 3, "img"),
+        "lnu_data_cubes": ("data_cubes_lnu", 2, "data_cube"),
+        "fnu_data_cubes": ("data_cubes_fnu", 2, "data_cube"),
+        "processed_lnu_data_cubes": (
+            "processed_data_cubes_lnu",
+            2,
+            "data_cube",
+        ),
+        "processed_fnu_data_cubes": (
+            "processed_data_cubes_fnu",
+            2,
+            "data_cube",
+        ),
+        "spectroscopy_lnu": ("spectroscopy", 2, "lnu"),
+        "spectroscopy_fnu": ("spectroscopy", 2, "fnu"),
     }
 
     # The group each component's outputs are written beneath
@@ -418,6 +466,70 @@ class PipelineIOBuffers:
         # Track how much memory we're holding if we flush on memory
         if self.flush_memory is not None:
             self.nbytes += get_buffered_nbytes(new_rows)
+
+    def unpack(self, galaxy, requested):
+        """Append a processed galaxy's outputs to the buffers.
+
+        Args:
+            galaxy (Galaxy):
+                The galaxy to take the outputs from.
+            requested (set):
+                The names of the per-galaxy outputs the Pipeline was asked
+                to write. Only these are held, everything else on the galaxy
+                is freed along with it.
+        """
+        # The components each output can be held on
+        components = {
+            "Galaxy": galaxy,
+            "Stars": galaxy.stars,
+            "BlackHole": galaxy.black_holes,
+        }
+
+        # Append the value of every product of each requested output
+        for name, (attr, depth, value_attr) in self.GALAXY_SOURCES.items():
+            if name not in requested:
+                continue
+
+            # Outputs held as a single list (rather than per component) come
+            # from the galaxy itself
+            if not isinstance(getattr(self, name), dict):
+                self.append_output(getattr(galaxy, attr), name)
+                continue
+
+            # Otherwise take them from each component, skipping missing
+            # components and stores (e.g. the processed data cubes only
+            # exist if the instrument had post-processing to apply)
+            for component, obj in components.items():
+                if obj is None:
+                    continue
+                store = getattr(obj, attr, {})
+                for keys, product in iter_products(store, depth):
+                    value = (
+                        product
+                        if value_attr is None
+                        else getattr(product, value_attr)
+                    )
+                    self.append_output(value, name, component, *keys)
+
+        # The observed line wavelengths depend on the galaxy's redshift so
+        # we store them for every galaxy, taking them from the first line
+        # collection we can find (on the galaxy, stars or black holes)
+        if "line_obs_lams" in requested:
+            for obj in components.values():
+                if obj is not None and len(obj.lines) > 0:
+                    self.append_output(
+                        next(iter(obj.lines.values())).obslam,
+                        "line_obs_lams",
+                    )
+                    break
+
+        # Append the results of any extra analysis functions
+        for key, res in getattr(galaxy, "_extra_analysis_results", {}).items():
+            self.append_analysis_output(key, res)
+
+        # Make sure every output has a row for this galaxy so later rows
+        # keep their galaxy index (and count the galaxy and its memory)
+        self.end_galaxy()
 
     def append_output(self, value, name, *keys):
         """Append the current galaxy's row to a per-galaxy output.

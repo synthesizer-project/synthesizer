@@ -156,6 +156,8 @@ def accumulate_pipeline_results_from_child(parent, *children):
             "line_maps_noise_fnu",
             "data_cubes_lnu",
             "data_cubes_fnu",
+            "sfh",
+            "sfzh",
         ):
             if hasattr(child, attr):
                 setattr(
@@ -866,6 +868,30 @@ def iter_row_lists(data, path=()):
             yield from iter_row_lists(value, (*path, key))
     elif isinstance(data, list):
         yield path, data
+
+
+def iter_products(store, depth):
+    """Yield every product in a nested store of products.
+
+    Args:
+        store (dict-like): The store, e.g. a component's images keyed by
+            instrument, then emission model label, then filter. Any
+            container with an items method can be a level of the store.
+        depth (int): The number of levels of keys leading to each product.
+
+    Yields:
+        tuple:
+            The keys leading to the product and the product itself.
+    """
+    # We've reached a product
+    if depth == 0:
+        yield (), store
+        return
+
+    # Otherwise descend a level, carrying the keys along
+    for key, value in store.items():
+        for keys, product in iter_products(value, depth - 1):
+            yield (key, *keys), product
 
 
 def rows_to_arrays(data):

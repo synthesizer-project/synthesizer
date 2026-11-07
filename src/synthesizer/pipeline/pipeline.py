@@ -57,6 +57,7 @@ from synthesizer.pipeline.pipeline_utils import (
     write_timing_analysis_summary,
 )
 from synthesizer.synth_warnings import warn
+from synthesizer.units import Units
 from synthesizer.utils.art import Art
 from synthesizer.utils.operation_timers import (
     build_timing_analysis_rows,
@@ -1579,17 +1580,32 @@ class Pipeline:
                 metallicities=op_kwargs["metallicities"],
                 nthreads=self.nthreads,
             )
-            galaxy.sfzh = galaxy.stars.sfzh
+
+            # Particle stars hold the grid on a parametric Stars object
+            galaxy.sfzh = galaxy.stars.sfzh.sfzh
         else:
             # No stars, no SFZH, store a zeroed grid
-            galaxy.sfzh = np.zeros(
-                (
-                    len(op_kwargs["log10ages"]),
-                    len(op_kwargs["metallicities"]),
+            galaxy.sfzh = unyt_array(
+                np.zeros(
+                    (
+                        len(op_kwargs["log10ages"]),
+                        len(op_kwargs["metallicities"]),
+                    ),
+                    dtype=resolve_out_dtype(self._out_dtypes.get("sfzh")),
                 ),
-                dtype=resolve_out_dtype(self._out_dtypes.get("sfzh")),
+                Units().mass,
             )
             return galaxy.sfzh
+
+        # The grid is in the internal mass units but doesn't carry them, so
+        # attach them (and cast to the requested dtype) ready for writing
+        galaxy.sfzh = unyt_array(
+            np.asarray(
+                galaxy.sfzh,
+                dtype=resolve_out_dtype(self._out_dtypes.get("sfzh")),
+            ),
+            Units().mass,
+        )
 
         # Count the number of SFZH grids we have generated
         self._op_counts["SFZH"] += 1
@@ -1684,11 +1700,24 @@ class Pipeline:
             galaxy.sfh = galaxy.stars.sfh
         else:
             # No stars, no SFH, store a zeroed grid
-            galaxy.sfh = np.zeros(
-                len(op_kwargs["log10ages"]),
-                dtype=resolve_out_dtype(self._out_dtypes.get("sfh")),
+            galaxy.sfh = unyt_array(
+                np.zeros(
+                    len(op_kwargs["log10ages"]),
+                    dtype=resolve_out_dtype(self._out_dtypes.get("sfh")),
+                ),
+                Units().mass,
             )
             return galaxy.sfh
+
+        # The grid is in the internal mass units but doesn't carry them, so
+        # attach them (and cast to the requested dtype) ready for writing
+        galaxy.sfh = unyt_array(
+            np.asarray(
+                galaxy.sfh,
+                dtype=resolve_out_dtype(self._out_dtypes.get("sfh")),
+            ),
+            Units().mass,
+        )
 
         # Count the number of SFH grids we have generated
         self._op_counts["SFH"] += 1
@@ -4372,98 +4401,6 @@ class Pipeline:
         # Record the time taken
         self._op_timing["Extra Analyses"] += time.perf_counter() - start
 
-    def _mass_grid_in_msun(self, grid, op):
-        """Return an SFZH or SFH grid in Msun with the requested dtype.
-
-        Args:
-            grid (np.ndarray/unyt_array):
-                The grid. Arrays without units (or dimensionless) are
-                already in Msun.
-            op (str):
-                The operation the grid is for ("sfzh" or "sfh"), used to
-                look up the requested output dtype.
-
-        Returns:
-            unyt_array:
-                The grid in Msun.
-        """
-        # Convert any grid carrying mass units, rather than relabelling it
-        if isinstance(grid, unyt_array) and not grid.units.is_dimensionless:
-            grid = grid.to("Msun")
-
-        return unyt_array(
-            np.asarray(
-                grid, dtype=resolve_out_dtype(self._out_dtypes.get(op))
-            ),
-            "Msun",
-        )
-
-    def _unpack_data_cubes(self, galaxy, quantity):
-        """Unpack the galaxy's data cubes into the IO buffers.
-
-        Args:
-            galaxy (Galaxy):
-                The galaxy to unpack the data cubes from.
-            quantity (str):
-                Which data cubes to unpack, either "lnu" or "fnu".
-        """
-        # Each component holds its cubes by instrument and then emission
-        # model label. The raw cubes are always there, the processed cubes
-        # (with the instrument's PSF/noise applied) only exist if the
-        # instrument had any post-processing to apply.
-        for component_name, component in (
-            ("Galaxy", galaxy),
-            ("Stars", galaxy.stars),
-            ("BlackHole", galaxy.black_holes),
-        ):
-            if component is None:
-                continue
-            for source_attr, target_attr in (
-                (f"data_cubes_{quantity}", f"{quantity}_data_cubes"),
-                (
-                    f"processed_data_cubes_{quantity}",
-                    f"processed_{quantity}_data_cubes",
-                ),
-            ):
-                cubes = getattr(component, source_attr, {})
-                for inst_label, inst_cubes in cubes.items():
-                    for spec_type, cube in inst_cubes.items():
-                        self.io_buffers.append_output(
-                            cube.arr * cube.units,
-                            target_attr,
-                            component_name,
-                            inst_label,
-                            spec_type,
-                        )
-
-    def _unpack_spectroscopy(self, galaxy, quantity):
-        """Unpack the galaxy's spectroscopy into the IO buffers.
-
-        Args:
-            galaxy (Galaxy):
-                The galaxy to unpack the spectroscopy from.
-            quantity (str):
-                Which spectroscopy to unpack, either "lnu" or "fnu".
-        """
-        # Each component holds its spectroscopy (an Sed holding both the
-        # lnu and fnu) by instrument and then emission model label
-        for component_name, component in (
-            ("Galaxy", galaxy),
-            ("Stars", galaxy.stars),
-            ("BlackHole", galaxy.black_holes),
-        ):
-            if component is None:
-                continue
-            for inst_label, seds in component.spectroscopy.items():
-                for spec_type, sed in seds.items():
-                    self.io_buffers.append_output(
-                        getattr(sed, quantity),
-                        f"spectroscopy_{quantity}",
-                        component_name,
-                        inst_label,
-                        spec_type,
-                    )
-
     @timed("Pipeline._unpack_results")
     def _unpack_results(self, galaxy):
         """Unpack the results from the galaxy into the pipeline.
@@ -4478,485 +4415,8 @@ class Pipeline:
         """
         start = time.perf_counter()
 
-        # Do we need to unpack the SFZH? We take it from the stars where
-        # possible since that's where split galaxies accumulate it. Particle
-        # stars hold it as a parametric Stars object so we extract the grid.
-        if self._write_sfzh:
-            sfzh = getattr(galaxy, "sfzh", None)
-            if (
-                isinstance(galaxy, ParticleGalaxy)
-                and galaxy.stars is not None
-                and galaxy.stars.sfzh is not None
-            ):
-                sfzh = galaxy.stars.sfzh
-            self.io_buffers.append_output(
-                self._mass_grid_in_msun(getattr(sfzh, "sfzh", sfzh), "sfzh"),
-                "sfzhs",
-            )
-
-        # Do we need to unpack the SFH? As above, particle stars hold it
-        if self._write_sfh:
-            sfh = getattr(galaxy, "sfh", None)
-            if (
-                isinstance(galaxy, ParticleGalaxy)
-                and galaxy.stars is not None
-                and galaxy.stars.sfh is not None
-            ):
-                sfh = galaxy.stars.sfh
-            self.io_buffers.append_output(
-                self._mass_grid_in_msun(sfh, "sfh"), "sfhs"
-            )
-
-        # Do we need to unpack the lnu spectra?
-        if self._write_lnu_spectra:
-            for spec_type, spec in galaxy.spectra.items():
-                self.io_buffers.append_output(
-                    spec.lnu, "lnu_spectra", "Galaxy", spec_type
-                )
-            if galaxy.stars is not None:
-                for spec_type, spec in galaxy.stars.spectra.items():
-                    self.io_buffers.append_output(
-                        spec.lnu, "lnu_spectra", "Stars", spec_type
-                    )
-            if galaxy.black_holes is not None:
-                for spec_type, spec in galaxy.black_holes.spectra.items():
-                    self.io_buffers.append_output(
-                        spec.lnu, "lnu_spectra", "BlackHole", spec_type
-                    )
-
-        # Do we need to unpack the fnu spectra?
-        if self._write_fnu_spectra:
-            for spec_type, spec in galaxy.spectra.items():
-                self.io_buffers.append_output(
-                    spec.fnu, "fnu_spectra", "Galaxy", spec_type
-                )
-            if galaxy.stars is not None:
-                for spec_type, spec in galaxy.stars.spectra.items():
-                    self.io_buffers.append_output(
-                        spec.fnu, "fnu_spectra", "Stars", spec_type
-                    )
-            if galaxy.black_holes is not None:
-                for spec_type, spec in galaxy.black_holes.spectra.items():
-                    self.io_buffers.append_output(
-                        spec.fnu, "fnu_spectra", "BlackHole", spec_type
-                    )
-
-        # Do we need to unpack the photometric luminosities?
-        if self._write_luminosities:
-            for spec_type, phot in galaxy.photo_lnu.items():
-                for filt, lnu in phot.items():
-                    self.io_buffers.append_output(
-                        lnu, "luminosities", "Galaxy", spec_type, filt
-                    )
-            if galaxy.stars is not None:
-                for spec_type, phot in galaxy.stars.photo_lnu.items():
-                    for filt, lnu in phot.items():
-                        self.io_buffers.append_output(
-                            lnu, "luminosities", "Stars", spec_type, filt
-                        )
-            if galaxy.black_holes is not None:
-                for spec_type, phot in galaxy.black_holes.photo_lnu.items():
-                    for filt, lnu in phot.items():
-                        self.io_buffers.append_output(
-                            lnu, "luminosities", "BlackHole", spec_type, filt
-                        )
-
-        # Do we need to unpack the photometric fluxes?
-        if self._write_fluxes:
-            for spec_type, phot in galaxy.photo_fnu.items():
-                for filt, fnu in phot.items():
-                    self.io_buffers.append_output(
-                        fnu, "fluxes", "Galaxy", spec_type, filt
-                    )
-            if galaxy.stars is not None:
-                for spec_type, phot in galaxy.stars.photo_fnu.items():
-                    for filt, fnu in phot.items():
-                        self.io_buffers.append_output(
-                            fnu, "fluxes", "Stars", spec_type, filt
-                        )
-            if galaxy.black_holes is not None:
-                for spec_type, phot in galaxy.black_holes.photo_fnu.items():
-                    for filt, fnu in phot.items():
-                        self.io_buffers.append_output(
-                            fnu, "fluxes", "BlackHole", spec_type, filt
-                        )
-
-        # Do we need to unpack the emission lines?
-        if self._write_lines:
-            for spec_type, lines in galaxy.lines.items():
-                self.io_buffers.append_output(
-                    lines.luminosity, "line_lums", "Galaxy", spec_type
-                )
-                self.io_buffers.append_output(
-                    lines.continuum, "line_cont_lums", "Galaxy", spec_type
-                )
-            if galaxy.stars is not None:
-                for spec_type, lines in galaxy.stars.lines.items():
-                    self.io_buffers.append_output(
-                        lines.luminosity, "line_lums", "Stars", spec_type
-                    )
-                    self.io_buffers.append_output(
-                        lines.continuum, "line_cont_lums", "Stars", spec_type
-                    )
-            if galaxy.black_holes is not None:
-                for spec_type, lines in galaxy.black_holes.lines.items():
-                    self.io_buffers.append_output(
-                        lines.luminosity, "line_lums", "BlackHole", spec_type
-                    )
-                    self.io_buffers.append_output(
-                        lines.continuum,
-                        "line_cont_lums",
-                        "BlackHole",
-                        spec_type,
-                    )
-
-        # Do we need to unpack the observed emission lines?
-        if self._write_flux_lines:
-            for spec_type, lines in galaxy.lines.items():
-                self.io_buffers.append_output(
-                    lines.flux, "line_fluxes", "Galaxy", spec_type
-                )
-                self.io_buffers.append_output(
-                    lines.continuum_flux,
-                    "line_cont_fluxes",
-                    "Galaxy",
-                    spec_type,
-                )
-            if galaxy.stars is not None:
-                for spec_type, lines in galaxy.stars.lines.items():
-                    self.io_buffers.append_output(
-                        lines.flux, "line_fluxes", "Stars", spec_type
-                    )
-                    self.io_buffers.append_output(
-                        lines.continuum_flux,
-                        "line_cont_fluxes",
-                        "Stars",
-                        spec_type,
-                    )
-            if galaxy.black_holes is not None:
-                for spec_type, lines in galaxy.black_holes.lines.items():
-                    self.io_buffers.append_output(
-                        lines.flux, "line_fluxes", "BlackHole", spec_type
-                    )
-                    self.io_buffers.append_output(
-                        lines.continuum_flux,
-                        "line_cont_fluxes",
-                        "BlackHole",
-                        spec_type,
-                    )
-
-            # The observed wavelengths depend on the galaxy's redshift so we
-            # store them for every galaxy, taking them from the first line
-            # collection we can find (on the galaxy, stars, or black holes)
-            collections = [*galaxy.lines.values()]
-            if galaxy.stars is not None:
-                collections.extend(galaxy.stars.lines.values())
-            if galaxy.black_holes is not None:
-                collections.extend(galaxy.black_holes.lines.values())
-            if len(collections) > 0:
-                self.io_buffers.append_output(
-                    collections[0].obslam, "line_obs_lams"
-                )
-
-        # Do we need to unpack the luminosity images?
-        if self._write_images_lum:
-            for inst_label, d in galaxy.images_lnu.items():
-                for spec_type, imgs in d.items():
-                    for f, img in imgs.items():
-                        self.io_buffers.append_output(
-                            img.arr * img.units,
-                            "images_lum",
-                            "Galaxy",
-                            inst_label,
-                            spec_type,
-                            f,
-                        )
-            if galaxy.stars is not None:
-                for inst_label, d in galaxy.stars.images_lnu.items():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.io_buffers.append_output(
-                                img.arr * img.units,
-                                "images_lum",
-                                "Stars",
-                                inst_label,
-                                spec_type,
-                                f,
-                            )
-            if galaxy.black_holes is not None:
-                for inst_label, d in galaxy.black_holes.images_lnu.items():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.io_buffers.append_output(
-                                img.arr * img.units,
-                                "images_lum",
-                                "BlackHole",
-                                inst_label,
-                                spec_type,
-                                f,
-                            )
-
-        # Do we need to unpack the flux images?
-        if self._write_images_flux:
-            for inst_label, d in galaxy.images_fnu.items():
-                for spec_type, imgs in d.items():
-                    for f, img in imgs.items():
-                        self.io_buffers.append_output(
-                            img.arr * img.units,
-                            "images_flux",
-                            "Galaxy",
-                            inst_label,
-                            spec_type,
-                            f,
-                        )
-            if galaxy.stars is not None:
-                for inst_label, d in galaxy.stars.images_fnu.items():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.io_buffers.append_output(
-                                img.arr * img.units,
-                                "images_flux",
-                                "Stars",
-                                inst_label,
-                                spec_type,
-                                f,
-                            )
-            if galaxy.black_holes is not None:
-                for inst_label, d in galaxy.black_holes.images_fnu.items():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.io_buffers.append_output(
-                                img.arr * img.units,
-                                "images_flux",
-                                "BlackHole",
-                                inst_label,
-                                spec_type,
-                                f,
-                            )
-
-        # Do we need to unpack the luminosity images With PSFs?
-        if self._write_images_lum_psf:
-            for inst_label, d in galaxy.images_psf_lnu.items():
-                for spec_type, imgs in d.items():
-                    for f, img in imgs.items():
-                        self.io_buffers.append_output(
-                            img.arr * img.units,
-                            "images_lum_psf",
-                            "Galaxy",
-                            inst_label,
-                            spec_type,
-                            f,
-                        )
-            if galaxy.stars is not None:
-                for inst_label, d in galaxy.stars.images_psf_lnu.items():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.io_buffers.append_output(
-                                img.arr * img.units,
-                                "images_lum_psf",
-                                "Stars",
-                                inst_label,
-                                spec_type,
-                                f,
-                            )
-            if galaxy.black_holes is not None:
-                for inst_label, d in galaxy.black_holes.images_psf_lnu.items():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.io_buffers.append_output(
-                                img.arr * img.units,
-                                "images_lum_psf",
-                                "BlackHole",
-                                inst_label,
-                                spec_type,
-                                f,
-                            )
-
-        # Do we need to unpack the flux images With PSFs?
-        if self._write_images_flux_psf:
-            for inst_label, d in galaxy.images_psf_fnu.items():
-                for spec_type, imgs in d.items():
-                    for f, img in imgs.items():
-                        self.io_buffers.append_output(
-                            img.arr * img.units,
-                            "images_flux_psf",
-                            "Galaxy",
-                            inst_label,
-                            spec_type,
-                            f,
-                        )
-            if galaxy.stars is not None:
-                for inst_label, d in galaxy.stars.images_psf_fnu.items():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.io_buffers.append_output(
-                                img.arr * img.units,
-                                "images_flux_psf",
-                                "Stars",
-                                inst_label,
-                                spec_type,
-                                f,
-                            )
-            if galaxy.black_holes is not None:
-                for inst_label, d in galaxy.black_holes.images_psf_fnu.items():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.io_buffers.append_output(
-                                img.arr * img.units,
-                                "images_flux_psf",
-                                "BlackHole",
-                                inst_label,
-                                spec_type,
-                                f,
-                            )
-
-        # Do we need to unpack the luminosity images With Noise?
-        if self._write_images_lum_noise:
-            for inst_label, d in galaxy.images_noise_lnu.items():
-                for spec_type, imgs in d.items():
-                    for f, img in imgs.items():
-                        self.io_buffers.append_output(
-                            img.arr * img.units,
-                            "images_lum_noise",
-                            "Galaxy",
-                            inst_label,
-                            spec_type,
-                            f,
-                        )
-            if galaxy.stars is not None:
-                for inst_label, d in galaxy.stars.images_noise_lnu.items():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.io_buffers.append_output(
-                                img.arr * img.units,
-                                "images_lum_noise",
-                                "Stars",
-                                inst_label,
-                                spec_type,
-                                f,
-                            )
-            if galaxy.black_holes is not None:
-                bhs = galaxy.black_holes
-                for inst_label, d in bhs.images_noise_lnu.items():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.io_buffers.append_output(
-                                img.arr * img.units,
-                                "images_lum_noise",
-                                "BlackHole",
-                                inst_label,
-                                spec_type,
-                                f,
-                            )
-
-        # Do we need to unpack the flux images With Noise?
-        if self._write_images_flux_noise:
-            for inst_label, d in galaxy.images_noise_fnu.items():
-                for spec_type, imgs in d.items():
-                    for f, img in imgs.items():
-                        self.io_buffers.append_output(
-                            img.arr * img.units,
-                            "images_flux_noise",
-                            "Galaxy",
-                            inst_label,
-                            spec_type,
-                            f,
-                        )
-            if galaxy.stars is not None:
-                for inst_label, d in galaxy.stars.images_noise_fnu.items():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.io_buffers.append_output(
-                                img.arr * img.units,
-                                "images_flux_noise",
-                                "Stars",
-                                inst_label,
-                                spec_type,
-                                f,
-                            )
-            if galaxy.black_holes is not None:
-                bhs = galaxy.black_holes
-                for inst_label, d in bhs.images_noise_fnu.items():
-                    for spec_type, imgs in d.items():
-                        for f, img in imgs.items():
-                            self.io_buffers.append_output(
-                                img.arr * img.units,
-                                "images_flux_noise",
-                                "BlackHole",
-                                inst_label,
-                                spec_type,
-                                f,
-                            )
-
-        # Unpack each requested line-map family using the same nested schema.
-        line_map_stores = (
-            ("_write_line_maps_lum", "line_maps_lnu", "line_maps_lum"),
-            ("_write_line_maps_flux", "line_maps_fnu", "line_maps_flux"),
-            (
-                "_write_line_maps_lum_psf",
-                "line_maps_psf_lnu",
-                "line_maps_lum_psf",
-            ),
-            (
-                "_write_line_maps_flux_psf",
-                "line_maps_psf_fnu",
-                "line_maps_flux_psf",
-            ),
-            (
-                "_write_line_maps_lum_noise",
-                "line_maps_noise_lnu",
-                "line_maps_lum_noise",
-            ),
-            (
-                "_write_line_maps_flux_noise",
-                "line_maps_noise_fnu",
-                "line_maps_flux_noise",
-            ),
-        )
-        components = (
-            ("Galaxy", galaxy),
-            ("Stars", galaxy.stars),
-            ("BlackHole", galaxy.black_holes),
-        )
-        for write_attr, source_attr, target_attr in line_map_stores:
-            if not getattr(self, write_attr):
-                continue
-            for component_name, component in components:
-                if component is None:
-                    continue
-                source_store = getattr(component, source_attr)
-                for inst_label, maps in source_store.items():
-                    for spec_type, images in maps.items():
-                        for line_id, image in images.items():
-                            self.io_buffers.append_output(
-                                image.arr * image.units,
-                                target_attr,
-                                component_name,
-                                inst_label,
-                                spec_type,
-                                line_id,
-                            )
-
-        # Do we need to unpack the data cubes?
-        if self._write_lnu_data_cubes:
-            self._unpack_data_cubes(galaxy, "lnu")
-        if self._write_fnu_data_cubes:
-            self._unpack_data_cubes(galaxy, "fnu")
-
-        # Do we need to unpack the spectroscopy?
-        if self._write_spectroscopy_lnu:
-            self._unpack_spectroscopy(galaxy, "lnu")
-        if self._write_spectroscopy_fnu:
-            self._unpack_spectroscopy(galaxy, "fnu")
-
-        # Do we need to unpack the extra analysis results?
-        if hasattr(galaxy, "_extra_analysis_results"):
-            for key, res in galaxy._extra_analysis_results.items():
-                self.io_buffers.append_analysis_output(key, res)
-
-        # Make sure every output has a row for this galaxy so later rows
-        # keep their galaxy index (and count the galaxy and its memory)
-        self.io_buffers.end_galaxy()
+        # Hold the outputs we were asked to write in the IO buffers
+        self.io_buffers.unpack(galaxy, self._requested_galaxy_outputs)
 
         # Done!
         self._op_timing["Unpacking results"] += time.perf_counter() - start
@@ -5495,20 +4955,30 @@ class Pipeline:
             include_lines=self._write_lines or self._write_flux_lines,
         )
 
+    @property
+    def _requested_galaxy_outputs(self):
+        """Return the names of the per-galaxy outputs we were asked for.
+
+        Returns:
+            set:
+                The names of the requested outputs (keys of
+                PipelineIOBuffers.GALAXY_OUTPUTS).
+        """
+        # The flag requesting each output is stored on the Pipeline
+        return {
+            name
+            for name, (flag, _) in self.io_buffers.GALAXY_OUTPUTS.items()
+            if getattr(self, flag)
+        }
+
     def _write_galaxy_outputs(self):
         """Write the per-galaxy data held in memory to file.
 
         On each call the data is appended to anything written by earlier
         calls (i.e. earlier flushes).
         """
-        # Only the outputs we were asked for are written (the flag requesting
-        # each output is stored on the Pipeline)
-        requested = {
-            name
-            for name, (flag, _) in self.io_buffers.GALAXY_OUTPUTS.items()
-            if getattr(self, flag)
-        }
-        self.io_helper.write_galaxy_outputs(requested)
+        # Only the outputs we were asked for are written
+        self.io_helper.write_galaxy_outputs(self._requested_galaxy_outputs)
 
     def combine_files(self):
         """Combine individual rank files into a single file.

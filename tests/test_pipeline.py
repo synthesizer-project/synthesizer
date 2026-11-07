@@ -3568,26 +3568,6 @@ def test_reused_galaxy_sfzh_and_sfh_follow_new_axes(
     assert second._get_sfh(galaxy).shape == ages.shape
 
 
-def test_mass_grids_are_converted_to_msun(nebular_emission_model):
-    """Grids carrying mass units are converted, not just relabelled."""
-    from unyt import Msun
-
-    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-
-    # A grid in units of 1e6 Msun is converted
-    grid = pipeline._mass_grid_in_msun(
-        unyt_array([1.0, 2.0], 1e6 * Msun), "sfh"
-    )
-    assert str(grid.units) == "Msun"
-    np.testing.assert_allclose(grid.value, [1e6, 2e6])
-
-    # Plain arrays are already in Msun
-    np.testing.assert_allclose(
-        pipeline._mass_grid_in_msun(np.array([1.0, 2.0]), "sfh").value,
-        [1.0, 2.0],
-    )
-
-
 def test_parametric_sfzh_and_sfh_out_dtype(
     nebular_emission_model, single_star_parametric, test_grid, tmp_path
 ):
@@ -4278,6 +4258,12 @@ def test_buffer_outputs_cover_every_container():
         if not f.name.startswith("_") and f.name not in bookkeeping
     }
     assert set(PipelineIOBuffers.OUTPUT_NAMES) == containers
+
+    # Every per-galaxy output should say where it's unpacked from (other
+    # than the observed line wavelengths, which unpack handles itself)
+    assert set(PipelineIOBuffers.GALAXY_SOURCES) == (
+        set(PipelineIOBuffers.GALAXY_OUTPUTS) - {"line_obs_lams"}
+    )
 
     # The property should return the current containers, even once
     # they've been replaced
