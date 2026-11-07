@@ -1,5 +1,8 @@
 """A collection of fixtures for testing the synthesizer package."""
 
+import gc
+import sysconfig
+
 import numpy as np
 import pytest
 from scipy import signal
@@ -60,6 +63,23 @@ def pytest_configure(config):
         for manager in (KernelManager, AsyncKernelManager):
             manager.transport.default_value = "ipc"
             manager._ip_default = _worker_ipc_path
+
+
+# ================================ MEMORY =====================================
+
+
+@pytest.fixture(autouse=sysconfig.get_config_var("Py_GIL_DISABLED") == 1)
+def collect_cyclic_garbage():
+    """Free any reference cycles left by a test on free-threaded Python.
+
+    Some tests leave reference cycles behind (e.g. via exception tracebacks
+    or mocks) which keep large objects such as grids alive until the cyclic
+    garbage collector runs. On free-threaded builds it runs too rarely to
+    keep up, so a test session runs out of memory. This is only autouse on
+    free-threaded builds.
+    """
+    yield
+    gc.collect()
 
 
 # ============================= DUST GENERATORS ===============================
