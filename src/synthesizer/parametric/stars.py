@@ -320,7 +320,7 @@ class Stars(StarsComponent):
         # metallicity distribution. Either way the masses are a new array,
         # so normalising them in place never touches the caller's SFZH
         if sfzh is not None:
-            edges, masses = self._get_point_bins(sfzh)
+            edges, masses = self._sfzh_to_bins(sfzh)
         else:
             edges, masses = self._get_bins()
 
@@ -471,27 +471,27 @@ class Stars(StarsComponent):
         )
 
     @staticmethod
-    def _get_points_as_bins(nodes, values):
-        """Get zero width bins at a set of points.
+    def _points_to_bins(points, point_masses):
+        """Convert masses at a set of points along one axis into bins.
 
-        Each point becomes a zero width bin, with (empty) finite bins
-        between them.
+        Each point becomes a zero width bin holding its mass, with an empty
+        finite bin between each pair of points.
 
         Args:
-            nodes (np.ndarray of float):
+            points (np.ndarray of float):
                 The (linear) points.
-            values (np.ndarray of float):
+            point_masses (np.ndarray of float):
                 The mass at each point.
 
         Returns:
             tuple:
                 The bin edges and the mass in each bin.
         """
-        # Repeating each node gives a zero width bin at every even index
-        # with an empty finite bin between each pair of nodes
-        masses = np.zeros(2 * len(nodes) - 1)
-        masses[::2] = values
-        return np.repeat(np.asarray(nodes, dtype=np.float64), 2), masses
+        # Repeating each point gives a zero width bin at every even index
+        # with an empty finite bin between each pair of points
+        masses = np.zeros(2 * len(points) - 1)
+        masses[::2] = point_masses
+        return np.repeat(np.asarray(points, dtype=np.float64), 2), masses
 
     def _get_age_bins(self, offset):
         """Get the age bins and the mass formed in each.
@@ -525,7 +525,7 @@ class Stars(StarsComponent):
 
         # An array is defined at the points of the axis
         if self.sf_hist is not None:
-            return self._get_points_as_bins(ages, self.sf_hist)
+            return self._points_to_bins(ages, self.sf_hist)
 
         # Without any of the above we have no SFH
         raise exceptions.InconsistentArguments(
@@ -568,7 +568,7 @@ class Stars(StarsComponent):
 
         # An array is defined at the points of the axis
         if self.metal_dist is not None:
-            return self._get_points_as_bins(metals, self.metal_dist)
+            return self._points_to_bins(metals, self.metal_dist)
 
         # Without any of the above we have no metallicity distribution
         raise exceptions.InconsistentArguments(
@@ -727,8 +727,8 @@ class Stars(StarsComponent):
         self._sfzh_view = None
         self._grid_weights = {}
 
-    def _get_point_bins(self, sfzh):
-        """Get bins from a SFZH defined at the points of the axes.
+    def _sfzh_to_bins(self, sfzh):
+        """Convert an SFZH defined at the points of the axes into bins.
 
         Each point of the age and metallicity axes becomes a zero width bin,
         with the (empty) finite bins between them. Mapping these onto any
