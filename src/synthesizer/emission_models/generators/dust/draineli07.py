@@ -204,7 +204,7 @@ class DraineLi07(DustEmission):
         umin (float):
             Radiation field heating majority of the dust.
         alpha (float):
-            The slope of the power-law part of the starlight intensity
+            The slope of the power-law part of the stellar emission intensity
             distribution.
         power_per_unit_mass (float):
             Power absorbed per unit dust mass in a radiation field with U = 1.
