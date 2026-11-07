@@ -611,7 +611,8 @@ class Stars(StarsComponent):
         # Otherwise, remap the existing SFZH onto the shifted age bins.
         else:
             # Construct linear age bins.
-            ages = self.ages.to("yr").value
+            self.ages.convert_to_units("yr")
+            ages = self.ages.ndview
             age_edges = np.empty(len(ages) + 1)
             age_edges[0] = 0.0
             age_edges[1:-1] = 0.5 * (ages[1:] + ages[:-1])
@@ -1053,6 +1054,10 @@ class Stars(StarsComponent):
             self._bin_edges, self._bin_masses * np.asarray(conversion)
         )
 
+        # Ensure sf_hist and metal_dist reflect the rescaled sfzh
+        self.sf_hist = np.sum(self.sfzh, axis=1)
+        self.metal_dist = np.sum(self.sfzh, axis=0)
+
     @accepts(flux=nJy)
     def scale_mass_by_flux(self, flux, scale_filter, spectra_type):
         """Scale the stellar mass to match a flux in a specific filter.
@@ -1112,6 +1117,10 @@ class Stars(StarsComponent):
         self._set_bins(
             self._bin_edges, self._bin_masses * np.asarray(conversion)
         )
+
+        # Ensure sf_hist and metal_dist reflect the rescaled sfzh
+        self.sf_hist = np.sum(self.sfzh, axis=1)
+        self.metal_dist = np.sum(self.sfzh, axis=0)
 
     @timed("ParametricStars.get_sfzh")
     def get_sfzh(
