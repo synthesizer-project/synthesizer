@@ -4406,37 +4406,54 @@ class Pipeline:
                 The galaxy to unpack the data cubes from.
             quantity (str):
                 Which data cubes to unpack, either "lnu" or "fnu".
-
-        Raises:
-            UnimplementedFunctionality:
-                Always, writing data cubes is not yet supported.
         """
-        # TODO: append each component's data cubes to the
-        # io_buffers.<quantity>_data_cubes container and give them an
-        # entry in PipelineIOBuffers.GALAXY_OUTPUTS so they are written
-        raise exceptions.UnimplementedFunctionality(
-            f"Writing {quantity} data cubes is not yet supported. Pass "
-            f"write=False to get_data_cubes_{quantity}."
-        )
+        # Each component holds its cubes by instrument and then emission
+        # model label
+        for component_name, component in (
+            ("Galaxy", galaxy),
+            ("Stars", galaxy.stars),
+            ("BlackHole", galaxy.black_holes),
+        ):
+            if component is None:
+                continue
+            cubes = getattr(component, f"data_cubes_{quantity}")
+            for inst_label, inst_cubes in cubes.items():
+                for spec_type, cube in inst_cubes.items():
+                    self.io_buffers.append_output(
+                        cube.arr * cube.units,
+                        f"{quantity}_data_cubes",
+                        component_name,
+                        inst_label,
+                        spec_type,
+                    )
 
-    def _unpack_spectroscopy(self, galaxy):
+    def _unpack_spectroscopy(self, galaxy, quantity):
         """Unpack the galaxy's spectroscopy into the IO buffers.
 
         Args:
             galaxy (Galaxy):
                 The galaxy to unpack the spectroscopy from.
-
-        Raises:
-            UnimplementedFunctionality:
-                Always, writing spectroscopy is not yet supported.
+            quantity (str):
+                Which spectroscopy to unpack, either "lnu" or "fnu".
         """
-        # TODO: append each component's spectroscopy to the
-        # io_buffers.spectroscopy container and give it an entry in
-        # PipelineIOBuffers.GALAXY_OUTPUTS so it is written
-        raise exceptions.UnimplementedFunctionality(
-            "Writing spectroscopy is not yet supported. Pass write=False "
-            "to get_spectroscopy_lnu and get_spectroscopy_fnu."
-        )
+        # Each component holds its spectroscopy (an Sed holding both the
+        # lnu and fnu) by instrument and then emission model label
+        for component_name, component in (
+            ("Galaxy", galaxy),
+            ("Stars", galaxy.stars),
+            ("BlackHole", galaxy.black_holes),
+        ):
+            if component is None:
+                continue
+            for inst_label, seds in component.spectroscopy.items():
+                for spec_type, sed in seds.items():
+                    self.io_buffers.append_output(
+                        getattr(sed, quantity),
+                        f"spectroscopy_{quantity}",
+                        component_name,
+                        inst_label,
+                        spec_type,
+                    )
 
     @timed("Pipeline._unpack_results")
     def _unpack_results(self, galaxy):
@@ -4918,8 +4935,10 @@ class Pipeline:
             self._unpack_data_cubes(galaxy, "fnu")
 
         # Do we need to unpack the spectroscopy?
-        if self._write_spectroscopy_lnu or self._write_spectroscopy_fnu:
-            self._unpack_spectroscopy(galaxy)
+        if self._write_spectroscopy_lnu:
+            self._unpack_spectroscopy(galaxy, "lnu")
+        if self._write_spectroscopy_fnu:
+            self._unpack_spectroscopy(galaxy, "fnu")
 
         # Do we need to unpack the extra analysis results?
         if hasattr(galaxy, "_extra_analysis_results"):

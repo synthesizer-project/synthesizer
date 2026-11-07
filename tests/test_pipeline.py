@@ -19,7 +19,12 @@ from synthesizer.emission_models import PacmanEmission
 from synthesizer.emission_models.transformers import PowerLaw
 from synthesizer.emissions import Sed
 from synthesizer.grid import Grid
-from synthesizer.instruments import FilterCollection, Instrument
+from synthesizer.instruments import (
+    FilterCollection,
+    Instrument,
+    IntegratedFieldUnit,
+    SpectroscopicInstrument,
+)
 from synthesizer.particle.stars import Stars
 from synthesizer.pipeline.pipeline import Pipeline
 from synthesizer.pipeline.pipeline_utils import (
@@ -1141,24 +1146,40 @@ class TestPipelineOperations:
         pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
         assert pipeline.io_helper._first_from_any_rank("lams") == "lams"
 
-    @pytest.mark.parametrize(
-        "flag",
-        [
-            "_write_lnu_data_cubes",
-            "_write_fnu_data_cubes",
-            "_write_spectroscopy_lnu",
-            "_write_spectroscopy_fnu",
-        ],
-    )
-    def test_unpack_unwritable_outputs_raises(
-        self, nebular_emission_model, flag
+    def test_write_data_cubes_and_spectroscopy(
+        self, kernel, pipeline_with_galaxies_per_particle, tmp_path
     ):
-        """Outputs which can't be written yet raise rather than vanish."""
-        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
-        setattr(pipeline, flag, True)
-        galaxy = SimpleNamespace(stars=None, black_holes=None)
-        with pytest.raises(exceptions.UnimplementedFunctionality):
-            pipeline._unpack_results(galaxy)
+        """Data cubes and spectroscopy are written with a row per galaxy."""
+        lam = np.logspace(3, 4, 10) * angstrom
+        ifu = IntegratedFieldUnit(label="IFU", lam=lam, resolution=1 * kpc)
+        spectrometer = SpectroscopicInstrument(label="Spec", lam=lam)
+
+        # Request every flavour of data cube and spectroscopy
+        pipeline = pipeline_with_galaxies_per_particle
+        pipeline.get_data_cubes_lnu(ifu, kernel=kernel, fov=10 * kpc)
+        pipeline.get_data_cubes_fnu(
+            ifu, kernel=kernel, fov=10 * kpc, cosmo=cosmo
+        )
+        pipeline.get_spectroscopy_lnu(spectrometer)
+        pipeline.get_spectroscopy_fnu(spectrometer, cosmo=cosmo)
+        output = tmp_path / "ifu.hdf5"
+        pipeline.write(output)
+
+        # Each should have a row per galaxy sampled on the instrument's
+        # wavelengths
+        ngal = pipeline.n_galaxies_local
+        with h5py.File(output) as hdf:
+            for path in (
+                "DataCubes/SpectralLuminosityDensities/IFU",
+                "DataCubes/SpectralFluxDensities/IFU",
+                "Spectroscopy/SpectralLuminosityDensities/Spec",
+                "Spectroscopy/SpectralFluxDensities/Spec",
+            ):
+                group = hdf[f"Galaxies/Stars/{path}"]
+                assert len(group) > 0
+                for dset in group.values():
+                    assert dset.shape[0] == ngal
+                    assert dset.shape[-1] == len(lam)
 
     def test_run_pipeline_lines_luminosity_subset(
         self,

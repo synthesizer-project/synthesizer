@@ -190,6 +190,22 @@ class PipelineIOBuffers:
             "_write_line_maps_flux_noise",
             "NoiseLineMaps/Flux",
         ),
+        "lnu_data_cubes": (
+            "_write_lnu_data_cubes",
+            "DataCubes/SpectralLuminosityDensities",
+        ),
+        "fnu_data_cubes": (
+            "_write_fnu_data_cubes",
+            "DataCubes/SpectralFluxDensities",
+        ),
+        "spectroscopy_lnu": (
+            "_write_spectroscopy_lnu",
+            "Spectroscopy/SpectralLuminosityDensities",
+        ),
+        "spectroscopy_fnu": (
+            "_write_spectroscopy_fnu",
+            "Spectroscopy/SpectralFluxDensities",
+        ),
     }
 
     # The group each component's outputs are written beneath
@@ -242,9 +258,6 @@ class PipelineIOBuffers:
         *GALAXY_OUTPUTS,
         "analysis_results",
         *GLOBAL_OUTPUTS,
-        "lnu_data_cubes",
-        "fnu_data_cubes",
-        "spectroscopy",
     )
 
     # The flushing thresholds
@@ -281,6 +294,10 @@ class PipelineIOBuffers:
     line_maps_flux_noise: dict = field(
         init=False, default_factory=_per_component
     )
+    lnu_data_cubes: dict = field(init=False, default_factory=_per_component)
+    fnu_data_cubes: dict = field(init=False, default_factory=_per_component)
+    spectroscopy_lnu: dict = field(init=False, default_factory=_per_component)
+    spectroscopy_fnu: dict = field(init=False, default_factory=_per_component)
     analysis_results: dict = field(init=False, default_factory=dict)
 
     # The outputs that aren't per galaxy. These are accumulated over the
@@ -289,9 +306,6 @@ class PipelineIOBuffers:
     cosmic_fnus: dict = field(init=False, default_factory=_per_component)
     line_lams: unyt_array = field(init=False, default=None)
     line_ids: list = field(init=False, default=None)
-    lnu_data_cubes: dict = field(init=False, default_factory=_per_component)
-    fnu_data_cubes: dict = field(init=False, default_factory=_per_component)
-    spectroscopy: dict = field(init=False, default_factory=_per_component)
 
     # The axes the SFZHs and SFHs are binned on (set when they're requested)
     sfzh_log10ages: np.ndarray = field(init=False, default=None)
