@@ -78,11 +78,6 @@ def _hdf5_replaced_on_success(path):
         raise
 
 
-def _per_component():
-    """Return an empty container for each component's outputs."""
-    return {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-
-
 @dataclass(eq=False, repr=False)
 class PipelineIOBuffers:
     """The outputs a Pipeline holds in memory until written.
@@ -323,49 +318,123 @@ class PipelineIOBuffers:
     # The outputs themselves
     sfzhs: list = field(init=False, default_factory=list)
     sfhs: list = field(init=False, default_factory=list)
-    lnu_spectra: dict = field(init=False, default_factory=_per_component)
-    fnu_spectra: dict = field(init=False, default_factory=_per_component)
-    luminosities: dict = field(init=False, default_factory=_per_component)
-    fluxes: dict = field(init=False, default_factory=_per_component)
-    line_lums: dict = field(init=False, default_factory=_per_component)
-    line_cont_lums: dict = field(init=False, default_factory=_per_component)
-    line_fluxes: dict = field(init=False, default_factory=_per_component)
-    line_cont_fluxes: dict = field(init=False, default_factory=_per_component)
-    line_obs_lams: list = field(init=False, default_factory=list)
-    images_lum: dict = field(init=False, default_factory=_per_component)
-    images_lum_psf: dict = field(init=False, default_factory=_per_component)
-    images_lum_noise: dict = field(init=False, default_factory=_per_component)
-    images_flux: dict = field(init=False, default_factory=_per_component)
-    images_flux_psf: dict = field(init=False, default_factory=_per_component)
-    images_flux_noise: dict = field(init=False, default_factory=_per_component)
-    line_maps_lum: dict = field(init=False, default_factory=_per_component)
-    line_maps_lum_psf: dict = field(init=False, default_factory=_per_component)
-    line_maps_lum_noise: dict = field(
-        init=False, default_factory=_per_component
+    lnu_spectra: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
     )
-    line_maps_flux: dict = field(init=False, default_factory=_per_component)
+    fnu_spectra: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    luminosities: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    fluxes: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    line_lums: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    line_cont_lums: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    line_fluxes: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    line_cont_fluxes: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    line_obs_lams: list = field(init=False, default_factory=list)
+    images_lum: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    images_lum_psf: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    images_lum_noise: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    images_flux: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    images_flux_psf: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    images_flux_noise: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    line_maps_lum: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    line_maps_lum_psf: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    line_maps_lum_noise: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    line_maps_flux: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
     line_maps_flux_psf: dict = field(
-        init=False, default_factory=_per_component
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
     )
     line_maps_flux_noise: dict = field(
-        init=False, default_factory=_per_component
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
     )
-    lnu_data_cubes: dict = field(init=False, default_factory=_per_component)
-    fnu_data_cubes: dict = field(init=False, default_factory=_per_component)
+    lnu_data_cubes: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    fnu_data_cubes: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
     processed_lnu_data_cubes: dict = field(
-        init=False, default_factory=_per_component
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
     )
     processed_fnu_data_cubes: dict = field(
-        init=False, default_factory=_per_component
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
     )
-    spectroscopy_lnu: dict = field(init=False, default_factory=_per_component)
-    spectroscopy_fnu: dict = field(init=False, default_factory=_per_component)
+    spectroscopy_lnu: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    spectroscopy_fnu: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
     analysis_results: dict = field(init=False, default_factory=dict)
 
     # The outputs that aren't per galaxy. These are accumulated over the
     # whole run (flushing leaves them alone) and written once at the end.
-    cosmic_lnus: dict = field(init=False, default_factory=_per_component)
-    cosmic_fnus: dict = field(init=False, default_factory=_per_component)
+    cosmic_lnus: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    cosmic_fnus: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
     line_lams: unyt_array = field(init=False, default=None)
     line_ids: list = field(init=False, default=None)
 
@@ -376,8 +445,14 @@ class PipelineIOBuffers:
 
     # The number of galaxies contributing to each cosmic SED, so they can
     # be averaged once every rank's contributions have been summed
-    cosmic_lnu_counts: dict = field(init=False, default_factory=_per_component)
-    cosmic_fnu_counts: dict = field(init=False, default_factory=_per_component)
+    cosmic_lnu_counts: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
+    cosmic_fnu_counts: dict = field(
+        init=False,
+        default_factory=lambda: {"Galaxy": {}, "Stars": {}, "BlackHole": {}},
+    )
 
     # What we hold since the last flush
     ngalaxies: int = field(init=False, default=0)
@@ -467,6 +542,7 @@ class PipelineIOBuffers:
         if self.flush_memory is not None:
             self.nbytes += get_buffered_nbytes(new_rows)
 
+    @timed("PipelineIOBuffers.unpack")
     def unpack(self, galaxy, requested):
         """Append a processed galaxy's outputs to the buffers.
 
@@ -606,6 +682,7 @@ class PipelineIOBuffers:
         """
         self._hold(self.analysis_results[key], [result])
 
+    @timed("PipelineIOBuffers.end_galaxy")
     def end_galaxy(self):
         """Pad the outputs a galaxy didn't produce and count the galaxy.
 
@@ -648,6 +725,7 @@ class PipelineIOBuffers:
             return False
         return self.nbytes >= self.flush_nbytes
 
+    @timed("PipelineIOBuffers.to_arrays")
     def to_arrays(self):
         """Convert each list of rows held into a single array.
 
@@ -657,6 +735,7 @@ class PipelineIOBuffers:
         for name in self.GALAXY_OUTPUTS:
             setattr(self, name, rows_to_arrays(getattr(self, name)))
 
+    @timed("PipelineIOBuffers.combine_analysis_results")
     def combine_analysis_results(self):
         """Combine the lists of extra analysis results into unyt arrays.
 
@@ -720,6 +799,7 @@ class PipelineIOBuffers:
                     f"Expected {expected}, got {structure}."
                 )
 
+    @timed("PipelineIOBuffers.clear")
     def clear(self):
         """Empty the buffers once their rows have been written.
 
@@ -1407,6 +1487,7 @@ class PipelineIO:
         except Exception as e:
             raise OSError(f"Failed to write {key} - {e}") from e
 
+    @timed("PipelineIO.write_galaxy_outputs")
     def write_galaxy_outputs(self, requested):
         """Write the per-galaxy outputs held in the buffers to file.
 
@@ -1442,6 +1523,7 @@ class PipelineIO:
         # later flush can be padded to line up with the galaxies
         self.rows_written += buffers.ngalaxies
 
+    @timed("PipelineIO.write_global_outputs")
     def write_global_outputs(self, requested):
         """Write the outputs held in the buffers that aren't per galaxy.
 
