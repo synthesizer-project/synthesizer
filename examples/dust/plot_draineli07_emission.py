@@ -1,6 +1,6 @@
 """
-Draine-Li dust emission validation
-==================================
+Draine-Li dust emission
+=======================
 
 Compare Draine & Li (2007) dust emission across the radiation field grid.
 This example assigns a set of synthetic minimum radiation fields (umin)
