@@ -156,6 +156,8 @@ def accumulate_pipeline_results_from_child(parent, *children):
             "line_maps_noise_fnu",
             "data_cubes_lnu",
             "data_cubes_fnu",
+            "sfh",
+            "sfzh",
         ):
             if hasattr(child, attr):
                 setattr(
@@ -848,6 +850,151 @@ def divide_dicts_recursive(data, divisors):
             if key in divisors
         }
     return data / divisors
+
+
+def iter_row_lists(data, path=()):
+    """Yield every list of rows in a nested dictionary.
+
+    Args:
+        data (dict/list): The nested dictionary (or a list) to search.
+        path (tuple): The keys leading to data (used when recursing).
+
+    Yields:
+        tuple:
+            The keys leading to the list and the list itself.
+    """
+    if isinstance(data, dict):
+        for key, value in data.items():
+            yield from iter_row_lists(value, (*path, key))
+    elif isinstance(data, list):
+        yield path, data
+
+
+def iter_products(store, depth):
+    """Yield every product in a nested store of products.
+
+    Args:
+        store (dict-like): The store, e.g. a component's images keyed by
+            instrument, then emission model label, then filter. Any
+            container with an items method can be a level of the store.
+        depth (int): The number of levels of keys leading to each product.
+
+    Yields:
+        tuple:
+            The keys leading to the product and the product itself.
+    """
+    # We've reached a product
+    if depth == 0:
+        yield (), store
+        return
+
+    # Otherwise descend a level, carrying the keys along
+    for key, value in store.items():
+        for keys, product in iter_products(value, depth - 1):
+            yield (key, *keys), product
+
+
+def rows_to_arrays(data):
+    """Convert every list of rows in a nested dictionary into an array.
+
+    The dictionaries are updated in place, only the lists are replaced.
+
+    Args:
+        data (dict/list): The nested dictionary (or a list) to convert.
+
+    Returns:
+        dict/unyt_array:
+            The converted dictionary, or the array the list became.
+    """
+    if isinstance(data, dict):
+        for key, value in data.items():
+            data[key] = rows_to_arrays(value)
+        return data
+    return unyt_array(data)
+
+
+def get_row_template(row):
+    """Return what's needed to make an empty row like the one passed.
+
+    Args:
+        row (array-like): The row to describe.
+
+    Returns:
+        tuple:
+            The shape, dtype and units (None without units) of the row.
+    """
+    return np.shape(row), np.asarray(row).dtype, getattr(row, "units", None)
+
+
+def make_empty_row(template):
+    """Return a row of zeros matching a template from get_row_template.
+
+    Args:
+        template (tuple): The shape, dtype and units of the row.
+
+    Returns:
+        array-like:
+            The empty row (a unyt_array if the template has units).
+    """
+    shape, dtype, units = template
+    row = np.zeros(shape, dtype=dtype)
+    return row * units if units is not None else row
+
+
+def clear_lists_recursive(data):
+    """Empty every list in a nested dictionary in place.
+
+    The dictionary structure itself is left untouched.
+
+    Args:
+        data (dict/list): The nested dictionary (or a list) to clear.
+    """
+    # Keep the dictionary keys we discovered while processing galaxies so
+    # the next batch can reuse them; only the lists of rows need clearing.
+    for _, rows in iter_row_lists(data):
+        rows.clear()
+
+
+def get_dict_structure(data):
+    """Return the keys of a nested dictionary with the values stripped.
+
+    Args:
+        data (any): The (possibly nested) dictionary.
+
+    Returns:
+        dict/None:
+            The same nesting of keys with None at the leaves (or None if
+            data isn't a dictionary).
+    """
+    if not isinstance(data, dict):
+        return None
+    return {k: get_dict_structure(v) for k, v in data.items()}
+
+
+def get_buffered_nbytes(data):
+    """Return the number of bytes held by the arrays in nested containers.
+
+    Python numeric scalars are counted using their array payload size.
+
+    Args:
+        data (dict/list/array): The (nested) data to measure.
+
+    Returns:
+        int: The number of bytes.
+    """
+    # Count array payloads rather than the entire Pipeline footprint. This
+    # is a cheap approximation of what can actually be freed by a flush.
+    if isinstance(data, dict):
+        return sum(get_buffered_nbytes(value) for value in data.values())
+    if isinstance(data, (list, tuple)):
+        return sum(get_buffered_nbytes(value) for value in data)
+    if isinstance(data, (int, float, complex)):
+        return np.asarray(data).nbytes
+    if isinstance(data, str):
+        return len(data.encode("utf-8"))
+    if isinstance(data, bytes):
+        return len(data)
+    return getattr(data, "nbytes", 0)
 
 
 def unify_dict_structure_across_ranks(data, comm, root=0):
