@@ -46,11 +46,14 @@ print("Galaxy centre unchanged: gal.centre = ", gal.centre)
 # the aperture masks below select on
 gal.stars.get_radii()
 
+# Define the emission model, masked to each aperture in turn below
+model = IncidentEmission(grid)
+
 fig, ax = plt.subplots(1, 1)
 
 for aperture_radius in np.array([30, 10, 5, 2, 1, 0.5]) * kpc:
-    # Define an emission model only including stars within the aperture
-    model = IncidentEmission(grid, label=f"incident_{aperture_radius.value}")
+    # Only include stars within the aperture
+    model.clear_masks()
     model.add_mask(attr="radii", op="<", thresh=aperture_radius)
 
     spec = gal.stars.get_spectra(model)

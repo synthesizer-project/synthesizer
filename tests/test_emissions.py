@@ -114,7 +114,8 @@ def test_escape_fraction(
 @pytest.mark.parametrize(
     "override",
     [
-        {"dust_curves": None, "tau_v": 0.5},
+        {"dust_curves": {}},
+        {"tau_v": 0.5},
         {"fesc": 0.1},
         {"covering_fraction": 0.9},
         {"mask": {}},
