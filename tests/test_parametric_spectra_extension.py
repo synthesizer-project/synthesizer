@@ -39,22 +39,6 @@ def _grid_spectra(dtype=np.float64):
     return np.ascontiguousarray(rng.uniform(0.5, 2.0, shape).astype(dtype))
 
 
-def _to_linear(values, is_log):
-    """Convert grid coordinates into linear units.
-
-    Args:
-        values (np.ndarray):
-            The grid coordinates.
-        is_log (bool):
-            Whether the coordinates are log10 values.
-
-    Returns:
-        np.ndarray:
-            The coordinates in linear units.
-    """
-    return 10**values if is_log else values
-
-
 def _cic_weights(points, masses):
     """Get CIC grid weights for points (linear units) via the particle path.
 
@@ -332,6 +316,18 @@ def test_precomputed_weights_are_reused():
 
     # The spectrum must be unchanged
     np.testing.assert_allclose(spec_again, spec)
+
+
+def test_precomputed_weights_with_mask_raise():
+    """A mask can't be applied to precomputed weights, so must raise."""
+    # Compute the weights to pass back in
+    edges = _wide_edges()
+    masses = _random_masses(edges)
+    _, weights = _bic(edges, masses)
+
+    # Passing them back in alongside a mask must be rejected
+    with pytest.raises(ValueError):
+        _bic(edges, masses, mask=np.ones(masses.shape, bool), weights=weights)
 
 
 def test_float32_inputs():

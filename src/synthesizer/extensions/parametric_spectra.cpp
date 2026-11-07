@@ -390,6 +390,13 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
+  /* Precomputed weights are used as they are, so a mask can't be applied. */
+  if (weights_obj != Py_None && mask_obj != Py_None) {
+    PyErr_SetString(PyExc_ValueError,
+                    "A mask can't be applied to precomputed grid weights.");
+    return NULL;
+  }
+
   /* Get the number of wavelengths from the spectra. */
   const int nlam = get_nlam(spectra_obj);
   if (nlam < 0) {
