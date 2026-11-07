@@ -15,19 +15,615 @@ Example usage:
 
 import os
 import time
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import ClassVar
 
 import h5py
 import numpy as np
 from unyt import unyt_array
 
+from synthesizer import exceptions
 from synthesizer._version import __version__
 from synthesizer.instruments import InstrumentCollection
 from synthesizer.pipeline.pipeline_utils import (
+    clear_lists_recursive,
+    combine_list_of_dicts,
+    get_buffered_nbytes,
     get_dataset_properties,
+    get_dict_structure,
+    get_row_template,
+    iter_row_lists,
+    make_empty_row,
+    rows_to_arrays,
     unify_dict_structure_across_ranks,
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.utils.operation_timers import timed
+
+# These live under Galaxies alongside the outputs, but describe the whole
+# run rather than one row per galaxy. Rank 0 writes them once.
+_SHARED_AXIS_GROUPS = (
+    "/Galaxies/Stars/SFZHAxes",
+    "/Galaxies/Stars/SFHAxes",
+)
+
+
+@contextmanager
+def _hdf5_replaced_on_success(path):
+    """Open an HDF5 file for writing which only replaces path on success.
+
+    The file is written to a temporary path next to path, so a failure while
+    writing leaves any existing file at path untouched, rather than an
+    incomplete file which looks valid.
+
+    Args:
+        path (str): The path the file should end up at.
+
+    Yields:
+        h5py.File: The open file to write to.
+    """
+    temp_path = f"{path}.tmp"
+    try:
+        with h5py.File(temp_path, "w") as hdf:
+            yield hdf
+
+        # Everything was written (and the file closed), so swap it in
+        os.replace(temp_path, path)
+    except BaseException:
+        # Clean up the incomplete file before re-raising
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise
+
+
+def _per_component():
+    """Return an empty container for each component's outputs."""
+    return {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+
+
+@dataclass(eq=False, repr=False)
+class PipelineIOBuffers:
+    """The outputs a Pipeline holds in memory until written.
+
+    Each per-galaxy output is a (nested) container of lists with a row per
+    galaxy held. The Pipeline appends a row for each galaxy it unpacks and
+    the buffers are emptied once their rows have been written, either at
+    the end of the run or, if flushing was requested, whenever a flush
+    threshold is reached.
+
+    Not every galaxy produces every output (e.g. a galaxy without black
+    holes has no black hole spectra), so the buffers also pad the outputs a
+    galaxy didn't produce, keeping every row in line with its galaxy.
+
+    The outputs that aren't per galaxy (e.g. the cosmic SEDs) are also held
+    here but are accumulated over the whole run, so they are only written
+    once, at the end.
+
+    Attributes:
+        flush_ngalaxies (int):
+            The number of galaxies at which to flush to file (None for no
+            flushing based on the number of galaxies).
+        flush_memory (float):
+            The memory (in GB) at which to flush to file (None for no
+            flushing based on memory).
+        analysis_results (dict):
+            The results of each extra analysis function, keyed by the
+            function's result key.
+        cosmic_lnus (dict):
+            The cosmic SEDs (spectral luminosity densities) for each
+            component, keyed by label and then emission model label.
+        cosmic_fnus (dict):
+            The observed cosmic SEDs (spectral flux densities) for each
+            component, keyed by label and then emission model label.
+        cosmic_lnu_counts (dict):
+            The number of galaxies contributing to each cosmic_lnus entry.
+        cosmic_fnu_counts (dict):
+            The number of galaxies contributing to each cosmic_fnus entry.
+        line_lams (unyt_array):
+            The rest frame wavelengths of the emission lines (shared by
+            all galaxies).
+        line_ids (list):
+            The IDs of the emission lines (shared by all galaxies).
+        sfzh_log10ages (np.ndarray):
+            The log10 age axis the SFZHs are binned on.
+        sfzh_metallicities (np.ndarray):
+            The metallicity axis the SFZHs are binned on.
+        sfh_log10ages (np.ndarray):
+            The log10 age axis the SFHs are binned on.
+        ngalaxies (int):
+            The number of galaxies held since the last flush.
+        nbytes (int):
+            The bytes held by the outputs since the last flush (only
+            counted when flushing based on memory).
+    """
+
+    # The per-galaxy outputs (excluding the extra analysis results), each
+    # with the Pipeline flag requesting it and where it's written. Outputs
+    # held per component are written beneath each component's group (see
+    # COMPONENT_GROUPS), the others at the path given.
+    GALAXY_OUTPUTS: ClassVar[dict] = {
+        "sfzhs": ("_write_sfzh", "Galaxies/Stars/SFZH"),
+        "sfhs": ("_write_sfh", "Galaxies/Stars/SFH"),
+        "lnu_spectra": (
+            "_write_lnu_spectra",
+            "Spectra/SpectralLuminosityDensities",
+        ),
+        "fnu_spectra": (
+            "_write_fnu_spectra",
+            "Spectra/SpectralFluxDensities",
+        ),
+        "luminosities": ("_write_luminosities", "Photometry/Luminosities"),
+        "fluxes": ("_write_fluxes", "Photometry/Fluxes"),
+        "line_lums": ("_write_lines", "Lines/Luminosity"),
+        "line_cont_lums": ("_write_lines", "Lines/Continuum"),
+        "line_fluxes": ("_write_flux_lines", "Lines/Flux"),
+        "line_cont_fluxes": ("_write_flux_lines", "Lines/ContinuumFlux"),
+        "line_obs_lams": (
+            "_write_flux_lines",
+            "Galaxies/Lines/ObservedWavelengths",
+        ),
+        "images_lum": ("_write_images_lum", "Images/Luminosity"),
+        "images_lum_psf": ("_write_images_lum_psf", "PSFImages/Luminosity"),
+        "images_lum_noise": (
+            "_write_images_lum_noise",
+            "NoiseImages/Luminosity",
+        ),
+        "images_flux": ("_write_images_flux", "Images/Flux"),
+        "images_flux_psf": ("_write_images_flux_psf", "PSFImages/Flux"),
+        "images_flux_noise": ("_write_images_flux_noise", "NoiseImages/Flux"),
+        "line_maps_lum": ("_write_line_maps_lum", "LineMaps/Luminosity"),
+        "line_maps_lum_psf": (
+            "_write_line_maps_lum_psf",
+            "PSFLineMaps/Luminosity",
+        ),
+        "line_maps_lum_noise": (
+            "_write_line_maps_lum_noise",
+            "NoiseLineMaps/Luminosity",
+        ),
+        "line_maps_flux": ("_write_line_maps_flux", "LineMaps/Flux"),
+        "line_maps_flux_psf": (
+            "_write_line_maps_flux_psf",
+            "PSFLineMaps/Flux",
+        ),
+        "line_maps_flux_noise": (
+            "_write_line_maps_flux_noise",
+            "NoiseLineMaps/Flux",
+        ),
+        "lnu_data_cubes": (
+            "_write_lnu_data_cubes",
+            "DataCubes/SpectralLuminosityDensities",
+        ),
+        "fnu_data_cubes": (
+            "_write_fnu_data_cubes",
+            "DataCubes/SpectralFluxDensities",
+        ),
+        "processed_lnu_data_cubes": (
+            "_write_lnu_data_cubes",
+            "ProcessedDataCubes/SpectralLuminosityDensities",
+        ),
+        "processed_fnu_data_cubes": (
+            "_write_fnu_data_cubes",
+            "ProcessedDataCubes/SpectralFluxDensities",
+        ),
+        "spectroscopy_lnu": (
+            "_write_spectroscopy_lnu",
+            "Spectroscopy/SpectralLuminosityDensities",
+        ),
+        "spectroscopy_fnu": (
+            "_write_spectroscopy_fnu",
+            "Spectroscopy/SpectralFluxDensities",
+        ),
+    }
+
+    # The group each component's outputs are written beneath
+    COMPONENT_GROUPS: ClassVar[dict] = {
+        "Galaxy": "Galaxies",
+        "Stars": "Galaxies/Stars",
+        "BlackHole": "Galaxies/BlackHoles",
+    }
+
+    # The outputs that aren't per galaxy, each with the Pipeline flags
+    # requesting it (any one is enough) and where it's written. The cosmic
+    # SEDs are held per component and written beneath each component's
+    # group (see COSMIC_SED_GROUPS), the others at the path given.
+    GLOBAL_OUTPUTS: ClassVar[dict] = {
+        "cosmic_lnus": (
+            ("_write_cosmic_lnu",),
+            "SpectralLuminosityDensities",
+        ),
+        "cosmic_fnus": (("_write_cosmic_fnu",), "SpectralFluxDensities"),
+        "line_ids": (("_write_lines", "_write_flux_lines"), "Lines/IDs"),
+        "line_lams": (
+            ("_write_lines", "_write_flux_lines"),
+            "Lines/Wavelengths",
+        ),
+        "sfzh_log10ages": (
+            ("_write_sfzh",),
+            "Galaxies/Stars/SFZHAxes/Log10Ages",
+        ),
+        "sfzh_metallicities": (
+            ("_write_sfzh",),
+            "Galaxies/Stars/SFZHAxes/Metallicities",
+        ),
+        "sfh_log10ages": (
+            ("_write_sfh",),
+            "Galaxies/Stars/SFHAxes/Log10Ages",
+        ),
+    }
+
+    # Where each component's cosmic SEDs are written
+    COSMIC_SED_GROUPS: ClassVar[dict] = {
+        "Galaxy": "CosmicSED/Galaxy",
+        "Stars": "CosmicSED/Stars",
+        "BlackHole": "CosmicSED/BlackHoles",
+    }
+
+    # The names of every output container (see the outputs property). We
+    # cache the names rather than the containers since some containers are
+    # replaced (e.g. by to_arrays and clear)
+    OUTPUT_NAMES: ClassVar[tuple] = (
+        *GALAXY_OUTPUTS,
+        "analysis_results",
+        *GLOBAL_OUTPUTS,
+    )
+
+    # The flushing thresholds
+    flush_ngalaxies: int = None
+    flush_memory: float = None
+
+    # The outputs themselves
+    sfzhs: list = field(init=False, default_factory=list)
+    sfhs: list = field(init=False, default_factory=list)
+    lnu_spectra: dict = field(init=False, default_factory=_per_component)
+    fnu_spectra: dict = field(init=False, default_factory=_per_component)
+    luminosities: dict = field(init=False, default_factory=_per_component)
+    fluxes: dict = field(init=False, default_factory=_per_component)
+    line_lums: dict = field(init=False, default_factory=_per_component)
+    line_cont_lums: dict = field(init=False, default_factory=_per_component)
+    line_fluxes: dict = field(init=False, default_factory=_per_component)
+    line_cont_fluxes: dict = field(init=False, default_factory=_per_component)
+    line_obs_lams: list = field(init=False, default_factory=list)
+    images_lum: dict = field(init=False, default_factory=_per_component)
+    images_lum_psf: dict = field(init=False, default_factory=_per_component)
+    images_lum_noise: dict = field(init=False, default_factory=_per_component)
+    images_flux: dict = field(init=False, default_factory=_per_component)
+    images_flux_psf: dict = field(init=False, default_factory=_per_component)
+    images_flux_noise: dict = field(init=False, default_factory=_per_component)
+    line_maps_lum: dict = field(init=False, default_factory=_per_component)
+    line_maps_lum_psf: dict = field(init=False, default_factory=_per_component)
+    line_maps_lum_noise: dict = field(
+        init=False, default_factory=_per_component
+    )
+    line_maps_flux: dict = field(init=False, default_factory=_per_component)
+    line_maps_flux_psf: dict = field(
+        init=False, default_factory=_per_component
+    )
+    line_maps_flux_noise: dict = field(
+        init=False, default_factory=_per_component
+    )
+    lnu_data_cubes: dict = field(init=False, default_factory=_per_component)
+    fnu_data_cubes: dict = field(init=False, default_factory=_per_component)
+    processed_lnu_data_cubes: dict = field(
+        init=False, default_factory=_per_component
+    )
+    processed_fnu_data_cubes: dict = field(
+        init=False, default_factory=_per_component
+    )
+    spectroscopy_lnu: dict = field(init=False, default_factory=_per_component)
+    spectroscopy_fnu: dict = field(init=False, default_factory=_per_component)
+    analysis_results: dict = field(init=False, default_factory=dict)
+
+    # The outputs that aren't per galaxy. These are accumulated over the
+    # whole run (flushing leaves them alone) and written once at the end.
+    cosmic_lnus: dict = field(init=False, default_factory=_per_component)
+    cosmic_fnus: dict = field(init=False, default_factory=_per_component)
+    line_lams: unyt_array = field(init=False, default=None)
+    line_ids: list = field(init=False, default=None)
+
+    # The axes the SFZHs and SFHs are binned on (set when they're requested)
+    sfzh_log10ages: np.ndarray = field(init=False, default=None)
+    sfzh_metallicities: np.ndarray = field(init=False, default=None)
+    sfh_log10ages: np.ndarray = field(init=False, default=None)
+
+    # The number of galaxies contributing to each cosmic SED, so they can
+    # be averaged once every rank's contributions have been summed
+    cosmic_lnu_counts: dict = field(init=False, default_factory=_per_component)
+    cosmic_fnu_counts: dict = field(init=False, default_factory=_per_component)
+
+    # What we hold since the last flush
+    ngalaxies: int = field(init=False, default=0)
+    nbytes: int = field(init=False, default=0)
+
+    # The shape, dtype and units of a row of each output, so we can pad
+    # the outputs a galaxy doesn't produce. This outlives the rows
+    # themselves since flushing empties the lists.
+    _row_templates: dict = field(init=False, default_factory=dict)
+
+    # The keys of the outputs the current galaxy has produced so far (see
+    # append_output)
+    _appended: set = field(init=False, default_factory=set)
+
+    # The key structure of each analysis result from the first flush,
+    # later flushes must match it to append consistently
+    _analysis_result_structures: dict = field(init=False, default_factory=dict)
+
+    def __post_init__(self):
+        """Validate the flushing thresholds."""
+        # Don't accept a zero or negative threshold: we'd otherwise flush
+        # immediately after every galaxy, which is a surprising way to ask
+        # for no buffering. Numpy integers are fine but booleans aren't
+        if self.flush_ngalaxies is not None:
+            if (
+                not isinstance(self.flush_ngalaxies, (int, np.integer))
+                or isinstance(self.flush_ngalaxies, bool)
+                or self.flush_ngalaxies < 1
+            ):
+                raise exceptions.InconsistentArguments(
+                    "flush_ngalaxies must be an int >= 1"
+                )
+            self.flush_ngalaxies = int(self.flush_ngalaxies)
+        if self.flush_memory is not None and not (
+            0 < self.flush_memory < float("inf")
+        ):
+            raise exceptions.InconsistentArguments("flush_memory must be > 0")
+
+    @property
+    def flushing(self):
+        """Return whether outputs are flushed to file while running."""
+        return (
+            self.flush_ngalaxies is not None or self.flush_memory is not None
+        )
+
+    @property
+    def flush_nbytes(self):
+        """Return the memory threshold in bytes (None if not set)."""
+        if self.flush_memory is None:
+            return None
+        return self.flush_memory * 1024**3
+
+    @property
+    def outputs(self):
+        """Return every output container currently held.
+
+        Returns:
+            list:
+                The output containers, in the order of OUTPUT_NAMES.
+        """
+        return [getattr(self, name) for name in self.OUTPUT_NAMES]
+
+    def _iter_row_lists(self):
+        """Yield (key, rows) for every per-galaxy output list.
+
+        Yields:
+            tuple:
+                The output's key (its name followed by its path through
+                the nested containers) and its list of rows.
+        """
+        for name in self.GALAXY_OUTPUTS:
+            for path, rows in iter_row_lists(getattr(self, name)):
+                yield (name, *path), rows
+
+    def _hold(self, rows, new_rows):
+        """Add rows to an output's list, counting their memory if needed.
+
+        Args:
+            rows (list):
+                The output's list of rows.
+            new_rows (list):
+                The rows to add to the end of the list.
+        """
+        rows.extend(new_rows)
+
+        # Track how much memory we're holding if we flush on memory
+        if self.flush_memory is not None:
+            self.nbytes += get_buffered_nbytes(new_rows)
+
+    def append_output(self, value, name, *keys):
+        """Append the current galaxy's row to a per-galaxy output.
+
+        Any nested containers along the way are created on first use, so
+        an output is only held once a galaxy produces it.
+
+        Args:
+            value (array-like):
+                The galaxy's row.
+            name (str):
+                The name of the output (a key of GALAXY_OUTPUTS).
+            *keys (str):
+                The path to the row's list through the output's nested
+                containers (e.g. the component, then the emission model
+                label). Omitted for outputs which are a single list.
+        """
+        # Find the list for this row, creating it (and any containers above
+        # it) if this is the first time it's been produced
+        rows = getattr(self, name)
+        if keys:
+            for key in keys[:-1]:
+                rows = rows.setdefault(key, {})
+            rows = rows.setdefault(keys[-1], [])
+
+        # If no galaxy has produced this output before, pad a row for every
+        # galaxy we already hold. Galaxies already flushed are padded by the
+        # IO helper when it creates the dataset.
+        key = (name, *keys)
+        if key not in self._row_templates:
+            self._row_templates[key] = get_row_template(value)
+            self._hold(
+                rows,
+                [
+                    make_empty_row(self._row_templates[key])
+                    for _ in range(self.ngalaxies)
+                ],
+            )
+
+        # Store the galaxy's row and note the galaxy produced this output
+        self._hold(rows, [value])
+        self._appended.add(key)
+
+    def add_analysis_output(self, key):
+        """Add an output for the results of an extra analysis function.
+
+        There is no equivalent to this method for the other outputs because
+        their keys are known ahead of time, whereas the keys of analysis
+        outputs are entirely arbitrary (they're chosen by the user).
+
+        Args:
+            key (str):
+                The key of the analysis function's results.
+
+        Raises:
+            InconsistentArguments:
+                If an analysis output with this key already exists.
+        """
+        if key in self.analysis_results:
+            raise exceptions.InconsistentArguments(
+                f"{key} already exists in the analysis results. "
+                "Choose a different result_key"
+            )
+        self.analysis_results[key] = []
+
+    def append_analysis_output(self, key, result):
+        """Append the current galaxy's result of an extra analysis function.
+
+        Args:
+            key (str):
+                The key of the analysis function's results.
+            result (object):
+                The galaxy's result.
+        """
+        self._hold(self.analysis_results[key], [result])
+
+    def end_galaxy(self):
+        """Pad the outputs a galaxy didn't produce and count the galaxy.
+
+        Without a row for every galaxy, every later row would be written
+        against the wrong galaxy index, so we pad the missing outputs with
+        empty rows shaped like the rows we already hold.
+        """
+        # Pad any output this galaxy didn't append to. We can only do so if
+        # we know what a row looks like, if we don't then no galaxy has
+        # produced the output yet (e.g. the SFZH list exists from the start)
+        for key, rows in self._iter_row_lists():
+            if key not in self._appended and key in self._row_templates:
+                self._hold(rows, [make_empty_row(self._row_templates[key])])
+
+        # Count the galaxy and start afresh for the next one
+        self._appended.clear()
+        self.ngalaxies += 1
+
+    def should_flush(self):
+        """Return whether the outputs held should be flushed to file.
+
+        Returns:
+            bool: True if either flush threshold has been reached.
+        """
+        # A normal run still asks after each galaxy, so leave its in-memory
+        # outputs alone unless flushing was requested
+        if not self.flushing:
+            return False
+
+        # Have we held enough galaxies?
+        if (
+            self.flush_ngalaxies is not None
+            and self.ngalaxies >= self.flush_ngalaxies
+        ):
+            return True
+
+        # Have we held enough memory? (Galaxies can differ substantially in
+        # size so this isn't necessarily a fixed number of galaxies.)
+        if self.flush_memory is None:
+            return False
+        return self.nbytes >= self.flush_nbytes
+
+    def to_arrays(self):
+        """Convert each list of rows held into a single array.
+
+        This is done once the run is complete, so the outputs left in memory
+        are arrays (rather than lists of rows) when they are written.
+        """
+        for name in self.GALAXY_OUTPUTS:
+            setattr(self, name, rows_to_arrays(getattr(self, name)))
+
+    def combine_analysis_results(self):
+        """Combine the lists of extra analysis results into unyt arrays.
+
+        Raises:
+            BadResult:
+                If an analysis function's results differ in type or
+                structure between galaxies (or from an earlier flush).
+        """
+        # Unlike the other outputs we need to do some checks here to ensure
+        # that the data is in a consistent format. This is because the user
+        # can return any type of data from their analysis functions.
+        for key, res in self.analysis_results.items():
+            # Ensure the data of all results is in the same format.
+            types = set([type(r) for r in res])
+            if len(types) > 1:
+                raise exceptions.BadResult(
+                    "All results from extra analysis functions must be "
+                    f"of the same type. Got: {set(types)}"
+                )
+
+            # Ensure all results have the same keys (the merge below would
+            # silently drop any extras)
+            self._check_analysis_structure(key, res)
+
+            # Combine the list of results into a dict of unyt arrays or a
+            # single unyt array. This will simply return a unyt array if we
+            # hand a list of values
+            self.analysis_results[key] = combine_list_of_dicts(res)
+
+    def _check_analysis_structure(self, key, res):
+        """Ensure every result of an analysis function has the same keys.
+
+        The structure is remembered between calls since each flush appends
+        to the datasets the first flush created, so a result with a
+        different structure would leave some datasets missing rows.
+
+        Args:
+            key (str):
+                The key of the analysis function.
+            res (list):
+                The results of the analysis function for each galaxy.
+
+        Raises:
+            BadResult:
+                If a result's structure differs from the expected one.
+        """
+        # Nothing to check
+        if len(res) == 0:
+            return
+
+        # Compare against an earlier flush if there was one, otherwise
+        # against the first result
+        expected = self._analysis_result_structures.setdefault(
+            key, get_dict_structure(res[0])
+        )
+        for result in res:
+            structure = get_dict_structure(result)
+            if structure != expected:
+                raise exceptions.BadResult(
+                    f"Extra analysis result {key} changed structure. "
+                    f"Expected {expected}, got {structure}."
+                )
+
+    def clear(self):
+        """Empty the buffers once their rows have been written.
+
+        The containers' structure is left in place so the lists (and their
+        ids) persist into the next batch.
+        """
+        for name in self.GALAXY_OUTPUTS:
+            clear_lists_recursive(getattr(self, name))
+
+        # The analysis results are combined into arrays before writing, so
+        # go back to an empty list for each analysis function
+        self.analysis_results = {key: [] for key in self.analysis_results}
+
+        # Reset the counters for the next batch
+        self.ngalaxies = 0
+        self.nbytes = 0
 
 
 class PipelineIO:
@@ -39,6 +635,8 @@ class PipelineIO:
 
     Attributes:
         hdf (h5py.File): The HDF5 file to write to.
+        io_buffers (PipelineIOBuffers): The buffers holding the outputs to
+            write.
         comm (mpi.Comm): The MPI communicator.
         num_galaxies (int): The total number of galaxies.
         rank (int): The rank of the MPI process.
@@ -46,6 +644,9 @@ class PipelineIO:
         is_root (bool): Whether the writer is running on the root process.
         is_collective (bool): Whether the writer is running in collective mode.
         verbose (bool): Whether to print verbose output.
+        outpath (str): The path to write to (see the outpath property).
+        filepath (str): The path of the file this rank writes (the outpath
+            with the rank added when writing a file per rank).
         _start_time (float): The start time of the pipeline.
     """
 
@@ -58,9 +659,9 @@ class PipelineIO:
     @timed("PipelineIO.__init__")
     def __init__(
         self,
-        filepath,
+        io_buffers,
+        outpath=None,
         comm=None,
-        ngalaxies_local=None,
         start_time=None,
         verbose=1,
         parallel_io=False,
@@ -68,9 +669,13 @@ class PipelineIO:
         """Initialize the HDF5Writer class.
 
         Args:
-            filepath (str): The path to the HDF5 file to write to.
+            io_buffers (PipelineIOBuffers): The buffers holding the outputs
+                to write.
+            outpath (str, optional): The path to the HDF5 file to write to.
+                This can be set later (see outpath) but must be set before
+                the file is created. Required if the buffers are flushed to
+                file while running.
             comm (mpi.Comm, optional): The MPI communicator.
-            ngalaxies_local (int, optional): The local number of galaxies.
             start_time (float, optional): The start time of the pipeline, used
                 for timing information.
             verbose (int, optional): How verbose the output should be. 1 will
@@ -79,9 +684,22 @@ class PipelineIO:
             parallel_io (bool, optional): Whether to use parallel I/O. This
                 requires h5py to be built with parallel support. Defaults to
                 False.
+
+        Raises:
+            InconsistentArguments:
+                If the buffers are flushed to file while running but no
+                outpath was given.
         """
-        # Store the file path
-        self.filepath = filepath
+        # A path is only mandatory if we flush during run, otherwise it can
+        # be set later (e.g. by passing it to Pipeline.write)
+        if io_buffers.flushing and outpath is None:
+            raise exceptions.InconsistentArguments(
+                "An outpath must be given to flush outputs to file while "
+                "running (flush_ngalaxies or flush_memory were set)."
+            )
+
+        # Attach the buffers holding the outputs we'll write
+        self.io_buffers = io_buffers
 
         # Store the communicator and its properties
         self.comm = comm
@@ -119,48 +737,39 @@ class PipelineIO:
         # Are we talking?
         self.verbose = verbose
 
-        # Time how long we have to wait for everyone to get here
-        start = time.perf_counter()
-        if self.is_parallel:
-            self.comm.Barrier()
-            self._took(start, "Waiting for all ranks to get to I/O")
+        # Flag for whether the output file has been created (we can't
+        # change where we write once we've started flushing to it)
+        self._file_created = False
 
-            # If we are writing in parallel but not using collective I/O we
-            # need to write a file per rank. Modify the file path to include
-            # the rank.
-            if not self.is_collective:
-                ext = filepath.split(".")[-1]
-                self.filepath = filepath.replace(
-                    f".{ext}", f"_{self.rank}.{ext}"
-                )
+        # Flag for whether the file has been finalised (no more per-galaxy
+        # data can be written)
+        self.finalised = False
 
-        # Report some useful information
-        if self.is_collective:
-            self._print(
-                f"Writing in parallel to {filepath} "
-                f"with {comm.Get_size()} ranks, and collective I/O."
-            )
-        elif self.is_parallel:
-            self._print(
-                f"Writing to {filepath} "
-                f"with {comm.Get_size()} ranks, and a file per rank."
-            )
-        else:
-            self._print(f"Writing to {filepath}.")
+        # Flag for whether the final per-galaxy rows have been written, so
+        # retrying a failed write doesn't append them to the file again
+        self.galaxy_outputs_written = False
 
-        # For collective I/O we need the counts on each rank so we know where
-        # to write the data
-        if self.is_collective or self.is_parallel:
-            rank_gal_counts = self.comm.allgather(ngalaxies_local)
-            self._ngalaxies_local = ngalaxies_local
-            self.num_galaxies = sum(rank_gal_counts)
-            self.start = sum(rank_gal_counts[: self.rank])
-            self.end = self.start + ngalaxies_local
-        else:
-            self.num_galaxies = ngalaxies_local
-            self._ngalaxies_local = ngalaxies_local
-            self.start = 0
-            self.end = ngalaxies_local
+        # The number of galaxy rows already flushed to file. A dataset first
+        # appearing after a flush is padded with rows_written empty rows so
+        # its rows line up with the galaxies.
+        self.rows_written = 0
+
+        # Attach the output path (if we have one yet)
+        self._outpath = None
+        self.filepath = None
+        self.outpath = outpath
+
+    @contextmanager
+    def silenced(self):
+        """Silence the writer's reporting within a with block."""
+        # Flushing happens between progress rows, so suppress its per-dataset
+        # chatter and restore the requested verbosity even if writing fails.
+        verbose = self.verbose
+        self.verbose = 0
+        try:
+            yield
+        finally:
+            self.verbose = verbose
 
     def _print(self, *args, **kwargs):
         """Print a message to the screen with extra information.
@@ -230,24 +839,127 @@ class PipelineIO:
         # Report how blazingly fast we are
         self._print(f"{message} took {elapsed:.3f} {units}.")
 
+    @property
+    def outpath(self):
+        """Return the path to write to (before any per rank suffix).
+
+        Returns:
+            str:
+                The path to the HDF5 file (None if not yet set).
+        """
+        return self._outpath
+
+    @outpath.setter
+    def outpath(self, outpath):
+        """Set the path to write to.
+
+        The path can be changed freely unless we're flushing, in which case
+        it can't be changed between the first flush and the final write.
+        When writing a file per rank, the rank is added to the path of the
+        file this rank writes (filepath).
+
+        Args:
+            outpath (str):
+                The path to the HDF5 file to write to.
+
+        Raises:
+            InconsistentArguments:
+                If a different path is given after outputs were flushed to
+                the file but before the final write.
+        """
+        # h5py needs a string, but we may have been given a Path
+        if outpath is not None:
+            outpath = str(outpath)
+
+        # Don't move the file once we've flushed outputs to it (without
+        # flushing everything is still in memory so we can write anywhere)
+        if (
+            self.io_buffers.flushing
+            and self._file_created
+            and not self.finalised
+            and outpath != self._outpath
+        ):
+            raise exceptions.InconsistentArguments(
+                f"Cannot write to {outpath}, outputs have already been "
+                f"written to {self._outpath}."
+            )
+        self._outpath = outpath
+
+        # If we are writing in parallel but not using collective I/O we
+        # need to write a file per rank. Modify the file path to include
+        # the rank.
+        self.filepath = outpath
+        if outpath is not None and self.is_parallel and not self.is_collective:
+            ext = outpath.split(".")[-1]
+            self.filepath = outpath.replace(f".{ext}", f"_{self.rank}.{ext}")
+
     @timed("PipelineIO.create_file_with_metadata")
     def create_file_with_metadata(
         self,
+        ngalaxies_local,
         instruments,
         emission_model,
         include_lines=False,
     ):
-        """Write metadata to the HDF5 file.
+        """Create the HDF5 file and write metadata to it.
 
         This writes useful metadata to the root group of the HDF5 file and
         outputs the instruments and emission model to the appropriate groups.
+        Any earlier file at the path is replaced.
+
+        This is a collective operation.
 
         Args:
+            ngalaxies_local (int): The number of galaxies on this rank.
             instruments (dict): A dictionary of instrument objects.
             emission_model (dict): A dictionary of emission model objects.
             include_lines (bool): Whether to create the root-level line
                 metadata group.
+
+        Raises:
+            InconsistentArguments:
+                If no output path has been set.
         """
+        # We have to have somewhere to write
+        if self.outpath is None:
+            raise exceptions.InconsistentArguments(
+                "No outpath has been set to write to."
+            )
+
+        # Time how long we have to wait for everyone to get here
+        start = time.perf_counter()
+        if self.is_parallel:
+            self.comm.Barrier()
+            self._took(start, "Waiting for all ranks to get to I/O")
+
+        # Report some useful information
+        if self.is_collective:
+            self._print(
+                f"Writing in parallel to {self.outpath} "
+                f"with {self.size} ranks, and collective I/O."
+            )
+        elif self.is_parallel:
+            self._print(
+                f"Writing to {self.outpath} "
+                f"with {self.size} ranks, and a file per rank."
+            )
+        else:
+            self._print(f"Writing to {self.outpath}.")
+
+        # For collective I/O we need the counts on each rank so we know where
+        # to write the data
+        if self.is_collective or self.is_parallel:
+            rank_gal_counts = self.comm.allgather(ngalaxies_local)
+            self._ngalaxies_local = ngalaxies_local
+            self.num_galaxies = sum(rank_gal_counts)
+            self.start = sum(rank_gal_counts[: self.rank])
+            self.end = self.start + ngalaxies_local
+        else:
+            self.num_galaxies = ngalaxies_local
+            self._ngalaxies_local = ngalaxies_local
+            self.start = 0
+            self.end = ngalaxies_local
+
         start = time.perf_counter()
 
         # Unpack the instruments into a single instrument collection containing
@@ -295,10 +1007,18 @@ class PipelineIO:
             with h5py.File(self.filepath, "w") as hdf:
                 hdf.create_group("Galaxies")
 
+        # We've started a new file, so nothing has been written to it yet
+        # (only flagged once the file exists so a failed attempt doesn't
+        # pin us to its path)
+        self._file_created = True
+        self.finalised = False
+        self.galaxy_outputs_written = False
+        self.rows_written = 0
+
         if self.is_parallel:
             self.comm.Barrier()
 
-    def write_dataset(self, data, key):
+    def write_dataset(self, data, key, per_galaxy=True):
         """Write a dataset to an HDF5 file.
 
         We handle various different cases here:
@@ -308,9 +1028,15 @@ class PipelineIO:
         - If the data is a numpy array, we write the data and set the units to
           "dimensionless".
 
+        If the dataset already exists (i.e. the Pipeline has flushed earlier
+        galaxies to this file) the data is appended along the first axis.
+
         Args:
             data (any): The data to write.
             key (str): The key to write the data to.
+            per_galaxy (bool, optional): Whether the data has a row per
+                galaxy (appended to the rows already written) rather than
+                being written once at the end.
         """
         # Ensure we are working with a unyt_array
         data = unyt_array(data)
@@ -322,14 +1048,92 @@ class PipelineIO:
         else:
             units = "dimensionless"
 
-        # If we have an array of strings, convert to a h5py compatible string
+        # If we have an array of strings, convert to h5py's variable length
+        # strings (so later flushes can append longer strings)
         if data.dtype.kind == "U":
-            data = np.array([d.encode("utf-8") for d in data])
+            data = data.astype(h5py.string_dtype())
 
         # Write the dataset with the appropriate units
         with h5py.File(self.filepath, "a") as hdf:
-            dset = hdf.create_dataset(key, data=data, compression="gzip")
+            # Data that isn't per galaxy is only written once, at the end, so
+            # if it exists an earlier write failed after writing it. Replace
+            # it rather than appending a second copy
+            if not per_galaxy and key in hdf:
+                del hdf[key]
+
+            # A previous flush may already have created this dataset, in
+            # which case we just add to it
+            if self._append_to_dataset(hdf, data, key, units):
+                return
+
+            # A per-galaxy dataset first appearing after a flush needs empty
+            # rows for the galaxies already flushed so its rows line up with
+            # the galaxies. We leave those rows unwritten, HDF5 returns its
+            # fill value (zero) for them without us allocating them
+            nempty = self.rows_written if per_galaxy and data.ndim > 0 else 0
+
+            # Create the dataset, leaving its galaxy axis unlimited so future
+            # flushes can append to it
+            if data.ndim > 0:
+                dset = hdf.create_dataset(
+                    key,
+                    shape=(nempty + data.shape[0], *data.shape[1:]),
+                    dtype=data.dtype,
+                    maxshape=(None, *data.shape[1:]),
+                    compression="gzip",
+                )
+                dset[nempty:, ...] = data
+            else:
+                dset = hdf.create_dataset(key, data=data, compression="gzip")
             dset.attrs["Units"] = units
+
+    def _append_to_dataset(self, hdf, data, key, units):
+        """Append data to a dataset created by an earlier flush.
+
+        Args:
+            hdf (h5py.File): The open file to write to.
+            data (np.ndarray): The data to append (without units).
+            key (str): The key of the dataset.
+            units (str): The units of the data.
+
+        Returns:
+            bool:
+                True if we've handled the data, False if the dataset still
+                needs creating.
+        """
+        # Nothing to append to
+        if key not in hdf:
+            return False
+
+        # An empty batch has nothing to add
+        if data.ndim > 0 and data.shape[0] == 0:
+            return True
+
+        # An empty placeholder (written by a rank or batch without any
+        # galaxies) may not have the right trailing shape, so replace it
+        dset = hdf[key]
+        if dset.shape[0] == 0:
+            del hdf[key]
+            return False
+
+        # Every batch must agree on what a row looks like
+        if (
+            dset.shape[1:] != data.shape[1:]
+            or dset.dtype != data.dtype
+            or dset.attrs["Units"] != units
+        ):
+            raise ValueError(
+                f"Cannot append to {key}: existing dataset has "
+                f"shape {dset.shape}, dtype {dset.dtype}, units "
+                f"{dset.attrs['Units']}; new data has shape "
+                f"{data.shape}, dtype {data.dtype}, units {units}."
+            )
+
+        # Extend the galaxy axis and fill it
+        nexisting = dset.shape[0]
+        dset.resize(nexisting + data.shape[0], axis=0)
+        dset[nexisting:, ...] = data
+        return True
 
     def write_dataset_parallel(self, data, key):
         """Write a dataset to an HDF5 file in parallel.
@@ -357,12 +1161,14 @@ class PipelineIO:
 
         self._print(f"Wrote dataset {key} with shape {data.shape}")
 
-    def write_datasets_recursive(self, data, key):
+    def write_datasets_recursive(self, data, key, per_galaxy=True):
         """Write a dictionary to an HDF5 file recursively.
 
         Args:
             data (dict): The data to write.
             key (str): The key to write the data to.
+            per_galaxy (bool, optional): Whether the data has a row per
+                galaxy (see write_dataset).
         """
         # Early exit if data is None
         if data is None:
@@ -371,7 +1177,7 @@ class PipelineIO:
         # If the data isn't a dictionary just write the dataset
         if not isinstance(data, dict):
             try:
-                self.write_dataset(data, key)
+                self.write_dataset(data, key, per_galaxy)
             except TypeError as e:
                 raise TypeError(
                     f"Failed to write dataset {key} (type={type(data)}) - {e}"
@@ -380,7 +1186,7 @@ class PipelineIO:
 
         # Loop over the data
         for k, v in data.items():
-            self.write_datasets_recursive(v, f"{key}/{k}")
+            self.write_datasets_recursive(v, f"{key}/{k}", per_galaxy)
 
     def write_datasets_parallel(self, data, key, paths):
         """Write a dictionary to an HDF5 file recursively in parallel.
@@ -431,37 +1237,43 @@ class PipelineIO:
         return paths
 
     @timed("PipelineIO.write_data")
-    def write_data(self, data, key, indexes=None, root=0):
+    def write_data(self, data, key, per_galaxy=True, root=0):
         """Write data using the appropriate method based on the environment.
 
         Args:
             data (any): The data to write.
             key (str): The key to write the data to.
-            indexes (list, optional): The indexes to write the data to.
+            per_galaxy (bool, optional): Whether the data has a row per
+                galaxy (appended to the rows already written) rather than
+                being written once, by the root rank, at the end.
             root (int, optional): The root rank for gathering and writing.
         """
         try:
             start = time.perf_counter()
+
             # In parallel land we need to make sure we're on the same page with
-            # the structure we are writing
-            if self.is_parallel:
+            # the structure we are writing. Per-galaxy data can be flushed at
+            # different times on different ranks, so don't try to
+            # synchronise here. The file combiners handle missing datasets
+            # when all ranks have finished writing.
+            if self.is_parallel and not per_galaxy:
                 data = unify_dict_structure_across_ranks(data, self.comm)
 
             # Early exit if data is empty. Zero-row per-galaxy arrays are
             # still written so empty ranks hold the dataset with the right
             # trailing shape.
             if data is None or (
-                len(data) == 0 and (isinstance(data, dict) or indexes is None)
+                len(data) == 0 and (isinstance(data, dict) or not per_galaxy)
             ):
                 return
 
             # Root-level metadata should only be written once, even when using
             # MPI or collective I/O.
-            if self.is_parallel and indexes is None:
+            if self.is_parallel and not per_galaxy:
                 if self.rank != root:
                     return
 
-                self.write_datasets_recursive(data, key)
+                self.write_datasets_recursive(data, key, per_galaxy=False)
                 self._took(start, f"Writing {key} (and subgroups)")
                 return
 
@@ -476,12 +1288,110 @@ class PipelineIO:
                 # Otherwise, we can just write everything recursively. Bear
                 # in mind that when using MPI this will write a file per
                 # rank ready for later combination into a virtual file.
-                self.write_datasets_recursive(data, key)
+                self.write_datasets_recursive(data, key, per_galaxy)
 
             self._took(start, f"Writing {key} (and subgroups)")
 
         except Exception as e:
             raise OSError(f"Failed to write {key} - {e}") from e
+
+    def write_galaxy_outputs(self, requested):
+        """Write the per-galaxy outputs held in the buffers to file.
+
+        On each call the rows are appended to anything written by earlier
+        calls (i.e. earlier flushes).
+
+        Args:
+            requested (set):
+                The names of the outputs the Pipeline was asked for. Only
+                these are written, the others were never collected.
+        """
+        buffers = self.io_buffers
+
+        # Write each requested output, beneath each component's group if
+        # it's held per component. In MPI each rank writes its own file, so
+        # writing per-galaxy data makes no collective calls (ranks need not
+        # flush at the same galaxy).
+        for name, (_, path) in buffers.GALAXY_OUTPUTS.items():
+            if name not in requested:
+                continue
+            data = getattr(buffers, name)
+            if not isinstance(data, dict):
+                self.write_data(data, path)
+                continue
+            for component, group in buffers.COMPONENT_GROUPS.items():
+                self.write_data(data[component], f"{group}/{path}")
+
+        # Write out the extra analysis results
+        for key, res in buffers.analysis_results.items():
+            self.write_data(res, f"Galaxies/{key}")
+
+        # Record the rows we've written so datasets first appearing in a
+        # later flush can be padded to line up with the galaxies
+        self.rows_written += buffers.ngalaxies
+
+    def write_global_outputs(self, requested):
+        """Write the outputs held in the buffers that aren't per galaxy.
+
+        These are only written once, at the end of the run, since (unlike
+        the per-galaxy outputs) they aren't split into rows we can flush.
+        This is a collective operation when using MPI.
+
+        Args:
+            requested (set):
+                The names of the outputs the Pipeline was asked for. Only
+                these are written.
+        """
+        buffers = self.io_buffers
+        for name, (_, path) in buffers.GLOBAL_OUTPUTS.items():
+            if name not in requested:
+                continue
+            data = getattr(buffers, name)
+
+            # The cosmic SEDs are summed over every rank's galaxies (rank 0
+            # holds the totals) and written beneath each component's group
+            if isinstance(data, dict):
+                for component, group in buffers.COSMIC_SED_GROUPS.items():
+                    self.write_data(
+                        data[component], f"{group}/{path}", per_galaxy=False
+                    )
+                continue
+
+            # The rest are the same on every rank so are written by rank 0.
+            # Rank 0 may have no galaxies (and so e.g. no line wavelengths),
+            # so take them from any rank which has them
+            self.write_data(
+                self._first_from_any_rank(data),
+                path,
+                per_galaxy=False,
+                root=0,
+            )
+
+    def _first_from_any_rank(self, value):
+        """Return the first value which isn't None on any rank.
+
+        This is used for values only known on ranks with galaxies (e.g. the
+        line wavelengths), which may not include rank 0.
+
+        Args:
+            value (object):
+                This rank's value (None if this rank doesn't have it).
+
+        Returns:
+            object:
+                On rank 0, the first value which isn't None, in rank order,
+                or None if no rank has one. The other ranks get None.
+        """
+        # Without MPI this rank's value is the only one
+        if not self.is_parallel:
+            return value
+
+        # Collect every rank's value on rank 0
+        values = self.comm.gather(value, root=0)
+        if self.rank != 0:
+            return None
+
+        return next((val for val in values if val is not None), None)
 
     @timed("PipelineIO.combine_rank_files")
     def combine_rank_files(self):
@@ -510,6 +1420,13 @@ class PipelineIO:
                 # in the destination file if it doesn't exist. We also need to
                 # copy the attributes.
                 if isinstance(v, h5py.Group):
+                    # Bin axes have no galaxy dimension. Copy their group
+                    # once instead of slicing each dataset by rank.
+                    if v.name in _SHARED_AXIS_GROUPS:
+                        if k not in dest:
+                            src.file.copy(v, dest, name=k)
+                        continue
+
                     # Create the group if it doesn't exist
                     if k not in dest:
                         dest.create_group(k)
@@ -530,6 +1447,16 @@ class PipelineIO:
                         dset.attrs[attr] = v.attrs[attr]
 
                 else:
+                    # Each rank must hold exactly one row per galaxy
+                    if v.shape[0] != slice.stop - slice.start:
+                        raise ValueError(
+                            f"Cannot combine {v.name}: {v.shape[0]} rows "
+                            f"for {slice.stop - slice.start} galaxies"
+                        )
+                    # Empty ranks only hold zero-row placeholders, which
+                    # must not decide the combined dataset's shape
+                    if v.shape[0] == 0:
+                        continue
                     # If the dataset doesn't exist we need to create it
                     if k not in dest:
                         dset = dest.create_dataset(
@@ -561,8 +1488,9 @@ class PipelineIO:
         new_path = "_".join(path_no_ext.split("_")[:-1]) + f".{ext}"
         temp_path = "_".join(path_no_ext.split("_")[:-1]) + "_<rank>.hdf5"
 
-        # Open the output file
-        with h5py.File(new_path, "w") as hdf:
+        # Open the output file (any existing file is only replaced once the
+        # new one is complete)
+        with _hdf5_replaced_on_success(new_path) as hdf:
             # Loop over each rank file
             for rank in range(self.size):
                 # Open the rank file
@@ -615,7 +1543,9 @@ class PipelineIO:
         temp_path = "_".join(path_no_ext.split("_")[:-1]) + "_<rank>.hdf5"
         new_path = "_".join(path_no_ext.split("_")[:-1]) + f".{ext}"
 
-        # Remove the old combined file if it exists
+        # Remove any old virtual file. Unlike a copied file it can't be kept
+        # if this combine fails, since it points at the rank files this run
+        # has already overwritten
         if os.path.exists(new_path):
             os.remove(new_path)
 
@@ -630,6 +1560,10 @@ class PipelineIO:
             def gather_datasets(group, group_path="/"):
                 for k, v in group.items():
                     current_path = f"{group_path}{k}"
+                    # Axes are shared metadata, not virtual galaxy rows.
+                    # We'll copy them directly from rank 0 below.
+                    if current_path in _SHARED_AXIS_GROUPS:
+                        continue
                     if isinstance(v, h5py.Group):
                         gather_datasets(v, current_path + "/")
                     elif current_path not in datasets_info or (
@@ -649,6 +1583,8 @@ class PipelineIO:
             def gather_groups(group, group_path="/"):
                 for k, v in group.items():
                     current_path = f"{group_path}{k}"
+                    if current_path in _SHARED_AXIS_GROUPS:
+                        continue
                     if isinstance(v, h5py.Group):
                         groups_info.setdefault(current_path, dict(v.attrs))
                         gather_groups(v, current_path + "/")
@@ -664,8 +1600,9 @@ class PipelineIO:
                     gather_datasets(rank_f["Galaxies"], "/Galaxies/")
                     gather_groups(rank_f["Galaxies"], "/Galaxies/")
 
-            # Create the virtual file
-            with h5py.File(new_path, "w") as hdf:
+            # Create the virtual file (any existing file is only replaced
+            # once the new one is complete)
+            with _hdf5_replaced_on_success(new_path) as hdf:
                 for attr in f0.attrs:
                     hdf.attrs[attr] = f0.attrs[attr]
 
@@ -681,6 +1618,14 @@ class PipelineIO:
                     grp = hdf.create_group(gpath)
                     for attr_name, attr_val in gattrs.items():
                         grp.attrs[attr_name] = attr_val
+
+                # Preserve the axes at their usual paths without interpreting
+                # their lengths as a number of galaxies. Only rank 0 writes
+                # them, so it is also the source of truth here.
+                for path in _SHARED_AXIS_GROUPS:
+                    if path in f0:
+                        hdf.require_group("Galaxies/Stars")
+                        f0.copy(path, hdf, name=path)
 
                 # Construct the virtual datasets for each dataset
                 for dpath, (shape, dtype, dattrs) in datasets_info.items():
@@ -709,7 +1654,11 @@ class PipelineIO:
                         # Ensure the local size is as expected
                         expected_size = end_i - start_i
                         if local_size != expected_size:
-                            end_i = start_i + local_size
+                            raise ValueError(
+                                f"Cannot map {dpath}: rank {rank} has "
+                                f"{local_size} rows for {expected_size} "
+                                "galaxies"
+                            )
 
                         target_shape = (end_i - start_i,) + shape[1:]
 

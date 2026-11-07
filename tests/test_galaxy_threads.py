@@ -6,6 +6,7 @@ on every build: the outputs must not depend on whether the threads actually
 run in parallel.
 """
 
+import h5py
 import numpy as np
 import pytest
 from astropy.cosmology import Planck18
@@ -53,11 +54,23 @@ def _stellar_mass(gal):
     return gal.stars.initial_mass
 
 
-def _run(grid, model, nr_galaxy_threads):
-    """Run a pipeline over fresh galaxies and return it."""
+def _run(grid, model, nr_galaxy_threads, **kwargs):
+    """Run a pipeline over fresh galaxies and return it.
+
+    Args:
+        grid (Grid): The grid the galaxies are made with.
+        model (EmissionModel): The emission model to use.
+        nr_galaxy_threads (int): The number of galaxy threads to use.
+        **kwargs: Any other arguments to pass to the Pipeline.
+
+    Returns:
+        Pipeline: The pipeline after running.
+    """
     # Set up the pipeline with an analysis function and fresh galaxies (the
     # pipeline consumes its galaxies, so each run needs its own)
-    pipeline = Pipeline(model, verbose=0, nr_galaxy_threads=nr_galaxy_threads)
+    pipeline = Pipeline(
+        model, verbose=0, nr_galaxy_threads=nr_galaxy_threads, **kwargs
+    )
     pipeline.add_analysis_func(_stellar_mass, "StellarMass")
     pipeline.add_galaxies(_make_galaxies(grid))
 
@@ -124,9 +137,13 @@ def test_threaded_matches_serial(
         "line_lums",
         "line_cont_lums",
         "cosmic_lnus",
-        "_analysis_results",
+        "analysis_results",
     ):
-        _assert_same(getattr(serial, attr), getattr(threaded, attr), attr)
+        _assert_same(
+            getattr(serial.io_buffers, attr),
+            getattr(threaded.io_buffers, attr),
+            attr,
+        )
 
     # The worker threads' counts must sum to the serial counts
     assert serial._op_counts == threaded._op_counts
@@ -149,3 +166,49 @@ def test_worker_error_propagates(no_gil, test_grid, nebular_emission_model):
     # The worker's error should be raised by run on the main thread
     with pytest.raises(ValueError, match="boom"):
         pipeline.run()
+
+
+def _read_datasets(path):
+    """Return every dataset in an HDF5 file keyed by its path."""
+    datasets = {}
+    with h5py.File(path) as hdf:
+        hdf.visititems(
+            lambda key, obj: (
+                datasets.__setitem__(key, obj[...])
+                if isinstance(obj, h5py.Dataset)
+                else None
+            )
+        )
+    return datasets
+
+
+def test_threaded_flushing_matches_serial(
+    no_gil, test_grid, nebular_emission_model, tmp_path
+):
+    """Test flushing while processing on threads writes the serial file."""
+    # Write a serial run without flushing
+    serial = _run(test_grid, nebular_emission_model, 1)
+    serial.write(tmp_path / "serial.hdf5")
+
+    # And a threaded run which flushes every couple of galaxies
+    threaded = _run(
+        test_grid,
+        nebular_emission_model,
+        2,
+        outpath=tmp_path / "threaded.hdf5",
+        flush_ngalaxies=2,
+    )
+
+    # Only the last of the 7 galaxies should be left unflushed
+    assert threaded.io_buffers.ngalaxies == 1
+    threaded.write()
+
+    # Every output should match, including its galaxy ordering
+    expected = _read_datasets(tmp_path / "serial.hdf5")
+    found = _read_datasets(tmp_path / "threaded.hdf5")
+    outputs = [
+        key for key in expected if key.startswith(("Galaxies", "CosmicSED"))
+    ]
+    assert len(outputs) > 0
+    for key in outputs:
+        np.testing.assert_array_equal(expected[key], found[key], err_msg=key)
