@@ -10,7 +10,9 @@ This module contains tests for all dust generator functionality including:
 """
 
 import warnings
+from pathlib import Path
 
+import h5py
 import numpy as np
 import pytest
 from unyt import Hz, K, Lsun, Msun, angstrom, erg, s, um
@@ -29,6 +31,7 @@ from synthesizer.emission_models.generators.dust.draineli07 import (
 )
 from synthesizer.emission_models.generators.dust.greybody import Greybody
 from synthesizer.emissions import Sed
+from synthesizer.utils.integrate import trapezoid
 
 
 # Test fixtures
@@ -44,26 +47,64 @@ def dust_temperatures():
     return [5 * K, 10 * K, 20 * K, 50 * K, 100 * K]
 
 
+def _draineli07_templates(qpah, umin, alpha, nlam):
+    """Return analytic DL07 templates, linear in every grid axis."""
+    # qpah gets its own wavelength dependence so it changes the spectral
+    # shape (and not just the normalisation)
+    shape = np.linspace(1.0, 2.0, nlam)
+    ramp = np.linspace(0.0, 1.0, nlam)
+    diffuse = (1.0 + umin)[..., np.newaxis] * shape + (10.0 * qpah)[
+        ..., np.newaxis
+    ] * ramp
+    pdr = (1.0 + umin + alpha)[..., np.newaxis] * shape + (10.0 * qpah)[
+        ..., np.newaxis
+    ] * ramp
+    return diffuse, pdr
+
+
+def _write_draineli07_grid(path: Path, log_on_read=False):
+    """Write a minimal DL07 dust emission grid in the standard Grid format."""
+    qpah = np.array([0.01, 0.025, 0.05])
+    umin = np.array([0.1, 1.0, 10.0, 100.0])
+    alpha = np.array([1.5, 2.0, 2.5])
+    nlam = 100
+    diffuse, pdr = _draineli07_templates(
+        qpah[:, None, None], umin[None, :, None], alpha[None, None, :], nlam
+    )
+
+    with h5py.File(path, "w") as hdf:
+        hdf.attrs["axes"] = np.array(["qpah", "umin", "alpha"], dtype=object)
+        hdf.attrs["WeightVariable"] = "None"
+
+        axes = hdf.create_group("axes")
+        for name, values in (("qpah", qpah), ("umin", umin), ("alpha", alpha)):
+            axis = axes.create_dataset(name, data=values)
+            axis.attrs["Units"] = "dimensionless"
+            axis.attrs["log_on_read"] = log_on_read and name == "umin"
+
+        spectra = hdf.create_group("spectra")
+        wavelength = spectra.create_dataset(
+            "wavelength", data=np.logspace(3, 7, nlam)
+        )
+        wavelength.attrs["Units"] = "Å"
+        spectra.create_dataset("diffuse", data=diffuse[:, :, 0, :])
+        spectra.create_dataset("pdr", data=pdr)
+
+
 @pytest.fixture
-def mock_dust_grid():
-    """Mock dust grid for DraineLi07 testing."""
+def draineli07_grid(tmp_path):
+    """Create a temporary DL07 dust emission grid."""
+    grid_path = tmp_path / "draineli07_test_grid.hdf5"
+    _write_draineli07_grid(grid_path)
+    return grid_path
 
-    class MockGrid:
-        def __init__(self):
-            # Mock DL07 grid attributes
-            self._dtype = np.dtype(np.float32)
-            self.qpah = np.array([0.01, 0.025, 0.05])
-            self.umin = np.array([0.1, 1.0, 10.0, 100.0])
-            self.alpha = np.array([1.5, 2.0, 2.5])
 
-            # Mock spectral data on a native wavelength grid (in Angstrom)
-            self._lam = np.logspace(3, 7, 100)
-            self.spectra = {
-                "diffuse": np.random.random((3, 4, 100)).astype(self._dtype),
-                "pdr": np.random.random((3, 4, 3, 100)).astype(self._dtype),
-            }
-
-    return MockGrid()
+@pytest.fixture
+def draineli07_log_grid(tmp_path):
+    """Create a temporary DL07 dust emission grid with log umin."""
+    grid_path = tmp_path / "draineli07_log_test_grid.hdf5"
+    _write_draineli07_grid(grid_path, log_on_read=True)
+    return grid_path
 
 
 @pytest.fixture
@@ -741,12 +782,13 @@ class TestDraineLi07Generator:
         result = solve_umin(umin, umax, u_calculated, gamma)
         assert abs(result) < 1e-10  # Should be close to zero
 
-    def test_draineli07_initialization(self, mock_dust_grid):
+    def test_draineli07_initialization(self, draineli07_grid):
         """Test DraineLi07 initialization."""
         dust_mass = 1e6 * Msun
 
         dl07 = DraineLi07(
-            grid=mock_dust_grid,
+            grid_name=draineli07_grid.name,
+            grid_dir=draineli07_grid.parent,
             dust_mass=dust_mass,
             dust_to_gas_ratio=0.01,
             qpah=0.025,
@@ -754,21 +796,19 @@ class TestDraineLi07Generator:
             attenuated="attenuated",
         )
 
-        assert dl07.grid == mock_dust_grid
+        assert dl07.grid_name == draineli07_grid.name
         assert dl07.dust_mass == dust_mass
         assert dl07.dust_to_gas_ratio == 0.01
         assert dl07.qpah == 0.025
-        assert "dust_mass" in dl07._required_params
-        assert "dust_to_gas_ratio" in dl07._required_params
-        assert "hydrogen_mass" in dl07._required_params
-        assert "qpah" in dl07._required_params
+        assert dl07._required_params == ("dust_mass",)
 
-    def test_draineli07_variable_naming(self, mock_dust_grid):
+    def test_draineli07_variable_naming(self, draineli07_grid):
         """Test DraineLi07 uses improved variable names."""
         dust_mass = 1e6 * Msun
 
         dl07 = DraineLi07(
-            grid=mock_dust_grid,
+            grid_name=draineli07_grid.name,
+            grid_dir=draineli07_grid.parent,
             dust_mass=dust_mass,
             dust_to_gas_ratio=0.01,
             qpah=0.025,
@@ -782,22 +822,24 @@ class TestDraineLi07Generator:
         assert hasattr(dl07, "dust_to_gas_ratio")
         assert hasattr(dl07, "hydrogen_mass")
 
-    def test_draineli07_has_no_cmb_heating_option(self, mock_dust_grid):
+    def test_draineli07_has_no_cmb_heating_option(self, draineli07_grid):
         """Test CMB heating can't be requested, rather than being ignored."""
         with pytest.raises(TypeError):
             DraineLi07(
-                grid=mock_dust_grid,
+                grid_name=draineli07_grid.name,
+                grid_dir=draineli07_grid.parent,
                 dust_mass=1e6 * Msun,
                 do_cmb_heating=True,
             )
 
-    def test_draineli07_parameter_setup(self, mock_dust_grid):
+    def test_draineli07_parameter_setup(self, draineli07_grid):
         """Test DraineLi07 parameter setup."""
         dust_mass = 1e6 * Msun
         ldust = 1e10 * Lsun
 
         dl07 = DraineLi07(
-            grid=mock_dust_grid,
+            grid_name=draineli07_grid.name,
+            grid_dir=draineli07_grid.parent,
             dust_mass=dust_mass,
             dust_to_gas_ratio=0.01,
             qpah=0.025,
@@ -819,13 +861,14 @@ class TestDraineLi07Generator:
         assert not hasattr(dl07, "radiation_field_average")
         assert not hasattr(dl07, "u_avg")
 
-    def test_draineli07_get_spectra(self, mock_dust_grid, dust_wavelengths):
+    def test_draineli07_get_spectra(self, draineli07_grid, dust_wavelengths):
         """Test DraineLi07 get_spectra method."""
         dust_mass = 1e6 * Msun
         ldust = 1e10 * Lsun
 
         dl07 = DraineLi07(
-            grid=mock_dust_grid,
+            grid_name=draineli07_grid.name,
+            grid_dir=draineli07_grid.parent,
             dust_mass=dust_mass,
             dust_to_gas_ratio=0.01,
             qpah=0.025,
@@ -844,14 +887,15 @@ class TestDraineLi07Generator:
         assert np.all(sed.lnu >= 0)
 
     def test_draineli07_dust_components(
-        self, mock_dust_grid, dust_wavelengths
+        self, draineli07_grid, dust_wavelengths
     ):
         """Test DraineLi07 dust component separation."""
         dust_mass = 1e6 * Msun
         ldust = 1e10 * Lsun
 
         dl07 = DraineLi07(
-            grid=mock_dust_grid,
+            grid_name=draineli07_grid.name,
+            grid_dir=draineli07_grid.parent,
             dust_mass=dust_mass,
             dust_to_gas_ratio=0.01,
             qpah=0.025,
@@ -872,31 +916,30 @@ class TestDraineLi07Generator:
         assert isinstance(sed_pdr, Sed)
         assert len(sed_diffuse.lam) == len(dust_wavelengths)
         assert len(sed_pdr.lam) == len(dust_wavelengths)
-        assert sed_diffuse.lnu.dtype == mock_dust_grid._dtype
-        assert sed_pdr.lnu.dtype == mock_dust_grid._dtype
+        assert sed_diffuse.lnu.dtype == dl07.grid._dtype
+        assert sed_pdr.lnu.dtype == dl07.grid._dtype
 
     def test_draineli07_leaves_grid_unchanged(
-        self, mock_dust_grid, dust_wavelengths
+        self, draineli07_grid, dust_wavelengths
     ):
         """Test generating spectra doesn't resample the shared grid."""
         dl07 = DraineLi07(
-            grid=mock_dust_grid,
+            grid_name=draineli07_grid.name,
+            grid_dir=draineli07_grid.parent,
             dust_mass=1e6 * Msun,
             dust_to_gas_ratio=0.01,
             qpah=0.025,
             verbose=False,
         )
-        lam = mock_dust_grid._lam.copy()
-        diffuse = mock_dust_grid.spectra["diffuse"].copy()
-        pdr = mock_dust_grid.spectra["pdr"].copy()
+        lam = dl07.grid._lam.copy()
+        diffuse = dl07.grid.spectra["diffuse"].copy()
+        pdr = dl07.grid.spectra["pdr"].copy()
 
         dl07.get_spectra(dust_wavelengths)
 
-        np.testing.assert_array_equal(mock_dust_grid._lam, lam)
-        np.testing.assert_array_equal(
-            mock_dust_grid.spectra["diffuse"], diffuse
-        )
-        np.testing.assert_array_equal(mock_dust_grid.spectra["pdr"], pdr)
+        np.testing.assert_array_equal(dl07.grid._lam, lam)
+        np.testing.assert_array_equal(dl07.grid.spectra["diffuse"], diffuse)
+        np.testing.assert_array_equal(dl07.grid.spectra["pdr"], pdr)
 
 
 class TestDustGeneratorIntegration:
@@ -1234,10 +1277,11 @@ class TestDustGeneratorErrorHandling:
                 redshift=0.0,
             )
 
-    def test_draineli07_invalid_template(self, mock_dust_grid):
+    def test_draineli07_invalid_template(self, draineli07_grid):
         """Test DraineLi07 error for invalid template."""
         dl07 = DraineLi07(
-            grid=mock_dust_grid,
+            grid_name=draineli07_grid.name,
+            grid_dir=draineli07_grid.parent,
             dust_mass=1e6 * Msun,
             dust_to_gas_ratio=0.01,
             qpah=0.025,
@@ -1600,20 +1644,31 @@ class TestGeneratorOverridesEmitter:
         assert len(set(np.round(list(factors.values()), 12))) == 3
 
 
-def test_draineli07_generator_overrides_emitter(mock_dust_grid, mock_model):
+def test_draineli07_generator_overrides_emitter(draineli07_grid, mock_model):
     """DraineLi07 values override the emitter, unset ones come from it."""
-    gen = DraineLi07(grid=mock_dust_grid, dust_mass=1e6 * Msun, qpah=0.025)
+    gen = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+        dust_mass=1e6 * Msun,
+        qpah=0.025,
+    )
     emitter = _ParamEmitter(
         qpah=0.04, dust_to_gas_ratio=0.02, hydrogen_mass=1e8 * Msun
     )
-    params = gen._extract_params(mock_model, emitter)
+    params = gen._extract_optional_params(mock_model, emitter)
 
-    # The generator's values (including its defaults) win
+    # The generator's values win
     assert params["qpah"] == 0.025
-    assert params["dust_to_gas_ratio"] == 0.01
 
-    # The hydrogen mass isn't set on the generator so comes from the emitter
+    # Values not set on the generator come from the emitter, rather than
+    # being overridden by a generator default
+    assert params["dust_to_gas_ratio"] == 0.02
     assert params["hydrogen_mass"] == 1e8 * Msun
+
+    # Values set nowhere are left for the setup to derive or default
+    assert params["gamma"] is None
+    assert params["umin"] is None
+    assert params["alpha"] is None
 
 
 class FakeEmissionModel:
@@ -1704,6 +1759,388 @@ class TestRequiredEmissions:
         assert lscale == mock_emissions["scaler"].bolometric_luminosity
 
 
+def _draineli07_setup(dl07, **params):
+    """Set up DL07 parameters, with gamma and umin given unless overridden."""
+    values = dict(
+        qpah=0.025,
+        gamma=0.1,
+        umin=1.0,
+        alpha=2.0,
+        hydrogen_mass=1e8 * Msun,
+    )
+    values.update(params)
+    dust_mass = params.pop("dust_mass", 1e6 * Msun)
+    values.pop("dust_mass", None)
+    return dl07._setup_dl07_parameters(dust_mass, 1e10 * Lsun, **values)
+
+
+def _expected_templates(qpah, umin, alpha, nlam=100):
+    """Return the analytic templates of the test grid at some parameters."""
+    return _draineli07_templates(
+        np.asarray(qpah, dtype=float),
+        np.asarray(umin, dtype=float),
+        np.asarray(alpha, dtype=float),
+        nlam,
+    )
+
+
+def test_draineli07_uses_grid_extraction(draineli07_grid):
+    """Particle extraction reproduces the expected templates."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+    )
+
+    qpah = np.array([0.025, 0.0375])
+    umin = np.array([1.0, 5.5])
+    alpha = np.array([2.0, 2.25])
+    setup = _draineli07_setup(
+        dl07,
+        dust_mass=np.full(2, 1e6) * Msun,
+        qpah=qpah,
+        umin=umin,
+        alpha=alpha,
+    )
+
+    diffuse, pdr = dl07._get_templates_at_lam(dl07.grid.lam, setup)
+    expected_diffuse, expected_pdr = _expected_templates(qpah, umin, alpha)
+
+    np.testing.assert_allclose(diffuse, expected_diffuse)
+    np.testing.assert_allclose(pdr, expected_pdr)
+
+
+def test_draineli07_masks_zero_and_nan_inputs(draineli07_grid):
+    """Zero and NaN dust masses and parameters should give no emission."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+    )
+
+    setup = _draineli07_setup(
+        dl07,
+        dust_mass=np.array([1e6, 0.0, np.nan, 1e6]) * Msun,
+        qpah=np.array([0.025, 0.025, 0.025, np.nan]),
+    )
+
+    diffuse, pdr = dl07._get_templates_at_lam(dl07.grid.lam, setup)
+    expected_diffuse, expected_pdr = _expected_templates(0.025, 1.0, 2.0)
+
+    np.testing.assert_allclose(diffuse[0], expected_diffuse)
+    np.testing.assert_allclose(pdr[0], expected_pdr)
+    np.testing.assert_allclose(diffuse[1:], 0.0)
+    np.testing.assert_allclose(pdr[1:], 0.0)
+    assert np.all(np.isfinite(diffuse)) and np.all(np.isfinite(pdr))
+
+
+def test_draineli07_resamples_non_native_wavelengths(draineli07_grid):
+    """Non-native wavelength requests should use grid resampling."""
+    lam = np.logspace(4, 6, 20) * angstrom
+    dl07 = DraineLi07(
+        lam=lam,
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+    )
+
+    setup = _draineli07_setup(dl07, dust_mass=np.full(2, 1e6) * Msun)
+    diffuse, pdr = dl07._get_templates_at_lam(lam, setup)
+
+    resampled = dl07.grid.reduce_rest_frame_lam(lam)
+    np.testing.assert_allclose(
+        diffuse, np.vstack([resampled.spectra["diffuse"][1, 1]] * 2)
+    )
+    np.testing.assert_allclose(
+        pdr, np.vstack([resampled.spectra["pdr"][1, 1, 1]] * 2)
+    )
+
+
+def test_draineli07_resamples_scalar_wavelengths(draineli07_grid):
+    """Scalar wavelength requests should also use grid resampling."""
+    lam = np.array([2.0e4]) * angstrom
+    dl07 = DraineLi07(
+        lam=lam,
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+    )
+
+    setup = _draineli07_setup(dl07, dust_mass=np.full(2, 1e6) * Msun)
+    diffuse, pdr = dl07._get_templates_at_lam(lam, setup)
+
+    at_lam = dl07.grid.get_spectra_at_lam(lam)
+    np.testing.assert_allclose(
+        diffuse, np.vstack([at_lam["diffuse"][1, 1]] * 2).reshape(2, 1)
+    )
+    np.testing.assert_allclose(
+        pdr, np.vstack([at_lam["pdr"][1, 1, 1]] * 2).reshape(2, 1)
+    )
+
+
+def test_draineli07_supports_log10_umin_grids(draineli07_log_grid):
+    """Logarithmic umin extraction grids should work correctly."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_log_grid.name,
+        grid_dir=draineli07_log_grid.parent,
+    )
+
+    # Grid points, and the point half way between 1 and 10 in log10 umin
+    umin = np.array([1.0, 10.0, 10**0.5])
+    setup = _draineli07_setup(
+        dl07, dust_mass=np.full(3, 1e6) * Msun, umin=umin
+    )
+    diffuse, _ = dl07._get_templates_at_lam(dl07.grid.lam, setup)
+    expected, _ = _expected_templates(0.025, umin[:2], 2.0)
+
+    np.testing.assert_allclose(diffuse[:2], expected)
+    np.testing.assert_allclose(diffuse[2], expected.mean(axis=0))
+
+
+def test_draineli07_ignores_negative_dust_masses(draineli07_grid):
+    """Negative dust masses are treated as non-contributing inputs."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+    )
+
+    setup = _draineli07_setup(dl07, dust_mass=np.array([-1e6, -1e6]) * Msun)
+    diffuse, pdr = dl07._get_templates_at_lam(dl07.grid.lam, setup)
+
+    np.testing.assert_allclose(diffuse, np.zeros((2, 100)))
+    np.testing.assert_allclose(pdr, np.zeros((2, 100)))
+
+
+def test_draineli07_clamps_out_of_range_parameters(draineli07_grid):
+    """Parameters outside the grid use the grid edge."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+    )
+
+    setup = _draineli07_setup(dl07, umin=1e3)
+    diffuse, _ = dl07._get_templates_at_lam(dl07.grid.lam, setup)
+    expected, _ = _expected_templates(0.025, 100.0, 2.0)
+
+    np.testing.assert_allclose(diffuse, expected)
+
+
+def test_draineli07_rejects_invalid_grid_axis(tmp_path):
+    """The dust emission grid must expose the qpah, umin and alpha axes."""
+    grid_path = tmp_path / "bad_draineli07_grid.hdf5"
+    with h5py.File(grid_path, "w") as hdf:
+        hdf.attrs["axes"] = np.array(["qpah", "size", "alpha"], dtype=object)
+        hdf.attrs["WeightVariable"] = "None"
+
+        axes = hdf.create_group("axes")
+        for name in ("qpah", "size", "alpha"):
+            axis = axes.create_dataset(name, data=np.array([0.1, 0.2]))
+            axis.attrs["Units"] = "dimensionless"
+            axis.attrs["log_on_read"] = False
+
+        spectra = hdf.create_group("spectra")
+        wavelength = spectra.create_dataset(
+            "wavelength", data=np.array([1.0e4, 2.0e4, 3.0e4])
+        )
+        wavelength.attrs["Units"] = "Å"
+        spectra.create_dataset("diffuse", data=np.ones((2, 2, 3)))
+        spectra.create_dataset("pdr", data=np.ones((2, 2, 2, 3)))
+
+    with pytest.raises(exceptions.UnimplementedFunctionality):
+        DraineLi07(grid_name=grid_path.name, grid_dir=grid_path.parent)
+
+
+def test_draineli07_rejects_missing_template_grid(tmp_path):
+    """The dust emission grid must contain both DL07 templates."""
+    grid_path = tmp_path / "missing_template_draineli07_grid.hdf5"
+    with h5py.File(grid_path, "w") as hdf:
+        hdf.attrs["axes"] = np.array(["qpah", "umin", "alpha"], dtype=object)
+        hdf.attrs["WeightVariable"] = "None"
+
+        axes = hdf.create_group("axes")
+        for name in ("qpah", "umin", "alpha"):
+            axis = axes.create_dataset(name, data=np.array([0.1, 0.2]))
+            axis.attrs["Units"] = "dimensionless"
+            axis.attrs["log_on_read"] = False
+
+        spectra = hdf.create_group("spectra")
+        wavelength = spectra.create_dataset(
+            "wavelength", data=np.array([1.0e4, 2.0e4, 3.0e4])
+        )
+        wavelength.attrs["Units"] = "Å"
+        spectra.create_dataset("diffuse", data=np.ones((2, 2, 3)))
+
+    with pytest.raises(exceptions.InconsistentArguments):
+        DraineLi07(grid_name=grid_path.name, grid_dir=grid_path.parent)
+
+
+def test_draineli07_rejects_mismatched_parameter_lengths(draineli07_grid):
+    """Every parameter must have one value or one per particle."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+    )
+
+    with pytest.raises(exceptions.InconsistentArguments):
+        _draineli07_setup(
+            dl07,
+            dust_mass=np.full(3, 1e6) * Msun,
+            qpah=np.array([0.01, 0.05]),
+        )
+
+
+def test_draineli07_per_particle_parameters_need_per_particle_model(
+    draineli07_grid, mock_model, mock_emissions, dust_wavelengths
+):
+    """Arrays of parameters can't make one integrated spectrum."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+        intrinsic="intrinsic",
+        attenuated="attenuated",
+    )
+    emitter = _ParamEmitter(
+        dust_mass=np.full(2, 1e6) * Msun,
+        hydrogen_mass=1e8 * Msun,
+        qpah=np.array([0.01, 0.05]),
+        gamma=0.1,
+        umin=1.0,
+        alpha=2.0,
+    )
+
+    with pytest.raises(exceptions.InconsistentArguments):
+        dl07._generate_spectra(
+            dust_wavelengths, emitter, mock_model, mock_emissions
+        )
+
+
+def test_draineli07_resampled_grid_cached(draineli07_grid, dust_wavelengths):
+    """The grid is resampled once per wavelength array, never in place."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+    )
+
+    first = dl07._get_resampled_grid(dust_wavelengths)
+    assert dl07._get_resampled_grid(dust_wavelengths) is first
+    assert dl07._get_resampled_grid(dl07.grid.lam) is dl07.grid
+    assert dl07.grid.nlam == 100
+
+
+def test_draineli07_magdis_only_without_gamma_or_umin(draineli07_grid):
+    """Giving gamma and umin with alpha = 2 doesn't use Magdis+12."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        setup = _draineli07_setup(dl07)
+
+    assert not any("Magdis" in str(w.message) for w in caught)
+    np.testing.assert_array_equal(setup["umin_calculated"], [1.0])
+    np.testing.assert_array_equal(setup["gamma_calculated"], [0.1])
+
+
+@pytest.mark.parametrize("alpha", (1.5, 2.0, 2.5))
+def test_draineli07_magdis_umin_uses_alpha(draineli07_grid, alpha):
+    """The derived umin gives the Magdis+12 <U> for the given alpha."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+    )
+
+    setup = _draineli07_setup(dl07, umin=None, alpha=alpha, gamma=0.05)
+    np.testing.assert_allclose(
+        u_mean(setup["umin_calculated"], 1e7, 0.05, alpha),
+        setup["radiation_field_average"],
+        rtol=1e-8,
+    )
+
+
+def test_draineli07_magdis_umin_without_solution_raises(draineli07_grid):
+    """A power law alone above the target <U> can't be solved."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+    )
+
+    with pytest.raises(exceptions.InconsistentArguments):
+        dl07._setup_dl07_parameters(
+            1e8 * Msun, 1e10 * Lsun, gamma=0.05, alpha=1.0
+        )
+
+
+@pytest.mark.parametrize("alpha", (1.0, 1.5, 2.0, 2.5))
+def test_draineli07_u_mean_any_alpha(alpha):
+    """The mean radiation field matches the integral for any alpha."""
+    umin, umax, gamma = 1.0, 1e7, 0.1
+    log_u = np.linspace(np.log(umin), np.log(umax), 200001)
+    u = np.exp(log_u)
+    dm_du = u ** (-alpha)
+    norm = trapezoid(dm_du * u, log_u)
+    u_power_law = trapezoid(dm_du * u * u, log_u) / norm
+    np.testing.assert_allclose(
+        u_mean(umin, umax, gamma, alpha),
+        (1 - gamma) * umin + gamma * u_power_law,
+        rtol=1e-6,
+    )
+
+
+def test_draineli07_parameters_vary_per_emitter(
+    draineli07_grid, mock_model, mock_emissions, dust_wavelengths
+):
+    """Each emitter's qpah is used."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+        intrinsic="intrinsic",
+        attenuated="attenuated",
+    )
+    params = dict(
+        dust_mass=1e6 * Msun,
+        hydrogen_mass=1e8 * Msun,
+        gamma=0.1,
+        umin=1.0,
+        alpha=2.0,
+    )
+
+    seds = [
+        dl07._generate_spectra(
+            dust_wavelengths,
+            _ParamEmitter(qpah=qpah, **params),
+            mock_model,
+            mock_emissions,
+        )
+        for qpah in (0.01, 0.03)
+    ]
+    assert not np.allclose(seds[0].lnu, seds[1].lnu)
+
+
+def test_draineli07_normalised_over_native_wavelengths(
+    draineli07_grid, mock_model, mock_emissions
+):
+    """A truncated wavelength grid gives the same spectrum as a wider one."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+        intrinsic="intrinsic",
+        attenuated="attenuated",
+    )
+    emitter = _ParamEmitter(
+        dust_mass=1e6 * Msun,
+        hydrogen_mass=1e8 * Msun,
+        qpah=0.025,
+        gamma=0.1,
+        umin=1.0,
+        alpha=2.0,
+    )
+
+    lam = dl07.grid.lam
+    wide, truncated = (
+        dl07._generate_spectra(lams, emitter, mock_model, mock_emissions)
+        for lams in (lam[1:-1], lam[40:60])
+    )
+    np.testing.assert_allclose(truncated.lnu[1:-1], wide.lnu[40:58], rtol=1e-5)
+
+
 class TestAllFrequencyNormalisation:
     """Normalisation is over all frequencies, not the evaluation grid."""
 
@@ -1756,3 +2193,14 @@ def test_casey12_warns_for_shallow_alpha(alpha, warns):
         with warnings.catch_warnings():
             warnings.simplefilter("error", RuntimeWarning)
             generator._power_law_params(30 * K, 1.6, alpha)
+
+
+def test_draineli07_rejects_gamma_outside_unit_interval(draineli07_grid):
+    """Gamma is a mass fraction so values outside [0, 1] are rejected."""
+    dl07 = DraineLi07(
+        grid_name=draineli07_grid.name,
+        grid_dir=draineli07_grid.parent,
+    )
+
+    with pytest.raises(exceptions.InconsistentArguments, match="gamma"):
+        _draineli07_setup(dl07, gamma=1.5)
