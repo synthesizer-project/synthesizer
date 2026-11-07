@@ -2329,6 +2329,51 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         return emissions, particle_emissions
 
+    def _get_line_lams(self, line_ids):
+        """Return the wavelengths of the lines this model tree will produce.
+
+        Every model in a tree produces lines at the same wavelengths, those
+        of the lines extracted from the grid. We work them out from the first
+        extraction in the tree without extracting anything, so they are known
+        before any model runs (e.g. generators need them, and may run before
+        any extraction).
+
+        Args:
+            line_ids (list):
+                The IDs of the lines to produce.
+
+        Returns:
+            unyt_array/None:
+                The wavelengths of the lines, or None if the tree has no
+                extraction to take them from.
+        """
+        # Find an extraction, they all extract from grids with matching lines
+        for model in self._models.values():
+            if not model._is_extracting:
+                continue
+
+            # Build an empty collection of every line on the grid. Only the
+            # wavelengths matter, but going through a LineCollection means
+            # any composite lines get the same wavelengths extraction gives
+            # them
+            grid = model.grid
+            lines = LineCollection(
+                line_ids=grid.line_ids,
+                lam=grid.line_lams,
+                lum=np.zeros(grid.nlines) * erg / s,
+                cont=np.zeros(grid.nlines) * erg / s / Hz,
+            )
+
+            # Mirror the subsetting done after extraction (only subset when
+            # fewer lines were requested than the grid holds)
+            if len(line_ids) < lines.nlines:
+                lines = lines[line_ids]
+
+            return lines.lam
+
+        # Without an extraction there are no wavelengths to take
+        return None
+
     def _process_single_model_spectra(
         self,
         this_model,
@@ -2771,51 +2816,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 particle_spectra = func(particle_spectra, emitters, self)
 
         return spectra, particle_spectra
-
-    def _get_line_lams(self, line_ids):
-        """Return the wavelengths of the lines this model tree will produce.
-
-        Every model in a tree produces lines at the same wavelengths, those
-        of the lines extracted from the grid. We work them out from the first
-        extraction in the tree without extracting anything, so they are known
-        before any model runs (e.g. generators need them, and may run before
-        any extraction).
-
-        Args:
-            line_ids (list):
-                The IDs of the lines to produce.
-
-        Returns:
-            unyt_array/None:
-                The wavelengths of the lines, or None if the tree has no
-                extraction to take them from.
-        """
-        # Find an extraction, they all extract from grids with matching lines
-        for model in self._models.values():
-            if not model._is_extracting:
-                continue
-
-            # Build an empty collection of every line on the grid. Only the
-            # wavelengths matter, but going through a LineCollection means
-            # any composite lines get the same wavelengths extraction gives
-            # them
-            grid = model.grid
-            lines = LineCollection(
-                line_ids=grid.line_ids,
-                lam=grid.line_lams,
-                lum=np.zeros(grid.nlines) * erg / s,
-                cont=np.zeros(grid.nlines) * erg / s / Hz,
-            )
-
-            # Mirror the subsetting done after extraction (only subset when
-            # fewer lines were requested than the grid holds)
-            if len(line_ids) < lines.nlines:
-                lines = lines[line_ids]
-
-            return lines.lam
-
-        # Without an extraction there are no wavelengths to take
-        return None
 
     def _process_single_model_lines(
         self,
