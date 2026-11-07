@@ -86,6 +86,7 @@ def _time_spectra(
     """
     # Time each repeat from a clean slate, keeping the best
     best = np.inf
+    match = True
     for _ in range(average_over):
         stars.clear_all_emissions()
         start = time.perf_counter()
@@ -96,20 +97,31 @@ def _time_spectra(
         )
         best = min(best, time.perf_counter() - start)
 
-    # Keep the spectra from the last repeat, then free them from the stars
-    emissions = stars.particle_spectra if model.per_particle else stars.spectra
-    spectra = {label: sed.lnu.value for label, sed in emissions.items()}
+        # Get this repeat's spectra (outside the timed interval)
+        emissions = (
+            stars.particle_spectra if model.per_particle else stars.spectra
+        )
+        spectra = {label: sed.lnu.value for label, sed in emissions.items()}
+
+        # Check every spectrum is identical to the reference, so any
+        # repeat which differs is reported
+        if reference is not None:
+            match = (
+                match
+                and spectra.keys() == reference.keys()
+                and all(
+                    np.array_equal(spectra[k], reference[k], equal_nan=True)
+                    for k in reference
+                )
+            )
+
+    # Free the spectra from the stars
     stars.clear_all_emissions()
 
-    # Without a reference these spectra are the reference
+    # Without a reference the last repeat's spectra are the reference
     if reference is None:
         return best, spectra
 
-    # Otherwise check every spectrum is identical to the reference
-    match = spectra.keys() == reference.keys() and all(
-        np.array_equal(spectra[k], reference[k], equal_nan=True)
-        for k in reference
-    )
     return best, match
 
 
@@ -140,6 +152,10 @@ def profile_model_threads(
         nthreads (list): The OpenMP thread counts to test.
         average_over (int): The number of repeats (the best is kept).
     """
+    # Without any repeats there would be nothing to time or compare
+    if average_over < 1:
+        raise ValueError("average_over must be at least 1")
+
     # Make sure we have somewhere to write the results
     Path(out_dir).mkdir(parents=True, exist_ok=True)
 

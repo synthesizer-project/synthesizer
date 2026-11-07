@@ -6,6 +6,7 @@ execution path is exercised on every build: the results must not depend on
 whether the threads actually run in parallel.
 """
 
+import os
 import sys
 import threading
 import time
@@ -14,6 +15,7 @@ import numpy as np
 import pytest
 from unyt import K, Msun
 
+from synthesizer import GRID_DIR
 from synthesizer.emission_models import (
     DustEmission,
     EmissionModel,
@@ -246,6 +248,44 @@ class TestExecute:
         assert not caller.is_alive(), "execute hung"
         assert "done failed" in str(result.get("error"))
 
+    def test_worker_start_failure_stops_pool(
+        self, no_gil, monkeypatch, varied_model
+    ):
+        """Test a worker failing to start stops the workers already running."""
+        # Let the first worker start, then fail to start any more
+        queue = ModelQueue(varied_model)
+        start = threading.Thread.start
+        nstarted = []
+
+        def failing_start(thread):
+            """Start the first worker only.
+
+            Args:
+                thread (threading.Thread): The thread to start.
+
+            Raises:
+                RuntimeError: For every thread after the first.
+            """
+            if len(nstarted) > 0:
+                raise RuntimeError("can't start new thread")
+            nstarted.append(thread)
+            start(thread)
+
+        monkeypatch.setattr(threading.Thread, "start", failing_start)
+
+        def process(model):
+            """Take long enough that the started worker is still busy.
+
+            Args:
+                model (EmissionModel): The model being processed.
+            """
+            time.sleep(0.05)
+
+        # The start error should reach us, with the started worker finished
+        with pytest.raises(RuntimeError, match="can't start new thread"):
+            queue.execute(process, {}, {}, nr_model_threads=4)
+        assert not nstarted[0].is_alive()
+
 
 class TestThreadedParity:
     """Test threaded execution gives identical results to serial."""
@@ -404,17 +444,18 @@ def casey12_variants(test_grid):
 @pytest.fixture
 def dl07_generator():
     """Return a DraineLi07 generator, if its grid is available."""
-    try:
-        return DraineLi07(
-            "draine_li_dust_emission_grid_MW_3p1",
-            dust_mass=1e7 * Msun,
-            hydrogen_mass=1e9 * Msun,
-            gamma=0.05,
-            umin=1.0,
-            alpha=2.5,
-        )
-    except Exception:
+    # Only skip if the grid isn't downloaded, any other error should fail
+    grid_name = "draine_li_dust_emission_grid_MW_3p1"
+    if not os.path.exists(os.path.join(GRID_DIR, f"{grid_name}.hdf5")):
         pytest.skip("Draine & Li dust emission grid not available")
+    return DraineLi07(
+        grid_name,
+        dust_mass=1e7 * Msun,
+        hydrogen_mass=1e9 * Msun,
+        gamma=0.05,
+        umin=1.0,
+        alpha=2.5,
+    )
 
 
 @pytest.fixture

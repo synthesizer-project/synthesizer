@@ -503,26 +503,29 @@ class ModelQueue:
                 stop(error)
 
         # Start the other workers. The calling thread is one of the workers
-        # too, so we only need nr_threads - 1 more
+        # too, so we only need nr_threads - 1 more. We track which started
+        # so we only wait on those if something goes wrong part way through.
         threads = [
             threading.Thread(target=guarded_worker, daemon=True)
             for _ in range(nr_threads - 1)
         ]
-        for thread in threads:
-            thread.start()
-
-        # Work on the calling thread until there's nothing left to do
+        started = []
         try:
+            for thread in threads:
+                thread.start()
+                started.append(thread)
+
+            # Work on the calling thread until there's nothing left to do
             worker()
         except BaseException as error:
-            # Something escaped the calling thread's worker outside process
-            # (e.g. a KeyboardInterrupt while waiting). Stop the others taking
-            # new models.
+            # Something escaped outside process: a worker failed to start,
+            # or the calling thread's worker failed (e.g. a KeyboardInterrupt
+            # while waiting). Stop the others taking new models, the first
+            # error recorded is raised below.
             stop(error)
-            raise
         finally:
             # Wait for the models still running
-            for thread in threads:
+            for thread in started:
                 thread.join()
 
         # Re-raise the first error from any worker on the calling thread
