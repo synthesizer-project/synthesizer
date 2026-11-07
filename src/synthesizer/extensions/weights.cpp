@@ -611,31 +611,30 @@ static inline void spread_bin_bic(
 }
 
 /**
- * @brief Spread one population's masses onto the grid using a bin in cell
- *        (BIC) approach.
+ * @brief This calculates the grid weights of every population summed
+ *        together using a bin in cell (BIC) approach.
+ *
+ * This is the serial version of the function.
  *
  * @tparam PopReal The floating-point type of the population arrays.
  * @param tables: The per axis BIC tables.
  * @param grid_props: A struct containing the properties along each grid axis.
  * @param pops: A struct containing the population properties.
- * @param ipop: The population index.
- * @param start: The first bin (within the population) to spread.
- * @param end: One past the last bin (within the population) to spread.
- * @param out: The double precision grid sized output to accumulate into.
+ * @param out: The double precision accumulation buffer (grid sized).
  */
 template <typename PopReal>
-static void spread_population_bic(
+static void weight_loop_bic_serial(
     const std::array<BicAxisTable, MAX_GRID_NDIM> &tables,
-    GridProps *grid_props, Populations *pops, const int ipop, const int start,
-    const int end, double *out) {
+    GridProps *grid_props, Populations *pops, double *out) {
+
   /* Get the masses and somewhere to store each bin's N dimensional index. */
   const PopReal *masses = pops->get_masses<PopReal>();
   std::array<int, MAX_GRID_NDIM> bin_inds;
 
-  for (int icell = start; icell < end; icell++) {
-    /* Get the bin's flat index across all populations. */
-    const size_t ind =
-        static_cast<size_t>(ipop) * pops->ncells + static_cast<size_t>(icell);
+  /* Loop over every bin of every population (flat index). */
+  const size_t nbins_total =
+      static_cast<size_t>(pops->npop) * static_cast<size_t>(pops->ncells);
+  for (size_t ind = 0; ind < nbins_total; ind++) {
 
     /* Skip masked and empty bins. */
     if (pops->bin_is_masked(ind)) {
@@ -646,8 +645,10 @@ static void spread_population_bic(
       continue;
     }
 
-    /* Unravel the bin's index and spread its mass onto the grid. */
-    get_indices_from_flat(icell, pops->ndim, pops->nbins, bin_inds);
+    /* Unravel the bin's index within its population and spread its mass
+     * onto the grid. */
+    get_indices_from_flat(static_cast<int>(ind % pops->ncells), pops->ndim,
+                          pops->nbins, bin_inds);
     spread_bin_bic(tables, pops->ndim, grid_props->dims, bin_inds, mass, out);
   }
 }
@@ -656,9 +657,84 @@ static void spread_population_bic(
  * @brief This calculates the grid weights of every population summed
  *        together using a bin in cell (BIC) approach.
  *
- * Accumulation happens in double precision and is folded into the output
- * buffer once at the end. With OpenMP the bins of all populations are split
- * between threads, each accumulating into a private buffer.
+ * This is the parallel version of the function.
+ *
+ * The bins of all populations are split between threads, each accumulating
+ * into a private local buffer which is added into the output array at the
+ * end of the thread's execution.
+ *
+ * @tparam PopReal The floating-point type of the population arrays.
+ * @param tables: The per axis BIC tables.
+ * @param grid_props: A struct containing the properties along each grid axis.
+ * @param pops: A struct containing the population properties.
+ * @param out_size: The size of the output array.
+ * @param out: The double precision accumulation buffer (grid sized).
+ * @param nthreads: The number of threads to use.
+ */
+#ifdef WITH_OPENMP
+template <typename PopReal>
+static void weight_loop_bic_omp(
+    const std::array<BicAxisTable, MAX_GRID_NDIM> &tables,
+    GridProps *grid_props, Populations *pops, int out_size, double *out,
+    int nthreads) {
+
+  /* Get the masses and the number of bins across all populations. */
+  const PopReal *masses = pops->get_masses<PopReal>();
+  const size_t nbins_total =
+      static_cast<size_t>(pops->npop) * static_cast<size_t>(pops->ncells);
+
+#pragma omp parallel num_threads(nthreads)
+  {
+    /* Slice up the bins (flat index) between threads. */
+    const size_t per_thread = (nbins_total + nthreads - 1) / nthreads;
+    const size_t start = omp_get_thread_num() * per_thread;
+    const size_t end = std::min(start + per_thread, nbins_total);
+
+    /* Allocate a local output array to avoid races. */
+    std::vector<double> local_out(out_size, 0.0);
+    std::array<int, MAX_GRID_NDIM> bin_inds;
+
+    /* Loop over the bins assigned to this thread. */
+    for (size_t ind = start; ind < end; ind++) {
+
+      /* Skip masked and empty bins. */
+      if (pops->bin_is_masked(ind)) {
+        continue;
+      }
+      const double mass = static_cast<double>(masses[ind]);
+      if (mass == 0.0) {
+        continue;
+      }
+
+      /* Unravel the bin's index within its population and spread its mass
+       * onto the grid. */
+      get_indices_from_flat(static_cast<int>(ind % pops->ncells), pops->ndim,
+                            pops->nbins, bin_inds);
+      spread_bin_bic(tables, pops->ndim, grid_props->dims, bin_inds, mass,
+                     local_out.data());
+    }
+
+    /* Merge local buffer into global array. */
+#pragma omp critical
+    {
+      for (int i = 0; i < out_size; i++) {
+        out[i] += local_out[i];
+      }
+    }
+  }
+}
+#endif /* WITH_OPENMP */
+
+/**
+ * @brief This calculates the grid weights of every population summed
+ *        together using a bin in cell (BIC) approach.
+ *
+ * This is a wrapper which calls the correct function based on the number of
+ * threads requested and whether OpenMP is available.
+ *
+ * All accumulation happens in a double precision scratch buffer which is
+ * cast into the output buffer once at the end, so reduced precision outputs
+ * don't suffer float32 accumulation error over many bins.
  *
  * @tparam PopReal The floating-point type of the population arrays.
  * @tparam GridReal The floating-point type of the grid axis arrays.
@@ -682,57 +758,27 @@ void weight_loop_bic(GridProps *grid_props, Populations *pops, int out_size,
   /* Accumulate in double regardless of the requested output precision. */
   std::vector<double> accum(out_size, 0.0);
 
-  /* The number of bins across all populations. */
-  const size_t nbins_total =
-      static_cast<size_t>(pops->npop) * static_cast<size_t>(pops->ncells);
+  /* Call the correct function for the configuration/number of threads. */
 
 #ifdef WITH_OPENMP
+
+  /* If we have multiple threads and OpenMP we can parallelise. */
   if (nthreads > 1) {
-#pragma omp parallel num_threads(nthreads)
-    {
-      /* Slice the bins of all populations between threads. */
-      const size_t per_thread = (nbins_total + nthreads - 1) / nthreads;
-      const size_t start = omp_get_thread_num() * per_thread;
-      const size_t end = std::min(start + per_thread, nbins_total);
-
-      /* Each thread accumulates into its own buffer. */
-      std::vector<double> local(out_size, 0.0);
-
-      /* Walk this thread's slice one population at a time, since a slice
-       * can start and end part way through a population. */
-      for (size_t ind = start; ind < end;) {
-        const int ipop = static_cast<int>(ind / pops->ncells);
-        const int icell = static_cast<int>(ind % pops->ncells);
-        const int stop = static_cast<int>(
-            std::min(end - ind + icell, static_cast<size_t>(pops->ncells)));
-        spread_population_bic<PopReal>(tables, grid_props, pops, ipop, icell,
-                                       stop, local.data());
-        ind += stop - icell;
-      }
-
-      /* Add this thread's buffer into the shared accumulation. */
-#pragma omp critical
-      {
-        for (int i = 0; i < out_size; i++) {
-          accum[i] += local[i];
-        }
-      }
-    }
-  } else {
-    /* Serial case, spread every population straight into accum. */
-    for (int ipop = 0; ipop < pops->npop; ipop++) {
-      spread_population_bic<PopReal>(tables, grid_props, pops, ipop, 0,
-                                     pops->ncells, accum.data());
-    }
+    weight_loop_bic_omp<PopReal>(tables, grid_props, pops, out_size,
+                                 accum.data(), nthreads);
   }
+  /* Otherwise there's no point paying the OpenMP overhead. */
+  else {
+    weight_loop_bic_serial<PopReal>(tables, grid_props, pops, accum.data());
+  }
+
 #else
-  /* Without OpenMP always spread every population serially. */
+
   (void)nthreads;
-  (void)nbins_total;
-  for (int ipop = 0; ipop < pops->npop; ipop++) {
-    spread_population_bic<PopReal>(tables, grid_props, pops, ipop, 0,
-                                   pops->ncells, accum.data());
-  }
+
+  /* We don't have OpenMP, just call the serial version. */
+  weight_loop_bic_serial<PopReal>(tables, grid_props, pops, accum.data());
+
 #endif
 
   /* Fold the double precision accumulation into the output buffer. */
