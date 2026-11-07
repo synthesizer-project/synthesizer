@@ -4066,6 +4066,59 @@ class TestPipelineFlushing:
 
         run_pipeline("out.hdf5", flush_ngalaxies=1, before_write=check)
 
+    def test_retry_after_failed_write_without_flushing(
+        self, run_pipeline, tmp_path
+    ):
+        """A failed write doesn't stop us writing somewhere else."""
+
+        def fail_then_move(pipeline):
+            with pytest.raises(OSError):
+                pipeline.write(tmp_path / "missing" / "out.hdf5")
+            pipeline.write(tmp_path / "other.hdf5")
+
+        run_pipeline("out.hdf5", before_write=fail_then_move)
+        assert (tmp_path / "other.hdf5").exists()
+
+    def test_retry_failed_write_when_flushing(self, run_pipeline):
+        """Retrying a failed final write doesn't duplicate any rows."""
+
+        def fail_once(pipeline):
+            # Fail after the global outputs have been written so the retry
+            # has to cope with both those and the galaxy rows existing
+            write_global = pipeline.io_helper.write_global_outputs
+
+            def fail(requested):
+                write_global(requested)
+                raise OSError("Disk full")
+
+            pipeline.io_helper.write_global_outputs = fail
+            with pytest.raises(OSError):
+                pipeline.write()
+            pipeline.io_helper.write_global_outputs = write_global
+
+        expected = run_pipeline("expected.hdf5")
+        retried = run_pipeline(
+            "retried.hdf5", flush_ngalaxies=2, before_write=fail_once
+        )
+        self._assert_files_match(expected, retried)
+
+    def test_refused_write_keeps_flushed_path(self, run_pipeline, tmp_path):
+        """Refusing a second write leaves the writer on the flushed file."""
+        filepaths = []
+
+        def write_twice(pipeline):
+            pipeline.write()
+            with pytest.raises(exceptions.InconsistentArguments):
+                pipeline.write(tmp_path / "other.hdf5")
+            filepaths.append(pipeline.io_helper.filepath)
+
+        # The fixture's own write is refused too
+        with pytest.raises(exceptions.InconsistentArguments):
+            run_pipeline(
+                "out.hdf5", flush_ngalaxies=2, before_write=write_twice
+            )
+        assert filepaths == [str(tmp_path / "out.hdf5")]
+
 
 def test_empty_placeholder_replaced_by_nonempty_batch(tmp_path):
     """An empty dataset with unknown trailing shape can be replaced."""

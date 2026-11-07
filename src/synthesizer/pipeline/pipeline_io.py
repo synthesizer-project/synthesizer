@@ -710,12 +710,16 @@ class PipelineIO:
         self.verbose = verbose
 
         # Flag for whether the output file has been created (we can't
-        # change where we write once we've started writing)
+        # change where we write once we've started flushing to it)
         self._file_created = False
 
         # Flag for whether the file has been finalised (no more per-galaxy
         # data can be written)
         self.finalised = False
+
+        # Flag for whether the final per-galaxy rows have been written, so
+        # retrying a failed write doesn't append them to the file again
+        self.galaxy_outputs_written = False
 
         # The number of galaxy rows already flushed to file, and whether
         # we're writing per-galaxy data. A dataset first appearing after
@@ -823,9 +827,10 @@ class PipelineIO:
     def outpath(self, outpath):
         """Set the path to write to.
 
-        The path can be changed until we start writing to the file, and again
-        once we've finished. When writing a file per rank, the rank is
-        added to the path of the file this rank writes (filepath).
+        The path can be changed freely unless we're flushing, in which case
+        it can't be changed between the first flush and the final write.
+        When writing a file per rank, the rank is added to the path of the
+        file this rank writes (filepath).
 
         Args:
             outpath (str):
@@ -833,16 +838,18 @@ class PipelineIO:
 
         Raises:
             InconsistentArguments:
-                If a different path is given while the file is being written
-                (e.g. after outputs were flushed to it).
+                If a different path is given after outputs were flushed to
+                the file but before the final write.
         """
         # h5py needs a string, but we may have been given a Path
         if outpath is not None:
             outpath = str(outpath)
 
-        # Don't move the file part way through writing it
+        # Don't move the file once we've flushed outputs to it (without
+        # flushing everything is still in memory so we can write anywhere)
         if (
-            self._file_created
+            self.io_buffers.flushing
+            and self._file_created
             and not self.finalised
             and outpath != self._outpath
         ):
@@ -934,11 +941,6 @@ class PipelineIO:
         else:
             self.galaxy_indices = None
 
-        # We're starting a new file, so nothing has been written to it yet
-        self._file_created = True
-        self.finalised = False
-        self.rows_written = 0
-
         start = time.perf_counter()
 
         # Unpack the instruments into a single instrument collection containing
@@ -986,6 +988,14 @@ class PipelineIO:
             with h5py.File(self.filepath, "w") as hdf:
                 hdf.create_group("Galaxies")
 
+        # We've started a new file, so nothing has been written to it yet
+        # (only flagged once the file exists so a failed attempt doesn't
+        # pin us to its path)
+        self._file_created = True
+        self.finalised = False
+        self.galaxy_outputs_written = False
+        self.rows_written = 0
+
         if self.is_parallel:
             self.comm.Barrier()
 
@@ -1023,6 +1033,12 @@ class PipelineIO:
 
         # Write the dataset with the appropriate units
         with h5py.File(self.filepath, "a") as hdf:
+            # Data that isn't per galaxy is only written once, at the end, so
+            # if it exists an earlier write failed after writing it. Replace
+            # it rather than appending a second copy
+            if not self._writing_galaxy_data and key in hdf:
+                del hdf[key]
+
             # A previous flush may already have created this dataset, in
             # which case we just add to it
             if self._append_to_dataset(hdf, data, key, units):

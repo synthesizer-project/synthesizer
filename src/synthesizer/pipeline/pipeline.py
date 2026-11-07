@@ -5380,6 +5380,15 @@ class Pipeline:
                 differs from the one outputs were flushed to, or if flushed
                 outputs have already been written.
         """
+        # The flushed galaxies are no longer held on the Pipeline, so we
+        # can't write them a second time (checked before touching the path
+        # so a refused write leaves the writer pointing at the real file)
+        if self.io_buffers.flushing and self.io_helper.finalised:
+            raise exceptions.InconsistentArguments(
+                "The outputs were flushed to file while running and have "
+                "already been written, they cannot be written again."
+            )
+
         # Point the writer at the path if we were given one (this is an
         # error if we've already flushed outputs to a different path)
         if outpath is not None:
@@ -5409,20 +5418,14 @@ class Pipeline:
         # If we flushed outputs while running the file already exists and
         # holds the flushed galaxies, so we append the rest. Otherwise, we
         # start a new file.
-        if self.io_buffers.flushing:
-            # The flushed galaxies are no longer held on the Pipeline, so
-            # we can't write them a second time
-            if self.io_helper.finalised:
-                raise exceptions.InconsistentArguments(
-                    "The outputs were flushed to file while running and have "
-                    "already been written, they cannot be written again."
-                )
-
-        else:
+        if not self.io_buffers.flushing:
             self._create_output_file()
 
-        # Write the per-galaxy data
-        self._write_galaxy_outputs()
+        # Write the per-galaxy data, unless an earlier attempt that failed
+        # later on already appended it to the flushed file
+        if not self.io_helper.galaxy_outputs_written:
+            self._write_galaxy_outputs()
+            self.io_helper.galaxy_outputs_written = True
 
         # Write the data that isn't per galaxy
         self._write_global_outputs()
