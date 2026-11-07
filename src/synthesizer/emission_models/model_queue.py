@@ -324,26 +324,43 @@ class ModelQueue:
 
         Returns:
             None
+
+        Raises:
+            exceptions.InconsistentArguments:
+                If some models were never processed (see assert_finished).
+            Exception:
+                Any exception raised by ``process`` is re-raised unchanged.
         """
 
         # Reused or externally supplied emissions still need to unlock the
         # graph, but they do not need to be regenerated.
         def process_if_missing(model):
-            """Process a model unless its emission already exists."""
+            """Process a model unless its emission already exists.
+
+            Args:
+                model (EmissionModel):
+                    The model to process.
+            """
             if model.label not in emissions:
                 process(model)
 
+        # Work out how many threads we can actually use (this falls back to
+        # one with a warning when the GIL is enabled)
         nr_threads = resolve_threads(
             nr_model_threads,
             "nr_model_threads",
             nthreads,
         )
+
+        # With a single thread, process each model as soon as it becomes
+        # ready, marking it done to unlock its dependents
         if nr_threads == 1:
-            # Process each model as soon as it becomes ready.
             while len(self) > 0:
                 model = self.pop()
                 process_if_missing(model)
                 self.done(model, emissions, particle_emissions)
+
+        # Otherwise, hand the models to a pool of worker threads
         else:
             self._execute_threaded(
                 process_if_missing,
@@ -390,13 +407,30 @@ class ModelQueue:
 
         Returns:
             None
+
+        Raises:
+            BaseException:
+                The first exception raised on any worker (by ``process`` or
+                while taking or marking a model done) is re-raised.
         """
+        # The lock guarding the queue state, which workers also wait on for
+        # models to become ready
         ready = threading.Condition()
+
+        # The state shared between the workers (only touched while holding
+        # the lock): how many models are being processed right now, and the
+        # first error any worker hit
         state = {"in_flight": 0, "error": None}
 
         def worker():
-            """Process ready models until there are none left to run."""
+            """Process ready models until there are none left to run.
+
+            Each iteration takes the next ready model (waiting for one if
+            other workers are still running models which may unlock more),
+            processes it outside the lock, then marks it done.
+            """
             while True:
+                # Take the next ready model
                 with ready:
                     # Wait for a model to become ready. With nothing ready
                     # and nothing in flight nothing ever will be, so the
@@ -408,11 +442,19 @@ class ModelQueue:
                         and state["error"] is None
                     ):
                         ready.wait()
+
+                    # Stop if another worker failed or there's nothing left
                     if state["error"] is not None or len(self) == 0:
                         return
+
+                    # Claim the model, counting it as in flight so idle
+                    # workers keep waiting for whatever it unlocks
                     model = self.pop()
                     state["in_flight"] += 1
 
+                # Process the model without holding the lock, so the other
+                # workers can process their models at the same time. If it
+                # fails, record the error and wake everyone so they stop.
                 try:
                     process(model)
                 except BaseException as error:
@@ -423,6 +465,8 @@ class ModelQueue:
                         ready.notify_all()
                     return
 
+                # Mark the model done, which queues any dependents it
+                # unlocked and frees emissions nothing needs any more
                 with ready:
                     nready = len(self)
                     self.done(model, emissions, particle_emissions)
@@ -436,7 +480,12 @@ class ModelQueue:
                         ready.notify(len(self) - nready)
 
         def stop(error):
-            """Record the first error and wake every worker so they exit."""
+            """Record the first error and wake every worker so they exit.
+
+            Args:
+                error (BaseException):
+                    The error to record (ignored if one already has been).
+            """
             with ready:
                 if state["error"] is None:
                     state["error"] = error
@@ -453,13 +502,16 @@ class ModelQueue:
             except BaseException as error:
                 stop(error)
 
-        # The calling thread is one of the workers
+        # Start the other workers. The calling thread is one of the workers
+        # too, so we only need nr_threads - 1 more
         threads = [
             threading.Thread(target=guarded_worker, daemon=True)
             for _ in range(nr_threads - 1)
         ]
         for thread in threads:
             thread.start()
+
+        # Work on the calling thread until there's nothing left to do
         try:
             worker()
         except BaseException as error:

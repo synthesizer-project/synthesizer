@@ -379,6 +379,9 @@ class Extraction:
             unyt_array:
                 The wavelengths of the extracted lines.
         """
+        # Build an empty collection of every line on the grid. Only the
+        # wavelengths matter, but going through a LineCollection means any
+        # composite lines get the same wavelengths extraction gives them
         grid = self.grid
         lines = LineCollection(
             line_ids=grid.line_ids,
@@ -387,7 +390,8 @@ class Extraction:
             cont=np.zeros(grid.nlines) * erg / s / Hz,
         )
 
-        # Mirror the subsetting done after extraction
+        # Mirror the subsetting done after extraction (only subset when
+        # fewer lines were requested than the grid holds)
         if len(line_ids) < lines.nlines:
             lines = lines[line_ids]
 

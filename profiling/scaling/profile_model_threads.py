@@ -44,7 +44,12 @@ np.random.seed(42)
 
 
 def _peak_rss_gb():
-    """Return the peak resident set size of this process in GB."""
+    """Return the peak resident set size of this process in GB.
+
+    Returns:
+        float: The peak resident set size in GB.
+    """
+    # Get the peak memory used so far
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 
     # ru_maxrss is in bytes on macOS and kilobytes on Linux
@@ -61,11 +66,25 @@ def _time_spectra(
 ):
     """Time one configuration and compare it to the reference spectra.
 
-    Returns the best wall time and, if a reference is given, whether the
-    spectra match it, otherwise the spectra themselves (to use as the
-    reference). The spectra are cleared before returning so that per-particle
-    runs don't hold several sets of outputs in memory at once.
+    The spectra are cleared before returning so that per-particle runs don't
+    hold several sets of outputs in memory at once.
+
+    Args:
+        stars (Stars): The stars to generate the spectra for.
+        model (EmissionModel): The (expanded) emission model to use.
+        nr_model_threads (int): The number of model threads to use.
+        nthreads (int): The number of OpenMP threads to use.
+        average_over (int): The number of repeats (the best is kept).
+        reference (dict, optional): The serial spectra to compare to, keyed
+            by model label. If None the spectra themselves are returned.
+
+    Returns:
+        tuple:
+            The best wall time (in seconds) and, if a reference is given,
+            whether the spectra match it, otherwise the spectra themselves
+            (to use as the reference).
     """
+    # Time each repeat from a clean slate, keeping the best
     best = np.inf
     for _ in range(average_over):
         stars.clear_all_emissions()
@@ -77,13 +96,16 @@ def _time_spectra(
         )
         best = min(best, time.perf_counter() - start)
 
+    # Keep the spectra from the last repeat, then free them from the stars
     emissions = stars.particle_spectra if model.per_particle else stars.spectra
     spectra = {label: sed.lnu.value for label, sed in emissions.items()}
     stars.clear_all_emissions()
 
+    # Without a reference these spectra are the reference
     if reference is None:
         return best, spectra
 
+    # Otherwise check every spectrum is identical to the reference
     match = spectra.keys() == reference.keys() and all(
         np.array_equal(spectra[k], reference[k], equal_nan=True)
         for k in reference
@@ -102,9 +124,26 @@ def profile_model_threads(
     nthreads,
     average_over,
 ):
-    """Profile get_spectra over model and OpenMP thread counts."""
+    """Profile get_spectra over model and OpenMP thread counts.
+
+    The timings are written to a csv file and plotted as the speedup over a
+    serial run for each OpenMP thread count.
+
+    Args:
+        basename (str): The basename of the output files.
+        out_dir (str): The directory to write the output files to.
+        ntau (int): The number of tau_v values to vary over.
+        nfesc (int): The number of fesc values to vary over.
+        per_particle (bool): Whether to generate per-particle spectra.
+        nstars (int): The number of stars to use.
+        model_threads (list): The model thread counts to test.
+        nthreads (list): The OpenMP thread counts to test.
+        average_over (int): The number of repeats (the best is kept).
+    """
+    # Make sure we have somewhere to write the results
     Path(out_dir).mkdir(parents=True, exist_ok=True)
 
+    # Get the grid
     grid = Grid("test_grid")
 
     # Build and expand the varied model
@@ -137,6 +176,7 @@ def profile_model_threads(
         redshift=1,
     )
 
+    # Report what we're profiling, warning if the GIL will serialise it
     print(
         f"Python {sys.version.split()[0]}, GIL enabled: {gil_enabled()}, "
         f"models: {len(model._models)}, nstars: {nstars}, "
@@ -152,6 +192,8 @@ def profile_model_threads(
     _time_spectra(stars, model, 1, 1, 1)
     serial_time, reference = _time_spectra(stars, model, 1, 1, average_over)
 
+    # Time every combination of OpenMP and model threads (reusing the
+    # serial reference rather than timing it again)
     rows = []
     for nt in nthreads:
         for mt in model_threads:
@@ -181,6 +223,7 @@ def profile_model_threads(
                 f"match={match}"
             )
 
+    # Report the peak memory used over every run
     print(f"Peak RSS: {_peak_rss_gb():.2f} GB")
 
     # Write the results
@@ -220,7 +263,14 @@ def profile_model_threads(
 
 
 def _int_list(value):
-    """Parse a comma separated list of integers."""
+    """Parse a comma separated list of integers.
+
+    Args:
+        value (str): The comma separated list.
+
+    Returns:
+        list: The integers.
+    """
     return [int(v) for v in value.split(",")]
 
 
@@ -293,6 +343,7 @@ if __name__ == "__main__":
 
     args = args.parse_args()
 
+    # Run the profiling
     profile_model_threads(
         args.basename,
         args.out_dir,

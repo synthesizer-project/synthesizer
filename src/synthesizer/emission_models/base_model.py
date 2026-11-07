@@ -3143,14 +3143,18 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if hasattr(emitter, "particle_spectra"):
                 particle_spectra.update(emitter.particle_spectra)
 
-        # Cache a representative wavelength array before any eager deletion.
+        # Get the line wavelengths before any model runs. Generators need
+        # them, and with models running in any order (or concurrently) we
+        # can't rely on an extraction having produced them first. If we were
+        # given existing lines we can take them from those (before any are
+        # deleted once they're no longer needed).
         line_lams = None
         if len(lines) > 0:
             line_lams = lines[list(lines.keys())[0]].lam
+
+        # Otherwise work them out from the first extraction in the tree
+        # without extracting anything
         else:
-            # Otherwise get them from an extraction, so they are known before
-            # any model runs (generators need them whether or not an
-            # extraction has already run)
             for model in queue.models.values():
                 if model._is_extracting:
                     line_lams = model._get_line_lams(line_ids)
