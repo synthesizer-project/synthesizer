@@ -207,14 +207,20 @@ static inline void get_part_inds_ngp(
  * @return The mean of log10(x) over the interval.
  */
 static inline double mean_log10_uniform(double lo, double hi) {
+  /* The fractional width of the interval, d = r - 1. */
   const double d = hi / lo - 1.0;
+
+  /* Get the excess of the mean of ln(x) over ln(lo) (plus one). */
   double excess;
   if (d < 1e-4) {
     /* Series expansion of (r ln r - d) / d for small d. */
     excess = d / 2.0 - d * d / 6.0 + d * d * d / 12.0;
   } else {
+    /* The exact form, using log1p to keep ln(r) accurate. */
     excess = ((1.0 + d) * std::log1p(d) - d) / d;
   }
+
+  /* Shift by log10(lo) and convert the excess from ln to log10. */
   return std::log10(lo) + excess / M_LN10;
 }
 
@@ -232,9 +238,12 @@ static inline double mean_log10_uniform(double lo, double hi) {
 static inline void add_bin_frac(std::vector<int> &inds,
                                 std::vector<double> &fracs, int ind,
                                 double frac) {
+  /* Skip empty contributions so they don't bloat the lists. */
   if (frac <= 0.0) {
     return;
   }
+
+  /* Merge a repeat of the last index, otherwise append a new entry. */
   if (!inds.empty() && inds.back() == ind) {
     fracs.back() += frac;
   } else {
@@ -277,6 +286,7 @@ static inline void get_pop_bin_fracs_bic(const GridReal *grid_axis,
                                          const double hi,
                                          std::vector<int> &inds,
                                          std::vector<double> &fracs) {
+  /* Start from empty outputs (the buffers are reused between bins). */
   inds.clear();
   fracs.clear();
 
@@ -287,7 +297,13 @@ static inline void get_pop_bin_fracs_bic(const GridReal *grid_axis,
     return;
   }
 
-  /* Convert a grid coordinate into linear units. */
+  /**
+   * @brief Convert a grid coordinate into linear units.
+   *
+   * @param k: The index of the grid point along this axis.
+   *
+   * @return The grid point's coordinate in linear (physical) units.
+   */
   auto to_linear = [&](int k) {
     const double g = static_cast<double>(grid_axis[k]);
     return log_axis ? std::pow(10.0, g) : g;
@@ -302,7 +318,12 @@ static inline void get_pop_bin_fracs_bic(const GridReal *grid_axis,
       fracs.push_back(1.0);
       return;
     }
+
+    /* Get the point in the grid's coordinate. */
     const double u = log_axis ? std::log10(lo) : lo;
+
+    /* Clamp points outside the grid onto the edge points, otherwise split
+     * the mass linearly between the two bounding grid points. */
     if (u <= static_cast<double>(grid_axis[0])) {
       inds.push_back(0);
       fracs.push_back(1.0);
@@ -321,6 +342,7 @@ static inline void get_pop_bin_fracs_bic(const GridReal *grid_axis,
     return;
   }
 
+  /* Get the bin width and the extent of the grid, all in linear units. */
   const double width = hi - lo;
   const double x_first = to_linear(0);
   const double x_last = to_linear(dim_size - 1);
@@ -343,20 +365,32 @@ static inline void get_pop_bin_fracs_bic(const GridReal *grid_axis,
    * interval, using the mean of the hat function over the overlap. */
   double x_k = to_linear(k);
   while (k < dim_size - 1 && x_k < hi) {
+
+    /* Get the overlap [s, t] of the bin with this grid interval. */
     const double x_k1 = to_linear(k + 1);
     const double s = std::max(lo, x_k);
     const double t = std::min(hi, x_k1);
     if (t > s) {
+
+      /* The mean grid coordinate of the overlap (mass is uniform in linear
+       * units, so on a log axis this is the mean of log10). */
       const double g_k = static_cast<double>(grid_axis[k]);
       const double g_k1 = static_cast<double>(grid_axis[k + 1]);
       const double u_mean =
           log_axis ? mean_log10_uniform(s, t) : 0.5 * (s + t);
+
+      /* The hat functions are linear, so their mean over the overlap is
+       * their value at the mean coordinate (clamped against round off). */
       double frac = (u_mean - g_k) / (g_k1 - g_k);
       frac = std::min(1.0, std::max(0.0, frac));
+
+      /* Give each bounding point its share of the overlap's mass. */
       const double overlap = (t - s) / width;
       add_bin_frac(inds, fracs, k, overlap * (1.0 - frac));
       add_bin_frac(inds, fracs, k + 1, overlap * frac);
     }
+
+    /* Move on to the next grid interval. */
     x_k = x_k1;
     k++;
   }

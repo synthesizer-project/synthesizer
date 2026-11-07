@@ -57,6 +57,7 @@ class BinMask:
 
     def __init__(self):
         """Initialise an empty mask, which includes everything."""
+        # With no conditions every bin of every population passes
         self.axis_conditions = {}
         self.include = True
 
@@ -67,6 +68,8 @@ class BinMask:
             BinMask:
                 The copied mask.
         """
+        # Copy each axis' list of conditions so adding to the copy leaves
+        # this mask untouched
         new = BinMask()
         new.axis_conditions = {
             axis: list(conds) for axis, conds in self.axis_conditions.items()
@@ -84,12 +87,19 @@ class BinMask:
                 The comparison operator.
             thresh (float):
                 The threshold in the units of the bin edges.
+
+        Raises:
+            InconsistentArguments:
+                If the operator is not one of the supported comparisons.
         """
+        # Reject unknown operators
         if op not in OPERATORS:
             raise exceptions.InconsistentArguments(
                 "Masking operation must be '<', '>', '<=', '>=', '==', or "
                 f"'!=', not {op}"
             )
+
+        # Record the condition, it is only evaluated against the bins later
         self.axis_conditions.setdefault(axis, []).append((op, thresh))
 
     def add_population_condition(self, value, op, thresh):
@@ -102,12 +112,20 @@ class BinMask:
                 The comparison operator.
             thresh (float):
                 The threshold.
+
+        Raises:
+            InconsistentArguments:
+                If the operator is not one of the supported comparisons.
         """
+        # Reject unknown operators
         if op not in OPERATORS:
             raise exceptions.InconsistentArguments(
                 "Masking operation must be '<', '>', '<=', '>=', '==', or "
                 f"'!=', not {op}"
             )
+
+        # The value is known now so evaluate it immediately, a population
+        # that fails any condition is excluded entirely
         self.include = self.include and bool(OPERATORS[op](value, thresh))
 
     def _get_allowed_interval(self, axis):
@@ -127,9 +145,12 @@ class BinMask:
             tuple of float:
                 The lower and upper bounds of the allowed interval.
         """
+        # Start from the whole real line and narrow it with each condition
         allowed_lo = -np.inf
         allowed_hi = np.inf
         for op, thresh in self.axis_conditions.get(axis, []):
+            # Upper bounds lower the top, lower bounds raise the bottom and
+            # equality empties the interval ("!=" leaves it unchanged)
             if op in ("<", "<="):
                 allowed_hi = min(allowed_hi, thresh)
             elif op in (">", ">="):
@@ -151,9 +172,12 @@ class BinMask:
             np.ndarray:
                 The fraction of each bin satisfying every condition.
         """
+        # Get the lower and upper edge of each bin
         conditions = self.axis_conditions.get(axis, [])
         lo = edges[:-1]
         hi = edges[1:]
+
+        # With no conditions on this axis every bin passes in full
         if len(conditions) == 0:
             return np.ones(lo.size)
 
@@ -163,7 +187,9 @@ class BinMask:
         for op, thresh in conditions:
             point_pass &= OPERATORS[op](lo, thresh)
 
-        # Finite bins pass the part of them inside the allowed interval
+        # Finite bins pass the part of them inside the allowed interval (the
+        # point widths are set to 1 only to avoid dividing by zero, their
+        # results are discarded below)
         allowed_lo, allowed_hi = self._get_allowed_interval(axis)
         widths = np.where(points, 1.0, hi - lo)
         overlap = np.clip(
@@ -171,6 +197,8 @@ class BinMask:
             0.0,
             None,
         )
+
+        # Combine the exact point results with the finite bin fractions
         return np.where(points, point_pass.astype(float), overlap / widths)
 
     def get_fractions(self, stars):
@@ -184,11 +212,17 @@ class BinMask:
             np.ndarray:
                 The fractions, with the same shape as the population's masses.
         """
+        # Start from the population level decision (all or nothing)
         fractions = np.full(stars.bin_masses.shape, float(self.include))
+
+        # Multiply in the fractions along each bin axis
         for iaxis, axis in enumerate(stars.bin_axes):
             axis_fracs = self._get_axis_fractions(
                 axis, stars.get_bin_edges(axis, values_only=True)
             )
+
+            # Broadcast along this axis (offset by the leading population
+            # axis of the masses)
             shape = [1] * fractions.ndim
             shape[iaxis + 1] = axis_fracs.size
             fractions = fractions * axis_fracs.reshape(shape)
@@ -213,13 +247,19 @@ class BinMask:
                 The clipped bin edges keyed by axis name and the masked
                 masses (with the shape of the population's masses).
         """
+        # Clip the edges along each axis to the allowed interval
         edges = {}
         for axis in stars.bin_axes:
             axis_edges = stars.get_bin_edges(axis, values_only=True)
             allowed_lo, allowed_hi = self._get_allowed_interval(axis)
+
+            # An empty interval (e.g. from "==") passes no finite bin mass,
+            # so the edges are left alone rather than clipped to nonsense
             if allowed_lo <= allowed_hi:
                 axis_edges = np.clip(axis_edges, allowed_lo, allowed_hi)
             edges[axis] = axis_edges
+
+        # Scale each bin's mass by the fraction that passes
         return edges, stars.bin_masses * self.get_fractions(stars)
 
 
@@ -237,6 +277,10 @@ def to_axis_threshold(thresh, attr, axis_units):
     Returns:
         float:
             The threshold in the axis' linear units.
+
+    Raises:
+        InconsistentArguments:
+            If the axis has units but the threshold does not.
     """
     # A log10 attribute's threshold is the log10 of the linear value
     if attr.startswith("log10"):
@@ -249,6 +293,8 @@ def to_axis_threshold(thresh, attr, axis_units):
         if axis_units is None:
             return float(thresh.ndview)
         return float(thresh.to(axis_units).ndview)
+
+    # A unitless threshold can't be compared with an axis that has units
     if axis_units is not None:
         raise exceptions.InconsistentArguments(
             f"Masking attribute ({attr}) has units but threshold does not "

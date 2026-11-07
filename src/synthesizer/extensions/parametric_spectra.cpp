@@ -47,10 +47,10 @@
  *
  * @param edges_tuple: A tuple of 1D bin edge arrays, one per grid axis (in
  *                     linear units).
- * @param mask_obj: The mask (bool, same shape as the masses) or None.
  * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
  * @param log_flags: A sequence of booleans, one per grid axis, flagging
  *                   axes whose grid coordinates are log10 values.
+ * @param mask_obj: The mask (bool, same shape as the masses) or None.
  * @param grid_props: The grid properties (used for the number of axes).
  * @param pops: The struct to fill.
  *
@@ -60,6 +60,7 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
                               PyObject *log_flags, PyObject *mask_obj,
                               GridProps *grid_props, Populations &pops) {
 
+  /* The populations are binned along every grid axis. */
   const int ndim = grid_props->ndim;
   pops.ndim = ndim;
 
@@ -96,6 +97,7 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
   float_arrays[0] = np_masses;
   float_names[0] = "masses";
 
+  /* Validate each axis, counting the bins in a single population. */
   pops.ncells = 1;
   for (int idim = 0; idim < ndim; idim++) {
 
@@ -120,6 +122,8 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
       return false;
     }
     pops.nbins[idim] = static_cast<int>(nedges - 1);
+
+    /* The masses must have one entry per bin along this axis. */
     if (PyArray_DIM(np_masses, idim + 1) != pops.nbins[idim]) {
       PyErr_Format(PyExc_ValueError,
                    "masses has %ld bins along axis %d but the edges define "
@@ -165,6 +169,9 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
       return false;
     }
     pops.edges[idim] = PyArray_DATA(np_edges);
+
+    /* Check the edges are non-decreasing at their dtype (the negated
+     * comparison also rejects NaNs). */
     bool sorted = dispatch_float(pops.float_typenum, [&](auto r) {
       using Real = decltype(r);
       const Real *edges = pops.get_edges<Real>(idim);
@@ -189,6 +196,8 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     if (np_mask == NULL) {
       return false;
     }
+
+    /* The mask must be a contiguous bool array shaped like the masses. */
     if (PyArray_TYPE(np_mask) != NPY_BOOL ||
         !PyArray_SAMESHAPE(np_mask, np_masses)) {
       PyErr_SetString(PyExc_ValueError,
@@ -213,6 +222,7 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
  * @return The number of wavelength elements, or -1 (with a Python error set).
  */
 static int get_nlam(PyObject *spectra_obj) {
+  /* We need an array with at least one grid axis and a wavelength axis. */
   if (!PyArray_Check(spectra_obj) ||
       PyArray_NDIM(reinterpret_cast<PyArrayObject *>(spectra_obj)) < 2) {
     PyErr_SetString(PyExc_ValueError,
@@ -220,6 +230,8 @@ static int get_nlam(PyObject *spectra_obj) {
                     "followed by a wavelength axis.");
     return -1;
   }
+
+  /* The wavelength axis is the last axis. */
   PyArrayObject *np_spectra = reinterpret_cast<PyArrayObject *>(spectra_obj);
   return static_cast<int>(
       PyArray_DIM(np_spectra, PyArray_NDIM(np_spectra) - 1));
@@ -254,6 +266,7 @@ static void integrated_spectra_loop(GridProps *grid_props,
 
   tic("integrated_spectra_loop");
 
+  /* Unpack the grid spectra and their dimensions. */
   const GridReal *__restrict grid_spectra =
       grid_props->get_spectra<GridReal>();
   const size_t nlam = static_cast<size_t>(grid_props->nlam);
@@ -279,22 +292,32 @@ static void integrated_spectra_loop(GridProps *grid_props,
     schedule(static)
 #endif
   for (int iblock = 0; iblock < nblocks; iblock++) {
+    /* Get this block's range of good wavelengths (the last may be short,
+     * or empty). */
     const int start = iblock * block_len;
     const int len = std::min(ngood, start + block_len) - start;
     if (len <= 0) {
       continue;
     }
+
+    /* Accumulate this block in double precision. */
     std::vector<double> accum(len, 0.0);
     double *__restrict acc = accum.data();
 
     /* Add each grid point's spectrum weighted by its grid weight. */
     for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
+      /* Skip grid points the populations put no mass on. */
       const double weight = static_cast<double>(weights[grid_ind]);
       if (weight <= 0.0) {
         continue;
       }
+
+      /* Get this grid point's spectrum. */
       const GridReal *__restrict row =
           grid_spectra + static_cast<size_t>(grid_ind) * nlam;
+
+      /* With a wavelength mask gather the good wavelengths, otherwise the
+       * block is a contiguous segment we can vectorise over. */
       if (has_lam_mask) {
         for (int j = 0; j < len; j++) {
           acc[j] += weight * static_cast<double>(row[good_lams[start + j]]);
@@ -315,6 +338,8 @@ static void integrated_spectra_loop(GridProps *grid_props,
       out[good_lams[start + j]] = static_cast<OutT>(acc[j]);
     }
   }
+
+  /* Silence the unused argument warning without OpenMP. */
 #ifndef WITH_OPENMP
   (void)nthreads;
 #endif
@@ -351,6 +376,7 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
   /* We don't need the self argument but it has to be there. */
   (void)self;
 
+  /* Parse the arguments (prop_names is optional). */
   int nthreads;
   PyObject *spectra_obj, *grid_tuple, *edges_tuple, *log_flags;
   PyObject *weights_obj, *mask_obj, *lam_mask_obj, *out_dtype;
@@ -370,7 +396,8 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Extract the grid struct. */
+  /* Extract the grid struct, treating None weights and wavelength mask as
+   * absent. */
   PyArrayObject *np_grid_weights =
       weights_obj == Py_None ? NULL
                              : reinterpret_cast<PyArrayObject *>(weights_obj);
@@ -390,7 +417,7 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Resolve the dtypes. */
+  /* Resolve the dtypes, defaulting the grid to float64. */
   int grid_typenum = grid_props->get_float_typenum();
   if (grid_typenum == -1) {
     grid_typenum = NPY_FLOAT64;
@@ -409,10 +436,16 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
         using PopReal = decltype(p);
         using GridReal = decltype(g);
         using OutT = decltype(o);
+
+        /* Get the grid weights buffer (either the precomputed weights or a
+         * new zeroed array). */
         GridReal *grid_weights = grid_props->get_grid_weights<GridReal>();
         if (grid_weights == NULL || PyErr_Occurred()) {
           return;
         }
+
+        /* Spread the populations onto the grid if we weren't given the
+         * weights. */
         if (grid_props->need_grid_weights()) {
           weight_loop_bic<PopReal, GridReal, GridReal>(grid_props.get(), &pops,
                                                        grid_props->size,
@@ -421,6 +454,9 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
             return;
           }
         }
+
+        /* Allocate the zeroed output spectrum and contract the weights with
+         * the grid spectra into it. */
         npy_intp np_dims[1] = {nlam};
         np_spectra =
             (PyArrayObject *)PyArray_ZEROS(1, np_dims, output_typenum, 0);
@@ -434,6 +470,7 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
     });
   });
 
+  /* Make sure a failure inside the dispatch always surfaces as an error. */
   if (np_spectra == NULL) {
     if (!PyErr_Occurred()) {
       PyErr_SetString(PyExc_RuntimeError,
@@ -477,6 +514,7 @@ PyObject *compute_parametric_weights(PyObject *self, PyObject *args) {
   /* We don't need the self argument but it has to be there. */
   (void)self;
 
+  /* Parse the arguments (prop_names is optional). */
   int nthreads;
   PyObject *grid_tuple, *edges_tuple, *log_flags, *mask_obj;
   PyObject *prop_names = NULL;
@@ -502,7 +540,7 @@ PyObject *compute_parametric_weights(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  /* Resolve the grid dtype. */
+  /* Resolve the grid dtype, defaulting to float64. */
   int grid_typenum = grid_props->get_float_typenum();
   if (grid_typenum == -1) {
     grid_typenum = NPY_FLOAT64;
@@ -513,10 +551,14 @@ PyObject *compute_parametric_weights(PyObject *self, PyObject *args) {
     dispatch_float(grid_typenum, [&](auto g) {
       using PopReal = decltype(p);
       using GridReal = decltype(g);
+
+      /* Get a new zeroed grid weights buffer. */
       GridReal *grid_weights = grid_props->get_grid_weights<GridReal>();
       if (grid_weights == NULL || PyErr_Occurred()) {
         return;
       }
+
+      /* Accumulate every population's bins into it. */
       weight_loop_bic<PopReal, GridReal, GridReal>(
           grid_props.get(), &pops, grid_props->size, grid_weights, nthreads);
     });
@@ -525,6 +567,7 @@ PyObject *compute_parametric_weights(PyObject *self, PyObject *args) {
 
   toc("compute_parametric_weights");
 
+  /* Hand the weights array back to Python. */
   return (PyObject *)grid_props->get_np_grid_weights();
 }
 
@@ -552,14 +595,24 @@ static struct PyModuleDef moduledef = {
     NULL,                                                  /* m_free */
 };
 
+/**
+ * @brief Initialise the parametric_spectra module.
+ *
+ * @return The module object, or NULL (with a Python error set) on failure.
+ */
 PyMODINIT_FUNC PyInit_parametric_spectra(void) {
+  /* Create the module. */
   PyObject *m = PyModule_Create(&moduledef);
   if (m == NULL) return NULL;
+
+  /* Import numpy's C API. */
   if (numpy_import() < 0) {
     PyErr_SetString(PyExc_RuntimeError, "Failed to import numpy.");
     Py_DECREF(m);
     return NULL;
   }
+
+  /* Hook up the shared atomic timers if they are enabled. */
 #ifdef ATOMIC_TIMING
   if (import_toc_capsule() < 0) {
     Py_DECREF(m);

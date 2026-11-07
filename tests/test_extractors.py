@@ -509,7 +509,15 @@ def test_particle_generate_lnu(
 
 
 def test_integrated_parametric_generate_lnu(test_grid, nebular_emission_model):
-    """Test a SFZH on the grid axes multiplies the grid spectra directly."""
+    """Test a SFZH on the grid axes multiplies the grid spectra directly.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+        nebular_emission_model (EmissionModel):
+            The emission model fixture to extract with.
+    """
+    # Create a random SFZH defined on the grid's own axes
     extractor = IntegratedParametricExtractor(test_grid, "incident")
     sfzh = np.random.default_rng(0).random(
         (len(test_grid.log10ages), len(test_grid.metallicities))
@@ -519,6 +527,8 @@ def test_integrated_parametric_generate_lnu(test_grid, nebular_emission_model):
         test_grid.metallicities,
         sfzh,
     )
+
+    # Extract the integrated spectra
     result = extractor.generate_lnu(
         stars,
         nebular_emission_model,
@@ -545,11 +555,20 @@ def test_integrated_parametric_off_grid_axes(
 
     Each point of the parametric axes is a zero width bin, so it must be
     spread onto the grid exactly as a particle at that point is by CIC.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+        nebular_emission_model (EmissionModel):
+            The emission model fixture to extract with.
     """
+    # Create a random SFZH on axes that don't match the grid's
     log10ages = np.linspace(6.05, 9.95, 7)
     metallicities = np.array([0.0005, 0.003, 0.017])
     sfzh = np.random.default_rng(1).random((log10ages.size, 3))
     stars = ParametricStars.from_sfzh(log10ages, metallicities, sfzh)
+
+    # Extract the parametric integrated spectra
     param = IntegratedParametricExtractor(test_grid, "incident").generate_lnu(
         stars,
         nebular_emission_model,
@@ -560,6 +579,8 @@ def test_integrated_parametric_off_grid_axes(
         False,
     )
 
+    # Place a particle at each (age, metallicity) point holding its mass and
+    # extract their integrated spectra with CIC
     ages, metals = np.meshgrid(10**log10ages, metallicities, indexing="ij")
     particles = ParticleStars(
         initial_masses=sfzh.ravel() * Msun,
@@ -575,4 +596,6 @@ def test_integrated_parametric_off_grid_axes(
         1,
         False,
     )
+
+    # The parametric and particle spectra must agree
     np.testing.assert_allclose(param.lnu.ndview, part.lnu.ndview, rtol=1e-10)

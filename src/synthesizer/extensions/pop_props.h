@@ -57,19 +57,38 @@ struct Populations {
   /* The shared floating-point dtype of the edges and masses. */
   int float_typenum = NPY_FLOAT64;
 
-  /* Get the bin edges along an axis at the population dtype. */
+  /**
+   * @brief Get the bin edges along an axis at the population dtype.
+   *
+   * @tparam Real The floating-point type of the population arrays.
+   * @param idim: The axis index.
+   *
+   * @return A pointer to the (nbins[idim] + 1) bin edges along the axis.
+   */
   template <typename Real>
   const Real *get_edges(int idim) const {
     return static_cast<const Real *>(edges[idim]);
   }
 
-  /* Get the masses at the population dtype. */
+  /**
+   * @brief Get the masses at the population dtype.
+   *
+   * @tparam Real The floating-point type of the population arrays.
+   *
+   * @return A pointer to the (npop * ncells) masses.
+   */
   template <typename Real>
   const Real *get_masses() const {
     return static_cast<const Real *>(masses);
   }
 
-  /* Is a bin (flat index across all populations) masked out? */
+  /**
+   * @brief Is a bin masked out?
+   *
+   * @param ind: The flat index of the bin across all populations.
+   *
+   * @return True if there is a mask and it excludes the bin.
+   */
   bool bin_is_masked(size_t ind) const {
     return mask != nullptr && !mask[ind];
   }

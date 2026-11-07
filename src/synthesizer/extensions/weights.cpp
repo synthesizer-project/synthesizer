@@ -496,8 +496,13 @@ void weight_loop_ngp(GridProps *grid_props, Particles *parts, int out_size,
  * grid point inds[j] for j in [offsets[i], offsets[i + 1]).
  */
 struct BicAxisTable {
+  /* The start of each bin's run in inds and fracs (nbins + 1 entries). */
   std::vector<int> offsets;
+
+  /* The grid point indices each bin contributes to, bin after bin. */
   std::vector<int> inds;
+
+  /* The fraction of the bin's mass given to each entry in inds. */
   std::vector<double> fracs;
 };
 
@@ -517,15 +522,22 @@ struct BicAxisTable {
 template <typename PopReal, typename GridReal>
 static void build_bic_tables(GridProps *grid_props, Populations *pops,
                              std::array<BicAxisTable, MAX_GRID_NDIM> &tables) {
+  /* Scratch buffers for a single bin, reused for every bin. */
   std::vector<int> inds;
   std::vector<double> fracs;
+
   for (int dim = 0; dim < pops->ndim; dim++) {
+    /* Get this axis' grid points and bin edges. */
     const GridReal *grid_axis = grid_props->get_axis<GridReal>(dim);
     const PopReal *edges = pops->get_edges<PopReal>(dim);
+
+    /* Reset the table, starting the offsets with the first bin's start. */
     BicAxisTable &table = tables[dim];
     table.offsets.assign(1, 0);
     table.inds.clear();
     table.fracs.clear();
+
+    /* Compute each bin's grid points and fractions and append them. */
     for (int ibin = 0; ibin < pops->nbins[dim]; ibin++) {
       get_pop_bin_fracs_bic<GridReal>(
           grid_axis, grid_props->dims[dim], pops->log_axis[dim],
@@ -564,6 +576,8 @@ static inline void spread_bin_bic(
     const BicAxisTable &table = tables[dim];
     starts[dim] = table.offsets[bin_inds[dim]];
     lens[dim] = table.offsets[bin_inds[dim] + 1] - starts[dim];
+
+    /* An axis with no contributions means the bin puts nothing anywhere. */
     if (lens[dim] == 0) {
       return;
     }
@@ -572,6 +586,7 @@ static inline void spread_bin_bic(
 
   /* Step through every combination of grid points like an odometer. */
   while (true) {
+    /* Multiply the per axis fractions and build the flat grid index. */
     double frac = mass;
     int flat_ind = 0;
     for (int dim = 0; dim < ndim; dim++) {
@@ -579,6 +594,8 @@ static inline void spread_bin_bic(
       frac *= tables[dim].fracs[j];
       flat_ind = flat_ind * grid_dims[dim] + tables[dim].inds[j];
     }
+
+    /* Add this combination's share of the mass. */
     out[flat_ind] += frac;
 
     /* Advance the odometer, finishing once every axis has wrapped. */
@@ -611,11 +628,16 @@ static void spread_population_bic(
     const std::array<BicAxisTable, MAX_GRID_NDIM> &tables,
     GridProps *grid_props, Populations *pops, const int ipop, const int start,
     const int end, double *out) {
+  /* Get the masses and somewhere to store each bin's N dimensional index. */
   const PopReal *masses = pops->get_masses<PopReal>();
   std::array<int, MAX_GRID_NDIM> bin_inds;
+
   for (int icell = start; icell < end; icell++) {
+    /* Get the bin's flat index across all populations. */
     const size_t ind =
         static_cast<size_t>(ipop) * pops->ncells + static_cast<size_t>(icell);
+
+    /* Skip masked and empty bins. */
     if (pops->bin_is_masked(ind)) {
       continue;
     }
@@ -623,6 +645,8 @@ static void spread_population_bic(
     if (mass == 0.0) {
       continue;
     }
+
+    /* Unravel the bin's index and spread its mass onto the grid. */
     get_indices_from_flat(icell, pops->ndim, pops->nbins, bin_inds);
     spread_bin_bic(tables, pops->ndim, grid_props->dims, bin_inds, mass, out);
   }
@@ -657,6 +681,8 @@ void weight_loop_bic(GridProps *grid_props, Populations *pops, int out_size,
 
   /* Accumulate in double regardless of the requested output precision. */
   std::vector<double> accum(out_size, 0.0);
+
+  /* The number of bins across all populations. */
   const size_t nbins_total =
       static_cast<size_t>(pops->npop) * static_cast<size_t>(pops->ncells);
 
@@ -668,7 +694,12 @@ void weight_loop_bic(GridProps *grid_props, Populations *pops, int out_size,
       const size_t per_thread = (nbins_total + nthreads - 1) / nthreads;
       const size_t start = omp_get_thread_num() * per_thread;
       const size_t end = std::min(start + per_thread, nbins_total);
+
+      /* Each thread accumulates into its own buffer. */
       std::vector<double> local(out_size, 0.0);
+
+      /* Walk this thread's slice one population at a time, since a slice
+       * can start and end part way through a population. */
       for (size_t ind = start; ind < end;) {
         const int ipop = static_cast<int>(ind / pops->ncells);
         const int icell = static_cast<int>(ind % pops->ncells);
@@ -678,6 +709,8 @@ void weight_loop_bic(GridProps *grid_props, Populations *pops, int out_size,
                                        stop, local.data());
         ind += stop - icell;
       }
+
+      /* Add this thread's buffer into the shared accumulation. */
 #pragma omp critical
       {
         for (int i = 0; i < out_size; i++) {
@@ -686,12 +719,14 @@ void weight_loop_bic(GridProps *grid_props, Populations *pops, int out_size,
       }
     }
   } else {
+    /* Serial case, spread every population straight into accum. */
     for (int ipop = 0; ipop < pops->npop; ipop++) {
       spread_population_bic<PopReal>(tables, grid_props, pops, ipop, 0,
                                      pops->ncells, accum.data());
     }
   }
 #else
+  /* Without OpenMP always spread every population serially. */
   (void)nthreads;
   (void)nbins_total;
   for (int ipop = 0; ipop < pops->npop; ipop++) {
@@ -710,7 +745,8 @@ void weight_loop_bic(GridProps *grid_props, Populations *pops, int out_size,
 
 /* Explicit instantiations to satisfy multi-extension linking. All
  * (PartReal, GridReal, OutT) combinations are required by the dtype
- * dispatchers in sfzh and integrated_spectra. */
+ * dispatchers in sfzh and integrated_spectra (and, for weight_loop_bic,
+ * parametric_spectra). */
 #define INSTANTIATE_WEIGHT_LOOPS(PartReal, GridReal, OutT) \
   template void weight_loop_cic<PartReal, GridReal, OutT>( \
       GridProps *, Particles *, int, OutT *, const int);   \

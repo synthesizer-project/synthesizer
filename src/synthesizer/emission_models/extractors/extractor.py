@@ -1434,6 +1434,7 @@ class IntegratedParametricExtractor(Extractor):
             }
             bin_masses = emitter.bin_masses
 
+        # Collect the edges along each grid axis in the grid's order
         edges = []
         for axis_name, units, log in zip(
             self._emitter_attributes,
@@ -1506,6 +1507,7 @@ class IntegratedParametricExtractor(Extractor):
         Returns:
             Sed: The integrated spectra.
         """
+        # Resolve the requested output precision
         out_dtype = resolve_out_dtype(out_dtype)
 
         # Get the bins in the grid's axes
@@ -1579,7 +1581,11 @@ class IntegratedParametricExtractor(Extractor):
                 Unused, mass outside the grid is clamped onto its edges.
             out_dtype (np.dtype):
                 Requested floating-point dtype for returned line arrays.
+
+        Returns:
+            LineCollection: The integrated line luminosities and continua.
         """
+        # Resolve the requested output precision
         out_dtype = resolve_out_dtype(out_dtype)
 
         # Get the bins in the grid's axes
