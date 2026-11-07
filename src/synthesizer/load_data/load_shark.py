@@ -191,10 +191,10 @@ def load_SHARK(
             # Z = 0 bins clamp to the lowest grid metallicity
             with np.errstate(divide="ignore"):
                 zw = cic_matrix(np.log10(z[keep]), log10zs)
-            stars = ParametricStars.from_sfzh(
+            stars = ParametricStars(
                 grid.log10ages,
                 grid.metallicities,
-                overlap[keep].T @ (m[keep, None] * zw),
+                sfzh=overlap[keep].T @ (m[keep, None] * zw),
             )
 
         galaxy_cls = (

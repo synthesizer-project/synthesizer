@@ -1754,10 +1754,10 @@ class Stars(Particles, StarsComponent):
         )
 
         # Get the SFZH and create the ParametricStars object
-        self.sfzh = ParametricStars.from_sfzh(
+        self.sfzh = ParametricStars(
             log10ages,
             metallicities,
-            compute_sfzh(*args),
+            sfzh=compute_sfzh(*args),
         )
 
         return self.sfzh

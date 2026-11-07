@@ -80,10 +80,10 @@ def sfzh_stars(test_grid):
 
     sfzh = np.ones((n_ages, n_metals))
 
-    return Stars.from_sfzh(
+    return Stars(
         test_grid.log10ages,
         test_grid.metallicities,
-        sfzh,
+        sfzh=sfzh,
         initial_mass=1e10 * Msun,
     )
 
@@ -700,34 +700,10 @@ class TestBinStorage:
         sfzh = np.random.default_rng(0).random(
             (test_grid.log10ages.size, test_grid.metallicities.size)
         )
-        stars = Stars.from_sfzh(
-            test_grid.log10ages, test_grid.metallicities, sfzh
-        )
+        stars = Stars(test_grid.log10ages, test_grid.metallicities, sfzh=sfzh)
 
         # The SFZH view must reproduce the input
         np.testing.assert_allclose(stars.sfzh, sfzh, rtol=1e-12)
-
-    def test_passing_sfzh_is_deprecated(self, test_grid):
-        """Passing sfzh warns and matches from_sfzh.
-
-        Args:
-            test_grid (Grid):
-                The test grid fixture.
-        """
-        # Passing sfzh directly must warn
-        sfzh = np.ones(
-            (test_grid.log10ages.size, test_grid.metallicities.size)
-        )
-        with pytest.warns(FutureWarning, match="from_sfzh"):
-            stars = Stars(
-                test_grid.log10ages, test_grid.metallicities, sfzh=sfzh
-            )
-
-        # The result must have the same bins as from_sfzh
-        expected = Stars.from_sfzh(
-            test_grid.log10ages, test_grid.metallicities, sfzh
-        )
-        np.testing.assert_array_equal(stars.bin_masses, expected.bin_masses)
 
     def test_sfzh_view_is_read_only(self, instantaneous_stars):
         """The SFZH view can't be modified in place.
@@ -751,10 +727,10 @@ class TestBinStorage:
         sfzh = np.ones(
             (test_grid.log10ages.size, test_grid.metallicities.size)
         )
-        Stars.from_sfzh(
+        Stars(
             test_grid.log10ages,
             test_grid.metallicities,
-            sfzh,
+            sfzh=sfzh,
             initial_mass=1e9 * Msun,
         )
 
