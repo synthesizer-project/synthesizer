@@ -4127,7 +4127,7 @@ def test_empty_placeholder_replaced_by_nonempty_batch(tmp_path):
     # Set up a writer as the Pipeline would have it
     io = PipelineIO.__new__(PipelineIO)
     io.filepath = str(tmp_path / "placeholder.hdf5")
-    io._writing_galaxy_data = False
+    io.rows_written = 0
 
     # An earlier empty batch left a placeholder without the trailing shape
     with h5py.File(io.filepath, "w") as hdf:
@@ -4179,8 +4179,7 @@ def test_black_hole_fnu_spectra_written_beneath_spectra():
     # rather than writing a file
     paths = []
     io = PipelineIO(buffers)
-    io.galaxy_indices = None
-    io.write_data = lambda data, path, indexes: paths.append(path)
+    io.write_data = lambda data, path: paths.append(path)
     io.write_galaxy_outputs({"fnu_spectra"})
 
     assert "Galaxies/BlackHoles/Spectra/SpectralFluxDensities" in paths
@@ -4200,7 +4199,7 @@ def test_late_product_backfills_flushed_rows(tmp_path):
 
     # Write a product for the third galaxy only, which should be preceded
     # by empty rows for the flushed galaxies
-    io.write_data(np.array([[3.0]]), "Galaxies/Product", indexes=[2])
+    io.write_data(np.array([[3.0]]), "Galaxies/Product")
     with h5py.File(io.filepath) as hdf:
         np.testing.assert_array_equal(hdf["Galaxies/Product"], [[0], [0], [3]])
 
@@ -4217,9 +4216,9 @@ def test_flushed_strings_can_grow(tmp_path):
     io.rows_written = 0
 
     # Write a first batch, then a second with a longer string
-    io.write_data(np.array(["ab", "cd"]), "Galaxies/Name", indexes=[0, 1])
+    io.write_data(np.array(["ab", "cd"]), "Galaxies/Name")
     io.rows_written = 2
-    io.write_data(np.array(["abcde"]), "Galaxies/Name", indexes=[2])
+    io.write_data(np.array(["abcde"]), "Galaxies/Name")
 
     # Every string should be stored in full
     with h5py.File(io.filepath) as hdf:

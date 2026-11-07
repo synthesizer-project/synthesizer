@@ -721,12 +721,10 @@ class PipelineIO:
         # retrying a failed write doesn't append them to the file again
         self.galaxy_outputs_written = False
 
-        # The number of galaxy rows already flushed to file, and whether
-        # we're writing per-galaxy data. A dataset first appearing after
-        # a flush is padded with rows_written empty rows so its rows line up
-        # with the galaxies.
+        # The number of galaxy rows already flushed to file. A dataset first
+        # appearing after a flush is padded with rows_written empty rows so
+        # its rows line up with the galaxies.
         self.rows_written = 0
-        self._writing_galaxy_data = False
 
         # Attach the output path (if we have one yet)
         self._outpath = None
@@ -934,13 +932,6 @@ class PipelineIO:
             self.start = 0
             self.end = ngalaxies_local
 
-        # In MPI land the per-galaxy data needs the indices of this rank's
-        # galaxies in the full set of galaxies
-        if self.is_parallel:
-            self.galaxy_indices = np.arange(self.start, self.end)
-        else:
-            self.galaxy_indices = None
-
         start = time.perf_counter()
 
         # Unpack the instruments into a single instrument collection containing
@@ -999,7 +990,7 @@ class PipelineIO:
         if self.is_parallel:
             self.comm.Barrier()
 
-    def write_dataset(self, data, key):
+    def write_dataset(self, data, key, per_galaxy=True):
         """Write a dataset to an HDF5 file.
 
         We handle various different cases here:
@@ -1015,6 +1006,9 @@ class PipelineIO:
         Args:
             data (any): The data to write.
             key (str): The key to write the data to.
+            per_galaxy (bool, optional): Whether the data has a row per
+                galaxy (appended to the rows already written) rather than
+                being written once at the end.
         """
         # Ensure we are working with a unyt_array
         data = unyt_array(data)
@@ -1036,7 +1030,7 @@ class PipelineIO:
             # Data that isn't per galaxy is only written once, at the end, so
             # if it exists an earlier write failed after writing it. Replace
             # it rather than appending a second copy
-            if not self._writing_galaxy_data and key in hdf:
+            if not per_galaxy and key in hdf:
                 del hdf[key]
 
             # A previous flush may already have created this dataset, in
@@ -1048,11 +1042,7 @@ class PipelineIO:
             # rows for the galaxies already flushed so its rows line up with
             # the galaxies. We leave those rows unwritten, HDF5 returns its
             # fill value (zero) for them without us allocating them
-            nempty = (
-                self.rows_written
-                if self._writing_galaxy_data and data.ndim > 0
-                else 0
-            )
+            nempty = self.rows_written if per_galaxy and data.ndim > 0 else 0
 
             # Create the dataset, leaving its galaxy axis unlimited so future
             # flushes can append to it
@@ -1143,12 +1133,14 @@ class PipelineIO:
 
         self._print(f"Wrote dataset {key} with shape {data.shape}")
 
-    def write_datasets_recursive(self, data, key):
+    def write_datasets_recursive(self, data, key, per_galaxy=True):
         """Write a dictionary to an HDF5 file recursively.
 
         Args:
             data (dict): The data to write.
             key (str): The key to write the data to.
+            per_galaxy (bool, optional): Whether the data has a row per
+                galaxy (see write_dataset).
         """
         # Early exit if data is None
         if data is None:
@@ -1157,7 +1149,7 @@ class PipelineIO:
         # If the data isn't a dictionary just write the dataset
         if not isinstance(data, dict):
             try:
-                self.write_dataset(data, key)
+                self.write_dataset(data, key, per_galaxy)
             except TypeError as e:
                 raise TypeError(
                     f"Failed to write dataset {key} (type={type(data)}) - {e}"
@@ -1166,7 +1158,7 @@ class PipelineIO:
 
         # Loop over the data
         for k, v in data.items():
-            self.write_datasets_recursive(v, f"{key}/{k}")
+            self.write_datasets_recursive(v, f"{key}/{k}", per_galaxy)
 
     def write_datasets_parallel(self, data, key, paths):
         """Write a dictionary to an HDF5 file recursively in parallel.
@@ -1217,48 +1209,43 @@ class PipelineIO:
         return paths
 
     @timed("PipelineIO.write_data")
-    def write_data(self, data, key, indexes=None, root=0):
+    def write_data(self, data, key, per_galaxy=True, root=0):
         """Write data using the appropriate method based on the environment.
 
         Args:
             data (any): The data to write.
             key (str): The key to write the data to.
-            indexes (list, optional): The galaxy indexes of the data. These
-                only mark the data as per galaxy (appended to the rows
-                already written) rather than data written once by the root
-                rank, the values themselves aren't used.
+            per_galaxy (bool, optional): Whether the data has a row per
+                galaxy (appended to the rows already written) rather than
+                being written once, by the root rank, at the end.
             root (int, optional): The root rank for gathering and writing.
         """
         try:
             start = time.perf_counter()
 
-            # Only per-galaxy data (which has indexes) needs padding when a
-            # dataset first appears after a flush
-            self._writing_galaxy_data = indexes is not None
-
             # In parallel land we need to make sure we're on the same page with
-            # the structure we are writing. Per-galaxy data (indexes given)
-            # can be flushed at different times on different ranks, so don't
-            # try to synchronise here. The file combiners handle missing
-            # datasets when all ranks have finished writing.
-            if self.is_parallel and indexes is None:
+            # the structure we are writing. Per-galaxy data can be flushed at
+            # different times on different ranks, so don't try to
+            # synchronise here. The file combiners handle missing datasets
+            # when all ranks have finished writing.
+            if self.is_parallel and not per_galaxy:
                 data = unify_dict_structure_across_ranks(data, self.comm)
 
             # Early exit if data is empty. Zero-row per-galaxy arrays are
             # still written so empty ranks hold the dataset with the right
             # trailing shape.
             if data is None or (
-                len(data) == 0 and (isinstance(data, dict) or indexes is None)
+                len(data) == 0 and (isinstance(data, dict) or not per_galaxy)
             ):
                 return
 
             # Root-level metadata should only be written once, even when using
             # MPI or collective I/O.
-            if self.is_parallel and indexes is None:
+            if self.is_parallel and not per_galaxy:
                 if self.rank != root:
                     return
 
-                self.write_datasets_recursive(data, key)
+                self.write_datasets_recursive(data, key, per_galaxy=False)
                 self._took(start, f"Writing {key} (and subgroups)")
                 return
 
@@ -1273,7 +1260,7 @@ class PipelineIO:
                 # Otherwise, we can just write everything recursively. Bear
                 # in mind that when using MPI this will write a file per
                 # rank ready for later combination into a virtual file.
-                self.write_datasets_recursive(data, key)
+                self.write_datasets_recursive(data, key, per_galaxy)
 
             self._took(start, f"Writing {key} (and subgroups)")
 
@@ -1293,29 +1280,23 @@ class PipelineIO:
         """
         buffers = self.io_buffers
 
-        # An index marks these as per-galaxy data to write_data. In MPI
-        # each rank writes its own file, so the index also avoids
-        # collective calls during a flush (ranks need not flush at the same
-        # galaxy).
-        indexes = self.galaxy_indices
-        if indexes is None:
-            indexes = range(buffers.ngalaxies)
-
         # Write each requested output, beneath each component's group if
-        # it's held per component
+        # it's held per component. In MPI each rank writes its own file, so
+        # writing per-galaxy data makes no collective calls (ranks need not
+        # flush at the same galaxy).
         for name, (_, path) in buffers.GALAXY_OUTPUTS.items():
             if name not in requested:
                 continue
             data = getattr(buffers, name)
             if not isinstance(data, dict):
-                self.write_data(data, path, indexes)
+                self.write_data(data, path)
                 continue
             for component, group in buffers.COMPONENT_GROUPS.items():
-                self.write_data(data[component], f"{group}/{path}", indexes)
+                self.write_data(data[component], f"{group}/{path}")
 
         # Write out the extra analysis results
         for key, res in buffers.analysis_results.items():
-            self.write_data(res, f"Galaxies/{key}", indexes)
+            self.write_data(res, f"Galaxies/{key}")
 
         # Record the rows we've written so datasets first appearing in a
         # later flush can be padded to line up with the galaxies
@@ -1343,13 +1324,20 @@ class PipelineIO:
             # holds the totals) and written beneath each component's group
             if isinstance(data, dict):
                 for component, group in buffers.COSMIC_SED_GROUPS.items():
-                    self.write_data(data[component], f"{group}/{path}")
+                    self.write_data(
+                        data[component], f"{group}/{path}", per_galaxy=False
+                    )
                 continue
 
             # The rest are the same on every rank so are written by rank 0.
             # Rank 0 may have no galaxies (and so e.g. no line wavelengths),
             # so take them from any rank which has them
-            self.write_data(self._first_from_any_rank(data), path, root=0)
+            self.write_data(
+                self._first_from_any_rank(data),
+                path,
+                per_galaxy=False,
+                root=0,
+            )
 
     def _first_from_any_rank(self, value):
         """Return the first value which isn't None on any rank.
