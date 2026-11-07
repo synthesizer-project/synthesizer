@@ -735,13 +735,11 @@ class Stars(StarsComponent):
             tuple:
                 The bin edges keyed by axis name and the bin masses.
         """
-        # Get the point bin edges along each axis (the masses are filled
-        # in 2D below so the 1D masses are discarded)
-        age_edges, _ = self._get_points_as_bins(
-            self.ages.to("yr").ndview, np.zeros(self.ages.size)
-        )
-        metal_edges, _ = self._get_points_as_bins(
-            self.metallicities, np.zeros(self.metallicities.size)
+        # Repeating each point gives a zero width bin at it, with a finite
+        # bin between each pair of points
+        age_edges = np.repeat(self.ages.to("yr").ndview, 2)
+        metal_edges = np.repeat(
+            np.asarray(self.metallicities, dtype=np.float64), 2
         )
 
         # Put the SFZH in the zero width bins (even indices on both axes),

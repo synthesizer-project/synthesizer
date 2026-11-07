@@ -599,3 +599,38 @@ def test_integrated_parametric_off_grid_axes(
 
     # The parametric and particle spectra must agree
     np.testing.assert_allclose(param.lnu.ndview, part.lnu.ndview, rtol=1e-10)
+
+
+def test_integrated_parametric_mismatched_axes(
+    test_grid, nebular_emission_model
+):
+    """Test a grid axis with no matching bin axis raises a clear error.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+        nebular_emission_model (EmissionModel):
+            The nebular emission model fixture.
+    """
+    # Pretend the grid's metallicity axis is an ionisation parameter axis,
+    # which a parametric Stars isn't binned along
+    extractor = IntegratedParametricExtractor(test_grid, "incident")
+    extractor._emitter_attributes = ("log10ages", "log10Us")
+    extractor._log_emitter_attr = (True, True)
+    stars = ParametricStars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sfzh=np.ones((len(test_grid.log10ages), len(test_grid.metallicities))),
+    )
+
+    # Extracting must raise rather than fail on a missing bin axis
+    with pytest.raises(InconsistentArguments, match="don't match"):
+        extractor.generate_lnu(
+            stars,
+            nebular_emission_model,
+            None,
+            None,
+            "cic",
+            1,
+            False,
+        )

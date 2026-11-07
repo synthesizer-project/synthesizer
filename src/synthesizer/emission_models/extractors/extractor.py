@@ -1422,7 +1422,27 @@ class IntegratedParametricExtractor(Extractor):
             tuple:
                 The bin edges along each grid axis (in the grid's units), the
                 (masked) bin masses and the log10 flag for each grid axis.
+
+        Raises:
+            InconsistentArguments:
+                If the grid's axes don't match the emitter's bin axes.
         """
+        # Each grid axis maps onto the emitter's bin axis of the same name
+        # (with any log10 prefix removed), so they must be the same axes
+        grid_bin_axes = [
+            name[5:] if log else name
+            for name, log in zip(
+                self._emitter_attributes, self._log_emitter_attr
+            )
+        ]
+        if sorted(grid_bin_axes) != sorted(emitter.bin_axes):
+            raise exceptions.InconsistentArguments(
+                f"The grid's axes ({self._emitter_attributes}) don't match "
+                f"the axes the {emitter.__class__.__name__} is binned along "
+                f"({emitter.bin_axes}). A parametric population can only "
+                "be extracted from a grid with the same axes."
+            )
+
         # Apply the mask, which clips the bins to the parts that pass and
         # scales their masses to match
         if mask is not None:
@@ -1436,14 +1456,7 @@ class IntegratedParametricExtractor(Extractor):
 
         # Collect the edges along each grid axis in the grid's order
         edges = []
-        for axis_name, units, log in zip(
-            self._emitter_attributes,
-            self._axes_units,
-            self._log_emitter_attr,
-        ):
-            # Each grid axis maps onto the emitter's bin axis of the same
-            # name (with any log10 prefix removed)
-            bin_axis = axis_name[5:] if log else axis_name
+        for bin_axis, units in zip(grid_bin_axes, self._axes_units):
             axis_edges = bin_edges[bin_axis]
 
             # Convert to the grid's units if the edges have units
@@ -1455,12 +1468,7 @@ class IntegratedParametricExtractor(Extractor):
             edges.append(np.ascontiguousarray(axis_edges, dtype=np.float64))
 
         # The bins must be ordered like the grid axes
-        bin_order = [
-            emitter.bin_axes.index(name[5:] if log else name)
-            for name, log in zip(
-                self._emitter_attributes, self._log_emitter_attr
-            )
-        ]
+        bin_order = [emitter.bin_axes.index(axis) for axis in grid_bin_axes]
         masses = np.transpose(bin_masses, [0] + [i + 1 for i in bin_order])
 
         return (
