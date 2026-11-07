@@ -11,6 +11,7 @@ from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
+    optically_thin_luminosity,
 )
 from synthesizer.emissions import LineCollection, Sed
 from synthesizer.units import accepts
@@ -34,20 +35,18 @@ class Blackbody(DustEmission):
     Attributes:
         temperature (unyt_quantity):
             The temperature of the blackbody.
-        temperature_z (unyt_quantity):
-            The temperature of the blackbody at redshift z, accounting for
-            CMB heating. Stores the last used temperature (important when
-            used with emitter temperatures).
-        cmb_factor (float):
-            The multiplicative factor to account for CMB heating at
-            high-redshift.
+
+    temperature is optional. A value set on the generator is a fixed override
+    that takes priority over any value on the emitter (only an
+    EmissionModel's fixed_parameters take priority over it). If left as None
+    it is read from the emitter.
     """
 
-    temperature: unyt_quantity
+    temperature: Optional[unyt_quantity]
 
     def __init__(
         self,
-        temperature: unyt_quantity,
+        temperature: Optional[unyt_quantity] = None,
         do_cmb_heating: bool = False,
         intrinsic: Optional[EmissionModel] = None,
         attenuated: Optional[EmissionModel] = None,
@@ -56,8 +55,10 @@ class Blackbody(DustEmission):
         """Initialise the blackbody base class.
 
         Args:
-            temperature (unyt_array):
-                The temperature of the blackbody.
+            temperature (unyt_quantity, optional):
+                The temperature of the blackbody. If given, this overrides
+                any temperature on the emitter. If None, it is read from the
+                emitter.
             do_cmb_heating (bool):
                 Should we apply cmb heating?
             intrinsic (EmissionModel):
@@ -118,8 +119,8 @@ class Blackbody(DustEmission):
         Note that the temperature here will be extracted using this priority
         order:
             1. From the EmissionModels fixed parameters
-            2. From the emitter object
-            3. From the Blackbody object itself
+            2. From the Blackbody object itself (if not None)
+            3. From the emitter object
 
         This is handle internally using the Generator's _extract_params method.
 
@@ -165,8 +166,8 @@ class Blackbody(DustEmission):
         # Create an SED object for convenience
         sed = Sed(lam=lams, lnu=lnu)
 
-        # Get the bolometric luminosity with proper units
-        bol_lum = sed._bolometric_luminosity
+        # Get the bolometric luminosity over all frequencies
+        bol_lum = optically_thin_luminosity(temperature)
 
         # Normalise the blackbody spectrum
         sed._lnu /= bol_lum
@@ -237,8 +238,6 @@ class Blackbody(DustEmission):
                 "missing. Please generate spectra first or remove the "
                 "generation of lines."
             )
-        else:
-            sed = spectra[model.label]
 
         # Get the required parameters
         params = self._extract_params(model, emitter)
@@ -248,7 +247,6 @@ class Blackbody(DustEmission):
 
         # Define frequencies
         nu = (c / line_lams).to(Hz)
-        sed_nu = sed.nu
 
         # Account for CMB heating
         cmb_factor, temperature = self.apply_cmb_heating(
@@ -259,13 +257,9 @@ class Blackbody(DustEmission):
 
         # Compute the planck function
         lnu = planck(nu, temperature)
-        norm_lnu = planck(sed_nu, temperature)
 
-        # Create an SED object for convenience
-        norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)
-
-        # Get the bolometric luminosity with proper units
-        bol_lum = norm_sed._bolometric_luminosity
+        # Get the bolometric luminosity over all frequencies
+        bol_lum = optically_thin_luminosity(temperature)
 
         # Normalise the blackbody spectrum
         lnu /= bol_lum
@@ -303,7 +297,8 @@ class Blackbody(DustEmission):
 
         This will return the scaling free spectra for a given wavelength grid.
         It will not consider any emitter or model, so the temperature must
-        have been provided directly to the class.
+        have been provided directly to the class (otherwise a
+        MissingAttribute exception is raised).
 
         Args:
             lams (unyt_array):

@@ -14,14 +14,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Tuple, Union
 
 import numpy as np
-from unyt import K, unyt_quantity
+from scipy.special import gamma, zeta
+from unyt import Hz, K, c, erg, h, kb, pc, s, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.generator import Generator
 from synthesizer.emission_models.utils import get_emission_label
-from synthesizer.units import accepts
-from synthesizer.utils.precision import resolve_out_dtype
+from synthesizer.units import Units, accepts
+from synthesizer.utils.integrate import trapezoid
+from synthesizer.utils.precision import get_float_dtype, resolve_out_dtype
 
 if TYPE_CHECKING:
     from synthesizer.components.component import Component
@@ -63,6 +65,83 @@ def get_cmb_heating_factor(
     cmb_factor: float = (_temperature / temperature) ** (4 + emissivity)
 
     return cmb_factor, _temperature
+
+
+@accepts(temperature=K)
+def optically_thin_luminosity(
+    temperature: unyt_quantity,
+    emissivity: float = 0.0,
+) -> float:
+    """Return the integral of nu**emissivity * planck(nu, T) over all nu.
+
+    This is the bolometric luminosity of an optically thin greybody (or a
+    blackbody when emissivity is 0), with nu in Hz as in the greybody, so
+    dust spectra can be normalised without integrating over the (possibly
+    truncated) wavelength grid they are evaluated on. The integral is
+
+        8 pi h (10 pc)^2 / c^2 (k T / h)^(4 + beta)
+            Gamma(4 + beta) zeta(4 + beta).
+
+    Args:
+        temperature (unyt_quantity):
+            The dust temperature.
+        emissivity (float):
+            The emissivity (beta).
+
+    Returns:
+        float:
+            The bolometric luminosity in the luminosity unit of
+            Sed.bolometric_luminosity.
+    """
+    # Gamma and zeta only give a finite integral for 4 + beta > 1
+    if np.any(np.asarray(emissivity) <= -3):
+        raise exceptions.InconsistentArguments(
+            "The optically thin luminosity requires emissivity > -3, "
+            "otherwise the integral over all frequencies is infinite "
+            f"(got emissivity={emissivity})."
+        )
+
+    power = 4.0 + emissivity
+
+    # NOTE: planck returns lnu for an assumed luminosity distance of 10 pc,
+    # so the same (10 pc)^2 must appear here for the normalisation to match
+    prefactor = (8 * np.pi * h * (10 * pc) ** 2 / c**2).to("erg * s**3")
+    # NOTE: (k T / h)^(4 + beta) overflows float32 at typical dust
+    # temperatures, so compute it at float64 and only cast the luminosity
+    # back to the temperature's precision
+    nu_t = np.asarray((kb * temperature / h).to(Hz).value, dtype=np.float64)
+    lum = prefactor.value * nu_t**power * gamma(power) * zeta(power)
+    return (
+        (lum * erg / s)
+        .to(Units().luminosity)
+        .value.astype(get_float_dtype(temperature.dtype), copy=False)
+    )
+
+
+@accepts(temperature=K)
+def integrate_over_all_frequencies(lnu_func, temperature: unyt_quantity):
+    """Integrate a thermal dust spectrum over all frequencies.
+
+    This is used where the integral has no closed form. The spectrum is
+    integrated on a fixed grid in x = h nu / k T from 1e-6 to 100, which
+    holds all of the emission of a thermal spectrum at this temperature, so
+    the result does not depend on the grid the spectrum is evaluated on.
+
+    Args:
+        lnu_func (callable):
+            A function returning lnu (erg/s/Hz) for frequencies nu.
+        temperature (unyt_quantity):
+            The dust temperature.
+
+    Returns:
+        float:
+            The bolometric luminosity in the luminosity unit of
+            Sed.bolometric_luminosity.
+    """
+    nu = np.logspace(-6, 2, 4096) * (kb * temperature / h).to(Hz)
+    lnu = lnu_func(nu).to(erg / s / Hz).value
+    lum = trapezoid(lnu * nu.value, np.log(nu.value))
+    return (lum * erg / s).to(Units().luminosity).value
 
 
 class DustEmission(Generator):
@@ -140,12 +219,6 @@ class DustEmission(Generator):
         # Are we doing CMB heating?
         self.do_cmb_heating = do_cmb_heating
 
-        # Store the last computed temperature for convenience
-        self.last_effective_temperature = None
-
-        # Store the last used cmb factor for convenience
-        self.last_cmb_factor = None
-
     def __repr__(self):
         """Return a string representation of the DustEmission object."""
         parts = [self.__class__.__name__]
@@ -164,16 +237,6 @@ class DustEmission(Generator):
             parts.append("do_cmb_heating=True")
 
         return f"{parts[0]}({', '.join(parts[1:])})"
-
-    @property
-    def temperature_z(self):
-        """The last processed effective temperature."""
-        return self.last_effective_temperature
-
-    @property
-    def cmb_factor(self):
-        """The last processed cmb heating factor."""
-        return self.last_cmb_factor
 
     def set_energy_balance(self, intrinsic, attenuated) -> None:
         """Set the dust emission to be energy-balance.
@@ -345,21 +408,24 @@ class DustEmission(Generator):
     def apply_cmb_heating(self, temperature, emissivity, redshift) -> Tuple:
         """Compute the cmb heating factor and modify the temperature.
 
-        This stores the effective temperature in last_effective_temperature
-        which can be returned by temperature_z for labelling. This feature is
-        mostly only useful when using the generators in isolation.
+        Nothing is stored on the generator, since one generator can be shared
+        by several models and emitters. Use the returned values to get the
+        effective temperature and heating factor for a particular call.
 
-        Note that those stored values belong to whichever call ran last. One
-        generator can be attached to several models and used for many
-        emitters, so they say nothing about which emission they came from, and
-        they are not safe to read if generation is ever threaded. See
-        https://github.com/synthesizer-project/synthesizer/issues/1196. Take
-        the returned values instead when it matters which call they came from.
+        Args:
+            temperature (unyt_quantity):
+                The dust temperature without CMB heating.
+            emissivity (float):
+                The emissivity of the dust.
+            redshift (float):
+                The redshift at which to evaluate the CMB heating.
+
+        Returns:
+            tuple:
+                The CMB heating factor and the effective dust temperature.
         """
         # Return immediately if we aren't applying cmb heating
         if not self.do_cmb_heating:
-            self.last_cmb_factor = 1.0
-            self.last_effective_temperature = temperature
             return 1.0, temperature
 
         # Otherwise, do the calculation
@@ -368,9 +434,5 @@ class DustEmission(Generator):
             emissivity,
             redshift,
         )
-
-        # Store the last results
-        self.last_cmb_factor = cmb_factor
-        self.last_effective_temperature = _temperature
 
         return cmb_factor, _temperature

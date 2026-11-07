@@ -29,12 +29,12 @@ import numpy as np
 from unyt import Msun, Myr
 
 from synthesizer.emission_models import PacmanEmission
-from synthesizer.emission_models.model_queue import gil_enabled
 from synthesizer.emission_models.parameters import ParameterList
 from synthesizer.grid import Grid
 from synthesizer.parametric import SFH, ZDist
 from synthesizer.parametric import Stars as ParametricStars
 from synthesizer.particle.stars import sample_sfzh
+from synthesizer.utils.free_threading import gil_enabled
 
 plt.rcParams["font.family"] = "DeJavu Serif"
 plt.rcParams["font.serif"] = ["Times New Roman"]

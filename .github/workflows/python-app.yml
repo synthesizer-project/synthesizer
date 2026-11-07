@@ -80,8 +80,8 @@ jobs:
           make html SPHINXOPTS="-j auto"
 
   free-threaded:
-    # Test on a free-threaded (no-GIL) build of Python, where emission models
-    # can be executed concurrently with nr_model_threads.
+    # Test on a free-threaded (no-GIL) build of Python, where Python level
+    # work (e.g. emission models with nr_model_threads) can run concurrently.
     runs-on: ubuntu-latest
 
     steps:

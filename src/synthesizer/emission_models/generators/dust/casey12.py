@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
+from scipy.special import gamma
 from unyt import (
     Hz,
     K,
@@ -23,9 +24,11 @@ from synthesizer import exceptions
 from synthesizer.emission_models.base_model import EmissionModel
 from synthesizer.emission_models.generators.dust.dust_emission_base import (
     DustEmission,
+    integrate_over_all_frequencies,
 )
 from synthesizer.emissions import LineCollection, Sed
-from synthesizer.units import accepts
+from synthesizer.synth_warnings import warn
+from synthesizer.units import Units, accepts
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.precision import verify_out_precision
 
@@ -46,13 +49,18 @@ class Casey12(DustEmission):
     scale the Casey12 spectrum accordingly. For more details see the base
     DustEmission parent class.
 
+    The mid-infrared power law is a functional form for the shape of the
+    warm dust emission in the mid-infrared (above roughly 5-8 um). Casey
+    (2012) finds slopes of roughly alpha = 1.5-2.5 in their fits and
+    recommends alpha = 2.0, though other works find values outside this
+    range. The power law has no short-wavelength cut-off, so a shallower
+    slope puts an unphysical fraction of the dust luminosity into the
+    near-infrared and optical (alpha <= 1 gives infinite luminosity). A
+    warning is raised for alpha < 1.5.
+
     Attributes:
         temperature (unyt_quantity):
             The temperature of the dust.
-        temperature_z (unyt_quantity):
-            The temperature of the dust at redshift z, accounting for
-            CMB heating. Stores the last used temperature (important when
-            used with emitter temperatures).
         emissivity (float):
             The emissivity of the dust (dimensionless).
         alpha (float):
@@ -61,26 +69,27 @@ class Casey12(DustEmission):
             Normalisation of the blackbody component [default 1.0].
         lam_0 (unyt_quantity):
             Wavelength where the dust optical depth is unity.
-        lam_c (unyt_quantity):
-            The power law turnover wavelength.
-        n_pl (unyt_quantity):
-            The power law normalisation.
+
+    temperature, emissivity and alpha are optional. A value set on the
+    generator is a fixed override that takes priority over any value on the
+    emitter (only an EmissionModel's fixed_parameters take priority over it).
+    If left as None they are read from the emitter. The power-law turnover
+    wavelength (lam_c) and normalisation (n_pl) depend on these parameters,
+    so they are derived when emission is generated and never stored.
     """
 
-    temperature: unyt_quantity
-    emissivity: float
-    alpha: float
+    temperature: Optional[unyt_quantity]
+    emissivity: Optional[float]
+    alpha: Optional[float]
     n_bb: float
     lam_0: unyt_quantity
-    lam_c: unyt_quantity
-    n_pl: unyt_quantity
 
     @accepts(temperature=K, lam_0=um)
     def __init__(
         self,
-        temperature: unyt_quantity,
-        emissivity: float = 2.0,
-        alpha: float = 2.0,
+        temperature: Optional[unyt_quantity] = None,
+        emissivity: Optional[float] = None,
+        alpha: Optional[float] = None,
         n_bb: float = 1.0,
         lam_0: unyt_quantity = 200.0 * um,
         do_cmb_heating: bool = False,
@@ -91,12 +100,18 @@ class Casey12(DustEmission):
         """Initialise the Casey12 dust emission model.
 
         Args:
-            temperature (unyt_array):
-                The temperature of the dust.
-            emissivity (float):
-                The emissivity (dimensionless) [good value = 2.0].
-            alpha (float):
-                The power-law slope (dimensionless) [good value = 2.0].
+            temperature (unyt_quantity, optional):
+                The temperature of the dust. If given, this overrides any
+                temperature on the emitter. If None, it is read from the
+                emitter.
+            emissivity (float, optional):
+                The emissivity (dimensionless) [good value = 2.0]. If given,
+                this overrides any emissivity on the emitter. If None, it is
+                read from the emitter.
+            alpha (float, optional):
+                The power-law slope (dimensionless) [good value = 2.0]. If
+                given, this overrides any alpha on the emitter. If None, it
+                is read from the emitter.
             n_bb (float):
                 Normalisation of the blackbody component [default 1.0].
             lam_0 (unyt_quantity):
@@ -118,6 +133,51 @@ class Casey12(DustEmission):
         self.n_bb = n_bb
         self.lam_0 = lam_0
 
+        DustEmission.__init__(
+            self,
+            intrinsic,
+            attenuated,
+            scaler,
+            do_cmb_heating,
+            required_params=("temperature", "emissivity", "alpha"),
+        )
+
+    def _power_law_params(
+        self,
+        temperature: unyt_quantity,
+        emissivity: float,
+        alpha: float,
+    ) -> tuple[unyt_quantity, unyt_quantity]:
+        """Compute the power-law turnover wavelength and normalisation.
+
+        Both depend on the temperature, emissivity and mid-infrared slope,
+        which may come from the emitter and be modified by CMB heating, so
+        they are computed on demand and never stored on the instance.
+
+        Args:
+            temperature (unyt_quantity):
+                The dust temperature.
+            emissivity (float):
+                The dust emissivity.
+            alpha (float):
+                The mid-infrared power-law slope.
+
+        Returns:
+            tuple:
+                The power-law turnover wavelength (lam_c) and the power-law
+                normalisation (n_pl).
+        """
+        # Shallow slopes are below the range typically found in fits and
+        # put too much luminosity at short wavelengths
+        if np.any(np.asarray(alpha) < 1.5):
+            warn(
+                f"Casey12 alpha={alpha} is below the range typically found "
+                "in fits (~1.5-2.5). The mid-infrared power law has no "
+                "short-wavelength cut-off, so a shallow slope puts an "
+                "unphysical fraction of the dust luminosity into the "
+                "near-infrared and optical."
+            )
+
         # Calculate the power law turnover wavelength
         b1 = 26.68
         b2 = 6.246
@@ -128,26 +188,19 @@ class Casey12(DustEmission):
             + (b3 + b4 * alpha) * temperature.to("K").value
         ) ** -1
 
-        self.lam_c = (3.0 / 4.0) * lum * um
+        lam_c = (3.0 / 4.0) * lum * um
 
         # Calculate normalisation of the power-law term
         # See Casey+2012, Table 1 for the expression
         # Missing factors of lam_c and c in some places
-        self.n_pl = (
+        n_pl = (
             self.n_bb
-            * (1 - np.exp(-((self.lam_0 / self.lam_c) ** emissivity)))
-            * (c / self.lam_c) ** 3
-            / (np.exp(h * c / (self.lam_c * kb * temperature)) - 1)
+            * (1 - np.exp(-((self.lam_0 / lam_c) ** emissivity)))
+            * (c / lam_c) ** 3
+            / (np.exp(h * c / (lam_c * kb * temperature)) - 1)
         )
 
-        DustEmission.__init__(
-            self,
-            intrinsic,
-            attenuated,
-            scaler,
-            do_cmb_heating,
-            required_params=("temperature",),
-        )
+        return lam_c, n_pl
 
     def __repr__(self):
         """Return a string representation of the Casey12 object."""
@@ -181,8 +234,19 @@ class Casey12(DustEmission):
         return f"Casey12({', '.join(parts)})"
 
     @accepts(nu=Hz)
-    def _lnu(self, nu: unyt_array, temperature: unyt_quantity) -> unyt_array:
+    def _lnu(
+        self,
+        nu: unyt_array,
+        temperature: unyt_quantity,
+        emissivity: float,
+        alpha: float,
+    ) -> unyt_array:
         """Generate unnormalised spectrum for given frequency (nu) grid.
+
+        All model parameters are passed in explicitly (they have already been
+        resolved from the model, generator and emitter by the caller). The
+        power-law turnover wavelength and normalisation are derived from them
+        here and never stored, so the generator holds no per-call state.
 
         Args:
             nu (unyt_array):
@@ -190,11 +254,18 @@ class Casey12(DustEmission):
                 density.
             temperature (unyt_quantity):
                 The temperature to use for the Casey12 model.
+            emissivity (float):
+                The emissivity to use.
+            alpha (float):
+                The mid-infrared power-law slope to use.
 
         Returns:
             lnu (unyt_array):
                 The unnormalised spectral luminosity density.
         """
+        # Derive the power-law turnover wavelength and normalisation
+        lam_c, n_pl = self._power_law_params(temperature, emissivity, alpha)
+
         # Convert to wavelength
         lam = c / nu
 
@@ -208,35 +279,96 @@ class Casey12(DustEmission):
             """
             return (
                 (
-                    self.n_pl
-                    * ((lam / self.lam_c) ** self.alpha)
-                    * np.exp(-((lam / self.lam_c) ** 2))
+                    n_pl
+                    * ((lam / lam_c) ** alpha)
+                    * np.exp(-((lam / lam_c) ** 2))
                 ).value
                 * erg
                 / s
                 / Hz
             )
 
-        def _blackbody(lam: unyt_array) -> unyt_array:
-            """Calculate the blackbody component.
+        return _power_law(lam) + self._blackbody(lam, temperature, emissivity)
 
-            Args:
-                lam (unyt_array):
-                    The wavelengths at which to calculate lnu.
-            """
-            return (
-                (
-                    self.n_bb
-                    * (1 - np.exp(-((self.lam_0 / lam) ** self.emissivity)))
-                    * (c / lam) ** 3
-                    / (np.exp((h * c) / (lam * kb * temperature)) - 1.0)
-                ).value
-                * erg
-                / s
-                / Hz
+    def _blackbody(
+        self,
+        lam: unyt_array,
+        temperature: unyt_quantity,
+        emissivity: float,
+    ) -> unyt_array:
+        """Calculate the blackbody component.
+
+        Args:
+            lam (unyt_array):
+                The wavelengths at which to calculate lnu.
+            temperature (unyt_quantity):
+                The temperature to use for the Casey12 model.
+            emissivity (float):
+                The emissivity to use.
+        """
+        return (
+            (
+                self.n_bb
+                * (1 - np.exp(-((self.lam_0 / lam) ** emissivity)))
+                * (c / lam) ** 3
+                / (np.exp((h * c) / (lam * kb * temperature)) - 1.0)
+            ).value
+            * erg
+            / s
+            / Hz
+        )
+
+    def _bolometric_luminosity(
+        self,
+        temperature: unyt_quantity,
+        emissivity: float,
+        alpha: float,
+    ) -> float:
+        """Return the integral of the unnormalised spectrum over all nu.
+
+        The power-law component integrates analytically to
+        n_pl (c / lam_c) Gamma((alpha - 1) / 2) / 2, which is only finite for
+        alpha > 1 because the power law has no blue cut-off. The blackbody
+        component has no closed form so is integrated numerically over all
+        frequencies.
+
+        Args:
+            temperature (unyt_quantity):
+                The temperature to use for the Casey12 model.
+            emissivity (float):
+                The emissivity to use.
+            alpha (float):
+                The mid-infrared power-law slope to use.
+
+        Returns:
+            float:
+                The bolometric luminosity in the luminosity unit of
+                Sed.bolometric_luminosity.
+        """
+        if np.any(np.asarray(alpha) <= 1):
+            raise exceptions.InconsistentArguments(
+                "Casey12 requires alpha > 1, otherwise the mid-infrared "
+                f"power law has infinite luminosity (got alpha={alpha})."
             )
 
-        return _power_law(lam) + _blackbody(lam)
+        lam_c, n_pl = self._power_law_params(temperature, emissivity, alpha)
+        power_law = (
+            (
+                n_pl.value
+                * (c / lam_c).to(Hz).value
+                * 0.5
+                * gamma((alpha - 1) / 2)
+                * erg
+                / s
+            )
+            .to(Units().luminosity)
+            .value
+        )
+        blackbody = integrate_over_all_frequencies(
+            lambda nu: self._blackbody(c / nu, temperature, emissivity),
+            temperature,
+        )
+        return power_law + blackbody
 
     @accepts(lams=angstrom)
     @timed("Casey12._generate_spectra")
@@ -252,11 +384,11 @@ class Casey12(DustEmission):
     ) -> Sed:
         """Generate the dust emission spectra.
 
-        Note that the temperature here will be extracted using this priority
-        order:
+        Note that the temperature, emissivity and alpha here will be
+        extracted using this priority order:
             1. From the EmissionModels fixed parameters
-            2. From the emitter object
-            3. From the Casey12 object itself
+            2. From the Casey12 object itself (if not None)
+            3. From the emitter object
 
         This is handle internally using the Generator's _extract_params method.
 
@@ -283,8 +415,10 @@ class Casey12(DustEmission):
         # Get the required parameters
         params = self._extract_params(model, emitter)
 
-        # Unpack the temperature
+        # Unpack the parameters (any of which may vary per emitter)
         temperature = params["temperature"]
+        emissivity = params["emissivity"]
+        alpha = params["alpha"]
 
         # Define frequencies
         nu = (c / lams).to(Hz)
@@ -292,48 +426,18 @@ class Casey12(DustEmission):
         # Account for CMB heating
         cmb_factor, temperature = self.apply_cmb_heating(
             temperature=temperature,
-            emissivity=self.emissivity,
+            emissivity=emissivity,
             redshift=redshift,
         )
 
-        # Recompute the Casey12 parameters if temperature changed due to CMB
-        # heating
-        b1 = 26.68
-        b2 = 6.246
-        b3 = 0.0001905
-        b4 = 0.00007243
-        lum = (
-            (b1 + b2 * self.alpha) ** -2
-            + (b3 + b4 * self.alpha) * temperature.to("K").value
-        ) ** -1
-
-        lam_c = (3.0 / 4.0) * lum * um
-
-        n_pl = (
-            self.n_bb
-            * (1 - np.exp(-((self.lam_0 / lam_c) ** self.emissivity)))
-            * (c / lam_c) ** 3
-            / (np.exp(h * c / (lam_c * kb * temperature)) - 1)
-        )
-
-        # Store temporary values for _lnu calculation
-        original_lam_c = self.lam_c
-        original_n_pl = self.n_pl
-        self.lam_c = lam_c
-        self.n_pl = n_pl
-
         # Compute the Casey12 function
-        lnu = self._lnu(nu, temperature)
-
-        # Restore original values
-        self.lam_c = original_lam_c
-        self.n_pl = original_n_pl
+        lnu = self._lnu(nu, temperature, emissivity, alpha)
 
         # Create an SED object for convenience
         sed = Sed(lam=lams, lnu=lnu)
 
-        # Get the bolometric luminosity with proper units
-        bol_lum = sed._bolometric_luminosity
+        # Get the bolometric luminosity over all frequencies
+        bol_lum = self._bolometric_luminosity(temperature, emissivity, alpha)
 
         # Normalise the Casey12 spectrum
         sed._lnu /= bol_lum
@@ -404,65 +508,30 @@ class Casey12(DustEmission):
                 "missing. Please generate spectra first or remove the "
                 "generation of lines."
             )
-        else:
-            sed = spectra[model.label]
 
         # Get the required parameters
         params = self._extract_params(model, emitter)
 
-        # Unpack the temperature
+        # Unpack the parameters (any of which may vary per emitter)
         temperature = params["temperature"]
+        emissivity = params["emissivity"]
+        alpha = params["alpha"]
 
         # Define frequencies
         nu = (c / line_lams).to(Hz)
-        sed_nu = sed.nu
 
         # Account for CMB heating
         cmb_factor, temperature = self.apply_cmb_heating(
             temperature=temperature,
-            emissivity=self.emissivity,
+            emissivity=emissivity,
             redshift=redshift,
         )
 
-        # Recompute the Casey12 parameters if temperature changed due to CMB
-        # heating
-        b1 = 26.68
-        b2 = 6.246
-        b3 = 0.0001905
-        b4 = 0.00007243
-        lum = (
-            (b1 + b2 * self.alpha) ** -2
-            + (b3 + b4 * self.alpha) * temperature.to("K").value
-        ) ** -1
-
-        lam_c = (3.0 / 4.0) * lum * um
-
-        n_pl = (
-            self.n_bb
-            * (1 - np.exp(-((self.lam_0 / lam_c) ** self.emissivity)))
-            * (c / lam_c) ** 3
-            / (np.exp(h * c / (lam_c * kb * temperature)) - 1)
-        )
-
-        # Store temporary values for _lnu calculation
-        original_lam_c = self.lam_c
-        original_n_pl = self.n_pl
-        self.lam_c = lam_c
-        self.n_pl = n_pl
-
         # Compute the Casey12 function
-        lnu = self._lnu(nu, temperature)
-        norm_lnu = self._lnu(sed_nu, temperature)
+        lnu = self._lnu(nu, temperature, emissivity, alpha)
 
-        # Restore original values
-        self.lam_c = original_lam_c
-        self.n_pl = original_n_pl
-
-        # Create an SED object for convenience
-        norm_sed = Sed(lam=sed.lam, lnu=norm_lnu)
-
-        # Get the bolometric luminosity with proper units
-        bol_lum = norm_sed._bolometric_luminosity
+        # Get the bolometric luminosity over all frequencies
+        bol_lum = self._bolometric_luminosity(temperature, emissivity, alpha)
 
         # Normalise the Casey12 spectrum
         lnu /= bol_lum
@@ -495,8 +564,9 @@ class Casey12(DustEmission):
         """Generate dust emission spectra for given wavelength grid.
 
         This will return the scaling free spectra for a given wavelength grid.
-        It will not consider any emitter or model, so the temperature must
-        have been provided directly to the class.
+        It will not consider any emitter or model, so the temperature,
+        emissivity and alpha must have been provided directly to the class
+        (otherwise a MissingAttribute exception is raised).
 
         Args:
             lams (unyt_array):

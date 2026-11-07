@@ -454,6 +454,33 @@ class TestPipelineInit:
         with pytest.raises(ValueError, match="max_npart must be an int >= 1"):
             Pipeline(emission_model=nebular_emission_model, max_npart=0)
 
+    def test_analysis_func_timing_registered(self, nebular_emission_model):
+        """Analysis timings exist before any galaxy is processed."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_analysis_func(lambda gal: 1.0, "Extra")
+
+        # A rank without galaxies must still reduce this timing
+        assert pipeline._op_timing["Extra"] == 0.0
+
+    def test_analysis_func_error_names_key(self, nebular_emission_model):
+        """Analysis errors name the function, whatever their signature."""
+
+        # An error which can't be rebuilt from a single message
+        class TwoArgError(Exception):
+            def __init__(self, a, b):
+                super().__init__(f"{a} {b}")
+
+        def fail(gal):
+            raise TwoArgError("real", "cause")
+
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_analysis_func(fail, "Broken")
+
+        # The key and the original error should both reach the user
+        with pytest.raises(RuntimeError, match="Broken: real cause") as exc:
+            pipeline._run_extra_analysis(SimpleNamespace())
+        assert isinstance(exc.value.__cause__, TwoArgError)
+
 
 class TestPipelineTimingAnalysis:
     """Tests for Pipeline atomic timing analysis."""
@@ -668,6 +695,59 @@ class TestPipelineNotReady:
 class TestPipelineOperations:
     """Tests for the pipeline operations."""
 
+    def test_pipeline_uses_a_single_igm(
+        self, test_grid, nebular_emission_model
+    ):
+        """A Pipeline only accepts one IGM for all observed emissions."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        line_ids = test_grid.available_lines[:2]
+        igm = MagicMock()
+
+        # The first IGM is used, and passing it again (or None) is fine
+        pipeline.get_observed_spectra(cosmo=cosmo, igm=igm)
+        pipeline.get_observed_lines(cosmo=cosmo, igm=None, line_ids=line_ids)
+        pipeline.get_observed_lines(cosmo=cosmo, igm=igm, line_ids=line_ids)
+        assert pipeline._igm is igm
+
+        # But a different IGM isn't
+        with pytest.raises(exceptions.InconsistentArguments):
+            pipeline.get_observed_lines(
+                cosmo=cosmo, igm=MagicMock(), line_ids=line_ids
+            )
+
+    def test_pipeline_accepts_equivalent_igms(self, nebular_emission_model):
+        """Equivalent built-in instances may share a Pipeline."""
+        from synthesizer.emission_models.attenuation import (
+            Asada25,
+            Inoue14,
+            Madau96,
+        )
+
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        first = Inoue14(scale_tau=2.0)
+        pipeline.get_observed_spectra(cosmo=cosmo, igm=first)
+        pipeline.get_photometry_fluxes(
+            make_test_imager(), cosmo=cosmo, igm=Inoue14(scale_tau=2.0)
+        )
+        assert pipeline._igm is first
+
+        for different in (Inoue14(scale_tau=3.0), Asada25()):
+            with pytest.raises(exceptions.InconsistentArguments):
+                pipeline._set_igm(different)
+
+        for factory, difference in (
+            (Asada25, Asada25(sigmoid_params=(1, 2, 3))),
+            (Madau96, None),
+        ):
+            other = Pipeline(emission_model=nebular_emission_model, verbose=0)
+            other._set_igm(factory())
+            other._set_igm(factory())
+            if difference is None:
+                difference = Madau96()
+                difference.coefficients[0] *= 2
+            with pytest.raises(exceptions.InconsistentArguments):
+                other._set_igm(difference)
+
     def test_base_galaxy_get_observed_spectra_passes_nthreads(self):
         """BaseGalaxy should forward nthreads to each Sed.get_fnu call."""
         igm = MagicMock()
@@ -705,6 +785,7 @@ class TestPipelineOperations:
                 nthreads=7,
                 out_dtype=None,
                 peculiar_velocity=None,
+                emitter=galaxy,
             )
 
     def test_pipeline_get_observed_spectra_passes_pipeline_nthreads(
@@ -973,6 +1054,80 @@ class TestPipelineOperations:
         assert pipeline_with_galaxies.line_obs_lams is not None, (
             "Line wavelengths not calculated"
         )
+
+    def test_observed_line_wavelengths_per_galaxy(
+        self,
+        test_grid,
+        nebular_emission_model,
+        random_particle_galaxy,
+        tmp_path,
+    ):
+        """Observed line wavelengths are written for each galaxy."""
+        # Make two copies of the galaxy at different redshifts
+        galaxies = []
+        for redshift in (1.0, 3.0):
+            gal = copy.deepcopy(random_particle_galaxy)
+            gal.redshift = redshift
+            for comp in (gal.stars, gal.gas, gal.black_holes):
+                comp.redshift = redshift
+            galaxies.append(gal)
+
+        # Compute and write their observed lines
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_galaxies(galaxies)
+        pipeline.get_observed_lines(
+            line_ids=test_grid.available_lines,
+            cosmo=cosmo,
+        )
+        output = tmp_path / "observed_lines.hdf5"
+        pipeline.write(output)
+
+        # Each galaxy should have its own wavelengths, scaled by (1 + z)
+        with h5py.File(output) as hdf:
+            obslams = hdf["Galaxies/Lines/ObservedWavelengths"][...]
+
+            # The line IDs and rest frame wavelengths should also be written
+            # even though only observed lines were requested
+            nids = hdf["Lines/IDs"].shape[0]
+            nlams = hdf["Lines/Wavelengths"].shape[0]
+        assert obslams.shape == (2, len(test_grid.available_lines))
+        np.testing.assert_allclose(obslams[1] / obslams[0], 4.0 / 2.0)
+        assert nids == nlams == len(test_grid.available_lines)
+
+    @pytest.mark.parametrize("rank", [0, 1])
+    def test_first_from_any_rank_gathers_to_root(
+        self, nebular_emission_model, rank
+    ):
+        """Rank 0 gets a value held only by another rank."""
+        # Pretend to be one rank of two where only rank 1 has the value
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.using_mpi = True
+        pipeline.rank = rank
+        pipeline.comm = MagicMock()
+        pipeline.comm.gather.return_value = [None, "lams"]
+
+        # Only rank 0 receives the value, gathered rather than allgathered
+        result = pipeline._first_from_any_rank("lams" if rank else None)
+        assert result == ("lams" if rank == 0 else None)
+        pipeline.comm.gather.assert_called_once()
+        pipeline.comm.allgather.assert_not_called()
+
+    def test_first_from_any_rank_all_ranks(self, nebular_emission_model):
+        """Every rank gets the value with all_ranks=True."""
+        # Pretend to be a non-root rank without the value
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.using_mpi = True
+        pipeline.rank = 1
+        pipeline.comm = MagicMock()
+        pipeline.comm.allgather.return_value = [None, "props", "other"]
+
+        # The first value which isn't None is returned on this rank too
+        assert pipeline._first_from_any_rank(None, all_ranks=True) == "props"
+
+    def test_first_from_any_rank_without_mpi(self, nebular_emission_model):
+        """Without MPI the rank's own value is returned."""
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        assert pipeline._first_from_any_rank("lams") == "lams"
 
     def test_run_pipeline_lines_luminosity_subset(
         self,
@@ -1327,6 +1482,95 @@ class TestPipelineOperations:
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.sfhs) > 0
         ), "No SFH was calculated"
+
+    def test_write_sfzh_and_sfh_particle(
+        self,
+        test_grid,
+        pipeline_with_galaxies,
+        tmp_path,
+    ):
+        """Particle SFZHs and SFHs are written as per-galaxy mass grids."""
+        pipeline_with_galaxies.get_sfzh(
+            log10ages=test_grid.log10ages,
+            metallicities=test_grid.metallicities,
+        )
+        pipeline_with_galaxies.get_sfh(log10ages=test_grid.log10ages)
+        output = tmp_path / "sfzh.hdf5"
+        pipeline_with_galaxies.write(output)
+
+        nage, nmet = len(test_grid.log10ages), len(test_grid.metallicities)
+        with h5py.File(output) as hdf:
+            sfzh = hdf["Galaxies/Stars/SFZH"]
+            sfh = hdf["Galaxies/Stars/SFH"]
+            assert sfzh.shape == (3, nage, nmet)
+            assert sfh.shape == (3, nage)
+            assert sfzh.attrs["Units"] == "Msun"
+            assert sfh.attrs["Units"] == "Msun"
+            assert np.all(np.sum(sfzh[...], axis=(1, 2)) > 0)
+            axes = hdf["Galaxies/Stars/SFZHAxes"]
+            np.testing.assert_allclose(
+                axes["Log10Ages"][...], test_grid.log10ages
+            )
+            np.testing.assert_allclose(
+                axes["Metallicities"][...], test_grid.metallicities
+            )
+            np.testing.assert_allclose(
+                hdf["Galaxies/Stars/SFHAxes/Log10Ages"][...],
+                test_grid.log10ages,
+            )
+
+    def test_write_sfzh_and_sfh_parametric(
+        self,
+        nebular_emission_model,
+        single_star_parametric,
+        test_grid,
+        tmp_path,
+    ):
+        """Parametric galaxies write the SFZH and SFH of their stars."""
+        from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+
+        galaxy = ParametricGalaxy(stars=single_star_parametric, redshift=1.0)
+        pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+        pipeline.add_galaxies([galaxy])
+        pipeline.get_sfzh(
+            log10ages=test_grid.log10ages,
+            metallicities=test_grid.metallicities,
+        )
+        pipeline.get_sfh(log10ages=test_grid.log10ages)
+        output = tmp_path / "sfzh.hdf5"
+        pipeline.write(output)
+
+        with h5py.File(output) as hdf:
+            np.testing.assert_allclose(
+                hdf["Galaxies/Stars/SFZH"][0], single_star_parametric.sfzh
+            )
+            np.testing.assert_allclose(
+                hdf["Galaxies/Stars/SFH"][0], single_star_parametric.sfh
+            )
+
+    def test_write_lines_and_observed_lines(
+        self, test_grid, pipeline_with_galaxies, tmp_path
+    ):
+        """Luminosity and flux lines can be written together."""
+        pipeline_with_galaxies.get_lines(line_ids=test_grid.available_lines)
+        pipeline_with_galaxies.get_observed_lines(
+            cosmo=cosmo, line_ids=test_grid.available_lines
+        )
+        output = tmp_path / "lines.hdf5"
+        pipeline_with_galaxies.write(output)
+
+        # Each gets its own continuum, in its own units
+        with h5py.File(output) as hdf:
+            lines = hdf["Galaxies/Stars/Lines"]
+            assert "Luminosity" in lines
+            assert "Flux" in lines
+            lum_cont = lines["Continuum"]
+            flux_cont = lines["ContinuumFlux"]
+            for spec_type in lum_cont:
+                assert (
+                    lum_cont[spec_type].attrs["Units"]
+                    != flux_cont[spec_type].attrs["Units"]
+                )
 
 
 class TestPipelineNewFeatures:
@@ -3039,3 +3283,391 @@ class TestGoldenPipelineRegression:
             golden_reference["bolometric_luminosity"],
             rtol=1e-5,
         )
+
+
+def test_combine_rank_files_virtual_with_empty_rank(tmp_path):
+    """Ranks without rows (or datasets) must not break the virtual file."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Rank 0 has no galaxies: an empty placeholder for one dataset and
+    # nothing at all for the other. Rank 1 holds all the rows. Neither rank
+    # has rows for the final dataset.
+    obslams = np.arange(10.0).reshape(2, 5)
+    fluxes = np.arange(6.0).reshape(2, 3)
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.attrs["synthesizer_version"] = "test"
+        dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", shape=(0,))
+        dset.attrs["Units"] = "dimensionless"
+        hdf.create_dataset("Galaxies/Empty", shape=(0, 5))
+    with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
+        dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", data=fluxes)
+        dset.attrs["Units"] = "erg/s/cm**2"
+        dset = hdf.create_dataset(
+            "Galaxies/Lines/ObservedWavelengths", data=obslams
+        )
+        dset.attrs["Units"] = "Å"
+        hdf.create_dataset("Galaxies/Empty", shape=(0, 5))
+
+    # Build the writer as rank 0 of 2 would have it after writing
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 2, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 0
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 0], [0, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    io.combine_rank_files_virtual()
+
+    # Both datasets should come entirely from rank 1
+    with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lines/ObservedWavelengths"][...], obslams
+        )
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lines/Flux/nebular"][...], fluxes
+        )
+        assert hdf["Galaxies/Lines/Flux/nebular"].attrs["Units"] == (
+            "erg/s/cm**2"
+        )
+
+        # A dataset without rows on any rank isn't written
+        assert "Galaxies/Empty" not in hdf
+
+
+def test_combine_rank_files_virtual_units_mismatch(tmp_path):
+    """Ranks with different units for a dataset must raise an error."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Both ranks hold a row but with different units
+    for rank, units in enumerate(("erg/s", "W")):
+        with h5py.File(tmp_path / f"out_{rank}.hdf5", "w") as hdf:
+            dset = hdf.create_dataset("Galaxies/Lum", data=np.ones((1, 3)))
+            dset.attrs["Units"] = units
+
+    # Build the writer as rank 0 of 2 would have it after writing
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 2, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 1
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 1], [1, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    with pytest.raises(ValueError, match="units"):
+        io.combine_rank_files_virtual()
+
+
+def _rank0_writer(tmp_path, starts, ends):
+    """Return a PipelineIO set up as rank 0 of 2 would be after writing."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 2, 0, True
+    io.num_galaxies, io.start, io.end = ends[-1], starts[0], ends[0]
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([starts, ends])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+    return io
+
+
+@pytest.mark.parametrize("virtual", [False, True])
+def test_failed_combine_keeps_existing_output(tmp_path, virtual):
+    """A failed combine must not leave misleading output behind.
+
+    An existing copied file is kept untouched. An existing virtual file is
+    removed, since it points at the rank files this run has overwritten.
+    """
+    # An existing, valid combined file from an earlier run
+    with h5py.File(tmp_path / "out.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Lum", data=np.full((2, 3), 7.0))
+
+    # Rank files which can't be combined (different units for the virtual
+    # file, rows which don't fit the dataset rank 0 created for the copy)
+    for rank, (units, ncols) in enumerate((("erg/s", 1), ("W", 3))):
+        with h5py.File(tmp_path / f"out_{rank}.hdf5", "w") as hdf:
+            dset = hdf.create_dataset(
+                "Galaxies/Lum",
+                data=np.ones((1, 3 if virtual else ncols)),
+            )
+            dset.attrs["Units"] = units if virtual else "erg/s"
+
+    # Combining should fail
+    io = _rank0_writer(tmp_path, [0, 1], [1, 2])
+    with pytest.raises((ValueError, TypeError)):
+        if virtual:
+            io.combine_rank_files_virtual()
+        else:
+            io.combine_rank_files()
+
+    # The earlier copied output survives (an earlier virtual file is gone)
+    # and no temporary file is left behind
+    if virtual:
+        assert not (tmp_path / "out.hdf5").exists()
+    else:
+        with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+            np.testing.assert_array_equal(hdf["Galaxies/Lum"][...], 7.0)
+    assert not (tmp_path / "out.hdf5.tmp").exists()
+
+
+def test_combine_replaces_existing_output(tmp_path):
+    """A successful combine replaces an existing combined file."""
+    # An existing combined file from an earlier run
+    with h5py.File(tmp_path / "out.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Lum", data=np.full((2, 3), 7.0))
+
+    # Rank files which combine cleanly
+    for rank in range(2):
+        with h5py.File(tmp_path / f"out_{rank}.hdf5", "w") as hdf:
+            hdf.create_dataset("Galaxies/Lum", data=np.full((1, 3), rank))
+
+    _rank0_writer(tmp_path, [0, 1], [1, 2]).combine_rank_files()
+
+    # The new rows replace the old file
+    with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lum"][...], [[0, 0, 0], [1, 1, 1]]
+        )
+    assert not (tmp_path / "out.hdf5.tmp").exists()
+
+
+def test_parametric_sfh_rebinned_onto_requested_ages(
+    nebular_emission_model, single_star_parametric
+):
+    """A parametric SFH is rebinned onto other ages, like the SFZH."""
+    from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+
+    # Request ages offset from the stars' own
+    ages = single_star_parametric.log10ages[1:-1] + 0.05
+    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    pipeline.get_sfh(log10ages=ages)
+    sfh = pipeline._get_sfh(ParametricGalaxy(stars=single_star_parametric))
+
+    # It's on the requested ages, conserves the mass and is counted
+    assert sfh.shape == ages.shape
+    np.testing.assert_allclose(
+        np.sum(sfh), np.sum(single_star_parametric.sfzh), rtol=1e-6
+    )
+    assert pipeline._op_counts["SFH"] == 1
+
+
+def test_reused_galaxy_sfzh_and_sfh_follow_new_axes(
+    nebular_emission_model, single_star_parametric, test_grid
+):
+    """A galaxy reused from an earlier run is recomputed on the new axes."""
+    from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+
+    galaxy = ParametricGalaxy(stars=single_star_parametric)
+
+    # A first run on the stars' own axes caches a grid on the galaxy
+    first = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    first.get_sfzh(
+        log10ages=test_grid.log10ages, metallicities=test_grid.metallicities
+    )
+    first.get_sfh(log10ages=test_grid.log10ages)
+    first._get_sfzh(galaxy)
+    first._get_sfh(galaxy)
+
+    # A second run on other axes must not reuse those grids
+    ages = test_grid.log10ages[1:-1] + 0.05
+    metals = test_grid.metallicities[1:-1]
+    second = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    second.get_sfzh(log10ages=ages, metallicities=metals)
+    second.get_sfh(log10ages=ages)
+    assert second._get_sfzh(galaxy).shape == (len(ages), len(metals))
+    assert second._get_sfh(galaxy).shape == ages.shape
+
+
+def test_mass_grids_are_converted_to_msun(nebular_emission_model):
+    """Grids carrying mass units are converted, not just relabelled."""
+    from unyt import Msun
+
+    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+
+    # A grid in units of 1e6 Msun is converted
+    grid = pipeline._mass_grid_in_msun(
+        unyt_array([1.0, 2.0], 1e6 * Msun), "sfh"
+    )
+    assert str(grid.units) == "Msun"
+    np.testing.assert_allclose(grid.value, [1e6, 2e6])
+
+    # Plain arrays are already in Msun
+    np.testing.assert_allclose(
+        pipeline._mass_grid_in_msun(np.array([1.0, 2.0]), "sfh").value,
+        [1.0, 2.0],
+    )
+
+
+def test_parametric_sfzh_and_sfh_out_dtype(
+    nebular_emission_model, single_star_parametric, test_grid, tmp_path
+):
+    """The written SFZH and SFH honour the requested out_dtype."""
+    from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
+
+    # Write both, asking for single precision
+    pipeline = Pipeline(emission_model=nebular_emission_model, verbose=0)
+    pipeline.add_galaxies([ParametricGalaxy(stars=single_star_parametric)])
+    pipeline.get_sfzh(
+        log10ages=test_grid.log10ages,
+        metallicities=test_grid.metallicities,
+        out_dtype=np.float32,
+    )
+    pipeline.get_sfh(log10ages=test_grid.log10ages, out_dtype=np.float32)
+    output = tmp_path / "sfzh.hdf5"
+    pipeline.write(output)
+
+    # The SFH matches the SFZH and both are single precision
+    with h5py.File(output) as hdf:
+        sfzh = hdf["Galaxies/Stars/SFZH"][0]
+        sfh = hdf["Galaxies/Stars/SFH"][0]
+    np.testing.assert_allclose(sfh, np.sum(sfzh, axis=1), rtol=1e-6)
+    assert sfzh.dtype == sfh.dtype == np.float32
+
+
+def test_combine_rank_files_virtual_shared_axes_with_empty_rank(tmp_path):
+    """Ranks without rows (or datasets) must not break the virtual file."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Rank 0 has no galaxies: an empty placeholder for one dataset and
+    # nothing at all for the other. Rank 1 holds all the rows.
+    obslams = np.arange(10.0).reshape(2, 5)
+    fluxes = np.arange(6.0).reshape(2, 3)
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.attrs["synthesizer_version"] = "test"
+        dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", shape=(0,))
+        dset.attrs["Units"] = "dimensionless"
+        # These axes have three/four bins, not two galaxy rows. Rank 0
+        # writes them even though it has no galaxies of its own.
+        for name, values in (
+            ("SFZHAxes/Log10Ages", [6.0, 7.0, 8.0]),
+            ("SFZHAxes/Metallicities", [0.01, 0.02, 0.03, 0.04]),
+            ("SFHAxes/Log10Ages", [6.0, 7.0, 8.0]),
+        ):
+            dset = hdf.create_dataset(f"Galaxies/Stars/{name}", data=values)
+            dset.attrs["Units"] = "dimensionless"
+    with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
+        dset = hdf.create_dataset("Galaxies/Lines/Flux/nebular", data=fluxes)
+        dset.attrs["Units"] = "erg/s/cm**2"
+        dset = hdf.create_dataset(
+            "Galaxies/Lines/ObservedWavelengths", data=obslams
+        )
+        dset.attrs["Units"] = "Å"
+
+    # Build the writer as rank 0 of 2 would have it after writing
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 2, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 0
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 0], [0, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    io.combine_rank_files_virtual()
+
+    with h5py.File(tmp_path / "out.hdf5", "r") as hdf:
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lines/ObservedWavelengths"][...], obslams
+        )
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Lines/Flux/nebular"][...], fluxes
+        )
+        assert hdf["Galaxies/Lines/Flux/nebular"].attrs["Units"] == (
+            "erg/s/cm**2"
+        )
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Stars/SFZHAxes/Metallicities"],
+            [0.01, 0.02, 0.03, 0.04],
+        )
+        for path in ("SFZHAxes/Log10Ages", "SFHAxes/Log10Ages"):
+            dset = hdf[f"Galaxies/Stars/{path}"]
+            np.testing.assert_array_equal(dset, [6.0, 7.0, 8.0])
+            assert dset.attrs["Units"] == "dimensionless"
+            assert not dset.is_virtual
+
+
+def test_combine_rank_files_with_empty_rank(tmp_path):
+    """Physical combination needs no placeholders for missing datasets."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Rank 0 has no galaxies; rank 1 has the only dataset. Neither file
+    # needs an empty placeholder for that missing dataset.
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.create_group("Galaxies")
+        for name, values in (
+            ("SFZHAxes/Log10Ages", [6.0, 7.0, 8.0]),
+            ("SFZHAxes/Metallicities", [0.01, 0.02, 0.03, 0.04]),
+            ("SFHAxes/Log10Ages", [6.0, 7.0, 8.0]),
+        ):
+            dset = hdf.create_dataset(f"Galaxies/Stars/{name}", data=values)
+            dset.attrs["Units"] = "dimensionless"
+    with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Mass", data=[1.0, 2.0])
+
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.is_root, io.num_galaxies = 2, True, 2
+    io.start, io.end = 0, 0
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 0], [0, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    io.combine_rank_files()
+
+    with h5py.File(tmp_path / "out.hdf5") as hdf:
+        np.testing.assert_array_equal(hdf["Galaxies/Mass"], [1.0, 2.0])
+        np.testing.assert_array_equal(
+            hdf["Galaxies/Stars/SFZHAxes/Metallicities"],
+            [0.01, 0.02, 0.03, 0.04],
+        )
+        for path in ("SFZHAxes/Log10Ages", "SFHAxes/Log10Ages"):
+            dset = hdf[f"Galaxies/Stars/{path}"]
+            np.testing.assert_array_equal(dset, [6.0, 7.0, 8.0])
+            assert dset.attrs["Units"] == "dimensionless"
+
+
+def test_combine_rank_files_with_empty_placeholder(tmp_path):
+    """A zero-row placeholder on an empty rank doesn't set the shape."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    # Rank 0 has no galaxies so only holds a placeholder
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Product", shape=(0,))
+    with h5py.File(tmp_path / "out_1.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Product", data=np.ones((2, 3)))
+
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.is_root, io.num_galaxies = 2, True, 2
+    io.start, io.end = 0, 0
+    io.verbose, io._start_time = 0, time.perf_counter()
+    gathered = iter([[0, 0], [0, 2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+
+    io.combine_rank_files()
+
+    with h5py.File(tmp_path / "out.hdf5") as hdf:
+        np.testing.assert_array_equal(hdf["Galaxies/Product"], np.ones((2, 3)))
+
+
+def test_combine_rejects_sparse_rows(tmp_path):
+    """Sparse rank data must not silently shift into other galaxy rows."""
+    from synthesizer.pipeline.pipeline_io import PipelineIO
+
+    with h5py.File(tmp_path / "out_0.hdf5", "w") as hdf:
+        hdf.create_dataset("Galaxies/Product", data=[1.0])
+    io = PipelineIO.__new__(PipelineIO)
+    io.filepath = str(tmp_path / "out_0.hdf5")
+    io.size, io.rank, io.is_root = 1, 0, True
+    io.num_galaxies, io.start, io.end = 2, 0, 2
+    io.verbose, io._start_time = 0, time.perf_counter()
+
+    # Both the physical and virtual combinations must refuse
+    gathered = iter([[0], [2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+    with pytest.raises(ValueError, match="rows for 2 galaxies"):
+        io.combine_rank_files()
+    gathered = iter([[0], [2]])
+    io.comm = SimpleNamespace(gather=lambda value, root=0: next(gathered))
+    with pytest.raises(ValueError, match="rows for 2 galaxies"):
+        io.combine_rank_files_virtual()

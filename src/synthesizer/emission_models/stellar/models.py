@@ -1107,7 +1107,7 @@ class TotalEmissionNoEscapedNoDust:
         cls,
         grid,
         dust_curve,
-        label="attenuated",
+        label=None,
         fesc_ly_alpha="fesc_ly_alpha",
         **kwargs,
     ):
@@ -1116,7 +1116,8 @@ class TotalEmissionNoEscapedNoDust:
         Args:
             grid (synthesizer.grid.Grid): The grid object to extract from.
             dust_curve (AttenuationLaw): The dust curve to use.
-            label (str): The label for this emission model.
+            label (str): The label for this emission model. If `None` this
+                will be set to "attenuated".
             fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
             **kwargs: Additional keyword arguments.
         """
@@ -1158,6 +1159,7 @@ class TotalEmissionNoEscapedNoDust:
             dust_curve=dust_curve,
             apply_to=reprocessed,
             emitter="stellar",
+            label="attenuated" if label is None else label,
             **kwargs,
         )
         return attenuated
@@ -1180,7 +1182,7 @@ class TotalEmissionWithEscapedNoDust:
         dust_curve,
         fesc="fesc",
         fesc_ly_alpha="fesc_ly_alpha",
-        label="total",
+        label=None,
         **kwargs,
     ):
         """Initialise the TotalEmissionWithEscapeNoDust object.
@@ -1190,7 +1192,8 @@ class TotalEmissionWithEscapedNoDust:
             dust_curve (AttenuationLaw): The dust curve to use.
             fesc (float): The escape fraction of the emission.
             fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
-            label (str): The label for this emission model.
+            label (str): The label for this emission model. If `None` this
+                will be set to "emergent".
             **kwargs: Additional keyword arguments.
         """
         # Set up models we need to link
@@ -1240,6 +1243,7 @@ class TotalEmissionWithEscapedNoDust:
             grid=grid,
             attenuated=attenuated,
             escaped=escaped,
+            label="emergent" if label is None else label,
             **kwargs,
         )
         return emergent
@@ -1263,7 +1267,7 @@ class TotalEmission:
         dust_emission_model=None,
         fesc="fesc",
         fesc_ly_alpha="fesc_ly_alpha",
-        label="total",
+        label=None,
         velocity_dispersion=None,
         **kwargs,
     ):
@@ -1276,7 +1280,9 @@ class TotalEmission:
                 emission model to use.
             fesc (float): The escape fraction of the emission.
             fesc_ly_alpha (float): The escape fraction of Lyman-alpha.
-            label (str): The label for this emission model.
+            label (str): The label for this emission model. If `None` this
+                will be set to "total", or to the root of the simpler model
+                ("attenuated" or "emergent") without dust emission.
             velocity_dispersion (unyt.unyt_quantity): Optional scalar velocity
                 dispersion applied to the final emission.
             **kwargs: Additional keyword arguments.
@@ -1303,7 +1309,7 @@ class TotalEmission:
                     dust_curve=dust_curve,
                     dust_emission_model=dust_emission_model,
                     fesc_ly_alpha=fesc_ly_alpha,
-                    label=label,
+                    label="total" if label is None else label,
                     **kwargs,
                 )
                 return _apply_broadening_to_model(
@@ -1335,7 +1341,7 @@ class TotalEmission:
                     dust_emission_model=dust_emission_model,
                     fesc=fesc,
                     fesc_ly_alpha=fesc_ly_alpha,
-                    label=label,
+                    label="total" if label is None else label,
                     **kwargs,
                 )
                 return _apply_broadening_to_model(

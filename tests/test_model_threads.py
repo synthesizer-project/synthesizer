@@ -6,11 +6,7 @@ execution path is exercised on every build: the results must not depend on
 whether the threads actually run in parallel.
 """
 
-import importlib.util
-import os
-import subprocess
 import sys
-import sysconfig
 import threading
 import time
 
@@ -18,34 +14,28 @@ import numpy as np
 import pytest
 from unyt import K, Msun
 
-from synthesizer import exceptions
 from synthesizer.emission_models import (
     DustEmission,
     EmissionModel,
     IncidentEmission,
     PacmanEmission,
 )
-from synthesizer.emission_models import model_queue as model_queue_module
 from synthesizer.emission_models.generators.dust import (
     Blackbody,
     Casey12,
     DraineLi07,
 )
-from synthesizer.emission_models.model_queue import (
-    ModelQueue,
-    resolve_model_threads,
-)
+from synthesizer.emission_models.model_queue import ModelQueue
 from synthesizer.emission_models.parameters import ParameterList
 from synthesizer.grid import Grid
 from synthesizer.pipeline import Pipeline
-
-FREE_THREADED_BUILD = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+from synthesizer.utils import free_threading
 
 
 @pytest.fixture
 def no_gil(monkeypatch):
     """Pretend the GIL is disabled so model threads are used."""
-    monkeypatch.setattr(model_queue_module, "gil_enabled", lambda: False)
+    monkeypatch.setattr(free_threading, "gil_enabled", lambda: False)
 
 
 @pytest.fixture
@@ -89,60 +79,6 @@ def _assert_same(serial, threaded):
             threaded[label],
             err_msg=f"Threaded output differs for {label}",
         )
-
-
-class TestResolveModelThreads:
-    """Test resolving the requested number of model threads."""
-
-    def test_serial_is_unchanged(self):
-        """Test a single thread is always allowed."""
-        assert resolve_model_threads(1) == 1
-
-    @pytest.mark.parametrize("value", [0, -2, 1.5, "4", True, None])
-    def test_invalid_values_raise(self, value):
-        """Test anything other than a positive integer is rejected."""
-        with pytest.raises(exceptions.InconsistentArguments):
-            resolve_model_threads(value)
-
-    def test_numpy_integers_accepted(self, no_gil):
-        """Test numpy integers are accepted and converted to int."""
-        nthreads = resolve_model_threads(np.int64(2))
-        assert nthreads == 2
-        assert type(nthreads) is int
-
-    def test_gil_falls_back_to_serial(self, monkeypatch):
-        """Test model threads are disabled with a warning under the GIL."""
-        monkeypatch.setattr(model_queue_module, "gil_enabled", lambda: True)
-        with pytest.warns(RuntimeWarning, match="GIL is enabled"):
-            assert resolve_model_threads(4) == 1
-
-    def test_no_gil_uses_threads(self, no_gil):
-        """Test the requested threads are used without the GIL."""
-        assert resolve_model_threads(2) == 2
-
-    def test_oversubscription_warns(self, no_gil, monkeypatch):
-        """Test a warning when model x OpenMP threads exceed the cores."""
-        monkeypatch.setattr(
-            model_queue_module.os,
-            "process_cpu_count",
-            lambda: 4,
-            raising=False,
-        )
-        monkeypatch.setattr(model_queue_module.os, "cpu_count", lambda: 4)
-        with pytest.warns(RuntimeWarning, match="only 4 cores"):
-            assert resolve_model_threads(4, nthreads=2) == 4
-
-    def test_all_cores_nthreads_warns(self, no_gil, monkeypatch):
-        """Test nthreads=-1 counts as one OpenMP thread per core."""
-        monkeypatch.setattr(
-            model_queue_module.os,
-            "process_cpu_count",
-            lambda: 4,
-            raising=False,
-        )
-        monkeypatch.setattr(model_queue_module.os, "cpu_count", lambda: 4)
-        with pytest.warns(RuntimeWarning, match="only 4 cores"):
-            assert resolve_model_threads(2, nthreads=-1) == 2
 
 
 class TestExecute:
@@ -201,6 +137,39 @@ class TestExecute:
 
         with pytest.raises(ValueError, match=bad_label):
             queue.execute(process, {}, {}, nr_model_threads=nr_threads)
+
+    def test_done_error_on_worker_does_not_hang(self, no_gil, varied_model):
+        """Test an error marking a model done on a worker thread is raised."""
+        queue = ModelQueue(varied_model)
+        done = queue.done
+        result = {}
+
+        def run():
+            try:
+                queue.execute(process, {}, {}, nr_model_threads=4)
+            except RuntimeError as error:
+                result["error"] = error
+
+        # Execute on a thread of our own so a hang fails this test rather
+        # than blocking the suite. That thread is the calling worker.
+        caller = threading.Thread(target=run, daemon=True)
+
+        def failing_done(model, emissions, particle_emissions):
+            if threading.current_thread() is not caller:
+                raise RuntimeError("done failed")
+            done(model, emissions, particle_emissions)
+
+        def process(model):
+            # Slow the calling worker so the other workers take models too
+            if threading.current_thread() is caller:
+                time.sleep(0.01)
+
+        queue.done = failing_done
+        caller.start()
+        caller.join(timeout=30)
+
+        assert not caller.is_alive(), "execute hung"
+        assert "done failed" in str(result.get("error"))
 
 
 class TestThreadedParity:
@@ -326,7 +295,7 @@ class TestThreadedParity:
 def casey12_variants(test_grid):
     """Return temperature variants which all share one Casey12 generator."""
     return DustEmission(
-        Casey12(temperature=20 * K),
+        Casey12(temperature=20 * K, emissivity=2.0, alpha=2.0),
         emitter="stellar",
         grid=test_grid,
         temperature=ParameterList(
@@ -404,80 +373,7 @@ class TestPipeline:
 
     def test_pipeline_falls_back_under_gil(self, monkeypatch, varied_model):
         """Test the Pipeline falls back to serial execution under the GIL."""
-        monkeypatch.setattr(model_queue_module, "gil_enabled", lambda: True)
+        monkeypatch.setattr(free_threading, "gil_enabled", lambda: True)
         with pytest.warns(RuntimeWarning, match="GIL is enabled"):
             pipeline = Pipeline(varied_model, nr_model_threads=2, verbose=0)
         assert pipeline.nr_model_threads == 1
-
-
-# Load one extension module straight from its file, so the synthesizer
-# package (and the third party modules it imports) is not imported first, and
-# report whether the GIL ended up enabled.
-_LOAD_EXTENSION = """
-import importlib.util, sys
-spec = importlib.util.spec_from_file_location(sys.argv[1], sys.argv[2])
-spec.loader.exec_module(importlib.util.module_from_spec(spec))
-print(sys._is_gil_enabled())
-"""
-
-EXTENSION_MODULES = [
-    "synthesizer.extensions.atomic_timing_check",
-    "synthesizer.extensions.column_density",
-    "synthesizer.extensions.doppler_particle_spectra",
-    "synthesizer.extensions.grid_interpolation",
-    "synthesizer.extensions.integrated_spectra",
-    "synthesizer.extensions.integration",
-    "synthesizer.extensions.kernel",
-    "synthesizer.extensions.observed_spectra",
-    "synthesizer.extensions.openmp_check",
-    "synthesizer.extensions.particle_spectra",
-    "synthesizer.extensions.photometry",
-    "synthesizer.extensions.reductions",
-    "synthesizer.extensions.sfzh",
-    "synthesizer.extensions.spectra_operations",
-    "synthesizer.extensions.timers",
-    "synthesizer.imaging.extensions.circular_aperture",
-    "synthesizer.imaging.extensions.image",
-]
-
-
-@pytest.mark.skipif(
-    not FREE_THREADED_BUILD,
-    reason="Requires a free-threaded build of Python",
-)
-@pytest.mark.parametrize("module", EXTENSION_MODULES)
-def test_extension_does_not_enable_gil(module):
-    """Test an extension module doesn't re-enable the GIL when imported.
-
-    Each module is loaded in a fresh interpreter with PYTHON_GIL unset, since
-    setting it (as CI does to run the threaded tests) stops Python ever
-    re-enabling the GIL, which would make this test pass regardless.
-    """
-    path = importlib.util.find_spec(module).origin
-    env = {k: v for k, v in os.environ.items() if k != "PYTHON_GIL"}
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-W",
-            "always::RuntimeWarning",
-            "-c",
-            _LOAD_EXTENSION,
-            module,
-            path,
-        ],
-        capture_output=True,
-        text=True,
-        env=env,
-        check=True,
-    )
-
-    # Python names the module which caused the GIL to be enabled
-    enabled_by = [line for line in result.stderr.splitlines() if "GIL" in line]
-    assert not any("'synthesizer." in line for line in enabled_by), enabled_by
-
-    # NOTE: with ATOMIC_TIMING an extension imports the synthesizer package
-    # (for the timer capsules) during its own initialisation, so a third
-    # party module can enable the GIL first. That is only inconclusive for
-    # this module, so it is only a failure if nothing else enabled it.
-    if not enabled_by:
-        assert result.stdout.strip() == "False"

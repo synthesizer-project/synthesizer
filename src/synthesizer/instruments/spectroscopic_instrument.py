@@ -20,7 +20,7 @@ from synthesizer.instruments.utils import (
     read_instrument_attribute,
     write_instrument_attribute,
 )
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, deepcopy_with_shared_units
 from synthesizer.utils.operation_timers import timed
 
 
@@ -53,9 +53,16 @@ class SpectroscopicInstrument(InstrumentBase):
             serialised to HDF5 and is silently dropped on save (it is not
             restored on load either, since there is nothing to restore it
             from).
+        lsfs (array, optional): Normalised line spread function kernels
+            with shape (nwave, nkernel). Each row corresponds to a
+            wavelength in lam. Kernels must have an odd number of bins
+            and sum to unity.
     """
 
     lam = Quantity("wavelength")
+
+    # Share units rather than deep copying unyt's whole unit registry
+    __deepcopy__ = deepcopy_with_shared_units
 
     @accepts(lam=angstrom)
     @timed("SpectroscopicInstrument.__init__")
@@ -68,6 +75,7 @@ class SpectroscopicInstrument(InstrumentBase):
         snrs=None,
         noise_maps=None,
         resolving_power=None,
+        lsfs=None,
     ):
         """Initialise a spectroscopic instrument.
 
@@ -92,6 +100,9 @@ class SpectroscopicInstrument(InstrumentBase):
                 (R = lambda / delta_lambda) of the instrument. May be a
                 constant or a function of wavelength. Only a constant value is
                 persisted when the instrument is saved to HDF5.
+            lsfs (array, optional): Normalised line spread function
+                kernels with shape (nwave, nkernel), sampled on the
+                instrument wavelength grid.
         """
         super().__init__(label)
         self.lam = lam
@@ -100,6 +111,7 @@ class SpectroscopicInstrument(InstrumentBase):
         self.snrs = snrs
         self.noise_maps = noise_maps
         self.resolving_power = resolving_power
+        self.lsfs = None if lsfs is None else np.asarray(lsfs).copy()
         SpectroscopicInstrument._validate(self)
 
     @timed("SpectroscopicInstrument._validate")
@@ -146,6 +158,44 @@ class SpectroscopicInstrument(InstrumentBase):
                     "resolving_power must be a positive number or callable."
                 )
 
+        # Validate the LSF kernels
+        if self.lsfs is not None:
+            if self.lsfs.ndim != 2:
+                raise exceptions.InconsistentArguments(
+                    "LSFs must be a 2D array with shape (nwave, nkernel)."
+                )
+
+            if self.lsfs.shape[0] != len(self.lam):
+                raise exceptions.InconsistentArguments(
+                    "The number of LSFs must match the instrument "
+                    "wavelength grid."
+                )
+
+            if self.lsfs.shape[1] < 1 or self.lsfs.shape[1] % 2 == 0:
+                raise exceptions.InconsistentArguments(
+                    "LSF kernels must have an odd, non-zero length."
+                )
+
+            if not np.issubdtype(self.lsfs.dtype, np.floating):
+                raise exceptions.InconsistentArguments(
+                    "LSFs must have a floating-point dtype."
+                )
+
+            if not np.all(np.isfinite(self.lsfs)):
+                raise exceptions.InconsistentArguments(
+                    "LSFs must contain only finite values."
+                )
+
+            if np.any(self.lsfs < 0):
+                raise exceptions.InconsistentArguments(
+                    "LSF kernel weights must be non-negative."
+                )
+
+            if not np.allclose(self.lsfs.sum(axis=1), 1.0, rtol=0, atol=1e-6):
+                raise exceptions.InconsistentArguments(
+                    "Each LSF kernel must be normalised to unity."
+                )
+
     @property
     def instrument_type(self):
         """Return the serialised type tag for this instrument."""
@@ -175,6 +225,7 @@ class SpectroscopicInstrument(InstrumentBase):
             _hashable_state(self.snrs),
             _hashable_state(self.noise_maps),
             _hashable_state(self.resolving_power),
+            _hashable_state(self.lsfs),
         )
 
     @timed("SpectroscopicInstrument.apply_lam_array")
@@ -248,9 +299,13 @@ class SpectroscopicInstrument(InstrumentBase):
             group.attrs["resolving_power"] = float(self.resolving_power)
 
         ds = group.create_dataset(
-            "Wavelength", data=self.lam.value, dtype=float
+            "Wavelength", data=self.lam.ndview, dtype=float
         )
         ds.attrs["units"] = str(self.lam.units)
+
+        if self.lsfs is not None:
+            ds = group.create_dataset("LSFs", data=self.lsfs)
+            ds.attrs["units"] = "dimensionless"
 
         write_instrument_attribute(group, "Depth", self.depth)
         write_instrument_attribute(
@@ -298,6 +353,11 @@ class SpectroscopicInstrument(InstrumentBase):
 
         noise_maps = read_instrument_attribute(group, "NoiseMaps")
 
+        if "LSFs" in group:
+            lsfs = group["LSFs"][...]
+        else:
+            lsfs = None
+
         payload = {
             "label": group.attrs["label"],
             "lam": lam,
@@ -306,6 +366,7 @@ class SpectroscopicInstrument(InstrumentBase):
             "snrs": snrs,
             "noise_maps": noise_maps,
             "resolving_power": group.attrs.get("resolving_power"),
+            "lsfs": lsfs,
         }
         payload.update(kwargs)
 
@@ -317,4 +378,5 @@ class SpectroscopicInstrument(InstrumentBase):
             snrs=payload["snrs"],
             noise_maps=payload["noise_maps"],
             resolving_power=payload["resolving_power"],
+            lsfs=payload["lsfs"],
         )

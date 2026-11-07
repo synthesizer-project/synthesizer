@@ -69,7 +69,7 @@ You can check whether the GIL is enabled at runtime with:
 
 .. code-block:: python
 
-    from synthesizer.emission_models.model_queue import gil_enabled
+    from synthesizer.utils.free_threading import gil_enabled
     gil_enabled()
 
 Each model thread still uses ``nthreads`` OpenMP threads, so ``nr_model_threads * nthreads`` should not exceed the number of cores available (a warning is issued if it does). As a rule of thumb, favour ``nr_model_threads`` for large trees of cheap models (e.g. integrated spectra with many variations) and ``nthreads`` for small trees applied to many particles.

@@ -227,6 +227,13 @@ class BlackHoles(Particles, BlackholesComponent):
         ]:
             setattr(self, plural, getattr(self, singular))
 
+        # blue_bump_temperature is an optional kwarg, so link the singular
+        # and plural versions to whichever was passed (or calculated)
+        if getattr(self, "blue_bump_temperatures", None) is not None:
+            self.blue_bump_temperature = self.blue_bump_temperatures
+        elif getattr(self, "blue_bump_temperature", None) is not None:
+            self.blue_bump_temperatures = self.blue_bump_temperature
+
         # Set the smoothing lengths
         self.smoothing_lengths = smoothing_lengths
 
@@ -236,7 +243,8 @@ class BlackHoles(Particles, BlackholesComponent):
             np.random.uniform(low=0.0, high=np.pi / 2.0, size=self.nbh) * rad
         )
 
-        self.cosine_inclination = np.cos(self.inclination.to("rad").value)
+        self.inclination.convert_to_units("rad")
+        self.cosine_inclination = np.cos(self.inclination.ndview)
 
     def calculate_ionising_luminosity(self):
         """Calculates the ionising luminosity of the blackhole(s).

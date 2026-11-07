@@ -664,7 +664,7 @@ class Image(ImagingBase):
         This can either be for a point source or an aperture if aperture_radius
         is passed.
 
-        This assumes the SNR is defined as SNR = S / sqrt(noise_std)
+        This assumes the SNR is defined as SNR = S / noise_std
 
         Args:
             snr (float):
@@ -722,7 +722,7 @@ class Image(ImagingBase):
             app_area_pix = app_area_coordinates / self._resolution**2
 
             # Get the noise per pixel
-            noise_std = app_noise / app_area_pix
+            noise_std = app_noise / np.sqrt(app_area_pix)
 
         # Calculate the noise from the depth and snr for a point source.
         else:

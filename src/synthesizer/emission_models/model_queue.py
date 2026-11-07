@@ -26,117 +26,19 @@ the queue can also execute them concurrently on a pool of threads (see
 the queue state is only touched while holding a single lock, so there is no
 dispatching thread for the workers to wait on. Concurrent execution is only
 useful when the Python work done per model can run in parallel, which
-requires a free-threaded (no-GIL) build of Python; ``resolve_model_threads``
-falls back to serial execution otherwise.
+requires a free-threaded (no-GIL) build of Python; ``resolve_threads`` (see
+``synthesizer.utils.free_threading``) falls back to serial execution
+otherwise.
 """
 
-import os
-import sys
-import sysconfig
 import threading
 from collections import deque
 
 import numpy as np
 
 from synthesizer import exceptions
-from synthesizer.synth_warnings import warn
+from synthesizer.utils.free_threading import resolve_threads
 from synthesizer.utils.operation_timers import timed, timer
-
-
-def gil_enabled():
-    """Return whether the GIL is enabled in the running interpreter.
-
-    This is a runtime check rather than a check of how Python was built. A
-    free-threaded interpreter re-enables the GIL when it imports an extension
-    module that has not declared itself safe to run without it, or when the
-    ``PYTHON_GIL=1`` environment variable is set.
-
-    Returns:
-        bool:
-            ``True`` if the GIL is enabled, otherwise ``False``.
-    """
-    # Interpreters before 3.13 have no way to disable the GIL at all.
-    return getattr(sys, "_is_gil_enabled", lambda: True)()
-
-
-def resolve_model_threads(nr_model_threads, nthreads=1):
-    """Return the number of threads to execute emission models with.
-
-    Args:
-        nr_model_threads (int):
-            The requested number of threads to execute independent emission
-            models concurrently with.
-        nthreads (int):
-            The number of OpenMP threads each model will use, used to warn
-            about oversubscribing the available cores.
-
-    Returns:
-        int:
-            The number of model threads to use. This is 1 when the GIL is
-            enabled, since the Python work done per model cannot then run in
-            parallel.
-
-    Raises:
-        exceptions.InconsistentArguments:
-            If nr_model_threads is not a positive integer.
-    """
-    # Reject anything that isn't a positive integer (bools are ints, but
-    # passing True here is almost certainly a mistake).
-    if (
-        isinstance(nr_model_threads, bool)
-        or not isinstance(nr_model_threads, (int, np.integer))
-        or nr_model_threads < 1
-    ):
-        raise exceptions.InconsistentArguments(
-            "nr_model_threads must be a positive integer "
-            f"(got {nr_model_threads!r})."
-        )
-    nr_model_threads = int(nr_model_threads)
-
-    # Nothing to resolve for serial execution.
-    if nr_model_threads == 1:
-        return 1
-
-    # With the GIL the threads would contend for it rather than run in
-    # parallel, which is slower than running serially.
-    if gil_enabled():
-        # On a free-threaded build the GIL has been turned back on, either
-        # explicitly or by importing an extension module that hasn't declared
-        # it can run without it.
-        if sysconfig.get_config_var("Py_GIL_DISABLED"):
-            reason = (
-                "This is a free-threaded build of Python but the GIL has been "
-                "re-enabled, usually by importing an extension module that "
-                "has not declared it is safe without the GIL (at the time of "
-                "writing astropy.table, imported via astropy.cosmology, does "
-                "this). Run with PYTHON_GIL=0 (or -Xgil=0) to keep the GIL "
-                "disabled."
-            )
-        else:
-            reason = (
-                "This requires a free-threaded (no-GIL) build of Python, "
-                "e.g. python3.14t."
-            )
-        warn(
-            f"nr_model_threads={nr_model_threads} was requested but the GIL "
-            f"is enabled. {reason} Emission models will be executed serially."
-        )
-        return 1
-
-    # Warn if the model threads and the OpenMP threads they each spawn
-    # together exceed the cores available to this process.
-    # (nthreads=-1 means one OpenMP thread per core.)
-    ncores = getattr(os, "process_cpu_count", os.cpu_count)()
-    if ncores is not None:
-        omp_threads = ncores if nthreads == -1 else max(nthreads, 1)
-        if nr_model_threads * omp_threads > ncores:
-            warn(
-                f"nr_model_threads={nr_model_threads} with "
-                f"nthreads={nthreads} uses {nr_model_threads * omp_threads} "
-                f"threads but only {ncores} cores are available."
-            )
-
-    return nr_model_threads
 
 
 class ModelQueue:
@@ -415,7 +317,7 @@ class ModelQueue:
                 The particle emission dictionary being populated.
             nr_model_threads (int):
                 The requested number of threads to process models with. See
-                ``resolve_model_threads`` for when fewer are used.
+                ``resolve_threads`` for when fewer are used.
             nthreads (int):
                 The number of OpenMP threads each model uses, used to warn
                 about oversubscribing the available cores.
@@ -431,7 +333,11 @@ class ModelQueue:
             if model.label not in emissions:
                 process(model)
 
-        nr_threads = resolve_model_threads(nr_model_threads, nthreads)
+        nr_threads = resolve_threads(
+            nr_model_threads,
+            "nr_model_threads",
+            nthreads,
+        )
         if nr_threads == 1:
             # Process each model as soon as it becomes ready.
             while len(self) > 0:
@@ -529,9 +435,27 @@ class ModelQueue:
                     else:
                         ready.notify(len(self) - nready)
 
+        def stop(error):
+            """Record the first error and wake every worker so they exit."""
+            with ready:
+                if state["error"] is None:
+                    state["error"] = error
+                ready.notify_all()
+
+        def guarded_worker():
+            """Run a worker, recording anything escaping it outside process.
+
+            Without this an error in pop or done on a worker thread would
+            kill it silently, leaving the others waiting on it forever.
+            """
+            try:
+                worker()
+            except BaseException as error:
+                stop(error)
+
         # The calling thread is one of the workers
         threads = [
-            threading.Thread(target=worker, daemon=True)
+            threading.Thread(target=guarded_worker, daemon=True)
             for _ in range(nr_threads - 1)
         ]
         for thread in threads:
@@ -542,10 +466,7 @@ class ModelQueue:
             # Something escaped the calling thread's worker outside process
             # (e.g. a KeyboardInterrupt while waiting). Stop the others taking
             # new models.
-            with ready:
-                if state["error"] is None:
-                    state["error"] = error
-                ready.notify_all()
+            stop(error)
             raise
         finally:
             # Wait for the models still running
