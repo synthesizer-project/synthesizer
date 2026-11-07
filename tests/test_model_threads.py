@@ -27,7 +27,6 @@ from synthesizer.emission_models.generators.dust import (
 )
 from synthesizer.emission_models.model_queue import ModelQueue
 from synthesizer.emission_models.parameters import ParameterList
-from synthesizer.grid import Grid
 from synthesizer.pipeline import Pipeline
 from synthesizer.utils import free_threading
 
@@ -306,29 +305,31 @@ def casey12_variants(test_grid):
 
 
 @pytest.fixture
-def dl07_grid():
-    """Return the Draine & Li dust emission grid, if it is available."""
+def dl07_generator():
+    """Return a DraineLi07 generator, if its grid is available."""
     try:
-        return Grid("draine_li_dust_emission_grid_MW_3p1.hdf5")
-    except Exception:
-        pytest.skip("Draine & Li dust emission grid not available")
-
-
-@pytest.fixture
-def dl07_variants(test_grid, dl07_grid):
-    """Return qpah variants which all share one DraineLi07 generator."""
-    return DustEmission(
-        DraineLi07(
-            dl07_grid,
+        return DraineLi07(
+            "draine_li_dust_emission_grid_MW_3p1",
             dust_mass=1e7 * Msun,
             hydrogen_mass=1e9 * Msun,
             gamma=0.05,
             umin=1.0,
             alpha=2.5,
-        ),
+        )
+    except Exception:
+        pytest.skip("Draine & Li dust emission grid not available")
+
+
+@pytest.fixture
+def dl07_variants(test_grid, dl07_generator):
+    """Return qpah variants which all share one DraineLi07 generator."""
+    return DustEmission(
+        dl07_generator,
         emitter="stellar",
         grid=test_grid,
-        qpah=ParameterList(list(dl07_grid.qpah[:4]), label_modifier="q%.4f"),
+        qpah=ParameterList(
+            list(dl07_generator.grid.qpah[:4]), label_modifier="q%.4f"
+        ),
     ).expand_models()
 
 
