@@ -570,10 +570,10 @@ def test_integrated_parametric_axis_mismatch(
 ):
     """Test that a SFZH on different axes to the grid is rejected."""
     extractor = IntegratedParametricExtractor(test_grid, "incident")
-    stars = ParametricStars(
+    stars = ParametricStars.from_sfzh(
         test_grid.log10ages + 0.5,
         test_grid.metallicities,
-        sfzh=np.ones((len(test_grid.log10ages), len(test_grid.metallicities))),
+        np.ones((len(test_grid.log10ages), len(test_grid.metallicities))),
     )
     with pytest.raises(InconsistentArguments):
         extractor.generate_lnu(

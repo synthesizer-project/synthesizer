@@ -78,10 +78,10 @@ def sfzh_stars(test_grid):
 
     sfzh = np.ones((n_ages, n_metals))
 
-    return Stars(
+    return Stars.from_sfzh(
         test_grid.log10ages,
         test_grid.metallicities,
-        sfzh=sfzh,
+        sfzh,
         initial_mass=1e10 * Msun,
     )
 
@@ -651,6 +651,32 @@ class TestGetSFZHRemap:
         remapped = stars.get_sfzh(new_log10ages, test_grid.metallicities)
         assert remapped.sfzh.shape == (20, len(test_grid.metallicities))
         assert np.isclose(remapped.sfzh.sum(), stars.sfzh.sum())
+
+
+class TestFromSFZH:
+    """Tests for creating a parametric Stars from an explicit SFZH."""
+
+    def test_passing_sfzh_is_deprecated(self, test_grid):
+        """Passing sfzh warns and matches from_sfzh.
+
+        Args:
+            test_grid (Grid):
+                The test grid fixture.
+        """
+        # Passing sfzh directly must warn
+        sfzh = np.ones(
+            (test_grid.log10ages.size, test_grid.metallicities.size)
+        )
+        with pytest.warns(FutureWarning, match="from_sfzh"):
+            stars = Stars(
+                test_grid.log10ages, test_grid.metallicities, sfzh=sfzh
+            )
+
+        # The result must have the same SFZH as from_sfzh
+        expected = Stars.from_sfzh(
+            test_grid.log10ages, test_grid.metallicities, sfzh
+        )
+        np.testing.assert_array_equal(stars.sfzh, expected.sfzh)
 
 
 class TestSFHCDF:
