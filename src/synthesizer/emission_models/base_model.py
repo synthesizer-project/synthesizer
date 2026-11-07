@@ -45,7 +45,7 @@ import functools
 import sys
 
 import numpy as np
-from unyt import unyt_quantity
+from unyt import Hz, erg, s, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.model_queue import ModelQueue
@@ -57,6 +57,7 @@ from synthesizer.emission_models.operations import (
 )
 from synthesizer.emission_models.parameters import VARIATION_TYPES
 from synthesizer.emission_models.transformers import DopplerBroadening
+from synthesizer.emissions import LineCollection
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, deepcopy_with_shared_units
 from synthesizer.utils.operation_timers import timed, timer
@@ -2771,6 +2772,51 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         return spectra, particle_spectra
 
+    def _get_line_lams(self, line_ids):
+        """Return the wavelengths of the lines this model tree will produce.
+
+        Every model in a tree produces lines at the same wavelengths, those
+        of the lines extracted from the grid. We work them out from the first
+        extraction in the tree without extracting anything, so they are known
+        before any model runs (e.g. generators need them, and may run before
+        any extraction).
+
+        Args:
+            line_ids (list):
+                The IDs of the lines to produce.
+
+        Returns:
+            unyt_array/None:
+                The wavelengths of the lines, or None if the tree has no
+                extraction to take them from.
+        """
+        # Find an extraction, they all extract from grids with matching lines
+        for model in self._models.values():
+            if not model._is_extracting:
+                continue
+
+            # Build an empty collection of every line on the grid. Only the
+            # wavelengths matter, but going through a LineCollection means
+            # any composite lines get the same wavelengths extraction gives
+            # them
+            grid = model.grid
+            lines = LineCollection(
+                line_ids=grid.line_ids,
+                lam=grid.line_lams,
+                lum=np.zeros(grid.nlines) * erg / s,
+                cont=np.zeros(grid.nlines) * erg / s / Hz,
+            )
+
+            # Mirror the subsetting done after extraction (only subset when
+            # fewer lines were requested than the grid holds)
+            if len(line_ids) < lines.nlines:
+                lines = lines[line_ids]
+
+            return lines.lam
+
+        # Without an extraction there are no wavelengths to take
+        return None
+
     def _process_single_model_lines(
         self,
         this_model,
@@ -3152,13 +3198,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if len(lines) > 0:
             line_lams = lines[list(lines.keys())[0]].lam
 
-        # Otherwise work them out from the first extraction in the tree
-        # without extracting anything
+        # Otherwise work them out from the tree without extracting anything
         else:
-            for model in queue.models.values():
-                if model._is_extracting:
-                    line_lams = model._get_line_lams(line_ids)
-                    break
+            line_lams = emission_model._get_line_lams(line_ids)
 
         # Execute the full model closure, processing each model once all of
         # its dependencies are ready.
