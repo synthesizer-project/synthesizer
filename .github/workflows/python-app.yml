@@ -81,7 +81,7 @@ jobs:
 
   free-threaded:
     # Test on a free-threaded (no-GIL) build of Python, where Python level
-    # work can run concurrently on threads.
+    # work (e.g. emission models with nr_model_threads) can run concurrently.
     runs-on: ubuntu-latest
 
     steps:

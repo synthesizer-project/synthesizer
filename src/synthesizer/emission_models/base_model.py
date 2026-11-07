@@ -41,10 +41,11 @@ Example usage::
 
 import copy
 import fnmatch
+import functools
 import sys
 
 import numpy as np
-from unyt import unyt_quantity
+from unyt import Hz, erg, s, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.emission_models.model_queue import ModelQueue
@@ -56,6 +57,7 @@ from synthesizer.emission_models.operations import (
 )
 from synthesizer.emission_models.parameters import VARIATION_TYPES
 from synthesizer.emission_models.transformers import DopplerBroadening
+from synthesizer.emissions import LineCollection
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, deepcopy_with_shared_units
 from synthesizer.utils.operation_timers import timed, timer
@@ -2327,6 +2329,287 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         return emissions, particle_emissions
 
+    def _get_line_lams(self, line_ids):
+        """Return the wavelengths of the lines this model tree will produce.
+
+        Every model in a tree produces lines at the same wavelengths, those
+        of the lines extracted from the grid. We work them out from the first
+        extraction in the tree without extracting anything, so they are known
+        before any model runs (e.g. generators need them, and may run before
+        any extraction).
+
+        Args:
+            line_ids (list):
+                The IDs of the lines to produce.
+
+        Returns:
+            unyt_array/None:
+                The wavelengths of the lines, or None if the tree has no
+                extraction to take them from.
+        """
+        # Find an extraction, they all extract from grids with matching lines
+        for model in self._models.values():
+            if not model._is_extracting:
+                continue
+
+            # Build an empty collection of every line on the grid. Only the
+            # wavelengths matter, but going through a LineCollection means
+            # any composite lines get the same wavelengths extraction gives
+            # them
+            grid = model.grid
+            lines = LineCollection(
+                line_ids=grid.line_ids,
+                lam=grid.line_lams,
+                lum=np.zeros(grid.nlines) * erg / s,
+                cont=np.zeros(grid.nlines) * erg / s / Hz,
+            )
+
+            # Mirror the subsetting done after extraction (only subset when
+            # fewer lines were requested than the grid holds)
+            if len(line_ids) < lines.nlines:
+                lines = lines[line_ids]
+
+            return lines.lam
+
+        # Without an extraction there are no wavelengths to take
+        return None
+
+    def _process_single_model_spectra(
+        self,
+        this_model,
+        emission_model,
+        emitters,
+        spectra,
+        particle_spectra,
+        dependencies,
+        nthreads,
+        grid_assignment_method,
+        out_dtype,
+        verbose,
+    ):
+        """Generate and store the spectra for a single model.
+
+        This is called by ModelQueue.execute for each model once all of its
+        dependencies are ready. It may run on a worker thread (with other
+        models running concurrently on other threads), so it only writes
+        this model's own entries in the emission dictionaries.
+
+        Args:
+            this_model (EmissionModel):
+                The model to generate the spectra for.
+            emission_model (EmissionModel):
+                The (overridden copy of the) root emission model.
+            emitters (dict):
+                The emitters to generate the spectra for, keyed by emitter
+                name.
+            spectra (dict):
+                The integrated spectra generated so far, keyed by model
+                label. This model's spectra are added to it.
+            particle_spectra (dict):
+                The particle spectra generated so far, keyed by model label.
+                This model's particle spectra are added to it.
+            dependencies (dict):
+                The labels of the models each model depends on (see
+                ModelQueue.dependencies).
+            nthreads (int):
+                The number of OpenMP threads to use.
+            grid_assignment_method (str):
+                The grid assignment method used when extracting.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted spectra arrays.
+            verbose (bool):
+                Are we talking?
+
+        Raises:
+            InconsistentArguments:
+                If the model's emitter is missing or it can't be scaled as
+                requested.
+        """
+        label = this_model.label
+
+        # Active queued models must always have a matching emitter.
+        if this_model.emitter not in emitters:
+            raise exceptions.InconsistentArguments(
+                f"Active EmissionModel '{this_model.label}' requires "
+                f"missing emitter '{this_model.emitter}'."
+            )
+
+        # Get the emitter for this model now that it is ready to execute.
+        emitter = emitters[this_model.emitter]
+
+        # Build the combined mask once for operations that use it.
+        this_mask = None
+        for mask_dict in this_model.masks:
+            this_mask = emitter.get_mask(
+                **mask_dict,
+                mask=this_mask,
+                attr_override_obj=this_model,
+            )
+
+        # Dispatch to the appropriate operation for this model.
+        if this_model._is_extracting:
+            try:
+                self._extract_spectra(
+                    this_model,
+                    emitters,
+                    spectra,
+                    particle_spectra,
+                    verbose=verbose,
+                    nthreads=nthreads,
+                    grid_assignment_method=grid_assignment_method,
+                    out_dtype=out_dtype,
+                )
+            except Exception as e:
+                if sys.version_info >= (3, 11):
+                    e.add_note(f"EmissionModel.label: {label}")
+                    raise
+                else:
+                    raise type(e)(
+                        f"{e} [EmissionModel.label: {label}]"
+                    ).with_traceback(e.__traceback__)
+        elif this_model._is_combining:
+            try:
+                self._combine_spectra(
+                    emission_model,
+                    spectra,
+                    particle_spectra,
+                    this_model,
+                    emitter,
+                    nthreads,
+                )
+            except Exception as e:
+                if sys.version_info >= (3, 11):
+                    e.add_note(f"EmissionModel.label: {this_model.label}")
+                    raise
+                else:
+                    raise type(e)(
+                        f"{e} [EmissionModel.label: {this_model.label}]"
+                    ).with_traceback(e.__traceback__)
+        elif this_model._is_transforming:
+            try:
+                this_model._transform_emission(
+                    this_model,
+                    spectra,
+                    particle_spectra,
+                    emitter,
+                    this_mask,
+                    self.lam,
+                    nthreads,
+                )
+            except Exception as e:
+                if sys.version_info >= (3, 11):
+                    e.add_note(f"EmissionModel.label: {this_model.label}")
+                    raise
+                else:
+                    raise type(e)(
+                        f"{e} [EmissionModel.label: {this_model.label}]"
+                    ).with_traceback(e.__traceback__)
+        elif this_model._is_generating:
+            try:
+                self._generate_spectra(
+                    this_model,
+                    emission_model,
+                    spectra,
+                    particle_spectra,
+                    self.lam,
+                    emitter,
+                    nthreads,
+                    out_dtype=out_dtype,
+                )
+            except Exception as e:
+                if sys.version_info >= (3, 11):
+                    e.add_note(f"EmissionModel.label: {this_model.label}")
+                    raise
+                else:
+                    raise type(e)(
+                        f"{e} [EmissionModel.label: {this_model.label}]"
+                    ).with_traceback(e.__traceback__)
+
+        # Apply any requested scaling after the model has been generated.
+        for scaler in this_model.scale_by:
+            if scaler is None:
+                continue
+            if hasattr(emitter, scaler):
+                # Ok, the emitter has this scaler, get it
+                scaler_arr = getattr(emitter, f"_{scaler}", None)
+                if scaler_arr is None:
+                    scaler_arr = getattr(emitter, scaler)
+
+                # Ensure we can actually multiply the spectra by it
+                if (
+                    scaler_arr.ndim == 1
+                    and spectra[label].shape[0] != scaler_arr.shape[0]
+                ):
+                    raise exceptions.InconsistentArguments(
+                        f"Can't scale a spectra with shape "
+                        f"{spectra[label].shape} by an array of "
+                        f"shape {scaler_arr.shape}. Did you mean to "
+                        "make particle spectra?"
+                    )
+                elif (
+                    scaler_arr.ndim == spectra[label].ndim
+                    and scaler_arr.shape != spectra[label].shape
+                ):
+                    raise exceptions.InconsistentArguments(
+                        f"Can't scale a spectra with shape "
+                        f"{spectra[label].shape} by an array of "
+                        f"shape {scaler_arr.shape}. Did you mean to "
+                        "make particle spectra?"
+                    )
+
+                # Scale the spectra by this attribute
+                if this_model.per_particle:
+                    particle_spectra[label].scale(
+                        scaler_arr,
+                        inplace=True,
+                        nthreads=nthreads,
+                    )
+                spectra[label].scale(
+                    scaler_arr,
+                    inplace=True,
+                    nthreads=nthreads,
+                )
+            elif scaler in spectra:
+                # Compute the scaling against another generated spectrum.
+                if this_model.per_particle:
+                    scaling = (
+                        particle_spectra[scaler].bolometric_luminosity
+                        / particle_spectra[label].bolometric_luminosity
+                    ).value
+                else:
+                    scaling = (
+                        spectra[scaler].bolometric_luminosity
+                        / spectra[label].bolometric_luminosity
+                    ).value
+
+                # Scale the spectra (handling 1D and 2D cases)
+                if this_model.per_particle:
+                    particle_spectra[label].scale(
+                        scaling,
+                        inplace=True,
+                        nthreads=nthreads,
+                    )
+                spectra[label].scale(
+                    scaling,
+                    inplace=True,
+                    nthreads=nthreads,
+                )
+            else:
+                raise exceptions.InconsistentArguments(
+                    f"Can't scale spectra by {scaler}."
+                )
+
+        # Flag spectra built from particle velocity shifts so a peculiar
+        # velocity can't be applied on top of them (see Sed.get_fnu).
+        if this_model.vel_shift or any(
+            spectra[dep].vel_shifted
+            for dep in dependencies[label]
+            if dep in spectra
+        ):
+            spectra[label].vel_shifted = True
+            if label in particle_spectra:
+                particle_spectra[label].vel_shifted = True
+
     @timed("EmissionModel._get_spectra")
     def _get_spectra(
         self,
@@ -2343,6 +2626,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         nthreads=1,
         grid_assignment_method="cic",
         out_dtype=None,
+        nr_model_threads=1,
         **fixed_parameters,
     ):
         """Generate stellar spectra as described by the emission model.
@@ -2425,6 +2709,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted spectra arrays.
+            nr_model_threads (int):
+                The number of threads to execute independent models with
+                concurrently. Each model still uses nthreads OpenMP threads.
+                This requires a free-threaded (no-GIL) build of Python; with
+                the GIL enabled a warning is issued and the models are
+                executed serially.
             **fixed_parameters (dict):
                 A dictionary of fixed parameters to apply to the model. Each
                 of these will be applied to the model before generating the
@@ -2498,205 +2788,26 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             models=queue.models.values(),
         )
 
-        # Execute the full model closure by processing each ready model once.
-        while len(queue) > 0:
-            this_model = queue.pop()
-            label = this_model.label
-
-            # Reused or externally supplied emissions still need to unlock the
-            # graph, but they do not need to be regenerated.
-            if label in spectra:
-                queue.done(this_model, spectra, particle_spectra)
-                continue
-
-            # Active queued models must always have a matching emitter.
-            if this_model.emitter not in emitters:
-                raise exceptions.InconsistentArguments(
-                    f"Active EmissionModel '{this_model.label}' requires "
-                    f"missing emitter '{this_model.emitter}'."
-                )
-
-            # Get the emitter for this model now that it is ready to execute.
-            emitter = emitters[this_model.emitter]
-
-            # Build the combined mask once for operations that use it.
-            this_mask = None
-            for mask_dict in this_model.masks:
-                this_mask = emitter.get_mask(
-                    **mask_dict,
-                    mask=this_mask,
-                    attr_override_obj=this_model,
-                )
-
-            # Dispatch to the appropriate operation for this model.
-            if this_model._is_extracting:
-                try:
-                    spectra, particle_spectra = self._extract_spectra(
-                        this_model,
-                        emitters,
-                        spectra,
-                        particle_spectra,
-                        verbose=verbose,
-                        nthreads=nthreads,
-                        grid_assignment_method=grid_assignment_method,
-                        out_dtype=out_dtype,
-                    )
-                except Exception as e:
-                    if sys.version_info >= (3, 11):
-                        e.add_note(f"EmissionModel.label: {label}")
-                        raise
-                    else:
-                        raise type(e)(
-                            f"{e} [EmissionModel.label: {label}]"
-                        ).with_traceback(e.__traceback__)
-            elif this_model._is_combining:
-                try:
-                    spectra, particle_spectra = self._combine_spectra(
-                        emission_model,
-                        spectra,
-                        particle_spectra,
-                        this_model,
-                        emitter,
-                        nthreads,
-                    )
-                except Exception as e:
-                    if sys.version_info >= (3, 11):
-                        e.add_note(f"EmissionModel.label: {this_model.label}")
-                        raise
-                    else:
-                        raise type(e)(
-                            f"{e} [EmissionModel.label: {this_model.label}]"
-                        ).with_traceback(e.__traceback__)
-            elif this_model._is_transforming:
-                try:
-                    spectra, particle_spectra = this_model._transform_emission(
-                        this_model,
-                        spectra,
-                        particle_spectra,
-                        emitter,
-                        this_mask,
-                        self.lam,
-                        nthreads,
-                    )
-                except Exception as e:
-                    if sys.version_info >= (3, 11):
-                        e.add_note(f"EmissionModel.label: {this_model.label}")
-                        raise
-                    else:
-                        raise type(e)(
-                            f"{e} [EmissionModel.label: {this_model.label}]"
-                        ).with_traceback(e.__traceback__)
-            elif this_model._is_generating:
-                try:
-                    spectra, particle_spectra = self._generate_spectra(
-                        this_model,
-                        emission_model,
-                        spectra,
-                        particle_spectra,
-                        self.lam,
-                        emitter,
-                        nthreads,
-                        out_dtype=out_dtype,
-                    )
-                except Exception as e:
-                    if sys.version_info >= (3, 11):
-                        e.add_note(f"EmissionModel.label: {this_model.label}")
-                        raise
-                    else:
-                        raise type(e)(
-                            f"{e} [EmissionModel.label: {this_model.label}]"
-                        ).with_traceback(e.__traceback__)
-
-            # Apply any requested scaling after the model has been generated.
-            for scaler in this_model.scale_by:
-                if scaler is None:
-                    continue
-                if hasattr(emitter, scaler):
-                    # Ok, the emitter has this scaler, get it
-                    scaler_arr = getattr(emitter, f"_{scaler}", None)
-                    if scaler_arr is None:
-                        scaler_arr = getattr(emitter, scaler)
-
-                    # Ensure we can actually multiply the spectra by it
-                    if (
-                        scaler_arr.ndim == 1
-                        and spectra[label].shape[0] != scaler_arr.shape[0]
-                    ):
-                        raise exceptions.InconsistentArguments(
-                            f"Can't scale a spectra with shape "
-                            f"{spectra[label].shape} by an array of "
-                            f"shape {scaler_arr.shape}. Did you mean to "
-                            "make particle spectra?"
-                        )
-                    elif (
-                        scaler_arr.ndim == spectra[label].ndim
-                        and scaler_arr.shape != spectra[label].shape
-                    ):
-                        raise exceptions.InconsistentArguments(
-                            f"Can't scale a spectra with shape "
-                            f"{spectra[label].shape} by an array of "
-                            f"shape {scaler_arr.shape}. Did you mean to "
-                            "make particle spectra?"
-                        )
-
-                    # Scale the spectra by this attribute
-                    if this_model.per_particle:
-                        particle_spectra[label].scale(
-                            scaler_arr,
-                            inplace=True,
-                            nthreads=nthreads,
-                        )
-                    spectra[label].scale(
-                        scaler_arr,
-                        inplace=True,
-                        nthreads=nthreads,
-                    )
-                elif scaler in spectra:
-                    # Compute the scaling against another generated spectrum.
-                    if this_model.per_particle:
-                        scaling = (
-                            particle_spectra[scaler].bolometric_luminosity
-                            / particle_spectra[label].bolometric_luminosity
-                        ).value
-                    else:
-                        scaling = (
-                            spectra[scaler].bolometric_luminosity
-                            / spectra[label].bolometric_luminosity
-                        ).value
-
-                    # Scale the spectra (handling 1D and 2D cases)
-                    if this_model.per_particle:
-                        particle_spectra[label].scale(
-                            scaling,
-                            inplace=True,
-                            nthreads=nthreads,
-                        )
-                    spectra[label].scale(
-                        scaling,
-                        inplace=True,
-                        nthreads=nthreads,
-                    )
-                else:
-                    raise exceptions.InconsistentArguments(
-                        f"Can't scale spectra by {scaler}."
-                    )
-
-            # Flag spectra built from particle velocity shifts so a peculiar
-            # velocity can't be applied on top of them (see Sed.get_fnu).
-            if this_model.vel_shift or any(
-                spectra[dep].vel_shifted
-                for dep in queue.dependencies[label]
-                if dep in spectra
-            ):
-                spectra[label].vel_shifted = True
-                if label in particle_spectra:
-                    particle_spectra[label].vel_shifted = True
-
-            # Unlock downstream models and delete expired unsaved emissions.
-            queue.done(this_model, spectra, particle_spectra)
-
-        # Ensure the dependency graph was fully traversed before returning.
-        queue.assert_finished()
+        # Execute the full model closure, processing each model once all of
+        # its dependencies are ready.
+        queue.execute(
+            functools.partial(
+                self._process_single_model_spectra,
+                emission_model=emission_model,
+                emitters=emitters,
+                spectra=spectra,
+                particle_spectra=particle_spectra,
+                dependencies=queue.dependencies,
+                nthreads=nthreads,
+                grid_assignment_method=grid_assignment_method,
+                out_dtype=out_dtype,
+                verbose=verbose,
+            ),
+            spectra,
+            particle_spectra,
+            nr_model_threads=nr_model_threads,
+            nthreads=nthreads,
+        )
 
         # Apply any post processing functions to the surviving emissions.
         for func in self._post_processing:
@@ -2705,6 +2816,194 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 particle_spectra = func(particle_spectra, emitters, self)
 
         return spectra, particle_spectra
+
+    def _process_single_model_lines(
+        self,
+        this_model,
+        emission_model,
+        emitters,
+        line_ids,
+        line_lams,
+        lines,
+        particle_lines,
+        spectra,
+        particle_spectra,
+        nthreads,
+        grid_assignment_method,
+        out_dtype,
+        verbose,
+    ):
+        """Generate and store the lines for a single model.
+
+        This is called by ModelQueue.execute for each model once all of its
+        dependencies are ready. It may run on a worker thread (with other
+        models running concurrently on other threads), so it only writes
+        this model's own entries in the emission dictionaries.
+
+        Args:
+            this_model (EmissionModel):
+                The model to generate the lines for.
+            emission_model (EmissionModel):
+                The (overridden copy of the) root emission model.
+            emitters (dict):
+                The emitters to generate the lines for, keyed by emitter
+                name.
+            line_ids (list):
+                The IDs of the lines to generate.
+            line_lams (unyt_array):
+                The wavelengths of the lines (needed by generators).
+            lines (dict):
+                The integrated lines generated so far, keyed by model label.
+                This model's lines are added to it.
+            particle_lines (dict):
+                The particle lines generated so far, keyed by model label.
+                This model's particle lines are added to it.
+            spectra (dict):
+                The existing integrated spectra on the emitters (used by
+                generators and for scaling).
+            particle_spectra (dict):
+                The existing particle spectra on the emitters.
+            nthreads (int):
+                The number of OpenMP threads to use.
+            grid_assignment_method (str):
+                The grid assignment method used when extracting.
+            out_dtype (np.dtype):
+                Requested floating-point dtype for extracted line arrays.
+            verbose (bool):
+                Are we talking?
+
+        Raises:
+            InconsistentArguments:
+                If the model's emitter is missing or it can't be scaled as
+                requested.
+        """
+        label = this_model.label
+
+        # Active queued models must always have a matching emitter.
+        if this_model.emitter not in emitters:
+            raise exceptions.InconsistentArguments(
+                f"Active EmissionModel '{this_model.label}' requires "
+                f"missing emitter '{this_model.emitter}'."
+            )
+
+        # Get the emitter for this model now that it is ready to execute.
+        emitter = emitters[this_model.emitter]
+
+        # Build the combined mask once for operations that use it.
+        this_mask = None
+        for mask_dict in this_model.masks:
+            this_mask = emitter.get_mask(
+                **mask_dict,
+                mask=this_mask,
+                attr_override_obj=this_model,
+            )
+
+        # Dispatch to the appropriate operation for this model.
+        if this_model._is_extracting:
+            try:
+                self._extract_lines(
+                    line_ids,
+                    this_model,
+                    emitters,
+                    lines,
+                    particle_lines,
+                    verbose=verbose,
+                    nthreads=nthreads,
+                    grid_assignment_method=grid_assignment_method,
+                    out_dtype=out_dtype,
+                )
+            except Exception as e:
+                if sys.version_info >= (3, 11):
+                    e.add_note(f"EmissionModel.label: {label}")
+                    raise
+                else:
+                    raise type(e)(
+                        f"{e} [EmissionModel.label: {label}]"
+                    ).with_traceback(e.__traceback__)
+        elif this_model._is_combining:
+            try:
+                self._combine_lines(
+                    emission_model,
+                    lines,
+                    particle_lines,
+                    this_model,
+                    emitter,
+                    nthreads=nthreads,
+                )
+            except Exception as e:
+                if sys.version_info >= (3, 11):
+                    e.add_note(f"EmissionModel.label: {this_model.label}")
+                    raise
+                else:
+                    raise type(e)(
+                        f"{e} [EmissionModel.label: {this_model.label}]"
+                    ).with_traceback(e.__traceback__)
+        elif this_model._is_transforming:
+            try:
+                this_model._transform_emission(
+                    this_model,
+                    lines,
+                    particle_lines,
+                    emitter,
+                    this_mask,
+                    self.lam,
+                )
+            except Exception as e:
+                if sys.version_info >= (3, 11):
+                    e.add_note(f"EmissionModel.label: {this_model.label}")
+                    raise
+                else:
+                    raise type(e)(
+                        f"{e} [EmissionModel.label: {this_model.label}]"
+                    ).with_traceback(e.__traceback__)
+        elif this_model._is_generating:
+            try:
+                self._generate_lines(
+                    this_model,
+                    emission_model,
+                    lines,
+                    particle_lines,
+                    emitter,
+                    line_lams,
+                    line_ids,
+                    spectra,
+                    particle_spectra,
+                    out_dtype=out_dtype,
+                    nthreads=nthreads,
+                )
+            except Exception as e:
+                if sys.version_info >= (3, 11):
+                    e.add_note(f"EmissionModel.label: {this_model.label}")
+                    raise
+                else:
+                    raise type(e)(
+                        f"{e} [EmissionModel.label: {this_model.label}]"
+                    ).with_traceback(e.__traceback__)
+
+        # Apply any requested scaling after the model has been generated.
+        with timer("EmissionModel._get_lines.scale"):
+            for scaler in this_model.scale_by:
+                if scaler is None:
+                    continue
+                elif hasattr(emitter, scaler):
+                    for line_id in line_ids:
+                        if this_model.per_particle:
+                            particle_lines[label][
+                                line_id
+                            ]._luminosity *= getattr(emitter, scaler)
+                            particle_lines[label][
+                                line_id
+                            ]._continuum *= getattr(emitter, scaler)
+                        lines[label][line_id]._luminosity *= getattr(
+                            emitter, scaler
+                        )
+                        lines[label][line_id]._continuum *= getattr(
+                            emitter, scaler
+                        )
+                else:
+                    raise exceptions.InconsistentArguments(
+                        f"Can't scale lines by {scaler}."
+                    )
 
     @timed("EmissionModel._get_lines")
     def _get_lines(
@@ -2722,6 +3021,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         nthreads=1,
         grid_assignment_method="cic",
         out_dtype=None,
+        nr_model_threads=1,
         **kwargs,
     ):
         """Generate stellar lines as described by the emission model.
@@ -2802,6 +3102,12 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted line arrays.
+            nr_model_threads (int):
+                The number of threads to execute independent models with
+                concurrently. Each model still uses nthreads OpenMP threads.
+                This requires a free-threaded (no-GIL) build of Python; with
+                the GIL enabled a warning is issued and the models are
+                executed serially.
             **kwargs (dict):
                 Any additional keyword arguments to pass to the generator
                 function.
@@ -2883,163 +3189,42 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if hasattr(emitter, "particle_spectra"):
                 particle_spectra.update(emitter.particle_spectra)
 
-        # Cache a representative wavelength array before any eager deletion.
+        # Get the line wavelengths before any model runs. Generators need
+        # them, and with models running in any order (or concurrently) we
+        # can't rely on an extraction having produced them first. If we were
+        # given existing lines we can take them from those (before any are
+        # deleted once they're no longer needed).
         line_lams = None
         if len(lines) > 0:
             line_lams = lines[list(lines.keys())[0]].lam
 
-        # Execute the full model closure by processing each ready model once.
-        while len(queue) > 0:
-            this_model = queue.pop()
-            label = this_model.label
+        # Otherwise work them out from the tree without extracting anything
+        else:
+            line_lams = emission_model._get_line_lams(line_ids)
 
-            # Reused or externally supplied emissions still need to unlock the
-            # graph, but they do not need to be regenerated.
-            if label in lines:
-                if line_lams is None:
-                    line_lams = lines[label].lam
-                queue.done(this_model, lines, particle_lines)
-                continue
-
-            # Active queued models must always have a matching emitter.
-            if this_model.emitter not in emitters:
-                raise exceptions.InconsistentArguments(
-                    f"Active EmissionModel '{this_model.label}' requires "
-                    f"missing emitter '{this_model.emitter}'."
-                )
-
-            # Get the emitter for this model now that it is ready to execute.
-            emitter = emitters[this_model.emitter]
-
-            # Build the combined mask once for operations that use it.
-            this_mask = None
-            for mask_dict in this_model.masks:
-                this_mask = emitter.get_mask(
-                    **mask_dict,
-                    mask=this_mask,
-                    attr_override_obj=this_model,
-                )
-
-            # Dispatch to the appropriate operation for this model.
-            if this_model._is_extracting:
-                try:
-                    lines, particle_lines = self._extract_lines(
-                        line_ids,
-                        this_model,
-                        emitters,
-                        lines,
-                        particle_lines,
-                        verbose=verbose,
-                        nthreads=nthreads,
-                        grid_assignment_method=grid_assignment_method,
-                        out_dtype=out_dtype,
-                    )
-                    if line_lams is None and label in lines:
-                        line_lams = lines[label].lam
-                except Exception as e:
-                    if sys.version_info >= (3, 11):
-                        e.add_note(f"EmissionModel.label: {label}")
-                        raise
-                    else:
-                        raise type(e)(
-                            f"{e} [EmissionModel.label: {label}]"
-                        ).with_traceback(e.__traceback__)
-            elif this_model._is_combining:
-                try:
-                    lines, particle_lines = self._combine_lines(
-                        emission_model,
-                        lines,
-                        particle_lines,
-                        this_model,
-                        emitter,
-                        nthreads=nthreads,
-                    )
-                    if line_lams is None and label in lines:
-                        line_lams = lines[label].lam
-                except Exception as e:
-                    if sys.version_info >= (3, 11):
-                        e.add_note(f"EmissionModel.label: {this_model.label}")
-                        raise
-                    else:
-                        raise type(e)(
-                            f"{e} [EmissionModel.label: {this_model.label}]"
-                        ).with_traceback(e.__traceback__)
-            elif this_model._is_transforming:
-                try:
-                    lines, particle_lines = this_model._transform_emission(
-                        this_model,
-                        lines,
-                        particle_lines,
-                        emitter,
-                        this_mask,
-                        self.lam,
-                    )
-                    if line_lams is None and label in lines:
-                        line_lams = lines[label].lam
-                except Exception as e:
-                    if sys.version_info >= (3, 11):
-                        e.add_note(f"EmissionModel.label: {this_model.label}")
-                        raise
-                    else:
-                        raise type(e)(
-                            f"{e} [EmissionModel.label: {this_model.label}]"
-                        ).with_traceback(e.__traceback__)
-            elif this_model._is_generating:
-                try:
-                    lines, particle_lines = self._generate_lines(
-                        this_model,
-                        emission_model,
-                        lines,
-                        particle_lines,
-                        emitter,
-                        line_lams,
-                        line_ids,
-                        spectra,
-                        particle_spectra,
-                        out_dtype=out_dtype,
-                        nthreads=nthreads,
-                    )
-                    if line_lams is None and label in lines:
-                        line_lams = lines[label].lam
-                except Exception as e:
-                    if sys.version_info >= (3, 11):
-                        e.add_note(f"EmissionModel.label: {this_model.label}")
-                        raise
-                    else:
-                        raise type(e)(
-                            f"{e} [EmissionModel.label: {this_model.label}]"
-                        ).with_traceback(e.__traceback__)
-
-            # Apply any requested scaling after the model has been generated.
-            with timer("EmissionModel._get_lines.scale"):
-                for scaler in this_model.scale_by:
-                    if scaler is None:
-                        continue
-                    elif hasattr(emitter, scaler):
-                        for line_id in line_ids:
-                            if this_model.per_particle:
-                                particle_lines[label][
-                                    line_id
-                                ]._luminosity *= getattr(emitter, scaler)
-                                particle_lines[label][
-                                    line_id
-                                ]._continuum *= getattr(emitter, scaler)
-                            lines[label][line_id]._luminosity *= getattr(
-                                emitter, scaler
-                            )
-                            lines[label][line_id]._continuum *= getattr(
-                                emitter, scaler
-                            )
-                    else:
-                        raise exceptions.InconsistentArguments(
-                            f"Can't scale lines by {scaler}."
-                        )
-
-            # Unlock downstream models and delete expired unsaved emissions.
-            queue.done(this_model, lines, particle_lines)
-
-        # Ensure the dependency graph was fully traversed before returning.
-        queue.assert_finished()
+        # Execute the full model closure, processing each model once all of
+        # its dependencies are ready.
+        queue.execute(
+            functools.partial(
+                self._process_single_model_lines,
+                emission_model=emission_model,
+                emitters=emitters,
+                line_ids=line_ids,
+                line_lams=line_lams,
+                lines=lines,
+                particle_lines=particle_lines,
+                spectra=spectra,
+                particle_spectra=particle_spectra,
+                nthreads=nthreads,
+                grid_assignment_method=grid_assignment_method,
+                out_dtype=out_dtype,
+                verbose=verbose,
+            ),
+            lines,
+            particle_lines,
+            nr_model_threads=nr_model_threads,
+            nthreads=nthreads,
+        )
 
         # Apply any post processing functions to the surviving emissions.
         with timer("EmissionModel._get_lines.post_processing"):
