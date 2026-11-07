@@ -21,6 +21,10 @@ LOG_FLAGS = (True, True, False)
 # The number of wavelength elements in the test grid spectra
 NLAM = 7
 
+# The largest finite float, used for open mask bounds since the extension is
+# compiled with -ffast-math and can't handle infinities
+BIG = np.finfo(np.float64).max
+
 
 def _grid_spectra(dtype=np.float64):
     """Return deterministic positive grid spectra for GRID_AXES.
@@ -273,20 +277,53 @@ def test_threads_match_serial(nthreads):
     np.testing.assert_allclose(spec_t, spec)
 
 
-def test_mask_excludes_bins():
-    """Masked bins must contribute nothing, like zeroing their mass."""
-    # Mask out a random half of the bins
+def test_mask_clips_bins():
+    """A range mask must equal clipping the bins to it by hand.
+
+    Mass is uniform within a bin, so masking must be the same as clipping
+    the edges to the allowed range and scaling each bin's mass by the
+    fraction of it inside the range.
+    """
+    # Mask the first two axes to ranges that cut through bins
     edges = _wide_edges()
     masses = _random_masses(edges)
-    mask = np.random.default_rng(3).random(masses.shape) > 0.5
-
-    # Compute with the mask and with the masked bins' masses zeroed
+    mask = np.array([[2e6, 1e8], [-BIG, 5e-3], [-BIG, BIG]])
     spec, weights = _bic(edges, masses, mask=mask)
-    spec_zeroed, weights_zeroed = _bic(edges, np.where(mask, masses, 0.0))
+
+    # Clip the edges by hand and scale the masses by the fraction of each
+    # bin inside the range
+    clipped = []
+    scaled = masses.copy()
+    for iaxis, (axis_edges, (lo, hi)) in enumerate(zip(edges, mask)):
+        clip = np.clip(axis_edges, lo, hi)
+        frac = np.diff(clip) / np.diff(axis_edges)
+        shape = [1] * masses.ndim
+        shape[iaxis + 1] = frac.size
+        scaled *= frac.reshape(shape)
+        clipped.append(clip)
+    spec_clipped, weights_clipped = _bic(tuple(clipped), scaled)
 
     # Both must agree
-    np.testing.assert_allclose(weights, weights_zeroed)
-    np.testing.assert_allclose(spec, spec_zeroed)
+    np.testing.assert_allclose(weights, weights_clipped, atol=1e-14)
+    np.testing.assert_allclose(spec, spec_clipped)
+
+
+def test_mask_on_points_is_inclusive():
+    """Zero width bins pass only when inside the inclusive range."""
+    # A single point along every axis
+    point = (3e7, 5e-3, 1.0)
+    edges = tuple(np.array([p, p]) for p in point)
+    masses = np.array([[[[1.0]]]])
+
+    # A range ending exactly on the point keeps it
+    mask = np.array([[-BIG, 3e7], [-BIG, BIG], [-BIG, BIG]])
+    _, weights = _bic(edges, masses, mask=mask)
+    assert np.isclose(weights.sum(), 1.0)
+
+    # A range ending one step below the point excludes it
+    mask[0, 1] = np.nextafter(3e7, 0.0)
+    _, weights = _bic(edges, masses, mask=mask)
+    assert weights.sum() == 0.0
 
 
 def test_lam_mask_zeroes_masked_wavelengths():
@@ -327,7 +364,12 @@ def test_precomputed_weights_with_mask_raise():
 
     # Passing them back in alongside a mask must be rejected
     with pytest.raises(ValueError):
-        _bic(edges, masses, mask=np.ones(masses.shape, bool), weights=weights)
+        _bic(
+            edges,
+            masses,
+            mask=np.array([[-BIG, BIG]] * 3),
+            weights=weights,
+        )
 
 
 def test_float32_inputs():
@@ -370,7 +412,7 @@ def test_float32_inputs():
         # Masses not matching the edges
         (_wide_edges(), np.ones((1, 5, 5, 4)), None),
         # A mask with the wrong shape
-        (_wide_edges(), np.ones((1, 6, 5, 4)), np.ones((6, 5, 4), bool)),
+        (_wide_edges(), np.ones((1, 6, 5, 4)), np.zeros((2, 2))),
         # Mismatched dtypes
         (
             tuple(e.astype(np.float32) for e in _wide_edges()),

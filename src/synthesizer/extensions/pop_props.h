@@ -15,6 +15,7 @@
 
 /* Standard includes */
 #include <array>
+#include <limits>
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
@@ -50,12 +51,26 @@ struct Populations {
   /* The masses with shape (npop, nbins[0], ..., nbins[ndim - 1]). */
   const void *masses = nullptr;
 
-  /* The optional mask with the same shape as the masses (true means the bin
-   * is included), or nullptr for no mask. */
-  const npy_bool *mask = nullptr;
+  /* The range [mask_lo, mask_hi] (linear units, inclusive) along each axis
+   * that bins are masked to. Only the part of a bin inside the range
+   * contributes, and with no mask the range covers every finite value.
+   *
+   * NOTE: The extensions are compiled with -ffast-math, which makes
+   * infinities undefined behaviour, so the bounds must always be finite. */
+  std::array<double, MAX_GRID_NDIM> mask_lo;
+  std::array<double, MAX_GRID_NDIM> mask_hi;
 
   /* The shared floating-point dtype of the edges and masses. */
   int float_typenum = NPY_FLOAT64;
+
+  /**
+   * @brief Construct an empty set of populations with no mask.
+   */
+  Populations() {
+    /* Start with a range covering every finite value along every axis. */
+    mask_lo.fill(-std::numeric_limits<double>::max());
+    mask_hi.fill(std::numeric_limits<double>::max());
+  }
 
   /**
    * @brief Get the bin edges along an axis at the population dtype.
@@ -80,17 +95,6 @@ struct Populations {
   template <typename Real>
   const Real *get_masses() const {
     return static_cast<const Real *>(masses);
-  }
-
-  /**
-   * @brief Is a bin masked out?
-   *
-   * @param ind: The flat index of the bin across all populations.
-   *
-   * @return True if there is a mask and it excludes the bin.
-   */
-  bool bin_is_masked(size_t ind) const {
-    return mask != nullptr && !mask[ind];
   }
 };
 

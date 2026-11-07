@@ -11,6 +11,7 @@ Example usage::
     stars.plot_spectra()
 """
 
+import operator
 from copy import deepcopy
 
 import cmasher as cmr
@@ -31,7 +32,6 @@ from synthesizer import exceptions
 from synthesizer.components.stellar import StarsComponent
 from synthesizer.emission_models.utils import get_param
 from synthesizer.grid import Grid
-from synthesizer.parametric.bin_mask import BinMask, to_axis_threshold
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.synth_warnings import warn
@@ -46,6 +46,16 @@ from synthesizer.utils.stats import weighted_mean, weighted_median
 # spectra are within 0.2% of the converged result for a narrow (sigma = 4 Myr)
 # young Gaussian SFH, and within 0.04% for typical SFHs.
 SFZH_SUBDIVISIONS = 8
+
+# The comparison operators a mask can apply to a population level value
+_OPERATORS = {
+    "<": operator.lt,
+    "<=": operator.le,
+    ">": operator.gt,
+    ">=": operator.ge,
+    "==": operator.eq,
+    "!=": operator.ne,
+}
 
 
 class Stars(StarsComponent):
@@ -872,10 +882,18 @@ class Stars(StarsComponent):
         Will derive a mask of the form attr op thresh, e.g. age > 10 Myr.
 
         A condition on a bin axis (ages or metallicities, or their log10)
-        can cut through a bin, so the mask records the allowed interval and
-        converts it into the fraction of each bin passing (see BinMask).
+        can cut through a bin, so rather than flagging bins the mask is the
+        allowed [lo, hi] range (inclusive, in the linear units of the bin
+        edges) along each bin axis. The extraction clips each bin to this
+        range and keeps the fraction of its mass inside it. A strict
+        inequality moves the bound by one floating point step, so a zero
+        width bin exactly on the threshold is excluded just as a particle
+        would be. "!=" can't be expressed as a single range so isn't
+        supported on a bin axis.
+
         Conditions on a population level value (e.g. a fixed model parameter)
-        include or exclude the whole population.
+        include or exclude the whole population, a failing one empties the
+        range.
 
         Args:
             attr (str):
@@ -884,8 +902,8 @@ class Stars(StarsComponent):
                 The threshold value.
             op (str):
                 The operation to apply. Can be '<', '>', '<=', '>=', "==",
-                or "!=".
-            mask (BinMask):
+                or "!=" ("!=" only on population level values).
+            mask (np.ndarray of float):
                 Optionally, a mask to combine with the new mask.
             attr_override_obj (object):
                 An alternative object to check from the attribute. This
@@ -893,23 +911,36 @@ class Stars(StarsComponent):
                 fixed parameter override, but can be used more generally.
 
         Returns:
-            mask (BinMask):
-                The combined mask.
+            mask (np.ndarray of float):
+                The combined mask, the allowed range along each bin axis with
+                shape (len(bin_axes), 2).
 
         Raises:
             InconsistentArguments:
-                If the mask to combine with is not a BinMask, or the
-                attribute is neither a bin axis nor single valued.
+                If the operator is unknown or "!=" is used on a bin axis, the
+                mask to combine with has the wrong shape, or the attribute is
+                neither a bin axis nor single valued.
         """
-        # Start from a copy of the mask we're combining with
+        # Reject unknown operators
+        if op not in _OPERATORS:
+            raise exceptions.InconsistentArguments(
+                "Masking operation must be '<', '>', '<=', '>=', '==', or "
+                f"'!=', not {op}"
+            )
+
+        # Start from a copy of the mask we're combining with, or an
+        # unbounded range along every axis
+        nbin_axes = len(self.bin_axes)
         if mask is None:
-            new_mask = BinMask()
-        elif isinstance(mask, BinMask):
-            new_mask = mask.copy()
+            new_mask = np.empty((nbin_axes, 2))
+            new_mask[:, 0] = -np.inf
+            new_mask[:, 1] = np.inf
+        elif np.shape(mask) == (nbin_axes, 2):
+            new_mask = np.array(mask, dtype=np.float64)
         else:
             raise exceptions.InconsistentArguments(
-                "Parametric Stars masks must be BinMask objects, "
-                f"got {type(mask)}."
+                "Parametric Stars masks must be the allowed range along each "
+                f"bin axis with shape ({nbin_axes}, 2), got {np.shape(mask)}."
             )
 
         # Resolve a string threshold as an attribute alias on the emitter
@@ -928,10 +959,23 @@ class Stars(StarsComponent):
         # Otherwise, is this a condition on a bin axis?
         axis = attr[5:] if attr.startswith("log10") else attr
         if override is None and axis in self.bin_axes:
-            axis_units = yr if axis == "ages" else None
-            new_mask.add_axis_condition(
-                axis, op, to_axis_threshold(thresh, attr, axis_units)
-            )
+            # "!=" would need a range with a hole in it
+            if op == "!=":
+                raise exceptions.InconsistentArguments(
+                    f"Can't mask a parametric Stars on {attr} with '!=', "
+                    "masks on the bin axes must be a single range."
+                )
+
+            # Narrow the axis' range, moving strict bounds by one step so a
+            # value exactly on the threshold fails
+            iaxis = self.bin_axes.index(axis)
+            value = self._get_axis_threshold(thresh, attr, axis)
+            if op in ("<", "<=", "=="):
+                hi = np.nextafter(value, -np.inf) if op == "<" else value
+                new_mask[iaxis, 1] = min(new_mask[iaxis, 1], hi)
+            if op in (">", ">=", "=="):
+                lo = np.nextafter(value, np.inf) if op == ">" else value
+                new_mask[iaxis, 0] = max(new_mask[iaxis, 0], lo)
             return new_mask
 
         # Anything else must be a single population level value
@@ -946,8 +990,53 @@ class Stars(StarsComponent):
                 f"({self.bin_axes}) and single valued quantities can be "
                 "masked."
             )
-        new_mask.add_population_condition(value, op, thresh)
+
+        # A failing population level condition excludes everything, which
+        # we mark by emptying the first axis' range
+        if not _OPERATORS[op](value, thresh):
+            new_mask[0] = (np.inf, -np.inf)
         return new_mask
+
+    def _get_axis_threshold(self, thresh, attr, axis):
+        """Convert a mask threshold into the linear units of a bin axis.
+
+        Args:
+            thresh (float/unyt_quantity):
+                The threshold as given to the mask.
+            attr (str):
+                The masked attribute (e.g. "log10ages" or "ages").
+            axis (str):
+                The bin axis the attribute refers to (e.g. "ages").
+
+        Returns:
+            float:
+                The threshold in the units of the axis' bin edges.
+
+        Raises:
+            InconsistentArguments:
+                If the axis has units but the threshold does not.
+        """
+        # A log10 attribute's threshold is the log10 of the linear value
+        if attr.startswith("log10"):
+            if isinstance(thresh, unyt_quantity):
+                thresh = thresh.ndview
+            return 10 ** float(thresh)
+
+        # Otherwise convert any units to the edge units (only the ages have
+        # units, stored in yr)
+        axis_units = yr if axis == "ages" else None
+        if isinstance(thresh, unyt_quantity):
+            if axis_units is None:
+                return float(thresh.ndview)
+            return float(thresh.to(axis_units).ndview)
+
+        # A unitless threshold can't be compared with an axis that has units
+        if axis_units is not None:
+            raise exceptions.InconsistentArguments(
+                f"Masking attribute ({attr}) has units but threshold does not "
+                f"({thresh})."
+            )
+        return float(thresh)
 
     def calculate_median_age(self):
         """Calculate the median age of the stellar population."""

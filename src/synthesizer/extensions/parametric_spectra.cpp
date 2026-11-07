@@ -50,7 +50,10 @@
  * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
  * @param log_flags: A sequence of booleans, one per grid axis, flagging
  *                   axes whose grid coordinates are log10 values.
- * @param mask_obj: The mask (bool, same shape as the masses) or None.
+ * @param mask_obj: The mask, a float64 array of shape (ndim, 2) holding the
+ *                  allowed [lo, hi] range (linear units, inclusive) along
+ *                  each axis, or None. The bounds must be finite (use the
+ *                  largest finite float for an open bound).
  * @param grid_props: The grid properties (used for the number of axes).
  * @param pops: The struct to fill.
  *
@@ -189,26 +192,31 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     }
   }
 
-  /* Attach the mask if we have one. */
-  pops.mask = nullptr;
+  /* Read the mask's range along each axis if we have one (the struct
+   * starts with unbounded ranges). */
   if (mask_obj != NULL && mask_obj != Py_None) {
     PyArrayObject *np_mask = array_or_none(mask_obj, "mask");
     if (np_mask == NULL) {
       return false;
     }
 
-    /* The mask must be a contiguous bool array shaped like the masses. */
-    if (PyArray_TYPE(np_mask) != NPY_BOOL ||
-        !PyArray_SAMESHAPE(np_mask, np_masses)) {
-      PyErr_SetString(PyExc_ValueError,
-                      "mask must be a boolean array with the same shape as "
-                      "the masses.");
+    /* The mask must be a contiguous (ndim, 2) float64 array. */
+    if (PyArray_TYPE(np_mask) != NPY_FLOAT64 || PyArray_NDIM(np_mask) != 2 ||
+        PyArray_DIM(np_mask, 0) != ndim || PyArray_DIM(np_mask, 1) != 2) {
+      PyErr_Format(PyExc_ValueError,
+                   "mask must be a float64 array of shape (%d, 2) holding "
+                   "the allowed range along each axis.",
+                   ndim);
       return false;
     }
     if (!is_c_contiguous(np_mask, "mask")) {
       return false;
     }
-    pops.mask = static_cast<const npy_bool *>(PyArray_DATA(np_mask));
+    const double *ranges = static_cast<const double *>(PyArray_DATA(np_mask));
+    for (int idim = 0; idim < ndim; idim++) {
+      pops.mask_lo[idim] = ranges[2 * idim];
+      pops.mask_hi[idim] = ranges[2 * idim + 1];
+    }
   }
 
   return true;
@@ -362,7 +370,7 @@ static void integrated_spectra_loop(GridProps *grid_props,
  * @param log_flags: One boolean per axis flagging log10 grid axes.
  * @param nthreads: The number of threads to use.
  * @param np_grid_weights: Precomputed grid weights or None.
- * @param mask: A boolean mask with the shape of the masses or None.
+ * @param mask: The allowed (ndim, 2) range along each axis or None.
  * @param np_lam_mask: A wavelength mask or None.
  * @param out_dtype: Requested floating-point dtype for the returned spectrum.
  * @param prop_names: Optional names for the grid axes (for error messages).
@@ -509,7 +517,7 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
  * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
  * @param log_flags: One boolean per axis flagging log10 grid axes.
  * @param nthreads: The number of threads to use.
- * @param mask: A boolean mask with the shape of the masses or None.
+ * @param mask: The allowed (ndim, 2) range along each axis or None.
  * @param prop_names: Optional names for the grid axes (for error messages).
  *
  * @return The grid weights (with the grid's shape and dtype).

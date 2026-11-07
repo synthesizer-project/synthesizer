@@ -763,8 +763,8 @@ class TestBinStorage:
         np.testing.assert_allclose(stars.get_spectra(model).lnu, 2 * lnu)
 
 
-class TestBinMask:
-    """Tests for fractional masks on binned parametric populations."""
+class TestMask:
+    """Tests for range masks on binned parametric populations."""
 
     @pytest.fixture
     def stars(self, test_grid):
@@ -789,109 +789,96 @@ class TestBinMask:
         _set_age_bin(stars, 5e6, 2e7, 1.0, metallicity_index=3)
         return stars
 
-    def test_straddling_bin_fraction(self, stars):
-        """A threshold through a bin passes the fraction below it.
+    def test_axis_conditions_set_ranges(self, stars):
+        """Conditions on a bin axis bound its range in linear units.
 
         Args:
             stars (Stars):
                 The single 5-20 Myr bin Stars fixture.
         """
-        # A log10 threshold at 10 Myr passes the 5-10 Myr part
+        # A strict log10 upper bound sits one step below 10 Myr
         mask = stars.get_mask("log10ages", 7, "<")
-        np.testing.assert_allclose(mask.get_fractions(stars), 5.0 / 15.0)
+        assert mask[0, 0] == -np.inf
+        assert mask[0, 1] == np.nextafter(1e7, -np.inf)
 
-        # A threshold with units passes the 10-20 Myr part
+        # A non-strict bound with units sits exactly on 10 Myr
         mask = stars.get_mask("ages", 10 * Myr, ">=")
-        np.testing.assert_allclose(mask.get_fractions(stars), 10.0 / 15.0)
+        assert mask[0, 0] == 1e7
+        assert mask[0, 1] == np.inf
 
-    def test_same_axis_conditions_intersect(self, stars):
-        """Two conditions on one axis keep the intersection of intervals.
+        # The metallicity axis is left unbounded
+        np.testing.assert_array_equal(mask[1], [-np.inf, np.inf])
+
+    def test_conditions_combine(self, stars):
+        """Conditions on one axis intersect and on others are independent.
 
         Args:
             stars (Stars):
                 The single 5-20 Myr bin Stars fixture.
         """
-        # Combine 8 Myr < age < 12 Myr
-        mask = stars.get_mask("ages", 8 * Myr, ">")
-        mask = stars.get_mask("ages", 12 * Myr, "<", mask=mask)
+        # Combine 8 Myr <= age <= 12 Myr with Z <= 0.002
+        mask = stars.get_mask("ages", 8 * Myr, ">=")
+        mask = stars.get_mask("ages", 12 * Myr, "<=", mask=mask)
+        mask = stars.get_mask("metallicities", 0.002, "<=", mask=mask)
 
-        # Only the 4 Myr overlap of the 15 Myr bin passes
-        np.testing.assert_allclose(mask.get_fractions(stars), 4.0 / 15.0)
+        # Each axis must hold its own range
+        np.testing.assert_array_equal(mask, [[8e6, 1.2e7], [-np.inf, 0.002]])
 
-    def test_conditions_on_different_axes_multiply(self, test_grid):
-        """Conditions on different axes multiply their fractions.
+    def test_strictness_on_points(self, test_grid):
+        """A point on the threshold fails "<" and passes "<=".
 
         Args:
             test_grid (Grid):
                 The test grid fixture.
         """
-        # Give a Stars a single bin that is finite along both axes
-        stars = Stars(
-            test_grid.log10ages,
-            test_grid.metallicities,
-            sf_hist=1e7 * yr,
-            metal_dist=0.01,
+        # Put all the mass on a single grid point
+        sfzh = np.zeros(
+            (test_grid.log10ages.size, test_grid.metallicities.size)
         )
-        stars._set_bins(
-            {
-                "ages": np.array([5e6, 2e7]),
-                "metallicities": np.array([0.001, 0.005]),
-            },
-            np.ones((1, 1, 1)),
-        )
+        sfzh[5, 2] = 1.0
+        stars = Stars(test_grid.log10ages, test_grid.metallicities, sfzh=sfzh)
+        thresh = test_grid.log10ages[5] * dimensionless
 
-        # Cut through the bin along both axes
-        mask = stars.get_mask("log10ages", 7, "<")
-        mask = stars.get_mask("metallicities", 0.002, "<", mask=mask)
+        # A strict bound at the point excludes it
+        model = IncidentEmission(test_grid)
+        model.add_mask("log10ages", "<", thresh)
+        assert np.all(stars.get_spectra(model).lnu == 0)
 
-        # The passing fraction is the product of the two axis fractions
-        np.testing.assert_allclose(
-            mask.get_fractions(stars), (5.0 / 15.0) * (1.0 / 4.0)
-        )
+        # A non-strict bound at the point keeps all of it
+        model = IncidentEmission(test_grid)
+        model.add_mask("log10ages", "<=", thresh)
+        expected = stars.get_spectra(IncidentEmission(test_grid)).lnu
+        np.testing.assert_allclose(stars.get_spectra(model).lnu, expected)
 
-    def test_points_are_exact(self, instantaneous_stars):
-        """Zero width bins are evaluated exactly, including equality.
-
-        Args:
-            instantaneous_stars (Stars):
-                The instantaneous burst Stars fixture.
-        """
-        # Mask the point SFZH below 10 Myr
-        stars = instantaneous_stars
-        mask = stars.get_mask("log10ages", 7, "<")
-        fracs = mask.get_fractions(stars)[0, :, 0]
-
-        # The point bins (even indices) pass exactly when below the
-        # threshold, the empty bins between them get the clipped fraction
-        edges = stars.get_bin_edges("ages", values_only=True)
-        lo, hi = edges[:-1], edges[1:]
-        expected = np.where(
-            lo == hi,
-            (lo < 1e7).astype(float),
-            np.clip(np.minimum(hi, 1e7) - lo, 0, None)
-            / np.where(lo == hi, 1.0, hi - lo),
-        )
-        np.testing.assert_allclose(fracs, expected)
-
-        # Equality is allowed on points
-        mask = stars.get_mask("metallicities", stars.metallicities[2], "==")
-        fracs = mask.get_fractions(stars)[0, 0, ::2]
-        np.testing.assert_allclose(fracs, np.arange(fracs.size) == 2)
-
-    def test_equality_on_finite_bins(self, stars):
-        """No mass in a finite bin sits exactly at a single value.
+    def test_equality(self, stars):
+        """Test "==" collapses the range and "!=" is rejected on a bin axis.
 
         Args:
             stars (Stars):
                 The single 5-20 Myr bin Stars fixture.
         """
-        # Equality passes none of a finite bin
+        # Equality allows only the threshold itself
         mask = stars.get_mask("ages", 10 * Myr, "==")
-        np.testing.assert_allclose(mask.get_fractions(stars), 0.0)
+        np.testing.assert_array_equal(mask[0], [1e7, 1e7])
 
-        # Inequality passes all of it
-        mask = stars.get_mask("ages", 10 * Myr, "!=")
-        np.testing.assert_allclose(mask.get_fractions(stars), 1.0)
+        # Inequality can't be a single range
+        with pytest.raises(exceptions.InconsistentArguments):
+            stars.get_mask("ages", 10 * Myr, "!=")
+
+    def test_invalid_masks_raise(self, stars):
+        """Unknown operators and malformed masks must raise.
+
+        Args:
+            stars (Stars):
+                The single 5-20 Myr bin Stars fixture.
+        """
+        # An unknown operator
+        with pytest.raises(exceptions.InconsistentArguments):
+            stars.get_mask("ages", 10 * Myr, "~")
+
+        # A mask with the wrong shape to combine with
+        with pytest.raises(exceptions.InconsistentArguments):
+            stars.get_mask("ages", 10 * Myr, "<", mask=np.ones(3, bool))
 
     def test_masked_extraction_matches_clipped_bin(self, test_grid, stars):
         """A masked straddling bin must equal the clipped bin on its own.
@@ -935,13 +922,17 @@ class TestBinMask:
         # A model with a fixed fesc of 0.3
         model = IncidentEmission(test_grid, fesc=0.3)
 
-        # A passing condition includes the whole population
+        # A passing condition leaves every range unbounded
         mask = stars.get_mask("fesc", 0.5, "<", attr_override_obj=model)
-        np.testing.assert_allclose(mask.get_fractions(stars), 1.0)
+        assert np.all(mask[:, 0] == -np.inf) and np.all(mask[:, 1] == np.inf)
 
-        # A failing condition excludes the whole population
+        # A failing condition empties a range, excluding everything
         mask = stars.get_mask("fesc", 0.1, "<", attr_override_obj=model)
-        np.testing.assert_allclose(mask.get_fractions(stars), 0.0)
+        assert np.any(mask[:, 0] > mask[:, 1])
+
+        # The extracted spectra must be zero
+        model.add_mask("fesc", "<", 0.1 * dimensionless)
+        assert np.all(stars.get_spectra(model).lnu == 0)
 
 
 class TestBinnedSFH:

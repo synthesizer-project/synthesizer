@@ -513,6 +513,12 @@ struct BicAxisTable {
  * fractions along each axis are computed once and reused for every
  * population and every bin sharing that edge pair.
  *
+ * The mask is applied here too. Each bin is clipped to the mask's range
+ * along the axis, its fractions are computed over the clipped extent and
+ * then scaled by the fraction of the bin inside the range. Mass is uniform
+ * within a bin, so this is exact, and it costs nothing per bin when the
+ * populations are spread.
+ *
  * @tparam PopReal The floating-point type of the population arrays.
  * @tparam GridReal The floating-point type of the grid axis arrays.
  * @param grid_props: A struct containing the properties along each grid axis.
@@ -537,14 +543,46 @@ static void build_bic_tables(GridProps *grid_props, Populations *pops,
     table.inds.clear();
     table.fracs.clear();
 
+    /* Get the mask's range along this axis. */
+    const double mask_lo = pops->mask_lo[dim];
+    const double mask_hi = pops->mask_hi[dim];
+
     /* Compute each bin's grid points and fractions and append them. */
     for (int ibin = 0; ibin < pops->nbins[dim]; ibin++) {
-      get_pop_bin_fracs_bic<GridReal>(
-          grid_axis, grid_props->dims[dim], pops->log_axis[dim],
-          static_cast<double>(edges[ibin]),
-          static_cast<double>(edges[ibin + 1]), inds, fracs);
-      table.inds.insert(table.inds.end(), inds.begin(), inds.end());
-      table.fracs.insert(table.fracs.end(), fracs.begin(), fracs.end());
+      double lo = static_cast<double>(edges[ibin]);
+      double hi = static_cast<double>(edges[ibin + 1]);
+
+      /* Apply the mask. A point passes or fails entirely, while a finite
+       * bin is clipped to the range and keeps the fraction inside it. */
+      double scale = 1.0;
+      if (hi <= lo) {
+        if (lo < mask_lo || lo > mask_hi) {
+          scale = 0.0;
+        }
+      } else {
+        const double clip_lo = std::max(lo, mask_lo);
+        const double clip_hi = std::min(hi, mask_hi);
+        if (clip_hi <= clip_lo) {
+          scale = 0.0;
+        } else {
+          scale = (clip_hi - clip_lo) / (hi - lo);
+          lo = clip_lo;
+          hi = clip_hi;
+        }
+      }
+
+      /* A bin entirely outside the mask contributes nothing, so it gets an
+       * empty run. Otherwise append its (scaled) grid points and fractions.
+       */
+      if (scale > 0.0) {
+        get_pop_bin_fracs_bic<GridReal>(grid_axis, grid_props->dims[dim],
+                                        pops->log_axis[dim], lo, hi, inds,
+                                        fracs);
+        table.inds.insert(table.inds.end(), inds.begin(), inds.end());
+        for (const double frac : fracs) {
+          table.fracs.push_back(frac * scale);
+        }
+      }
       table.offsets.push_back(static_cast<int>(table.inds.size()));
     }
   }
@@ -636,10 +674,7 @@ static void weight_loop_bic_serial(
       static_cast<size_t>(pops->npop) * static_cast<size_t>(pops->ncells);
   for (size_t ind = 0; ind < nbins_total; ind++) {
 
-    /* Skip masked and empty bins. */
-    if (pops->bin_is_masked(ind)) {
-      continue;
-    }
+    /* Skip empty bins (masked out bins have empty table runs). */
     const double mass = static_cast<double>(masses[ind]);
     if (mass == 0.0) {
       continue;
@@ -697,10 +732,7 @@ static void weight_loop_bic_omp(
     /* Loop over the bins assigned to this thread. */
     for (size_t ind = start; ind < end; ind++) {
 
-      /* Skip masked and empty bins. */
-      if (pops->bin_is_masked(ind)) {
-        continue;
-      }
+      /* Skip empty bins (masked out bins have empty table runs). */
       const double mass = static_cast<double>(masses[ind]);
       if (mass == 0.0) {
         continue;

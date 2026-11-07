@@ -1410,18 +1410,20 @@ class IntegratedParametricExtractor(Extractor):
     """
 
     def _get_population_inputs(self, emitter, mask):
-        """Get the bins of a parametric emitter in the grid's axes.
+        """Get the bins (and mask) of a parametric emitter in the grid's axes.
 
         Args:
             emitter (Stars):
                 The parametric emitter.
-            mask (BinMask):
-                A mask to apply to the bins, or None.
+            mask (np.ndarray of float):
+                The allowed range along each of the emitter's bin axes (see
+                parametric.Stars.get_mask), or None.
 
         Returns:
             tuple:
                 The bin edges along each grid axis (in the grid's units), the
-                (masked) bin masses and the log10 flag for each grid axis.
+                bin masses, the log10 flag for each grid axis and the mask's
+                range along each grid axis (in the grid's units, or None).
 
         Raises:
             InconsistentArguments:
@@ -1443,38 +1445,48 @@ class IntegratedParametricExtractor(Extractor):
                 "be extracted from a grid with the same axes."
             )
 
-        # Apply the mask, which clips the bins to the parts that pass and
-        # scales their masses to match
-        if mask is not None:
-            bin_edges, bin_masses = mask.get_masked_bins(emitter)
-        else:
-            bin_edges = {
-                axis: emitter.get_bin_edges(axis, values_only=True)
-                for axis in emitter.bin_axes
-            }
-            bin_masses = emitter.bin_masses
+        # The bins (and mask rows) must be ordered like the grid axes
+        bin_order = [emitter.bin_axes.index(axis) for axis in grid_bin_axes]
 
-        # Collect the edges along each grid axis in the grid's order
+        # Collect the edges and mask range along each grid axis
         edges = []
-        for bin_axis, units in zip(grid_bin_axes, self._axes_units):
-            axis_edges = bin_edges[bin_axis]
+        ranges = None if mask is None else np.empty((len(bin_order), 2))
+        for iaxis, (bin_axis, units) in enumerate(
+            zip(grid_bin_axes, self._axes_units)
+        ):
+            axis_edges = emitter.get_bin_edges(bin_axis)
+            axis_range = None if mask is None else mask[bin_order[iaxis]]
 
             # Convert to the grid's units if the edges have units
-            unit_edges = emitter.get_bin_edges(bin_axis)
-            if isinstance(unit_edges, unyt_array):
-                axis_edges = (
-                    unyt_array(axis_edges, unit_edges.units).to(units).ndview
-                )
+            if isinstance(axis_edges, unyt_array):
+                if axis_range is not None:
+                    axis_range = (
+                        unyt_array(axis_range, axis_edges.units)
+                        .to(units)
+                        .ndview
+                    )
+                axis_edges = axis_edges.to(units).ndview
             edges.append(np.ascontiguousarray(axis_edges, dtype=np.float64))
+            if ranges is not None:
+                ranges[iaxis] = axis_range
 
-        # The bins must be ordered like the grid axes
-        bin_order = [emitter.bin_axes.index(axis) for axis in grid_bin_axes]
-        masses = np.transpose(bin_masses, [0] + [i + 1 for i in bin_order])
+        # The extension is compiled with -ffast-math so can't handle
+        # infinite bounds, replace them with the largest finite float (an
+        # emptied range stays empty)
+        if ranges is not None:
+            big = np.finfo(np.float64).max
+            np.clip(ranges, -big, big, out=ranges)
+
+        # Reorder the masses' bin axes to match
+        masses = np.transpose(
+            emitter.bin_masses, [0] + [i + 1 for i in bin_order]
+        )
 
         return (
             tuple(edges),
             np.ascontiguousarray(masses, dtype=np.float64),
             tuple(self._log_emitter_attr),
+            ranges,
         )
 
     @timed("IntegratedParametricExtractor.generate_lnu")
@@ -1497,8 +1509,9 @@ class IntegratedParametricExtractor(Extractor):
                 The emitter object from which to extract the emission.
             model (EmissionModel):
                 The emission model defining the emission to extract.
-            mask (BinMask):
-                A mask to apply to the bins.
+            mask (np.ndarray of float):
+                The allowed range along each bin axis (see
+                parametric.Stars.get_mask), or None.
             lam_mask (np.ndarray of bool):
                 A mask to apply to the spectra's wavelength axis.
             grid_assignment_method (str):
@@ -1519,7 +1532,9 @@ class IntegratedParametricExtractor(Extractor):
         out_dtype = resolve_out_dtype(out_dtype)
 
         # Get the bins in the grid's axes
-        edges, masses, log_flags = self._get_population_inputs(emitter, mask)
+        edges, masses, log_flags, ranges = self._get_population_inputs(
+            emitter, mask
+        )
 
         # If nthreads is -1 then use all available threads
         if nthreads == -1:
@@ -1540,7 +1555,7 @@ class IntegratedParametricExtractor(Extractor):
             log_flags,
             nthreads,
             grid_weights,
-            None,
+            ranges,
             lam_mask,
             out_dtype,
             self._emitter_attributes,
@@ -1575,8 +1590,9 @@ class IntegratedParametricExtractor(Extractor):
                 The emitter object from which to extract the emission.
             model (EmissionModel):
                 The emission model defining the emission to extract.
-            mask (BinMask):
-                A mask to apply to the bins.
+            mask (np.ndarray of float):
+                The allowed range along each bin axis (see
+                parametric.Stars.get_mask), or None.
             lam_mask (np.ndarray of bool):
                 A mask to apply to the lines.
             grid_assignment_method (str):
@@ -1597,7 +1613,9 @@ class IntegratedParametricExtractor(Extractor):
         out_dtype = resolve_out_dtype(out_dtype)
 
         # Get the bins in the grid's axes
-        edges, masses, log_flags = self._get_population_inputs(emitter, mask)
+        edges, masses, log_flags, ranges = self._get_population_inputs(
+            emitter, mask
+        )
 
         # If nthreads is -1 then use all available threads
         if nthreads == -1:
@@ -1610,7 +1628,7 @@ class IntegratedParametricExtractor(Extractor):
         )
 
         # Compute the integrated line luminosities, then reuse the weights
-        # for the continuum
+        # for the continuum (they already include any mask)
         lum, grid_weights = compute_integrated_parametric_sed(
             self._line_lum_grid,
             self._grid_axes,
@@ -1619,7 +1637,7 @@ class IntegratedParametricExtractor(Extractor):
             log_flags,
             nthreads,
             grid_weights,
-            None,
+            ranges,
             lam_mask,
             out_dtype,
             self._emitter_attributes,
