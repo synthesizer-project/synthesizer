@@ -198,6 +198,14 @@ class PipelineIOBuffers:
             "_write_fnu_data_cubes",
             "DataCubes/SpectralFluxDensities",
         ),
+        "processed_lnu_data_cubes": (
+            "_write_lnu_data_cubes",
+            "ProcessedDataCubes/SpectralLuminosityDensities",
+        ),
+        "processed_fnu_data_cubes": (
+            "_write_fnu_data_cubes",
+            "ProcessedDataCubes/SpectralFluxDensities",
+        ),
         "spectroscopy_lnu": (
             "_write_spectroscopy_lnu",
             "Spectroscopy/SpectralLuminosityDensities",
@@ -296,6 +304,12 @@ class PipelineIOBuffers:
     )
     lnu_data_cubes: dict = field(init=False, default_factory=_per_component)
     fnu_data_cubes: dict = field(init=False, default_factory=_per_component)
+    processed_lnu_data_cubes: dict = field(
+        init=False, default_factory=_per_component
+    )
+    processed_fnu_data_cubes: dict = field(
+        init=False, default_factory=_per_component
+    )
     spectroscopy_lnu: dict = field(init=False, default_factory=_per_component)
     spectroscopy_fnu: dict = field(init=False, default_factory=_per_component)
     analysis_results: dict = field(init=False, default_factory=dict)

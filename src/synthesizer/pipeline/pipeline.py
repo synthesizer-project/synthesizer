@@ -4408,7 +4408,9 @@ class Pipeline:
                 Which data cubes to unpack, either "lnu" or "fnu".
         """
         # Each component holds its cubes by instrument and then emission
-        # model label
+        # model label. The raw cubes are always there, the processed cubes
+        # (with the instrument's PSF/noise applied) only exist if the
+        # instrument had any post-processing to apply.
         for component_name, component in (
             ("Galaxy", galaxy),
             ("Stars", galaxy.stars),
@@ -4416,16 +4418,23 @@ class Pipeline:
         ):
             if component is None:
                 continue
-            cubes = getattr(component, f"data_cubes_{quantity}")
-            for inst_label, inst_cubes in cubes.items():
-                for spec_type, cube in inst_cubes.items():
-                    self.io_buffers.append_output(
-                        cube.arr * cube.units,
-                        f"{quantity}_data_cubes",
-                        component_name,
-                        inst_label,
-                        spec_type,
-                    )
+            for source_attr, target_attr in (
+                (f"data_cubes_{quantity}", f"{quantity}_data_cubes"),
+                (
+                    f"processed_data_cubes_{quantity}",
+                    f"processed_{quantity}_data_cubes",
+                ),
+            ):
+                cubes = getattr(component, source_attr, {})
+                for inst_label, inst_cubes in cubes.items():
+                    for spec_type, cube in inst_cubes.items():
+                        self.io_buffers.append_output(
+                            cube.arr * cube.units,
+                            target_attr,
+                            component_name,
+                            inst_label,
+                            spec_type,
+                        )
 
     def _unpack_spectroscopy(self, galaxy, quantity):
         """Unpack the galaxy's spectroscopy into the IO buffers.

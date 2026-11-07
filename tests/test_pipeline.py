@@ -1150,8 +1150,16 @@ class TestPipelineOperations:
         self, kernel, pipeline_with_galaxies_per_particle, tmp_path
     ):
         """Data cubes and spectroscopy are written with a row per galaxy."""
+        # Give the IFU a PSF so we also get processed cubes
         lam = np.logspace(3, 4, 10) * angstrom
-        ifu = IntegratedFieldUnit(label="IFU", lam=lam, resolution=1 * kpc)
+        psf = np.ones((3, 3)) / 9
+        ifu = IntegratedFieldUnit(
+            label="IFU",
+            lam=lam,
+            resolution=1 * kpc,
+            psfs=psf,
+            psf_pixel_scale=1 * kpc,
+        )
         spectrometer = SpectroscopicInstrument(label="Spec", lam=lam)
 
         # Request every flavour of data cube and spectroscopy
@@ -1172,6 +1180,8 @@ class TestPipelineOperations:
             for path in (
                 "DataCubes/SpectralLuminosityDensities/IFU",
                 "DataCubes/SpectralFluxDensities/IFU",
+                "ProcessedDataCubes/SpectralLuminosityDensities/IFU",
+                "ProcessedDataCubes/SpectralFluxDensities/IFU",
                 "Spectroscopy/SpectralLuminosityDensities/Spec",
                 "Spectroscopy/SpectralFluxDensities/Spec",
             ):
