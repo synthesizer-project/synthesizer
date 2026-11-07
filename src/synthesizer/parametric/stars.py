@@ -316,13 +316,11 @@ class Stars(StarsComponent):
             self.stellar_fraction = grid.stellar_fraction
 
         # Get the bins describing the population, either from an explicit
-        # SFZH (defined at the points of the axes, which we copy so
-        # normalising doesn't modify the caller's array) or from the SFH and
-        # metallicity distribution
+        # SFZH (defined at the points of the axes) or from the SFH and
+        # metallicity distribution. Either way the masses are a new array,
+        # so normalising them in place never touches the caller's SFZH
         if sfzh is not None:
-            edges, masses = self._get_point_bins(
-                np.array(sfzh, dtype=np.float64)
-            )
+            edges, masses = self._get_point_bins(sfzh)
         else:
             edges, masses = self._get_bins()
 
@@ -359,14 +357,14 @@ class Stars(StarsComponent):
             self.sfzh_normalisation = (
                 self._surviving_mass / current_surviving_mass
             )
-            masses = masses * self.sfzh_normalisation
+            masses *= self.sfzh_normalisation
 
             # now calculate the initial mass
             self.initial_mass = np.sum(masses) * Msun
 
         elif self.initial_mass is not None:
             self.sfzh_normalisation = self._initial_mass / np.sum(masses)
-            masses = masses * self.sfzh_normalisation
+            masses *= self.sfzh_normalisation
 
         else:
             # Otherwise calculate the total initial mass by just summing the
@@ -1153,9 +1151,8 @@ class Stars(StarsComponent):
                 self.spectra[key]._fnu *= conversion
 
         # Apply correction to the SFZH
-        self._set_bins(
-            self._bin_edges, self._bin_masses * np.asarray(conversion)
-        )
+        self._bin_masses *= np.asarray(conversion)
+        self._set_bins(self._bin_edges, self._bin_masses)
 
         # Ensure sf_hist and metal_dist reflect the rescaled sfzh
         self.sf_hist = np.sum(self.sfzh, axis=1)
@@ -1217,9 +1214,8 @@ class Stars(StarsComponent):
                 self.spectra[key]._fnu *= conversion
 
         # Apply correction to the SFZH
-        self._set_bins(
-            self._bin_edges, self._bin_masses * np.asarray(conversion)
-        )
+        self._bin_masses *= np.asarray(conversion)
+        self._set_bins(self._bin_edges, self._bin_masses)
 
         # Ensure sf_hist and metal_dist reflect the rescaled sfzh
         self.sf_hist = np.sum(self.sfzh, axis=1)

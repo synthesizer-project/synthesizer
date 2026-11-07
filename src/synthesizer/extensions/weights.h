@@ -5,6 +5,7 @@
 #ifndef WEIGHTS_H_
 #define WEIGHTS_H_
 /* C includes */
+#include <algorithm>
 #include <cmath>
 #include <math.h>
 #include <stdlib.h>
