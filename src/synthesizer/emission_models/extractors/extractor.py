@@ -40,6 +40,7 @@ from synthesizer.utils.precision import (
     verify_out_precision,
     weighted_sum_fits,
 )
+from synthesizer.utils.util_funcs import get_attr_unit_conversion
 
 
 class Extractor(ABC):
@@ -1409,35 +1410,38 @@ class IntegratedParametricExtractor(Extractor):
     the computation time.
     """
 
-    def _get_population_inputs(self, emitter, mask):
-        """Get the bins (and mask) of a parametric emitter in the grid's axes.
+    def _get_bin_axes(self, emitter):
+        """Match the grid's axes to a parametric emitter's bin axes.
+
+        The emitter's edges, masses and mask stay in its own axis order and
+        units. Instead, the extension is told which bin axis matches each
+        grid axis and the factor converting that axis' edges into the grid
+        axis' units, so nothing is reordered or copied.
 
         Args:
             emitter (Stars):
                 The parametric emitter.
-            mask (np.ndarray of float):
-                The allowed range along each of the emitter's bin axes (see
-                parametric.Stars.get_mask), or None.
 
         Returns:
             tuple:
-                The bin edges along each grid axis (in the grid's units), the
-                bin masses, the log10 flag for each grid axis and the mask's
-                range along each grid axis (in the grid's units, or None).
+                The emitter's bin edges (in its bin axis order), the bin axis
+                matching each grid axis and the unit conversion factor for
+                each grid axis.
 
         Raises:
             InconsistentArguments:
-                If the grid's axes don't match the emitter's bin axes.
+                If the grid's axes (without any log10 prefix) aren't the
+                emitter's bin axes.
         """
-        # Each grid axis maps onto the emitter's bin axis of the same name
-        # (with any log10 prefix removed), so they must be the same axes
+        # Each grid axis maps onto the bin axis of the same name (with any
+        # log10 prefix removed), so they must be the same axes
         grid_bin_axes = [
             name[5:] if log else name
             for name, log in zip(
                 self._emitter_attributes, self._log_emitter_attr
             )
         ]
-        if sorted(grid_bin_axes) != sorted(emitter.bin_axes):
+        if set(grid_bin_axes) != set(emitter.bin_axes):
             raise exceptions.InconsistentArguments(
                 f"The grid's axes ({self._emitter_attributes}) don't match "
                 f"the axes the {emitter.__class__.__name__} is binned along "
@@ -1445,49 +1449,26 @@ class IntegratedParametricExtractor(Extractor):
                 "be extracted from a grid with the same axes."
             )
 
-        # The bins (and mask rows) must be ordered like the grid axes
-        bin_order = [emitter.bin_axes.index(axis) for axis in grid_bin_axes]
+        # Get the bin axis and unit conversion factor for each grid axis
+        # (axes without units need no conversion)
+        bin_axes = []
+        unit_scales = []
+        for axis, units in zip(grid_bin_axes, self._axes_units):
+            bin_axes.append(emitter.bin_axes.index(axis))
+            edges = emitter.get_bin_edges(axis)
+            unit_scales.append(
+                get_attr_unit_conversion(edges.units, units)
+                if isinstance(edges, unyt_array)
+                else 1.0
+            )
 
-        # Collect the edges and mask range along each grid axis
-        edges = []
-        ranges = None if mask is None else np.empty((len(bin_order), 2))
-        for iaxis, (bin_axis, units) in enumerate(
-            zip(grid_bin_axes, self._axes_units)
-        ):
-            axis_edges = emitter.get_bin_edges(bin_axis)
-            axis_range = None if mask is None else mask[bin_order[iaxis]]
-
-            # Convert to the grid's units if the edges have units
-            if isinstance(axis_edges, unyt_array):
-                if axis_range is not None:
-                    axis_range = (
-                        unyt_array(axis_range, axis_edges.units)
-                        .to(units)
-                        .ndview
-                    )
-                axis_edges = axis_edges.to(units).ndview
-            edges.append(np.ascontiguousarray(axis_edges, dtype=np.float64))
-            if ranges is not None:
-                ranges[iaxis] = axis_range
-
-        # The extension is compiled with -ffast-math so can't handle
-        # infinite bounds, replace them with the largest finite float (an
-        # emptied range stays empty)
-        if ranges is not None:
-            big = np.finfo(np.float64).max
-            np.clip(ranges, -big, big, out=ranges)
-
-        # Reorder the masses' bin axes to match
-        masses = np.transpose(
-            emitter.bin_masses, [0] + [i + 1 for i in bin_order]
+        # The edges themselves are passed in the emitter's own order
+        edges = tuple(
+            emitter.get_bin_edges(axis, values_only=True)
+            for axis in emitter.bin_axes
         )
 
-        return (
-            tuple(edges),
-            np.ascontiguousarray(masses, dtype=np.float64),
-            tuple(self._log_emitter_attr),
-            ranges,
-        )
+        return edges, tuple(bin_axes), tuple(unit_scales)
 
     @timed("IntegratedParametricExtractor.generate_lnu")
     @verify_out_precision()
@@ -1531,10 +1512,8 @@ class IntegratedParametricExtractor(Extractor):
         # Resolve the requested output precision
         out_dtype = resolve_out_dtype(out_dtype)
 
-        # Get the bins in the grid's axes
-        edges, masses, log_flags, ranges = self._get_population_inputs(
-            emitter, mask
-        )
+        # Get the bin edges and how the bin axes map onto the grid's axes
+        edges, bin_axes, unit_scales = self._get_bin_axes(emitter)
 
         # If nthreads is -1 then use all available threads
         if nthreads == -1:
@@ -1551,11 +1530,13 @@ class IntegratedParametricExtractor(Extractor):
             self._spectra_grid,
             self._grid_axes,
             edges,
-            masses,
-            log_flags,
+            emitter.bin_masses,
+            self._log_emitter_attr,
+            bin_axes,
+            unit_scales,
             nthreads,
             grid_weights,
-            ranges,
+            mask,
             lam_mask,
             out_dtype,
             self._emitter_attributes,
@@ -1612,10 +1593,8 @@ class IntegratedParametricExtractor(Extractor):
         # Resolve the requested output precision
         out_dtype = resolve_out_dtype(out_dtype)
 
-        # Get the bins in the grid's axes
-        edges, masses, log_flags, ranges = self._get_population_inputs(
-            emitter, mask
-        )
+        # Get the bin edges and how the bin axes map onto the grid's axes
+        edges, bin_axes, unit_scales = self._get_bin_axes(emitter)
 
         # If nthreads is -1 then use all available threads
         if nthreads == -1:
@@ -1633,11 +1612,13 @@ class IntegratedParametricExtractor(Extractor):
             self._line_lum_grid,
             self._grid_axes,
             edges,
-            masses,
-            log_flags,
+            emitter.bin_masses,
+            self._log_emitter_attr,
+            bin_axes,
+            unit_scales,
             nthreads,
             grid_weights,
-            ranges,
+            mask,
             lam_mask,
             out_dtype,
             self._emitter_attributes,
@@ -1646,8 +1627,10 @@ class IntegratedParametricExtractor(Extractor):
             self._line_cont_grid,
             self._grid_axes,
             edges,
-            masses,
-            log_flags,
+            emitter.bin_masses,
+            self._log_emitter_attr,
+            bin_axes,
+            unit_scales,
             nthreads,
             grid_weights,
             None,

@@ -763,6 +763,10 @@ class TestBinStorage:
         np.testing.assert_allclose(stars.get_spectra(model).lnu, 2 * lnu)
 
 
+# The bound parametric masks use for an open end of a range
+BIG = np.finfo(np.float64).max
+
+
 class TestMask:
     """Tests for range masks on binned parametric populations."""
 
@@ -798,16 +802,16 @@ class TestMask:
         """
         # A strict log10 upper bound sits one step below 10 Myr
         mask = stars.get_mask("log10ages", 7, "<")
-        assert mask[0, 0] == -np.inf
+        assert mask[0, 0] == -BIG
         assert mask[0, 1] == np.nextafter(1e7, -np.inf)
 
         # A non-strict bound with units sits exactly on 10 Myr
         mask = stars.get_mask("ages", 10 * Myr, ">=")
         assert mask[0, 0] == 1e7
-        assert mask[0, 1] == np.inf
+        assert mask[0, 1] == BIG
 
-        # The metallicity axis is left unbounded
-        np.testing.assert_array_equal(mask[1], [-np.inf, np.inf])
+        # The metallicity axis is left open
+        np.testing.assert_array_equal(mask[1], [-BIG, BIG])
 
     def test_conditions_combine(self, stars):
         """Conditions on one axis intersect and on others are independent.
@@ -822,7 +826,7 @@ class TestMask:
         mask = stars.get_mask("metallicities", 0.002, "<=", mask=mask)
 
         # Each axis must hold its own range
-        np.testing.assert_array_equal(mask, [[8e6, 1.2e7], [-np.inf, 0.002]])
+        np.testing.assert_array_equal(mask, [[8e6, 1.2e7], [-BIG, 0.002]])
 
     def test_strictness_on_points(self, test_grid):
         """A point on the threshold fails "<" and passes "<=".
@@ -922,9 +926,9 @@ class TestMask:
         # A model with a fixed fesc of 0.3
         model = IncidentEmission(test_grid, fesc=0.3)
 
-        # A passing condition leaves every range unbounded
+        # A passing condition leaves every range open
         mask = stars.get_mask("fesc", 0.5, "<", attr_override_obj=model)
-        assert np.all(mask[:, 0] == -np.inf) and np.all(mask[:, 1] == np.inf)
+        assert np.all(mask[:, 0] == -BIG) and np.all(mask[:, 1] == BIG)
 
         # A failing condition empties a range, excluding everything
         mask = stars.get_mask("fesc", 0.1, "<", attr_override_obj=model)

@@ -85,7 +85,16 @@ def _cic_weights(points, masses):
     return weights
 
 
-def _bic(edges, masses, nthreads=1, mask=None, lam_mask=None, weights=None):
+def _bic(
+    edges,
+    masses,
+    nthreads=1,
+    mask=None,
+    lam_mask=None,
+    weights=None,
+    bin_axes=(0, 1, 2),
+    unit_scales=(1.0, 1.0, 1.0),
+):
     """Call compute_integrated_parametric_sed with the test grid.
 
     Args:
@@ -101,6 +110,10 @@ def _bic(edges, masses, nthreads=1, mask=None, lam_mask=None, weights=None):
             A wavelength mask, or None.
         weights (np.ndarray):
             Precomputed grid weights to reuse, or None.
+        bin_axes (tuple of int):
+            The input (edges/masses/mask) axis matching each grid axis.
+        unit_scales (tuple of float):
+            The factor converting each grid axis' edges into its units.
 
     Returns:
         tuple:
@@ -112,6 +125,8 @@ def _bic(edges, masses, nthreads=1, mask=None, lam_mask=None, weights=None):
         edges,
         masses,
         LOG_FLAGS,
+        bin_axes,
+        unit_scales,
         nthreads,
         weights,
         mask,
@@ -355,6 +370,53 @@ def test_precomputed_weights_are_reused():
     np.testing.assert_allclose(spec_again, spec)
 
 
+def test_reordered_axes_match():
+    """Inputs in another axis order must give the same result, uncopied.
+
+    The edges, masses and mask stay in their own order and bin_axes maps
+    them onto the grid's axes.
+    """
+    # Compute the result in the grid's axis order with a mask
+    edges = _wide_edges()
+    masses = _random_masses(edges)
+    mask = np.array([[2e6, 1e8], [-BIG, 5e-3], [0.5, BIG]])
+    spec, weights = _bic(edges, masses, mask=mask)
+
+    # Store the same inputs with the axes in the order (2, 0, 1)
+    order = (2, 0, 1)
+    spec_r, weights_r = _bic(
+        tuple(edges[i] for i in order),
+        np.ascontiguousarray(np.transpose(masses, (0, 3, 1, 2))),
+        mask=np.ascontiguousarray(mask[list(order)]),
+        bin_axes=(1, 2, 0),
+    )
+
+    # Both must agree
+    np.testing.assert_allclose(weights_r, weights)
+    np.testing.assert_allclose(spec_r, spec)
+
+
+def test_unit_scales_convert_edges_and_mask():
+    """Edges and a mask in other units must be converted by unit_scales."""
+    # Compute the result with the first axis in the grid's units (yr)
+    edges = _wide_edges()
+    masses = _random_masses(edges)
+    mask = np.array([[2e6, 1e8], [-BIG, BIG], [-BIG, BIG]])
+    spec, weights = _bic(edges, masses, mask=mask)
+
+    # Express the first axis' edges and mask in Myr with a scale of 1e6
+    edges_myr = (edges[0] / 1e6,) + edges[1:]
+    mask_myr = mask.copy()
+    mask_myr[0] /= 1e6
+    spec_s, weights_s = _bic(
+        edges_myr, masses, mask=mask_myr, unit_scales=(1e6, 1.0, 1.0)
+    )
+
+    # Both must agree
+    np.testing.assert_allclose(weights_s, weights, rtol=1e-12)
+    np.testing.assert_allclose(spec_s, spec, rtol=1e-12)
+
+
 def test_precomputed_weights_with_mask_raise():
     """A mask can't be applied to precomputed weights, so must raise."""
     # Compute the weights to pass back in
@@ -386,6 +448,8 @@ def test_float32_inputs():
         tuple(e.astype(np.float32) for e in edges),
         masses.astype(np.float32),
         LOG_FLAGS,
+        (0, 1, 2),
+        (1.0, 1.0, 1.0),
         1,
         None,
         None,

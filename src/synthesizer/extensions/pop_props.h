@@ -7,6 +7,12 @@
  * that is uniformly distributed within it. All populations share the same
  * bin edges along each axis and differ only in their masses.
  *
+ * The inputs (edges, masses and mask) are ordered by the populations' own
+ * bin axes, which needn't match the grid's axis order or units. Everything
+ * per axis in the struct is ordered like the grid, with bin_axis giving the
+ * input axis matching each grid axis and unit_scale the factor converting
+ * that axis' edges into the grid axis' units.
+ *
  * The struct is a plain holder of validated pointers, all validation of the
  * Python inputs happens where it is filled (see parametric_spectra.cpp).
  *****************************************************************************/
@@ -26,6 +32,7 @@
 
 /* Local includes */
 #include "grid_props.h"
+#include "index_utils.h"
 
 struct Populations {
   /* The number of populations. */
@@ -34,26 +41,38 @@ struct Populations {
   /* The number of axes (always equal to the grid's ndim). */
   int ndim = 0;
 
-  /* The number of bins along each axis (one less than the number of edges).
-   */
+  /* The input (bin) axis matching each grid axis. */
+  std::array<int, MAX_GRID_NDIM> bin_axis = {};
+
+  /* The number of bins along each grid axis (one less than the number of
+   * edges). */
   std::array<int, MAX_GRID_NDIM> nbins = {};
+
+  /* The number of bins along each input axis, i.e. the masses' layout. */
+  std::array<int, MAX_GRID_NDIM> input_nbins = {};
+
+  /* The factor converting each grid axis' edges (and mask bounds) into the
+   * grid axis' units. */
+  std::array<double, MAX_GRID_NDIM> unit_scale = {};
 
   /* The number of bins in a single population (product of nbins). */
   int ncells = 0;
 
-  /* The bin edges along each axis, in linear (physical) units. These are
-   * read at the population dtype. */
+  /* The bin edges along each grid axis, in linear (physical) units before
+   * scaling by unit_scale. These are read at the population dtype. */
   std::array<const void *, MAX_GRID_NDIM> edges = {};
 
   /* Is the grid axis matching each bin axis in log10 space? */
   std::array<bool, MAX_GRID_NDIM> log_axis = {};
 
-  /* The masses with shape (npop, nbins[0], ..., nbins[ndim - 1]). */
+  /* The masses with shape (npop, input_nbins[0], ...,
+   * input_nbins[ndim - 1]). */
   const void *masses = nullptr;
 
-  /* The range [mask_lo, mask_hi] (linear units, inclusive) along each axis
-   * that bins are masked to. Only the part of a bin inside the range
-   * contributes, and with no mask the range covers every finite value.
+  /* The range [mask_lo, mask_hi] (linear units before scaling by
+   * unit_scale, inclusive) along each grid axis that bins are masked to. Only
+   * the part of a bin inside the range contributes, and with no mask the range
+   * covers every finite value.
    *
    * NOTE: The extensions are compiled with -ffast-math, which makes
    * infinities undefined behaviour, so the bounds must always be finite. */
@@ -95,6 +114,25 @@ struct Populations {
   template <typename Real>
   const Real *get_masses() const {
     return static_cast<const Real *>(masses);
+  }
+
+  /**
+   * @brief Get a bin's index along each grid axis.
+   *
+   * @param icell: The bin's flat index within its population (in the
+   *               masses' layout).
+   * @param bin_inds: The output index along each grid axis.
+   */
+  void get_bin_inds(int icell,
+                    std::array<int, MAX_GRID_NDIM> &bin_inds) const {
+    /* Unravel the index in the masses' (input axis) layout. */
+    std::array<int, MAX_GRID_NDIM> input_inds;
+    get_indices_from_flat(icell, ndim, input_nbins, input_inds);
+
+    /* Reorder it to match the grid's axes. */
+    for (int idim = 0; idim < ndim; idim++) {
+      bin_inds[idim] = input_inds[bin_axis[idim]];
+    }
   }
 };
 

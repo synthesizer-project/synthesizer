@@ -35,7 +35,7 @@ from synthesizer.grid import Grid
 from synthesizer.parametric.metal_dist import Common as ZDistCommon
 from synthesizer.parametric.sf_hist import Common as SFHCommon
 from synthesizer.synth_warnings import warn
-from synthesizer.units import Quantity, accepts
+from synthesizer.units import Quantity, accepts, convert_in_place
 from synthesizer.utils.operation_timers import timed
 from synthesizer.utils.plt import single_histxy
 from synthesizer.utils.stats import weighted_mean, weighted_median
@@ -46,6 +46,11 @@ from synthesizer.utils.stats import weighted_mean, weighted_median
 # spectra are within 0.2% of the converged result for a narrow (sigma = 4 Myr)
 # young Gaussian SFH, and within 0.04% for typical SFHs.
 SFZH_SUBDIVISIONS = 8
+
+# The bound used for an open end of a mask's range. The extensions are
+# compiled with -ffast-math, which makes infinities undefined behaviour, so
+# masks use the largest finite float instead
+_MASK_BOUND = np.finfo(np.float64).max
 
 # The comparison operators a mask can apply to a population level value
 _OPERATORS = {
@@ -509,7 +514,7 @@ class Stars(StarsComponent):
                 If no SFH has been defined.
         """
         # Work with the ages in years
-        ages = self.ages.to("yr").ndview
+        ages = convert_in_place(self.ages, yr).ndview
 
         # An SFH function is integrated exactly over fine bins of the axis
         if self.sf_hist_func is not None:
@@ -520,7 +525,7 @@ class Stars(StarsComponent):
 
         # An instantaneous SFH is a single point
         if self._instant_sf is not None:
-            age = self._instant_sf.to("yr").value + offset
+            age = convert_in_place(self._instant_sf, yr).value + offset
             return np.array([age, age]), np.array([1.0])
 
         # An array is defined at the points of the axis
@@ -600,7 +605,11 @@ class Stars(StarsComponent):
             self._instant_sf = self._instant_sf * self.ages.units
 
         # Bin each axis separately, offsetting the ages if requested
-        offset = 0.0 if age_offset is None else age_offset.to("yr").value
+        offset = (
+            0.0
+            if age_offset is None
+            else convert_in_place(age_offset, yr).value
+        )
         age_edges, age_masses = self._get_age_bins(offset)
         metal_edges, metal_weights = self._get_metal_bins()
 
@@ -745,7 +754,7 @@ class Stars(StarsComponent):
         """
         # Repeating each point gives a zero width bin at it, with a finite
         # bin between each pair of points
-        age_edges = np.repeat(self.ages.to("yr").ndview, 2)
+        age_edges = np.repeat(convert_in_place(self.ages, yr).ndview, 2)
         metal_edges = np.repeat(
             np.asarray(self.metallicities, dtype=np.float64), 2
         )
@@ -793,6 +802,8 @@ class Stars(StarsComponent):
             ),
             np.ascontiguousarray(masses, dtype=np.float64),
             (True, log_metals),
+            (0, 1),
+            (1.0, 1.0),
             1,
             None,
         )
@@ -840,11 +851,11 @@ class Stars(StarsComponent):
                 f"This parametric Stars has no bins along {axis} (it is "
                 f"binned along {self.bin_axes})."
             )
-        # Only the ages carry units (stored in yr)
+        # Only the ages carry units (stored in yr), attached to a view
         edges = self._bin_edges[axis]
         if values_only or axis != "ages":
             return edges
-        return edges * yr
+        return unyt_array(edges, yr, bypass_validation=True)
 
     @property
     def sfzh(self):
@@ -887,7 +898,8 @@ class Stars(StarsComponent):
         inequality moves the bound by one floating point step, so a zero
         width bin exactly on the threshold is excluded just as a particle
         would be. "!=" can't be expressed as a single range so isn't
-        supported on a bin axis.
+        supported on a bin axis. An open end of a range is the largest
+        finite float rather than infinity, which the extensions can't handle.
 
         Conditions on a population level value (e.g. a fixed model parameter)
         include or exclude the whole population, a failing one empties the
@@ -926,13 +938,13 @@ class Stars(StarsComponent):
                 f"'!=', not {op}"
             )
 
-        # Start from a copy of the mask we're combining with, or an
-        # unbounded range along every axis
+        # Start from a copy of the mask we're combining with, or an open
+        # range along every axis
         nbin_axes = len(self.bin_axes)
         if mask is None:
             new_mask = np.empty((nbin_axes, 2))
-            new_mask[:, 0] = -np.inf
-            new_mask[:, 1] = np.inf
+            new_mask[:, 0] = -_MASK_BOUND
+            new_mask[:, 1] = _MASK_BOUND
         elif np.shape(mask) == (nbin_axes, 2):
             new_mask = np.array(mask, dtype=np.float64)
         else:
@@ -992,7 +1004,7 @@ class Stars(StarsComponent):
         # A failing population level condition excludes everything, which
         # we mark by emptying the first axis' range
         if not _OPERATORS[op](value, thresh):
-            new_mask[0] = (np.inf, -np.inf)
+            new_mask[0] = (_MASK_BOUND, -_MASK_BOUND)
         return new_mask
 
     def _get_axis_threshold(self, thresh, attr, axis):
@@ -1026,7 +1038,7 @@ class Stars(StarsComponent):
         if isinstance(thresh, unyt_quantity):
             if axis_units is None:
                 return float(thresh.ndview)
-            return float(thresh.to(axis_units).ndview)
+            return float(convert_in_place(thresh, axis_units).ndview)
 
         # A unitless threshold can't be compared with an axis that has units
         if axis_units is not None:

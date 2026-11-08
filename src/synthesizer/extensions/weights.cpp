@@ -552,8 +552,9 @@ static void build_bic_tables(GridProps *grid_props, Populations *pops,
       double lo = static_cast<double>(edges[ibin]);
       double hi = static_cast<double>(edges[ibin + 1]);
 
-      /* Apply the mask. A point passes or fails entirely, while a finite
-       * bin is clipped to the range and keeps the fraction inside it. */
+      /* Apply the mask (in the edges' own units). A point passes or fails
+       * entirely, while a finite bin is clipped to the range and keeps the
+       * fraction inside it. */
       double scale = 1.0;
       if (hi <= lo) {
         if (lo < mask_lo || lo > mask_hi) {
@@ -575,9 +576,10 @@ static void build_bic_tables(GridProps *grid_props, Populations *pops,
        * empty run. Otherwise append its (scaled) grid points and fractions.
        */
       if (scale > 0.0) {
-        get_pop_bin_fracs_bic<GridReal>(grid_axis, grid_props->dims[dim],
-                                        pops->log_axis[dim], lo, hi, inds,
-                                        fracs);
+        get_pop_bin_fracs_bic<GridReal>(
+            grid_axis, grid_props->dims[dim], pops->log_axis[dim],
+            lo * pops->unit_scale[dim], hi * pops->unit_scale[dim], inds,
+            fracs);
         table.inds.insert(table.inds.end(), inds.begin(), inds.end());
         for (const double frac : fracs) {
           table.fracs.push_back(frac * scale);
@@ -680,10 +682,9 @@ static void weight_loop_bic_serial(
       continue;
     }
 
-    /* Unravel the bin's index within its population and spread its mass
-     * onto the grid. */
-    get_indices_from_flat(static_cast<int>(ind % pops->ncells), pops->ndim,
-                          pops->nbins, bin_inds);
+    /* Get the bin's index along each grid axis and spread its mass onto
+     * the grid. */
+    pops->get_bin_inds(static_cast<int>(ind % pops->ncells), bin_inds);
     spread_bin_bic(tables, pops->ndim, grid_props->dims, bin_inds, mass, out);
   }
 }
@@ -738,10 +739,9 @@ static void weight_loop_bic_omp(
         continue;
       }
 
-      /* Unravel the bin's index within its population and spread its mass
-       * onto the grid. */
-      get_indices_from_flat(static_cast<int>(ind % pops->ncells), pops->ndim,
-                            pops->nbins, bin_inds);
+      /* Get the bin's index along each grid axis and spread its mass onto
+       * the grid. */
+      pops->get_bin_inds(static_cast<int>(ind % pops->ncells), bin_inds);
       spread_bin_bic(tables, pops->ndim, grid_props->dims, bin_inds, mass,
                      local_out.data());
     }

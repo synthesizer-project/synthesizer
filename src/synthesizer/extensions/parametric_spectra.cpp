@@ -45,45 +45,59 @@
 /**
  * @brief Validate the Python population inputs and fill a Populations struct.
  *
- * @param edges_tuple: A tuple of 1D bin edge arrays, one per grid axis (in
+ * The edges, masses and mask are ordered by the populations' own (input)
+ * bin axes, while log_flags, bin_axes and unit_scales have one entry per
+ * grid axis.
+ *
+ * @param edges_tuple: A tuple of 1D bin edge arrays, one per input axis (in
  *                     linear units).
- * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
+ * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N) in
+ *                   the input axis order.
  * @param log_flags: A sequence of booleans, one per grid axis, flagging
  *                   axes whose grid coordinates are log10 values.
+ * @param bin_axes: A sequence of ints, one per grid axis, giving the input
+ *                  axis matching it (a permutation of 0, ..., ndim - 1).
+ * @param unit_scales: A sequence of floats, one per grid axis, converting the
+ *                     matching input axis' edges into the grid axis' units.
  * @param mask_obj: The mask, a float64 array of shape (ndim, 2) holding the
  *                  allowed [lo, hi] range (linear units, inclusive) along
- *                  each axis, or None. The bounds must be finite (use the
- *                  largest finite float for an open bound).
+ *                  each input axis, or None. The bounds must be finite (use
+ *                  the largest finite float for an open bound).
  * @param grid_props: The grid properties (used for the number of axes).
  * @param pops: The struct to fill.
  *
  * @return True on success, false (with a Python error set) otherwise.
  */
 static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
-                              PyObject *log_flags, PyObject *mask_obj,
+                              PyObject *log_flags, PyObject *bin_axes,
+                              PyObject *unit_scales, PyObject *mask_obj,
                               GridProps *grid_props, Populations &pops) {
 
   /* The populations are binned along every grid axis. */
   const int ndim = grid_props->ndim;
   pops.ndim = ndim;
 
-  /* We need one set of edges and one log flag per grid axis. */
+  /* We need one set of edges per input axis and one log flag, bin axis and
+   * unit scale per grid axis. */
   if (!PyTuple_Check(edges_tuple) || PyTuple_Size(edges_tuple) != ndim) {
     PyErr_Format(PyExc_ValueError,
                  "edges must be a tuple with one array per grid axis (%d).",
                  ndim);
     return false;
   }
-  if (!PySequence_Check(log_flags) || PySequence_Size(log_flags) != ndim) {
-    PyErr_Format(PyExc_ValueError,
-                 "log_flags must be a sequence with one entry per grid axis "
-                 "(%d).",
-                 ndim);
-    return false;
+  PyObject *per_axis[3] = {log_flags, bin_axes, unit_scales};
+  const char *per_axis_names[3] = {"log_flags", "bin_axes", "unit_scales"};
+  for (int i = 0; i < 3; i++) {
+    if (!PySequence_Check(per_axis[i]) ||
+        PySequence_Size(per_axis[i]) != ndim) {
+      PyErr_Format(PyExc_ValueError,
+                   "%s must be a sequence with one entry per grid axis (%d).",
+                   per_axis_names[i], ndim);
+      return false;
+    }
   }
 
-  /* The masses must have a leading population axis then one per grid axis.
-   */
+  /* The masses must have a leading population axis then one per axis. */
   if (!PyArray_Check(reinterpret_cast<PyObject *>(np_masses)) ||
       PyArray_NDIM(np_masses) != ndim + 1) {
     PyErr_Format(PyExc_ValueError,
@@ -100,16 +114,35 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
   float_arrays[0] = np_masses;
   float_names[0] = "masses";
 
-  /* Validate each axis, counting the bins in a single population. */
+  /* Validate each grid axis, counting the bins in a single population. */
+  std::array<bool, MAX_GRID_NDIM> seen = {};
   pops.ncells = 1;
   for (int idim = 0; idim < ndim; idim++) {
 
+    /* Get the input axis matching this grid axis, each must be used once. */
+    PyObject *axis_obj = PySequence_GetItem(bin_axes, idim);
+    if (axis_obj == NULL) {
+      return false;
+    }
+    const long axis = PyLong_AsLong(axis_obj);
+    Py_DECREF(axis_obj);
+    if (PyErr_Occurred()) {
+      return false;
+    }
+    if (axis < 0 || axis >= ndim || seen[axis]) {
+      PyErr_SetString(PyExc_ValueError,
+                      "bin_axes must be a permutation of the input axes.");
+      return false;
+    }
+    seen[axis] = true;
+    pops.bin_axis[idim] = static_cast<int>(axis);
+
     /* Get the edges along this axis. */
-    PyObject *edges_obj = PyTuple_GetItem(edges_tuple, idim);
+    PyObject *edges_obj = PyTuple_GetItem(edges_tuple, axis);
     if (edges_obj == NULL || !PyArray_Check(edges_obj) ||
         PyArray_NDIM(reinterpret_cast<PyArrayObject *>(edges_obj)) != 1) {
       PyErr_Format(PyExc_ValueError,
-                   "The edges for axis %d must be a 1D array.", idim);
+                   "The edges for axis %ld must be a 1D array.", axis);
       return false;
     }
     PyArrayObject *np_edges = reinterpret_cast<PyArrayObject *>(edges_obj);
@@ -120,18 +153,19 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     const npy_intp nedges = PyArray_DIM(np_edges, 0);
     if (nedges < 2) {
       PyErr_Format(PyExc_ValueError,
-                   "The edges for axis %d must define at least one bin.",
-                   idim);
+                   "The edges for axis %ld must define at least one bin.",
+                   axis);
       return false;
     }
     pops.nbins[idim] = static_cast<int>(nedges - 1);
+    pops.input_nbins[axis] = pops.nbins[idim];
 
     /* The masses must have one entry per bin along this axis. */
-    if (PyArray_DIM(np_masses, idim + 1) != pops.nbins[idim]) {
+    if (PyArray_DIM(np_masses, axis + 1) != pops.nbins[idim]) {
       PyErr_Format(PyExc_ValueError,
-                   "masses has %ld bins along axis %d but the edges define "
+                   "masses has %ld bins along axis %ld but the edges define "
                    "%d.",
-                   static_cast<long>(PyArray_DIM(np_masses, idim + 1)), idim,
+                   static_cast<long>(PyArray_DIM(np_masses, axis + 1)), axis,
                    pops.nbins[idim]);
       return false;
     }
@@ -148,6 +182,21 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
       return false;
     }
     pops.log_axis[idim] = is_log == 1;
+
+    /* Get the unit scale for this axis, which must be positive. */
+    PyObject *scale_obj = PySequence_GetItem(unit_scales, idim);
+    if (scale_obj == NULL) {
+      return false;
+    }
+    pops.unit_scale[idim] = PyFloat_AsDouble(scale_obj);
+    Py_DECREF(scale_obj);
+    if (PyErr_Occurred()) {
+      return false;
+    }
+    if (!(pops.unit_scale[idim] > 0.0)) {
+      PyErr_SetString(PyExc_ValueError, "unit_scales must be positive.");
+      return false;
+    }
   }
 
   /* Check the dtypes match and the arrays are contiguous. */
@@ -164,8 +213,8 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
   /* Store the pointers and check the edges are non-decreasing. */
   pops.masses = PyArray_DATA(np_masses);
   for (int idim = 0; idim < ndim; idim++) {
-    PyArrayObject *np_edges =
-        reinterpret_cast<PyArrayObject *>(PyTuple_GetItem(edges_tuple, idim));
+    PyArrayObject *np_edges = reinterpret_cast<PyArrayObject *>(
+        PyTuple_GetItem(edges_tuple, pops.bin_axis[idim]));
     if (PyArray_TYPE(np_edges) != pops.float_typenum) {
       PyErr_SetString(PyExc_TypeError,
                       "masses and bin edges must share the same dtype.");
@@ -187,13 +236,14 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     });
     if (!sorted) {
       PyErr_Format(PyExc_ValueError,
-                   "The edges for axis %d must be non-decreasing.", idim);
+                   "The edges for axis %d must be non-decreasing.",
+                   pops.bin_axis[idim]);
       return false;
     }
   }
 
   /* Read the mask's range along each axis if we have one (the struct
-   * starts with unbounded ranges). */
+   * starts with ranges covering every finite value). */
   if (mask_obj != NULL && mask_obj != Py_None) {
     PyArrayObject *np_mask = array_or_none(mask_obj, "mask");
     if (np_mask == NULL) {
@@ -212,10 +262,12 @@ static bool build_populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     if (!is_c_contiguous(np_mask, "mask")) {
       return false;
     }
+
+    /* The mask's rows follow the input axes, store them by grid axis. */
     const double *ranges = static_cast<const double *>(PyArray_DATA(np_mask));
     for (int idim = 0; idim < ndim; idim++) {
-      pops.mask_lo[idim] = ranges[2 * idim];
-      pops.mask_hi[idim] = ranges[2 * idim + 1];
+      pops.mask_lo[idim] = ranges[2 * pops.bin_axis[idim]];
+      pops.mask_hi[idim] = ranges[2 * pops.bin_axis[idim] + 1];
     }
   }
 
@@ -364,13 +416,17 @@ static void integrated_spectra_loop(GridProps *grid_props,
  *
  * @param np_grid_spectra: The SPS spectra array.
  * @param grid_tuple: The tuple of grid axis arrays (log10 where flagged).
- * @param edges_tuple: The tuple of bin edge arrays (linear units), in the
- *                     same order as grid_tuple.
+ * @param edges_tuple: The tuple of bin edge arrays (linear units), one per
+ *                     input axis.
  * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
- * @param log_flags: One boolean per axis flagging log10 grid axes.
+ * @param log_flags: One boolean per grid axis flagging log10 grid axes.
+ * @param bin_axes: The input (edges/masses/mask) axis matching each grid
+ *                  axis.
+ * @param unit_scales: The factor converting each grid axis' edges into the
+ *                     grid axis' units.
  * @param nthreads: The number of threads to use.
  * @param np_grid_weights: Precomputed grid weights or None.
- * @param mask: The allowed (ndim, 2) range along each axis or None.
+ * @param mask: The allowed (ndim, 2) range along each input axis or None.
  * @param np_lam_mask: A wavelength mask or None.
  * @param out_dtype: Requested floating-point dtype for the returned spectrum.
  * @param prop_names: Optional names for the grid axes (for error messages).
@@ -386,15 +442,16 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
 
   /* Parse the arguments (prop_names is optional). */
   int nthreads;
-  PyObject *spectra_obj, *grid_tuple, *edges_tuple, *log_flags;
+  PyObject *spectra_obj, *grid_tuple, *edges_tuple, *log_flags, *bin_axes;
+  PyObject *unit_scales;
   PyObject *weights_obj, *mask_obj, *lam_mask_obj, *out_dtype;
   PyObject *prop_names = NULL;
   PyArrayObject *np_masses;
 
-  if (!PyArg_ParseTuple(args, "OOOOOiOOOO|O", &spectra_obj, &grid_tuple,
-                        &edges_tuple, &np_masses, &log_flags, &nthreads,
-                        &weights_obj, &mask_obj, &lam_mask_obj, &out_dtype,
-                        &prop_names)) {
+  if (!PyArg_ParseTuple(args, "OOOOOOOiOOOO|O", &spectra_obj, &grid_tuple,
+                        &edges_tuple, &np_masses, &log_flags, &bin_axes,
+                        &unit_scales, &nthreads, &weights_obj, &mask_obj,
+                        &lam_mask_obj, &out_dtype, &prop_names)) {
     return NULL;
   }
 
@@ -427,8 +484,8 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
 
   /* Extract the populations. */
   Populations pops;
-  if (!build_populations(edges_tuple, np_masses, log_flags, mask_obj,
-                         grid_props.get(), pops)) {
+  if (!build_populations(edges_tuple, np_masses, log_flags, bin_axes,
+                         unit_scales, mask_obj, grid_props.get(), pops)) {
     return NULL;
   }
 
@@ -512,12 +569,16 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
  * population's SFZH or remap it onto new axes).
  *
  * @param grid_tuple: The tuple of grid axis arrays (log10 where flagged).
- * @param edges_tuple: The tuple of bin edge arrays (linear units), in the
- *                     same order as grid_tuple.
+ * @param edges_tuple: The tuple of bin edge arrays (linear units), one per
+ *                     input axis.
  * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
- * @param log_flags: One boolean per axis flagging log10 grid axes.
+ * @param log_flags: One boolean per grid axis flagging log10 grid axes.
+ * @param bin_axes: The input (edges/masses/mask) axis matching each grid
+ *                  axis.
+ * @param unit_scales: The factor converting each grid axis' edges into the
+ *                     grid axis' units.
  * @param nthreads: The number of threads to use.
- * @param mask: The allowed (ndim, 2) range along each axis or None.
+ * @param mask: The allowed (ndim, 2) range along each input axis or None.
  * @param prop_names: Optional names for the grid axes (for error messages).
  *
  * @return The grid weights (with the grid's shape and dtype).
@@ -531,13 +592,14 @@ PyObject *compute_parametric_weights(PyObject *self, PyObject *args) {
 
   /* Parse the arguments (prop_names is optional). */
   int nthreads;
-  PyObject *grid_tuple, *edges_tuple, *log_flags, *mask_obj;
+  PyObject *grid_tuple, *edges_tuple, *log_flags, *bin_axes, *unit_scales;
+  PyObject *mask_obj;
   PyObject *prop_names = NULL;
   PyArrayObject *np_masses;
 
-  if (!PyArg_ParseTuple(args, "OOOOiO|O", &grid_tuple, &edges_tuple,
-                        &np_masses, &log_flags, &nthreads, &mask_obj,
-                        &prop_names)) {
+  if (!PyArg_ParseTuple(args, "OOOOOOiO|O", &grid_tuple, &edges_tuple,
+                        &np_masses, &log_flags, &bin_axes, &unit_scales,
+                        &nthreads, &mask_obj, &prop_names)) {
     return NULL;
   }
 
@@ -550,8 +612,8 @@ PyObject *compute_parametric_weights(PyObject *self, PyObject *args) {
 
   /* Extract the populations. */
   Populations pops;
-  if (!build_populations(edges_tuple, np_masses, log_flags, mask_obj,
-                         grid_props.get(), pops)) {
+  if (!build_populations(edges_tuple, np_masses, log_flags, bin_axes,
+                         unit_scales, mask_obj, grid_props.get(), pops)) {
     return NULL;
   }
 
