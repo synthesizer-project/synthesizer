@@ -222,6 +222,36 @@ class Extractor(ABC):
         """Extract the line luminosities from the grid for the emitter."""
         pass
 
+    def _can_cache_grid_weights(self, model, mask):
+        """Check whether the emitter's stored grid weights can be used.
+
+        The grid weights only depend on the emitter and the grid unless a
+        mask is applied or the model fixes one of the attributes (or the
+        weight variable) the grid is weighted by, in which case they are
+        specific to this extraction and must be neither reused nor stored.
+
+        Args:
+            model (EmissionModel):
+                The emission model object.
+            mask (np.ndarray of bool):
+                The mask applied to the emitter, or None.
+
+        Returns:
+            bool:
+                True if the stored grid weights can be reused and stored.
+        """
+        # Masked weights are always specific to the extraction
+        if mask is not None:
+            return False
+
+        # Check whether the model fixes any of the attributes (with or
+        # without a log10 prefix) or the weight variable
+        fixed = getattr(model, "fixed_parameters", {})
+        return not any(
+            name in fixed or name.replace("log10", "") in fixed
+            for name in (*self._emitter_attributes, str(self._weight_var))
+        )
+
     @abstractmethod
     def get_emitter_attrs(self, emitter, model, do_grid_check):
         """Get the attributes from the emitter.
@@ -342,7 +372,7 @@ class ParticleExtractorBase(Extractor):
 
         # Check if the attributes are outside the grid axes if necessary
         if do_grid_check:
-            self.check_emitter_attrs(extracted)
+            self.check_emitter_attrs(emitter, extracted)
 
         # Also extract the weight variable, at the same precision as the
         # extracted attributes if we have to make unit weights (the extension
@@ -398,12 +428,14 @@ class ParticleExtractorBase(Extractor):
                 The extracted attributes from the emitter.
         """
         # Loop over the extracted attributes and check if they are outside the
-        # grid axes, we'll do this by updating a mask for each attribute
-        inside = np.zeros_like(extracted_attrs[0], dtype=bool)
+        # grid axes, we'll do this by updating a mask for each attribute (a
+        # particle is only inside if it is inside along every axis, and
+        # single values are broadcast to every particle)
+        inside = np.ones(np.broadcast(*extracted_attrs).shape, dtype=bool)
         for i, (attr, axis) in enumerate(
             zip(extracted_attrs, self._grid_axes),
         ):
-            inside |= (attr >= axis.min()) & (attr <= axis.max())
+            inside &= (attr >= axis.min()) & (attr <= axis.max())
 
         # Compute the fraction of attributes outside the grid axes
         frac_outside = 1 - np.sum(inside) / len(inside)
@@ -500,8 +532,8 @@ class IntegratedParticleExtractor(ParticleExtractorBase):
             if nthreads == -1:
                 nthreads = os.cpu_count()
 
-            # Get the grid_weights if they exist and we don't have a mask
-            if mask is None:
+            # Get the grid_weights if they exist and can be reused
+            if self._can_cache_grid_weights(model, mask):
                 grid_weights = emitter._grid_weights.get(
                     grid_assignment_method.lower(),
                     {},
@@ -530,10 +562,10 @@ class IntegratedParticleExtractor(ParticleExtractorBase):
             emitter_attr_names,
         )
 
-        # If we have no mask then lets store the grid weights in case
+        # If the grid weights can be reused then lets store them in case
         # we can make use of them later
         if (
-            mask is None
+            self._can_cache_grid_weights(model, mask)
             and self._grid.grid_name
             not in emitter._grid_weights[grid_assignment_method.lower()]
         ):
@@ -626,8 +658,8 @@ class IntegratedParticleExtractor(ParticleExtractorBase):
             if nthreads == -1:
                 nthreads = os.cpu_count()
 
-            # Get the grid_weights if they exist and we don't have a mask
-            if mask is None:
+            # Get the grid_weights if they exist and can be reused
+            if self._can_cache_grid_weights(model, mask):
                 grid_weights = emitter._grid_weights.get(
                     grid_assignment_method.lower(),
                     {},
@@ -679,10 +711,10 @@ class IntegratedParticleExtractor(ParticleExtractorBase):
             emitter_attr_names,
         )
 
-        # If we have no mask then lets store the grid weights in case
+        # If the grid weights can be reused then lets store them in case
         # we can make use of them later
         if (
-            mask is None
+            self._can_cache_grid_weights(model, mask)
             and self._grid.grid_name
             not in emitter._grid_weights[grid_assignment_method.lower()]
         ):
@@ -1102,12 +1134,12 @@ class ParticleExtractor(ParticleExtractorBase):
             if nthreads == -1:
                 nthreads = os.cpu_count()
 
-        # Get the grid_weights if they exist and we don't have a mask. The
+        # Get the grid_weights if they exist and can be reused. The
         # particle spectra extraction no longer reduces to the integrated
         # spectra; the integrated machinery is cheaper than reducing the full
         # per-particle spectra array.
         emitter_attr_names = (*self._emitter_attributes, self._weight_label)
-        if mask is None:
+        if self._can_cache_grid_weights(model, mask):
             grid_weights = emitter._grid_weights.get(
                 grid_assignment_method.lower(),
                 {},
@@ -1154,10 +1186,10 @@ class ParticleExtractor(ParticleExtractorBase):
             emitter_attr_names,
         )
 
-        # If we have no mask then lets store the grid weights in case
+        # If the grid weights can be reused then lets store them in case
         # we can make use of them later.
         if (
-            mask is None
+            self._can_cache_grid_weights(model, mask)
             and self._grid.grid_name
             not in emitter._grid_weights[grid_assignment_method.lower()]
         ):
@@ -1305,11 +1337,11 @@ class ParticleExtractor(ParticleExtractorBase):
             grid_dims = np.array(self._grid_dims)
             grid_dims[-1] = self._grid.nlines
 
-        # Get the grid_weights if they exist and we don't have a mask. The
+        # Get the grid_weights if they exist and can be reused. The
         # integrated line spectra are computed through the integrated machinery
         # rather than by reducing the per-particle line arrays.
         emitter_attr_names = (*self._emitter_attributes, self._weight_label)
-        if mask is None:
+        if self._can_cache_grid_weights(model, mask):
             grid_weights = emitter._grid_weights.get(
                 grid_assignment_method.lower(),
                 {},
@@ -1394,10 +1426,10 @@ class ParticleExtractor(ParticleExtractorBase):
             emitter_attr_names,
         )
 
-        # If we have no mask then lets store the grid weights in case
+        # If the grid weights can be reused then lets store them in case
         # we can make use of them later.
         if (
-            mask is None
+            self._can_cache_grid_weights(model, mask)
             and self._grid.grid_name
             not in emitter._grid_weights[grid_assignment_method.lower()]
         ):
