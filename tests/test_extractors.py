@@ -4,23 +4,25 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-from unyt import Hz, erg, s
+from unyt import Hz, Msun, erg, s, yr
 
+from synthesizer.emission_models import IncidentEmission
 from synthesizer.emission_models.extractors.extractor import (
     DopplerShiftedParticleExtractor,
-    Extractor,
     IntegratedDopplerShiftedParticleExtractor,
     IntegratedParametricExtractor,
     IntegratedParticleExtractor,
     ParticleExtractor,
+    ParticleExtractorBase,
 )
 from synthesizer.emissions import Sed
 from synthesizer.exceptions import InconsistentArguments
 from synthesizer.parametric import Stars as ParametricStars
+from synthesizer.particle import Stars as ParticleStars
 
 
 # Mock Extractor implementation for testing abstract base class methods
-class MockExtractor(Extractor):
+class MockExtractor(ParticleExtractorBase):
     """Mock implementation of the Extractor class for testing purposes."""
 
     def generate_lnu(self, *args, **kwargs):
@@ -508,74 +510,122 @@ def test_particle_generate_lnu(
 
 
 def test_integrated_parametric_generate_lnu(test_grid, nebular_emission_model):
-    """Test that IntegratedParametricExtractor.generate_lnu works correctly."""
-    # Create an IntegratedParametricExtractor
+    """Test a SFZH on the grid axes multiplies the grid spectra directly.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+        nebular_emission_model (EmissionModel):
+            The emission model fixture to extract with.
+    """
+    # Create a random SFZH defined on the grid's own axes
     extractor = IntegratedParametricExtractor(test_grid, "incident")
-
-    # Create a mock parametric stars object
-    mock_parametric_stars = MagicMock(spec=ParametricStars)
-    mock_parametric_stars.get_mask.return_value = np.array(
-        [[True, False], [True, True], [True, False]]
+    sfzh = np.random.default_rng(0).random(
+        (len(test_grid.log10ages), len(test_grid.metallicities))
+    )
+    stars = ParametricStars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sfzh=sfzh,
     )
 
-    # Create mock SFZH and spectra grid
-    mock_sfzh = np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 0.0]])
-    mock_parametric_stars.sfzh = mock_sfzh
-
-    # Set a mock spectra grid with known values
-    mock_spectra = np.ones((*mock_sfzh.shape, 1))
-    extractor._spectra_grid = mock_spectra
-    extractor._grid_naxes = 2
-
-    # Give the mock stars and grid matching axes
-    extractor._grid_axes = (np.arange(3.0), np.arange(2.0))
-    for name, axis in zip(extractor._emitter_attributes, extractor._grid_axes):
-        setattr(mock_parametric_stars, name, axis)
-
-    # Call generate_lnu
-    with patch.object(nebular_emission_model, "_lam", np.array([1.0])):
-        result = extractor.generate_lnu(
-            mock_parametric_stars,
-            nebular_emission_model,
-            None,
-            None,
-            "cic",
-            1,
-            False,
-        )
-
-    # Check that get_mask was called with the right parameters
-    mock_parametric_stars.get_mask.assert_called_once_with(
-        "sfzh", 0, ">", mask=None
+    # Extract the integrated spectra
+    result = extractor.generate_lnu(
+        stars,
+        nebular_emission_model,
+        None,
+        None,
+        "cic",
+        1,
+        False,
     )
 
-    # Check that the result is a Sed object with the right values
+    # Check that the result is an integrated Sed with the right values
     assert isinstance(result, Sed), f"Expected Sed, got {type(result)}"
-
-    # Ensure the output sed is "integrated" (has ndim == 1)
     assert result.lnu.ndim == 1, f"Expected 1D lnu, got {result.lnu.ndim}"
-
-    # Ensure we have the correct "spectrum" for the parametric stars, this
-    # can be check by summing the sfzh values for the particles that are
-    # included in the mask
-    expected = mock_sfzh.sum()
-    assert np.array_equal(result.lnu.sum(), expected * erg / s / Hz), (
-        f"Expected {expected * erg / s / Hz}, got {result.lnu.sum()}"
-        f"{result.lnu} {mock_sfzh}"
+    expected = np.sum(
+        sfzh[..., None] * test_grid.spectra["incident"], axis=(0, 1)
     )
+    np.testing.assert_allclose(result.lnu.ndview, expected, rtol=1e-10)
 
 
-def test_integrated_parametric_axis_mismatch(
+def test_integrated_parametric_off_grid_axes(
     test_grid, nebular_emission_model
 ):
-    """Test that a SFZH on different axes to the grid is rejected."""
+    """Test a SFZH on other axes is mapped onto the grid like particles.
+
+    Each point of the parametric axes is a zero width bin, so it must be
+    spread onto the grid exactly as a particle at that point is by CIC.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+        nebular_emission_model (EmissionModel):
+            The emission model fixture to extract with.
+    """
+    # Create a random SFZH on axes that don't match the grid's
+    log10ages = np.linspace(6.05, 9.95, 7)
+    metallicities = np.array([0.0005, 0.003, 0.017])
+    sfzh = np.random.default_rng(1).random((log10ages.size, 3))
+    stars = ParametricStars(log10ages, metallicities, sfzh=sfzh)
+
+    # Extract the parametric integrated spectra
+    param = IntegratedParametricExtractor(test_grid, "incident").generate_lnu(
+        stars,
+        nebular_emission_model,
+        None,
+        None,
+        "cic",
+        1,
+        False,
+    )
+
+    # Place a particle at each (age, metallicity) point holding its mass and
+    # extract their integrated spectra with CIC
+    ages, metals = np.meshgrid(10**log10ages, metallicities, indexing="ij")
+    particles = ParticleStars(
+        initial_masses=sfzh.ravel() * Msun,
+        ages=ages.ravel() * yr,
+        metallicities=metals.ravel(),
+    )
+    part = IntegratedParticleExtractor(test_grid, "incident").generate_lnu(
+        particles,
+        nebular_emission_model,
+        None,
+        None,
+        "cic",
+        1,
+        False,
+    )
+
+    # The parametric and particle spectra must agree
+    np.testing.assert_allclose(param.lnu.ndview, part.lnu.ndview, rtol=1e-10)
+
+
+def test_integrated_parametric_mismatched_axes(
+    test_grid, nebular_emission_model
+):
+    """Test an emitter bin axis the grid doesn't have raises a clear error.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+        nebular_emission_model (EmissionModel):
+            The nebular emission model fixture.
+    """
+    # Pretend the grid's metallicity axis is an ionisation parameter axis,
+    # so the grid has no axis for the Stars' metallicity bins
     extractor = IntegratedParametricExtractor(test_grid, "incident")
+    extractor._emitter_attributes = ("log10ages", "log10Us")
+    extractor._log_emitter_attr = (True, True)
     stars = ParametricStars(
-        test_grid.log10ages + 0.5,
+        test_grid.log10ages,
         test_grid.metallicities,
         sfzh=np.ones((len(test_grid.log10ages), len(test_grid.metallicities))),
     )
-    with pytest.raises(InconsistentArguments):
+
+    # Extracting must raise rather than fail on a missing bin axis
+    with pytest.raises(InconsistentArguments, match="don't include"):
         extractor.generate_lnu(
             stars,
             nebular_emission_model,
@@ -584,4 +634,129 @@ def test_integrated_parametric_axis_mismatch(
             "cic",
             1,
             False,
+        )
+
+
+def test_integrated_parametric_fixed_axis(test_grid):
+    """Test a bin axis fixed by the model puts all the mass at that value.
+
+    This must match particles placed at the same points, which take the
+    fixed value in the same way.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+    """
+    # Create a random SFZH on the grid's axes
+    sfzh = np.random.default_rng(1).random(
+        (test_grid.log10ages.size, test_grid.metallicities.size)
+    )
+    stars = ParametricStars(
+        test_grid.log10ages, test_grid.metallicities, sfzh=sfzh
+    )
+
+    # A model fixing the age
+    model = IncidentEmission(test_grid, log10ages=7.0)
+
+    # Extract the parametric integrated spectra
+    param = IntegratedParametricExtractor(test_grid, "incident").generate_lnu(
+        stars,
+        model,
+        None,
+        None,
+        "cic",
+        1,
+        False,
+    )
+
+    # Place a particle at each (age, metallicity) point holding its mass and
+    # extract their integrated spectra with the same model
+    ages, metals = np.meshgrid(
+        10**test_grid.log10ages, test_grid.metallicities, indexing="ij"
+    )
+    particles = ParticleStars(
+        initial_masses=sfzh.ravel() * Msun,
+        ages=ages.ravel() * yr,
+        metallicities=metals.ravel(),
+    )
+    part = IntegratedParticleExtractor(test_grid, "incident").generate_lnu(
+        particles,
+        model,
+        None,
+        None,
+        "cic",
+        1,
+        False,
+    )
+
+    # The parametric and particle spectra must agree
+    np.testing.assert_allclose(param.lnu.ndview, part.lnu.ndview, rtol=1e-10)
+
+
+def test_integrated_parametric_unbinned_axis(test_grid):
+    """Test a grid axis the emitter isn't binned along takes a single value.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+    """
+    # Pretend the grid has an extra ionisation parameter axis
+    extractor = IntegratedParametricExtractor(test_grid, "incident")
+    extractor._emitter_attributes = (
+        "log10ages",
+        "metallicities",
+        "ionisation_parameter",
+    )
+    extractor._log_emitter_attr = (True, False, False)
+    extractor._axes_units = ("yr", "dimensionless", "dimensionless")
+    extractor._grid_naxes = 3
+    stars = ParametricStars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sf_hist=1e7 * yr,
+        metal_dist=0.01,
+    )
+
+    # Get the attributes with a model fixing the ionisation parameter
+    model = IncidentEmission(test_grid, ionisation_parameter=0.01)
+    extracted, weight, bin_axes, unit_scales = extractor.get_emitter_attrs(
+        stars, model, False
+    )
+
+    # The extra axis must be a single collapsed bin on a trailing axis of
+    # an uncopied view of the masses
+    np.testing.assert_array_equal(extracted[2], [0.01, 0.01])
+    assert bin_axes == (0, 1, 2)
+    assert unit_scales[2] == 1.0
+    assert weight.shape == stars.bin_masses.shape + (1,)
+    assert np.shares_memory(weight, stars.bin_masses)
+
+
+def test_integrated_parametric_grid_check(test_grid, nebular_emission_model):
+    """Test do_grid_check warns about mass outside the grid.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+        nebular_emission_model (EmissionModel):
+            The nebular emission model fixture.
+    """
+    # Create a Stars with a burst older than the grid
+    stars = ParametricStars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sf_hist=10 ** (test_grid.log10ages.max() + 0.5) * yr,
+        metal_dist=0.01,
+    )
+
+    # Extracting with the check must warn
+    with pytest.warns(RuntimeWarning, match="outside the grid"):
+        IntegratedParametricExtractor(test_grid, "incident").generate_lnu(
+            stars,
+            nebular_emission_model,
+            None,
+            None,
+            "cic",
+            1,
+            True,
         )
