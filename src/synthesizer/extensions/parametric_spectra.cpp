@@ -185,16 +185,16 @@ static void integrated_spectra_loop(GridProps *grid_props,
  * @param np_grid_spectra: The SPS spectra array.
  * @param grid_tuple: The tuple of grid axis arrays (log10 where flagged).
  * @param edges_tuple: The tuple of bin edge arrays (linear units), one per
- *                     input axis.
+ *                     grid axis.
  * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
  * @param log_flags: One boolean per grid axis flagging log10 grid axes.
- * @param bin_axes: The input (edges/masses/mask) axis matching each grid
- *                  axis.
+ * @param bin_axes: The input (masses/mask) axis matching each grid axis.
  * @param unit_scales: The factor converting each grid axis' edges into the
  *                     grid axis' units.
  * @param nthreads: The number of threads to use.
  * @param np_grid_weights: Precomputed grid weights or None.
- * @param mask: The allowed (ndim, 2) range along each input axis or None.
+ * @param mask: The allowed (nmask, 2) range along the first nmask input
+ *              axes or None.
  * @param np_lam_mask: A wavelength mask or None.
  * @param out_dtype: Requested floating-point dtype for the returned spectrum.
  * @param prop_names: Optional names for the grid axes (for error messages).
@@ -337,15 +337,15 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
  *
  * @param grid_tuple: The tuple of grid axis arrays (log10 where flagged).
  * @param edges_tuple: The tuple of bin edge arrays (linear units), one per
- *                     input axis.
+ *                     grid axis.
  * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N).
  * @param log_flags: One boolean per grid axis flagging log10 grid axes.
- * @param bin_axes: The input (edges/masses/mask) axis matching each grid
- *                  axis.
+ * @param bin_axes: The input (masses/mask) axis matching each grid axis.
  * @param unit_scales: The factor converting each grid axis' edges into the
  *                     grid axis' units.
  * @param nthreads: The number of threads to use.
- * @param mask: The allowed (ndim, 2) range along each input axis or None.
+ * @param mask: The allowed (nmask, 2) range along the first nmask input
+ *              axes or None.
  * @param prop_names: Optional names for the grid axes (for error messages).
  *
  * @return The grid weights (with the grid's shape and dtype).

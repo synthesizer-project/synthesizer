@@ -7,11 +7,12 @@
  * that is uniformly distributed within it. All populations share the same
  * bin edges along each axis and differ only in their masses.
  *
- * The inputs (edges, masses and mask) are ordered by the populations' own
- * bin axes, which needn't match the grid's axis order or units. Everything
- * per axis in the class is ordered like the grid, with bin_axis giving the
- * input axis matching each grid axis and unit_scale the factor converting
- * that axis' edges into the grid axis' units.
+ * The edges have one array per grid axis, like the particle properties. The
+ * masses and mask are ordered by the populations' own (input) bin axes, which
+ * needn't match the grid's axis order or units. Everything per axis in the
+ * class is ordered like the grid, with bin_axis giving the input axis
+ * matching each grid axis and unit_scale the factor converting that axis'
+ * edges into the grid axis' units.
  *****************************************************************************/
 #ifndef POP_PROPS_H_
 #define POP_PROPS_H_

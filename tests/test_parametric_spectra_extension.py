@@ -373,8 +373,8 @@ def test_precomputed_weights_are_reused():
 def test_reordered_axes_match():
     """Inputs in another axis order must give the same result, uncopied.
 
-    The edges, masses and mask stay in their own order and bin_axes maps
-    them onto the grid's axes.
+    The masses and mask stay in their own order and bin_axes maps them onto
+    the grid's axes (the edges are always given per grid axis).
     """
     # Compute the result in the grid's axis order with a mask
     edges = _wide_edges()
@@ -385,7 +385,7 @@ def test_reordered_axes_match():
     # Store the same inputs with the axes in the order (2, 0, 1)
     order = (2, 0, 1)
     spec_r, weights_r = _bic(
-        tuple(edges[i] for i in order),
+        edges,
         np.ascontiguousarray(np.transpose(masses, (0, 3, 1, 2))),
         mask=np.ascontiguousarray(mask[list(order)]),
         bin_axes=(1, 2, 0),
@@ -394,6 +394,24 @@ def test_reordered_axes_match():
     # Both must agree
     np.testing.assert_allclose(weights_r, weights)
     np.testing.assert_allclose(spec_r, spec)
+
+
+def test_mask_rows_cover_leading_axes():
+    """Axes without a mask row must be left open."""
+    # Compute the result with an explicitly open last axis
+    edges = _wide_edges()
+    masses = _random_masses(edges)
+    mask = np.array([[2e6, 1e8], [-BIG, 5e-3], [-BIG, BIG]])
+    spec, weights = _bic(edges, masses, mask=mask)
+
+    # Drop the open row
+    spec_p, weights_p = _bic(
+        edges, masses, mask=np.ascontiguousarray(mask[:2])
+    )
+
+    # Both must agree
+    np.testing.assert_array_equal(weights_p, weights)
+    np.testing.assert_array_equal(spec_p, spec)
 
 
 def test_unit_scales_convert_edges_and_mask():
@@ -476,7 +494,7 @@ def test_float32_inputs():
         # Masses not matching the edges
         (_wide_edges(), np.ones((1, 5, 5, 4)), None),
         # A mask with the wrong shape
-        (_wide_edges(), np.ones((1, 6, 5, 4)), np.zeros((2, 2))),
+        (_wide_edges(), np.ones((1, 6, 5, 4)), np.zeros((4, 2))),
         # Mismatched dtypes
         (
             tuple(e.astype(np.float32) for e in _wide_edges()),

@@ -6,13 +6,14 @@ import numpy as np
 import pytest
 from unyt import Hz, Msun, erg, s, yr
 
+from synthesizer.emission_models import IncidentEmission
 from synthesizer.emission_models.extractors.extractor import (
     DopplerShiftedParticleExtractor,
-    Extractor,
     IntegratedDopplerShiftedParticleExtractor,
     IntegratedParametricExtractor,
     IntegratedParticleExtractor,
     ParticleExtractor,
+    ParticleExtractorBase,
 )
 from synthesizer.emissions import Sed
 from synthesizer.exceptions import InconsistentArguments
@@ -21,7 +22,7 @@ from synthesizer.particle import Stars as ParticleStars
 
 
 # Mock Extractor implementation for testing abstract base class methods
-class MockExtractor(Extractor):
+class MockExtractor(ParticleExtractorBase):
     """Mock implementation of the Extractor class for testing purposes."""
 
     def generate_lnu(self, *args, **kwargs):
@@ -604,7 +605,7 @@ def test_integrated_parametric_off_grid_axes(
 def test_integrated_parametric_mismatched_axes(
     test_grid, nebular_emission_model
 ):
-    """Test a grid axis with no matching bin axis raises a clear error.
+    """Test an emitter bin axis the grid doesn't have raises a clear error.
 
     Args:
         test_grid (Grid):
@@ -613,7 +614,7 @@ def test_integrated_parametric_mismatched_axes(
             The nebular emission model fixture.
     """
     # Pretend the grid's metallicity axis is an ionisation parameter axis,
-    # which a parametric Stars isn't binned along
+    # so the grid has no axis for the Stars' metallicity bins
     extractor = IntegratedParametricExtractor(test_grid, "incident")
     extractor._emitter_attributes = ("log10ages", "log10Us")
     extractor._log_emitter_attr = (True, True)
@@ -624,7 +625,7 @@ def test_integrated_parametric_mismatched_axes(
     )
 
     # Extracting must raise rather than fail on a missing bin axis
-    with pytest.raises(InconsistentArguments, match="don't match"):
+    with pytest.raises(InconsistentArguments, match="don't include"):
         extractor.generate_lnu(
             stars,
             nebular_emission_model,
@@ -633,4 +634,129 @@ def test_integrated_parametric_mismatched_axes(
             "cic",
             1,
             False,
+        )
+
+
+def test_integrated_parametric_fixed_axis(test_grid):
+    """Test a bin axis fixed by the model puts all the mass at that value.
+
+    This must match particles placed at the same points, which take the
+    fixed value in the same way.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+    """
+    # Create a random SFZH on the grid's axes
+    sfzh = np.random.default_rng(1).random(
+        (test_grid.log10ages.size, test_grid.metallicities.size)
+    )
+    stars = ParametricStars(
+        test_grid.log10ages, test_grid.metallicities, sfzh=sfzh
+    )
+
+    # A model fixing the age
+    model = IncidentEmission(test_grid, log10ages=7.0)
+
+    # Extract the parametric integrated spectra
+    param = IntegratedParametricExtractor(test_grid, "incident").generate_lnu(
+        stars,
+        model,
+        None,
+        None,
+        "cic",
+        1,
+        False,
+    )
+
+    # Place a particle at each (age, metallicity) point holding its mass and
+    # extract their integrated spectra with the same model
+    ages, metals = np.meshgrid(
+        10**test_grid.log10ages, test_grid.metallicities, indexing="ij"
+    )
+    particles = ParticleStars(
+        initial_masses=sfzh.ravel() * Msun,
+        ages=ages.ravel() * yr,
+        metallicities=metals.ravel(),
+    )
+    part = IntegratedParticleExtractor(test_grid, "incident").generate_lnu(
+        particles,
+        model,
+        None,
+        None,
+        "cic",
+        1,
+        False,
+    )
+
+    # The parametric and particle spectra must agree
+    np.testing.assert_allclose(param.lnu.ndview, part.lnu.ndview, rtol=1e-10)
+
+
+def test_integrated_parametric_unbinned_axis(test_grid):
+    """Test a grid axis the emitter isn't binned along takes a single value.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+    """
+    # Pretend the grid has an extra ionisation parameter axis
+    extractor = IntegratedParametricExtractor(test_grid, "incident")
+    extractor._emitter_attributes = (
+        "log10ages",
+        "metallicities",
+        "ionisation_parameter",
+    )
+    extractor._log_emitter_attr = (True, False, False)
+    extractor._axes_units = ("yr", "dimensionless", "dimensionless")
+    extractor._grid_naxes = 3
+    stars = ParametricStars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sf_hist=1e7 * yr,
+        metal_dist=0.01,
+    )
+
+    # Get the attributes with a model fixing the ionisation parameter
+    model = IncidentEmission(test_grid, ionisation_parameter=0.01)
+    extracted, weight, bin_axes, unit_scales = extractor.get_emitter_attrs(
+        stars, model, False
+    )
+
+    # The extra axis must be a single collapsed bin on a trailing axis of
+    # an uncopied view of the masses
+    np.testing.assert_array_equal(extracted[2], [0.01, 0.01])
+    assert bin_axes == (0, 1, 2)
+    assert unit_scales[2] == 1.0
+    assert weight.shape == stars.bin_masses.shape + (1,)
+    assert np.shares_memory(weight, stars.bin_masses)
+
+
+def test_integrated_parametric_grid_check(test_grid, nebular_emission_model):
+    """Test do_grid_check warns about mass outside the grid.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+        nebular_emission_model (EmissionModel):
+            The nebular emission model fixture.
+    """
+    # Create a Stars with a burst older than the grid
+    stars = ParametricStars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sf_hist=10 ** (test_grid.log10ages.max() + 0.5) * yr,
+        metal_dist=0.01,
+    )
+
+    # Extracting with the check must warn
+    with pytest.warns(RuntimeWarning, match="outside the grid"):
+        IntegratedParametricExtractor(test_grid, "incident").generate_lnu(
+            stars,
+            nebular_emission_model,
+            None,
+            None,
+            "cic",
+            1,
+            True,
         )

@@ -18,11 +18,11 @@
  * This validates the Python population inputs. On failure a Python error is
  * set, which the caller must check for.
  *
- * The edges, masses and mask are ordered by the populations' own (input)
- * bin axes, while log_flags, bin_axes and unit_scales have one entry per
+ * The masses and mask are ordered by the populations' own (input) bin axes,
+ * while edges_tuple, log_flags, bin_axes and unit_scales have one entry per
  * grid axis.
  *
- * @param edges_tuple: A tuple of 1D bin edge arrays, one per input axis (in
+ * @param edges_tuple: A tuple of 1D bin edge arrays, one per grid axis (in
  *                     linear units).
  * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N) in
  *                   the input axis order.
@@ -32,10 +32,11 @@
  *                  axis matching it (a permutation of 0, ..., ndim - 1).
  * @param unit_scales: A sequence of floats, one per grid axis, converting the
  *                     matching input axis' edges into the grid axis' units.
- * @param mask_obj: The mask, a float64 array of shape (ndim, 2) holding the
+ * @param mask_obj: The mask, a float64 array of shape (nmask, 2) holding the
  *                  allowed [lo, hi] range (linear units, inclusive) along
- *                  each input axis, or None. The bounds must be finite (use
- *                  the largest finite float for an open bound).
+ *                  the first nmask <= ndim input axes, or None. Input axes
+ *                  without a row are left open. The bounds must be finite
+ *                  (use the largest finite float for an open bound).
  * @param prop_names: The names of the grid axes (for error messages).
  * @param ndim_: The number of grid axes.
  */
@@ -52,8 +53,8 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
   mask_lo_.fill(-std::numeric_limits<double>::max());
   mask_hi_.fill(std::numeric_limits<double>::max());
 
-  /* We need one set of edges per input axis and one log flag, bin axis and
-   * unit scale per grid axis. */
+  /* We need one set of edges, log flag, bin axis and unit scale per grid
+   * axis. */
   if (!PyTuple_Check(edges_tuple) || PyTuple_Size(edges_tuple) != ndim) {
     PyErr_Format(PyExc_ValueError,
                  "[Populations.__init__]: edges must be a tuple with one "
@@ -143,11 +144,11 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     bin_axis_[idim] = static_cast<int>(axis);
 
     /* Get the edges along this axis. */
-    PyObject *edges_obj = PyTuple_GetItem(edges_tuple, axis);
+    PyObject *edges_obj = PyTuple_GetItem(edges_tuple, idim);
     if (edges_obj == NULL || !PyArray_Check(edges_obj) ||
         PyArray_NDIM(reinterpret_cast<PyArrayObject *>(edges_obj)) != 1) {
       PyErr_Format(PyExc_ValueError,
-                   "[Populations.__init__]: The bin edges matching the %s "
+                   "[Populations.__init__]: The bin edges along the %s "
                    "axis must be a 1D array.",
                    axis_name);
       return;
@@ -161,7 +162,7 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     const npy_intp nedges = PyArray_DIM(np_edges, 0);
     if (nedges < 2) {
       PyErr_Format(PyExc_ValueError,
-                   "[Populations.__init__]: The bin edges matching the %s "
+                   "[Populations.__init__]: The bin edges along the %s "
                    "axis must define at least one bin.",
                    axis_name);
       return;
@@ -226,8 +227,8 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
   /* Store the pointers and check the edges are non-decreasing. */
   masses_ = PyArray_DATA(np_masses);
   for (int idim = 0; idim < ndim; idim++) {
-    PyArrayObject *np_edges = reinterpret_cast<PyArrayObject *>(
-        PyTuple_GetItem(edges_tuple, bin_axis_[idim]));
+    PyArrayObject *np_edges =
+        reinterpret_cast<PyArrayObject *>(PyTuple_GetItem(edges_tuple, idim));
     if (PyArray_TYPE(np_edges) != float_typenum_) {
       PyErr_SetString(PyExc_TypeError,
                       "[Populations.__init__]: masses and bin edges must "
@@ -250,7 +251,7 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     });
     if (!sorted) {
       PyErr_Format(PyExc_ValueError,
-                   "[Populations.__init__]: The bin edges matching the %s "
+                   "[Populations.__init__]: The bin edges along the %s "
                    "axis must be non-decreasing.",
                    axis_names_[idim].c_str());
       return;
@@ -265,13 +266,14 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
       return;
     }
 
-    /* The mask must be a contiguous (ndim, 2) float64 array. */
+    /* The mask must be a contiguous (nmask, 2) float64 array with at most
+     * one row per axis. */
     if (PyArray_TYPE(np_mask) != NPY_FLOAT64 || PyArray_NDIM(np_mask) != 2 ||
-        PyArray_DIM(np_mask, 0) != ndim || PyArray_DIM(np_mask, 1) != 2) {
+        PyArray_DIM(np_mask, 0) > ndim || PyArray_DIM(np_mask, 1) != 2) {
       PyErr_Format(PyExc_ValueError,
                    "[Populations.__init__]: mask must be a float64 array of "
-                   "shape (%d, 2) holding "
-                   "the allowed range along each axis.",
+                   "shape (nmask, 2), with nmask <= %d, holding the allowed "
+                   "range along each axis.",
                    ndim);
       return;
     }
@@ -279,11 +281,15 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
       return;
     }
 
-    /* The mask's rows follow the input axes, store them by grid axis. */
+    /* The mask's rows follow the input axes, store them by grid axis
+     * (input axes without a row stay open). */
+    const int nmask = static_cast<int>(PyArray_DIM(np_mask, 0));
     const double *ranges = static_cast<const double *>(PyArray_DATA(np_mask));
     for (int idim = 0; idim < ndim; idim++) {
-      mask_lo_[idim] = ranges[2 * bin_axis_[idim]];
-      mask_hi_[idim] = ranges[2 * bin_axis_[idim] + 1];
+      if (bin_axis_[idim] < nmask) {
+        mask_lo_[idim] = ranges[2 * bin_axis_[idim]];
+        mask_hi_[idim] = ranges[2 * bin_axis_[idim] + 1];
+      }
     }
   }
 
