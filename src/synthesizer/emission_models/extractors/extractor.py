@@ -1775,8 +1775,8 @@ class IntegratedParametricExtractor(ParametricExtractorBase):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        # Get the grid_weights if they exist and we don't have a mask
-        if mask is None:
+        # Get the grid_weights if they exist and can be reused
+        if self._can_cache_grid_weights(model, mask):
             grid_weights = emitter._grid_weights.get("bic", {}).get(
                 self._grid.grid_name, None
             )
@@ -1800,9 +1800,9 @@ class IntegratedParametricExtractor(ParametricExtractorBase):
             self._emitter_attributes,
         )
 
-        # If we have no mask then lets store the grid weights in case
+        # If the grid weights can be reused then lets store them in case
         # we can make use of them later
-        if mask is None:
+        if self._can_cache_grid_weights(model, mask):
             emitter._grid_weights.setdefault("bic", {})[
                 self._grid.grid_name
             ] = grid_weights
@@ -1866,8 +1866,8 @@ class IntegratedParametricExtractor(ParametricExtractorBase):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        # Get the grid_weights if they exist and we don't have a mask
-        if mask is None:
+        # Get the grid_weights if they exist and can be reused
+        if self._can_cache_grid_weights(model, mask):
             grid_weights = emitter._grid_weights.get("bic", {}).get(
                 self._grid.grid_name, None
             )
@@ -1907,9 +1907,9 @@ class IntegratedParametricExtractor(ParametricExtractorBase):
             self._emitter_attributes,
         )
 
-        # If we have no mask then lets store the grid weights in case
+        # If the grid weights can be reused then lets store them in case
         # we can make use of them later
-        if mask is None:
+        if self._can_cache_grid_weights(model, mask):
             emitter._grid_weights.setdefault("bic", {})[
                 self._grid.grid_name
             ] = grid_weights

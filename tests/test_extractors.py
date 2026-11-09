@@ -693,6 +693,43 @@ def test_integrated_parametric_fixed_axis(test_grid):
     np.testing.assert_allclose(param.lnu.ndview, part.lnu.ndview, rtol=1e-10)
 
 
+def test_integrated_parametric_fixed_axis_not_reused(test_grid):
+    """Test stored BIC weights aren't reused for a model fixing an axis.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+    """
+
+    def make_stars():
+        """Make a fresh parametric Stars on the grid's axes.
+
+        Returns:
+            ParametricStars:
+                Stars with a random SFZH.
+        """
+        return ParametricStars(
+            test_grid.log10ages,
+            test_grid.metallicities,
+            sfzh=np.random.default_rng(1).random(
+                (test_grid.log10ages.size, test_grid.metallicities.size)
+            ),
+        )
+
+    # Extract with a model that doesn't fix anything, storing the weights
+    stars = make_stars()
+    stars.get_spectra(IncidentEmission(test_grid))
+
+    # Extract the same stars with a model fixing the age
+    fixed = stars.get_spectra(IncidentEmission(test_grid, log10ages=7.0))
+
+    # This must match fresh stars without any stored weights
+    expected = make_stars().get_spectra(
+        IncidentEmission(test_grid, log10ages=7.0)
+    )
+    np.testing.assert_allclose(fixed.lnu, expected.lnu)
+
+
 def test_integrated_parametric_unbinned_axis(test_grid):
     """Test a grid axis the emitter isn't binned along takes a single value.
 
