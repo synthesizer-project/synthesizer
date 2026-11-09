@@ -399,6 +399,7 @@ extensions = [
         "synthesizer.extensions.parametric_spectra",
         [
             "src/synthesizer/extensions/parametric_spectra.cpp",
+            "src/synthesizer/extensions/pop_props.cpp",
             "src/synthesizer/extensions/weights.cpp",
             "src/synthesizer/extensions/property_funcs.cpp",
             "src/synthesizer/extensions/cpp_to_python.cpp",

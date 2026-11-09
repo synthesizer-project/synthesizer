@@ -544,8 +544,8 @@ static void build_bic_tables(GridProps *grid_props, Populations *pops,
     table.fracs.clear();
 
     /* Get the mask's range along this axis. */
-    const double mask_lo = pops->mask_lo[dim];
-    const double mask_hi = pops->mask_hi[dim];
+    const double mask_lo = pops->get_mask_lo(dim);
+    const double mask_hi = pops->get_mask_hi(dim);
 
     /* Compute each bin's grid points and fractions and append them. */
     for (int ibin = 0; ibin < pops->nbins[dim]; ibin++) {
@@ -577,9 +577,9 @@ static void build_bic_tables(GridProps *grid_props, Populations *pops,
        */
       if (scale > 0.0) {
         get_pop_bin_fracs_bic<GridReal>(
-            grid_axis, grid_props->dims[dim], pops->log_axis[dim],
-            lo * pops->unit_scale[dim], hi * pops->unit_scale[dim], inds,
-            fracs);
+            grid_axis, grid_props->dims[dim], pops->is_log_axis(dim),
+            lo * pops->get_unit_scale(dim), hi * pops->get_unit_scale(dim),
+            inds, fracs);
         table.inds.insert(table.inds.end(), inds.begin(), inds.end());
         for (const double frac : fracs) {
           table.fracs.push_back(frac * scale);

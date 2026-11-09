@@ -11,7 +11,6 @@ Example usage::
     stars.plot_spectra()
 """
 
-import operator
 from copy import deepcopy
 
 import cmasher as cmr
@@ -51,16 +50,6 @@ SFZH_SUBDIVISIONS = 8
 # compiled with -ffast-math, which makes infinities undefined behaviour, so
 # masks use the largest finite float instead
 _MASK_BOUND = np.finfo(np.float64).max
-
-# The comparison operators a mask can apply to a population level value
-_OPERATORS = {
-    "<": operator.lt,
-    "<=": operator.le,
-    ">": operator.gt,
-    ">=": operator.ge,
-    "==": operator.eq,
-    "!=": operator.ne,
-}
 
 
 class Stars(StarsComponent):
@@ -734,7 +723,7 @@ class Stars(StarsComponent):
 
         # Anything derived from the bins is now stale
         self._sfzh_view = None
-        self._grid_weights = {}
+        self._grid_weights = {"cic": {}, "ngp": {}}
 
     def _sfzh_to_bins(self, sfzh):
         """Convert an SFZH defined at the points of the axes into bins.
@@ -932,7 +921,7 @@ class Stars(StarsComponent):
                 neither a bin axis nor single valued.
         """
         # Reject unknown operators
-        if op not in _OPERATORS:
+        if op not in ("<", ">", "<=", ">=", "==", "!="):
             raise exceptions.InconsistentArguments(
                 "Masking operation must be '<', '>', '<=', '>=', '==', or "
                 f"'!=', not {op}"
@@ -1001,9 +990,23 @@ class Stars(StarsComponent):
                 "masked."
             )
 
+        # Apply the operator
+        if op == ">":
+            include = value > thresh
+        elif op == "<":
+            include = value < thresh
+        elif op == ">=":
+            include = value >= thresh
+        elif op == "<=":
+            include = value <= thresh
+        elif op == "==":
+            include = value == thresh
+        else:
+            include = value != thresh
+
         # A failing population level condition excludes everything, which
         # we mark by emptying the first axis' range
-        if not _OPERATORS[op](value, thresh):
+        if not include:
             new_mask[0] = (_MASK_BOUND, -_MASK_BOUND)
         return new_mask
 

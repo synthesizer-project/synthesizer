@@ -1519,11 +1519,13 @@ class IntegratedParametricExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        # Reuse stored grid weights if we have them and don't have a mask
-        grid_name = self._grid.grid_name
-        grid_weights = (
-            emitter._grid_weights.get(grid_name) if mask is None else None
-        )
+        # Get the grid_weights if they exist and we don't have a mask
+        if mask is None:
+            grid_weights = emitter._grid_weights.get("bic", {}).get(
+                self._grid.grid_name, None
+            )
+        else:
+            grid_weights = None
 
         # Compute the integrated lnu array
         spec, grid_weights = compute_integrated_parametric_sed(
@@ -1542,9 +1544,12 @@ class IntegratedParametricExtractor(Extractor):
             self._emitter_attributes,
         )
 
-        # Store the grid weights for reuse if we had no mask
+        # If we have no mask then lets store the grid weights in case
+        # we can make use of them later
         if mask is None:
-            emitter._grid_weights[grid_name] = grid_weights
+            emitter._grid_weights.setdefault("bic", {})[
+                self._grid.grid_name
+            ] = grid_weights
 
         return Sed(
             model.lam,
@@ -1600,11 +1605,13 @@ class IntegratedParametricExtractor(Extractor):
         if nthreads == -1:
             nthreads = os.cpu_count()
 
-        # Reuse stored grid weights if we have them and don't have a mask
-        grid_name = self._grid.grid_name
-        grid_weights = (
-            emitter._grid_weights.get(grid_name) if mask is None else None
-        )
+        # Get the grid_weights if they exist and we don't have a mask
+        if mask is None:
+            grid_weights = emitter._grid_weights.get("bic", {}).get(
+                self._grid.grid_name, None
+            )
+        else:
+            grid_weights = None
 
         # Compute the integrated line luminosities, then reuse the weights
         # for the continuum (they already include any mask)
@@ -1639,9 +1646,12 @@ class IntegratedParametricExtractor(Extractor):
             self._emitter_attributes,
         )
 
-        # Store the grid weights for reuse if we had no mask
+        # If we have no mask then lets store the grid weights in case
+        # we can make use of them later
         if mask is None:
-            emitter._grid_weights[grid_name] = grid_weights
+            emitter._grid_weights.setdefault("bic", {})[
+                self._grid.grid_name
+            ] = grid_weights
 
         return LineCollection(
             line_ids=self._grid.line_ids,
