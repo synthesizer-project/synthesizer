@@ -31,6 +31,7 @@ from synthesizer.extensions.particle_spectra import (
 )
 from synthesizer.synth_warnings import warn
 from synthesizer.units import convert_in_place, get_quantity_unit
+from synthesizer.utils import depluralize, pluralize
 from synthesizer.utils.operation_timers import timed, timer
 from synthesizer.utils.precision import (
     resolve_out_dtype,
@@ -286,12 +287,15 @@ class Extractor(ABC):
         if mask is not None:
             return False
 
-        # Check whether the model fixes any of the attributes (with or
-        # without a log10 prefix) or the weight variable
+        # Check whether the model fixes any of the attributes or the weight
+        # variable under any name get_param would resolve them by (with or
+        # without a log10 prefix, singular or plural)
         fixed = getattr(model, "fixed_parameters", {})
         return not any(
-            name in fixed or name.replace("log10", "") in fixed
+            alias in fixed
             for name in (*self._emitter_attributes, str(self._weight_var))
+            for base in (name, name.replace("log10", ""))
+            for alias in (base, depluralize(base), pluralize(base))
         )
 
     @timed("Extractor.check_emitter_attrs")

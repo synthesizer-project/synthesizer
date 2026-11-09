@@ -613,6 +613,7 @@ def test_grid_weights_not_reused_with_fixed_parameters(test_grid):
     # Extract with a model that doesn't fix anything, storing the weights
     stars = make_stars()
     stars.get_spectra(IncidentEmission(test_grid))
+    assert test_grid.grid_name in stars._grid_weights["cic"]
 
     # Extract the same stars with a model fixing the age
     fixed = stars.get_spectra(IncidentEmission(test_grid, log10ages=7.0))
@@ -622,6 +623,25 @@ def test_grid_weights_not_reused_with_fixed_parameters(test_grid):
         IncidentEmission(test_grid, log10ages=7.0)
     )
     np.testing.assert_allclose(fixed.lnu, expected.lnu)
+
+
+@pytest.mark.parametrize("fixed", ["log10ages", "ages", "log10age", "age"])
+def test_grid_weights_not_cached_for_fixed_aliases(test_grid, fixed):
+    """Test any name get_param resolves an axis by stops weight caching.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+        fixed (str):
+            The name the model fixes the age axis by.
+    """
+    # A model fixing the age axis under this name
+    model = MagicMock()
+    model.fixed_parameters = {fixed: 7.0}
+
+    # The stored weights can't be used for this model
+    extractor = IntegratedParticleExtractor(test_grid, "incident")
+    assert not extractor._can_cache_grid_weights(model, None)
 
 
 def test_do_grid_check_warns(test_grid, nebular_emission_model):
