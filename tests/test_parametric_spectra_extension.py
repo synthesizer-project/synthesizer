@@ -499,3 +499,28 @@ def test_invalid_inputs_raise(edges, masses, mask):
     # Each case must be rejected with a Python error
     with pytest.raises((ValueError, TypeError)):
         _bic(edges, masses, mask=mask)
+
+
+def test_invalid_inputs_name_the_axis():
+    """Errors about an axis' bins must name that axis, like Particles."""
+    # Make the metallicity edges decrease
+    edges = list(_wide_edges())
+    edges[1] = edges[1][::-1].copy()
+
+    # The error must name the offending axis
+    with pytest.raises(ValueError, match="log10metallicities"):
+        compute_integrated_parametric_sed(
+            _grid_spectra(),
+            GRID_AXES,
+            tuple(edges),
+            np.ones((1, 6, 5, 4)),
+            LOG_FLAGS,
+            (0, 1, 2),
+            (1.0, 1.0, 1.0),
+            1,
+            None,
+            None,
+            None,
+            None,
+            ("log10ages", "log10metallicities", "x"),
+        )

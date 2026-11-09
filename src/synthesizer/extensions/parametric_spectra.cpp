@@ -253,7 +253,7 @@ PyObject *compute_integrated_parametric_sed(PyObject *self, PyObject *args) {
   /* Create the object that holds the population properties. */
   auto pops = std::unique_ptr<Populations>(
       new Populations(edges_tuple, np_masses, log_flags, bin_axes, unit_scales,
-                      mask_obj, grid_props->ndim));
+                      mask_obj, prop_names, grid_props->ndim));
   RETURN_IF_PYERR();
 
   /* Resolve the dtypes, defaulting the grid to float64. */
@@ -380,7 +380,7 @@ PyObject *compute_parametric_weights(PyObject *self, PyObject *args) {
   /* Create the object that holds the population properties. */
   auto pops = std::unique_ptr<Populations>(
       new Populations(edges_tuple, np_masses, log_flags, bin_axes, unit_scales,
-                      mask_obj, grid_props->ndim));
+                      mask_obj, prop_names, grid_props->ndim));
   RETURN_IF_PYERR();
 
   /* Resolve the grid dtype, defaulting to float64. */

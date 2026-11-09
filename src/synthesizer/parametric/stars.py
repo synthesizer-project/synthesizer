@@ -795,6 +795,10 @@ class Stars(StarsComponent):
             (1.0, 1.0),
             1,
             None,
+            (
+                "log10ages",
+                "log10metallicities" if log_metals else "metallicities",
+            ),
         )
 
     @property

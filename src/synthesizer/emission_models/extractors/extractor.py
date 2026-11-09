@@ -1410,9 +1410,11 @@ class IntegratedParametricExtractor(Extractor):
     the computation time.
     """
 
-    def _get_bin_axes(self, emitter):
-        """Match the grid's axes to a parametric emitter's bin axes.
+    @timed("IntegratedParametricExtractor.get_emitter_attrs")
+    def get_emitter_attrs(self, emitter, model, do_grid_check):
+        """Get the bin attributes from a parametric emitter.
 
+        This is the parametric counterpart of Extractor.get_emitter_attrs.
         The emitter's edges, masses and mask stay in its own axis order and
         units. Instead, the extension is told which bin axis matches each
         grid axis and the factor converting that axis' edges into the grid
@@ -1421,12 +1423,16 @@ class IntegratedParametricExtractor(Extractor):
         Args:
             emitter (Stars):
                 The parametric emitter.
+            model (EmissionModel):
+                Unused, the bins are always read from the emitter.
+            do_grid_check (bool):
+                Unused, mass outside the grid is clamped onto its edges.
 
         Returns:
-            tuple:
-                The emitter's bin edges (in its bin axis order), the bin axis
-                matching each grid axis and the unit conversion factor for
-                each grid axis.
+            tuple
+                The extracted attributes (the emitter's bin edges in its bin
+                axis order, the bin axis matching each grid axis and the unit
+                conversion factor for each grid axis) and the bin masses.
 
         Raises:
             InconsistentArguments:
@@ -1468,7 +1474,7 @@ class IntegratedParametricExtractor(Extractor):
             for axis in emitter.bin_axes
         )
 
-        return edges, tuple(bin_axes), tuple(unit_scales)
+        return (edges, tuple(bin_axes), tuple(unit_scales)), emitter.bin_masses
 
     @timed("IntegratedParametricExtractor.generate_lnu")
     @verify_out_precision()
@@ -1512,8 +1518,10 @@ class IntegratedParametricExtractor(Extractor):
         # Resolve the requested output precision
         out_dtype = resolve_out_dtype(out_dtype)
 
-        # Get the bin edges and how the bin axes map onto the grid's axes
-        edges, bin_axes, unit_scales = self._get_bin_axes(emitter)
+        # Get the bin attributes and masses from the emitter
+        (edges, bin_axes, unit_scales), masses = self.get_emitter_attrs(
+            emitter, model, do_grid_check
+        )
 
         # If nthreads is -1 then use all available threads
         if nthreads == -1:
@@ -1532,7 +1540,7 @@ class IntegratedParametricExtractor(Extractor):
             self._spectra_grid,
             self._grid_axes,
             edges,
-            emitter.bin_masses,
+            masses,
             self._log_emitter_attr,
             bin_axes,
             unit_scales,
@@ -1598,8 +1606,10 @@ class IntegratedParametricExtractor(Extractor):
         # Resolve the requested output precision
         out_dtype = resolve_out_dtype(out_dtype)
 
-        # Get the bin edges and how the bin axes map onto the grid's axes
-        edges, bin_axes, unit_scales = self._get_bin_axes(emitter)
+        # Get the bin attributes and masses from the emitter
+        (edges, bin_axes, unit_scales), masses = self.get_emitter_attrs(
+            emitter, model, do_grid_check
+        )
 
         # If nthreads is -1 then use all available threads
         if nthreads == -1:
@@ -1619,7 +1629,7 @@ class IntegratedParametricExtractor(Extractor):
             self._line_lum_grid,
             self._grid_axes,
             edges,
-            emitter.bin_masses,
+            masses,
             self._log_emitter_attr,
             bin_axes,
             unit_scales,
@@ -1634,7 +1644,7 @@ class IntegratedParametricExtractor(Extractor):
             self._line_cont_grid,
             self._grid_axes,
             edges,
-            emitter.bin_masses,
+            masses,
             self._log_emitter_attr,
             bin_axes,
             unit_scales,

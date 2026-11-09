@@ -18,6 +18,7 @@
 
 /* Standard includes */
 #include <array>
+#include <string>
 
 /* Python includes */
 #define PY_ARRAY_UNIQUE_SYMBOL SYNTHESIZER_ARRAY_API
@@ -53,7 +54,7 @@ class Populations {
   /* Constructor */
   Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
               PyObject *log_flags, PyObject *bin_axes, PyObject *unit_scales,
-              PyObject *mask_obj, int ndim);
+              PyObject *mask_obj, PyObject *prop_names, int ndim);
 
   /**
    * @brief Get the resolved floating-point dtype of the edges and masses.
@@ -173,6 +174,9 @@ class Populations {
    * infinities undefined behaviour, so the bounds must always be finite. */
   std::array<double, MAX_GRID_NDIM> mask_lo_;
   std::array<double, MAX_GRID_NDIM> mask_hi_;
+
+  /* The name of each grid axis (for error messages). */
+  std::array<std::string, MAX_GRID_NDIM> axis_names_;
 
   /* The shared floating-point dtype of the edges and masses. */
   int float_typenum_ = -1;

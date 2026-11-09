@@ -4,6 +4,7 @@
 /* Standard includes */
 #include <array>
 #include <limits>
+#include <string>
 
 /* Local includes */
 #include "pop_props.h"
@@ -35,11 +36,13 @@
  *                  allowed [lo, hi] range (linear units, inclusive) along
  *                  each input axis, or None. The bounds must be finite (use
  *                  the largest finite float for an open bound).
+ * @param prop_names: The names of the grid axes (for error messages).
  * @param ndim_: The number of grid axes.
  */
 Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
                          PyObject *log_flags, PyObject *bin_axes,
-                         PyObject *unit_scales, PyObject *mask_obj, int ndim_)
+                         PyObject *unit_scales, PyObject *mask_obj,
+                         PyObject *prop_names, int ndim_)
     : npop(0), ndim(ndim_), ncells(0), masses_(nullptr) {
 
   tic("Populations.__init__");
@@ -53,7 +56,8 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
    * unit scale per grid axis. */
   if (!PyTuple_Check(edges_tuple) || PyTuple_Size(edges_tuple) != ndim) {
     PyErr_Format(PyExc_ValueError,
-                 "edges must be a tuple with one array per grid axis (%d).",
+                 "[Populations.__init__]: edges must be a tuple with one "
+                 "array per grid axis (%d).",
                  ndim);
     return;
   }
@@ -63,7 +67,8 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     if (!PySequence_Check(per_axis[i]) ||
         PySequence_Size(per_axis[i]) != ndim) {
       PyErr_Format(PyExc_ValueError,
-                   "%s must be a sequence with one entry per grid axis (%d).",
+                   "[Populations.__init__]: %s must be a sequence with one "
+                   "entry per grid axis (%d).",
                    per_axis_names[i], ndim);
       return;
     }
@@ -73,7 +78,8 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
   if (!PyArray_Check(reinterpret_cast<PyObject *>(np_masses)) ||
       PyArray_NDIM(np_masses) != ndim + 1) {
     PyErr_Format(PyExc_ValueError,
-                 "masses must be an array of shape (npop, nbins_0, ..., "
+                 "[Populations.__init__]: masses must be an array of shape "
+                 "(npop, nbins_0, ..., "
                  "nbins_%d).",
                  ndim - 1);
     return;
@@ -86,10 +92,36 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
   float_arrays[0] = np_masses;
   float_names[0] = "masses";
 
+  /* Storage for the edge labels, since float_names only holds pointers. */
+  std::array<std::string, MAX_GRID_NDIM> edge_labels;
+
   /* Validate each grid axis, counting the bins in a single population. */
   std::array<bool, MAX_GRID_NDIM> seen = {};
   ncells = 1;
   for (int idim = 0; idim < ndim; idim++) {
+
+    /* Extract the axis name (if given) so errors can name the axis. A
+     * missing or invalid name is not fatal, we just fall back to the axis
+     * index. */
+    axis_names_[idim] = "grid axis " + std::to_string(idim);
+    if (prop_names != NULL && PySequence_Check(prop_names) &&
+        !PyUnicode_Check(prop_names)) {
+      PyObject *name_obj = PySequence_GetItem(prop_names, idim);
+      if (name_obj != NULL) {
+        if (PyUnicode_Check(name_obj)) {
+          const char *name = PyUnicode_AsUTF8(name_obj);
+          if (name != NULL) {
+            axis_names_[idim] = name;
+          } else {
+            PyErr_Clear();
+          }
+        }
+        Py_DECREF(name_obj);
+      } else {
+        PyErr_Clear();
+      }
+    }
+    const char *axis_name = axis_names_[idim].c_str();
 
     /* Get the input axis matching this grid axis, each must be used once. */
     PyObject *axis_obj = PySequence_GetItem(bin_axes, idim);
@@ -103,7 +135,8 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     }
     if (axis < 0 || axis >= ndim || seen[axis]) {
       PyErr_SetString(PyExc_ValueError,
-                      "bin_axes must be a permutation of the input axes.");
+                      "[Populations.__init__]: bin_axes must be a permutation "
+                      "of the input axes.");
       return;
     }
     seen[axis] = true;
@@ -114,19 +147,23 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     if (edges_obj == NULL || !PyArray_Check(edges_obj) ||
         PyArray_NDIM(reinterpret_cast<PyArrayObject *>(edges_obj)) != 1) {
       PyErr_Format(PyExc_ValueError,
-                   "The edges for axis %ld must be a 1D array.", axis);
+                   "[Populations.__init__]: The bin edges matching the %s "
+                   "axis must be a 1D array.",
+                   axis_name);
       return;
     }
     PyArrayObject *np_edges = reinterpret_cast<PyArrayObject *>(edges_obj);
     float_arrays[idim + 1] = np_edges;
-    float_names[idim + 1] = "bin edges";
+    edge_labels[idim] = axis_names_[idim] + " bin edges";
+    float_names[idim + 1] = edge_labels[idim].c_str();
 
     /* There is one fewer bin than there are edges. */
     const npy_intp nedges = PyArray_DIM(np_edges, 0);
     if (nedges < 2) {
       PyErr_Format(PyExc_ValueError,
-                   "The edges for axis %ld must define at least one bin.",
-                   axis);
+                   "[Populations.__init__]: The bin edges matching the %s "
+                   "axis must define at least one bin.",
+                   axis_name);
       return;
     }
     nbins[idim] = static_cast<int>(nedges - 1);
@@ -135,10 +172,10 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     /* The masses must have one entry per bin along this axis. */
     if (PyArray_DIM(np_masses, axis + 1) != nbins[idim]) {
       PyErr_Format(PyExc_ValueError,
-                   "masses has %ld bins along axis %ld but the edges define "
-                   "%d.",
-                   static_cast<long>(PyArray_DIM(np_masses, axis + 1)), axis,
-                   nbins[idim]);
+                   "[Populations.__init__]: masses has %ld bins along the %s "
+                   "axis but the bin edges define %d.",
+                   static_cast<long>(PyArray_DIM(np_masses, axis + 1)),
+                   axis_name, nbins[idim]);
       return;
     }
     ncells *= nbins[idim];
@@ -166,7 +203,10 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
       return;
     }
     if (!(unit_scale_[idim] > 0.0)) {
-      PyErr_SetString(PyExc_ValueError, "unit_scales must be positive.");
+      PyErr_Format(PyExc_ValueError,
+                   "[Populations.__init__]: The unit scale for the %s axis "
+                   "must be positive.",
+                   axis_name);
       return;
     }
   }
@@ -178,7 +218,8 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
   }
   if (PyArray_TYPE(np_masses) != float_typenum_) {
     PyErr_SetString(PyExc_TypeError,
-                    "masses and bin edges must share the same dtype.");
+                    "[Populations.__init__]: masses and bin edges must share "
+                    "the same dtype.");
     return;
   }
 
@@ -189,7 +230,8 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
         PyTuple_GetItem(edges_tuple, bin_axis_[idim]));
     if (PyArray_TYPE(np_edges) != float_typenum_) {
       PyErr_SetString(PyExc_TypeError,
-                      "masses and bin edges must share the same dtype.");
+                      "[Populations.__init__]: masses and bin edges must "
+                      "share the same dtype.");
       return;
     }
     edges_[idim] = PyArray_DATA(np_edges);
@@ -208,8 +250,9 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     });
     if (!sorted) {
       PyErr_Format(PyExc_ValueError,
-                   "The edges for axis %d must be non-decreasing.",
-                   bin_axis_[idim]);
+                   "[Populations.__init__]: The bin edges matching the %s "
+                   "axis must be non-decreasing.",
+                   axis_names_[idim].c_str());
       return;
     }
   }
@@ -226,7 +269,8 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
     if (PyArray_TYPE(np_mask) != NPY_FLOAT64 || PyArray_NDIM(np_mask) != 2 ||
         PyArray_DIM(np_mask, 0) != ndim || PyArray_DIM(np_mask, 1) != 2) {
       PyErr_Format(PyExc_ValueError,
-                   "mask must be a float64 array of shape (%d, 2) holding "
+                   "[Populations.__init__]: mask must be a float64 array of "
+                   "shape (%d, 2) holding "
                    "the allowed range along each axis.",
                    ndim);
       return;
