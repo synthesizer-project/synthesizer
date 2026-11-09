@@ -4,8 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-from unyt import Hz, erg, s
+from unyt import Hz, Msun, erg, s, yr
 
+from synthesizer.emission_models import IncidentEmission
 from synthesizer.emission_models.extractors.extractor import (
     DopplerShiftedParticleExtractor,
     Extractor,
@@ -17,6 +18,7 @@ from synthesizer.emission_models.extractors.extractor import (
 from synthesizer.emissions import Sed
 from synthesizer.exceptions import InconsistentArguments
 from synthesizer.parametric import Stars as ParametricStars
+from synthesizer.particle import Stars as ParticleStars
 
 
 # Mock Extractor implementation for testing abstract base class methods
@@ -585,3 +587,91 @@ def test_integrated_parametric_axis_mismatch(
             1,
             False,
         )
+
+
+def test_grid_weights_not_reused_with_fixed_parameters(test_grid):
+    """Test stored grid weights aren't reused for a model fixing an axis.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+    """
+
+    def make_stars():
+        """Make a fresh set of particle stars.
+
+        Returns:
+            ParticleStars:
+                Stars spread over a range of ages.
+        """
+        return ParticleStars(
+            initial_masses=np.ones(5) * Msun,
+            ages=np.logspace(6, 9, 5) * yr,
+            metallicities=np.full(5, 0.01),
+        )
+
+    # Extract with a model that doesn't fix anything, storing the weights
+    stars = make_stars()
+    stars.get_spectra(IncidentEmission(test_grid))
+    assert test_grid.grid_name in stars._grid_weights["cic"]
+
+    # Extract the same stars with a model fixing the age
+    fixed = stars.get_spectra(IncidentEmission(test_grid, log10ages=7.0))
+
+    # This must match fresh stars without any stored weights
+    expected = make_stars().get_spectra(
+        IncidentEmission(test_grid, log10ages=7.0)
+    )
+    np.testing.assert_allclose(fixed.lnu, expected.lnu)
+
+
+@pytest.mark.parametrize("fixed", ["log10ages", "ages", "log10age", "age"])
+def test_grid_weights_not_cached_for_fixed_aliases(test_grid, fixed):
+    """Test any name get_param resolves an axis by stops weight caching.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+        fixed (str):
+            The name the model fixes the age axis by.
+    """
+    # A model fixing the age axis under this name
+    model = MagicMock()
+    model.fixed_parameters = {fixed: 7.0}
+
+    # The stored weights can't be used for this model
+    extractor = IntegratedParticleExtractor(test_grid, "incident")
+    assert not extractor._can_cache_grid_weights(model, None)
+
+
+def test_do_grid_check_warns(test_grid, nebular_emission_model):
+    """Test do_grid_check warns with the fraction outside the grid.
+
+    Args:
+        test_grid (Grid):
+            The test grid fixture.
+        nebular_emission_model (EmissionModel):
+            The nebular emission model fixture.
+    """
+    # One particle inside the grid and one outside along the age axis only
+    stars = ParticleStars(
+        initial_masses=np.ones(2) * Msun,
+        ages=np.array([1e7, 10 ** (test_grid.log10ages.max() + 1)]) * yr,
+        metallicities=np.full(2, 0.01),
+    )
+
+    # Extracting with the check must warn about half the particles
+    with patch(
+        "synthesizer.emission_models.extractors.extractor.warn"
+    ) as mock_warn:
+        IntegratedParticleExtractor(test_grid, "incident").generate_lnu(
+            stars,
+            nebular_emission_model,
+            None,
+            None,
+            "cic",
+            1,
+            True,
+        )
+    mock_warn.assert_called_once()
+    assert "50.00%" in mock_warn.call_args[0][0]
