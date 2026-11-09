@@ -120,6 +120,7 @@ def test_escape_fraction(
         {"covering_fraction": 0.9},
         {"mask": {}},
         {"vel_shift": True},
+        {"tau_v_ism": 0.3},
     ],
 )
 def test_removed_spectra_overrides_raise(
@@ -151,4 +152,15 @@ def test_removed_lines_overrides_raise(
     with pytest.raises(exceptions.InconsistentArguments, match="fesc"):
         random_particle_galaxy.get_lines(
             ["H 1 6562.80A"], nebular_emission_model, fesc=0.1
+        )
+
+    # Keywords get_lines never took (e.g. vel_shift) should raise the same
+    # error rather than a bare TypeError
+    with pytest.raises(exceptions.InconsistentArguments, match="vel_shift"):
+        random_particle_galaxy.get_lines(
+            ["H 1 6562.80A"], nebular_emission_model, vel_shift=True
+        )
+    with pytest.raises(exceptions.InconsistentArguments, match="tau_v_ism"):
+        random_particle_galaxy.stars.get_lines(
+            ["H 1 6562.80A"], nebular_emission_model, tau_v_ism=0.3
         )

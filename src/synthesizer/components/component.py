@@ -432,8 +432,9 @@ class Component(ABC):
                 No longer supported, passing it raises an error.
                 Modify the EmissionModel (or the emitter) instead.
             **kwargs (dict):
-                Any additional keyword arguments to pass to the generator
-                function.
+                Any additional keyword arguments to pass to
+                EmissionModel._get_spectra, which raises an error for any it
+                doesn't accept.
 
         Returns:
             dict
@@ -517,8 +518,9 @@ class Component(ABC):
                 No longer supported, passing it raises an error.
                 Modify the EmissionModel (or the emitter) instead.
             kwargs (dict):
-                Any additional keyword arguments to pass to the generator
-                function.
+                Any additional keyword arguments to pass to
+                EmissionModel._get_lines, which raises an error for any it
+                doesn't accept.
 
         Returns:
             LineCollection

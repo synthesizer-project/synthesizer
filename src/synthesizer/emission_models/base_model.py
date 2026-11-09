@@ -56,6 +56,7 @@ from synthesizer.emission_models.operations import (
 )
 from synthesizer.emission_models.parameters import VARIATION_TYPES
 from synthesizer.emission_models.transformers import DopplerBroadening
+from synthesizer.emission_models.utils import check_removed_overrides
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, deepcopy_with_shared_units
 from synthesizer.utils.operation_timers import timed, timer
@@ -2195,6 +2196,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         nthreads=1,
         grid_assignment_method="cic",
         out_dtype=None,
+        **kwargs,
     ):
         """Generate stellar spectra as described by the emission model.
 
@@ -2220,6 +2222,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted spectra arrays.
+            **kwargs (dict):
+                No longer supported, passing any other keyword raises an
+                error. Modify the EmissionModel (or the emitter) instead.
 
         Returns:
             dict
@@ -2227,6 +2232,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
+        # Passing overrides (or parameters for the generators) here is no
+        # longer supported, the model itself should be modified instead
+        check_removed_overrides(**kwargs)
+
         # A variation is a declaration, not a value, so nothing can be
         # generated while one is still waiting to be expanded
         self._check_expanded()
@@ -2487,6 +2496,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         nthreads=1,
         grid_assignment_method="cic",
         out_dtype=None,
+        **kwargs,
     ):
         """Generate stellar lines as described by the emission model.
 
@@ -2514,6 +2524,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted line arrays.
+            **kwargs (dict):
+                No longer supported, passing any other keyword raises an
+                error. Modify the EmissionModel (or the emitter) instead.
 
         Returns:
             dict
@@ -2521,6 +2534,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate lines attribute of the component
                 (lines/particle_lines)
         """
+        # Passing overrides (or parameters for the generators) here is no
+        # longer supported, the model itself should be modified instead
+        check_removed_overrides(**kwargs)
+
         # A variation is a declaration, not a value, so nothing can be
         # generated while one is still waiting to be expanded
         self._check_expanded()

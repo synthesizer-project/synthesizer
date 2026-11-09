@@ -1217,8 +1217,9 @@ class BaseGalaxy:
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted spectra arrays.
             kwargs (dict):
-                Any additional keyword arguments to pass to the generator
-                function.
+                Any additional keyword arguments to pass to
+                EmissionModel._get_spectra, which raises an error for any it
+                doesn't accept.
 
         Returns:
             dict
@@ -1333,8 +1334,9 @@ class BaseGalaxy:
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted line arrays.
             kwargs (dict):
-                Any additional keyword arguments to pass to the generator
-                function.
+                Any additional keyword arguments to pass to
+                EmissionModel._get_lines, which raises an error for any it
+                doesn't accept.
 
         Returns:
             dict
