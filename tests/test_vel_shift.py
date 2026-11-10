@@ -10,31 +10,6 @@ from unyt import km, s
 from synthesizer import exceptions
 
 
-def test_velocity_shift_applys_cic(random_part_stars, nebular_emission_model):
-    """Test the velocity shift of particle spectra."""
-    # Compute the spectra with and without velocity shift
-    with_shift_spec = random_part_stars.get_spectra(
-        nebular_emission_model,
-        vel_shift=True,
-        grid_assignment_method="cic",
-    )
-    random_part_stars.clear_all_emissions()
-    without_shift_spec = random_part_stars.get_spectra(
-        nebular_emission_model,
-        vel_shift=False,
-        grid_assignment_method="cic",
-    )
-    random_part_stars.clear_all_emissions()
-
-    # Get and print a seed for reproducibility
-    seed = int(time.time())
-    print(f"Seed for reproducibility: {seed} (use this to reproduce the test)")
-    np.random.seed(seed)
-
-    # Ensure that the spectra are different
-    assert not np.allclose(with_shift_spec._lnu, without_shift_spec._lnu)
-
-
 def test_velocity_shift_applys_cic_on_model(
     random_part_stars,
     nebular_emission_model,
@@ -71,15 +46,15 @@ def test_velocity_shift_conservation_cic(
 ):
     """Test the velocity shift of particle spectra."""
     # Compute the spectra with and without velocity shift
+    nebular_emission_model.set_vel_shift(True, set_all=True)
     with_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
-        vel_shift=True,
         grid_assignment_method="cic",
     )
     random_part_stars.clear_all_emissions()
+    nebular_emission_model.set_vel_shift(False, set_all=True)
     without_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
-        vel_shift=False,
         grid_assignment_method="cic",
     )
     random_part_stars.clear_all_emissions()
@@ -105,29 +80,6 @@ def test_velocity_shift_conservation_cic(
         f"{(with_shift_sum - without_shift_sum) / without_shift_sum}, "
         f"with: {with_shift_sum}, without: {without_shift_sum})"
     )
-
-
-def test_velocity_shift_applys_ngp(random_part_stars, nebular_emission_model):
-    """Test the velocity shift of particle spectra."""
-    # Compute the spectra with and without velocity shift
-    with_shift_spec = random_part_stars.get_spectra(
-        nebular_emission_model,
-        vel_shift=True,
-        grid_assignment_method="ngp",
-    )
-    without_shift_spec = random_part_stars.get_spectra(
-        nebular_emission_model,
-        vel_shift=False,
-        grid_assignment_method="ngp",
-    )
-
-    # Get and print a seed for reproducibility
-    seed = int(time.time())
-    print(f"Seed for reproducibility: {seed} (use this to reproduce the test)")
-    np.random.seed(seed)
-
-    # Ensure that the spectra are different
-    assert not np.allclose(with_shift_spec._lnu, without_shift_spec._lnu)
 
 
 def test_velocity_shift_applys_ngp_on_model(
@@ -164,14 +116,14 @@ def test_velocity_shift_conservation_ngp(
 ):
     """Test the velocity shift of particle spectra."""
     # Compute the spectra with and without velocity shift
+    nebular_emission_model.set_vel_shift(True, set_all=True)
     with_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
-        vel_shift=True,
         grid_assignment_method="ngp",
     )
+    nebular_emission_model.set_vel_shift(False, set_all=True)
     without_shift_spec = random_part_stars.get_spectra(
         nebular_emission_model,
-        vel_shift=False,
         grid_assignment_method="ngp",
     )
 
@@ -203,14 +155,14 @@ def test_velocity_shift_flags_spectra(
     nebular_emission_model,
 ):
     """vel_shift spectra, and those built from them, are flagged."""
+    nebular_emission_model.set_vel_shift(True, set_all=True)
     shifted = random_part_stars.get_spectra(
         nebular_emission_model,
-        vel_shift=True,
     )
     random_part_stars.clear_all_emissions()
+    nebular_emission_model.set_vel_shift(False, set_all=True)
     unshifted = random_part_stars.get_spectra(
         nebular_emission_model,
-        vel_shift=False,
     )
     random_part_stars.clear_all_emissions()
 
