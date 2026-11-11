@@ -198,6 +198,8 @@ class Sed:
         flux can include IGM absorption and peculiar velocity shifts, and the
         Sed does not store the cosmology needed to invert the luminosity
         distance. If it is not passed, the rest frame luminosity is NaN.
+        Rest frame operations (e.g. sum and get_resampled_sed) treat NaN as
+        zero, so this unknown luminosity only survives observer frame work.
 
         Args:
             observed_lam (unyt_array of float):
