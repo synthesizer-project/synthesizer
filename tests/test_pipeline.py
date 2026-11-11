@@ -22,6 +22,7 @@ from synthesizer.grid import Grid
 from synthesizer.instruments import (
     FilterCollection,
     Instrument,
+    IntegratedFieldUnit,
     SpectroscopicInstrument,
 )
 from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
@@ -1062,6 +1063,47 @@ class TestPipelineOperations:
                 assert len(group) > 0
                 for spec_type in group:
                     assert group[spec_type].shape == (ngal, inst.lam.size)
+
+    def test_pipeline_writes_data_cubes(
+        self,
+        pipeline_with_galaxies_per_particle,
+        tmp_path,
+    ):
+        """Test the pipeline writes rest and observer frame data cubes.
+
+        Each spectra type should be written for every galaxy as a cube on
+        the IFU's wavelength grid, under the IFU's label.
+        """
+        # Request both kinds of data cube and write them out
+        ifu = IntegratedFieldUnit(
+            label="ifu",
+            lam=np.linspace(4000.0, 8000.0, 20) * angstrom,
+            resolution=1 * kpc,
+        )
+        ngal = len(pipeline_with_galaxies_per_particle.galaxies)
+        pipeline_with_galaxies_per_particle.get_data_cubes_lnu(
+            ifu, fov=10 * kpc, cube_type="hist"
+        )
+        pipeline_with_galaxies_per_particle.get_data_cubes_fnu(
+            ifu, fov=10 * kpc, cube_type="hist", cosmo=cosmo
+        )
+        pipeline_with_galaxies_per_particle.run()
+        output = tmp_path / "data_cubes.hdf5"
+        pipeline_with_galaxies_per_particle.write(output)
+
+        # Both frames are written with one cube per galaxy per type (this
+        # emission model only produces stellar spectra)
+        with h5py.File(output) as hdf:
+            for name in (
+                "SpectralLuminosityDensities",
+                "SpectralFluxDensities",
+            ):
+                group = hdf[f"Galaxies/Stars/DataCubes/{name}/ifu"]
+                assert len(group) > 0
+                for spec_type in group:
+                    shape = group[spec_type].shape
+                    assert shape[0] == ngal
+                    assert shape[-1] == ifu.lam.size
 
     def test_run_pipeline_lines(
         self,

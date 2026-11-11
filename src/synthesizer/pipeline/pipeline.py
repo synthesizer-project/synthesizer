@@ -4551,6 +4551,35 @@ class Pipeline:
                             inst_label, {}
                         ).setdefault(spec_type, []).append(spec.fnu)
 
+        # Do we need to unpack the data cubes? (keyed by instrument then
+        # spectra type, wrapping each cube's array without copying it)
+        for write, cubes, attr in (
+            (
+                self._write_lnu_data_cubes,
+                self.lnu_data_cubes,
+                "data_cubes_lnu",
+            ),
+            (
+                self._write_fnu_data_cubes,
+                self.fnu_data_cubes,
+                "data_cubes_fnu",
+            ),
+        ):
+            if not write:
+                continue
+            for key, owner in (
+                ("Galaxy", galaxy),
+                ("Stars", galaxy.stars),
+                ("BlackHole", galaxy.black_holes),
+            ):
+                if owner is None:
+                    continue
+                for inst_label, d in getattr(owner, attr).items():
+                    for spec_type, cube in d.items():
+                        cubes[key].setdefault(inst_label, {}).setdefault(
+                            spec_type, []
+                        ).append(unyt_array(cube.arr, cube.units))
+
         # Do we need to unpack the photometric luminosities?
         if self._write_luminosities:
             for spec_type, phot in galaxy.photo_lnu.items():
@@ -5141,9 +5170,14 @@ class Pipeline:
         for spec_type, spec in self.fnu_spectra["BlackHole"].items():
             self.fnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
 
-        # Convert the lists of spectroscopy to unyt arrays
-        for spectroscopy in (self.spectroscopy_lnu, self.spectroscopy_fnu):
-            for inst_data in spectroscopy.values():
+        # Convert the lists of spectroscopy and data cubes to unyt arrays
+        for products in (
+            self.spectroscopy_lnu,
+            self.spectroscopy_fnu,
+            self.lnu_data_cubes,
+            self.fnu_data_cubes,
+        ):
+            for inst_data in products.values():
                 for specs in inst_data.values():
                     for spec_type, spec in specs.items():
                         specs[spec_type] = unyt_array(spec)
@@ -5777,6 +5811,42 @@ class Pipeline:
             self.io_helper.write_data(
                 self.spectroscopy_fnu["BlackHole"],
                 "Galaxies/BlackHoles/Spectroscopy/SpectralFluxDensities",
+                galaxy_indices,
+            )
+
+        # Write rest frame data cubes
+        if self._write_lnu_data_cubes:
+            self.io_helper.write_data(
+                self.lnu_data_cubes["Galaxy"],
+                "Galaxies/DataCubes/SpectralLuminosityDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.lnu_data_cubes["Stars"],
+                "Galaxies/Stars/DataCubes/SpectralLuminosityDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.lnu_data_cubes["BlackHole"],
+                "Galaxies/BlackHoles/DataCubes/SpectralLuminosityDensities",
+                galaxy_indices,
+            )
+
+        # Write observer frame data cubes
+        if self._write_fnu_data_cubes:
+            self.io_helper.write_data(
+                self.fnu_data_cubes["Galaxy"],
+                "Galaxies/DataCubes/SpectralFluxDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.fnu_data_cubes["Stars"],
+                "Galaxies/Stars/DataCubes/SpectralFluxDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.fnu_data_cubes["BlackHole"],
+                "Galaxies/BlackHoles/DataCubes/SpectralFluxDensities",
                 galaxy_indices,
             )
 
