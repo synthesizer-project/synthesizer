@@ -1725,7 +1725,6 @@ class Sed:
 
         return index
 
-    @timed("Sed.get_resampled_sed")
     def cast(self, dtype):
         """Cast the spectra arrays to a new floating-point dtype in place.
 
@@ -1748,6 +1747,7 @@ class Sed:
             self._fnu = self._fnu.astype(dtype)
         return self
 
+    @timed("Sed.get_resampled_sed")
     def get_resampled_sed(self, resample_factor=None, new_lam=None):
         """Resample the spectra onto a new set of wavelength points.
 
