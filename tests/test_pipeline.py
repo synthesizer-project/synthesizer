@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from astropy.cosmology import Planck18 as cosmo
 from synthesizer.extensions.timers import reset_timings, tic, toc
-from unyt import Mpc, Myr, angstrom, kpc, unyt_array
+from unyt import Hz, Mpc, Myr, angstrom, erg, kpc, s, unyt_array
 
 from synthesizer import GRID_DIR, check_atomic_timing, exceptions
 from synthesizer.base_galaxy import BaseGalaxy
@@ -19,7 +19,12 @@ from synthesizer.emission_models import PacmanEmission
 from synthesizer.emission_models.transformers import PowerLaw
 from synthesizer.emissions import Sed
 from synthesizer.grid import Grid
-from synthesizer.instruments import FilterCollection, Instrument
+from synthesizer.instruments import (
+    FilterCollection,
+    Instrument,
+    SpectroscopicInstrument,
+)
+from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 from synthesizer.particle.stars import Stars
 from synthesizer.pipeline.pipeline import Pipeline
 from synthesizer.pipeline.pipeline_utils import (
@@ -986,6 +991,45 @@ class TestPipelineOperations:
         assert (
             count_and_check_dict_recursive(pipeline_with_galaxies.fluxes) > 0
         ), "No fluxes were calculated"
+
+    def test_pipeline_spectroscopy_frames(self, base_pipeline):
+        """Test the pipeline's rest and observer frame spectroscopy steps.
+
+        The lnu and fnu operations must each fill their own galaxy
+        dictionary, on the rest and observer frame grids respectively.
+        """
+        # A galaxy holding a spectrum observed at z=1, stored under the
+        # emission model's label so the pipeline accepts it
+        label = base_pipeline.emission_model.label
+        z = 1.0
+        lam = np.linspace(1000.0, 20000.0, 1000) * angstrom
+        sed = Sed(lam, np.ones(lam.size) * erg / s / Hz)
+        sed.get_fnu(cosmo, z)
+        gal = ParticleGalaxy(redshift=z)
+        gal.spectra[label] = sed
+
+        # Request both kinds of spectroscopy with the same instrument
+        inst = SpectroscopicInstrument(
+            "spec",
+            lam=np.linspace(4000.0, 8000.0, 100) * angstrom,
+        )
+        base_pipeline.get_spectroscopy_lnu(inst, labels=label)
+        base_pipeline.get_spectroscopy_fnu(inst, labels=label, cosmo=cosmo)
+
+        # Run the per-galaxy spectroscopy steps
+        base_pipeline._get_spectroscopy_lnu(gal)
+        base_pipeline._get_spectroscopy_fnu(gal)
+
+        # Each operation filled its own dictionary on the right frame's
+        # wavelengths, and was counted
+        np.testing.assert_allclose(
+            gal.spectroscopy_lnu["spec"][label].lam, inst.lam
+        )
+        np.testing.assert_allclose(
+            gal.spectroscopy_fnu["spec"][label].obslam, inst.lam
+        )
+        assert base_pipeline._op_counts["Spectroscopy Lnu"] == 1
+        assert base_pipeline._op_counts["Spectroscopy Fnu"] == 1
 
     def test_run_pipeline_lines(
         self,
