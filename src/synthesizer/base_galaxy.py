@@ -3045,21 +3045,6 @@ class BaseGalaxy:
         """
         return self.spectroscopy_fnu
 
-    @spectroscopy.setter
-    @deprecated(
-        "is deprecated and will be removed in version 1.4.0. "
-        "It is an alias for spectroscopy_fnu (observer frame); use that, or "
-        "spectroscopy_lnu for the rest frame, instead."
-    )
-    def spectroscopy(self, value):
-        """Set the observer frame spectroscopy (deprecated alias).
-
-        Args:
-            value (dict):
-                The new spectroscopy_fnu dictionary.
-        """
-        self.spectroscopy_fnu = value
-
     def get_spectroscopy_lnu(
         self,
         instrument,
@@ -3175,7 +3160,7 @@ class BaseGalaxy:
     ):
         """Get spectroscopy for the galaxy based on a specific instrument.
 
-        This method acts as an orchestration wrapper around the
+        This method now acts as an orchestration wrapper around the
         instrument-owned spectroscopy path. It fetches the relevant SEDs,
         passes them into the instrument, stores the returned spectroscopy, and
         then repeats the same orchestration for any attached components.

@@ -34,6 +34,7 @@ from unyt import (
     h,
     kb,
     km,
+    nJy,
     s,
     unyt_array,
     unyt_quantity,
@@ -174,7 +175,7 @@ class Sed:
     @classmethod
     @accepts(
         observed_lam=angstrom,
-        observed_fnu=erg / s / cm**2 / Hz,
+        observed_fnu=nJy,
         rest_frame_lnu=erg / s / Hz,
     )
     def from_observed(
@@ -189,8 +190,9 @@ class Sed:
 
         The wavelengths passed here are always interpreted as observer frame
         wavelengths. The rest frame wavelengths are derived from them as
-        observed_lam / (1 + redshift), while the observer frame wavelengths,
-        frequencies and fluxes are stored exactly as given.
+        observed_lam / (1 + redshift), while the observer frame wavelengths
+        and fluxes are stored exactly as given (the observer frame
+        frequencies are computed from the wavelengths).
 
         The rest frame luminosity is never derived from the flux, since the
         flux can include IGM absorption and peculiar velocity shifts, and the
@@ -1882,12 +1884,10 @@ class Sed:
             verbose=False,
         ).astype(self._lnu.dtype, copy=False)
 
-        # Clean up nans, we shouldn't get them but they do appear sometimes.
-        # Luminosities that are entirely NaN are unknown (see from_observed)
-        # so those stay NaN.
+        # Clean up nans in the fluxes, we shouldn't get them but they do
+        # appear sometimes. The luminosities are left as they are so unknown
+        # (NaN) luminosities from from_observed stay unknown.
         np.nan_to_num(fnu, copy=False)
-        if not np.isnan(self._lnu).all():
-            np.nan_to_num(lnu, copy=False)
 
         # Build the new Sed from the observer frame spectra
         sed = Sed.from_observed(

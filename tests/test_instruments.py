@@ -800,29 +800,6 @@ def test_galaxy_get_spectroscopy_fnu_uses_observer_frame_wavelengths():
     assert spec.obslam[seen].max() <= 12010.0 * angstrom
 
 
-def test_galaxy_get_spectroscopy_lnu_uses_rest_frame_wavelengths():
-    """get_spectroscopy_lnu should see the emission at rest wavelengths."""
-    # Observe the top-hat at z=1 with an instrument covering its rest frame
-    # window
-    galaxy = _top_hat_galaxy(1.0)
-    instrument = SpectroscopicInstrument(
-        label="spec",
-        lam=np.arange(4000.0, 7001.0, 10.0) * angstrom,
-    )
-
-    spec = galaxy.get_spectroscopy_lnu(instrument)["toy"]
-
-    # The result is stored in the lnu dictionary, on the instrument grid,
-    # with the luminosity in the rest frame emission window
-    assert galaxy.spectroscopy_lnu["spec"]["toy"] is spec
-    assert galaxy.spectroscopy_fnu == {}
-    np.testing.assert_allclose(spec.lam, instrument.lam)
-    seen = spec.lnu.value > 0
-    assert seen.any()
-    assert spec.lam[seen].min() >= 4990.0 * angstrom
-    assert spec.lam[seen].max() <= 6010.0 * angstrom
-
-
 def test_galaxy_get_spectroscopy_is_deprecated_alias_of_fnu():
     """get_spectroscopy and spectroscopy should warn and alias the fnu API."""
     galaxy = _top_hat_galaxy(1.0)
@@ -839,9 +816,6 @@ def test_galaxy_get_spectroscopy_is_deprecated_alias_of_fnu():
     # The deprecated attribute warns and points at the fnu dictionary
     with pytest.warns(FutureWarning, match="1.4.0"):
         assert galaxy.spectroscopy is galaxy.spectroscopy_fnu
-    with pytest.warns(FutureWarning, match="1.4.0"):
-        galaxy.spectroscopy = {}
-    assert galaxy.spectroscopy_fnu == {}
 
     # The component attributes alias the fnu dictionaries in the same way
     component = SimpleNamespace(

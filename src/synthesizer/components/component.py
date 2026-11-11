@@ -1582,21 +1582,6 @@ class Component(ABC):
         """
         return self.spectroscopy_fnu
 
-    @spectroscopy.setter
-    @deprecated(
-        "is deprecated and will be removed in version 1.4.0. "
-        "It is an alias for spectroscopy_fnu (observer frame); use that, or "
-        "spectroscopy_lnu for the rest frame, instead."
-    )
-    def spectroscopy(self, value):
-        """Set the observer frame spectroscopy (deprecated alias).
-
-        Args:
-            value (dict):
-                The new spectroscopy_fnu dictionary.
-        """
-        self.spectroscopy_fnu = value
-
     @property
     @deprecated(
         "is deprecated and will be removed in version 1.4.0. "
@@ -1611,21 +1596,6 @@ class Component(ABC):
                 The particle_spectroscopy_fnu dictionary.
         """
         return self.particle_spectroscopy_fnu
-
-    @particle_spectroscopy.setter
-    @deprecated(
-        "is deprecated and will be removed in version 1.4.0. "
-        "It is an alias for particle_spectroscopy_fnu (observer frame); use "
-        "that, or particle_spectroscopy_lnu for the rest frame, instead."
-    )
-    def particle_spectroscopy(self, value):
-        """Set the observer frame particle spectroscopy (deprecated alias).
-
-        Args:
-            value (dict):
-                The new particle_spectroscopy_fnu dictionary.
-        """
-        self.particle_spectroscopy_fnu = value
 
     def get_spectroscopy_lnu(
         self,
@@ -1747,7 +1717,7 @@ class Component(ABC):
     ):
         """Get spectroscopy for the component based on a specific instrument.
 
-        This method acts as an orchestration wrapper around the
+        This method now acts as an orchestration wrapper around the
         instrument-owned spectroscopy path. It fetches the relevant SEDs,
         passes them into the instrument, and stores the returned spectroscopy
         on the component.
@@ -2100,8 +2070,7 @@ class Component(ABC):
 
         This will plot the rest frame spectroscopy (spectroscopy_lnu) for the
         component using the instrument's wavelength array. The spectra are
-        plotted
-        in the order they are stored in the spectroscopy dictionary.
+        plotted in the order they are stored in the spectroscopy dictionary.
 
         Can either plot specific spectroscopy (specified via spectra_to_plot)
         or all spectroscopy on the component.
