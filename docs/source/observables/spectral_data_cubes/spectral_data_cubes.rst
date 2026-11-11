@@ -20,8 +20,9 @@ These methods will return a ``SpectralCube``, which is the main data container f
 How the ``IntegratedFieldUnit`` wavelengths are interpreted depends on the
 quantity in the cube. For observer frame quantities (``"fnu"``, ``"flux"`` and
 ``"flam"``) they are observer frame wavelengths, so the fluxes are resampled
-directly onto them. For all other quantities (e.g. ``"lnu"``) they are rest
-frame wavelengths.
+directly onto them; these cubes need the observed spectra (e.g. from
+``get_observed_spectra``) to have been generated first. For all other
+quantities (e.g. ``"lnu"``) they are rest frame wavelengths.
 
 Spectral cubes can be spatially convolved with a PSF through an
 ``IntegratedFieldUnit``. Both wavelength-independent 2D kernels and
