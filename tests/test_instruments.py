@@ -89,10 +89,16 @@ class DummySpectroscopicInstrument:
         """Return whether this dummy instrument should add noise."""
         return self.noisy
 
-    def apply_lam_array(self, sed):
-        """Record the delegated wavelength-application call."""
+    def apply_lam_array_lnu(self, sed):
+        """Record the delegated rest frame wavelength-application call."""
         marker = object()
-        self.calls.append({"sed": sed, "result": marker})
+        self.calls.append({"sed": sed, "result": marker, "quantity": "lnu"})
+        return marker
+
+    def apply_lam_array_fnu(self, sed):
+        """Record the delegated observer frame wavelength-application call."""
+        marker = object()
+        self.calls.append({"sed": sed, "result": marker, "quantity": "fnu"})
         return marker
 
     def apply_noise(self, spectrum):
@@ -671,50 +677,63 @@ def test_apply_instrument_lams_is_deprecated_alias_of_fnu():
     np.testing.assert_allclose(spec.fnu, expected.fnu)
 
 
-def test_base_galaxy_spectroscopy_routing_delegates_to_instrument():
+@pytest.mark.parametrize("quantity", ["lnu", "fnu"])
+def test_base_galaxy_spectroscopy_routing_delegates_to_instrument(quantity):
     """Base-galaxy spectroscopy should delegate to the instrument."""
     sed = object()
     galaxy = SimpleNamespace(
         spectra={"stellar": sed},
-        spectroscopy={},
+        spectroscopy_lnu={},
+        spectroscopy_fnu={},
         stars=None,
         black_holes=None,
     )
     instrument = DummySpectroscopicInstrument()
 
-    returned = BaseGalaxy.get_spectroscopy(galaxy, instrument)
+    returned = BaseGalaxy._get_spectroscopy(galaxy, instrument, quantity)
 
+    # The matching instrument method was used and the result stored in the
+    # matching dictionary only
     assert instrument.calls[0]["sed"] is sed
+    assert instrument.calls[0]["quantity"] == quantity
     assert returned["stellar"] is instrument.calls[0]["result"]
-    assert (
-        galaxy.spectroscopy["inst"]["stellar"] is instrument.calls[0]["result"]
-    )
+    spectroscopy = getattr(galaxy, f"spectroscopy_{quantity}")
+    assert spectroscopy["inst"]["stellar"] is instrument.calls[0]["result"]
+    other = "fnu" if quantity == "lnu" else "lnu"
+    assert getattr(galaxy, f"spectroscopy_{other}") == {}
 
 
-def test_component_spectroscopy_routing_delegates_to_instrument():
+@pytest.mark.parametrize("quantity", ["lnu", "fnu"])
+def test_component_spectroscopy_routing_delegates_to_instrument(quantity):
     """Component spectroscopy should delegate to the instrument."""
     sed = object()
     particle_sed = object()
     component = SimpleNamespace(
         spectra={"stellar": sed},
-        spectroscopy={},
+        spectroscopy_lnu={},
+        spectroscopy_fnu={},
         particle_spectra={"stellar": particle_sed},
-        particle_spectroscopy={},
+        particle_spectroscopy_lnu={},
+        particle_spectroscopy_fnu={},
     )
     instrument = DummySpectroscopicInstrument()
 
-    returned = Component.get_spectroscopy(component, instrument)
+    returned = Component._get_spectroscopy(component, instrument, quantity)
 
+    # The matching instrument method was used for both the integrated and
+    # particle spectra, with the results stored in the matching dictionaries
     assert instrument.calls[0]["sed"] is sed
     assert instrument.calls[1]["sed"] is particle_sed
+    assert {call["quantity"] for call in instrument.calls} == {quantity}
     assert returned["stellar"] is instrument.calls[0]["result"]
-    assert (
-        component.spectroscopy["inst"]["stellar"]
-        is instrument.calls[0]["result"]
+    spectroscopy = getattr(component, f"spectroscopy_{quantity}")
+    particle_spectroscopy = getattr(
+        component, f"particle_spectroscopy_{quantity}"
     )
+    assert spectroscopy["inst"]["stellar"] is instrument.calls[0]["result"]
     assert (
-        component.particle_spectroscopy["inst"]["stellar"]
-        is (instrument.calls[1]["result"])
+        particle_spectroscopy["inst"]["stellar"]
+        is instrument.calls[1]["result"]
     )
 
 
@@ -723,21 +742,121 @@ def test_component_spectroscopy_applies_noise_when_configured():
     sed = object()
     component = SimpleNamespace(
         spectra={"stellar": sed},
-        spectroscopy={},
+        spectroscopy_lnu={},
+        spectroscopy_fnu={},
         particle_spectra={},
-        particle_spectroscopy={},
+        particle_spectroscopy_lnu={},
+        particle_spectroscopy_fnu={},
     )
     instrument = DummySpectroscopicInstrument(noisy=True)
 
-    returned = Component.get_spectroscopy(component, instrument)
+    returned = Component._get_spectroscopy(component, instrument, "fnu")
 
     assert instrument.calls[0]["sed"] is sed
     assert instrument.calls[1]["spectrum"] is instrument.calls[0]["result"]
     assert returned["stellar"] is instrument.calls[1]["noise_result"]
     assert (
-        component.spectroscopy["inst"]["stellar"]
+        component.spectroscopy_fnu["inst"]["stellar"]
         is instrument.calls[1]["noise_result"]
     )
+
+
+def _top_hat_galaxy(z):
+    """Build a particle galaxy holding an observed top-hat spectrum.
+
+    Args:
+        z (float):
+            The redshift of the galaxy and its spectrum.
+
+    Returns:
+        ParticleGalaxy:
+            The galaxy with the spectrum stored under "toy".
+    """
+    galaxy = ParticleGalaxy(redshift=z)
+    galaxy.spectra["toy"] = _observed_top_hat_sed(z)
+    return galaxy
+
+
+def test_galaxy_get_spectroscopy_fnu_uses_observer_frame_wavelengths():
+    """get_spectroscopy_fnu should see the emission at observed wavelengths."""
+    # Observe the top-hat at z=1 with an instrument covering its observer
+    # frame window
+    galaxy = _top_hat_galaxy(1.0)
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
+    )
+
+    spec = galaxy.get_spectroscopy_fnu(instrument)["toy"]
+
+    # The result is stored in the fnu dictionary, on the instrument grid,
+    # with the flux in the observer frame emission window
+    assert galaxy.spectroscopy_fnu["spec"]["toy"] is spec
+    assert galaxy.spectroscopy_lnu == {}
+    np.testing.assert_allclose(spec.obslam, instrument.lam)
+    seen = spec.fnu.value > 0
+    assert seen.any()
+    assert spec.obslam[seen].min() >= 9990.0 * angstrom
+    assert spec.obslam[seen].max() <= 12010.0 * angstrom
+
+
+def test_galaxy_get_spectroscopy_lnu_uses_rest_frame_wavelengths():
+    """get_spectroscopy_lnu should see the emission at rest wavelengths."""
+    # Observe the top-hat at z=1 with an instrument covering its rest frame
+    # window
+    galaxy = _top_hat_galaxy(1.0)
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(4000.0, 7001.0, 10.0) * angstrom,
+    )
+
+    spec = galaxy.get_spectroscopy_lnu(instrument)["toy"]
+
+    # The result is stored in the lnu dictionary, on the instrument grid,
+    # with the luminosity in the rest frame emission window
+    assert galaxy.spectroscopy_lnu["spec"]["toy"] is spec
+    assert galaxy.spectroscopy_fnu == {}
+    np.testing.assert_allclose(spec.lam, instrument.lam)
+    seen = spec.lnu.value > 0
+    assert seen.any()
+    assert spec.lam[seen].min() >= 4990.0 * angstrom
+    assert spec.lam[seen].max() <= 6010.0 * angstrom
+
+
+def test_galaxy_get_spectroscopy_is_deprecated_alias_of_fnu():
+    """get_spectroscopy and spectroscopy should warn and alias the fnu API."""
+    galaxy = _top_hat_galaxy(1.0)
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
+    )
+
+    # The deprecated method warns and stores into the fnu dictionary
+    with pytest.warns(FutureWarning, match="1.4.0"):
+        returned = galaxy.get_spectroscopy(instrument)
+    assert returned is galaxy.spectroscopy_fnu["spec"]
+
+    # The deprecated attribute warns and points at the fnu dictionary
+    with pytest.warns(FutureWarning, match="1.4.0"):
+        assert galaxy.spectroscopy is galaxy.spectroscopy_fnu
+    with pytest.warns(FutureWarning, match="1.4.0"):
+        galaxy.spectroscopy = {}
+    assert galaxy.spectroscopy_fnu == {}
+
+    # The component attributes alias the fnu dictionaries in the same way
+    component = SimpleNamespace(
+        spectroscopy_fnu={}, particle_spectroscopy_fnu={}
+    )
+    with pytest.warns(FutureWarning, match="1.4.0"):
+        assert (
+            Component.spectroscopy.fget(component)
+            is component.spectroscopy_fnu
+        )
+    with pytest.warns(FutureWarning, match="1.4.0"):
+        assert (
+            Component.particle_spectroscopy.fget(component)
+            is component.particle_spectroscopy_fnu
+        )
 
 
 def test_component_image_generation_delegates_to_instrument():
