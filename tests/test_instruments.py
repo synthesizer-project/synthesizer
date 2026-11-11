@@ -5,11 +5,13 @@ from types import SimpleNamespace
 import h5py
 import numpy as np
 import pytest
-from unyt import angstrom, arcsecond, kpc, nJy, unyt_quantity
+from astropy.cosmology import Planck18
+from unyt import Hz, angstrom, arcsecond, erg, kpc, nJy, s, unyt_quantity
 
 from synthesizer import exceptions
 from synthesizer.base_galaxy import BaseGalaxy
 from synthesizer.components.component import Component
+from synthesizer.emissions import Sed
 from synthesizer.imaging import SpectralCube
 from synthesizer.imaging.postprocess import _postprocess_existing_data_cubes
 from synthesizer.instruments import (
@@ -552,28 +554,121 @@ def test_component_psf_routing_delegates_to_instrument(
     )
 
 
-def test_spectroscopic_instrument_apply_lam_array_delegates_to_resampling():
-    """apply_lam_array should use the existing SED resampling primitive."""
+def _observed_top_hat_sed(z):
+    """Build a top-hat Sed observed at redshift z.
+
+    The emission is only between 5000 and 6000 A in the rest frame, so
+    between 5000 * (1 + z) and 6000 * (1 + z) A in the observer frame.
+
+    Args:
+        z (float):
+            The redshift to observe the Sed at.
+
+    Returns:
+        Sed:
+            The Sed with its fluxes computed at z.
+    """
+    # Build the top-hat luminosity and compute its fluxes at z
+    lam = np.arange(1000.0, 20001.0, 10.0) * angstrom
+    inside = (lam >= 5000 * angstrom) & (lam <= 6000 * angstrom)
+    sed = Sed(lam, np.where(inside, 1e28, 0.0) * erg / s / Hz)
+    sed.get_fnu(Planck18, z)
+    return sed
+
+
+def test_apply_lam_array_fnu_uses_observer_frame_wavelengths():
+    """apply_lam_array_fnu should treat the instrument grid as observer frame.
+
+    A Sed with emission only between 5000 and 6000 A in the rest frame should
+    be seen by an instrument covering 9000-13000 A at z=1, with the observed
+    wavelengths of the result matching the instrument's.
+    """
+    # Observe the top-hat at z=1
+    z = 1.0
+    sed = _observed_top_hat_sed(z)
+
+    # Define an instrument whose observer frame window contains the emission
     instrument = SpectroscopicInstrument(
         label="spec",
-        lam=np.linspace(1000, 3000, 32) * angstrom,
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
     )
-    sed = SimpleNamespace()
-    expected = object()
-    captured = {}
 
-    def fake_apply_instrument_lams(passed_instrument, nthreads=1):
-        captured["instrument"] = passed_instrument
-        captured["nthreads"] = nthreads
-        return expected
+    # Resample onto the instrument grid
+    spec = instrument.apply_lam_array_fnu(sed)
 
-    sed.apply_instrument_lams = fake_apply_instrument_lams
+    # The observed grid should be the instrument grid and the rest frame
+    # grid should be that shifted back by (1 + z)
+    np.testing.assert_allclose(spec.obslam, instrument.lam)
+    np.testing.assert_allclose(spec.lam, instrument.lam / (1.0 + z))
 
-    result = instrument.apply_lam_array(sed, nthreads=4)
+    # The flux should land in the observer frame emission window
+    seen = spec.fnu.value > 0
+    assert seen.any()
+    assert spec.obslam[seen].min() >= 9990.0 * angstrom
+    assert spec.obslam[seen].max() <= 12010.0 * angstrom
 
-    assert result is expected
-    assert captured["instrument"] is instrument
-    assert captured["nthreads"] == 4
+
+def test_apply_lam_array_lnu_uses_rest_frame_wavelengths():
+    """apply_lam_array_lnu should treat the instrument grid as rest frame."""
+    # Observe the top-hat at z=1
+    z = 1.0
+    sed = _observed_top_hat_sed(z)
+
+    # Define an instrument whose rest frame window contains the emission
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(4000.0, 7001.0, 10.0) * angstrom,
+    )
+
+    # Resample onto the instrument grid
+    spec = instrument.apply_lam_array_lnu(sed)
+
+    # The rest frame grid should be the instrument grid and the observed grid
+    # should be that shifted forward by (1 + z)
+    np.testing.assert_allclose(spec.lam, instrument.lam)
+    np.testing.assert_allclose(spec.obslam, instrument.lam * (1.0 + z))
+
+    # The luminosity should land in the rest frame emission window
+    seen = spec.lnu.value > 0
+    assert seen.any()
+    assert spec.lam[seen].min() >= 4990.0 * angstrom
+    assert spec.lam[seen].max() <= 6010.0 * angstrom
+
+
+def test_apply_lam_array_is_deprecated_alias_of_fnu():
+    """apply_lam_array should warn and match apply_lam_array_fnu."""
+    sed = _observed_top_hat_sed(1.0)
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
+    )
+
+    # The deprecated method warns about its removal
+    with pytest.warns(FutureWarning, match="1.4.0"):
+        spec = instrument.apply_lam_array(sed)
+
+    # It gives the same result as the observer frame method
+    expected = instrument.apply_lam_array_fnu(sed)
+    np.testing.assert_allclose(spec.obslam, expected.obslam)
+    np.testing.assert_allclose(spec.fnu, expected.fnu)
+
+
+def test_apply_instrument_lams_is_deprecated_alias_of_fnu():
+    """Sed.apply_instrument_lams should warn and match apply_lam_array_fnu."""
+    sed = _observed_top_hat_sed(1.0)
+    instrument = SpectroscopicInstrument(
+        label="spec",
+        lam=np.arange(9000.0, 13001.0, 10.0) * angstrom,
+    )
+
+    # The deprecated method warns about its removal
+    with pytest.warns(FutureWarning, match="1.4.0"):
+        spec = sed.apply_instrument_lams(instrument)
+
+    # It gives the same result as the observer frame method
+    expected = instrument.apply_lam_array_fnu(sed)
+    np.testing.assert_allclose(spec.obslam, expected.obslam)
+    np.testing.assert_allclose(spec.fnu, expected.fnu)
 
 
 def test_base_galaxy_spectroscopy_routing_delegates_to_instrument():

@@ -57,7 +57,7 @@ from synthesizer.extensions.spectra_operations import (
     scale_spectra_2d,
 )
 from synthesizer.photometry import PhotometryCollection
-from synthesizer.synth_warnings import warn
+from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import (
     Quantity,
     Units,
@@ -1900,14 +1900,16 @@ class Sed:
 
         return sed
 
+    @deprecated(
+        "is deprecated and will be removed in version 1.4.0. "
+        "Use instrument.apply_lam_array_fnu(sed) (observer frame) or "
+        "instrument.apply_lam_array_lnu(sed) (rest frame) instead."
+    )
     def apply_instrument_lams(self, instrument, nthreads=1):
         """Apply an instrument to the spectra.
 
-        This will resample a Sed object on to the instrument's wavelength
-        array. It is actually just an intuitive wrapper around
-        get_resampled_sed which will handle the actual resampling of
-        both lnu and fnu (if applicable) using the instrument's
-        wavelength array.
+        Deprecated alias for instrument.apply_lam_array_fnu, which treats the
+        instrument wavelengths as observer frame wavelengths.
 
         Args:
             instrument (Instrument):
@@ -1925,7 +1927,9 @@ class Sed:
             raise exceptions.InconsistentArguments(
                 f"{instrument.label} Instrument cannot do spectroscopy"
             )
-        return self.get_resampled_sed(new_lam=instrument.lam)
+
+        # Defer to the instrument's observer frame resampling
+        return instrument.apply_lam_array_fnu(self, nthreads=nthreads)
 
     @timed("Sed.apply_attenuation")
     def apply_attenuation(
