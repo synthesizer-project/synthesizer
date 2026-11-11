@@ -21,6 +21,7 @@ from synthesizer.instruments import (
     PhotometricImager,
     PhotometricInstrument,
     SpectroscopicInstrument,
+    get_lams_from_resolving_power,
 )
 from synthesizer.instruments.premade import GALEXFUV, GALEXNUV, JWSTNIRSpec
 from synthesizer.parametric.galaxy import Galaxy as ParametricGalaxy
@@ -1602,3 +1603,35 @@ def test_resolving_power_must_be_positive_number(resolving_power):
             lam=np.linspace(1000, 3000, 32) * angstrom,
             resolving_power=resolving_power,
         )
+
+
+def test_lams_from_constant_resolving_power():
+    """A constant resolving power gives distinct, evenly log-spaced lams."""
+    lams = get_lams_from_resolving_power(
+        1000.0 * angstrom, 2000.0 * angstrom, 100.0
+    )
+
+    # Every wavelength is distinct, rising and within the requested range
+    assert np.all(np.diff(lams.value) > 0)
+    assert lams[0] == 1000 * angstrom
+    assert lams[-1] <= 2000 * angstrom
+
+    # Each step is lambda / R
+    np.testing.assert_allclose(lams.value[1:] / lams.value[:-1], 1.01)
+
+
+def test_lams_from_varying_resolving_power():
+    """A wavelength-dependent resolving power sets each step."""
+
+    def resolving_power(lam):
+        return lam.to_value("angstrom") / 10
+
+    lams = get_lams_from_resolving_power(
+        1000.0 * angstrom, 2005.0 * angstrom, resolving_power
+    )
+
+    # R = lambda / 10 A means a constant 10 A step, so 101 wavelengths
+    # from 1000 A to 2000 A
+    np.testing.assert_allclose(np.diff(lams.value), 10.0)
+    assert len(lams) == 101
+    np.testing.assert_allclose(lams[-1].value, 2000.0)
