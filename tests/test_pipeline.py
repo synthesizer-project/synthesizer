@@ -1031,6 +1031,38 @@ class TestPipelineOperations:
         assert base_pipeline._op_counts["Spectroscopy Lnu"] == 1
         assert base_pipeline._op_counts["Spectroscopy Fnu"] == 1
 
+    def test_pipeline_writes_spectroscopy(
+        self, pipeline_with_galaxies, tmp_path
+    ):
+        """Test the pipeline writes rest and observer frame spectroscopy.
+
+        Each spectra type should be written for every galaxy on the
+        instrument's wavelength grid, under the instrument's label.
+        """
+        # Request both kinds of spectroscopy and write them out
+        inst = SpectroscopicInstrument(
+            "spec",
+            lam=np.linspace(4000.0, 8000.0, 100) * angstrom,
+        )
+        ngal = len(pipeline_with_galaxies.galaxies)
+        pipeline_with_galaxies.get_spectroscopy_lnu(inst)
+        pipeline_with_galaxies.get_spectroscopy_fnu(inst, cosmo=cosmo)
+        pipeline_with_galaxies.run()
+        output = tmp_path / "spectroscopy.hdf5"
+        pipeline_with_galaxies.write(output)
+
+        # Both frames are written with one spectrum per galaxy per type (this
+        # emission model only produces stellar spectra)
+        with h5py.File(output) as hdf:
+            for name in (
+                "SpectralLuminosityDensities",
+                "SpectralFluxDensities",
+            ):
+                group = hdf[f"Galaxies/Stars/Spectroscopy/{name}/spec"]
+                assert len(group) > 0
+                for spec_type in group:
+                    assert group[spec_type].shape == (ngal, inst.lam.size)
+
     def test_run_pipeline_lines(
         self,
         test_grid,
