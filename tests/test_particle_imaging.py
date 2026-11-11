@@ -462,6 +462,47 @@ class TestSpectralCube:
         assert basic_cube.cube.shape == (5, 5, 10)
         assert np.sum(basic_cube.cube) >= 0
 
+    @pytest.mark.parametrize(
+        "quantity, cube_lam, frame_lam",
+        [
+            # Observer frame cubes see the emission at 10000-12000 A
+            ("fnu", np.arange(9000.0, 13001.0, 10.0), "obslam"),
+            # Rest frame cubes see the emission at 5000-6000 A
+            ("lnu", np.arange(4000.0, 7001.0, 10.0), "lam"),
+        ],
+    )
+    def test_generate_data_cube_hist_frame(
+        self, quantity, cube_lam, frame_lam
+    ):
+        """Test data cubes resample in the frame of their quantity.
+
+        Particles emitting only between 5000 and 6000 A in the rest frame are
+        observed at z=1. An fnu cube treats its wavelengths as observer frame
+        and an lnu cube as rest frame, so both see the emission.
+        """
+        from astropy.cosmology import Planck18
+
+        from synthesizer.emissions.sed import Sed
+
+        # Build observed top-hat particle spectra at z=1
+        lam = np.arange(1000.0, 20001.0, 10.0) * angstrom
+        inside = (lam >= 5000 * angstrom) & (lam <= 6000 * angstrom)
+        lnu = np.tile(np.where(inside, 1e28, 0.0), (2, 1)) * erg / s / Hz
+        sed = Sed(lam=lam, lnu=lnu)
+        sed.get_fnu(Planck18, 1.0)
+        coords = unyt_array([[-0.2, -0.1, 0.0], [0.2, 0.1, 0.0]], kpc)
+
+        # Sort the spectra into a cube covering the emission in its frame
+        cube = SpectralCube(
+            resolution=0.2 * kpc, fov=1.0 * kpc, lam=cube_lam * angstrom
+        )
+        cube.generate_data_cube_hist(sed, coords, quantity=quantity)
+
+        # The cube's wavelengths are the resampled Sed's wavelengths in the
+        # quantity's frame, and the emission lands in the cube
+        np.testing.assert_allclose(getattr(cube.sed, frame_lam), cube.lam)
+        assert np.sum(cube.arr) > 0
+
     def test_get_data_cube_hist_delegates(self, basic_cube):
         """Histogram cube compatibility wrapper should still generate."""
         from synthesizer.emissions.sed import Sed
