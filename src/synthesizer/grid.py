@@ -602,6 +602,14 @@ class Grid:
         calculate the nebular continuum spectra not native to the grid file:
             nebular_continuum = nebular - linecont
 
+        If the grid file stores the incident light scattered back towards
+        the source separately ("reflected_incident", written by grids that
+        account for reflected light in open geometries), it is added to
+        "nebular" on read, so that transmitted + nebular remains the total
+        reprocessed emission and nebular_continuum includes it. The
+        "reflected_incident" spectrum itself (if read) is left unchanged;
+        it is already included in "nebular" and should not be added again.
+
         Args:
             spectra_to_read (list):
                 A list of spectra to read in. If None then all available
@@ -654,11 +662,32 @@ class Grid:
                     hf[spectra_key][spectra_id]
                 )
 
+            # Grids that store the incident light scattered back towards the
+            # source separately (reflected_incident) have it removed from
+            # nebular. Fold it back in so that transmitted + nebular is the
+            # total reprocessed emission, as for grids without it (where it
+            # is already inside nebular). We read it here even if it was not
+            # requested, so nebular is consistent whatever spectra are read.
+            if (
+                "nebular" in self.spectra
+                and "reflected_incident" in hf[spectra_key]
+            ):
+                if "reflected_incident" in self.spectra:
+                    reflected_incident = self.spectra["reflected_incident"]
+                else:
+                    reflected_incident = self._read_floats(
+                        hf[spectra_key]["reflected_incident"]
+                    )
+                self.spectra["nebular"] = (
+                    self.spectra["nebular"] + reflected_incident
+                )
+
         # If a full cloudy grid is available calculate some
         # other spectra for convenience.
         if self.reprocessed is True:
             # The nebular continuum is the nebular emission with the line
-            # contribution removed
+            # contribution removed (including any reflected incident light
+            # folded into nebular above)
             self.spectra["nebular_continuum"] = (
                 self.spectra["nebular"] - self.spectra["linecont"]
             )
@@ -742,6 +771,37 @@ class Grid:
                 self._read_floats(hf["lines"]["transmitted"]),
                 cont_units,
             )
+
+            # As for the spectra (see _get_spectra_grid), fold any reflected
+            # incident light into the nebular continuum at each line. The
+            # stored line continua exclude it, so interpolate the stored
+            # reflected_incident spectrum (on the file's own wavelength grid,
+            # independent of any spectra read or resampled) to the line
+            # wavelengths.
+            if "spectra" in hf and "reflected_incident" in hf["spectra"]:
+                spec_lam = self._read_floats(hf["spectra"]["wavelength"])
+                spec_lam_units = hf["spectra"]["wavelength"].attrs.get("Units")
+                if spec_lam_units is None:
+                    spec_lam_units = angstrom
+                spec_lam = unyt_array(spec_lam, spec_lam_units).to_value(
+                    angstrom
+                )
+                reflected_incident_conts = interp1d(
+                    spec_lam,
+                    self._read_floats(hf["spectra"]["reflected_incident"]),
+                    axis=-1,
+                    kind="linear",
+                    fill_value=0.0,
+                    bounds_error=False,
+                )(self.line_lams.to_value(angstrom))
+                reflected_incident_conts = unyt_array(
+                    reflected_incident_conts.astype(self._dtype, copy=False),
+                    cont_units,
+                )
+                for key in ("nebular", "nebular_continuum"):
+                    self.line_conts[key] = (
+                        self.line_conts[key] + reflected_incident_conts
+                    )
 
             # Now that we have read the line data itself we need to populate
             # the other spectra entries, if any exist. the line luminosities
