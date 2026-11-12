@@ -1072,16 +1072,18 @@ class TestPipelineOperations:
         pipeline_with_galaxies.write(output)
 
         # Both frames are written with one spectrum per galaxy per type (this
-        # emission model only produces stellar spectra)
+        # emission model only produces stellar spectra), each in its own
+        # frame's units
         with h5py.File(output) as hdf:
-            for name in (
-                "SpectralLuminosityDensities",
-                "SpectralFluxDensities",
+            for name, units in (
+                ("SpectralLuminosityDensities", "erg/(Hz*s)"),
+                ("SpectralFluxDensities", "nJy"),
             ):
                 group = hdf[f"Galaxies/Stars/Spectroscopy/{name}/spec"]
                 assert len(group) > 0
                 for spec_type in group:
                     assert group[spec_type].shape == (ngal, inst.lam.size)
+                    assert group[spec_type].attrs["Units"] == units
 
     def test_pipeline_writes_data_cubes(
         self,
@@ -4308,6 +4310,37 @@ def test_black_hole_fnu_spectra_written_beneath_spectra():
 
     assert "Galaxies/BlackHoles/Spectra/SpectralFluxDensities" in paths
     assert not any("Photometry" in path for path in paths)
+
+
+def test_spectroscopy_unpacked_from_matching_frame():
+    """Each spectroscopy output is taken from its own frame's store."""
+    from types import SimpleNamespace
+
+    from synthesizer.pipeline.pipeline_io import PipelineIOBuffers
+
+    # A galaxy holding different spectroscopy in each frame
+    galaxy = SimpleNamespace(
+        stars=None,
+        black_holes=None,
+        spectroscopy_lnu={
+            "spec": {"total": SimpleNamespace(lnu=np.array([1.0]))}
+        },
+        spectroscopy_fnu={
+            "spec": {"total": SimpleNamespace(fnu=np.array([2.0]))}
+        },
+    )
+
+    # Unpack both outputs
+    buffers = PipelineIOBuffers()
+    buffers.unpack(galaxy, {"spectroscopy_lnu", "spectroscopy_fnu"})
+
+    # Each output holds its own frame's spectrum
+    np.testing.assert_array_equal(
+        buffers.spectroscopy_lnu["Galaxy"]["spec"]["total"], [[1.0]]
+    )
+    np.testing.assert_array_equal(
+        buffers.spectroscopy_fnu["Galaxy"]["spec"]["total"], [[2.0]]
+    )
 
 
 def test_late_product_backfills_flushed_rows(tmp_path):
