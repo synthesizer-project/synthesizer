@@ -4098,7 +4098,9 @@ class Pipeline:
         """Flag that the Pipeline should compute spectral luminosity density.
 
         This will signal the Pipeline to compute the spectral luminosity
-        density for each galaxy when the run method is called.
+        density for each galaxy when the run method is called. The
+        instrument wavelengths are interpreted as rest frame wavelengths and
+        the results are stored in each galaxy's spectroscopy_lnu.
 
         Args:
             instruments (Instrument/InstrumentCollection):
@@ -4184,8 +4186,8 @@ class Pipeline:
 
             # Loop over instruments
             for inst in instruments:
-                # Get the spectroscopy for this instrument
-                galaxy.get_spectroscopy(
+                # Get the rest frame spectroscopy for this instrument
+                galaxy.get_spectroscopy_lnu(
                     inst,
                     limit_to=model_label,
                     out_dtype=self._out_dtypes.get("spectroscopy_lnu"),
@@ -4193,15 +4195,17 @@ class Pipeline:
 
         # Count the number of spectroscopy items we have generated
         self._op_counts["Spectroscopy Lnu"] += count_and_check_dict_recursive(
-            galaxy.spectroscopy
+            galaxy.spectroscopy_lnu
         )
         if galaxy.stars is not None:
             self._op_counts["Spectroscopy Lnu"] += (
-                count_and_check_dict_recursive(galaxy.stars.spectroscopy)
+                count_and_check_dict_recursive(galaxy.stars.spectroscopy_lnu)
             )
         if galaxy.black_holes is not None:
             self._op_counts["Spectroscopy Lnu"] += (
-                count_and_check_dict_recursive(galaxy.black_holes.spectroscopy)
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.spectroscopy_lnu
+                )
             )
 
         # Record the time taken
@@ -4219,7 +4223,9 @@ class Pipeline:
         """Flag that the Pipeline should compute the spectral flux density.
 
         This will signal the Pipeline to compute the spectral flux density
-        for each galaxy when the run method is called.
+        for each galaxy when the run method is called. The instrument
+        wavelengths are interpreted as observer frame wavelengths and the
+        results are stored in each galaxy's spectroscopy_fnu.
 
         Args:
             instruments (Instrument/InstrumentCollection):
@@ -4313,8 +4319,8 @@ class Pipeline:
 
             # Loop over instruments
             for inst in instruments:
-                # Get the spectroscopy for this instrument
-                galaxy.get_spectroscopy(
+                # Get the observer frame spectroscopy for this instrument
+                galaxy.get_spectroscopy_fnu(
                     inst,
                     limit_to=model_label,
                     out_dtype=self._out_dtypes.get("spectroscopy_fnu"),
@@ -4322,15 +4328,17 @@ class Pipeline:
 
         # Count the number of spectroscopy items we have generated
         self._op_counts["Spectroscopy Fnu"] += count_and_check_dict_recursive(
-            galaxy.spectroscopy
+            galaxy.spectroscopy_fnu
         )
         if galaxy.stars is not None:
             self._op_counts["Spectroscopy Fnu"] += (
-                count_and_check_dict_recursive(galaxy.stars.spectroscopy)
+                count_and_check_dict_recursive(galaxy.stars.spectroscopy_fnu)
             )
         if galaxy.black_holes is not None:
             self._op_counts["Spectroscopy Fnu"] += (
-                count_and_check_dict_recursive(galaxy.black_holes.spectroscopy)
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.spectroscopy_fnu
+                )
             )
 
         # Record the time taken

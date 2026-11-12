@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from astropy.cosmology import Planck18 as cosmo
 from synthesizer.extensions.timers import reset_timings, tic, toc
-from unyt import Mpc, Myr, angstrom, kpc, unyt_array
+from unyt import Hz, Mpc, Myr, angstrom, erg, kpc, s, unyt_array
 
 from synthesizer import GRID_DIR, check_atomic_timing, exceptions
 from synthesizer.base_galaxy import BaseGalaxy
@@ -25,6 +25,7 @@ from synthesizer.instruments import (
     IntegratedFieldUnit,
     SpectroscopicInstrument,
 )
+from synthesizer.particle.galaxy import Galaxy as ParticleGalaxy
 from synthesizer.particle.stars import Stars
 from synthesizer.pipeline.pipeline import Pipeline
 from synthesizer.pipeline.pipeline_utils import (
@@ -1010,6 +1011,118 @@ class TestPipelineOperations:
             )
             > 0
         ), "No fluxes were calculated"
+
+    def test_pipeline_spectroscopy_frames(self, base_pipeline):
+        """Test the pipeline's rest and observer frame spectroscopy steps.
+
+        The lnu and fnu operations must each fill their own galaxy
+        dictionary, on the rest and observer frame grids respectively.
+        """
+        # A galaxy holding a spectrum observed at z=1, stored under the
+        # emission model's label so the pipeline accepts it
+        label = base_pipeline.emission_model.label
+        z = 1.0
+        lam = np.linspace(1000.0, 20000.0, 1000) * angstrom
+        sed = Sed(lam, np.ones(lam.size) * erg / s / Hz)
+        sed.get_fnu(cosmo, z)
+        gal = ParticleGalaxy(redshift=z)
+        gal.spectra[label] = sed
+
+        # Request both kinds of spectroscopy with the same instrument
+        inst = SpectroscopicInstrument(
+            "spec",
+            lam=np.linspace(4000.0, 8000.0, 100) * angstrom,
+        )
+        base_pipeline.get_spectroscopy_lnu(inst, labels=label)
+        base_pipeline.get_spectroscopy_fnu(inst, labels=label, cosmo=cosmo)
+
+        # Run the per-galaxy spectroscopy steps
+        base_pipeline._get_spectroscopy_lnu(gal)
+        base_pipeline._get_spectroscopy_fnu(gal)
+
+        # Each operation filled its own dictionary on the right frame's
+        # wavelengths, and was counted
+        np.testing.assert_allclose(
+            gal.spectroscopy_lnu["spec"][label].lam, inst.lam
+        )
+        np.testing.assert_allclose(
+            gal.spectroscopy_fnu["spec"][label].obslam, inst.lam
+        )
+        assert base_pipeline._op_counts["Spectroscopy Lnu"] == 1
+        assert base_pipeline._op_counts["Spectroscopy Fnu"] == 1
+
+    def test_pipeline_writes_spectroscopy(
+        self, pipeline_with_galaxies, tmp_path
+    ):
+        """Test the pipeline writes rest and observer frame spectroscopy.
+
+        Each spectra type should be written for every galaxy on the
+        instrument's wavelength grid, under the instrument's label.
+        """
+        # Request both kinds of spectroscopy and write them out
+        inst = SpectroscopicInstrument(
+            "spec",
+            lam=np.linspace(4000.0, 8000.0, 100) * angstrom,
+        )
+        ngal = len(pipeline_with_galaxies.galaxies)
+        pipeline_with_galaxies.get_spectroscopy_lnu(inst)
+        pipeline_with_galaxies.get_spectroscopy_fnu(inst, cosmo=cosmo)
+        pipeline_with_galaxies.run()
+        output = tmp_path / "spectroscopy.hdf5"
+        pipeline_with_galaxies.write(output)
+
+        # Both frames are written with one spectrum per galaxy per type (this
+        # emission model only produces stellar spectra)
+        with h5py.File(output) as hdf:
+            for name in (
+                "SpectralLuminosityDensities",
+                "SpectralFluxDensities",
+            ):
+                group = hdf[f"Galaxies/Stars/Spectroscopy/{name}/spec"]
+                assert len(group) > 0
+                for spec_type in group:
+                    assert group[spec_type].shape == (ngal, inst.lam.size)
+
+    def test_pipeline_writes_data_cubes(
+        self,
+        pipeline_with_galaxies_per_particle,
+        tmp_path,
+    ):
+        """Test the pipeline writes rest and observer frame data cubes.
+
+        Each spectra type should be written for every galaxy as a cube on
+        the IFU's wavelength grid, under the IFU's label.
+        """
+        # Request both kinds of data cube and write them out
+        ifu = IntegratedFieldUnit(
+            label="ifu",
+            lam=np.linspace(4000.0, 8000.0, 20) * angstrom,
+            resolution=1 * kpc,
+        )
+        ngal = len(pipeline_with_galaxies_per_particle.galaxies)
+        pipeline_with_galaxies_per_particle.get_data_cubes_lnu(
+            ifu, fov=10 * kpc, cube_type="hist"
+        )
+        pipeline_with_galaxies_per_particle.get_data_cubes_fnu(
+            ifu, fov=10 * kpc, cube_type="hist", cosmo=cosmo
+        )
+        pipeline_with_galaxies_per_particle.run()
+        output = tmp_path / "data_cubes.hdf5"
+        pipeline_with_galaxies_per_particle.write(output)
+
+        # Both frames are written with one cube per galaxy per type (this
+        # emission model only produces stellar spectra)
+        with h5py.File(output) as hdf:
+            for name in (
+                "SpectralLuminosityDensities",
+                "SpectralFluxDensities",
+            ):
+                group = hdf[f"Galaxies/Stars/DataCubes/{name}/ifu"]
+                assert len(group) > 0
+                for spec_type in group:
+                    shape = group[spec_type].shape
+                    assert shape[0] == ngal
+                    assert shape[-1] == ifu.lam.size
 
     def test_run_pipeline_lines(
         self,

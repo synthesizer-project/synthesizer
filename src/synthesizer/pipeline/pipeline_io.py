@@ -255,8 +255,8 @@ class PipelineIOBuffers:
             2,
             "data_cube",
         ),
-        "spectroscopy_lnu": ("spectroscopy", 2, "lnu"),
-        "spectroscopy_fnu": ("spectroscopy", 2, "fnu"),
+        "spectroscopy_lnu": ("spectroscopy_lnu", 2, "lnu"),
+        "spectroscopy_fnu": ("spectroscopy_fnu", 2, "fnu"),
     }
 
     # The group each component's outputs are written beneath

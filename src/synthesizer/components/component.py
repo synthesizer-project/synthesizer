@@ -19,7 +19,7 @@ from synthesizer.cosmology import (
     get_luminosity_distance,
 )
 from synthesizer.emission_models.utils import check_removed_overrides
-from synthesizer.emissions import plot_spectra
+from synthesizer.emissions import plot_observed_spectra, plot_spectra
 from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.imaging.data_cube_generators import (
     _combine_spectral_cubes,
@@ -116,8 +116,11 @@ class Component(ABC):
         self.line_maps_noise_fnu = {}
 
         # Define the dictionaries to hold instrument specific spectroscopy
-        self.spectroscopy = {}
-        self.particle_spectroscopy = {}
+        # (rest frame in the lnu dictionaries, observer frame in the fnu)
+        self.spectroscopy_lnu = {}
+        self.spectroscopy_fnu = {}
+        self.particle_spectroscopy_lnu = {}
+        self.particle_spectroscopy_fnu = {}
         self.data_cubes_lnu = {}
         self.data_cubes_fnu = {}
 
@@ -1564,18 +1567,48 @@ class Component(ABC):
 
         return self.images_noise_fnu[instrument.label]
 
-    def get_spectroscopy(
+    @property
+    @deprecated(
+        "is deprecated and will be removed in version 1.4.0. "
+        "It is an alias for spectroscopy_fnu (observer frame); use that, or "
+        "spectroscopy_lnu for the rest frame, instead."
+    )
+    def spectroscopy(self):
+        """Return the observer frame spectroscopy (deprecated alias).
+
+        Returns:
+            dict
+                The spectroscopy_fnu dictionary.
+        """
+        return self.spectroscopy_fnu
+
+    @property
+    @deprecated(
+        "is deprecated and will be removed in version 1.4.0. "
+        "It is an alias for particle_spectroscopy_fnu (observer frame); use "
+        "that, or particle_spectroscopy_lnu for the rest frame, instead."
+    )
+    def particle_spectroscopy(self):
+        """Return the observer frame particle spectroscopy (deprecated alias).
+
+        Returns:
+            dict
+                The particle_spectroscopy_fnu dictionary.
+        """
+        return self.particle_spectroscopy_fnu
+
+    def get_spectroscopy_lnu(
         self,
         instrument,
         limit_to=None,
         out_dtype=None,
     ):
-        """Get spectroscopy for the component based on a specific instrument.
+        """Get rest frame spectroscopy for the component from an instrument.
 
-        This method now acts as an orchestration wrapper around the
-        instrument-owned spectroscopy path. It fetches the relevant SEDs,
-        passes them into the instrument, and stores the returned spectroscopy
-        on the component.
+        The instrument wavelengths are interpreted as rest frame wavelengths
+        (see SpectroscopicInstrument.apply_lam_array_lnu). The results are
+        stored in spectroscopy_lnu (and particle_spectroscopy_lnu for any
+        particle spectra).
 
         Args:
             instrument (Instrument):
@@ -1591,12 +1624,133 @@ class Component(ABC):
 
         Returns:
             dict
-                The spectroscopy for the galaxy.
+                The rest frame spectroscopy for the component.
         """
+        return self._get_spectroscopy(
+            instrument,
+            "lnu",
+            limit_to=limit_to,
+            out_dtype=out_dtype,
+        )
+
+    def get_spectroscopy_fnu(
+        self,
+        instrument,
+        limit_to=None,
+        out_dtype=None,
+    ):
+        """Get observer frame spectroscopy for the component.
+
+        The instrument wavelengths are interpreted as observer frame
+        wavelengths (see SpectroscopicInstrument.apply_lam_array_fnu), so the
+        spectra must already have their fluxes computed. The results are
+        stored in spectroscopy_fnu (and particle_spectroscopy_fnu for any
+        particle spectra).
+
+        Args:
+            instrument (Instrument):
+                The instrument to use for the spectroscopy.
+            limit_to (str/list, optional):
+                If None, then spectroscopy is calculated for all spectra in
+                the component. If a string or list of strings is provided,
+                then spectroscopy is only calculated for the specified
+                spectra.
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the resulting spectra.
+                If None the spectroscopy inherits the source spectra dtype.
+
+        Returns:
+            dict
+                The observer frame spectroscopy for the component.
+        """
+        return self._get_spectroscopy(
+            instrument,
+            "fnu",
+            limit_to=limit_to,
+            out_dtype=out_dtype,
+        )
+
+    @deprecated(
+        "is deprecated and will be removed in version 1.4.0. "
+        "It is an alias for get_spectroscopy_fnu(...) (observer frame); use "
+        "that, or get_spectroscopy_lnu(...) for the rest frame, instead."
+    )
+    def get_spectroscopy(
+        self,
+        instrument,
+        limit_to=None,
+        out_dtype=None,
+    ):
+        """Get spectroscopy for the component based on a specific instrument.
+
+        Deprecated alias for get_spectroscopy_fnu, which treats the
+        instrument wavelengths as observer frame wavelengths.
+
+        Args:
+            instrument (Instrument):
+                The instrument to use for the spectroscopy.
+            limit_to (str/list, optional):
+                If None, then spectroscopy is calculated for all spectra in
+                the component. If a string or list of strings is provided,
+                then spectroscopy is only calculated for the specified
+                spectra.
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the resulting spectra.
+                If None the spectroscopy inherits the source spectra dtype.
+
+        Returns:
+            dict
+                The observer frame spectroscopy for the component.
+        """
+        return self.get_spectroscopy_fnu(
+            instrument,
+            limit_to=limit_to,
+            out_dtype=out_dtype,
+        )
+
+    def _get_spectroscopy(
+        self,
+        instrument,
+        quantity,
+        limit_to=None,
+        out_dtype=None,
+    ):
+        """Get spectroscopy for the component based on a specific instrument.
+
+        This method now acts as an orchestration wrapper around the
+        instrument-owned spectroscopy path. It fetches the relevant SEDs,
+        passes them into the instrument, and stores the returned spectroscopy
+        on the component.
+
+        Args:
+            instrument (Instrument):
+                The instrument to use for the spectroscopy.
+            quantity (str):
+                Either "lnu" (the instrument wavelengths are rest frame) or
+                "fnu" (the instrument wavelengths are observer frame). This
+                picks the instrument method and the dictionaries the results
+                are stored in.
+            limit_to (str/list, optional):
+                If None, then spectroscopy is calculated for all spectra in
+                the component. If a string or list of strings is provided,
+                then spectroscopy is only calculated for the specified
+                spectra.
+            out_dtype (np.dtype, optional):
+                Requested floating-point dtype for the resulting spectra.
+                If None the spectroscopy inherits the source spectra dtype.
+
+        Returns:
+            dict
+                The spectroscopy for the component.
+        """
+        # Get the instrument method and output dictionaries for this frame
+        apply_lam_array = getattr(instrument, f"apply_lam_array_{quantity}")
+        spectroscopy = getattr(self, f"spectroscopy_{quantity}")
+
         # Create an entry for the instrument in the spectroscopy
         # dictionary if it doesn't exist
-        if instrument.label not in self.spectroscopy:
-            self.spectroscopy[instrument.label] = {}
+        if instrument.label not in spectroscopy:
+            spectroscopy[instrument.label] = {}
 
         # Get the labels
         labels = self.spectra.keys() if limit_to is None else limit_to
@@ -1608,20 +1762,23 @@ class Component(ABC):
                 continue
             # Delegate the spectroscopy observation to the instrument so the
             # component layer only handles routing and output storage
-            spectrum = instrument.apply_lam_array(self.spectra[label])
+            spectrum = apply_lam_array(self.spectra[label])
             if instrument.can_do_noisy_spectroscopy:
                 spectrum = instrument.apply_noise(spectrum)
             if out_dtype is not None:
                 spectrum.cast(out_dtype)
-            self.spectroscopy[instrument.label][label] = spectrum
+            spectroscopy[instrument.label][label] = spectrum
 
         # If we have particle spectra then do the same for them
         if (
             hasattr(self, "particle_spectra")
             and len(self.particle_spectra) > 0
         ):
-            if instrument.label not in self.particle_spectroscopy:
-                self.particle_spectroscopy[instrument.label] = {}
+            particle_spectroscopy = getattr(
+                self, f"particle_spectroscopy_{quantity}"
+            )
+            if instrument.label not in particle_spectroscopy:
+                particle_spectroscopy[instrument.label] = {}
 
             # Get the labels for particle spectra
             particle_labels = (
@@ -1636,17 +1793,15 @@ class Component(ABC):
                 # Delegate the particle-spectrum observation to the instrument
                 # so the component layer only handles routing and output
                 # storage
-                spectrum = instrument.apply_lam_array(
-                    self.particle_spectra[label]
-                )
+                spectrum = apply_lam_array(self.particle_spectra[label])
                 if instrument.can_do_noisy_spectroscopy:
                     spectrum = instrument.apply_noise(spectrum)
                 if out_dtype is not None:
                     spectrum.cast(out_dtype)
-                self.particle_spectroscopy[instrument.label][label] = spectrum
+                particle_spectroscopy[instrument.label][label] = spectrum
 
         # Return the spectroscopy for the component
-        return self.spectroscopy[instrument.label]
+        return spectroscopy[instrument.label]
 
     def get_data_cube(
         self,
@@ -1911,11 +2066,11 @@ class Component(ABC):
         ax=None,
         **kwargs,
     ):
-        """Plot the instrument's spectroscopy of the component.
+        """Plot the instrument's rest frame spectroscopy of the component.
 
-        This will plot the spectroscopy for the component using the
-        instrument's wavelength array. The spectra are plotted
-        in the order they are stored in the spectroscopy dictionary.
+        This will plot the rest frame spectroscopy (spectroscopy_lnu) for the
+        component using the instrument's wavelength array. The spectra are
+        plotted in the order they are stored in the spectroscopy dictionary.
 
         Can either plot specific spectroscopy (specified via spectra_to_plot)
         or all spectroscopy on the component.
@@ -1955,36 +2110,153 @@ class Component(ABC):
             ax (matplotlib.axes)
                 The matplotlib axes object containing the plotted data.
         """
-        # Handling whether we are plotting all spectra, specific spectra, or
-        # a single spectra
-        if spectra_to_plot is None:
-            spectra = self.spectroscopy[instrument_label]
-        elif isinstance(spectra_to_plot, (list, tuple)):
-            spectra = {
-                key: self.spectroscopy[instrument_label][key]
-                for key in spectra_to_plot
-            }
-        else:
-            spectra = self.spectroscopy[instrument_label][spectra_to_plot]
-
-        # Include the instrument label in the spectra key (i.e. plot lables)
-        if isinstance(spectra, dict):
-            spectra = {
-                f"{instrument_label}: {key}": self.spectroscopy[
-                    instrument_label
-                ][key]
-                for key in spectra
-            }
-
-        return plot_spectra(
-            spectra,
+        return self._plot_spectroscopy(
+            instrument_label,
+            "lnu",
+            spectra_to_plot=spectra_to_plot,
             show=show,
             ylimits=ylimits,
             xlimits=xlimits,
             figsize=figsize,
-            draw_legend=isinstance(spectra, dict),
             fig=fig,
             ax=ax,
+            **kwargs,
+        )
+
+    def plot_observed_spectroscopy(
+        self,
+        instrument_label,
+        spectra_to_plot=None,
+        show=False,
+        ylimits=(),
+        xlimits=(),
+        figsize=(3.5, 5),
+        fig=None,
+        ax=None,
+        **kwargs,
+    ):
+        """Plot the instrument's observer frame spectroscopy of the component.
+
+        This will plot the observer frame spectroscopy (spectroscopy_fnu) for
+        the component using the instrument's wavelength array. The spectra
+        are plotted in the order they are stored in the spectroscopy
+        dictionary.
+
+        Can either plot specific spectroscopy (specified via spectra_to_plot)
+        or all spectroscopy on the component.
+
+        Args:
+            instrument_label (str):
+                The label of the instrument to use for the spectroscopy.
+            spectra_to_plot (string/list, string):
+                The specific spectroscopy to plot.
+                    - If None all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            show (bool):
+                Flag for whether to show the plot or just return the
+                figure and axes.
+            ylimits (tuple):
+                The limits to apply to the y axis. If not provided the limits
+                will be calculated with the lower limit set to 100 times less
+                than the peak of the spectrum.
+            xlimits (tuple):
+                The limits to apply to the x axis. If not provided the optimal
+                limits are found based on the ylimits.
+            figsize (tuple):
+                Tuple with size 2 defining the figure size.
+            fig (matplotlib.pyplot.figure):
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes):
+                The matplotlib axes object containing the plotted data.
+            **kwargs (dict):
+                Arguments to the `sed.plot_observed_spectra` method called
+                from this wrapper.
+
+        Returns:
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes)
+                The matplotlib axes object containing the plotted data.
+        """
+        return self._plot_spectroscopy(
+            instrument_label,
+            "fnu",
+            spectra_to_plot=spectra_to_plot,
+            show=show,
+            ylimits=ylimits,
+            xlimits=xlimits,
+            figsize=figsize,
+            fig=fig,
+            ax=ax,
+            **kwargs,
+        )
+
+    def _plot_spectroscopy(
+        self,
+        instrument_label,
+        quantity,
+        spectra_to_plot=None,
+        **kwargs,
+    ):
+        """Plot the instrument's spectroscopy of the component in one frame.
+
+        Args:
+            instrument_label (str):
+                The label of the instrument to use for the spectroscopy.
+            quantity (str):
+                The frame to plot, either "lnu" (rest frame,
+                spectroscopy_lnu) or "fnu" (observer frame,
+                spectroscopy_fnu).
+            spectra_to_plot (string/list, string):
+                The specific spectroscopy to plot.
+                    - If None all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            **kwargs (dict):
+                Arguments to the `sed.plot_spectra` (rest frame) or
+                `sed.plot_observed_spectra` (observer frame) method.
+
+        Returns:
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes)
+                The matplotlib axes object containing the plotted data.
+        """
+        # Get the spectroscopy for this frame and instrument
+        spectroscopy = getattr(self, f"spectroscopy_{quantity}")[
+            instrument_label
+        ]
+
+        # Handling whether we are plotting all spectra, specific spectra, or
+        # a single spectra
+        if spectra_to_plot is None:
+            spectra = spectroscopy
+        elif isinstance(spectra_to_plot, (list, tuple)):
+            spectra = {key: spectroscopy[key] for key in spectra_to_plot}
+        else:
+            spectra = spectroscopy[spectra_to_plot]
+
+        # Include the instrument label in the spectra key (i.e. plot lables)
+        if isinstance(spectra, dict):
+            spectra = {
+                f"{instrument_label}: {key}": spectroscopy[key]
+                for key in spectra
+            }
+
+        # Observer frame spectra are plotted against observed wavelengths,
+        # which needs the redshift
+        if quantity == "fnu":
+            return plot_observed_spectra(
+                spectra,
+                self.redshift,
+                draw_legend=isinstance(spectra, dict),
+                **kwargs,
+            )
+
+        return plot_spectra(
+            spectra,
+            draw_legend=isinstance(spectra, dict),
             **kwargs,
         )
 
@@ -1996,9 +2268,11 @@ class Component(ABC):
 
     def clear_all_spectroscopy(self):
         """Clear all spectroscopy from the component."""
-        self.spectroscopy = {}
-        if hasattr(self, "particle_spectroscopy"):
-            self.particle_spectroscopy = {}
+        self.spectroscopy_lnu = {}
+        self.spectroscopy_fnu = {}
+        if hasattr(self, "particle_spectroscopy_lnu"):
+            self.particle_spectroscopy_lnu = {}
+            self.particle_spectroscopy_fnu = {}
 
     def clear_all_lines(self):
         """Clear all lines from the component."""
