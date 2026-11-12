@@ -56,8 +56,11 @@ def get_lams_from_resolving_power(
         # Calculate wavelength step
         delta_lambda = current_wav / _resolving_power
 
-        # Update current wavelength
-        current_wav += delta_lambda
+        # Update current wavelength. This must make a new quantity rather
+        # than add in place: an in-place add would also change the
+        # wavelengths already stored in the list, since they are the same
+        # object.
+        current_wav = current_wav + delta_lambda
 
         # Include the current wavelength in the array if it still lies within
         # the requested wavelength interval
