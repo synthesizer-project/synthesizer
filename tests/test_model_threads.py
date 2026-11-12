@@ -361,12 +361,12 @@ class TestThreadedParity:
         """Test velocity shift flags propagate as they do in serial."""
         # Record the velocity shift flags from a serial and a threaded run
         varied_model.set_per_particle(False)
+        varied_model.set_vel_shift(True, set_all=True)
         flags = []
         for nr_model_threads in (1, 4):
             random_part_stars.clear_all_emissions()
             random_part_stars.get_spectra(
                 varied_model,
-                vel_shift=True,
                 nr_model_threads=nr_model_threads,
             )
             flags.append(

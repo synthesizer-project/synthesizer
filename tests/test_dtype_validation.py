@@ -322,8 +322,10 @@ class TestPrecisionCombinations:
 
         def spectra(part, grid, out, vel_shift):
             stars = _realistic_stars(part)
-            model = IncidentEmission(grid=grids[grid], per_particle=True)
-            stars.get_spectra(model, out_dtype=out, vel_shift=vel_shift)
+            model = IncidentEmission(
+                grid=grids[grid], per_particle=True, vel_shift=vel_shift
+            )
+            stars.get_spectra(model, out_dtype=out)
             return (
                 stars.spectra[model.label]._lnu,
                 stars.particle_spectra[model.label]._lnu,
