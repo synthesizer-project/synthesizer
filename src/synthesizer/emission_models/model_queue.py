@@ -19,13 +19,25 @@ consumed by all downstream dependents, and the model is not marked to be
 saved, the queue deletes that emission from the working output dictionaries.
 Keeping this logic in a dedicated module keeps execution-specific state out of
 ``EmissionModel`` and makes the scheduling logic easier to reason about.
+
+Models whose dependencies are all satisfied are independent of each other, so
+the queue can also execute them concurrently on a pool of threads (see
+``ModelQueue.execute``). Each worker takes the next ready model itself, and
+the queue state is only touched while holding a single lock, so there is no
+dispatching thread for the workers to wait on. Concurrent execution is only
+useful when the Python work done per model can run in parallel, which
+requires a free-threaded (no-GIL) build of Python; ``resolve_threads`` (see
+``synthesizer.utils.free_threading``) falls back to serial execution
+otherwise.
 """
 
+import threading
 from collections import deque
 
 import numpy as np
 
 from synthesizer import exceptions
+from synthesizer.utils.free_threading import resolve_threads
 from synthesizer.utils.operation_timers import timed, timer
 
 
@@ -270,6 +282,255 @@ class ModelQueue:
                 emissions,
                 particle_emissions,
             )
+
+    def execute(
+        self,
+        process,
+        emissions,
+        particle_emissions,
+        nr_model_threads=1,
+        nthreads=1,
+    ):
+        """Execute every active model in dependency order.
+
+        Each model is passed to ``process`` once all of its dependencies have
+        been processed. ``process`` must store the model's emission in the
+        emission dictionaries itself. Models whose emission is already in
+        ``emissions`` (e.g. reused existing emissions) are not processed
+        again. Once a model is processed, the queue unlocks its dependents and
+        deletes any emissions that are no longer needed.
+
+        With more than one thread, ready models are processed concurrently by
+        a pool of worker threads (the calling thread being one of them). Each
+        worker takes the next ready model, processes it, then marks it done,
+        which queues any dependents it unlocked. Taking a model and marking it
+        done happen under one lock, while ``process`` runs without it, so it
+        must be safe to run for independent models at the same time.
+
+        Args:
+            process (callable):
+                A function taking a single ``EmissionModel`` which generates
+                its emission.
+            emissions (dict):
+                The integrated emission dictionary being populated.
+            particle_emissions (dict):
+                The particle emission dictionary being populated.
+            nr_model_threads (int):
+                The requested number of threads to process models with. See
+                ``resolve_threads`` for when fewer are used.
+            nthreads (int):
+                The number of OpenMP threads each model uses, used to warn
+                about oversubscribing the available cores.
+
+        Returns:
+            None
+
+        Raises:
+            exceptions.InconsistentArguments:
+                If some models were never processed (see assert_finished).
+            Exception:
+                Any exception raised by ``process`` is re-raised unchanged.
+        """
+
+        # Reused or externally supplied emissions still need to unlock the
+        # graph, but they do not need to be regenerated.
+        def process_if_missing(model):
+            """Process a model unless its emission already exists.
+
+            Args:
+                model (EmissionModel):
+                    The model to process.
+            """
+            if model.label not in emissions:
+                process(model)
+
+        # Work out how many threads we can actually use (this falls back to
+        # one with a warning when the GIL is enabled)
+        nr_threads = resolve_threads(
+            nr_model_threads,
+            "nr_model_threads",
+            nthreads,
+        )
+
+        # With a single thread, process each model as soon as it becomes
+        # ready, marking it done to unlock its dependents
+        if nr_threads == 1:
+            while len(self) > 0:
+                model = self.pop()
+                process_if_missing(model)
+                self.done(model, emissions, particle_emissions)
+
+        # Otherwise, hand the models to a pool of worker threads
+        else:
+            self._execute_threaded(
+                process_if_missing,
+                emissions,
+                particle_emissions,
+                nr_threads,
+            )
+
+        # Ensure the dependency graph was fully traversed.
+        self.assert_finished()
+
+    def _execute_threaded(
+        self,
+        process,
+        emissions,
+        particle_emissions,
+        nr_threads,
+    ):
+        """Execute every active model on a pool of worker threads.
+
+        The workers schedule themselves rather than being fed by a dispatcher:
+        a model's emission is often cheap enough to generate that a single
+        thread handing out work would become the bottleneck. The queue state
+        (the ready queue, dependency counts and emission lifetimes) is only
+        read or written while holding one lock. A worker holds it to take a
+        ready model and again to mark the model done; ``process`` itself runs
+        without it.
+
+        If any model raises, no further models are started, the ones already
+        running are left to finish, and the first exception is re-raised on
+        the calling thread.
+
+        Args:
+            process (callable):
+                A function taking a single ``EmissionModel`` which generates
+                its emission.
+            emissions (dict):
+                The integrated emission dictionary being populated.
+            particle_emissions (dict):
+                The particle emission dictionary being populated.
+            nr_threads (int):
+                The number of worker threads to use, including the calling
+                thread.
+
+        Returns:
+            None
+
+        Raises:
+            BaseException:
+                The first exception raised on any worker (by ``process`` or
+                while taking or marking a model done) is re-raised.
+        """
+        # The lock guarding the queue state, which workers also wait on for
+        # models to become ready
+        ready = threading.Condition()
+
+        # The state shared between the workers (only touched while holding
+        # the lock): how many models are being processed right now, and the
+        # first error any worker hit
+        state = {"in_flight": 0, "error": None}
+
+        def worker():
+            """Process ready models until there are none left to run.
+
+            Each iteration takes the next ready model (waiting for one if
+            other workers are still running models which may unlock more),
+            processes it outside the lock, then marks it done.
+            """
+            while True:
+                # Take the next ready model
+                with ready:
+                    # Wait for a model to become ready. With nothing ready
+                    # and nothing in flight nothing ever will be, so the
+                    # graph is finished (or stuck, which assert_finished
+                    # reports).
+                    while (
+                        len(self) == 0
+                        and state["in_flight"] > 0
+                        and state["error"] is None
+                    ):
+                        ready.wait()
+
+                    # Stop if another worker failed or there's nothing left
+                    if state["error"] is not None or len(self) == 0:
+                        return
+
+                    # Claim the model, counting it as in flight so idle
+                    # workers keep waiting for whatever it unlocks
+                    model = self.pop()
+                    state["in_flight"] += 1
+
+                # Process the model without holding the lock, so the other
+                # workers can process their models at the same time. If it
+                # fails, record the error and wake everyone so they stop.
+                try:
+                    process(model)
+                except BaseException as error:
+                    with ready:
+                        state["in_flight"] -= 1
+                        if state["error"] is None:
+                            state["error"] = error
+                        ready.notify_all()
+                    return
+
+                # Mark the model done, which queues any dependents it
+                # unlocked and frees emissions nothing needs any more
+                with ready:
+                    nready = len(self)
+                    self.done(model, emissions, particle_emissions)
+                    state["in_flight"] -= 1
+
+                    # Wake a worker for each model this unlocked, or every
+                    # worker if there is nothing left for them to wait for.
+                    if len(self) == 0 and state["in_flight"] == 0:
+                        ready.notify_all()
+                    else:
+                        ready.notify(len(self) - nready)
+
+        def stop(error):
+            """Record the first error and wake every worker so they exit.
+
+            Args:
+                error (BaseException):
+                    The error to record (ignored if one already has been).
+            """
+            with ready:
+                if state["error"] is None:
+                    state["error"] = error
+                ready.notify_all()
+
+        def guarded_worker():
+            """Run a worker, recording anything escaping it outside process.
+
+            Without this an error in pop or done on a worker thread would
+            kill it silently, leaving the others waiting on it forever.
+            """
+            try:
+                worker()
+            except BaseException as error:
+                stop(error)
+
+        # Start the other workers. The calling thread is one of the workers
+        # too, so we only need nr_threads - 1 more. We track which started
+        # so we only wait on those if something goes wrong part way through.
+        threads = [
+            threading.Thread(target=guarded_worker, daemon=True)
+            for _ in range(nr_threads - 1)
+        ]
+        started = []
+        try:
+            for thread in threads:
+                thread.start()
+                started.append(thread)
+
+            # Work on the calling thread until there's nothing left to do
+            worker()
+        except BaseException as error:
+            # Something escaped outside process: a worker failed to start,
+            # or the calling thread's worker failed (e.g. a KeyboardInterrupt
+            # while waiting). Stop the others taking new models, the first
+            # error recorded is raised below.
+            stop(error)
+        finally:
+            # Wait for the models still running
+            for thread in started:
+                thread.join()
+
+        # Re-raise the first error from any worker on the calling thread
+        if state["error"] is not None:
+            raise state["error"]
 
     def assert_finished(self):
         """Ensure the dependency graph was fully traversed.
