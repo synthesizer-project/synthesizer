@@ -372,7 +372,8 @@ class Pipeline:
         }
         self.lnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
         self.fnu_data_cubes = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
-        self.spectroscopy = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.spectroscopy_lnu = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
+        self.spectroscopy_fnu = {"Galaxy": {}, "Stars": {}, "BlackHole": {}}
 
         # We'll need to store the timing information to be reported at the
         # end of the pipeline (this will be stored with the operation
@@ -766,7 +767,8 @@ class Pipeline:
             self.images_flux_psf,
             self.lnu_data_cubes,
             self.fnu_data_cubes,
-            self.spectroscopy,
+            self.spectroscopy_lnu,
+            self.spectroscopy_fnu,
         ]
 
         return get_full_memory(results) / (1024**2)
@@ -4107,7 +4109,9 @@ class Pipeline:
         """Flag that the Pipeline should compute spectral luminosity density.
 
         This will signal the Pipeline to compute the spectral luminosity
-        density for each galaxy when the run method is called.
+        density for each galaxy when the run method is called. The
+        instrument wavelengths are interpreted as rest frame wavelengths and
+        the results are stored in each galaxy's spectroscopy_lnu.
 
         Args:
             instruments (Instrument/InstrumentCollection):
@@ -4193,8 +4197,8 @@ class Pipeline:
 
             # Loop over instruments
             for inst in instruments:
-                # Get the spectroscopy for this instrument
-                galaxy.get_spectroscopy(
+                # Get the rest frame spectroscopy for this instrument
+                galaxy.get_spectroscopy_lnu(
                     inst,
                     limit_to=model_label,
                     out_dtype=self._out_dtypes.get("spectroscopy_lnu"),
@@ -4202,15 +4206,17 @@ class Pipeline:
 
         # Count the number of spectroscopy items we have generated
         self._op_counts["Spectroscopy Lnu"] += count_and_check_dict_recursive(
-            galaxy.spectroscopy
+            galaxy.spectroscopy_lnu
         )
         if galaxy.stars is not None:
             self._op_counts["Spectroscopy Lnu"] += (
-                count_and_check_dict_recursive(galaxy.stars.spectroscopy)
+                count_and_check_dict_recursive(galaxy.stars.spectroscopy_lnu)
             )
         if galaxy.black_holes is not None:
             self._op_counts["Spectroscopy Lnu"] += (
-                count_and_check_dict_recursive(galaxy.black_holes.spectroscopy)
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.spectroscopy_lnu
+                )
             )
 
         # Record the time taken
@@ -4228,7 +4234,9 @@ class Pipeline:
         """Flag that the Pipeline should compute the spectral flux density.
 
         This will signal the Pipeline to compute the spectral flux density
-        for each galaxy when the run method is called.
+        for each galaxy when the run method is called. The instrument
+        wavelengths are interpreted as observer frame wavelengths and the
+        results are stored in each galaxy's spectroscopy_fnu.
 
         Args:
             instruments (Instrument/InstrumentCollection):
@@ -4322,8 +4330,8 @@ class Pipeline:
 
             # Loop over instruments
             for inst in instruments:
-                # Get the spectroscopy for this instrument
-                galaxy.get_spectroscopy(
+                # Get the observer frame spectroscopy for this instrument
+                galaxy.get_spectroscopy_fnu(
                     inst,
                     limit_to=model_label,
                     out_dtype=self._out_dtypes.get("spectroscopy_fnu"),
@@ -4331,15 +4339,17 @@ class Pipeline:
 
         # Count the number of spectroscopy items we have generated
         self._op_counts["Spectroscopy Fnu"] += count_and_check_dict_recursive(
-            galaxy.spectroscopy
+            galaxy.spectroscopy_fnu
         )
         if galaxy.stars is not None:
             self._op_counts["Spectroscopy Fnu"] += (
-                count_and_check_dict_recursive(galaxy.stars.spectroscopy)
+                count_and_check_dict_recursive(galaxy.stars.spectroscopy_fnu)
             )
         if galaxy.black_holes is not None:
             self._op_counts["Spectroscopy Fnu"] += (
-                count_and_check_dict_recursive(galaxy.black_holes.spectroscopy)
+                count_and_check_dict_recursive(
+                    galaxy.black_holes.spectroscopy_fnu
+                )
             )
 
         # Record the time taken
@@ -4509,6 +4519,66 @@ class Pipeline:
                     self.fnu_spectra["BlackHole"].setdefault(
                         spec_type, []
                     ).append(spec.fnu)
+
+        # Do we need to unpack the rest frame spectroscopy? (keyed by
+        # instrument then spectra type, like the images)
+        if self._write_spectroscopy_lnu:
+            for key, owner in (
+                ("Galaxy", galaxy),
+                ("Stars", galaxy.stars),
+                ("BlackHole", galaxy.black_holes),
+            ):
+                if owner is None:
+                    continue
+                for inst_label, d in owner.spectroscopy_lnu.items():
+                    for spec_type, spec in d.items():
+                        self.spectroscopy_lnu[key].setdefault(
+                            inst_label, {}
+                        ).setdefault(spec_type, []).append(spec.lnu)
+
+        # Do we need to unpack the observer frame spectroscopy?
+        if self._write_spectroscopy_fnu:
+            for key, owner in (
+                ("Galaxy", galaxy),
+                ("Stars", galaxy.stars),
+                ("BlackHole", galaxy.black_holes),
+            ):
+                if owner is None:
+                    continue
+                for inst_label, d in owner.spectroscopy_fnu.items():
+                    for spec_type, spec in d.items():
+                        self.spectroscopy_fnu[key].setdefault(
+                            inst_label, {}
+                        ).setdefault(spec_type, []).append(spec.fnu)
+
+        # Do we need to unpack the data cubes? (keyed by instrument then
+        # spectra type, wrapping each cube's array without copying it)
+        for write, cubes, attr in (
+            (
+                self._write_lnu_data_cubes,
+                self.lnu_data_cubes,
+                "data_cubes_lnu",
+            ),
+            (
+                self._write_fnu_data_cubes,
+                self.fnu_data_cubes,
+                "data_cubes_fnu",
+            ),
+        ):
+            if not write:
+                continue
+            for key, owner in (
+                ("Galaxy", galaxy),
+                ("Stars", galaxy.stars),
+                ("BlackHole", galaxy.black_holes),
+            ):
+                if owner is None:
+                    continue
+                for inst_label, d in getattr(owner, attr).items():
+                    for spec_type, cube in d.items():
+                        cubes[key].setdefault(inst_label, {}).setdefault(
+                            spec_type, []
+                        ).append(unyt_array(cube.arr, cube.units))
 
         # Do we need to unpack the photometric luminosities?
         if self._write_luminosities:
@@ -5099,6 +5169,18 @@ class Pipeline:
             self.fnu_spectra["Stars"][spec_type] = unyt_array(spec)
         for spec_type, spec in self.fnu_spectra["BlackHole"].items():
             self.fnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
+
+        # Convert the lists of spectroscopy and data cubes to unyt arrays
+        for products in (
+            self.spectroscopy_lnu,
+            self.spectroscopy_fnu,
+            self.lnu_data_cubes,
+            self.fnu_data_cubes,
+        ):
+            for inst_data in products.values():
+                for specs in inst_data.values():
+                    for spec_type, spec in specs.items():
+                        specs[spec_type] = unyt_array(spec)
 
         # Cosmic SEDs are global products rather than per-galaxy arrays, so in
         # MPI mode we first gather and sum them onto rank 0. If averaging was
@@ -5693,6 +5775,78 @@ class Pipeline:
             self.io_helper.write_data(
                 self.fnu_spectra["BlackHole"],
                 "Galaxies/BlackHoles/Photometry/SpectralFluxDensities",
+                galaxy_indices,
+            )
+
+        # Write rest frame spectroscopy
+        if self._write_spectroscopy_lnu:
+            self.io_helper.write_data(
+                self.spectroscopy_lnu["Galaxy"],
+                "Galaxies/Spectroscopy/SpectralLuminosityDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.spectroscopy_lnu["Stars"],
+                "Galaxies/Stars/Spectroscopy/SpectralLuminosityDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.spectroscopy_lnu["BlackHole"],
+                "Galaxies/BlackHoles/Spectroscopy/SpectralLuminosityDensities",
+                galaxy_indices,
+            )
+
+        # Write observer frame spectroscopy
+        if self._write_spectroscopy_fnu:
+            self.io_helper.write_data(
+                self.spectroscopy_fnu["Galaxy"],
+                "Galaxies/Spectroscopy/SpectralFluxDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.spectroscopy_fnu["Stars"],
+                "Galaxies/Stars/Spectroscopy/SpectralFluxDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.spectroscopy_fnu["BlackHole"],
+                "Galaxies/BlackHoles/Spectroscopy/SpectralFluxDensities",
+                galaxy_indices,
+            )
+
+        # Write rest frame data cubes
+        if self._write_lnu_data_cubes:
+            self.io_helper.write_data(
+                self.lnu_data_cubes["Galaxy"],
+                "Galaxies/DataCubes/SpectralLuminosityDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.lnu_data_cubes["Stars"],
+                "Galaxies/Stars/DataCubes/SpectralLuminosityDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.lnu_data_cubes["BlackHole"],
+                "Galaxies/BlackHoles/DataCubes/SpectralLuminosityDensities",
+                galaxy_indices,
+            )
+
+        # Write observer frame data cubes
+        if self._write_fnu_data_cubes:
+            self.io_helper.write_data(
+                self.fnu_data_cubes["Galaxy"],
+                "Galaxies/DataCubes/SpectralFluxDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.fnu_data_cubes["Stars"],
+                "Galaxies/Stars/DataCubes/SpectralFluxDensities",
+                galaxy_indices,
+            )
+            self.io_helper.write_data(
+                self.fnu_data_cubes["BlackHole"],
+                "Galaxies/BlackHoles/DataCubes/SpectralFluxDensities",
                 galaxy_indices,
             )
 
