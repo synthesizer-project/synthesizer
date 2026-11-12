@@ -801,6 +801,44 @@ def test_galaxy_get_spectroscopy_fnu_uses_observer_frame_wavelengths():
     assert spec.obslam[seen].max() <= 12010.0 * angstrom
 
 
+@pytest.mark.parametrize(
+    "quantity,frame_lam",
+    [("lnu", "lam"), ("fnu", "obslam")],
+)
+def test_component_plot_spectroscopy_uses_matching_frame(quantity, frame_lam):
+    """Component spectroscopy plots should read and plot the matching frame.
+
+    Args:
+        quantity (str):
+            The frame to plot, "lnu" or "fnu".
+        frame_lam (str):
+            The Sed wavelength attribute the plot should use as its x axis.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    # Store the observed top-hat in only the requested frame's dictionary,
+    # so plotting the wrong frame raises a KeyError
+    sed = _observed_top_hat_sed(1.0)
+    component = SimpleNamespace(
+        redshift=1.0,
+        spectroscopy_lnu={},
+        spectroscopy_fnu={},
+    )
+    getattr(component, f"spectroscopy_{quantity}")["spec"] = {"toy": sed}
+
+    fig, ax = Component._plot_spectroscopy(component, "spec", quantity)
+
+    # The plotted wavelengths are those of the requested frame
+    np.testing.assert_allclose(
+        ax.lines[0].get_xdata(),
+        getattr(sed, frame_lam).value,
+    )
+    plt.close(fig)
+
+
 def test_galaxy_get_spectroscopy_is_deprecated_alias_of_fnu():
     """get_spectroscopy and spectroscopy should warn and alias the fnu API."""
     galaxy = _top_hat_galaxy(1.0)

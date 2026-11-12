@@ -19,7 +19,7 @@ from synthesizer.cosmology import (
     get_luminosity_distance,
 )
 from synthesizer.emission_models.utils import check_removed_overrides
-from synthesizer.emissions import plot_spectra
+from synthesizer.emissions import plot_observed_spectra, plot_spectra
 from synthesizer.emissions.utils import alias_to_line_id
 from synthesizer.imaging.data_cube_generators import (
     _combine_spectral_cubes,
@@ -2110,36 +2110,153 @@ class Component(ABC):
             ax (matplotlib.axes)
                 The matplotlib axes object containing the plotted data.
         """
-        # Handling whether we are plotting all spectra, specific spectra, or
-        # a single spectra
-        if spectra_to_plot is None:
-            spectra = self.spectroscopy_lnu[instrument_label]
-        elif isinstance(spectra_to_plot, (list, tuple)):
-            spectra = {
-                key: self.spectroscopy_lnu[instrument_label][key]
-                for key in spectra_to_plot
-            }
-        else:
-            spectra = self.spectroscopy_lnu[instrument_label][spectra_to_plot]
-
-        # Include the instrument label in the spectra key (i.e. plot lables)
-        if isinstance(spectra, dict):
-            spectra = {
-                f"{instrument_label}: {key}": self.spectroscopy_lnu[
-                    instrument_label
-                ][key]
-                for key in spectra
-            }
-
-        return plot_spectra(
-            spectra,
+        return self._plot_spectroscopy(
+            instrument_label,
+            "lnu",
+            spectra_to_plot=spectra_to_plot,
             show=show,
             ylimits=ylimits,
             xlimits=xlimits,
             figsize=figsize,
-            draw_legend=isinstance(spectra, dict),
             fig=fig,
             ax=ax,
+            **kwargs,
+        )
+
+    def plot_observed_spectroscopy(
+        self,
+        instrument_label,
+        spectra_to_plot=None,
+        show=False,
+        ylimits=(),
+        xlimits=(),
+        figsize=(3.5, 5),
+        fig=None,
+        ax=None,
+        **kwargs,
+    ):
+        """Plot the instrument's observer frame spectroscopy of the component.
+
+        This will plot the observer frame spectroscopy (spectroscopy_fnu) for
+        the component using the instrument's wavelength array. The spectra
+        are plotted in the order they are stored in the spectroscopy
+        dictionary.
+
+        Can either plot specific spectroscopy (specified via spectra_to_plot)
+        or all spectroscopy on the component.
+
+        Args:
+            instrument_label (str):
+                The label of the instrument to use for the spectroscopy.
+            spectra_to_plot (string/list, string):
+                The specific spectroscopy to plot.
+                    - If None all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            show (bool):
+                Flag for whether to show the plot or just return the
+                figure and axes.
+            ylimits (tuple):
+                The limits to apply to the y axis. If not provided the limits
+                will be calculated with the lower limit set to 100 times less
+                than the peak of the spectrum.
+            xlimits (tuple):
+                The limits to apply to the x axis. If not provided the optimal
+                limits are found based on the ylimits.
+            figsize (tuple):
+                Tuple with size 2 defining the figure size.
+            fig (matplotlib.pyplot.figure):
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes):
+                The matplotlib axes object containing the plotted data.
+            **kwargs (dict):
+                Arguments to the `sed.plot_observed_spectra` method called
+                from this wrapper.
+
+        Returns:
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes)
+                The matplotlib axes object containing the plotted data.
+        """
+        return self._plot_spectroscopy(
+            instrument_label,
+            "fnu",
+            spectra_to_plot=spectra_to_plot,
+            show=show,
+            ylimits=ylimits,
+            xlimits=xlimits,
+            figsize=figsize,
+            fig=fig,
+            ax=ax,
+            **kwargs,
+        )
+
+    def _plot_spectroscopy(
+        self,
+        instrument_label,
+        quantity,
+        spectra_to_plot=None,
+        **kwargs,
+    ):
+        """Plot the instrument's spectroscopy of the component in one frame.
+
+        Args:
+            instrument_label (str):
+                The label of the instrument to use for the spectroscopy.
+            quantity (str):
+                The frame to plot, either "lnu" (rest frame,
+                spectroscopy_lnu) or "fnu" (observer frame,
+                spectroscopy_fnu).
+            spectra_to_plot (string/list, string):
+                The specific spectroscopy to plot.
+                    - If None all spectra are plotted.
+                    - If a list of strings each specifc spectra is plotted.
+                    - If a single string then only that spectra is plotted.
+            **kwargs (dict):
+                Arguments to the `sed.plot_spectra` (rest frame) or
+                `sed.plot_observed_spectra` (observer frame) method.
+
+        Returns:
+            fig (matplotlib.pyplot.figure)
+                The matplotlib figure object for the plot.
+            ax (matplotlib.axes)
+                The matplotlib axes object containing the plotted data.
+        """
+        # Get the spectroscopy for this frame and instrument
+        spectroscopy = getattr(self, f"spectroscopy_{quantity}")[
+            instrument_label
+        ]
+
+        # Handling whether we are plotting all spectra, specific spectra, or
+        # a single spectra
+        if spectra_to_plot is None:
+            spectra = spectroscopy
+        elif isinstance(spectra_to_plot, (list, tuple)):
+            spectra = {key: spectroscopy[key] for key in spectra_to_plot}
+        else:
+            spectra = spectroscopy[spectra_to_plot]
+
+        # Include the instrument label in the spectra key (i.e. plot lables)
+        if isinstance(spectra, dict):
+            spectra = {
+                f"{instrument_label}: {key}": spectroscopy[key]
+                for key in spectra
+            }
+
+        # Observer frame spectra are plotted against observed wavelengths,
+        # which needs the redshift
+        if quantity == "fnu":
+            return plot_observed_spectra(
+                spectra,
+                self.redshift,
+                draw_legend=isinstance(spectra, dict),
+                **kwargs,
+            )
+
+        return plot_spectra(
+            spectra,
+            draw_legend=isinstance(spectra, dict),
             **kwargs,
         )
 
