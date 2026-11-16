@@ -56,6 +56,7 @@ from synthesizer.emission_models.operations import (
 )
 from synthesizer.emission_models.parameters import VARIATION_TYPES
 from synthesizer.emission_models.transformers import DopplerBroadening
+from synthesizer.emission_models.utils import check_removed_overrides
 from synthesizer.synth_warnings import deprecated, warn
 from synthesizer.units import Quantity, deepcopy_with_shared_units
 from synthesizer.utils.operation_timers import timed, timer
@@ -1990,148 +1991,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """
         return self.plot_emission_graph(*args, **kwargs)
 
-    @timed("EmissionModel._apply_overrides")
-    def _apply_overrides(
-        self,
-        emission_model,
-        dust_curves,
-        tau_v,
-        fesc,
-        covering_fraction,
-        mask,
-        vel_shift,
-    ):
-        """Apply overrides to an emission model copy.
-
-        This function is used in _get_spectra to apply any emission model
-        property overrides passed to that method before generating the
-        spectra.
-
-        _get_spectra will make a copy of the emission model and then pass it
-        to this function to apply any overrides before generating the spectra.
-
-        Args:
-            emission_model (EmissionModel):
-                The emission model copy to apply the overrides to.
-            dust_curves (dict):
-                An override to the emission model dust curves. Either:
-                    - None, indicating the dust_curves defined on the emission
-                      models should be used.
-                    - A single dust curve to apply to all emission models.
-                    - A dictionary of the form:
-                          {<label>: <dust_curve instance>}
-                      to use a specific dust curve instance with particular
-                      properties.
-            tau_v (dict):
-                An override to the dust model optical depth. Either:
-                    - None, indicating the tau_v defined on the emission model
-                        should be used.
-                    - A float to use as the optical depth for all models.
-                    - A dictionary of the form:
-                          {<label>: float(<tau_v>)}
-                      to use a specific optical depth with a particular
-                      model or
-                          {<label>: str(<attribute>)}
-                      to use an attribute of the component as the optical
-                      depth.
-            fesc (dict):
-                An override to the emission model escape fraction. Either:
-                    - None, indicating the fesc defined on the emission model
-                      should be used.
-                    - A float to use as the escape fraction for all models.
-                    - A dictionary of the form:
-                          {<label>: float(<fesc>)}
-                      to use a specific escape fraction with a particular
-                      model or
-                          {<label>: str(<attribute>)}
-                      to use an attribute of the component as the escape
-                      fraction.
-            covering_fraction (dict):
-                An override to the emission model covering fraction. Either:
-                    - None, indicating the covering fraction defined on the
-                      emission model should be used.
-                    - A float to use as the covering fraction for all models.
-                    - A dictionary of the form:
-                          {<label>: float(<covering_fraction>)}
-                      to use a specific covering fraction with a particular
-                      model or
-                          {<label>: str(<attribute>)}
-                      to use an attribute of the component as the covering
-                      fraction.
-            mask (dict):
-                An override to the emission model mask. Either:
-                    - None, indicating the mask defined on the emission model
-                      should be used.
-                    - A dictionary of the form:
-                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
-                      to add a specific mask to a particular model.
-            vel_shift (dict/bool):
-                Override the models flag for using peculiar velocities to apply
-                doppler shift to the generated spectra. Only applicable for
-                particle spectra. Can be a boolean to apply to all models or a
-                dictionary of the form:
-                    {<label>: bool}
-                to apply to specific models.
-        """
-        # If we have dust curves to apply, apply them
-        if dust_curves is not None:
-            if isinstance(dust_curves, dict):
-                for label, dust_curve in dust_curves.items():
-                    emission_model._models[label].fixed_parameters[
-                        "dust_curve"
-                    ] = dust_curve
-            else:
-                for model in emission_model._models.values():
-                    model.fixed_parameters["dust_curve"] = dust_curves
-
-        # If we have optical depths to apply, apply them
-        if tau_v is not None:
-            if isinstance(tau_v, dict):
-                for label, value in tau_v.items():
-                    emission_model._models[label].fixed_parameters["tau_v"] = (
-                        value
-                    )
-            else:
-                for model in emission_model._models.values():
-                    model.fixed_parameters["tau_v"] = tau_v
-
-        # If we have escape fractions to apply, apply them
-        if fesc is not None:
-            if isinstance(fesc, dict):
-                for label, value in fesc.items():
-                    emission_model._models[label].fixed_parameters["fesc"] = (
-                        value
-                    )
-            else:
-                for model in emission_model._models.values():
-                    model.fixed_parameters["fesc"] = fesc
-
-        # If we have covering fractions to apply, apply them
-        if covering_fraction is not None:
-            if isinstance(covering_fraction, dict):
-                for label, value in covering_fraction.items():
-                    emission_model._models[label].fixed_parameters["fesc"] = (
-                        1 - value
-                    )
-            else:
-                for model in emission_model._models.values():
-                    model.fixed_parameters["fesc"] = 1 - covering_fraction
-
-        # If we have masks to apply, apply them
-        if mask is not None:
-            for label, mask in mask.items():
-                emission_model[label].add_mask(**mask)
-
-        # If we have velocity shifts to apply, apply them
-        if vel_shift is not None:
-            if isinstance(vel_shift, dict):
-                for label, value in vel_shift.items():
-                    emission_model._models[label].set_vel_shift(value)
-            else:
-                for model in emission_model._models.values():
-                    if model._is_extracting:
-                        model.set_vel_shift(vel_shift)
-
     @timed("EmissionModel._get_existing_emissions")
     def _get_existing_emissions(
         self,
@@ -2331,19 +2190,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
     def _get_spectra(
         self,
         emitters,
-        dust_curves=None,
-        tau_v=None,
-        fesc=None,
-        covering_fraction=None,
-        mask=None,
-        vel_shift=None,
         verbose=True,
         spectra=None,
         particle_spectra=None,
         nthreads=1,
         grid_assignment_method="cic",
         out_dtype=None,
-        **fixed_parameters,
+        **kwargs,
     ):
         """Generate stellar spectra as described by the emission model.
 
@@ -2355,58 +2208,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             emitters (Stars/BlackHoles):
                 The emitters to generate the spectra for in the form of a
                 dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
-            dust_curves (dict):
-                An override to the emission model dust curves. Either:
-                    - None, indicating the dust_curves defined on the emission
-                      models should be used.
-                    - A single dust curve to apply to all emission models.
-                    - A dictionary of the form:
-                          {<label>: <dust_curve instance>}
-                      to use a specific dust curve instance with particular
-                      properties.
-            tau_v (dict):
-                An override to the dust model optical depth. Either:
-                    - None, indicating the tau_v defined on the emission model
-                        should be used.
-                    - A float to use as the optical depth for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<tau_v>)}
-                        to use a specific optical depth with a particular
-                        model or
-                            {<label>: str(<attribute>)}
-                        to use an attribute of the component as the optical
-                        depth.
-            fesc (dict):
-                An override to the emission model escape fraction. Either:
-                    - None, indicating the fesc defined on the emission model
-                      should be used.
-                    - A float to use as the escape fraction for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<fesc>)}
-                      to use a specific escape fraction with a particular
-                      model or
-                            {<label>: str(<attribute>)}
-                      to use an attribute of the component as the escape
-                      fraction.
-            covering_fraction (dict):
-                An override to the emission model covering fraction. Either:
-                    - None, indicating the covering fraction defined on the
-                      emission model should be used.
-                    - A float to use as the covering fraction for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<covering_fraction>)}
-                      to use a specific covering fraction with a particular
-                      model or
-                            {<label>: str(<attribute>)}
-                      to use an attribute of the component as the covering
-                      fraction.
-            mask (dict):
-                An override to the emission model mask. Either:
-                    - None, indicating the mask defined on the emission model
-                      should be used.
-                    - A dictionary of the form:
-                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
-                      to add a specific mask to a particular model.
             verbose (bool):
                 Are we talking?
             spectra (dict):
@@ -2414,10 +2215,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             particle_spectra (dict):
                 A dictionary of particle spectra to add to before executing the
                 model.
-            vel_shift (bool):
-                override the models flag for using peculiar velocities to apply
-                doppler shift to the generated spectra. Only applicable for
-                particle spectra.
             nthreads (int):
                 The number of threads to use when generating the spectra.
             grid_assignment_method (str):
@@ -2425,10 +2222,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 are "cic" (cloud in cell) or "ngp" (nearest grid point).
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted spectra arrays.
-            **fixed_parameters (dict):
-                A dictionary of fixed parameters to apply to the model. Each
-                of these will be applied to the model before generating the
-                spectra.
+            **kwargs (dict):
+                No longer supported, passing any other keyword raises an
+                error. Modify the EmissionModel (or the emitter) instead.
 
         Returns:
             dict
@@ -2436,30 +2232,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate spectra attribute of the component
                 (spectra/particle_spectra)
         """
+        # Passing overrides (or parameters for the generators) here is no
+        # longer supported, the model itself should be modified instead
+        check_removed_overrides(**kwargs)
+
         # A variation is a declaration, not a value, so nothing can be
         # generated while one is still waiting to be expanded
         self._check_expanded()
-
-        # We don't want to modify the original emission model with any
-        # modifications made here so we'll make a copy of it (this is a
-        # shallow copy so very cheap and doesn't copy any pointed to objects
-        # only their reference)
-        emission_model = copy.copy(self)
-
-        # Apply any overrides we have
-        self._apply_overrides(
-            emission_model,
-            dust_curves=dust_curves,
-            tau_v=tau_v,
-            fesc=fesc,
-            covering_fraction=covering_fraction,
-            mask=mask,
-            vel_shift=vel_shift,
-        )
-
-        # Work with the overridden root instance stored in the model tree so
-        # root-level overrides are reflected in any queue and reuse logic.
-        root_model = emission_model._models[self.label]
 
         # Make a spectra dictionary if we haven't got one yet
         if spectra is None:
@@ -2469,16 +2248,16 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # We need to make sure the root is being saved, otherwise this is a bit
         # nonsensical.
-        if not root_model.save:
+        if not self.save:
             raise exceptions.InconsistentArguments(
-                f"{root_model.label} is not being saved. There's no point in "
+                f"{self.label} is not being saved. There's no point in "
                 "generating at the root if they are not saved. Maybe you "
                 "want to use a child model you are saving instead?"
             )
 
         # Build the execution queue for the active model tree before doing any
         # existing-emission reuse checks so inactive branches are skipped.
-        queue = ModelQueue(root_model)
+        queue = ModelQueue(self)
 
         # Before we do anything else, check that we have the emitters needed by
         # the active models in the queued execution graph.
@@ -2490,7 +2269,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
         # Get any existing spectra we are reusing
-        spectra, particle_spectra = root_model._get_existing_emissions(
+        spectra, particle_spectra = self._get_existing_emissions(
             emitters,
             spectra,
             particle_spectra,
@@ -2552,7 +2331,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             elif this_model._is_combining:
                 try:
                     spectra, particle_spectra = self._combine_spectra(
-                        emission_model,
+                        self,
                         spectra,
                         particle_spectra,
                         this_model,
@@ -2590,7 +2369,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 try:
                     spectra, particle_spectra = self._generate_spectra(
                         this_model,
-                        emission_model,
+                        self,
                         spectra,
                         particle_spectra,
                         self.lam,
@@ -2711,11 +2490,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         self,
         line_ids,
         emitters,
-        dust_curves=None,
-        tau_v=None,
-        fesc=0.0,
-        covering_fraction=None,
-        mask=None,
         verbose=True,
         lines=None,
         particle_lines=None,
@@ -2736,58 +2510,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             emitters (Stars/BlackHoles):
                 The emitters to generate the lines for in the form of a
                 dictionary, {"stellar": <emitter>, "blackhole": <emitter>}.
-            dust_curves (dict):
-                An override to the emission model dust curves. Either:
-                    - None, indicating the dust_curves defined on the emission
-                      models should be used.
-                    - A single dust curve to apply to all emission models.
-                    - A dictionary of the form:
-                          {<label>: <dust_curve instance>}
-                      to use a specific dust curve instance with particular
-                      properties.
-            tau_v (dict):
-                An override to the dust model optical depth. Either:
-                    - None, indicating the tau_v defined on the emission model
-                        should be used.
-                    - A float to use as the optical depth for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<tau_v>)}
-                        to use a specific optical depth with a particular
-                        model or
-                            {<label>: str(<attribute>)}
-                        to use an attribute of the component as the optical
-                        depth.
-            fesc (dict):
-                An override to the emission model escape fraction. Either:
-                    - None, indicating the fesc defined on the emission model
-                      should be used.
-                    - A float to use as the escape fraction for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<fesc>)}
-                      to use a specific escape fraction with a particular
-                      model or
-                            {<label>: str(<attribute>)}
-                      to use an attribute of the component as the escape
-                      fraction.
-            covering_fraction (dict):
-                An override to the emission model covering fraction. Either:
-                    - None, indicating the covering fraction defined on the
-                      emission model should be used.
-                    - A float to use as the covering fraction for all models.
-                    - A dictionary of the form:
-                            {<label>: float(<covering_fraction>)}
-                      to use a specific covering fraction with a particular
-                      model or
-                            {<label>: str(<attribute>)}
-                      to use an attribute of the component as the covering
-                      fraction.
-            mask (dict):
-                An override to the emission model mask. Either:
-                    - None, indicating the mask defined on the emission model
-                      should be used.
-                    - A dictionary of the form:
-                      {<label>: {"attr": <attr>, "thresh": <thresh>, "op":<op>}
-                      to add a specific mask to a particular model.
             verbose (bool):
                 Are we talking?
             lines (dict):
@@ -2803,8 +2525,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             out_dtype (np.dtype):
                 Requested floating-point dtype for extracted line arrays.
             **kwargs (dict):
-                Any additional keyword arguments to pass to the generator
-                function.
+                No longer supported, passing any other keyword raises an
+                error. Modify the EmissionModel (or the emitter) instead.
 
         Returns:
             dict
@@ -2812,30 +2534,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 appropriate lines attribute of the component
                 (lines/particle_lines)
         """
+        # Passing overrides (or parameters for the generators) here is no
+        # longer supported, the model itself should be modified instead
+        check_removed_overrides(**kwargs)
+
         # A variation is a declaration, not a value, so nothing can be
         # generated while one is still waiting to be expanded
         self._check_expanded()
-
-        # We don't want to modify the original emission model with any
-        # modifications made here so we'll make a copy of it (this is a
-        # shallow copy so very cheap and doesn't copy any pointed to objects
-        # only their reference)
-        emission_model = copy.copy(self)
-
-        # Apply any overrides we have
-        self._apply_overrides(
-            emission_model,
-            dust_curves=dust_curves,
-            tau_v=tau_v,
-            fesc=fesc,
-            covering_fraction=covering_fraction,
-            mask=mask,
-            vel_shift=None,
-        )
-
-        # Work with the overridden root instance stored in the model tree so
-        # root-level overrides are reflected in any queue and reuse logic.
-        root_model = emission_model._models[self.label]
 
         # If we haven't got a lines dictionary yet we'll make one
         if lines is None:
@@ -2845,16 +2550,16 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # We need to make sure the root is being saved, otherwise this is a bit
         # nonsensical.
-        if not root_model.save:
+        if not self.save:
             raise exceptions.InconsistentArguments(
-                f"{root_model.label} is not being saved. There's no point in "
+                f"{self.label} is not being saved. There's no point in "
                 "generating at the root if they are not saved. Maybe you "
                 "want to use a child model you are saving instead?"
             )
 
         # Build the execution queue for the active model tree before doing any
         # existing-emission reuse checks so inactive branches are skipped.
-        queue = ModelQueue(root_model)
+        queue = ModelQueue(self)
 
         # Before we do anything else, check that we have the emitters needed by
         # the active models in the queued execution graph.
@@ -2866,7 +2571,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
         # Get any existing lines we are reusing
-        lines, particle_lines = root_model._get_existing_emissions(
+        lines, particle_lines = self._get_existing_emissions(
             emitters,
             lines,
             particle_lines,
@@ -2947,7 +2652,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             elif this_model._is_combining:
                 try:
                     lines, particle_lines = self._combine_lines(
-                        emission_model,
+                        self,
                         lines,
                         particle_lines,
                         this_model,
@@ -2988,7 +2693,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 try:
                     lines, particle_lines = self._generate_lines(
                         this_model,
-                        emission_model,
+                        self,
                         lines,
                         particle_lines,
                         emitter,

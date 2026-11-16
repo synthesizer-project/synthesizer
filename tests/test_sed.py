@@ -533,3 +533,91 @@ def test_get_fnu_peculiar_velocity_rejects_vel_shifted_sed():
 
     # Without a peculiar velocity the flux is computed as normal
     sed.get_fnu(Planck18, 1.0)
+
+
+def test_from_observed_treats_wavelengths_as_observer_frame():
+    """from_observed stores the observer frame and derives the rest frame."""
+    # Build a simple observer frame spectrum at z=1
+    z = 1.0
+    obslam = np.linspace(2000, 4000, 16) * angstrom
+    fnu = np.linspace(1.0, 16.0, 16) * nJy
+    lnu = np.linspace(1.0, 16.0, 16) * erg / s / Hz
+
+    sed = Sed.from_observed(obslam, fnu, z, rest_frame_lnu=lnu)
+
+    # The observer frame arrays are stored as given and the rest frame
+    # wavelengths are shifted back by (1 + z)
+    np.testing.assert_allclose(sed.obslam, obslam)
+    np.testing.assert_allclose(sed.lam, obslam / (1.0 + z))
+    np.testing.assert_allclose(sed.obsnu, sed.nu / (1.0 + z))
+    np.testing.assert_allclose(sed.fnu, fnu)
+    np.testing.assert_allclose(sed.lnu, lnu)
+    assert sed.redshift == z
+
+
+def test_from_observed_without_lnu_is_nan():
+    """from_observed leaves the luminosity NaN when it is not passed."""
+    # At z=0 the rest and observer frame wavelengths coincide
+    obslam = np.linspace(2000, 4000, 16) * angstrom
+    sed = Sed.from_observed(obslam, np.ones(16) * nJy, 0.0)
+
+    np.testing.assert_allclose(sed.lam, obslam)
+    assert np.isnan(sed.lnu).all()
+
+
+def test_from_observed_rejects_mismatched_shapes():
+    """from_observed raises on fluxes or luminosities of the wrong shape."""
+    obslam = np.linspace(2000, 4000, 16) * angstrom
+
+    # Fluxes not defined on the wavelengths
+    with pytest.raises(exceptions.InconsistentArguments):
+        Sed.from_observed(obslam, np.ones(8) * nJy, 1.0)
+
+    # Luminosities not matching the fluxes
+    with pytest.raises(exceptions.InconsistentArguments):
+        Sed.from_observed(
+            obslam,
+            np.ones(16) * nJy,
+            1.0,
+            rest_frame_lnu=np.ones(8) * erg / s / Hz,
+        )
+
+
+def test_get_resampled_observed_sed_uses_observer_frame():
+    """Observer frame resampling puts fnu exactly on the new wavelengths."""
+    # Emission only between 5000 and 6000 A in the rest frame, observed at
+    # z=1 so between 10000 and 12000 A in the observer frame
+    z = 1.0
+    lam = np.arange(1000.0, 20001.0, 10.0) * angstrom
+    inside = (lam >= 5000 * angstrom) & (lam <= 6000 * angstrom)
+    sed = Sed(lam, np.where(inside, 1e28, 0.0) * erg / s / Hz)
+    sed.get_fnu(Planck18, z)
+
+    # Resample onto an observer frame grid covering the emission
+    new_obslam = np.arange(9000.0, 13001.0, 10.0) * angstrom
+    resampled = sed.get_resampled_observed_sed(new_obslam)
+
+    # The observer frame grid is the one we asked for and the rest frame
+    # grid is that shifted back by (1 + z)
+    np.testing.assert_allclose(resampled.obslam, new_obslam)
+    np.testing.assert_allclose(resampled.lam, new_obslam / (1.0 + z))
+
+    # Both the flux and luminosity land in the emission window
+    seen = resampled.fnu.value > 0
+    assert seen.any()
+    assert resampled.obslam[seen].min() >= 9990.0 * angstrom
+    assert resampled.obslam[seen].max() <= 12010.0 * angstrom
+    np.testing.assert_array_equal(resampled.lnu.value > 0, seen)
+
+    # The resampled spectra keep the source precision
+    assert resampled._fnu.dtype == sed._fnu.dtype
+    assert resampled._lnu.dtype == sed._lnu.dtype
+
+
+def test_get_resampled_observed_sed_requires_fnu():
+    """Observer frame resampling raises without fluxes."""
+    lam = np.linspace(1000, 2000, 16) * angstrom
+    sed = Sed(lam, np.ones(16) * erg / s / Hz)
+
+    with pytest.raises(exceptions.MissingSpectraType):
+        sed.get_resampled_observed_sed(lam)
