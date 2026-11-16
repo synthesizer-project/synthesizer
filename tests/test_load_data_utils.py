@@ -9,6 +9,7 @@ from synthesizer.load_data.utils import (
 )
 
 GRID = 10 ** np.arange(6.0, 8.1, 0.5)  # 1e6, 3.16e6, 1e7, 3.16e7, 1e8 yr
+LOG10_GRID = np.log10(GRID)
 
 
 def test_split_narrow_bin_unchanged():
@@ -33,12 +34,14 @@ def test_split_wide_bin():
 
 def test_overlap_matrix():
     """Overlap fractions sum to one and follow the bin in cell spread."""
-    W = bin_overlap_matrix(np.array([0.0, 5e8]), np.array([2e7, 6e8]), GRID)
+    W = bin_overlap_matrix(
+        np.array([0.0, 5e8]), np.array([2e7, 6e8]), LOG10_GRID
+    )
     np.testing.assert_allclose(W.sum(axis=1), 1.0)
     # A bin older than the grid lands entirely on the last grid age
     np.testing.assert_array_equal(W[1], [0, 0, 0, 0, 1])
     # A bin ending at the first grid age lands entirely on it
-    W = bin_overlap_matrix(np.array([0.0]), np.array([GRID[0]]), GRID)
+    W = bin_overlap_matrix(np.array([0.0]), np.array([GRID[0]]), LOG10_GRID)
     np.testing.assert_array_equal(W[0], [1, 0, 0, 0, 0])
 
 
@@ -59,7 +62,9 @@ def test_overlap_matches_parametric_stars(test_grid):
         metal_dist=DeltaConstant(metallicity=0.01),
         initial_mass=1 * Msun,
     ).sfzh.sum(axis=1)
-    fast = bin_overlap_matrix(np.array([lo]), np.array([hi]), ages)[0]
+    fast = bin_overlap_matrix(np.array([lo]), np.array([hi]), np.log10(ages))[
+        0
+    ]
     np.testing.assert_allclose(fast, slow, atol=1e-8)
 
 
@@ -78,6 +83,10 @@ def test_zero_width_bin_is_burst():
     assert mid.tolist() == [5e6]
     assert frac.tolist() == [1.0]
     # The burst is split between its bounding grid ages in log10 age
-    overlap = bin_overlap_matrix(lo, hi, GRID)
+    overlap = bin_overlap_matrix(lo, hi, LOG10_GRID)
     frac = (np.log10(5e6) - 6.5) / 0.5
     np.testing.assert_allclose(overlap, [[0, 1 - frac, frac, 0, 0]])
+    # A bin with a negative width is a burst at its lower edge
+    np.testing.assert_array_equal(
+        bin_overlap_matrix(lo, np.array([4e6]), LOG10_GRID), overlap
+    )
