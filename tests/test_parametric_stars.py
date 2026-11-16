@@ -532,6 +532,22 @@ class TestGetAtEarlierTime:
         earlier = instantaneous_stars.get_at_earlier_time(20 * Myr)
         assert np.isclose(earlier.sfzh.sum(), 0.0)
 
+    def test_earlier_time_shifts_point_masses(self, sfzh_stars):
+        """Test that an explicit SFZH keeps the mass older than the offset.
+
+        Args:
+            sfzh_stars (Stars):
+                The explicit SFZH Stars fixture.
+        """
+        # Rewind by an offset lying between two of the age points
+        offset = 150 * Myr
+        earlier = sfzh_stars.get_at_earlier_time(offset)
+
+        # Only the points older than the offset had formed by then, and
+        # shifting them to younger ages can't move them off the axes
+        expected = sfzh_stars.sfzh[sfzh_stars.ages > offset].sum()
+        assert np.isclose(earlier.sfzh.sum(), expected)
+
 
 class TestAddition:
     """Tests for adding parametric Stars and Galaxies."""

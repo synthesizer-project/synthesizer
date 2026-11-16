@@ -32,13 +32,35 @@ def test_split_wide_bin():
 
 
 def test_overlap_matrix():
-    """Overlap fractions sum to one and follow the parametric cell edges."""
+    """Overlap fractions sum to one and follow the bin in cell spread."""
     W = bin_overlap_matrix(np.array([0.0, 5e8]), np.array([2e7, 6e8]), GRID)
     np.testing.assert_allclose(W.sum(axis=1), 1.0)
-    # A bin older than the grid lands entirely in the last cell
+    # A bin older than the grid lands entirely on the last grid age
     np.testing.assert_array_equal(W[1], [0, 0, 0, 0, 1])
-    # The first cell owns [0, midpoint(1e6, 3.16e6)]
-    np.testing.assert_allclose(W[0, 0], 0.5 * (GRID[0] + GRID[1]) / 2e7)
+    # A bin ending at the first grid age lands entirely on it
+    W = bin_overlap_matrix(np.array([0.0]), np.array([GRID[0]]), GRID)
+    np.testing.assert_array_equal(W[0], [1, 0, 0, 0, 0])
+
+
+def test_overlap_matches_parametric_stars(test_grid):
+    """The overlap rule matches a Constant SFH binned by parametric Stars."""
+    from unyt import Msun, yr
+
+    from synthesizer.parametric import Stars
+    from synthesizer.parametric.metal_dist import DeltaConstant
+    from synthesizer.parametric.sf_hist import Constant
+
+    ages = 10**test_grid.log10ages
+    lo, hi = 0.0, 1e8
+    slow = Stars(
+        test_grid.log10ages,
+        test_grid.metallicities,
+        sf_hist=Constant(min_age=lo * yr, max_age=hi * yr),
+        metal_dist=DeltaConstant(metallicity=0.01),
+        initial_mass=1 * Msun,
+    ).sfzh.sum(axis=1)
+    fast = bin_overlap_matrix(np.array([lo]), np.array([hi]), ages)[0]
+    np.testing.assert_allclose(fast, slow, atol=1e-8)
 
 
 def test_cic_matrix():
@@ -55,5 +77,7 @@ def test_zero_width_bin_is_burst():
     assert b.tolist() == [0]
     assert mid.tolist() == [5e6]
     assert frac.tolist() == [1.0]
+    # The burst is split between its bounding grid ages in log10 age
     overlap = bin_overlap_matrix(lo, hi, GRID)
-    assert overlap.tolist() == [[0.0, 1.0, 0.0, 0.0, 0.0]]
+    frac = (np.log10(5e6) - 6.5) / 0.5
+    np.testing.assert_allclose(overlap, [[0, 1 - frac, frac, 0, 0]])

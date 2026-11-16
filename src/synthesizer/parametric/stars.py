@@ -615,10 +615,11 @@ class Stars(StarsComponent):
         the shape is re-integrated exactly and scaled by the precomputed
         normalisation.
 
-        If continuous functions are not available, assume each age bin
-        is uniformly populated and remap the retained mass onto the
-        shifted age grid. Resolution is limited to the object's existing
-        age bins in this case and the two approaches will deviate.
+        If continuous functions are not available, the population's bins
+        are shifted to younger ages by the offset. Mass that had not yet
+        formed (ages below zero after the shift) is dropped, keeping the
+        fraction of any bin the offset cuts through, and the remaining bins
+        are mapped onto the age and metallicity axes.
 
         Args:
             age_offset (unyt_quantity):
@@ -635,52 +636,24 @@ class Stars(StarsComponent):
             if getattr(self, "sfzh_normalisation", None) is not None:
                 sfzh = sfzh * self.sfzh_normalisation
 
-        # Otherwise, remap the existing SFZH onto the shifted age bins.
+        # Otherwise, shift the existing bins to the earlier time.
         else:
-            # Construct linear age bins.
-            self.ages.convert_to_units("yr")
-            ages = self.ages.ndview
-            age_edges = np.empty(len(ages) + 1)
-            age_edges[0] = 0.0
-            age_edges[1:-1] = 0.5 * (ages[1:] + ages[:-1])
-            age_edges[-1] = ages[-1]
+            # Shift the age edges to younger ages by the offset
+            edges = dict(self._bin_edges)
+            edges["ages"] = (
+                self._bin_edges["ages"]
+                - convert_in_place(age_offset, yr).value
+            )
 
-            offset = age_offset.to("yr").value
-            sfzh = np.zeros_like(self.sfzh)
+            # Mask out the mass that hadn't formed yet (negative ages)
+            mask = np.empty((len(self.bin_axes), 2))
+            mask[:, 0] = -_MASK_BOUND
+            mask[:, 1] = _MASK_BOUND
+            mask[self.bin_axes.index("ages"), 0] = 0.0
 
-            # Loop over each bin in the original SFZH.
-            for source_index in range(len(ages)):
-                source_start = age_edges[source_index]
-                source_end = age_edges[source_index + 1]
-                source_width = source_end - source_start
-
-                # Bins entirely younger than age_offset will not contribute.
-                if source_end <= offset:
-                    continue
-
-                # Shift the bin by age_offset.
-                retained_start = max(source_start, offset)
-                shifted_start = retained_start - offset
-                shifted_end = source_end - offset
-
-                # Loop over each bin in the new SFZH and compute the
-                # overlap with the shifted source bin.
-                for destination_index in range(len(ages)):
-                    destination_start = age_edges[destination_index]
-                    destination_end = age_edges[destination_index + 1]
-
-                    overlap_start = max(shifted_start, destination_start)
-                    overlap_end = min(shifted_end, destination_end)
-                    overlap_width = max(0, overlap_end - overlap_start)
-
-                    # If there is overlap, add the appropriate fraction
-                    # of the SFZH.
-                    if overlap_width > 0:
-                        sfzh[destination_index] += (
-                            self.sfzh[source_index]
-                            * overlap_width
-                            / source_width
-                        )
+            # Map what remains onto the axes (the masses are already
+            # normalised)
+            sfzh = self._bins_to_axes(edges, self._bin_masses, mask=mask)
 
         return sfzh
 

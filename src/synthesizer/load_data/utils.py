@@ -135,12 +135,14 @@ def split_age_bins(lo, hi, grid_ages):
 
 
 def bin_overlap_matrix(lo, hi, grid_ages):
-    """Fraction of each top-hat age bin falling in each grid age cell.
+    """Fraction of each top-hat age bin given to each grid age.
 
-    Cell edges follow ``parametric.Stars``: zero, the linear midpoints
-    between adjacent grid ages, then infinity so mass older than the grid
-    is kept in the last cell. A zero-width bin is an instantaneous burst
-    placed wholly in the cell containing its age.
+    The bins are spread onto the grid ages with the bin in cell (BIC)
+    approach, exactly as ``parametric.Stars`` spreads its bins: mass is
+    uniform within a bin and each grid age gets the mean of its (log10 age)
+    linear hat function over the bin. Mass beyond the grid is kept on the
+    end points. A zero-width bin is an instantaneous burst, split between
+    the two grid ages bounding it as in cloud in cell.
 
     Args:
         lo (np.ndarray of float):
@@ -153,18 +155,30 @@ def bin_overlap_matrix(lo, hi, grid_ages):
     Returns:
         np.ndarray of float: (nbin, ngrid) overlap fractions.
     """
-    lo, hi = lo[:, None], hi[:, None]
-    edges = np.concatenate(
-        ([0.0], 0.5 * (grid_ages[:-1] + grid_ages[1:]), [np.inf])
+    # Imported here to avoid importing the extension at module load
+    from synthesizer.extensions.parametric_spectra import (
+        compute_parametric_weights,
     )
-    overlap = np.minimum(hi, edges[1:]) - np.maximum(lo, edges[:-1])
-    width = hi - lo
-    burst = (edges[:-1] <= lo) & (lo < edges[1:])
-    return np.where(
-        width > 0,
-        np.clip(overlap, 0.0, None) / np.where(width > 0, width, 1.0),
-        burst,
-    )
+
+    # The grid ages are a log10 axis and each bin holds a unit mass
+    log10ages = (np.log10(grid_ages).astype(np.float64, copy=False),)
+    mass = np.ones((1, 1))
+
+    # The bins needn't share edges, so spread them onto the grid one by one
+    overlap = np.empty((len(lo), len(grid_ages)))
+    for ibin, edges in enumerate(zip(lo, hi)):
+        overlap[ibin] = compute_parametric_weights(
+            log10ages,
+            (np.array(edges, dtype=np.float64),),
+            mass,
+            (True,),
+            (0,),
+            (1.0,),
+            1,
+            None,
+            ("log10ages",),
+        )
+    return overlap
 
 
 def cic_matrix(values, grid):
