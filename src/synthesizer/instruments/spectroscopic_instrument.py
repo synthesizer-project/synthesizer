@@ -20,6 +20,7 @@ from synthesizer.instruments.utils import (
     read_instrument_attribute,
     write_instrument_attribute,
 )
+from synthesizer.synth_warnings import deprecated
 from synthesizer.units import Quantity, accepts, deepcopy_with_shared_units
 from synthesizer.utils.operation_timers import timed
 
@@ -228,15 +229,62 @@ class SpectroscopicInstrument(InstrumentBase):
             _hashable_state(self.lsfs),
         )
 
+    @timed("SpectroscopicInstrument.apply_lam_array_lnu")
+    def apply_lam_array_lnu(self, sed, nthreads=1):
+        """Apply the instrument wavelength array in the rest frame.
+
+        The instrument wavelengths are interpreted as rest frame wavelengths,
+        so the luminosities are resampled directly onto them. Any fluxes are
+        resampled onto the matching observer frame wavelengths,
+        instrument.lam * (1 + redshift).
+
+        Args:
+            sed (Sed): Spectral energy distribution to resample.
+            nthreads (int): Number of threads to use in the low-level
+                resampling call. Currently unused.
+
+        Returns:
+            Sed: New SED resampled onto the instrument wavelength grid in the
+                rest frame.
+        """
+        # Delegate the low-level rest frame resampling to the SED
+        return sed.get_resampled_sed(new_lam=self.lam)
+
+    @timed("SpectroscopicInstrument.apply_lam_array_fnu")
+    def apply_lam_array_fnu(self, sed, nthreads=1):
+        """Apply the instrument wavelength array in the observer frame.
+
+        The instrument wavelengths are interpreted as observer frame
+        wavelengths, so the fluxes are resampled directly onto them and the
+        observer frame wavelengths of the result are exactly the instrument's.
+        The luminosities are resampled onto the matching rest frame
+        wavelengths, instrument.lam / (1 + redshift).
+
+        Args:
+            sed (Sed): Spectral energy distribution to observe. Its fluxes
+                must already have been computed (e.g. with Sed.get_fnu).
+            nthreads (int): Number of threads to use in the low-level
+                resampling call. Currently unused.
+
+        Returns:
+            Sed: New SED resampled onto the instrument wavelength grid in the
+                observer frame.
+        """
+        # Delegate the low-level observer frame resampling to the SED
+        return sed.get_resampled_observed_sed(self.lam)
+
+    @deprecated(
+        "is deprecated and will be removed in version 1.4.0. "
+        "It is an alias for instrument.apply_lam_array_fnu(...) (observer "
+        "frame); use that, or instrument.apply_lam_array_lnu(...) for the "
+        "rest frame, instead."
+    )
     @timed("SpectroscopicInstrument.apply_lam_array")
     def apply_lam_array(self, sed, nthreads=1):
         """Apply the instrument wavelength array to an SED.
 
-        This method is the instrument-owned entry point for applying the
-        spectroscopic wavelength definition to an SED. At present it remains a
-        thin wrapper around the existing SED resampling primitive so the
-        instrument owns the wavelength-application policy while the SED still
-        performs the low-level resampling.
+        Deprecated alias for apply_lam_array_fnu, which treats the instrument
+        wavelengths as observer frame wavelengths.
 
         Args:
             sed (Sed): Spectral energy distribution to observe.
@@ -246,10 +294,8 @@ class SpectroscopicInstrument(InstrumentBase):
         Returns:
             Sed: New SED resampled onto the instrument wavelength grid.
         """
-        # Delegate the low-level resampling to the existing SED helper while
-        # making the instrument the owner of the wavelength-application entry
-        # point
-        return sed.apply_instrument_lams(self, nthreads=nthreads)
+        # Defer to the observer frame version
+        return self.apply_lam_array_fnu(sed, nthreads=nthreads)
 
     @timed("SpectroscopicInstrument.apply_noise")
     def apply_noise(self, spectrum, **kwargs):
