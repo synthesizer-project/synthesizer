@@ -145,6 +145,11 @@ class Populations {
   }
 
  private:
+  /* Validate and unpack the Python inputs (the constructor's work). */
+  void init_(PyObject *edges_tuple, PyArrayObject *np_masses,
+             PyObject *log_flags, PyObject *bin_axes, PyObject *unit_scales,
+             PyObject *mask_obj, PyObject *prop_names);
+
   /* The input (bin) axis matching each grid axis. */
   std::array<int, MAX_GRID_NDIM> bin_axis_;
 

@@ -66,18 +66,158 @@ static int get_nlam(PyObject *spectra_obj) {
 }
 
 /**
- * @brief Contract a single set of grid weights with the grid spectra.
+ * @brief Contract the grid weights with one block of the grid spectra.
  *
- * This is the integrated (all populations summed) case. With a single set of
- * weights the product is memory bound, so rather than a BLAS gemv we walk
- * the grid spectra row by row, skipping grid points with zero weight. Many
- * SFZHs only touch a small part of the grid (e.g. a single metallicity or a
- * young burst), which a dense BLAS product can't exploit. With OpenMP the
- * wavelengths are split into one block per thread.
+ * We walk the grid spectra row by row, skipping grid points with zero
+ * weight. Many SFZHs only touch a small part of the grid (e.g. a single
+ * metallicity or a young burst), which a dense BLAS product can't exploit.
  *
  * Accumulation happens in double precision before being written to the
  * output at OutT. Masked wavelengths are skipped and left untouched in the
  * (zero initialised) output.
+ *
+ * @tparam GridReal The floating-point type of the grid spectra and weights.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
+ * @param grid_props: The grid properties.
+ * @param weights: The grid weights.
+ * @param good_lams: The indices of the unmasked wavelengths.
+ * @param start: The first entry of good_lams in this block.
+ * @param len: The number of entries of good_lams in this block.
+ * @param out: The zero initialised (nlam,) output array.
+ */
+template <typename GridReal, typename OutT>
+static inline void integrated_spectra_block(GridProps *grid_props,
+                                            const GridReal *weights,
+                                            const std::vector<int> &good_lams,
+                                            const int start, const int len,
+                                            OutT *out) {
+
+  /* Unpack the grid spectra and their dimensions. */
+  const GridReal *__restrict grid_spectra =
+      grid_props->get_spectra<GridReal>();
+  const size_t nlam = static_cast<size_t>(grid_props->nlam);
+  const int grid_size = grid_props->size;
+
+  /* Without a wavelength mask the block is a contiguous segment. */
+  const bool has_lam_mask = good_lams.size() != nlam;
+
+  /* Accumulate this block in double precision. */
+  std::vector<double> accum(len, 0.0);
+  double *__restrict acc = accum.data();
+
+  /* Add each grid point's spectrum weighted by its grid weight. */
+  for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
+    /* Skip grid points the populations put no mass on. */
+    const double weight = static_cast<double>(weights[grid_ind]);
+    if (weight <= 0.0) {
+      continue;
+    }
+
+    /* Get this grid point's spectrum. */
+    const GridReal *__restrict row =
+        grid_spectra + static_cast<size_t>(grid_ind) * nlam;
+
+    /* With a wavelength mask gather the good wavelengths, otherwise the
+     * block is a contiguous segment we can vectorise over. */
+    if (has_lam_mask) {
+      for (int j = 0; j < len; j++) {
+        acc[j] += weight * static_cast<double>(row[good_lams[start + j]]);
+      }
+    } else {
+      const GridReal *__restrict seg = row + start;
+#ifdef WITH_OPENMP
+#pragma omp simd
+#endif
+      for (int j = 0; j < len; j++) {
+        acc[j] += weight * static_cast<double>(seg[j]);
+      }
+    }
+  }
+
+  /* Write this block of the spectrum. */
+  for (int j = 0; j < len; j++) {
+    out[good_lams[start + j]] = static_cast<OutT>(acc[j]);
+  }
+}
+
+/**
+ * @brief Contract a single set of grid weights with the grid spectra.
+ *
+ * This is the serial version of the function.
+ *
+ * @tparam GridReal The floating-point type of the grid spectra and weights.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
+ * @param grid_props: The grid properties.
+ * @param weights: The grid weights.
+ * @param good_lams: The indices of the unmasked wavelengths.
+ * @param out: The zero initialised (nlam,) output array.
+ */
+template <typename GridReal, typename OutT>
+static void integrated_spectra_loop_serial(GridProps *grid_props,
+                                           const GridReal *weights,
+                                           const std::vector<int> &good_lams,
+                                           OutT *out) {
+
+  /* Every unmasked wavelength is a single block. */
+  integrated_spectra_block<GridReal, OutT>(
+      grid_props, weights, good_lams, /*start=*/0,
+      static_cast<int>(good_lams.size()), out);
+}
+
+/**
+ * @brief Contract a single set of grid weights with the grid spectra.
+ *
+ * This is the parallel version of the function.
+ *
+ * The unmasked wavelengths are split into one block per thread. Each block
+ * writes to its own wavelengths of the output so there are no races.
+ *
+ * @tparam GridReal The floating-point type of the grid spectra and weights.
+ * @tparam OutT The floating-point type stored in the output buffer.
+ *
+ * @param grid_props: The grid properties.
+ * @param weights: The grid weights.
+ * @param good_lams: The indices of the unmasked wavelengths.
+ * @param out: The zero initialised (nlam,) output array.
+ * @param nthreads: The number of threads to use.
+ */
+#ifdef WITH_OPENMP
+template <typename GridReal, typename OutT>
+static void integrated_spectra_loop_omp(GridProps *grid_props,
+                                        const GridReal *weights,
+                                        const std::vector<int> &good_lams,
+                                        OutT *out, const int nthreads) {
+
+  /* Split the wavelengths into one block per thread. */
+  const int ngood = static_cast<int>(good_lams.size());
+  const int nblocks = std::max(1, std::min(ngood, nthreads));
+  const int block_len = (ngood + nblocks - 1) / nblocks;
+
+#pragma omp parallel for num_threads(nthreads) schedule(static)
+  for (int iblock = 0; iblock < nblocks; iblock++) {
+    /* Get this block's range of good wavelengths (the last may be short,
+     * or empty). */
+    const int start = iblock * block_len;
+    const int len = std::min(ngood, start + block_len) - start;
+    if (len <= 0) {
+      continue;
+    }
+
+    /* Contract the weights with this block of the spectra. */
+    integrated_spectra_block<GridReal, OutT>(grid_props, weights, good_lams,
+                                             start, len, out);
+  }
+}
+#endif /* WITH_OPENMP */
+
+/**
+ * @brief Contract a single set of grid weights with the grid spectra.
+ *
+ * This is the integrated (all populations summed) case. It is a wrapper
+ * which calls the correct function based on the number of threads requested
+ * and whether OpenMP is available.
  *
  * @tparam GridReal The floating-point type of the grid spectra and weights.
  * @tparam OutT The floating-point type stored in the output buffer.
@@ -94,82 +234,38 @@ static void integrated_spectra_loop(GridProps *grid_props,
 
   tic("integrated_spectra_loop");
 
-  /* Unpack the grid spectra and their dimensions. */
-  const GridReal *__restrict grid_spectra =
-      grid_props->get_spectra<GridReal>();
-  const size_t nlam = static_cast<size_t>(grid_props->nlam);
-  const int grid_size = grid_props->size;
-
   /* Collect the wavelengths we actually need to compute. */
   std::vector<int> good_lams;
-  good_lams.reserve(nlam);
-  for (size_t ilam = 0; ilam < nlam; ilam++) {
-    if (!grid_props->lam_is_masked(static_cast<int>(ilam))) {
-      good_lams.push_back(static_cast<int>(ilam));
-    }
-  }
-  const bool has_lam_mask = good_lams.size() != nlam;
-  const int ngood = static_cast<int>(good_lams.size());
-
-  /* Split the wavelengths into one block per thread. */
-  const int nblocks = std::max(1, std::min(ngood, nthreads));
-  const int block_len = (ngood + nblocks - 1) / nblocks;
-
-#ifdef WITH_OPENMP
-#pragma omp parallel for num_threads(nthreads) if (nthreads > 1) \
-    schedule(static)
-#endif
-  for (int iblock = 0; iblock < nblocks; iblock++) {
-    /* Get this block's range of good wavelengths (the last may be short,
-     * or empty). */
-    const int start = iblock * block_len;
-    const int len = std::min(ngood, start + block_len) - start;
-    if (len <= 0) {
-      continue;
-    }
-
-    /* Accumulate this block in double precision. */
-    std::vector<double> accum(len, 0.0);
-    double *__restrict acc = accum.data();
-
-    /* Add each grid point's spectrum weighted by its grid weight. */
-    for (int grid_ind = 0; grid_ind < grid_size; grid_ind++) {
-      /* Skip grid points the populations put no mass on. */
-      const double weight = static_cast<double>(weights[grid_ind]);
-      if (weight <= 0.0) {
-        continue;
-      }
-
-      /* Get this grid point's spectrum. */
-      const GridReal *__restrict row =
-          grid_spectra + static_cast<size_t>(grid_ind) * nlam;
-
-      /* With a wavelength mask gather the good wavelengths, otherwise the
-       * block is a contiguous segment we can vectorise over. */
-      if (has_lam_mask) {
-        for (int j = 0; j < len; j++) {
-          acc[j] += weight * static_cast<double>(row[good_lams[start + j]]);
-        }
-      } else {
-        const GridReal *__restrict seg = row + start;
-#ifdef WITH_OPENMP
-#pragma omp simd
-#endif
-        for (int j = 0; j < len; j++) {
-          acc[j] += weight * static_cast<double>(seg[j]);
-        }
-      }
-    }
-
-    /* Write this block of the spectrum. */
-    for (int j = 0; j < len; j++) {
-      out[good_lams[start + j]] = static_cast<OutT>(acc[j]);
+  good_lams.reserve(grid_props->nlam);
+  for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
+    if (!grid_props->lam_is_masked(ilam)) {
+      good_lams.push_back(ilam);
     }
   }
 
-  /* Silence the unused argument warning without OpenMP. */
-#ifndef WITH_OPENMP
+  /* Call the correct function for the configuration/number of threads. */
+
+#ifdef WITH_OPENMP
+
+  /* If we have multiple threads and OpenMP we can parallelise. */
+  if (nthreads > 1) {
+    integrated_spectra_loop_omp<GridReal, OutT>(grid_props, weights, good_lams,
+                                                out, nthreads);
+  }
+  /* Otherwise there's no point paying the OpenMP overhead. */
+  else {
+    integrated_spectra_loop_serial<GridReal, OutT>(grid_props, weights,
+                                                   good_lams, out);
+  }
+
+#else
+
   (void)nthreads;
+
+  /* We don't have OpenMP, just call the serial version. */
+  integrated_spectra_loop_serial<GridReal, OutT>(grid_props, weights,
+                                                 good_lams, out);
+
 #endif
 
   toc("integrated_spectra_loop");
@@ -448,6 +544,12 @@ PyMODINIT_FUNC PyInit_parametric_spectra(void) {
   /* Create the module. */
   PyObject *m = PyModule_Create(&moduledef);
   if (m == NULL) return NULL;
+
+  /* Declare the module safe to use without the GIL so importing it doesn't
+   * re-enable the GIL on free-threaded builds of Python. */
+#ifdef Py_GIL_DISABLED
+  PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);
+#endif
 
   /* Import numpy's C API. */
   if (numpy_import() < 0) {

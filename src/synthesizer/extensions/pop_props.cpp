@@ -48,6 +48,39 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
 
   tic("Populations.__init__");
 
+  /* Validate and unpack the inputs (any failure sets a Python error). */
+  init_(edges_tuple, np_masses, log_flags, bin_axes, unit_scales, mask_obj,
+        prop_names);
+
+  toc("Populations.__init__");
+}
+
+/**
+ * @brief Validate and unpack the Python population inputs.
+ *
+ * This does the work of the constructor, in its own method so the
+ * constructor's timer is stopped however the validation ends. On failure a
+ * Python error is set and the method returns early.
+ *
+ * @param edges_tuple: A tuple of 1D bin edge arrays, one per grid axis (in
+ *                     linear units).
+ * @param np_masses: The masses with shape (npop, nbins_0, ..., nbins_N) in
+ *                   the input axis order.
+ * @param log_flags: A sequence of booleans, one per grid axis, flagging
+ *                   axes whose grid coordinates are log10 values.
+ * @param bin_axes: A sequence of ints, one per grid axis, giving the input
+ *                  axis matching it (a permutation of 0, ..., ndim - 1).
+ * @param unit_scales: A sequence of floats, one per grid axis, converting the
+ *                     matching input axis' edges into the grid axis' units.
+ * @param mask_obj: The mask, a float64 array of shape (nmask, 2), or None
+ *                  (see the constructor).
+ * @param prop_names: The names of the grid axes (for error messages).
+ */
+void Populations::init_(PyObject *edges_tuple, PyArrayObject *np_masses,
+                        PyObject *log_flags, PyObject *bin_axes,
+                        PyObject *unit_scales, PyObject *mask_obj,
+                        PyObject *prop_names) {
+
   /* Start with a range covering every finite value along every axis (the
    * mask, if any, narrows these below). */
   mask_lo_.fill(-std::numeric_limits<double>::max());
@@ -292,6 +325,4 @@ Populations::Populations(PyObject *edges_tuple, PyArrayObject *np_masses,
       }
     }
   }
-
-  toc("Populations.__init__");
 }
