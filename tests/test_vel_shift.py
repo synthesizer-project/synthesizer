@@ -8,6 +8,7 @@ from astropy.cosmology import Planck18
 from unyt import km, s
 
 from synthesizer import exceptions
+from synthesizer.emission_models import EmissionModel
 
 
 def test_velocity_shift_applys_cic_on_model(
@@ -174,3 +175,31 @@ def test_velocity_shift_flags_spectra(
     with pytest.raises(exceptions.InconsistentArguments):
         shifted.get_fnu(Planck18, 1.0, peculiar_velocity=500 * km / s)
     unshifted.get_fnu(Planck18, 1.0, peculiar_velocity=500 * km / s)
+
+
+def test_velocity_shift_not_flagged_by_scaler(random_part_stars, test_grid):
+    """Scaling by a vel_shift spectrum doesn't flag the scaled spectrum."""
+    # Scale an unshifted extraction by the luminosity of a shifted one
+    shifted = EmissionModel(
+        "shifted",
+        grid=test_grid,
+        extract="incident",
+        emitter="stellar",
+        vel_shift=True,
+    )
+    scaled = EmissionModel(
+        "scaled",
+        grid=test_grid,
+        extract="transmitted",
+        emitter="stellar",
+        scale_by=shifted,
+        related_models=shifted,
+    )
+    random_part_stars.get_spectra(scaled)
+    spectra = random_part_stars.spectra
+    random_part_stars.clear_all_emissions()
+
+    # Only the shifted spectrum carries the flag, its shape isn't in "scaled"
+    assert spectra["shifted"].vel_shifted
+    assert not spectra["scaled"].vel_shifted
+    spectra["scaled"].get_fnu(Planck18, 1.0, peculiar_velocity=500 * km / s)

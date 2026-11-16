@@ -2240,7 +2240,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         emitters,
         spectra,
         particle_spectra,
-        dependencies,
         nthreads,
         grid_assignment_method,
         out_dtype,
@@ -2267,9 +2266,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             particle_spectra (dict):
                 The particle spectra generated so far, keyed by model label.
                 This model's particle spectra are added to it.
-            dependencies (dict):
-                The labels of the models each model depends on (see
-                ModelQueue.dependencies).
             nthreads (int):
                 The number of OpenMP threads to use.
             grid_assignment_method (str):
@@ -2459,11 +2455,20 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
         # Flag spectra built from particle velocity shifts so a peculiar
-        # velocity can't be applied on top of them (see Sed.get_fnu).
+        # velocity can't be applied on top of them (see Sed.get_fnu). Only
+        # inputs whose spectral shape reaches this output (the transformed
+        # or combined emissions) carry the shift, luminosity-only inputs
+        # (scalers, energy balance) do not.
+        shape_inputs = []
+        if this_model._is_transforming:
+            shape_inputs.append(this_model.apply_to)
+        if this_model._is_combining:
+            shape_inputs.extend(this_model.combine)
+        shape_inputs = [
+            dep if isinstance(dep, str) else dep.label for dep in shape_inputs
+        ]
         if this_model.vel_shift or any(
-            spectra[dep].vel_shifted
-            for dep in dependencies[label]
-            if dep in spectra
+            spectra[dep].vel_shifted for dep in shape_inputs if dep in spectra
         ):
             spectra[label].vel_shifted = True
             if label in particle_spectra:
@@ -2576,7 +2581,6 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 emitters=emitters,
                 spectra=spectra,
                 particle_spectra=particle_spectra,
-                dependencies=queue.dependencies,
                 nthreads=nthreads,
                 grid_assignment_method=grid_assignment_method,
                 out_dtype=out_dtype,
