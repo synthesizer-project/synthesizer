@@ -58,13 +58,13 @@ class SpectroscopicInstrument(InstrumentBase):
             cannot be serialised to HDF5 and is silently dropped on save (it is
             not restored on load either, since there is nothing to restore it
             from).
-        resolving_power_lam (unyt_array, optional): Wavelength array
-            corresponding to tabulated resolving_power values. Required
-            when resolving_power is provided as an array.
         lsfs (array, optional): Normalised line spread function kernels
             with shape (nwave, nkernel). Each row corresponds to a
             wavelength in lam. Kernels must have an odd number of bins
             and sum to unity.
+        resolving_power_lam (unyt_array, optional): Wavelength array
+            corresponding to tabulated resolving_power values. Required
+            when resolving_power is provided as an array.
     """
 
     lam = Quantity("wavelength")
@@ -83,8 +83,8 @@ class SpectroscopicInstrument(InstrumentBase):
         snrs=None,
         noise_maps=None,
         resolving_power=None,
-        resolving_power_lam=None,
         lsfs=None,
+        resolving_power_lam=None,
     ):
         """Initialise a spectroscopic instrument.
 
@@ -109,12 +109,12 @@ class SpectroscopicInstrument(InstrumentBase):
                 power (R = lambda / delta_lambda) of the instrument.
                 May be a constant, array, or function of wavelength. Constants
                 and arrays are persisted when the instrument is saved to HDF5.
-            resolving_power_lam (unyt_array, optional): Wavelength array
-                corresponding to tabulated resolving_power values. Required
-                when resolving_power is provided as an array.
             lsfs (unyt_array, optional): Normalised line spread function
                 kernels with shape (nwave, nkernel), sampled on the
                 instrument wavelength grid.
+            resolving_power_lam (unyt_array, optional): Wavelength array
+                corresponding to tabulated resolving_power values. Required
+                when resolving_power is provided as an array.
         """
         super().__init__(label)
         self.lam = lam
@@ -266,6 +266,7 @@ class SpectroscopicInstrument(InstrumentBase):
             _hashable_state(self.snrs),
             _hashable_state(self.noise_maps),
             _hashable_state(self.resolving_power),
+            _hashable_state(self.resolving_power_lam),
             _hashable_state(self.lsfs),
         )
 
@@ -334,8 +335,14 @@ class SpectroscopicInstrument(InstrumentBase):
         # testing those alone would silently discard a resolving power that
         # came out of an array.
         if isinstance(self.resolving_power, np.ndarray):
-            group.attrs["resolving_power"] = self.resolving_power
-            group.attrs["resolving_power_lam"] = self.resolving_power_lam
+            ds = group.create_dataset(
+                "ResolvingPower", data=self.resolving_power, dtype=float
+            )
+            ds.attrs["units"] = "dimensionless"
+
+            write_instrument_attribute(
+                group, "ResolvingPowerWavelength", self.resolving_power_lam
+            )
         elif isinstance(self.resolving_power, Real) and not isinstance(
             self.resolving_power, bool
         ):
@@ -401,6 +408,15 @@ class SpectroscopicInstrument(InstrumentBase):
         else:
             lsfs = None
 
+        if "ResolvingPower" in group:
+            resolving_power = group["ResolvingPower"][...]
+            resolving_power_lam = read_instrument_attribute(
+                group, "ResolvingPowerWavelength"
+            )
+        else:
+            resolving_power = group.attrs.get("resolving_power")
+            resolving_power_lam = None
+
         payload = {
             "label": group.attrs["label"],
             "lam": lam,
@@ -408,8 +424,8 @@ class SpectroscopicInstrument(InstrumentBase):
             "depth_app_radius": depth_app_radius,
             "snrs": snrs,
             "noise_maps": noise_maps,
-            "resolving_power": group.attrs.get("resolving_power"),
-            "resolving_power_lam": group.attrs.get("resolving_power_lam"),
+            "resolving_power": resolving_power,
+            "resolving_power_lam": resolving_power_lam,
             "lsfs": lsfs,
         }
         payload.update(kwargs)
