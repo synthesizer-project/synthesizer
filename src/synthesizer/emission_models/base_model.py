@@ -2912,11 +2912,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         if line_lams is None and len(lines) > 0:
             requested = [str(alias_to_line_id(lid)) for lid in line_ids]
             for label, existing in lines.items():
-                if list(existing.line_ids) != requested:
+                # Blends are stored under the ID they were requested with
+                # (e.g. "a,b"), so normalise those too before comparing
+                held = [
+                    str(alias_to_line_id(lid)) for lid in existing.line_ids
+                ]
+                if held != requested:
                     raise exceptions.InconsistentArguments(
-                        f"Existing lines for '{label}' hold "
-                        f"{list(existing.line_ids)}, but {requested} were "
-                        "requested."
+                        f"Existing lines for '{label}' hold {held}, but "
+                        f"{requested} were requested."
                     )
             line_lams = lines[list(lines.keys())[0]].lam
 

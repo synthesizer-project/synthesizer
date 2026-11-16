@@ -29,6 +29,7 @@ from synthesizer.emission_models.generators.dust import (
 )
 from synthesizer.emission_models.model_queue import ModelQueue
 from synthesizer.emission_models.parameters import ParameterList
+from synthesizer.emission_models.transformers import PowerLaw
 from synthesizer.pipeline import Pipeline
 from synthesizer.utils import free_threading
 
@@ -393,6 +394,41 @@ class TestThreadedParity:
                 lines={"incident": incident},
                 nr_model_threads=4,
             )
+
+    def test_lines_existing_blend_reused(
+        self, no_gil, test_grid, random_part_stars
+    ):
+        """Test reused lines holding a blend match the same blend requested.
+
+        A blend requested without a space after the comma is stored under
+        that ID, which must still match the same request when reused.
+        """
+        # Extract a blend written without a space after the comma
+        lids = test_grid.available_lines
+        line_ids = [f"{lids[0]},{lids[1]}", lids[2]]
+        random_part_stars.clear_all_emissions()
+        incident = random_part_stars.get_lines(
+            line_ids,
+            IncidentEmission(test_grid, label="incident"),
+        )
+
+        # Attenuate the reused incident lines (no extraction)
+        model = EmissionModel(
+            "attenuated",
+            transformer=PowerLaw(slope=-1.0),
+            apply_to="incident",
+            emitter="stellar",
+            tau_v=0.5,
+        )
+
+        # Reusing the lines with the same request should not raise
+        lines, _ = model._get_lines(
+            line_ids,
+            {"stellar": random_part_stars},
+            lines={"incident": incident},
+            nr_model_threads=4,
+        )
+        np.testing.assert_array_equal(lines["attenuated"].lam, incident.lam)
 
     def test_vel_shifted_flags(self, no_gil, varied_model, random_part_stars):
         """Test velocity shift flags propagate as they do in serial."""
